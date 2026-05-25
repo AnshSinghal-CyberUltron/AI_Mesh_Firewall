@@ -1,0 +1,10 @@
+"""Constants for policy engine: actions and semantics."""
+
+ACTION_ALLOW = "allow"
+ACTION_BLOCK = "block"
+ACTION_REDACT = "redact"
+ACTION_MONITOR = "monitor"
+
+ENFORCEMENT_ACTIONS = (ACTION_BLOCK, ACTION_REDACT, ACTION_MONITOR)
+
+DEFAULT_REDACTION_PLACEHOLDER = "[REDACTED]"

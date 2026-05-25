@@ -1,0 +1,707 @@
+[
+  {
+    "name": "Harmful Content: General Hacking Intent",
+    "code": "HC_001",
+    "category": "Harmful Content",
+    "severity": "CRITICAL",
+    "description": "Detects prompts requesting instructions on how to hack systems, accounts, or services.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "hacking intent keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to hack", "teach me to hack", "guide to hacking", "hacking tutorial"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing hacking intent keywords."
+      },
+      {
+        "name": "hacking intent regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)(how\\s+(to|can\\s+i|do\\s+i)\\s+hack|teach\\s+me\\s+to\\s+hack|hacking\\s+tutorial)",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching hacking intent patterns."
+      },
+      {
+        "name": "hacking intent pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*how\\s+to\\s+hack.*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing hacking instructions requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Exploitation Intent",
+    "code": "HC_002",
+    "category": "Harmful Content",
+    "severity": "CRITICAL",
+    "description": "Detects prompts requesting instructions on exploiting vulnerabilities.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "exploitation intent keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to exploit vulnerabilities", "exploit a vulnerability", "how to exploit a system", "zero day exploit"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing exploitation intent keywords."
+      },
+      {
+        "name": "exploitation intent regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)(how\\s+to\\s+exploit|exploit\\s+a\\s+vulnerabilit|zero\\s*day\\s+exploit)",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching exploitation intent patterns."
+      },
+      {
+        "name": "exploitation intent pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*how\\s+to\\s+exploit.*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing exploitation instructions requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Unauthorized Access",
+    "code": "HC_003",
+    "category": "Harmful Content",
+    "severity": "CRITICAL",
+    "description": "Detects prompts requesting instructions on breaking into systems or accounts.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "unauthorized access keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to break into", "break into a system", "break into an account", "gain unauthorized access"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing unauthorized access intent keywords."
+      },
+      {
+        "name": "unauthorized access regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)(how\\s+to\\s+break\\s+into|gain\\s+unauthorized\\s+access|break\\s+into\\s+(a|an|the)\\s+(system|account|server|network))",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching unauthorized access patterns."
+      },
+      {
+        "name": "unauthorized access pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*how\\s+to\\s+break\\s+into.*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing unauthorized access requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Security Bypass",
+    "code": "HC_004",
+    "category": "Harmful Content",
+    "severity": "CRITICAL",
+    "description": "Detects prompts requesting instructions on bypassing security controls.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "security bypass keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to bypass security", "bypass authentication", "bypass firewall", "bypass antivirus", "bypass two factor", "bypass 2fa", "bypass mfa"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing security bypass intent keywords."
+      },
+      {
+        "name": "security bypass regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)(bypass\\s+(security|authentication|firewall|antivirus|2fa|mfa|two\\s*factor))",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching security bypass patterns."
+      },
+      {
+        "name": "security bypass pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*bypass\\s+(security|auth).*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing security bypass requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Data Theft Intent",
+    "code": "HC_005",
+    "category": "Harmful Content",
+    "severity": "CRITICAL",
+    "description": "Detects prompts requesting instructions on stealing data or credentials.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "data theft keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to steal data", "how to steal credentials", "steal passwords", "how to steal information", "how to exfiltrate data"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing data theft intent keywords."
+      },
+      {
+        "name": "data theft regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)(how\\s+to\\s+steal\\s+(data|credentials|passwords|information)|exfiltrate\\s+data)",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching data theft patterns."
+      },
+      {
+        "name": "data theft pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*how\\s+to\\s+steal.*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing data theft requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Malware Creation",
+    "code": "HC_006",
+    "category": "Harmful Content",
+    "severity": "CRITICAL",
+    "description": "Detects prompts requesting instructions on creating malware, viruses, or trojans.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "malware creation keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to create malware", "how to write a virus", "create a trojan", "write malware", "build a botnet", "create a worm", "how to make a virus"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing malware creation intent keywords."
+      },
+      {
+        "name": "malware creation regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)((create|write|build|make|develop)\\s+(a\\s+)?(malware|virus|trojan|botnet|worm|rootkit|backdoor))",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching malware creation patterns."
+      },
+      {
+        "name": "malware creation pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*(create|write|make)\\s+(a\\s+)?(malware|virus|trojan).*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing malware creation requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: DoS Attack Intent",
+    "code": "HC_007",
+    "category": "Harmful Content",
+    "severity": "CRITICAL",
+    "description": "Detects prompts requesting instructions on performing denial of service attacks.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "dos attack keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to ddos", "how to dos attack", "denial of service attack", "launch a ddos", "perform a ddos", "ddos attack tutorial"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing DoS attack intent keywords."
+      },
+      {
+        "name": "dos attack regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)((how\\s+to|launch|perform|execute)\\s+(a\\s+)?(ddos|dos\\s+attack|denial\\s+of\\s+service))",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching DoS attack patterns."
+      },
+      {
+        "name": "dos attack pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*(ddos|denial\\s+of\\s+service)\\s+(attack|tutorial).*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing DoS attack requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Phishing Intent",
+    "code": "HC_008",
+    "category": "Harmful Content",
+    "severity": "CRITICAL",
+    "description": "Detects prompts requesting instructions on creating phishing attacks or campaigns.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "phishing keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to phish", "create phishing", "phishing email template", "phishing page", "create a phishing site", "spear phishing"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing phishing intent keywords."
+      },
+      {
+        "name": "phishing regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)((create|build|make|design)\\s+(a\\s+)?phishing|phishing\\s+(email|page|site|template|campaign)|spear\\s+phishing)",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching phishing patterns."
+      },
+      {
+        "name": "phishing pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*(create|build)\\s+.*phishing.*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing phishing requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Credential Cracking",
+    "code": "HC_009",
+    "category": "Harmful Content",
+    "severity": "HIGH",
+    "description": "Detects prompts requesting instructions on cracking passwords or brute-force attacks.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "credential cracking keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to crack password", "brute force attack", "password cracking", "crack wifi password", "dictionary attack", "rainbow table attack"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing credential cracking intent keywords."
+      },
+      {
+        "name": "credential cracking regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)(crack\\s+(a\\s+)?password|brute\\s+force\\s+attack|password\\s+cracking|dictionary\\s+attack|rainbow\\s+table)",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching credential cracking patterns."
+      },
+      {
+        "name": "credential cracking pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*(crack|brute\\s+force)\\s+.*password.*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing credential cracking requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Social Engineering",
+    "code": "HC_010",
+    "category": "Harmful Content",
+    "severity": "HIGH",
+    "description": "Detects prompts requesting instructions on social engineering attacks.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "social engineering keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to social engineer", "social engineering attack", "social engineering techniques", "manipulate someone into", "pretexting attack", "vishing attack"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing social engineering intent keywords."
+      },
+      {
+        "name": "social engineering regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)(social\\s+engineering\\s+(attack|technique|method)|pretexting\\s+attack|vishing\\s+attack)",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching social engineering patterns."
+      },
+      {
+        "name": "social engineering pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*social\\s+engineering\\s+(attack|technique).*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing social engineering requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Surveillance and Spyware",
+    "code": "HC_011",
+    "category": "Harmful Content",
+    "severity": "HIGH",
+    "description": "Detects prompts requesting instructions on surveillance, spying, or installing spyware.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "surveillance keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to spy on", "how to surveil", "install spyware", "track someone without", "monitor someone without", "how to wiretap"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing surveillance intent keywords."
+      },
+      {
+        "name": "surveillance regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)(how\\s+to\\s+(spy|surveil|wiretap)|install\\s+spyware|(track|monitor)\\s+someone\\s+without)",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching surveillance patterns."
+      },
+      {
+        "name": "surveillance pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*install\\s+spyware.*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing surveillance requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Identity Fraud",
+    "code": "HC_012",
+    "category": "Harmful Content",
+    "severity": "HIGH",
+    "description": "Detects prompts requesting instructions on identity fraud or document forgery.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "identity fraud keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to forge", "create fake identity", "identity fraud", "forge documents", "fake passport", "fake id card", "identity theft"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing identity fraud intent keywords."
+      },
+      {
+        "name": "identity fraud regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)(create\\s+fake\\s+identity|identity\\s+(fraud|theft)|forge\\s+documents|fake\\s+(passport|id\\s+card|driver.?s?\\s+license))",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching identity fraud patterns."
+      },
+      {
+        "name": "identity fraud pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*(fake|forge)\\s+(identity|passport|id|documents).*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing identity fraud requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Ransomware",
+    "code": "HC_013",
+    "category": "Harmful Content",
+    "severity": "HIGH",
+    "description": "Detects prompts requesting instructions on creating or deploying ransomware.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "ransomware keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to ransomware", "create ransomware", "deploy ransomware", "ransomware attack", "encrypt files for ransom", "build ransomware"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing ransomware intent keywords."
+      },
+      {
+        "name": "ransomware regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)((create|build|deploy|develop|write)\\s+(a\\s+)?ransomware|ransomware\\s+(attack|tutorial)|encrypt\\s+files\\s+for\\s+ransom)",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching ransomware patterns."
+      },
+      {
+        "name": "ransomware pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*(create|build|deploy)\\s+(a\\s+)?ransomware.*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing ransomware requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Keylogging",
+    "code": "HC_014",
+    "category": "Harmful Content",
+    "severity": "HIGH",
+    "description": "Detects prompts requesting instructions on keylogging or keystroke capture.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "keylogging keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to keylog", "install keylogger", "capture keystrokes", "create a keylogger", "build a keylogger", "keyboard logger"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing keylogging intent keywords."
+      },
+      {
+        "name": "keylogging regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)((install|create|build|write)\\s+(a\\s+)?keylogger|capture\\s+keystrokes|keyboard\\s+logger)",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching keylogging patterns."
+      },
+      {
+        "name": "keylogging pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*(install|create|build)\\s+(a\\s+)?keylogger.*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing keylogging requests."
+      }
+    ]
+  },
+  {
+    "name": "Harmful Content: Web Application Attacks",
+    "code": "HC_015",
+    "category": "Harmful Content",
+    "severity": "HIGH",
+    "description": "Detects prompts requesting instructions on web application attacks like SQL injection or XSS.",
+    "enabled": true,
+    "priority": 15,
+    "rules": [
+      {
+        "name": "web attack keyword detection",
+        "rule_type": "keywords",
+        "condition": {
+          "keywords": ["how to sql inject", "sql injection attack", "xss attack", "cross site scripting attack", "how to deface a website", "web shell upload"],
+          "field": "prompt"
+        },
+        "action": "block",
+        "priority": 20,
+        "enabled": true,
+        "description": "Blocks prompts containing web application attack intent keywords."
+      },
+      {
+        "name": "web attack regex detection",
+        "rule_type": "regex",
+        "condition": {
+          "pattern": "(?i)(sql\\s+injection\\s+attack|xss\\s+attack|cross\\s+site\\s+scripting\\s+attack|deface\\s+a\\s+website|web\\s+shell\\s+upload)",
+          "field": "prompt"
+        },
+        "action": "monitor",
+        "priority": 25,
+        "enabled": true,
+        "description": "Monitors prompts matching web application attack patterns."
+      },
+      {
+        "name": "web attack pattern variation",
+        "rule_type": "pattern",
+        "condition": {
+          "pattern": "(?i).*(sql\\s+injection|xss|cross\\s+site\\s+scripting)\\s+attack.*",
+          "field": "prompt"
+        },
+        "action": "redact",
+        "priority": 30,
+        "enabled": true,
+        "description": "Redacts prompts containing web application attack requests."
+      }
+    ]
+  }
+]

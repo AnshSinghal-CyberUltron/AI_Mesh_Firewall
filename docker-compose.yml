@@ -1,0 +1,188 @@
+# AI Mesh Firewall — standalone product (dev)
+# UI :8180  Control :8100  Gateway :8300  RabbitMQ UI :15772
+
+name: ai_mesh_firewall
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ai_mesh_firewall}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_mesh_firewall}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_mesh_firewall}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ai_mesh_firewall}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports: ["6379:6379"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports: ["5772:5672", "15772:15672"]
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+
+  mongo:
+    image: mongo:7
+    ports: ["27017:27017"]
+    volumes: [mongo_data:/data/db]
+    profiles: ["telemetry-pilot"]
+
+  control:
+    build:
+      context: .
+      dockerfile: control/Dockerfile
+    ports: ["8100:8000"]
+    environment:
+      DJANGO_SETTINGS_MODULE: main_app.settings
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
+      POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
+      DEBUG: "true"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,control"
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:8180}
+      GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-http://127.0.0.1:8180}
+      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://127.0.0.1:8180}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
+
+  workers:
+    profiles: ["workers"]
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+    environment:
+      DJANGO_SETTINGS_MODULE: main_app.settings
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      REDIS_URL: redis://redis:6379/0
+      TELEMETRY_DRAIN_MODE: "off"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
+      POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  workers-beat:
+    profiles: ["workers"]
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+    command: celery -A ai_mesh_workers.celery_app beat --loglevel=info
+    environment:
+      DJANGO_SETTINGS_MODULE: main_app.settings
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      REDIS_URL: redis://redis:6379/0
+      TELEMETRY_DRAIN_MODE: beat
+      TELEMETRY_DRAIN_INTERVAL_SEC: ${TELEMETRY_DRAIN_INTERVAL_SEC:-1.0}
+      TELEMETRY_DRAIN_BATCH_SIZE: ${TELEMETRY_DRAIN_BATCH_SIZE:-250}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
+      POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    ports: ["8300:8300"]
+    env_file:
+      - .env
+      - ../.env
+    environment:
+      AI_MESH_CONTROL_URL: http://control:8000
+      AIGUARDX_BACKEND_URL: http://control:8000
+      GATEWAY_REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
+      GATEWAY_AUTH_ENABLED: "true"
+      GATEWAY_ALLOW_HTTP: "1"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-${BEDROCK_REGION:-ap-south-1}}
+      BEDROCK_REGION: ${BEDROCK_REGION:-ap-south-1}
+      BEDROCK_MODEL: ${BEDROCK_MODEL:-openai.gpt-oss-120b-1:0}
+      ENABLE_TIER2: ${ENABLE_TIER2:-true}
+      GUARDRAILS_SERVICE_URL: http://guardrails:8310
+      MCP_BROKER_URL: http://mcp-broker:8311
+      VECTOR_SERVICE_URL: http://vector-retrieval:8312
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:8180}
+      GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-http://127.0.0.1:8180}
+      GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://127.0.0.1:8180,http://localhost:8180,http://127.0.0.1:5173,http://localhost:5173}
+    depends_on:
+      control: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  guardrails:
+    image: python:3.12-slim
+    working_dir: /app
+    command: pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8310
+    volumes: ["./services/guardrails/src:/app"]
+    ports: ["8310:8310"]
+    profiles: ["services"]
+
+  mcp-broker:
+    image: python:3.12-slim
+    working_dir: /app
+    command: pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8311
+    volumes: ["./services/mcp-broker/src:/app"]
+    ports: ["8311:8311"]
+    profiles: ["services"]
+
+  vector-retrieval:
+    image: python:3.12-slim
+    working_dir: /app
+    command: pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8312
+    volumes: ["./services/vector-retrieval/src:/app"]
+    ports: ["8312:8312"]
+    profiles: ["services"]
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    volumes: ["./frontend:/app", "/app/node_modules"]
+    ports: ["8180:5173"]
+    environment:
+      VITE_CONTROL_PROXY: http://control:8000
+      VITE_GATEWAY_PROXY: http://gateway:8300
+      VITE_GATEWAY_BASE_URL: ${VITE_GATEWAY_BASE_URL:-http://127.0.0.1:8180}
+      VITE_BACKEND_BASE_URL: ${VITE_BACKEND_BASE_URL:-http://127.0.0.1:8180}
+    depends_on:
+      control: { condition: service_healthy }
+
+volumes:
+  postgres_data:
+  redis_data:
+  mongo_data:

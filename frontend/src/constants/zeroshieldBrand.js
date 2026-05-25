@@ -1,0 +1,42 @@
+/**
+ * Client-facing names for ZeroShield security models and scan tiers.
+ * Do not surface upstream provider names (e.g. Bedrock) in UI copy.
+ */
+
+/** Default routed / simulator model id exposed to clients */
+export const ZEROSHIELD_GUARD_MODEL = "zeroshield-guard-120b";
+
+/** Human-readable product name for the ML guard model */
+export const ZEROSHIELD_GUARD_MODEL_LABEL = "ZeroShield Guard Model";
+
+/** Tier-1 deterministic pattern engine */
+export const ZEROSHIELD_TIER1_LABEL = "ZeroShield Pattern Engine";
+
+/** Tier-2 semantic / ML guard (ZeroShield-hosted) */
+export const ZEROSHIELD_TIER2_LABEL = "ZeroShield Guard Model";
+
+/** Routing adjudicator display name */
+export const ZEROSHIELD_ADJUDICATOR_LABEL = "ZeroShield Policy Adjudicator";
+
+/** Log viewer service filter label (maps to gateway log service name internally) */
+export const ZEROSHIELD_ML_LOG_SERVICE = "Guard Model";
+
+/** Map gateway detection_tier codes to client-facing labels (never show Bedrock). */
+export function formatDetectionTier(tier) {
+  if (tier == null || tier === "") return tier;
+  const t = String(tier).toLowerCase();
+  if (t === "tier_1" || t === "tier1") return ZEROSHIELD_TIER1_LABEL;
+  if (t === "tier_2" || t === "tier2" || t === "input_scan") return ZEROSHIELD_TIER2_LABEL;
+  if (t.includes("bedrock") || t.includes("gpt-oss")) return ZEROSHIELD_TIER2_LABEL;
+  return tier;
+}
+
+/** Map model id from API responses for display */
+export function formatModelDisplayName(modelId) {
+  if (!modelId) return modelId;
+  const m = String(modelId).toLowerCase();
+  if (m.includes("bedrock") || m.includes("gpt-oss") || m === ZEROSHIELD_GUARD_MODEL) {
+    return ZEROSHIELD_GUARD_MODEL_LABEL;
+  }
+  return modelId;
+}

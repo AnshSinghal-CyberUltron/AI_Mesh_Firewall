@@ -1,0 +1,164 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useGatewayConfig } from "./useGatewayConfig";
+import { useAuth } from "../context/AuthContext";
+
+const HEALTH_POLL_INTERVAL = 15000;
+const GATEWAY_KEY_STORAGE = "zeroshield_gateway_key";
+
+/**
+ * Shared hook for all Module 1 live simulators.
+ * Provides connection management, health polling, gateway/backend fetch helpers,
+ * scenario execution, and result diffing.
+ */
+export function useSimulatorEngine() {
+  const { gatewayUrl } = useGatewayConfig();
+  const { fetchWithAuth } = useAuth();
+
+  const [gatewayKey, setGatewayKey] = useState(
+    () => localStorage.getItem(GATEWAY_KEY_STORAGE) || ""
+  );
+  const [connectionStatus, setConnectionStatus] = useState("disconnected"); // connected | degraded | disconnected
+  const [backendHealth, setBackendHealth] = useState(null);
+  const [gatewayHealth, setGatewayHealth] = useState(null);
+  const [executing, setExecuting] = useState(false);
+  const [lastResult, setLastResult] = useState(null);
+  const [previousResult, setPreviousResult] = useState(null);
+
+  const healthRef = useRef(null);
+  const defaultKeyFetchedRef = useRef(false);
+
+  // Save gateway key to localStorage
+  const updateGatewayKey = useCallback((key) => {
+    setGatewayKey(key);
+    localStorage.setItem(GATEWAY_KEY_STORAGE, key);
+  }, []);
+
+  // Authenticated fetch to gateway
+  const gatewayFetch = useCallback(async (path, opts = {}) => {
+    const url = `${gatewayUrl}${path}`;
+    const headers = {
+      "Content-Type": "application/json",
+      ...(gatewayKey ? { Authorization: `Bearer ${gatewayKey}` } : {}),
+      ...(opts.headers || {}),
+    };
+    const res = await fetch(url, { ...opts, headers });
+    const data = await res.json().catch(() => null);
+    return { ok: res.ok, status: res.status, data };
+  }, [gatewayUrl, gatewayKey]);
+
+  // Authenticated fetch to backend (through proxy)
+  const backendFetch = useCallback(async (path, opts = {}) => {
+    try {
+      const res = await fetchWithAuth(path, opts);
+      return { ok: true, status: 200, data: res };
+    } catch (err) {
+      return { ok: false, status: err.status || 500, data: { error: err.message } };
+    }
+  }, [fetchWithAuth]);
+
+  // Health check polling
+  const checkHealth = useCallback(async () => {
+    let gwOk = false;
+    let beOk = false;
+
+    try {
+      const res = await fetch(`${gatewayUrl}/health`, { signal: AbortSignal.timeout(5000) });
+      const data = await res.json().catch(() => null);
+      gwOk = res.ok;
+      setGatewayHealth(data);
+    } catch {
+      setGatewayHealth(null);
+    }
+
+    try {
+      const res = await fetch("/api/health/", { signal: AbortSignal.timeout(5000) });
+      beOk = res.ok;
+      setBackendHealth(beOk ? { status: "ok" } : null);
+    } catch {
+      setBackendHealth(null);
+    }
+
+    setConnectionStatus(gwOk && beOk ? "connected" : gwOk || beOk ? "degraded" : "disconnected");
+  }, [gatewayUrl]);
+
+  useEffect(() => {
+    checkHealth();
+    healthRef.current = setInterval(checkHealth, HEALTH_POLL_INTERVAL);
+    return () => clearInterval(healthRef.current);
+  }, [checkHealth]);
+
+  useEffect(() => {
+    if (gatewayKey || defaultKeyFetchedRef.current) return;
+    defaultKeyFetchedRef.current = true;
+
+    (async () => {
+      try {
+        const res = await fetchWithAuth("/api/gateways/simulator-default/");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.key) {
+          updateGatewayKey(data.key);
+        }
+      } catch {
+        // Simulator bootstrap is best-effort; manual entry still works.
+      }
+    })();
+  }, [fetchWithAuth, gatewayKey, updateGatewayKey]);
+
+  // Execute a scenario against the gateway
+  const executeScenario = useCallback(async (config) => {
+    setExecuting(true);
+    setPreviousResult(lastResult);
+    try {
+      const path = config.endpoint || "/v1/chat/completions";
+      const res = await gatewayFetch(path, {
+        method: config.method || "POST",
+        body: JSON.stringify(config.payload || {}),
+      });
+      const result = {
+        ...res.data,
+        httpStatus: res.status,
+        success: res.ok,
+        timestamp: new Date().toISOString(),
+      };
+      setLastResult(result);
+      return result;
+    } catch (err) {
+      const result = { error: err.message, success: false, timestamp: new Date().toISOString() };
+      setLastResult(result);
+      return result;
+    } finally {
+      setExecuting(false);
+    }
+  }, [gatewayFetch, lastResult]);
+
+  // Diff two results for before/after comparison
+  const diffResults = useCallback((a, b) => {
+    if (!a || !b) return null;
+    const changes = [];
+    const allKeys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of allKeys) {
+      if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) {
+        changes.push({ key, before: a[key], after: b[key] });
+      }
+    }
+    return changes;
+  }, []);
+
+  return {
+    gatewayUrl,
+    gatewayKey,
+    setGatewayKey: updateGatewayKey,
+    connectionStatus,
+    backendHealth,
+    gatewayHealth,
+    gatewayFetch,
+    backendFetch,
+    executeScenario,
+    executing,
+    lastResult,
+    previousResult,
+    diffResults,
+    checkHealth,
+  };
+}

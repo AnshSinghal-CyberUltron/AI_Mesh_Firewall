@@ -1,0 +1,175 @@
+"""
+API views for policy compilation management.
+
+POST /api/policies/compile/         -- Force recompilation (admin only)
+GET  /api/policies/compile/status/  -- View current compiled state from Redis
+"""
+
+import json
+import logging
+
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as drf_serializers
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from auth.utils import get_request_organization
+from core.admin_views import IsAdminOrSuperuser
+from policy.compiler import (
+    REDIS_KEY_COMPILED,
+    REDIS_KEY_VERSION,
+    PolicyCompiler,
+    _get_redis_client,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class PolicyCompileView(APIView):
+    """Force policy recompilation and push to Redis."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
+
+    @extend_schema(
+        tags=["Policies"],
+        summary="Force policy recompilation",
+        description=(
+            "Recompile all enabled policies and push the bundle to Redis. "
+            "Triggers a Pub/Sub notification on `policy_updates` channel.\n\n"
+            "**Permission:** Admin (superuser, staff, or aiguardx_admin)."
+        ),
+        request=None,
+        responses={
+            200: inline_serializer(
+                name="PolicyCompileResponse",
+                fields={
+                    "status": drf_serializers.CharField(),
+                    "version": drf_serializers.IntegerField(),
+                    "policy_count": drf_serializers.IntegerField(),
+                    "compiled_at": drf_serializers.FloatField(),
+                },
+            ),
+            500: inline_serializer(
+                name="PolicyCompileErrorResponse",
+                fields={"detail": drf_serializers.CharField()},
+            ),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        org = getattr(getattr(request.user, "profile", None), "organization", None)
+        compiler = PolicyCompiler()
+        bundle = compiler.compile_all(organization=org)
+        success = compiler.push_to_redis(
+            bundle,
+            trigger="manual",
+            changed_policy_ids=[],
+            organization=org,
+        )
+        if not success:
+            return Response(
+                {"detail": "Failed to push compiled policies to Redis."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response(
+            {
+                "status": "compiled",
+                "version": bundle.get("version"),
+                "policy_count": bundle.get("policy_count", 0),
+                "compiled_at": bundle.get("compiled_at"),
+            }
+        )
+
+
+class PolicyCompileStatusView(APIView):
+    """View the current compiled policy state from Redis."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Policies"],
+        summary="Get compiled policy status",
+        description=(
+            "Read the current compiled policy bundle metadata from Redis.\n\n"
+            "Returns version, policy count, compilation timestamp, and per-policy summary.\n\n"
+            "**Permission:** Authenticated users."
+        ),
+        responses={
+            200: inline_serializer(
+                name="PolicyCompileStatusResponse",
+                fields={
+                    "redis_available": drf_serializers.BooleanField(),
+                    "version": drf_serializers.IntegerField(allow_null=True),
+                    "policy_count": drf_serializers.IntegerField(allow_null=True),
+                    "compiled_at": drf_serializers.FloatField(allow_null=True),
+                    "policies": drf_serializers.ListField(
+                        child=drf_serializers.DictField(),
+                    ),
+                },
+            ),
+        },
+    )
+    def get(self, request: Request) -> Response:
+        org = get_request_organization(request)
+        if org is None and not request.user.is_superuser:
+            return Response(
+                {"detail": "Organization scope required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        suffix = "default" if org is None else org.slug
+        redis_key = f"{REDIS_KEY_COMPILED}:{suffix}"
+        version_key = f"{REDIS_KEY_VERSION}:{suffix}"
+
+        try:
+            client = _get_redis_client()
+            version = client.get(version_key)
+            raw_bundle = client.get(redis_key)
+        except Exception:
+            logger.exception("Failed to read compiled policy state from Redis")
+            return Response(
+                {
+                    "redis_available": False,
+                    "version": None,
+                    "policy_count": None,
+                    "compiled_at": None,
+                    "policies": [],
+                }
+            )
+
+        if raw_bundle is None:
+            return Response(
+                {
+                    "redis_available": True,
+                    "version": int(version) if version else None,
+                    "policy_count": None,
+                    "compiled_at": None,
+                    "policies": [],
+                }
+            )
+
+        bundle = json.loads(raw_bundle)
+        policy_summaries = []
+        for entry in bundle.get("policies", []):
+            p = entry.get("policy", {})
+            policy_summaries.append(
+                {
+                    "id": p.get("id"),
+                    "code": p.get("code"),
+                    "name": p.get("name"),
+                    "severity": p.get("severity"),
+                    "rule_count": len(entry.get("rules", [])),
+                }
+            )
+
+        return Response(
+            {
+                "redis_available": True,
+                "version": int(version) if version else bundle.get("version"),
+                "policy_count": bundle.get("policy_count"),
+                "compiled_at": bundle.get("compiled_at"),
+                "policies": policy_summaries,
+            }
+        )

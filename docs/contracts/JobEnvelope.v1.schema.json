@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeroshield.ai/schemas/ai-mesh/JobEnvelope.v1.json",
+  "title": "JobEnvelopeV1",
+  "type": "object",
+  "required": ["job_type", "request_id", "payload"],
+  "properties": {
+    "job_type": {
+      "type": "string",
+      "enum": ["mcp_audit", "tier2_post_scan", "chat_postprocess", "vector_ingest"]
+    },
+    "request_id": { "type": "string" },
+    "org_id": { "type": ["integer", "null"] },
+    "payload": { "type": "object" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "idempotency_key": { "type": "string" }
+  }
+}

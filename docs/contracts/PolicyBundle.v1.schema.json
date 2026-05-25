@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeroshield.ai/schemas/ai-mesh/PolicyBundle.v1.json",
+  "title": "PolicyBundleV1",
+  "type": "object",
+  "required": ["policies", "version", "compiled_at"],
+  "properties": {
+    "policies": { "type": "array", "items": { "type": "object" } },
+    "version": { "type": "integer", "minimum": 0 },
+    "compiled_at": { "type": "string", "format": "date-time" },
+    "_sig_alg": { "type": "string", "enum": ["HMAC-SHA256", "Ed25519"] },
+    "_sig_at": { "type": "string", "format": "date-time" },
+    "_sig": { "type": "string" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,290 @@
+"""
+AWS Bedrock client for Tier-2 scanning using boto3 invoke_model.
+
+Authentication uses standard AWS IAM credentials from environment:
+  - AWS_ACCESS_KEY_ID
+  - AWS_SECRET_ACCESS_KEY
+
+Configuration:
+  - BEDROCK_REGION: AWS region (default: ap-south-1)
+    - BEDROCK_MODEL: model ID (default: openai.gpt-oss-120b-1:0)
+  - BEDROCK_TIMEOUT: request timeout in seconds (default: 60)
+"""
+from __future__ import annotations
+
+import json
+import os
+import logging
+import time
+from typing import Any, Dict, Optional
+
+try:
+    import boto3
+    from botocore.config import Config as BotoConfig
+except ImportError:
+    boto3 = None  # type: ignore[assignment]
+    BotoConfig = None  # type: ignore[assignment,misc]
+
+try:
+    from bedrock_logger import (
+        bedrock_log as BLOG, new_request_id,
+        log_bedrock_request, log_bedrock_response, log_bedrock_error,
+        log_health_check, log_metrics,
+    )
+except Exception:
+    BLOG = None  # type: ignore[assignment]
+
+LOG = logging.getLogger("gateway.bedrock_client")
+
+
+def _extract_prompt_preview(payload: Dict[str, Any]) -> str:
+    messages = payload.get("messages") if isinstance(payload, dict) else None
+    if not isinstance(messages, list):
+        return ""
+    parts: list[str] = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            flat = []
+            for item in content:
+                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                    flat.append(item["text"])
+                elif isinstance(item, str):
+                    flat.append(item)
+            content = " ".join(flat)
+        if not isinstance(content, str):
+            content = str(content)
+        parts.append(f"{role}: {content}")
+    return " | ".join(parts)
+
+
+def _extract_output_preview(raw_response: Dict[str, Any]) -> str:
+    if not isinstance(raw_response, dict):
+        return str(raw_response)
+    # OpenAI-compatible (gpt-oss): {"choices":[{"message":{"content":"..."}}]}
+    choices = raw_response.get("choices") or []
+    if isinstance(choices, list) and choices:
+        first = choices[0] or {}
+        if isinstance(first, dict):
+            msg = first.get("message") or first.get("delta") or {}
+            if isinstance(msg, dict):
+                content = msg.get("content", "")
+                if isinstance(content, str):
+                    return content
+                if isinstance(content, list):
+                    flat = []
+                    for item in content:
+                        if isinstance(item, dict) and isinstance(item.get("text"), str):
+                            flat.append(item["text"])
+                        elif isinstance(item, str):
+                            flat.append(item)
+                    return " ".join(flat)
+    # Anthropic Messages API: {"content":[{"type":"text","text":"..."}]}
+    top_content = raw_response.get("content")
+    if isinstance(top_content, list):
+        flat = []
+        for item in top_content:
+            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                flat.append(item["text"])
+            elif isinstance(item, str):
+                flat.append(item)
+        if flat:
+            return " ".join(flat)
+    return json.dumps(raw_response, default=str)
+
+
+class BedrockClient:
+    """
+    AWS Bedrock runtime client using boto3 invoke_model.
+
+    Expects:
+      - AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (standard AWS env vars)
+      - BEDROCK_REGION: AWS region (e.g. ap-south-1, us-west-2)
+    - BEDROCK_MODEL: model ID (e.g. openai.gpt-oss-120b-1:0)
+    """
+
+    def __init__(
+        self,
+        region: Optional[str] = None,
+        model_id: Optional[str] = None,
+        timeout: float = 60.0,
+    ) -> None:
+        if boto3 is None:
+            raise ImportError(
+                "boto3 is required for Bedrock provider. "
+                "Install with: pip install boto3"
+            )
+
+        self.region: str = region or os.getenv("BEDROCK_REGION", "ap-south-1")
+        self.model_id: str = model_id or os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0")
+        self.timeout: float = timeout
+
+        boto_config = BotoConfig(
+            region_name=self.region,
+            read_timeout=int(timeout),
+            connect_timeout=5,
+            retries={"max_attempts": 2, "mode": "adaptive"},
+        )
+
+        self._client = boto3.client("bedrock-runtime", config=boto_config)
+        aws_key = os.getenv("AWS_ACCESS_KEY_ID", "")
+        aws_key_prefix = aws_key[:4] if aws_key else "(not set)"
+        LOG.info(
+            "BedrockClient initialized: model=%s, region=%s, timeout=%.1fs, "
+            "aws_key_prefix=%s",
+            self.model_id, self.region, self.timeout, aws_key_prefix,
+        )
+
+    def scan_prompt(
+        self,
+        model: str,
+        prompt_payload: Dict[str, Any],
+        deployment_path: Optional[str] = None,
+        request_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Send prompt to Bedrock via invoke_model and return normalized result.
+
+        Returns dict with keys: raw, tokens_in, tokens_out, elapsed_s.
+        The ``raw`` value contains the parsed model response body which
+        should follow the OpenAI chat-completion schema (with ``choices``).
+        """
+        effective_model = model or self.model_id
+        body = json.dumps(prompt_payload)
+        payload_bytes = len(body)
+        reqid = request_id or (new_request_id() if BLOG else "")
+        prompt_preview = _extract_prompt_preview(prompt_payload)
+
+        LOG.info(
+            "Bedrock invoke_model START: model=%s, region=%s, payload_bytes=%d",
+            effective_model, self.region, payload_bytes,
+        )
+
+        # ── Dedicated Bedrock log: REQUEST ──
+        if BLOG:
+            log_bedrock_request(
+                request_id=reqid,
+                model=effective_model,
+                region=self.region,
+                payload_bytes=payload_bytes,
+                prompt_len=payload_bytes,
+                truncated_len=payload_bytes,
+                deployment_path=deployment_path,
+                prompt_preview=prompt_preview,
+            )
+
+        start = time.time()
+        try:
+            response = self._client.invoke_model(
+                modelId=effective_model,
+                body=body,
+                contentType="application/json",
+                accept="application/json",
+            )
+        except Exception as exc:
+            elapsed = time.time() - start
+            LOG.error(
+                "Bedrock invoke_model FAILED: model=%s, region=%s, elapsed=%.3fs, error=%s",
+                effective_model, self.region, elapsed, exc,
+            )
+            # ── Dedicated Bedrock log: ERROR ──
+            if BLOG:
+                log_bedrock_error(
+                    request_id=reqid,
+                    model=effective_model,
+                    region=self.region,
+                    elapsed_s=elapsed,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                    payload_bytes=payload_bytes,
+                )
+            raise
+        elapsed = time.time() - start
+
+        response_body = json.loads(response["body"].read())
+        output_preview = _extract_output_preview(response_body)
+
+        usage = response_body.get("usage") or {}
+        # Support both OpenAI-style (prompt_tokens/completion_tokens) and
+        # Anthropic-style (input_tokens/output_tokens) Bedrock response shapes.
+        tokens_in = (
+            usage.get("prompt_tokens")
+            or usage.get("input_tokens")
+            or usage.get("total_tokens")
+            or 0
+        )
+        tokens_out = (
+            usage.get("completion_tokens")
+            or usage.get("output_tokens")
+            or 0
+        )
+
+        LOG.info(
+            "Bedrock invoke_model DONE: model=%s, elapsed=%.3fs, tokens_in=%d, "
+            "tokens_out=%d, response_keys=%s",
+            effective_model, elapsed, int(tokens_in), int(tokens_out),
+            list(response_body.keys()),
+        )
+
+        # ── Dedicated Bedrock log: RESPONSE + METRICS ──
+        if BLOG:
+            log_bedrock_response(
+                request_id=reqid,
+                model=effective_model,
+                region=self.region,
+                elapsed_s=elapsed,
+                tokens_in=int(tokens_in),
+                tokens_out=int(tokens_out),
+                success=True,
+                response_keys=list(response_body.keys()),
+                output_preview=output_preview,
+            )
+            log_metrics(
+                method="invoke_model",
+                model=effective_model,
+                tokens_in=int(tokens_in),
+                tokens_out=int(tokens_out),
+                elapsed_s=elapsed,
+                success=True,
+            )
+
+        return {
+            "raw": response_body,
+            "tokens_in": int(tokens_in),
+            "tokens_out": int(tokens_out),
+            "elapsed_s": elapsed,
+        }
+
+    def is_available(self) -> bool:
+        """Health check: verify Bedrock connectivity by listing foundation models."""
+        LOG.info("Bedrock health check START: region=%s", self.region)
+        start = time.time()
+        try:
+            bedrock_mgmt = boto3.client("bedrock", region_name=self.region)
+            bedrock_mgmt.list_foundation_models()
+            elapsed = time.time() - start
+            LOG.info("Bedrock health check PASSED: region=%s", self.region)
+            if BLOG:
+                log_health_check(region=self.region, success=True, elapsed_s=elapsed)
+            return True
+        except Exception as exc:
+            elapsed = time.time() - start
+            LOG.warning(
+                "Bedrock health check FAILED: region=%s, error=%s",
+                self.region, exc,
+            )
+            if BLOG:
+                log_health_check(region=self.region, success=False, elapsed_s=elapsed, error=str(exc))
+            return False
+
+
+def default_bedrock_client() -> BedrockClient:
+    """Convenience factory using environment configuration."""
+    return BedrockClient(
+        region=os.getenv("BEDROCK_REGION", "ap-south-1"),
+        model_id=os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0"),
+        timeout=float(os.getenv("BEDROCK_TIMEOUT", "60.0")),
+    )

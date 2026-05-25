@@ -1,0 +1,101 @@
+{
+  "base": "http://127.0.0.1:8180",
+  "modules": [
+    {
+      "id": "overview",
+      "tab": "firewall",
+      "title": "AI Mesh Firewall",
+      "ok": true,
+      "notes": [],
+      "error": null
+    },
+    {
+      "id": "1.1",
+      "tab": "firewall-1-1",
+      "title": "AI Gateway & Traffic Ingress",
+      "ok": true,
+      "notes": [
+        "gateway health 200"
+      ],
+      "error": null
+    },
+    {
+      "id": "1.2",
+      "tab": "firewall-1-2",
+      "title": "Policy Management",
+      "ok": true,
+      "notes": [
+        "API /api/policies/?policy_domain=global 200",
+        "Create policy button visible",
+        "Compile policies control visible"
+      ],
+      "error": null
+    },
+    {
+      "id": "1.3",
+      "tab": "firewall-1-3",
+      "title": "RAG & Vector DB Firewall",
+      "ok": true,
+      "notes": [
+        "API /api/vector-providers/ 200",
+        "API /api/security/rag-pipeline-kpis/?period=24h 200",
+        "RAG simulator action clicked"
+      ],
+      "error": null
+    },
+    {
+      "id": "1.4",
+      "tab": "firewall-1-4",
+      "title": "Context Assembly & MCP",
+      "ok": true,
+      "notes": [
+        "API /api/mcp-connector/servers/ 200",
+        "MCP simulator triggered"
+      ],
+      "error": null
+    },
+    {
+      "id": "1.5",
+      "tab": "firewall-1-5",
+      "title": "Multi-Model Governance",
+      "ok": true,
+      "notes": [
+        "API /api/models/status/ 200",
+        "Model routing simulator triggered"
+      ],
+      "error": null
+    },
+    {
+      "id": "1.6",
+      "tab": "firewall-1-6",
+      "title": "Model Isolation & Kill-Switch",
+      "ok": true,
+      "notes": [
+        "API /api/kill-switches/ 200"
+      ],
+      "error": null
+    },
+    {
+      "id": "1.7",
+      "tab": "firewall-1-7",
+      "title": "Output Guardrails",
+      "ok": true,
+      "notes": [
+        "Output guard simulator triggered"
+      ],
+      "error": null
+    },
+    {
+      "id": "inputs",
+      "tab": "firewall-config",
+      "title": "Inputs",
+      "ok": true,
+      "notes": [
+        "API /api/firewall/config/ 200",
+        "Bedrock health check clicked"
+      ],
+      "error": null
+    }
+  ],
+  "failed": 0
+}

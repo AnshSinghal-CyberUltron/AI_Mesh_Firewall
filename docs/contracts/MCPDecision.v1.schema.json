@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeroshield.ai/schemas/ai-mesh/MCPDecision.v1.json",
+  "title": "MCPDecisionV1",
+  "type": "object",
+  "required": ["tool_name", "action", "organization_id"],
+  "properties": {
+    "tool_name": { "type": "string" },
+    "action": { "type": "string", "enum": ["allow", "block", "redact"] },
+    "organization_id": { "type": "integer" },
+    "connector_id": { "type": "string" },
+    "reason": { "type": "string" },
+    "matched_rules": { "type": "array", "items": { "type": "string" } }
+  }
+}

@@ -1,0 +1,9 @@
+[project]
+name = "ai-mesh-firewall-workspace"
+version = "0.1.0"
+description = "Standalone AI Mesh Firewall product workspace"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["shared", "gateway", "control", "workers"]

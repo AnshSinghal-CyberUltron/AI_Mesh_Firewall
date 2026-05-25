@@ -1,0 +1,69 @@
+import { defineConfig, loadEnv } from 'vite'
+import react from '@vitejs/plugin-react-swc'
+import tailwindcss from '@tailwindcss/vite'
+import fs from 'fs'
+
+// https://vite.dev/config/
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const runningInDocker = fs.existsSync('/.dockerenv')
+  const backendTarget = env.VITE_BACKEND_PROXY_TARGET || (runningInDocker ? 'http://backend:8000' : 'http://127.0.0.1:8100')
+  const gatewayTarget = env.VITE_GATEWAY_PROXY_TARGET || (runningInDocker ? 'http://gateway:8300' : 'http://127.0.0.1:8300')
+
+  // VITE_DEBUG=true (set in docker-compose.override.yml) enables verbose
+  // Vite plugin/build/HMR debug output and exposes the flag to the browser
+  // bundle via import.meta.env.VITE_DEBUG so the app can gate console logging.
+  const debugMode = env.VITE_DEBUG === 'true' || env.VITE_DEBUG === '1'
+
+  return {
+    plugins: [react(), tailwindcss()],
+    // Expose VITE_DEBUG to the browser (accessible as import.meta.env.VITE_DEBUG)
+    define: {
+      __DEV_LOGGING__: debugMode,
+    },
+    server: {
+      // Enable verbose HMR and plugin tracing when VITE_DEBUG is set
+      ...(debugMode ? { hmr: { overlay: true } } : {}),
+      allowedHosts: [
+        'aisecshield.zeroshield.ai',
+        'aisecshieldbackend.zeroshield.ai',
+        'aisecshieldgateway.zeroshield.ai',
+      ],
+      proxy: {
+        '/ai-mesh-poc': {
+          target: backendTarget,
+          changeOrigin: true,
+        },
+        '/aiguardx-poc': {
+          target: backendTarget,
+          changeOrigin: true,
+        },
+        '/api': {
+          target: backendTarget,
+          changeOrigin: true,
+          // Log every proxied API request in debug mode
+          ...(debugMode ? { configure: (proxy) => { proxy.on('proxyReq', (proxyReq, req) => { console.debug('[proxy /api]', req.method, req.url) }) } } : {}),
+        },
+        '/ws': {
+          target: backendTarget,
+          changeOrigin: true,
+          ws: true,
+          // Log every proxied WebSocket connection in debug mode
+          ...(debugMode ? { configure: (proxy) => { proxy.on('open', (_proxySocket) => { console.debug('[proxy /ws] WebSocket connection opened') }) } } : {}),
+        },
+        '/v1': {
+          target: gatewayTarget,
+          changeOrigin: true,
+          // Log every proxied gateway API request in debug mode
+          ...(debugMode ? { configure: (proxy) => { proxy.on('proxyReq', (proxyReq, req) => { console.debug('[proxy /v1]', req.method, req.url) }) } } : {}),
+        },
+        '/mcp': {
+          target: gatewayTarget,
+          changeOrigin: true,
+          // Log every proxied MCP request in debug mode
+          ...(debugMode ? { configure: (proxy) => { proxy.on('proxyReq', (proxyReq, req) => { console.debug('[proxy /mcp]', req.method, req.url) }) } } : {}),
+        },
+      },
+    },
+  }
+})

@@ -1,0 +1,55 @@
+from django.urls import path
+
+from .evaluation_views import SecurityScanView
+
+from .security_views import (
+    AgentTypeStatsView,
+    AttackCatalogView,
+    AttackGraphView,
+    AttackVectorTrendsView,
+    BlockageTrendView,
+    EnforcementActionStatsView,
+    EscalateIncidentView,
+    ModuleChartsView,
+    ModuleKpisView,
+    ModuleTrendsView,
+    OwaspEventsView,
+    OwaspStatsView,
+    RAGPipelineStageKpisView,
+    RAGPipelineTraceView,
+    ResolveIncidentView,
+    SocKpisView,
+    ThreatFeedView,
+    ThreatSourcesView,
+    UsagePatternsView,
+    UserBlockageKpisView,
+    UserBlockageStatsView,
+    ViolationCategoriesView,
+)
+
+urlpatterns = [
+    path("attack-catalog/", AttackCatalogView.as_view(), name="security-attack-catalog"),
+    path("scan/", SecurityScanView.as_view(), name="security-scan"),
+    path("threat-feed/", ThreatFeedView.as_view(), name="security-threat-feed"),
+    path("attack-vector-trends/", AttackVectorTrendsView.as_view(), name="security-attack-vector-trends"),
+    path("owasp-stats/", OwaspStatsView.as_view(), name="security-owasp-stats"),
+    path("owasp-events/", OwaspEventsView.as_view(), name="security-owasp-events"),
+    path("threat-sources/", ThreatSourcesView.as_view(), name="security-threat-sources"),
+    path("attack-graph/", AttackGraphView.as_view(), name="security-attack-graph"),
+    path("soc-kpis/", SocKpisView.as_view(), name="security-soc-kpis"),
+    path("module-kpis/", ModuleKpisView.as_view(), name="security-module-kpis"),
+    path("module-trends/", ModuleTrendsView.as_view(), name="security-module-trends"),
+    path("module-charts/<str:module_id>/", ModuleChartsView.as_view(), name="security-module-charts"),
+    path("incidents/<int:pk>/escalate/", EscalateIncidentView.as_view(), name="incident-escalate"),
+    path("incidents/<int:pk>/resolve/", ResolveIncidentView.as_view(), name="incident-resolve"),
+    path("user-blockage-kpis/", UserBlockageKpisView.as_view(), name="security-user-blockage-kpis"),
+    path("blockage-trend/", BlockageTrendView.as_view(), name="security-blockage-trend"),
+    path("usage-patterns/", UsagePatternsView.as_view(), name="security-usage-patterns"),
+    path("violation-categories/", ViolationCategoriesView.as_view(), name="security-violation-categories"),
+    path("agent-type-stats/", AgentTypeStatsView.as_view(), name="security-agent-type-stats"),
+    path("enforcement-action-stats/", EnforcementActionStatsView.as_view(), name="security-enforcement-action-stats"),
+    path("user-blockage-stats/", UserBlockageStatsView.as_view(), name="security-user-blockage-stats"),
+
+    path("rag-pipeline-kpis/", RAGPipelineStageKpisView.as_view(), name="security-rag-pipeline-kpis"),
+    path("rag-pipeline-trace/<str:request_id>/", RAGPipelineTraceView.as_view(), name="security-rag-pipeline-trace"),
+]
