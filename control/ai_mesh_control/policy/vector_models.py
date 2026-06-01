@@ -137,9 +137,20 @@ class VectorCollectionPolicy(models.Model):
         verbose_name = "Vector Collection Policy"
         verbose_name_plural = "Vector Collection Policies"
         constraints = [
+            # Bundle X1 fix: include `organization` so two tenants can each
+            # own the same (project_id, collection_name, vector_db_type)
+            # triplet without colliding at the DB layer. Without this,
+            # Org B was permanently blocked from configuring a policy
+            # whose triplet already existed for Org A, and the unique
+            # violation error leaked Org A's policy existence to Org B.
             models.UniqueConstraint(
-                fields=["project_id", "collection_name", "vector_db_type"],
-                name="unique_project_collection_vdb",
+                fields=[
+                    "organization",
+                    "project_id",
+                    "collection_name",
+                    "vector_db_type",
+                ],
+                name="unique_org_project_collection_vdb",
             ),
         ]
 

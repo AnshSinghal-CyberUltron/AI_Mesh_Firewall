@@ -181,6 +181,28 @@ def _build_enforcement_metadata(event: dict) -> dict:
     if prompt_snippet:
         result["prompt_lineage"] = [{"prompt": prompt_snippet, "risk_score": security_risk_score}]
 
+    if event_type == "model_routed":
+        extra = result.get("extra") or {}
+        if isinstance(extra, dict):
+            requested = extra.get("original_model") or extra.get("requested_model") or ""
+            routed = extra.get("routed_model") or extra.get("selected_model") or result.get("model") or ""
+            result["requested_model"] = requested
+            result["original_model"] = extra.get("original_model") or requested
+            result["routed_model"] = routed
+            result["selected_model"] = extra.get("selected_model") or routed
+            for key in (
+                "routing_reason",
+                "decision_source",
+                "policy_summary",
+                "routing_score",
+                "rerouted",
+                "decision_factors",
+            ):
+                if key in extra:
+                    result[key] = extra[key]
+        result["module"] = "1.5"
+        result["module_id"] = "1.5"
+
     return result
 
 

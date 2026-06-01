@@ -28,7 +28,7 @@ def _parse_version(v):
 
 
 class IsAdminOrSuperuser(BasePermission):
-    """Allow access only for superusers, staff, or users with aiguardx_admin role."""
+    """Allow access only for superusers, staff, or users with platform_admin role."""
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
@@ -36,7 +36,7 @@ class IsAdminOrSuperuser(BasePermission):
         if request.user.is_superuser or request.user.is_staff:
             return True
         try:
-            return request.user.profile.roles.filter(name="aiguardx_admin").exists()
+            return request.user.profile.roles.filter(name="platform_admin").exists()
         except Exception:
             return False
 

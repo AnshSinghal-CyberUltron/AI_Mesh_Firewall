@@ -8,9 +8,11 @@ from core.model_state_views import (
     ModelRecoverView,
     ModelStatusDetailView,
     ModelStatusListView,
+    ModelStatusSyncView,
 )
 
 urlpatterns = [
+    path("sync/", ModelStatusSyncView.as_view(), name="model-status-sync"),
     path("status/", ModelStatusListView.as_view(), name="model-status-list"),
     path("status/<str:model_name>/", ModelStatusDetailView.as_view(), name="model-status-detail"),
     path("isolate/", ModelIsolateView.as_view(), name="model-isolate"),

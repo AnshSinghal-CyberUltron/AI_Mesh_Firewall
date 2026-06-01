@@ -18,6 +18,7 @@ Redis key structure:
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass
@@ -76,7 +77,46 @@ class CircuitBreaker:
         window = int(time.time()) // WINDOW_SECONDS
         return f"circuit:{prefix}:{model}:{window}"
 
-    async def record_success(self, model: str) -> None:
+    def _kill_switch_key(self, org_slug: str, model: str) -> str:
+        slug = (org_slug or "default").strip() or "default"
+        return f"kill_switch:{slug}:model:{model}"
+
+    async def _activate_kill_switch_trip(self, org_slug: str, model: str) -> None:
+        """Mirror circuit OPEN to org-scoped kill_switch Redis key with TTL."""
+        key = self._kill_switch_key(org_slug, model)
+        payload = json.dumps(
+            {
+                "is_active": True,
+                "action": "disable",
+                "fallback_model": "",
+                "reason": "circuit_breaker_open",
+                "org_slug": (org_slug or "default").strip() or "default",
+                "trigger_source": "circuit_breaker",
+            }
+        )
+        ttl = self._cooldown_seconds * 2
+        await self._redis.set(key, payload, ex=ttl)
+        LOG.warning(
+            "Circuit breaker tripped kill-switch key %s (ttl=%ds)",
+            key,
+            ttl,
+        )
+
+    async def _clear_kill_switch_trip(self, org_slug: str, model: str) -> None:
+        """Remove circuit-breaker kill-switch key if we own it."""
+        key = self._kill_switch_key(org_slug, model)
+        try:
+            raw = await self._redis.get(key)
+            if not raw:
+                return
+            payload = json.loads(raw if isinstance(raw, str) else raw.decode())
+            if payload.get("trigger_source") == "circuit_breaker":
+                await self._redis.delete(key)
+                LOG.info("Circuit breaker cleared kill-switch key %s", key)
+        except Exception as exc:
+            LOG.debug("Circuit breaker kill-switch clear failed: %s", exc)
+
+    async def record_success(self, model: str, org_slug: str = "default") -> None:
         """Record a successful LLM response."""
         try:
             total_key = self._window_key("total", model)
@@ -93,6 +133,7 @@ class CircuitBreaker:
                 if count >= self._probe_success_count:
                     await self._set_state(model, CircuitState.CLOSED)
                     await self._redis.delete(probe_key)
+                    await self._clear_kill_switch_trip(org_slug, model)
                     LOG.info(
                         "Circuit CLOSED for model '%s' after %d successful probes",
                         model,
@@ -101,7 +142,7 @@ class CircuitBreaker:
         except Exception as exc:
             LOG.debug("Circuit breaker record_success failed: %s", exc)
 
-    async def record_error(self, model: str, error_type: str = "") -> None:
+    async def record_error(self, model: str, error_type: str = "", org_slug: str = "default") -> None:
         """Record a failed LLM response and evaluate threshold."""
         try:
             total_key = self._window_key("total", model)
@@ -127,6 +168,7 @@ class CircuitBreaker:
                             str(time.time()),
                             ex=self._cooldown_seconds * 2,
                         )
+                        await self._activate_kill_switch_trip(org_slug, model)
                         LOG.warning(
                             "Circuit OPEN for model '%s': error_rate=%.2f (%d/%d), threshold=%.2f",
                             model,
@@ -144,6 +186,7 @@ class CircuitBreaker:
                     str(time.time()),
                     ex=self._cooldown_seconds * 2,
                 )
+                await self._activate_kill_switch_trip(org_slug, model)
                 await self._redis.delete(f"circuit:probes:{model}")
                 LOG.warning(
                     "Circuit re-OPENED for model '%s' after probe failure", model

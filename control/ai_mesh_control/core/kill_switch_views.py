@@ -19,6 +19,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core.kill_switch_audit import write_kill_switch_audit
 from core.models import KillSwitch
 from core.serializers import (
     KillSwitchActivateSerializer,
@@ -50,15 +51,28 @@ class KillSwitchViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        warning = serializer.validated_data.pop("_model_name_warning", None)
         self.perform_create(serializer)
-        return Response(
-            KillSwitchSerializer(serializer.instance).data,
-            status=status.HTTP_201_CREATED,
-        )
+        payload = KillSwitchSerializer(serializer.instance).data
+        if warning:
+            payload["warning"] = warning
+        return Response(payload, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
         org = self.request.user.profile.organization
-        serializer.save(organization=org)
+        instance = serializer.save(organization=org)
+        if instance.is_active:
+            write_kill_switch_audit(
+                instance=instance,
+                event="kill_switch_activated",
+                triggered_by=self.request.user.email or self.request.user.username,
+                trigger_source="create",
+            )
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx
 
     def get_serializer_class(self):
         if self.action in ("create", "update", "partial_update"):
@@ -83,6 +97,15 @@ class KillSwitchViewSet(viewsets.ModelViewSet):
         instance.activated_by = request.user
         instance.save()
 
+        org = instance.organization
+        if org is not None:
+            write_kill_switch_audit(
+                instance=instance,
+                event="kill_switch_activated",
+                triggered_by=request.user.email or request.user.username,
+                trigger_source="manual",
+            )
+
         logger.warning(
             "KillSwitch ACTIVATED: model=%s action=%s by=%s reason=%s",
             instance.model_name,
@@ -103,6 +126,15 @@ class KillSwitchViewSet(viewsets.ModelViewSet):
         instance.is_active = False
         instance.activated_at = None
         instance.save()
+
+        org = instance.organization
+        if org is not None:
+            write_kill_switch_audit(
+                instance=instance,
+                event="kill_switch_deactivated",
+                triggered_by=request.user.email or request.user.username,
+                trigger_source="manual",
+            )
 
         logger.info(
             "KillSwitch deactivated: model=%s by=%s",

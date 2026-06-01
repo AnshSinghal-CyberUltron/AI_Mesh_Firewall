@@ -1,0 +1,315 @@
+- generic [ref=e8]:
+  - complementary [ref=e9]:
+    - generic [ref=e10]:
+      - generic [ref=e12]:
+        - img [ref=e15]
+        - generic [ref=e18]:
+          - heading "ZeroShield" [level=1] [ref=e19]
+          - paragraph [ref=e20]: AI Security Platform
+      - button "Collapse sidebar" [ref=e21]:
+        - img [ref=e22]
+    - navigation [ref=e24]:
+      - generic [ref=e25]:
+        - generic [ref=e26]: Product
+        - generic [ref=e27]:
+          - button "AI Mesh Firewall" [ref=e28]:
+            - img [ref=e29]
+            - generic [ref=e31]: AI Mesh Firewall
+            - img [ref=e32]
+          - generic [ref=e34]:
+            - button "AI Gateway & Traffic Ingress" [ref=e35]:
+              - generic [ref=e37]: AI Gateway & Traffic Ingress
+            - button "Policy Management" [ref=e38]:
+              - generic [ref=e40]: Policy Management
+            - button "RAG & Vector DB Firewall" [ref=e41]:
+              - generic [ref=e43]: RAG & Vector DB Firewall
+            - button "Context Assembly & MCP" [ref=e44]:
+              - generic [ref=e46]: Context Assembly & MCP
+            - button "Multi-Model Governance" [ref=e47]:
+              - generic [ref=e49]: Multi-Model Governance
+            - button "Model Isolation & Kill-Switch" [ref=e50]:
+              - generic [ref=e52]: Model Isolation & Kill-Switch
+            - button "Output Guardrails" [ref=e53]:
+              - generic [ref=e55]: Output Guardrails
+            - button "Inputs" [ref=e56]:
+              - generic [ref=e58]: Inputs
+    - generic [ref=e62]:
+      - heading "System Status" [level=3] [ref=e63]
+      - paragraph [ref=e64]: All systems operational
+      - generic [ref=e67]: Protected
+    - button "Ansh Singhal admin@zeroshield.io" [ref=e69]:
+      - generic [ref=e70]:
+        - img [ref=e72]
+        - generic [ref=e75]:
+          - paragraph [ref=e76]: Ansh Singhal
+          - paragraph [ref=e77]: admin@zeroshield.io
+        - img [ref=e78]
+  - generic [ref=e80]:
+    - banner [ref=e81]:
+      - generic [ref=e82]:
+        - generic [ref=e83]:
+          - generic [ref=e85]:
+            - generic [ref=e86]: Model Isolation & Kill-Switch
+            - generic [ref=e87]: DEV
+            - generic [ref=e88]: Connected
+          - generic [ref=e90]:
+            - img [ref=e91]
+            - textbox "Search models, policies, threats, or infrastructure..." [ref=e94]
+        - generic [ref=e95]:
+          - button "Scan Model" [ref=e96]:
+            - img [ref=e97]
+            - generic [ref=e98]: Scan Model
+          - button [ref=e100]:
+            - img [ref=e101]
+          - button [ref=e105]:
+            - img [ref=e106]
+          - button "Switch to dark mode" [ref=e110]:
+            - img [ref=e111]
+          - button "Ansh Singhal admin@zeroshield.io" [ref=e115]:
+            - generic [ref=e116]:
+              - paragraph [ref=e117]: Ansh Singhal
+              - paragraph [ref=e118]: admin@zeroshield.io
+            - img [ref=e120]
+    - main [ref=e123]:
+      - generic [ref=e125]:
+        - generic [ref=e127]:
+          - generic [ref=e128]:
+            - generic [ref=e129]: Submodule 1.6 · Isolation and kill-switch lane
+            - generic [ref=e131]:
+              - img [ref=e133]
+              - generic [ref=e135]:
+                - heading "Inline Model Isolation & Kill-Switch" [level=1] [ref=e137]
+                - paragraph [ref=e138]: An incident-style workspace for model containment, threshold breaches, circuit-breaker state, and emergency isolation controls.
+                - paragraph [ref=e139]: "This page should feel like an incident board: thresholds, kill-switch controls, model state, and critical evidence front and center."
+            - generic [ref=e140]:
+              - generic [ref=e141]:
+                - generic [ref=e142]: Critical events
+                - generic [ref=e143]: "0"
+                - generic [ref=e144]: Only high-risk isolation-relevant events are included here
+              - generic [ref=e145]:
+                - generic [ref=e146]: Containment actions
+                - generic [ref=e147]: "0"
+                - generic [ref=e148]: Kill-switch, circuit-breaker, or hard-block events
+              - generic [ref=e149]:
+                - generic [ref=e150]: Affected models
+                - generic [ref=e151]: "0"
+                - generic [ref=e152]: Distinct models appearing in critical evidence
+              - generic [ref=e153]:
+                - generic [ref=e154]: Allowed despite risk
+                - generic [ref=e155]: "0"
+                - generic [ref=e156]: High-risk events that still resolved without a hard block
+          - generic [ref=e157]:
+            - generic [ref=e158]:
+              - generic [ref=e159]:
+                - generic [ref=e160]:
+                  - generic [ref=e161]: Operator lens
+                  - heading "Choose the time horizon" [level=3] [ref=e162]
+                - img [ref=e163]
+              - generic [ref=e166]:
+                - button "1h" [ref=e167]
+                - button "6h" [ref=e168]
+                - button "24h" [ref=e169]
+                - button "7d" [ref=e170]
+                - button "30d" [ref=e171]
+              - generic [ref=e172]:
+                - generic [ref=e173]:
+                  - generic [ref=e174]: Most affected model
+                  - generic [ref=e175]: Unknown
+                  - generic [ref=e176]: Model appearing most often in critical evidence
+                - generic [ref=e177]:
+                  - generic [ref=e178]: Average risk
+                  - generic [ref=e179]: 0%
+                  - generic [ref=e180]: Mean risk score across critical-only evidence
+                - generic [ref=e181]:
+                  - generic [ref=e182]: Latest trigger
+                  - generic [ref=e183]: "--"
+                  - generic [ref=e184]: Most recent critical source in the isolation stream
+            - generic [ref=e185]:
+              - generic [ref=e186]:
+                - generic [ref=e187]:
+                  - generic [ref=e188]: Operator priorities
+                  - heading "What should dominate this page" [level=3] [ref=e189]
+                - img [ref=e190]
+              - generic [ref=e193]:
+                - generic [ref=e194]: Lead with containment readiness and critical-event load.
+                - generic [ref=e195]: Keep the circuit-breaker simulator close to the kill-switch controls.
+                - generic [ref=e196]: Use evidence rows to understand which models are repeatedly tripping isolation conditions.
+              - button "Open detailed results" [ref=e197]:
+                - text: Open detailed results
+                - img [ref=e198]
+        - button "Getting Started Configure Kill-Switch & Circuit Breaker Thresholds For security operators and incident responders View guide" [ref=e202]:
+          - generic [ref=e203]:
+            - img [ref=e205]
+            - generic [ref=e207]:
+              - generic [ref=e208]: Getting Started
+              - heading "Configure Kill-Switch & Circuit Breaker Thresholds" [level=3] [ref=e209]
+              - generic [ref=e210]: For security operators and incident responders
+          - generic [ref=e211]:
+            - generic [ref=e212]:
+              - img [ref=e213]
+              - text: View guide
+            - img [ref=e217]
+        - generic [ref=e219]:
+          - generic [ref=e221]:
+            - generic [ref=e222]: Workflow
+            - heading "Containment controls and critical-response workflow" [level=2] [ref=e223]
+            - paragraph [ref=e224]: "This page should feel like an incident board: thresholds, kill-switch controls, model state, and critical evidence front and center."
+          - generic [ref=e225]:
+            - generic [ref=e226]:
+              - generic [ref=e227]:
+                - generic [ref=e228]: Containment controls
+                - generic [ref=e229]:
+                  - generic [ref=e230]:
+                    - generic [ref=e231]:
+                      - generic [ref=e232]:
+                        - heading "Model State & Risk Monitor Info" [level=3] [ref=e233]:
+                          - text: Model State & Risk Monitor
+                          - button "Info" [ref=e235]:
+                            - img [ref=e236]
+                        - paragraph [ref=e238]: Real-time org-scoped model health with rolling risk scores
+                      - generic [ref=e239]:
+                        - button "Audit Log" [ref=e240]:
+                          - img [ref=e241]
+                          - text: Audit Log
+                        - button "Live" [ref=e244]:
+                          - img [ref=e245]
+                          - text: Live
+                    - generic [ref=e247]:
+                      - generic [ref=e248]:
+                        - img [ref=e249]
+                        - generic [ref=e251]: 0 Active
+                      - generic [ref=e252]: "Auto-refresh: 5s"
+                    - generic [ref=e253]: No model states configured. Register models to enable real-time risk monitoring.
+                  - generic [ref=e254]:
+                    - generic [ref=e255]:
+                      - generic [ref=e256]:
+                        - heading "Kill-Switch Management Info" [level=3] [ref=e257]:
+                          - text: Kill-Switch Management
+                          - button "Info" [ref=e259]:
+                            - img [ref=e260]
+                        - paragraph [ref=e262]: Create and manage model kill-switches for emergency isolation
+                      - button "Create Kill-Switch" [ref=e263]:
+                        - img [ref=e264]
+                        - text: Create Kill-Switch
+                    - table [ref=e266]:
+                      - rowgroup [ref=e267]:
+                        - row "Model Status Action Fallback Reason Activated By Controls" [ref=e268]:
+                          - columnheader "Model" [ref=e269]
+                          - columnheader "Status" [ref=e270]
+                          - columnheader "Action" [ref=e271]
+                          - columnheader "Fallback" [ref=e272]
+                          - columnheader "Reason" [ref=e273]
+                          - columnheader "Activated By" [ref=e274]
+                          - columnheader "Controls" [ref=e275]
+                      - rowgroup [ref=e276]:
+                        - row "gpt-4o-mini-live-verify Inactive disable -- browser-agent live verification admin Activate kill switch for gpt-4o-mini-live-verify Edit kill switch for gpt-4o-mini-live-verify Delete kill switch for gpt-4o-mini-live-verify" [ref=e277]:
+                          - cell "gpt-4o-mini-live-verify" [ref=e278]
+                          - cell "Inactive" [ref=e279]:
+                            - generic [ref=e280]:
+                              - img [ref=e281]
+                              - text: Inactive
+                          - cell "disable" [ref=e284]:
+                            - generic [ref=e285]:
+                              - img [ref=e286]
+                              - text: disable
+                          - cell "--" [ref=e290]
+                          - cell "browser-agent live verification" [ref=e291]
+                          - cell "admin" [ref=e292]
+                          - cell "Activate kill switch for gpt-4o-mini-live-verify Edit kill switch for gpt-4o-mini-live-verify Delete kill switch for gpt-4o-mini-live-verify" [ref=e293]:
+                            - generic [ref=e294]:
+                              - button "Activate kill switch for gpt-4o-mini-live-verify" [ref=e295]:
+                                - img [ref=e296]
+                              - button "Edit kill switch for gpt-4o-mini-live-verify" [ref=e300]:
+                                - img [ref=e301]
+                              - button "Delete kill switch for gpt-4o-mini-live-verify" [ref=e304]:
+                                - img [ref=e305]
+              - generic [ref=e308]:
+                - generic [ref=e309]: Containment exercises
+                - generic [ref=e311]:
+                  - generic [ref=e313]:
+                    - generic [ref=e314]:
+                      - heading "Circuit Breaker Simulator" [level=3] [ref=e315]
+                      - paragraph [ref=e316]: Inject errors to trigger circuit breaker protection, observe state transitions, and test recovery
+                    - generic [ref=e317]:
+                      - generic [ref=e318]:
+                        - img [ref=e319]
+                        - text: Connected
+                      - button [ref=e323]:
+                        - img [ref=e324]
+                  - generic [ref=e327]:
+                    - generic [ref=e328]:
+                      - text: Gateway URL
+                      - textbox [ref=e329]: http://127.0.0.1:8180
+                    - generic [ref=e330]:
+                      - text: Gateway API Key
+                      - textbox "Enter gateway API key..." [ref=e331]: N15fcK54CkkxEnmkFyOrRgcNyw9o4VSDZG-WM6Us9dZlC6r1
+                  - generic [ref=e334]:
+                    - generic [ref=e335]:
+                      - text: Target Model
+                      - textbox [ref=e336]: gpt-4o-mini
+                    - generic [ref=e337]:
+                      - generic [ref=e338]: "Error Count: 10"
+                      - slider [ref=e339]: "10"
+                    - button "Reset Breaker" [ref=e341]:
+                      - img [ref=e342]
+                      - text: Reset Breaker
+                  - generic [ref=e345]:
+                    - button "Execute" [ref=e346]:
+                      - img [ref=e347]
+                      - text: Execute
+                    - button "Refresh State" [ref=e349]:
+                      - img [ref=e350]
+                      - text: Refresh State
+                  - generic [ref=e352]:
+                    - generic [ref=e353]: No circuit breaker keys in Redis. Send some requests through the gateway first, or click "Execute" to inject errors.
+                    - generic [ref=e354]:
+                      - heading "Model Risk Injection (Auto-Isolation Test)" [level=4] [ref=e355]:
+                        - img [ref=e356]
+                        - text: Model Risk Injection (Auto-Isolation Test)
+                      - generic [ref=e359]:
+                        - generic [ref=e360]:
+                          - text: Model
+                          - textbox [ref=e361]: gpt-4o
+                        - generic [ref=e362]:
+                          - text: Type
+                          - combobox [ref=e363]:
+                            - option "Output Guard (0.40)" [selected]
+                            - option "Circuit Breaker (0.35)"
+                            - option "Input Scan (0.30)"
+                            - option "Guardrail (0.25)"
+                            - option "Anomaly (0.20)"
+                            - option "Policy (0.10)"
+                        - generic [ref=e364]:
+                          - generic [ref=e365]: "Events: 20"
+                          - slider [ref=e366]: "20"
+                        - generic [ref=e367]:
+                          - generic [ref=e368]: "Severity: 0.85"
+                          - slider [ref=e369]: "0.85"
+                      - button "Inject Risk Events" [ref=e370]:
+                        - img [ref=e371]
+                        - text: Inject Risk Events
+            - generic [ref=e376]:
+              - generic [ref=e377]: Traffic path
+              - generic [ref=e378]:
+                - generic [ref=e379]:
+                  - generic [ref=e380]: Model Active
+                  - generic [ref=e381]: 0 watched
+                - generic [ref=e382]:
+                  - generic [ref=e383]: Risk Analysis
+                  - generic [ref=e384]: 0 critical
+                - generic [ref=e385]:
+                  - generic [ref=e386]: Threshold
+                  - generic [ref=e387]: 0 contained
+                - generic [ref=e388]:
+                  - generic [ref=e389]: Status
+                  - generic [ref=e390]: 0 passed
+        - generic [ref=e391]:
+          - generic [ref=e392]:
+            - generic [ref=e393]:
+              - generic [ref=e394]: Evidence
+              - heading "Recent critical evidence" [level=2] [ref=e395]
+              - paragraph [ref=e396]: The highest-risk model events, containment actions, and kill-switch-adjacent evidence in the current time window.
+            - button "View full results" [ref=e397]:
+              - text: View full results
+              - img [ref=e398]
+          - generic [ref=e401]: No recent module evidence is available for this time range.

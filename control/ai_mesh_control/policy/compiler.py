@@ -136,14 +136,61 @@ class PolicyCompiler:
         try:
             client = _get_redis_client()
 
-            new_version: int = client.incr(version_key)
-            bundle["version"] = new_version
+            # C1 race fix: previously `incr` ran as a standalone command
+            # BEFORE the pipeline that wrote the bundle. Two concurrent
+            # compiles could interleave so the higher version (e.g. v=2)
+            # ended up paired with the older bundle content. Gateways then
+            # cached stale rules under a "newer" version forever.
+            #
+            # Wrap version-bump + bundle-set + publish in a WATCH/MULTI/EXEC
+            # transaction. If anyone else writes to version_key between WATCH
+            # and EXEC, redis-py auto-retries this callable until success.
+            # Result: every (version, bundle) pair stored is consistent and
+            # the publish notification carries the version that actually
+            # matches the bytes at redis_key.
+            tx_state: dict[str, Any] = {"version": None, "policy_count": 0}
 
-            # HMAC-sign the bundle BEFORE serialising so the gateway can
-            # reject any tampered copy in Redis. Signing covers every field
-            # of the bundle except `_sig` itself.
+            def _atomic_publish(pipe: "redis.client.Pipeline") -> None:
+                current_raw = pipe.get(version_key)
+                try:
+                    current = int(current_raw) if current_raw is not None else 0
+                except (TypeError, ValueError):
+                    current = 0
+                new_version = current + 1
+
+                # Bundle is mutated each retry so the signed payload always
+                # reflects the version we are about to commit.
+                bundle["version"] = new_version
+                try:
+                    sign_bundle(bundle)
+                except RuntimeError:
+                    # Surface via outer exception path; raising here aborts
+                    # the WATCH (no EXEC issued) so no partial write occurs.
+                    raise
+
+                serialized_bundle = json.dumps(bundle, default=str)
+                notification = json.dumps(
+                    {
+                        "event": "policy_compiled",
+                        "version": new_version,
+                        "policy_count": bundle.get("policy_count", 0),
+                        "compiled_at": bundle.get("compiled_at"),
+                        "trigger": trigger,
+                        "changed_policy_ids": changed_policy_ids or [],
+                        "org_slug": org_slug,
+                    }
+                )
+
+                pipe.multi()
+                pipe.set(version_key, new_version)
+                pipe.set(redis_key, serialized_bundle)
+                pipe.publish(PUBSUB_CHANNEL, notification)
+
+                tx_state["version"] = new_version
+                tx_state["policy_count"] = bundle.get("policy_count", 0)
+
             try:
-                sign_bundle(bundle)
+                client.transaction(_atomic_publish, version_key)
             except RuntimeError:
                 logger.exception(
                     "Refusing to push unsigned policy bundle "
@@ -151,30 +198,13 @@ class PolicyCompiler:
                 )
                 return False
 
-            serialized_bundle = json.dumps(bundle, default=str)
-
-            notification = json.dumps(
-                {
-                    "event": "policy_compiled",
-                    "version": new_version,
-                    "policy_count": bundle.get("policy_count", 0),
-                    "compiled_at": bundle.get("compiled_at"),
-                    "trigger": trigger,
-                    "changed_policy_ids": changed_policy_ids or [],
-                    "org_slug": org_slug,
-                }
-            )
-
-            pipe = client.pipeline(transaction=True)
-            pipe.set(redis_key, serialized_bundle)
-            pipe.publish(PUBSUB_CHANNEL, notification)
-            pipe.execute()
+            new_version = tx_state["version"]
 
             logger.info(
-                "Pushed compiled policies to Redis (%s, version=%d, policies=%d, trigger=%s)",
+                "Pushed compiled policies to Redis (%s, version=%s, policies=%d, trigger=%s)",
                 redis_key,
                 new_version,
-                bundle.get("policy_count", 0),
+                tx_state["policy_count"],
                 trigger,
             )
             return True

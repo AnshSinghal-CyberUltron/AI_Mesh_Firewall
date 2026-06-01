@@ -24,12 +24,10 @@ import {
   BarChart3,
   Clock,
   Ban,
-  Zap,
-  Power,
   Hash,
+  Key,
   ToggleLeft,
   ToggleRight,
-  Key,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { toAbsoluteGatewayUrl, resolveGatewayBaseUrl } from "../utils/environmentUrls";
@@ -40,7 +38,13 @@ import { PolicyManagementPanel } from "./PolicyManagementPanel";
 const TRANSPORT_OPTIONS = [
   { value: "streamable-http", label: "Streamable HTTP", supported: true },
   { value: "sse", label: "SSE", supported: true },
-  { value: "stdio", label: "Stdio", supported: true },
+  // stdio spawns a subprocess INSIDE the gateway container. The gateway now
+  // ships node/npx/python/python3, so npx-based servers (Linear/Playwright)
+  // launch. The command must be one of the allow-listed interpreters and the
+  // package's own runtime dependency must be present in the container (e.g.
+  // Semgrep MCP needs the `semgrep` binary). Failures surface a clear
+  // actionable error in last_sync_error rather than a silent "disconnected".
+  { value: "stdio", label: "Stdio (subprocess)", supported: true },
   { value: "websocket", label: "WebSocket", supported: true },
 ];
 
@@ -54,6 +58,7 @@ const AUTH_OPTIONS = [
   { value: "basic", label: "Basic Auth" },
   { value: "authheaders", label: "Custom Header" },
   { value: "query_param", label: "Query Parameter" },
+  { value: "oauth", label: "OAuth 2.1 (authorize via provider)" },
 ];
 
 const MCP_PRESETS = [
@@ -229,6 +234,9 @@ function StatusDot({ status }) {
 const CONNECTION_STATUS_STYLES = {
   connected: "bg-emerald-100 text-emerald-700 dark:bg-emerald-800/30 dark:text-emerald-300",
   disconnected: "bg-red-100 text-red-700 dark:bg-red-800/30 dark:text-red-300",
+  // Backend MCPServerToolListView returns connection_status="failed" when a
+  // tools sync hits an upstream/transport error (HTTP 200 body, see A2 fix).
+  failed: "bg-red-100 text-red-700 dark:bg-red-800/30 dark:text-red-300",
   unknown: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
   syncing: "bg-blue-100 text-blue-700 dark:bg-blue-800/30 dark:text-blue-300",
 };
@@ -251,7 +259,7 @@ const TABS = [
   { id: "servers", label: "MCP Servers", icon: Server },
   { id: "tools", label: "Tool Discovery", icon: Wrench },
   { id: "execute", label: "Tool Execution", icon: Play },
-  { id: "protection", label: "MCP Protection", icon: Shield },
+  { id: "protection", label: "MCP Security Policies", icon: Shield },
   { id: "observability", label: "Observability", icon: BarChart3 },
   { id: "health", label: "Services Health", icon: Activity },
 ];
@@ -261,7 +269,6 @@ export function MCPConnectorPanel() {
   const { fetchWithAuth, user } = useAuth();
 
   const [tab, setTab] = useState("servers");
-  const [protectionView, setProtectionView] = useState("policies");
   const [obsHours, setObsHours] = useState(24); // 0 = all-time, 1/24/168/720
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -282,17 +289,6 @@ export function MCPConnectorPanel() {
   const [executeArguments, setExecuteArguments] = useState("{}");
   const [executeResult, setExecuteResult] = useState(null);
   const [executeBusy, setExecuteBusy] = useState(false);
-
-  /* ── guardrails ── */
-  const [guardrails, setGuardrails] = useState([]);
-  const [grOpen, setGrOpen] = useState(false);
-  const [grForm, setGrForm] = useState({
-    name: "", description: "",
-    input_policy: { enabled: true, pii_redaction: true, block: ["injection_attack"] },
-    output_policy: { enabled: true, block: ["policy_violation"] },
-    is_default: false,
-  });
-  const [grSaving, setGrSaving] = useState(false);
 
   /* ── MCP policy server filter ── */
   const [policyServerFilter, setPolicyServerFilter] = useState("");
@@ -362,21 +358,6 @@ export function MCPConnectorPanel() {
     }
   }, [fetchWithAuth]);
 
-  const loadGuardrails = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetchWithAuth("/api/mcp-connector/guardrails/");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setGuardrails(Array.isArray(data) ? data : data.results ?? []);
-    } catch (e) {
-      setError(`Failed to load guardrails: ${e.message}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchWithAuth]);
-
   const loadHealth = useCallback(async () => {
     try {
       const res = await fetchWithAuth("/api/mcp-connector/health/");
@@ -439,10 +420,10 @@ export function MCPConnectorPanel() {
     if (tab === "servers") { loadServers(); loadOrgGatewayKey(); }
     if (tab === "tools") loadTools();
     if (tab === "execute") loadTools();
-    if (tab === "protection") { loadServers(); loadGuardrails(); }
+    if (tab === "protection") { loadServers(); }
     if (tab === "observability") { loadEvents(); loadEventSummary(); }
     if (tab === "health") loadHealth();
-  }, [tab, loadServers, loadTools, loadGuardrails, loadHealth, loadEvents, loadEventSummary, loadOrgGatewayKey]);
+  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadEventSummary, loadOrgGatewayKey]);
 
   /* ────────── actions ────────── */
 
@@ -488,34 +469,6 @@ export function MCPConnectorPanel() {
       await loadServers();
     } catch (e) {
       setError(`Delete failed: ${e.message}`);
-    }
-  };
-
-  const addGuardrail = async () => {
-    setGrSaving(true);
-    setError(null);
-    try {
-      const res = await fetchWithAuth("/api/mcp-connector/guardrails/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(grForm),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || body.error || `HTTP ${res.status}`);
-      }
-      setGrOpen(false);
-      setGrForm({
-        name: "", description: "",
-        input_policy: { enabled: true, pii_redaction: true, block: ["injection_attack"] },
-        output_policy: { enabled: true, block: ["policy_violation"] },
-        is_default: false,
-      });
-      await loadGuardrails();
-    } catch (e) {
-      setError(`Add guardrail failed: ${e.message}`);
-    } finally {
-      setGrSaving(false);
     }
   };
 
@@ -570,7 +523,20 @@ export function MCPConnectorPanel() {
     setSyncingServer(serverId);
     try {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/tools/`, { method: "POST" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // A2 contract: the sync endpoint returns HTTP 200 even on upstream
+      // failure, carrying { synced, pruned, error, connection_status } in the
+      // body. A transport/handshake/auth error is reported via body.error with
+      // connection_status="failed" — NOT via a non-2xx status. So we must
+      // inspect the body instead of relying on res.ok alone.
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.detail || body.error || `HTTP ${res.status}`);
+      }
+      if (body.error || body.connection_status === "failed") {
+        setError(`Sync failed for server: ${body.error || "upstream discovery error"}`);
+      } else {
+        setError(null);
+      }
       await loadServerTools(serverId);
       await loadServers();
     } catch (e) {
@@ -591,6 +557,38 @@ export function MCPConnectorPanel() {
       await loadServerTools(serverId);
     } catch (e) {
       setError(`Toggle tool failed: ${e.message}`);
+    }
+  };
+
+  // DECISION-D Phase 1: per-tool Presidio action override.
+  // "inherit" falls back to MCPServerRegistration.default_presidio_action,
+  // which itself defaults to "tag". Block short-circuits at the gateway.
+  const setToolPresidioAction = async (serverId, toolName, action) => {
+    try {
+      const res = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/tools/${encodeURIComponent(toolName)}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ presidio_action: action }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await loadServerTools(serverId);
+    } catch (e) {
+      setError(`Update Presidio action failed: ${e.message}`);
+    }
+  };
+
+  // DECISION-D Phase 1: server-level Presidio default action.
+  const setServerPresidioDefault = async (serverId, action) => {
+    try {
+      const res = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ default_presidio_action: action }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await loadServers();
+    } catch (e) {
+      setError(`Update server Presidio default failed: ${e.message}`);
     }
   };
 
@@ -707,6 +705,65 @@ export function MCPConnectorPanel() {
     }
   };
 
+  /**
+   * Control-plane OAuth 2.1 flow for HTTP MCP servers (auth_type === "oauth").
+   * Unlike startOAuth (gateway-side, for stdio mcp-remote), this calls the
+   * control authorize endpoint which performs RFC 9728/8414 discovery + RFC
+   * 7591 dynamic client registration, then returns a provider consent URL.
+   * The popup completes at the control callback, which exchanges the code and
+   * stores the per-org encrypted token. We poll the org-scoped server detail
+   * for oauth_authorized, then auto-sync tools. No credential ever touches the
+   * browser — the token lives only in the org's encrypted DB row.
+   */
+  const startControlOAuth = async (srv) => {
+    // Pre-open popup SYNCHRONOUSLY (same call stack as click) to dodge blockers.
+    const popup = window.open("about:blank", "mcp-oauth-2-1", "width=620,height=760");
+    if (!popup) {
+      setError("Popup blocked. Please allow popups for this site and try again.");
+      return;
+    }
+    setOauthBusy(srv.id);
+    setError(null);
+    try {
+      const res = await fetchWithAuth(`/api/mcp-connector/servers/${srv.id}/oauth/authorize/`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.authorize_url) {
+        popup.close();
+        throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+      }
+      popup.location.href = data.authorize_url;
+
+      // Poll the org-scoped server detail until the callback stores the token.
+      let elapsed = 0;
+      const interval = setInterval(async () => {
+        elapsed += 3000;
+        try {
+          const r = await fetchWithAuth(`/api/mcp-connector/servers/${srv.id}/`);
+          if (r.ok) {
+            const s = await r.json();
+            if (s.oauth_authorized) {
+              clearInterval(interval);
+              setOauthBusy(null);
+              if (!popup.closed) popup.close();
+              await loadServers();
+              await syncServerTools(srv.id);
+              return;
+            }
+          }
+        } catch (_) { /* transient — keep polling */ }
+        if (elapsed >= 180000 || popup.closed) {
+          clearInterval(interval);
+          setOauthBusy(null);
+          await loadServers();
+        }
+      }, 3000);
+    } catch (e) {
+      if (popup && !popup.closed) popup.close();
+      setOauthBusy(null);
+      setError(`OAuth authorize failed: ${e.message}`);
+    }
+  };
+
   // Listen for OAuth popup completion
   useEffect(() => {
     const handler = (event) => {
@@ -762,17 +819,6 @@ export function MCPConnectorPanel() {
       setError(`Tool execution failed: ${e.message}`);
     } finally {
       setExecuteBusy(false);
-    }
-  };
-
-  const deleteGuardrail = async (pk) => {
-    if (!window.confirm("Delete this guardrail profile?")) return;
-    try {
-      const res = await fetchWithAuth(`/api/mcp-connector/guardrails/${pk}/`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
-      await loadGuardrails();
-    } catch (e) {
-      setError(`Delete failed: ${e.message}`);
     }
   };
 
@@ -908,6 +954,13 @@ export function MCPConnectorPanel() {
                     </span>
                   )}
                 </div>
+                {/* Last sync error banner (A2: surfaced from HTTP-200 body) */}
+                {srv.last_sync_error && (
+                  <div className="mt-2 flex items-start gap-1.5 text-[10px] text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded px-2 py-1">
+                    <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                    <span className="break-all">{srv.last_sync_error}</span>
+                  </div>
+                )}
                 {/* Gateway endpoint with copy */}
                 {srv.gateway_endpoint && (
                   <div className="mt-2 space-y-1">
@@ -941,6 +994,18 @@ export function MCPConnectorPanel() {
                 <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                   {srv.transport}
                 </span>
+                {/* DECISION-D Phase 1: server-level Presidio default action.
+                    Per-tool override (set on each tool row) takes precedence. */}
+                <select
+                  value={srv.default_presidio_action || "tag"}
+                  onChange={(e) => setServerPresidioDefault(srv.id, e.target.value)}
+                  className="text-[11px] bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5"
+                  title="Default Presidio PII enforcement for tools on this server"
+                >
+                  <option value="tag">PII default: tag</option>
+                  <option value="redact">PII default: redact</option>
+                  <option value="block">PII default: block</option>
+                </select>
                 {/* OAuth Authorize button for mcp-remote servers */}
                 {serverNeedsOAuth(srv) && (
                   <button
@@ -953,6 +1018,26 @@ export function MCPConnectorPanel() {
                       ? <Loader2 className="w-3 h-3 animate-spin" />
                       : <Shield className="w-3 h-3" />}
                     Authorize
+                  </button>
+                )}
+                {/* OAuth 2.1 Authorize button for HTTP servers (control-plane DCR + PKCE) */}
+                {srv.auth_type === "oauth" && (
+                  <button
+                    onClick={() => startControlOAuth(srv)}
+                    disabled={oauthBusy === srv.id}
+                    className={`text-xs px-2 py-1 rounded disabled:opacity-50 flex items-center gap-1 font-medium ${
+                      srv.oauth_authorized
+                        ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                        : "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
+                    }`}
+                    title={srv.oauth_authorized
+                      ? "Re-authorize OAuth 2.1 — opens provider consent popup"
+                      : "Authorize OAuth 2.1 — opens provider consent popup; token is stored encrypted per-org"}
+                  >
+                    {oauthBusy === srv.id
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Shield className="w-3 h-3" />}
+                    {srv.oauth_authorized ? "Re-authorize" : "Authorize"}
                   </button>
                 )}
                 <button
@@ -1020,9 +1105,24 @@ export function MCPConnectorPanel() {
                           {tool.tool_name}
                         </span>
                       </div>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${SENSITIVITY_STYLES[tool.sensitivity] || SENSITIVITY_STYLES.low}`}>
-                        {tool.sensitivity}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* DECISION-D Phase 1: per-tool Presidio action.
+                            "inherit" defers to the server-level default. */}
+                        <select
+                          value={tool.presidio_action || "inherit"}
+                          onChange={(e) => setToolPresidioAction(srv.id, tool.tool_name, e.target.value)}
+                          className="text-[10px] bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5"
+                          title="Presidio PII enforcement for this tool"
+                        >
+                          <option value="inherit">PII: inherit</option>
+                          <option value="tag">PII: tag</option>
+                          <option value="redact">PII: redact</option>
+                          <option value="block">PII: block</option>
+                        </select>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SENSITIVITY_STYLES[tool.sensitivity] || SENSITIVITY_STYLES.low}`}>
+                          {tool.sensitivity}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1077,7 +1177,8 @@ export function MCPConnectorPanel() {
                   ))}
                 </select>
                 <p className="text-xs text-slate-500 mt-1">
-                  Supports HTTP, SSE, Stdio (subprocess), and WebSocket transports.
+                  Supports HTTP, SSE, WebSocket, and Stdio (subprocess) transports.
+                  Stdio runs the command inside the gateway container.
                 </p>
               </div>
 
@@ -1085,6 +1186,13 @@ export function MCPConnectorPanel() {
               {addForm.transport === "stdio" && (
                 <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-3 bg-blue-50/50 dark:bg-blue-900/20">
                   <p className="text-xs font-medium text-blue-700 dark:text-blue-300">Stdio Transport Settings</p>
+                  <p className="text-xs text-blue-700/80 dark:text-blue-300/80">
+                    Command must be an allow-listed interpreter (<code>npx</code>, <code>node</code>,
+                    <code> python</code>, <code>python3</code>) — not a path. The package's own
+                    runtime dependency must also be installed in the gateway container
+                    (e.g. Semgrep MCP requires the <code>semgrep</code> binary). Missing
+                    dependencies surface a clear error below the server.
+                  </p>
                   <div>
                     <label className="block text-sm font-medium mb-1">Command</label>
                     <input
@@ -1350,7 +1458,7 @@ export function MCPConnectorPanel() {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Scope to server:</label>
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter policies by server:</label>
           <select
             className="border rounded-lg px-3 py-1.5 text-sm dark:bg-slate-700 dark:border-slate-600 min-w-[200px]"
             value={policyServerFilter}
@@ -1373,8 +1481,8 @@ export function MCPConnectorPanel() {
           title="MCP Security Policies"
           description={
             policyServerFilter
-              ? `Policies scoped to server "${selectedServer?.name || policyServerFilter}" + org-wide MCP policies`
-              : "Organization-wide MCP policies (apply to all MCP servers)"
+              ? `Active rules for "${selectedServer?.name || policyServerFilter}" plus org-wide MCP policies — the single enforcement layer for every MCP tool call.`
+              : "Organization-wide MCP policies — the single enforcement layer applied in-band to every MCP tool call across all servers."
           }
           scope="mcp"
           mcpServerSlug={policyServerFilter || null}
@@ -1386,330 +1494,7 @@ export function MCPConnectorPanel() {
     );
   };
 
-  const renderGuardrails = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Guardrail profiles for MCP traffic. Apply PII redaction, injection blocking,
-          and compliance policies through ZeroShield enforcement.
-        </p>
-        <div className="flex gap-2">
-          <button onClick={loadGuardrails} className="btn-icon" title="Refresh">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button onClick={() => setGrOpen(true)} className="btn-primary text-sm flex items-center gap-1">
-            <Plus className="w-4 h-4" /> New Profile
-          </button>
-        </div>
-      </div>
-
-      {guardrails.length === 0 && !loading && (
-        <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-          <Shield className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p>No guardrail profiles defined.</p>
-          <p className="text-xs mt-1">Create a profile to enforce PII redaction, injection blocking, etc.</p>
-        </div>
-      )}
-
-      <div className="grid gap-3">
-        {guardrails.map((gr) => (
-          <div key={gr.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <h4 className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-violet-500" />
-                  {gr.name}
-                  {gr.is_default && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 dark:text-emerald-300 font-medium">
-                      DEFAULT
-                    </span>
-                  )}
-                </h4>
-                {gr.description && <p className="text-xs text-slate-500 mt-1">{gr.description}</p>}
-              </div>
-              <button onClick={() => deleteGuardrail(gr.id)} className="text-red-500 hover:text-red-700" title="Delete">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <span className="text-[10px] font-medium uppercase text-slate-400">Input Detectors</span>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {gr.input_policy?.enabled === false ? (
-                    <span className="text-[10px] text-slate-400 italic">Disabled</span>
-                  ) : (gr.input_policy?.block || []).length > 0 ? (
-                    (gr.input_policy.block || []).map((b) => (
-                      <span key={b} className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300 font-medium">
-                        {b.replace(/_/g, " ")}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-[10px] text-slate-400 italic">No blocking detectors</span>
-                  )}
-                  {gr.input_policy?.pii_redaction && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-800/30 text-amber-700 dark:text-amber-300 font-medium">
-                      PII redaction
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div>
-                <span className="text-[10px] font-medium uppercase text-slate-400">Output Detectors</span>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {gr.output_policy?.enabled === false ? (
-                    <span className="text-[10px] text-slate-400 italic">Disabled</span>
-                  ) : (gr.output_policy?.block || []).length > 0 ? (
-                    (gr.output_policy.block || []).map((b) => (
-                      <span key={b} className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300 font-medium">
-                        {b.replace(/_/g, " ")}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-[10px] text-slate-400 italic">No blocking detectors</span>
-                  )}
-                </div>
-              </div>
-            </div>
-            {/* Enforcement Chain: Policy → Scope → Effect */}
-            <div className="mt-3 border-t border-slate-100 dark:border-slate-700 pt-3">
-              <span className="text-[10px] font-medium uppercase text-slate-400 mb-1 block">Enforcement Chain</span>
-              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                <span className="inline-flex items-center gap-1 rounded bg-violet-100 dark:bg-violet-800/30 text-violet-700 dark:text-violet-300 px-2 py-0.5 font-medium">
-                  <Shield className="w-3 h-3" /> {gr.name}
-                </span>
-                <span className="text-slate-400">→</span>
-                <span className="inline-flex items-center rounded bg-blue-100 dark:bg-blue-800/30 text-blue-700 dark:text-blue-300 px-2 py-0.5">
-                  {gr.is_default ? "All MCP servers (default)" : "Manually assigned servers"}
-                </span>
-                <span className="text-slate-400">→</span>
-                <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-2 py-0.5">
-                  {gr.input_policy?.enabled && gr.output_policy?.enabled ? "Input + Output" :
-                   gr.input_policy?.enabled ? "Input only" :
-                   gr.output_policy?.enabled ? "Output only" : "Inactive"}
-                </span>
-                <span className="text-slate-400">→</span>
-                {(gr.input_policy?.block?.length > 0 || gr.output_policy?.block?.length > 0) ? (
-                  <span className="inline-flex items-center rounded bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300 px-2 py-0.5 font-medium">
-                    Blocks: {[...(gr.input_policy?.block || []), ...(gr.output_policy?.block || [])].join(", ")}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center rounded bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5">
-                    Monitor only
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Add Guardrail Modal — Category-based toggles ── */}
-      {grOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setGrOpen(false)} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600">
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="text-lg font-semibold mb-4">New Guardrail Profile</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
-                <input
-                  className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                  value={grForm.name}
-                  onChange={(e) => setGrForm({ ...grForm, name: e.target.value })}
-                  placeholder="PII + Injection Protection"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Description</label>
-                <textarea
-                  className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                  rows={2}
-                  value={grForm.description}
-                  onChange={(e) => setGrForm({ ...grForm, description: e.target.value })}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={grForm.is_default}
-                  onChange={(e) => setGrForm({ ...grForm, is_default: e.target.checked })}
-                  className="rounded"
-                />
-                <label className="text-sm">Apply by default to new MCP servers</label>
-              </div>
-
-              {/* ── Input Protection Toggles ── */}
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-medium text-slate-900 dark:text-white">Input Protection</h4>
-                  <button
-                    type="button"
-                    onClick={() => setGrForm({
-                      ...grForm,
-                      input_policy: { ...grForm.input_policy, enabled: !grForm.input_policy?.enabled }
-                    })}
-                    className="shrink-0"
-                    title={grForm.input_policy?.enabled ? "Disable input protection" : "Enable input protection"}
-                  >
-                    {grForm.input_policy?.enabled
-                      ? <ToggleRight className="w-5 h-5 text-emerald-500" />
-                      : <ToggleLeft className="w-5 h-5 text-slate-400" />}
-                  </button>
-                </div>
-                {grForm.input_policy?.enabled && (
-                  <div className="space-y-2">
-                    {[
-                      { key: "pii_redaction", label: "PII Redaction", desc: "Redact emails, SSNs, credit cards, phone numbers", builtin: true },
-                      { key: "injection_attack", label: "Prompt Injection Blocking", desc: "Block prompt injection and jailbreak attempts", builtin: true },
-                      { key: "sensitive_data", label: "Sensitive Data Detection", desc: "Detect API keys, passwords, secrets in input", builtin: true },
-                      { key: "profanity", label: "Profanity Filter", desc: "Block profanity and offensive language", builtin: true },
-                      { key: "topic_restriction", label: "Topic Restriction", desc: "Restrict off-topic or disallowed content categories", builtin: true },
-                    ].map((detector) => {
-                      const isBlocked = (grForm.input_policy?.block || []).includes(detector.key);
-                      return (
-                        <div key={detector.key} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded px-3 py-2">
-                          <div className="min-w-0">
-                            <span className="text-xs font-medium text-slate-900 dark:text-white">{detector.label}</span>
-                            <p className="text-[10px] text-slate-500">{detector.desc}</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const currentBlocks = grForm.input_policy?.block || [];
-                              const newBlocks = isBlocked
-                                ? currentBlocks.filter((b) => b !== detector.key)
-                                : [...currentBlocks, detector.key];
-                              setGrForm({
-                                ...grForm,
-                                input_policy: { ...grForm.input_policy, block: newBlocks },
-                              });
-                            }}
-                            className="shrink-0 ml-2"
-                          >
-                            {isBlocked
-                              ? <ToggleRight className="w-5 h-5 text-red-500" />
-                              : <ToggleLeft className="w-5 h-5 text-slate-400" />}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* ── Output Protection Toggles ── */}
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-medium text-slate-900 dark:text-white">Output Protection</h4>
-                  <button
-                    type="button"
-                    onClick={() => setGrForm({
-                      ...grForm,
-                      output_policy: { ...grForm.output_policy, enabled: !grForm.output_policy?.enabled }
-                    })}
-                    className="shrink-0"
-                    title={grForm.output_policy?.enabled ? "Disable output protection" : "Enable output protection"}
-                  >
-                    {grForm.output_policy?.enabled
-                      ? <ToggleRight className="w-5 h-5 text-emerald-500" />
-                      : <ToggleLeft className="w-5 h-5 text-slate-400" />}
-                  </button>
-                </div>
-                {grForm.output_policy?.enabled && (
-                  <div className="space-y-2">
-                    {[
-                      { key: "policy_violation", label: "Policy Violation Blocking", desc: "Block responses that violate organizational policies", builtin: true },
-                      { key: "pii_leakage", label: "PII Leakage Prevention", desc: "Prevent PII from appearing in tool output", builtin: true },
-                      { key: "hallucination", label: "Hallucination Detection", desc: "Flag fabricated or ungrounded content", builtin: false },
-                      { key: "toxicity", label: "Toxicity Filter", desc: "Block toxic, harmful, or offensive output", builtin: false },
-                      { key: "data_exfiltration", label: "Data Exfiltration Guard", desc: "Prevent unauthorized data extraction via tool output", builtin: true },
-                    ].map((detector) => {
-                      const isBlocked = (grForm.output_policy?.block || []).includes(detector.key);
-                      const enkryptMissing = !detector.builtin && !health?.enkrypt_configured;
-                      return (
-                        <div key={detector.key} className={`flex items-center justify-between rounded px-3 py-2 ${enkryptMissing ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" : "bg-slate-50 dark:bg-slate-900"}`}>
-                          <div className="min-w-0">
-                            <span className="text-xs font-medium text-slate-900 dark:text-white">{detector.label}</span>
-                            {!detector.builtin && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-800 dark:text-amber-200 font-medium">Enkrypt API</span>}
-                            <p className="text-[10px] text-slate-500">{detector.desc}</p>
-                            {enkryptMissing && <p className="text-[10px] text-amber-600 dark:text-amber-400">Requires SECURE_MCP_GATEWAY_ADMIN_KEY</p>}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const currentBlocks = grForm.output_policy?.block || [];
-                              const newBlocks = isBlocked
-                                ? currentBlocks.filter((b) => b !== detector.key)
-                                : [...currentBlocks, detector.key];
-                              setGrForm({
-                                ...grForm,
-                                output_policy: { ...grForm.output_policy, block: newBlocks },
-                              });
-                            }}
-                            className="shrink-0 ml-2"
-                          >
-                            {isBlocked
-                              ? <ToggleRight className="w-5 h-5 text-red-500" />
-                              : <ToggleLeft className="w-5 h-5 text-slate-400" />}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setGrOpen(false)} className="btn-secondary text-sm">Cancel</button>
-              <button
-                onClick={addGuardrail}
-                disabled={grSaving || !grForm.name}
-                className="btn-primary text-sm flex items-center gap-1"
-              >
-                {grSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                Create Profile
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderProtection = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Unified MCP protection — policy rules and guardrail profiles.
-        </p>
-        <div className="flex gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-0.5">
-          <button
-            onClick={() => setProtectionView("policies")}
-            className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
-              protectionView === "policies"
-                ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
-            }`}
-          >
-            <Ban className="w-3 h-3 inline mr-1" />Policy Rules
-          </button>
-          <button
-            onClick={() => setProtectionView("guardrails")}
-            className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
-              protectionView === "guardrails"
-                ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
-            }`}
-          >
-            <Shield className="w-3 h-3 inline mr-1" />Guardrail Profiles
-          </button>
-        </div>
-      </div>
-      {protectionView === "policies" ? renderPolicies() : renderGuardrails()}
-    </div>
-  );
+  const renderProtection = () => renderPolicies();
 
   const renderExecute = () => (
     <div className="space-y-4">
@@ -1997,6 +1782,23 @@ export function MCPConnectorPanel() {
                 {evt.policy_reason && (
                   <p className="text-[10px] text-slate-500 mt-1">{evt.policy_reason}</p>
                 )}
+                {/* DECISION-D Phase 1: surface compliance tags + Presidio finding count
+                    so operators can see PII enforcement at a glance. */}
+                {Array.isArray(evt.compliance_tags) && evt.compliance_tags.length > 0 && (
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    <span className="text-[10px] text-slate-400">Compliance:</span>
+                    {evt.compliance_tags.map((tag) => (
+                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium">
+                        {tag}
+                      </span>
+                    ))}
+                    {Array.isArray(evt.presidio_findings) && evt.presidio_findings.length > 0 && (
+                      <span className="text-[10px] text-slate-400">
+                        ({evt.presidio_findings.length} finding{evt.presidio_findings.length === 1 ? "" : "s"})
+                      </span>
+                    )}
+                  </div>
+                )}
                 {evt.username && (
                   <p className="text-[10px] text-slate-400 mt-0.5">User: {evt.username}</p>
                 )}
@@ -2027,62 +1829,16 @@ export function MCPConnectorPanel() {
       )}
 
       {health && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Registry plane */}
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                <Server className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h4 className="font-medium text-slate-900 dark:text-white">ZeroShield Registry Plane</h4>
-                <p className="text-xs text-slate-500">MCP Registry, Discovery &amp; Federation</p>
-              </div>
-              <StatusDot status={health.contextforge?.status} />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-                health.contextforge?.status === "healthy"
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-800/30 dark:text-emerald-300"
-                  : "bg-red-100 text-red-700 dark:bg-red-800/30 dark:text-red-300"
-              }`}>
-                {health.contextforge?.status || "unknown"}
-              </span>
-            </div>
-          </div>
-
-          {/* Guardrail plane */}
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-lg bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center">
-                <Shield className="w-5 h-5 text-violet-600" />
-              </div>
-              <div>
-                <h4 className="font-medium text-slate-900 dark:text-white">ZeroShield Guardrail Plane</h4>
-                <p className="text-xs text-slate-500">Guardrails, PII Redaction &amp; Compliance</p>
-              </div>
-              <StatusDot status={health.secure_mcp_gateway?.status} />
-            </div>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-              health.secure_mcp_gateway?.status === "healthy"
-                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-800/30 dark:text-emerald-300"
-                : health.secure_mcp_gateway?.status === "not_configured"
-                ? "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                : "bg-red-100 text-red-700 dark:bg-red-800/30 dark:text-red-300"
-            }`}>
-              {health.secure_mcp_gateway?.status || "unknown"}
-            </span>
-          </div>
-
-          {/* Policy plane — built-in engine */}
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
+        <div className="space-y-4">
+          {/* Policy Engine — the single source of MCP enforcement */}
+          <section aria-label="Policy engine status" className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-lg bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
                 <Ban className="w-5 h-5 text-orange-600" />
               </div>
               <div>
                 <h4 className="font-medium text-slate-900 dark:text-white">ZeroShield Policy Engine</h4>
-                <p className="text-xs text-slate-500">Built-in Regex, Keyword &amp; Pattern Enforcement</p>
+                <p className="text-xs text-slate-500">Inline Regex, Keyword &amp; Pattern Enforcement</p>
               </div>
               <StatusDot status={health.mcp_firewall?.status} />
             </div>
@@ -2096,9 +1852,35 @@ export function MCPConnectorPanel() {
               {health.mcp_firewall?.status || "unknown"}
             </span>
             {health.mcp_firewall?.detail && (
-              <p className="text-xs text-slate-500 mt-1">{health.mcp_firewall.detail}</p>
+              <p className="text-xs text-slate-500 mt-2">{health.mcp_firewall.detail}</p>
             )}
-          </div>
+          </section>
+
+          {/* Built-in detectors — the unified guard set enforced in-band on every call */}
+          {Array.isArray(health.builtin_detectors) && health.builtin_detectors.length > 0 && (
+            <section aria-label="Built-in detectors" className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-violet-600" />
+                </div>
+                <div>
+                  <h4 className="font-medium text-slate-900 dark:text-white">Built-in Detectors</h4>
+                  <p className="text-xs text-slate-500">Enforced in-band by the policy engine on every tool call</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {health.builtin_detectors.map((d) => (
+                  <span
+                    key={d}
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-violet-100 dark:bg-violet-800/30 text-violet-700 dark:text-violet-300 font-medium"
+                  >
+                    <CheckCircle className="w-3 h-3" />
+                    {String(d).replace(/_/g, " ")}
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>
@@ -2118,7 +1900,6 @@ export function MCPConnectorPanel() {
           const count =
             id === "servers" ? servers.length :
             id === "tools" ? tools.length :
-            id === "protection" ? guardrails.length :
             id === "observability" ? events.length :
             null;
           const isActive = tab === id;
@@ -2173,12 +1954,22 @@ export function MCPConnectorPanel() {
       )}
 
       {/* Tab content */}
-      {!loading && tab === "servers" && renderServers()}
-      {!loading && tab === "tools" && renderTools()}
-      {!loading && tab === "execute" && renderExecute()}
-      {!loading && tab === "protection" && renderProtection()}
-      {!loading && tab === "observability" && renderObservability()}
-      {!loading && tab === "health" && renderHealth()}
+      {!loading && (
+        <div
+          role="tabpanel"
+          id={`mcp-tab-${tab}`}
+          aria-label={TABS.find((t) => t.id === tab)?.label}
+          tabIndex={0}
+          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-lg"
+        >
+          {tab === "servers" && renderServers()}
+          {tab === "tools" && renderTools()}
+          {tab === "execute" && renderExecute()}
+          {tab === "protection" && renderProtection()}
+          {tab === "observability" && renderObservability()}
+          {tab === "health" && renderHealth()}
+        </div>
+      )}
     </div>
   );
 }

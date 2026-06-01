@@ -38,6 +38,13 @@ const ACTION_THEME = {
     icon: "text-zinc-500",
     highlight: "ring-zinc-400/40 shadow-zinc-500/20",
   },
+  needs_model: {
+    card: "border-violet-200 bg-violet-50/80 text-violet-900 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-50",
+    badge: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+    dot: "bg-violet-500",
+    icon: "text-violet-500",
+    highlight: "ring-violet-400/40 shadow-violet-500/20",
+  },
 };
 
 const ACTION_ICONS = {
@@ -46,6 +53,7 @@ const ACTION_ICONS = {
   flag: AlertTriangle,
   redact: Shield,
   skip: Clock,
+  needs_model: AlertTriangle,
 };
 
 /**

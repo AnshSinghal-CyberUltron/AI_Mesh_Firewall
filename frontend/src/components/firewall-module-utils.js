@@ -1,3 +1,9 @@
+import {
+  getRequestedModel as routingRequestedModel,
+  getRoutedModel as routingRoutedModel,
+  getRoutingContext,
+} from "../utils/routingEventFields";
+
 const MODULE_FILTERS = {
   "1.1": {},
   "1.2": {
@@ -14,11 +20,14 @@ const MODULE_FILTERS = {
     owaspPrefixes: ["MCP"],
   },
   "1.5": {
-    sources: ["agentic_scan"],
+    sources: ["routing", "agentic_scan"],
+    eventTypes: ["model_routed"],
     owaspPrefixes: ["AGENTIC"],
   },
   "1.6": {
-    criticalOnly: true,
+    moduleId: "1.6",
+    eventTypes: ["kill_switch", "model_isolation", "circuit_breaker"],
+    threatTypes: ["kill_switch", "model_isolation", "model_state_unavailable", "model_isolated"],
   },
   "1.7": {
     eventTypes: ["output_guard", "output_scan"],
@@ -161,6 +170,7 @@ const MODULE_PAGE_CONFIG = {
       { label: "Time", value: (event) => formatTimestamp(event.timestamp) },
       { label: "Requested", value: (event) => getRequestedModel(event) || "--" },
       { label: "Routed", value: (event) => getRoutedModel(event) || "--" },
+      { label: "Context", value: (event) => getRoutingContext(event) || "--" },
       { label: "Action", kind: "action", value: (event) => event.action || "allow" },
       { label: "Risk", kind: "severity", value: (event) => getRiskScore(event) || "--" },
       { label: "Source", value: (event) => getSource(event) || "--" },
@@ -170,8 +180,8 @@ const MODULE_PAGE_CONFIG = {
     badge: "Isolation and kill-switch lane",
     workspaceTitle: "Containment controls and critical-response workflow",
     workspaceDescription: "This page should feel like an incident board: thresholds, kill-switch controls, model state, and critical evidence front and center.",
-    analyticsTitle: "Critical-risk and isolation telemetry",
-    analyticsDescription: "The analytics lane is tuned for critical-only evidence so operators can triage fast when risk crosses containment thresholds.",
+    analyticsTitle: "Isolation and kill-switch telemetry",
+    analyticsDescription: "Analytics cover gateway detections and control-plane containment actions in the current time window.",
     evidenceTitle: "Recent critical evidence",
     evidenceDescription: "The highest-risk model events, containment actions, and kill-switch-adjacent evidence in the current time window.",
     focusAreas: [
@@ -188,10 +198,11 @@ const MODULE_PAGE_CONFIG = {
     columns: [
       { label: "Time", value: (event) => formatTimestamp(event.timestamp) },
       { label: "Model", value: (event) => getMetadata(event).model || getRoutedModel(event) || "--" },
+      { label: "Origin", value: (event) => getEventOrigin(event) },
       { label: "Action", kind: "action", value: (event) => event.action || "allow" },
       { label: "Risk", kind: "severity", value: (event) => getRiskScore(event) || "--" },
-      { label: "Trigger", value: (event) => getMetadata(event).event_type || formatThreat(event) },
-      { label: "Source", value: (event) => getSource(event) || "--" },
+      { label: "Trigger", value: (event) => titleCase(getMetadata(event).event_type || formatThreat(event)) },
+      { label: "Operator", value: (event) => getEventOperator(event) },
     ],
   },
   "1.7": {
@@ -261,6 +272,16 @@ function matchesModuleFilters(event, filters, moduleId) {
 
   if (filters.criticalOnly && riskScore >= 80) {
     return true;
+  }
+
+  if (filters.moduleId) {
+    const mid = String(filters.moduleId);
+    if (meta.module_id === mid || meta.module === mid) {
+      return true;
+    }
+    if (meta.is_isolation_event || meta.is_audit_log) {
+      return true;
+    }
   }
 
   const matchedSource = filters.sources?.some((item) => source === String(item).toLowerCase()) || false;
@@ -372,7 +393,8 @@ function buildSummaryCards(moduleId, summary, events, extras) {
         return eventType.includes("kill") || eventType.includes("circuit") || event.action === "block";
       }).length;
       return [
-        { label: "Critical events", value: base.critical, detail: "Only high-risk isolation-relevant events are included here" },
+        { label: "Isolation events", value: base.total, detail: "Gateway detections and control-plane containment actions" },
+        { label: "Critical (≥80)", value: base.critical, detail: "Highest-risk events within the isolation stream" },
         { label: "Containment actions", value: fmtCount(containmentEvents), detail: "Kill-switch, circuit-breaker, or hard-block events" },
         { label: "Affected models", value: fmtCount(affectedModels), detail: "Distinct models appearing in critical evidence" },
         { label: "Allowed despite risk", value: base.allowed, detail: "High-risk events that still resolved without a hard block" },
@@ -447,7 +469,7 @@ function buildSpotlightCards(moduleId, summary, events, extras) {
       const models = countBy(events.map((event) => getMetadata(event).model || getRoutedModel(event) || "unknown"));
       return [
         { label: "Most affected model", value: titleCase(topKey(models) || "unknown"), detail: "Model appearing most often in critical evidence" },
-        { label: "Average risk", value: fmtPercent(avgRisk), detail: "Mean risk score across critical-only evidence" },
+        { label: "Average risk", value: fmtPercent(avgRisk), detail: "Mean risk score across isolation evidence" },
         { label: "Latest trigger", value: latestSource, detail: "Most recent critical source in the isolation stream" },
       ];
     }
@@ -487,6 +509,29 @@ export function getModulePageConfig(moduleId) {
   return MODULE_PAGE_CONFIG[moduleId] || MODULE_PAGE_CONFIG["1.1"];
 }
 
+export function getModuleEvidenceEmptyMessage(moduleId) {
+  if (moduleId === "1.6") {
+    return "No isolation or kill-switch evidence in this time range. Use the containment simulator to generate a live event, or widen the time lens.";
+  }
+  return "No recent module evidence is available for this time range.";
+}
+
+function getEventOrigin(event) {
+  const meta = getMetadata(event);
+  if (meta.is_audit_log || event.source_display === "control_plane" || event.record_type === "control_plane_audit") {
+    return "Control plane";
+  }
+  return "Gateway";
+}
+
+function getEventOperator(event) {
+  const meta = getMetadata(event);
+  if (meta.is_audit_log) {
+    return meta.triggered_by || event.user_display || "control_plane";
+  }
+  return event.user_display || meta.triggered_by || "--";
+}
+
 function getMetadata(event) {
   return event?.metadata || {};
 }
@@ -508,13 +553,11 @@ function getStage(event) {
 }
 
 function getRequestedModel(event) {
-  const meta = getMetadata(event);
-  return String(meta.requested_model || meta.model_requested || meta.model || "");
+  return routingRequestedModel(event);
 }
 
 function getRoutedModel(event) {
-  const meta = getMetadata(event);
-  return String(meta.routed_model || meta.selected_model || meta.model || "");
+  return routingRoutedModel(event);
 }
 
 function getToolsInvoked(event) {

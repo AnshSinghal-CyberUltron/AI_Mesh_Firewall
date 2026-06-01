@@ -35,6 +35,7 @@ class PolicyConfig(AppConfig):
 
     def ready(self) -> None:
         import policy.compiler_signals
+        import policy.mcp_seed_signals  # noqa: F401
         import policy.vector_provider_signals  # noqa: F401
         import policy.vector_signals  # noqa: F401
 
@@ -61,14 +62,21 @@ class PolicyConfig(AppConfig):
 
         def _run() -> None:
             try:
+                from auth.models import Organization
                 from policy.compiler import PolicyCompiler
 
                 compiler = PolicyCompiler()
-                _run_with_db_lock_retry(
-                    lambda: compiler.compile_and_push(trigger="startup"),
-                    "Policy compile",
-                )
-                logger.info("Startup policy compilation complete.")
+
+                def _compile_all_orgs() -> None:
+                    orgs = Organization.objects.filter(slug__isnull=False).exclude(slug="").order_by("id")
+                    if not orgs.exists():
+                        compiler.compile_and_push(trigger="startup")
+                        return
+                    for org in orgs:
+                        compiler.compile_and_push(trigger="startup", organization=org)
+
+                _run_with_db_lock_retry(_compile_all_orgs, "Policy compile")
+                logger.info("Startup per-org policy compilation complete.")
             except Exception:
                 logger.warning(
                     "Startup policy compilation failed (Redis may be unavailable).",

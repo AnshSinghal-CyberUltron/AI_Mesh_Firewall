@@ -9,7 +9,6 @@ User = get_user_model()
 
 OFFERING_ROLES = {
     "platform": ("platform_admin", "platform_user"),
-    "aiguardx": ("aiguardx_admin", "aiguardx_user"),
 }
 
 
@@ -46,10 +45,21 @@ class UserMeSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
     is_superuser = serializers.BooleanField(read_only=True)
     organization = serializers.SerializerMethodField()
+    preferences = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ("id", "email", "first_name", "last_name", "is_active", "is_superuser", "roles", "organization")
+        fields = (
+            "id",
+            "email",
+            "first_name",
+            "last_name",
+            "is_active",
+            "is_superuser",
+            "roles",
+            "organization",
+            "preferences",
+        )
 
     def get_organization(self, obj):
         try:
@@ -62,7 +72,7 @@ class UserMeSerializer(serializers.ModelSerializer):
 
     def get_roles(self, obj):
         if obj.is_superuser:
-            return ["admin", "user", "platform_admin", "platform_user", "aiguardx_admin", "aiguardx_user"]
+            return ["admin", "user", "platform_admin", "platform_user"]
         if obj.is_staff:
             return ["staff", "user"]
         try:
@@ -72,6 +82,99 @@ class UserMeSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return ["user"]
+
+    def get_preferences(self, obj):
+        default_preferences = {
+            "theme": "system",
+            "email_notifications": True,
+            "security_alerts": True,
+        }
+        try:
+            prefs = getattr(obj.profile, "preferences", {}) or {}
+            if not isinstance(prefs, dict):
+                return default_preferences
+            return {
+                "theme": prefs.get("theme", "system"),
+                "email_notifications": bool(prefs.get("email_notifications", True)),
+                "security_alerts": bool(prefs.get("security_alerts", True)),
+            }
+        except Exception:
+            return default_preferences
+
+
+class UserSelfProfileUpdateSerializer(serializers.Serializer):
+    """Write serializer for authenticated user self-service profile updates."""
+
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=False)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False)
+    current_password = serializers.CharField(required=False, write_only=True, trim_whitespace=False)
+    preferences = serializers.DictField(required=False)
+
+    def validate_email(self, value):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        normalized = value.lower()
+        if user and User.objects.filter(email__iexact=normalized).exclude(pk=user.pk).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return normalized
+
+    def validate_preferences(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Preferences must be an object.")
+        theme = value.get("theme", "system")
+        if theme not in {"light", "dark", "system"}:
+            raise serializers.ValidationError("theme must be one of: light, dark, system.")
+        for bool_key in ("email_notifications", "security_alerts"):
+            if bool_key in value and not isinstance(value[bool_key], bool):
+                raise serializers.ValidationError(f"{bool_key} must be a boolean.")
+        return value
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if "email" in attrs:
+            current_password = attrs.get("current_password")
+            if not current_password:
+                raise serializers.ValidationError({"current_password": "Current password is required to change email."})
+            if not user or not user.check_password(current_password):
+                raise serializers.ValidationError({"current_password": "Current password is incorrect."})
+        if not attrs:
+            raise serializers.ValidationError("At least one field must be provided.")
+        return attrs
+
+    def update(self, instance, validated_data):
+        first_name = validated_data.get("first_name")
+        last_name = validated_data.get("last_name")
+        email = validated_data.get("email")
+        preferences = validated_data.get("preferences")
+
+        updated_user_fields = []
+        if first_name is not None:
+            instance.first_name = first_name
+            updated_user_fields.append("first_name")
+        if last_name is not None:
+            instance.last_name = last_name
+            updated_user_fields.append("last_name")
+        if email is not None:
+            instance.email = email
+            updated_user_fields.append("email")
+        if updated_user_fields:
+            instance.save(update_fields=updated_user_fields)
+
+        if preferences is not None:
+            profile, _ = UserProfile.objects.get_or_create(user=instance)
+            existing_preferences = profile.preferences if isinstance(profile.preferences, dict) else {}
+            profile.preferences = {
+                "theme": preferences.get("theme", existing_preferences.get("theme", "system")),
+                "email_notifications": preferences.get(
+                    "email_notifications", existing_preferences.get("email_notifications", True)
+                ),
+                "security_alerts": preferences.get("security_alerts", existing_preferences.get("security_alerts", True)),
+            }
+            profile.save(update_fields=["preferences", "updated_at"])
+
+        return instance
 
 
 def _get_offering_role(user, offering):
@@ -94,7 +197,6 @@ class UserManagementSerializer(serializers.ModelSerializer):
     """Read serializer for user management lists and detail."""
 
     platform_role = serializers.SerializerMethodField()
-    aiguardx_role = serializers.SerializerMethodField()
     date_joined = serializers.DateTimeField(read_only=True)
     last_login = serializers.DateTimeField(read_only=True)
 
@@ -109,15 +211,10 @@ class UserManagementSerializer(serializers.ModelSerializer):
             "date_joined",
             "last_login",
             "platform_role",
-            "aiguardx_role",
         )
 
     def get_platform_role(self, obj):
         return _get_offering_role(obj, "platform")
-
-    def get_aiguardx_role(self, obj):
-        return _get_offering_role(obj, "aiguardx")
-
 
 class UserCreateSerializer(serializers.Serializer):
     """Write serializer for creating a new user via user management."""

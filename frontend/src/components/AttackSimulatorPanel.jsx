@@ -6,15 +6,15 @@ import {
 import { copyToClipboard } from "../lib/clipboard";
 import { InfoTooltip } from "./InfoTooltip";
 import { useSimulatorEngine } from "../hooks/useSimulatorEngine";
+import { useSimulatorGatewayModels } from "../hooks/useSimulatorGatewayModels";
+import { SimulatorModelSelector } from "./simulator/SimulatorModelSelector";
 import { StageTimeline } from "./simulator/StageTimeline";
 import {
   chatCompletionBody,
   normalizeChatPipelineResult,
+  normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
-import {
-  ZEROSHIELD_GUARD_MODEL,
-  ZEROSHIELD_GUARD_MODEL_LABEL,
-} from "../constants/zeroshieldBrand";
+import { ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
 
 const ATTACK_SCENARIOS = [
   {
@@ -109,9 +109,20 @@ const ATTACK_SCENARIOS = [
   },
 ];
 
-const SIMULATOR_MODEL = ZEROSHIELD_GUARD_MODEL;
-
 function getStatusConfig(httpStatus, action) {
+  if (action === "needs_model") {
+    return {
+      color: "violet",
+      label: "CONNECT MODEL",
+      icon: AlertTriangle,
+      bg: "bg-violet-50 dark:bg-violet-900/20",
+      border: "border-violet-200 dark:border-violet-800",
+      text: "text-violet-700 dark:text-violet-300",
+    };
+  }
+  if (action === "error" || (httpStatus >= 400 && httpStatus !== 403 && httpStatus !== 429 && httpStatus !== 422)) {
+    return { color: "amber", label: "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700" };
+  }
   if (httpStatus === 403 || action === "block") {
     return { color: "red", label: "BLOCKED", icon: AlertTriangle, bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800", text: "text-red-700" };
   }
@@ -148,12 +159,14 @@ function getToneClasses(tone) {
 export function AttackSimulatorPanel() {
   const {
     gatewayUrl, gatewayKey, setGatewayKey, connectionStatus,
-    gatewayFetch, executing: engineExecuting,
+    gatewayFetch, gatewayFetchStream, executing: engineExecuting,
   } = useSimulatorEngine();
+  const gatewayModels = useSimulatorGatewayModels();
 
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [promptText, setPromptText] = useState("");
   const [sending, setSending] = useState(false);
+  const [connectModelOpen, setConnectModelOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [showRawJson, setShowRawJson] = useState(false);
@@ -164,6 +177,7 @@ export function AttackSimulatorPanel() {
   const [burstCount, setBurstCount] = useState(10);
   const [burstConcurrency, setBurstConcurrency] = useState(10);
   const [burstEstimatedTokens, setBurstEstimatedTokens] = useState(8000);
+  const [useStreamMode, setUseStreamMode] = useState(false);
 
   const activePrompt = promptText;
 
@@ -174,6 +188,10 @@ export function AttackSimulatorPanel() {
       setError("Gateway API key is required. Create one in the Gateway API Keys panel above.");
       return;
     }
+    if (!gatewayModels.selectedModel) {
+      setError("Connect at least one model with an API key under Model Connection.");
+      return;
+    }
 
     setSending(true);
     setResult(null);
@@ -182,46 +200,103 @@ export function AttackSimulatorPanel() {
 
     try {
       const startTime = performance.now();
-      const res = await gatewayFetch("/v1/chat/completions", {
-        method: "POST",
-        body: JSON.stringify(
-          chatCompletionBody({
-            prompt: activePrompt,
-            model: SIMULATOR_MODEL,
-            runInference: true,
-          }),
-        ),
+      const payload = chatCompletionBody({
+        prompt: activePrompt,
+        model: gatewayModels.selectedModel,
+        runInference: true,
+        stream: useStreamMode,
       });
+
+      const res = useStreamMode
+        ? await gatewayFetchStream("/v1/chat/completions", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          })
+        : await gatewayFetch("/v1/chat/completions", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
       const elapsed = Math.round(performance.now() - startTime);
 
       if (res.status === 401) {
         setError("Authentication failed. Your Gateway API Key is invalid or expired.");
       } else if (
         res.status === 422
-        && ["no_provider_configured", "bedrock_model_not_configured", "model_not_configured"].includes(
-          res.data?.code || res.data?.blocked_by,
-        )
+        && [
+          "no_provider_configured",
+          "guard_model_not_for_inference",
+          "bedrock_model_not_configured",
+          "model_not_configured",
+        ].includes(res.data?.code || res.data?.blocked_by)
       ) {
-        setError(
-          `No inference model is configured. Add ${ZEROSHIELD_GUARD_MODEL_LABEL} (or another model) under `
-          + "Firewall → Model Connection, or run with scan-only (max_tokens: 0).",
-        );
-      } else if (
-        res.status === 502
-        && ["bedrock_inference_error", "guard_model_inference_error"].includes(
-          res.data?.code || res.data?.blocked_by,
-        )
-      ) {
-        setError(
-          `${ZEROSHIELD_GUARD_MODEL_LABEL} is unavailable. Check gateway guard-model credentials and connectivity.`,
-        );
-      } else {
-        const normalized = normalizeChatPipelineResult(res.data, res.status);
+        setConnectModelOpen(true);
+        setError(null);
+        const normalized = normalizeChatPipelineResult(res.data, res.status, {
+          prompt: activePrompt,
+          maxTokens: 32,
+          requestedModel: gatewayModels.selectedModel,
+        });
         setResult({
           ...normalized,
           httpStatus: res.status,
           elapsed,
-          action: normalized.final_action || (res.status === 403 ? "block" : "allow"),
+          action: "needs_model",
+          final_action: "needs_model",
+        });
+      } else if (
+        res.status === 502
+        && (
+          ["bedrock_inference_error", "guard_model_inference_error"].includes(
+            res.data?.code || res.data?.blocked_by,
+          )
+          || String(res.data?.error?.message || res.data?.message || "").toLowerCase().includes("upstream")
+          || String(res.data?.error?.message || "").toLowerCase().includes("missing credentials")
+        )
+      ) {
+        setError(
+          "Upstream model credentials are missing or invalid. Connect a model with a valid API key under Model Connection.",
+        );
+        const normalized = normalizeChatPipelineResult(res.data, res.status, {
+          prompt: activePrompt,
+          maxTokens: 32,
+          requestedModel: gatewayModels.selectedModel,
+        });
+        setResult({
+          ...normalized,
+          httpStatus: res.status,
+          elapsed,
+          action: "error",
+          final_action: "error",
+        });
+      } else if (useStreamMode && res.sse?.isStream) {
+        const normalized = normalizeStreamChatPipelineResult(
+          res.sse,
+          res.status,
+          res.headers,
+          {
+            prompt: activePrompt,
+            maxTokens: 32,
+            requestedModel: gatewayModels.selectedModel,
+          },
+        );
+        setResult({
+          ...normalized,
+          httpStatus: res.status,
+          elapsed,
+          action: normalized.final_action || (res.status === 403 ? "block" : res.status >= 400 ? "error" : "allow"),
+          stream: true,
+        });
+      } else {
+        const normalized = normalizeChatPipelineResult(res.data, res.status, {
+          prompt: activePrompt,
+          maxTokens: 32,
+          requestedModel: gatewayModels.selectedModel,
+        });
+        setResult({
+          ...normalized,
+          httpStatus: res.status,
+          elapsed,
+          action: normalized.final_action || (res.status === 403 ? "block" : res.status >= 400 ? "error" : "allow"),
         });
       }
     } catch (err) {
@@ -239,6 +314,10 @@ export function AttackSimulatorPanel() {
   const handleBurstTest = useCallback(async () => {
     if (!gatewayKey.trim()) {
       setError("Gateway API key is required for burst test.");
+      return;
+    }
+    if (!gatewayModels.selectedModel) {
+      setError("Connect at least one model with an API key under Model Connection.");
       return;
     }
     setBurstRunning(true);
@@ -272,13 +351,17 @@ export function AttackSimulatorPanel() {
           body: JSON.stringify({
             ...chatCompletionBody({
               prompt: burstPrompt,
-              model: SIMULATOR_MODEL,
+              model: gatewayModels.selectedModel,
               runInference: false,
             }),
             estimated_tokens: estimatedTokens,
           }),
         });
-        const normalized = normalizeChatPipelineResult(res.data, res.status);
+        const normalized = normalizeChatPipelineResult(res.data, res.status, {
+          prompt: burstPrompt,
+          maxTokens: 0,
+          requestedModel: gatewayModels.selectedModel,
+        });
         const rateStage = normalized.stages?.find((s) => s.name === "rate_limit");
         return {
           index: index + 1,
@@ -347,7 +430,9 @@ export function AttackSimulatorPanel() {
     }
   };
 
-  const statusCfg = result ? getStatusConfig(result.httpStatus, result.action) : null;
+  const statusCfg = result
+    ? getStatusConfig(result.httpStatus, result.final_action || result.action)
+    : null;
   const StatusIcon = statusCfg?.icon;
 
   return (
@@ -404,6 +489,24 @@ export function AttackSimulatorPanel() {
       </div>
 
       <div className="mb-4">
+        <SimulatorModelSelector
+          eligibleModels={gatewayModels.eligibleModels}
+          selectedModel={gatewayModels.selectedModel}
+          onSelectModel={gatewayModels.setSelectedModel}
+          loading={gatewayModels.loading}
+          loadError={gatewayModels.loadError}
+          firewallDefault={gatewayModels.firewallDefault}
+          allowlistBlocksSimulator={gatewayModels.allowlistBlocksSimulator}
+          allowedModels={gatewayModels.allowedModels}
+          onSyncAllowlist={gatewayModels.syncSelectedToAllowlist}
+          allowlistSyncing={gatewayModels.allowlistSyncing}
+          allowlistSyncError={gatewayModels.allowlistSyncError}
+          showModelPicker={gatewayModels.showModelPicker}
+          isSingleModel={gatewayModels.isSingleModel}
+        />
+      </div>
+
+      <div className="mb-4">
         <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Attack Scenarios</label>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {ATTACK_SCENARIOS.map((scenario) => (
@@ -455,6 +558,15 @@ export function AttackSimulatorPanel() {
 
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between text-slate-900 dark:text-slate-100">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={useStreamMode}
+              onChange={(e) => setUseStreamMode(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            SSE stream mode
+          </label>
           <button
             onClick={handleSend}
             disabled={sending || burstRunning || !activePrompt.trim()}
@@ -587,6 +699,7 @@ export function AttackSimulatorPanel() {
                     <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5 capitalize">{(stage.name || "").replace(/_/g, " ")}</div>
                     <div className={`text-sm font-semibold ${
                       stage.action === "block" ? "text-red-600" :
+                      stage.action === "needs_model" ? "text-violet-600" :
                       stage.action === "redact" ? "text-blue-600" :
                       stage.action === "flag" ? "text-amber-600" : "text-emerald-600"
                     }`}>
@@ -717,6 +830,42 @@ export function AttackSimulatorPanel() {
       )}
 
       {/* Burst Test Results */}
+      {connectModelOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          role="dialog"
+          aria-labelledby="connect-model-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-violet-200 bg-white p-5 shadow-xl dark:border-violet-800 dark:bg-slate-900">
+            <h3 id="connect-model-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Connect an inference model
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              ZeroShield runs input and output guardrails on our side. Chat completions and LLM responses must use
+              your organization&apos;s provider API key so inference cost is billed to you—not the platform operator.
+            </p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">
+              {ZEROSHIELD_GUARD_MODEL_LABEL} is for scanning only and cannot be used as the inference target.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                href="?tab=firewall-1-5"
+                className="inline-flex items-center rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
+              >
+                Open Model Connection (1.5)
+              </a>
+              <button
+                type="button"
+                onClick={() => setConnectModelOpen(false)}
+                className="inline-flex items-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {burstResults && (
         <div className="mt-4 space-y-3">
           <div className="rounded-[24px] border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-900/20">

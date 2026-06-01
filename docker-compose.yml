@@ -28,6 +28,24 @@ services:
       interval: 10s
       retries: 5
 
+  # Phase 1 F-3.1: local ChromaDB for the RAG Collection Manager.
+  # Lightweight, no external creds needed. Persisted to a named volume so
+  # collections survive container recreates.
+  chromadb:
+    image: chromadb/chroma:0.5.20
+    ports: ["8001:8000"]
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+      PERSIST_DIRECTORY: /chroma/chroma
+    volumes: [chroma_data:/chroma/chroma]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/heartbeat', timeout=2).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
   rabbitmq:
     image: rabbitmq:3-management
     ports: ["5772:5672", "15772:15672"]
@@ -49,6 +67,8 @@ services:
       context: .
       dockerfile: control/Dockerfile
     ports: ["8100:8000"]
+    env_file:
+      - .env
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
@@ -61,6 +81,19 @@ services:
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:8180}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-http://127.0.0.1:8180}
       BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://127.0.0.1:8180}
+      # Phase 1 Fx-2b: server-to-server admin proxy (control -> gateway)
+      GATEWAY_URL: http://gateway:8300
+      GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
+      # Security alerting email (Microsoft Graph application permissions)
+      TENANT_ID: ${TENANT_ID:-}
+      CLIENT_ID: ${CLIENT_ID:-}
+      CLIENT_SECRET: ${CLIENT_SECRET:-}
+      GRAPH_SENDER_EMAIL: ${GRAPH_SENDER_EMAIL:-support@zeroshield.ai}
+      # Drain telemetry + send alert emails without requiring --profile workers
+      TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-thread}
+      TELEMETRY_DRAIN_INTERVAL_SEC: ${TELEMETRY_DRAIN_INTERVAL_SEC:-1.0}
+      TELEMETRY_DRAIN_BATCH_SIZE: ${TELEMETRY_DRAIN_BATCH_SIZE:-250}
+      ALERT_EMAIL_USE_CELERY: ${ALERT_EMAIL_USE_CELERY:-false}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -81,7 +114,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       REDIS_URL: redis://redis:6379/0
-      TELEMETRY_DRAIN_MODE: "off"
+      TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-beat}
+      TENANT_ID: ${TENANT_ID:-}
+      CLIENT_ID: ${CLIENT_ID:-}
+      CLIENT_SECRET: ${CLIENT_SECRET:-}
+      GRAPH_SENDER_EMAIL: ${GRAPH_SENDER_EMAIL:-support@zeroshield.ai}
+      ALERT_EMAIL_USE_CELERY: ${ALERT_EMAIL_USE_CELERY:-true}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
     depends_on:
@@ -117,7 +155,6 @@ services:
     ports: ["8300:8300"]
     env_file:
       - .env
-      - ../.env
     environment:
       AI_MESH_CONTROL_URL: http://control:8000
       AIGUARDX_BACKEND_URL: http://control:8000
@@ -125,6 +162,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
       GATEWAY_AUTH_ENABLED: "true"
+      GATEWAY_ORG_ONLY_INFERENCE: "true"
       GATEWAY_ALLOW_HTTP: "1"
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
@@ -140,9 +178,58 @@ services:
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:8180}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-http://127.0.0.1:8180}
       GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://127.0.0.1:8180,http://localhost:8180,http://127.0.0.1:5173,http://localhost:5173}
+      # Phase 1 F-3.1: RAG firewall + local Chroma backend.
+      GATEWAY_RAG_ENABLED: "true"
+      CHROMA_URL: http://chromadb:8000
+      # DECISION-D Phase 1: Presidio PII scanning (auto = sidecar first,
+      # fall back to library, fall back to disabled).
+      PRESIDIO_MODE: ${PRESIDIO_MODE:-auto}
+      PRESIDIO_ANALYZER_URL: ${PRESIDIO_ANALYZER_URL:-http://presidio-analyzer:3000}
+      PRESIDIO_ANONYMIZER_URL: ${PRESIDIO_ANONYMIZER_URL:-http://presidio-anonymizer:3001}
+      PRESIDIO_LANGUAGE: en
+      PRESIDIO_MIN_SCORE: ${PRESIDIO_MIN_SCORE:-0.5}
+      # On-demand stdio MCP server fetch tuning. Packages are pulled via
+      # npx/uvx at client connect time (NOT baked into the image); the first
+      # connect must download+resolve the package before answering the MCP
+      # initialize handshake, so the init timeout is generous while the shared
+      # caches below make subsequent connects warm/fast.
+      MCP_STDIO_INIT_TIMEOUT: ${MCP_STDIO_INIT_TIMEOUT:-120}
+      MCP_STDIO_METHOD_TIMEOUT: ${MCP_STDIO_METHOD_TIMEOUT:-60}
+      MCP_STDIO_HUNG_INIT_TIMEOUT: ${MCP_STDIO_HUNG_INIT_TIMEOUT:-180}
+      MCP_STDIO_PACKAGE_ALLOWLIST: ${MCP_STDIO_PACKAGE_ALLOWLIST:-}
+      UV_CACHE_DIR: /root/.cache/uv
+      NPM_CONFIG_CACHE: /root/.npm
+    volumes:
+      - npm_cache:/root/.npm
+      - uv_cache:/root/.cache/uv
     depends_on:
       control: { condition: service_healthy }
       redis: { condition: service_healthy }
+      chromadb: { condition: service_healthy }
+
+  # DECISION-D Phase 1: Microsoft Presidio sidecars for PII detection.
+  # Pinned to ``latest`` tag (Microsoft does not publish stable semver
+  # tags). English-only recognizers; multi-language requires a custom
+  # spaCy model in the analyzer image.
+  presidio-analyzer:
+    image: mcr.microsoft.com/presidio-analyzer:latest
+    ports: ["3010:3000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:3000/health', timeout=2).status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  presidio-anonymizer:
+    image: mcr.microsoft.com/presidio-anonymizer:latest
+    ports: ["3011:3000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:3000/health', timeout=2).status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   guardrails:
     image: python:3.12-slim
@@ -159,6 +246,22 @@ services:
     volumes: ["./services/mcp-broker/src:/app"]
     ports: ["8311:8311"]
     profiles: ["services"]
+
+  # Submodule 1.4 hermetic MCP stub — deterministic target for live UI tests.
+  # Implements streamable-http MCP at http://mcp-stub:9999/mcp .
+  # Always-on (no profile) so the frontend "Add MCP Server" flow can reach it.
+  mcp-stub:
+    image: python:3.12-slim
+    working_dir: /app
+    command: sh -c "pip install --quiet fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 9999"
+    volumes: ["./services/mcp-stub/src:/app"]
+    ports: ["9999:9999"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9999/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   vector-retrieval:
     image: python:3.12-slim
@@ -186,3 +289,6 @@ volumes:
   postgres_data:
   redis_data:
   mongo_data:
+  chroma_data:
+  npm_cache:
+  uv_cache:

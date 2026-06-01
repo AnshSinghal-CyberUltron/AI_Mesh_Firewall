@@ -13,7 +13,7 @@ from django.utils.dateparse import parse_datetime
 from drf_spectacular.utils import OpenApiExample, extend_schema, inline_serializer
 from rest_framework import serializers as drf_serializers
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -28,7 +28,8 @@ from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
 from policy.engine import evaluate, validate_policy_domain
 from policy.models import EnforcementEvent, Policy, Rule
 from policy.rate_limit import check_rate_limit
-from policy.redaction import apply_redaction
+from policy.mcp_presets import list_presets
+from policy.redaction import apply_redaction, redact_structured
 from policy.threat_categories import get_all_threats_from_scan_result
 from ws.notify import send_enforcement_notification
 
@@ -242,7 +243,9 @@ class PolicyCheckView(APIView):
     """POST /api/policy/check/ — evaluate prompt/response against policies; return action and optional redacted content."""
 
     authentication_classes = [AgentKeyAuthentication]
-    permission_classes = [AllowAny]
+    # Hardened from AllowAny: require a valid agent API key (or dev mode where
+    # AGENT_API_KEY is empty). Matches EnforcementEventBatchView pattern.
+    permission_classes = [AgentAPIKeyPermission]
 
     @extend_schema(
         tags=["Policy Evaluation"],
@@ -782,7 +785,10 @@ class PolicyTestView(APIView):
     Response: same shape as policy check (action, matched_policies, matched_rules, redacted_*).
     """
 
-    permission_classes = [AllowAny]
+    # Hardened from AllowAny: dry-run endpoint may leak org policy structure to
+    # unauthenticated probes, so require a valid JWT (handler also enforces org
+    # scope via get_request_organization).
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Policy Evaluation"],
@@ -864,9 +870,27 @@ class PolicyTestView(APIView):
         if not isinstance(response_text, str):
             response_text = str(response_text)
 
+        # Structured payloads for MCP-style scope='key' rules and direction
+        # (input/output) matching. The simulator sends ``input_args`` (the
+        # raw tool arguments) and optionally ``output``/``output_data`` (an
+        # expected tool response). Both sides are placed in the context so a
+        # single dry-run evaluation can exercise input AND output rules.
+        input_args = body.get("input_args") or body.get("arguments")
+        output_data = body.get("output_data")
+        if output_data is None:
+            output_data = body.get("output")
+        if not isinstance(input_args, (dict, list)):
+            input_args = None
+        # If only an expected-output string was supplied, mirror it into
+        # response_text so entire-scope output rules can match.
+        if isinstance(output_data, str) and not response_text:
+            response_text = output_data
+
         context = {
             "prompt": prompt,
             "response": response_text,
+            "input_args": input_args,
+            "output_data": output_data,
             "user_id": body.get("user_id"),
             "endpoint_id": body.get("endpoint_id"),
             "request_metadata": metadata,
@@ -900,9 +924,15 @@ class PolicyTestView(APIView):
 
         redacted_prompt = None
         redacted_response = None
+        redacted_input_args = None
+        redacted_output = None
         if result.action == ACTION_REDACT and result.redaction_hints:
             redacted_prompt = apply_redaction(prompt, result.redaction_hints)
             redacted_response = apply_redaction(response_text, result.redaction_hints)
+            if input_args is not None:
+                redacted_input_args = redact_structured(input_args, result.redaction_hints, "input")
+            if output_data is not None and not isinstance(output_data, str):
+                redacted_output = redact_structured(output_data, result.redaction_hints, "output")
 
         payload = {
             "action": result.action,
@@ -916,8 +946,41 @@ class PolicyTestView(APIView):
             payload["redacted_prompt"] = redacted_prompt
         if redacted_response is not None:
             payload["redacted_response"] = redacted_response
+        if redacted_input_args is not None:
+            payload["redacted_input_args"] = redacted_input_args
+        if redacted_output is not None:
+            payload["redacted_output"] = redacted_output
 
         return Response(payload, status=status.HTTP_200_OK)
+
+
+class MCPPresetsView(APIView):
+    """
+    GET /api/policies/mcp-presets/ — catalogue of built-in PII/secret
+    detection presets an operator can attach to an MCP policy rule.
+
+    Data-driven so the policy authoring UI can render the preset dropdown
+    without hard-coding the list client-side. Only key/label/description
+    are exposed; the underlying regex stays server-side.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Policy Evaluation"],
+        summary="List MCP guardrail presets",
+        description="Returns the built-in PII/secret detection presets for MCP policy rules.",
+        responses={
+            200: inline_serializer(
+                name="MCPPresetsResponse",
+                fields={
+                    "presets": drf_serializers.ListField(child=drf_serializers.DictField()),
+                },
+            ),
+        },
+    )
+    def get(self, request: Request):
+        return Response({"presets": list_presets()}, status=status.HTTP_200_OK)
 
 
 class SecurityScanView(APIView):
@@ -926,7 +989,9 @@ class SecurityScanView(APIView):
     Returns ScanResult-like JSON. Use /api/policy/check/ for enforcement.
     """
 
-    permission_classes = [AllowAny]
+    # Hardened from AllowAny: scan endpoint should not be exposed unauthenticated
+    # (would allow unbounded ML inference cost + indirect policy fingerprinting).
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Security"],

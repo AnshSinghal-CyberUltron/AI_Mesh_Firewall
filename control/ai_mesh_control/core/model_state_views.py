@@ -18,6 +18,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.model_state_bootstrap import (
+    ensure_model_states_for_org,
+    merge_model_states_with_configs,
+)
 from core.models import KillSwitchAuditLog, ModelState
 from core.serializers import (
     KillSwitchAuditLogSerializer,
@@ -43,7 +47,30 @@ class ModelStatusListView(APIView):
         if not org:
             return Response([], status=status.HTTP_200_OK)
         states = ModelState.objects.filter(organization=org)
-        return Response(ModelStateSerializer(states, many=True).data)
+        return Response(merge_model_states_with_configs(org, states))
+
+
+class ModelStatusSyncView(APIView):
+    """POST /api/models/sync/ — bootstrap ModelState from active LLM configs."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        org = _get_org(request)
+        if not org:
+            return Response(
+                {"error": "No organization"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        created, active = ensure_model_states_for_org(org)
+        states = ModelState.objects.filter(organization=org)
+        return Response(
+            {
+                "created": created,
+                "active_configs": active,
+                "models": merge_model_states_with_configs(org, states),
+            }
+        )
 
 
 class ModelStatusDetailView(APIView):

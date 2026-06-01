@@ -1,11 +1,7 @@
 import unittest
 
-try:
-    from gateway.main import _build_zeroshield_metadata
-    from gateway.patterns import redact_all
-except ModuleNotFoundError:
-    from main import _build_zeroshield_metadata
-    from patterns import redact_all
+from ai_mesh_gateway.main import _build_zeroshield_metadata
+from ai_mesh_gateway.patterns import redact_all
 
 
 class OutputGuardrailMetadataTests(unittest.TestCase):

@@ -18,6 +18,7 @@ from .serializers import (
     UserCreateSerializer,
     UserManagementSerializer,
     UserMeSerializer,
+    UserSelfProfileUpdateSerializer,
     UserUpdateSerializer,
     _get_offering_role,
 )
@@ -164,6 +165,31 @@ class MeView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class MeProfileUpdateView(generics.GenericAPIView):
+    """PATCH /api/auth/me/profile/ — update current user's editable profile fields."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserSelfProfileUpdateSerializer
+
+    @extend_schema(
+        tags=["Auth"],
+        summary="Update current user profile",
+        description=(
+            "Update editable profile fields for the authenticated user.\n\n"
+            "Supported fields: `first_name`, `last_name`, `email`, and `preferences`.\n"
+            "Changing email requires `current_password`."
+        ),
+        request=UserSelfProfileUpdateSerializer,
+        responses={200: UserMeSerializer},
+    )
+    def patch(self, request: Request):
+        serializer = self.get_serializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.update(request.user, serializer.validated_data)
+        logger.info("Profile updated for user_id=%s fields=%s", request.user.pk, list(serializer.validated_data.keys()))
+        return Response(UserMeSerializer(user).data, status=status.HTTP_200_OK)
 
 
 class LogoutView(generics.GenericAPIView):
@@ -335,7 +361,7 @@ class IsOfferingAdmin(IsAuthenticated):
 @extend_schema(tags=["User Management"])
 class UserManagementListCreateView(APIView):
     """
-    GET  /api/auth/users/?offering=platform|aiguardx  — list users (admin only)
+    GET  /api/auth/users/?offering=platform  — list users (admin only)
     POST /api/auth/users/                              — create user (admin only)
     """
 
@@ -360,7 +386,7 @@ class UserManagementListCreateView(APIView):
         offering = request.query_params.get("offering")
         if offering not in OFFERING_ROLES:
             return Response(
-                {"detail": "offering query param required (platform|aiguardx)."}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "offering query param required (platform)."}, status=status.HTTP_400_BAD_REQUEST
             )
         if not self._check_admin(request, offering):
             return Response({"detail": "Admin role required for this offering."}, status=status.HTTP_403_FORBIDDEN)
@@ -389,7 +415,7 @@ class UserManagementListCreateView(APIView):
         offering = request.data.get("offering")
         if offering not in OFFERING_ROLES:
             return Response(
-                {"detail": "offering field required (platform|aiguardx)."}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "offering field required (platform)."}, status=status.HTTP_400_BAD_REQUEST
             )
         if not self._check_admin(request, offering):
             return Response({"detail": "Admin role required for this offering."}, status=status.HTTP_403_FORBIDDEN)
@@ -449,7 +475,7 @@ class UserManagementDetailView(APIView):
         offering = request.data.get("offering") or request.query_params.get("offering")
         if not offering or offering not in OFFERING_ROLES:
             return Response(
-                {"detail": "offering field required (platform|aiguardx)."}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "offering field required (platform)."}, status=status.HTTP_400_BAD_REQUEST
             )
         if not self._check_admin(request, offering):
             return Response({"detail": "Admin role required."}, status=status.HTTP_403_FORBIDDEN)

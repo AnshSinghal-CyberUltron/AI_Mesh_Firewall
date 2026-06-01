@@ -49,7 +49,7 @@ async def check_model_state(
     Check model state from Redis (synced from Django ModelState).
 
     Returns a ModelStateVerdict indicating current status and action.
-    Fail-open on Redis errors.
+    Fail-closed on Redis errors (status ``suspended``).
     """
     key = f"model_state:{org_slug}:{model_name}"
     try:

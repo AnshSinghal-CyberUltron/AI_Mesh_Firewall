@@ -11,11 +11,8 @@ function useOfferingVisibility(user) {
   const roles = user?.roles || [];
   const hasPlatform =
     user?.is_superuser || roles.some((r) => ["platform_admin", "platform_user"].includes(r));
-  const hasAiguardx =
-    user?.is_superuser || roles.some((r) => ["aiguardx_admin", "aiguardx_user"].includes(r));
   return {
-    hasPlatform: hasPlatform || (!hasPlatform && !hasAiguardx),
-    hasAiguardx,
+    hasPlatform: hasPlatform || !roles.length,
   };
 }
 
@@ -56,12 +53,12 @@ function HelpModal({ open, onClose }) {
         </div>
         <div className="p-6 space-y-4">
           <p className="text-sm text-slate-600 dark:text-slate-400 dark:text-slate-300">
-            ZeroShield (AIGuardX) is an AI Mesh Firewall for securing and governing LLM interactions.
+            ZeroShield is an AI Mesh Firewall for securing and governing LLM interactions.
           </p>
           <ul className="text-sm text-slate-600 dark:text-slate-400 dark:text-slate-300 space-y-2 list-disc list-inside">
             <li>Use the sidebar to switch between Dashboard, User Management, and modules.</li>
-            <li>Platform users see Modules 1-4; AIGuardX users see Module 5.</li>
-            <li>Admins can manage users in the User Management section for each offering.</li>
+            <li>Platform users can access all firewall modules from the AI Mesh section.</li>
+            <li>Admins can manage users and policy controls from the control console.</li>
           </ul>
           <a
             href={docsUrl}
@@ -157,13 +154,12 @@ const TAB_TITLES = {
   "firewall-1-6": "Model Isolation & Kill-Switch",
   "firewall-1-7": "Output Guardrails",
   "firewall-config": "Module 1 Inputs",
-  "aiguardx-config": "Inputs",
 };
 
 export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSearchSubmit, onTabChange, onMobileMenuToggle }) {
   const { user, logout, fetchWithAuth } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
-  const isAdmin = user?.is_superuser || (user?.roles || []).includes("aiguardx_admin");
+  const isAdmin = user?.is_superuser || (user?.roles || []).includes("platform_admin");
   const { hasPlatform } = useOfferingVisibility(user);
   const navigate = useNavigate();
   const displayName = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email : '';

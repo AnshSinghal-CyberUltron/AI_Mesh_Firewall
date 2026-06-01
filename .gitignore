@@ -12,3 +12,6 @@ dist/
 postgres_data/
 *.log
 .DS_Store
+
+# Verification run artifacts (may contain bearer tokens, payloads, screenshots)
+runs/verification/

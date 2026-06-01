@@ -858,7 +858,7 @@ export function AIMeshFirewallOverview({ onTabChange }) {
       summary: "Escalate quickly when a model or route drifts out of bounds and provide operators with hard stop controls.",
       metrics: [
         { label: "Events", value: moduleKpis ? fmt(modules["1.6"]?.total) : "--" },
-        { label: "Critical", value: moduleKpis ? fmt(modules["1.6"]?.critical) : socKpis ? String(critical) : "--", change: "Operator escalation queue" },
+        { label: "Critical", value: moduleKpis ? fmt(modules["1.6"]?.critical) : socKpis ? String(critical) : "--", change: "Critical + containment" },
       ],
     },
     {
@@ -881,7 +881,7 @@ export function AIMeshFirewallOverview({ onTabChange }) {
     { module: "1.3 RAG+Vector", requests: modules["1.3"]?.total ?? 0, blocked: modules["1.3"]?.blocked ?? 0 },
     { module: "1.4 Context", requests: modules["1.4"]?.total ?? 0, blocked: modules["1.4"]?.redacted ?? 0 },
     { module: "1.5 Routing", requests: modules["1.5"]?.total ?? 0, blocked: modules["1.5"]?.blocked ?? 0 },
-    { module: "1.6 Isolation", requests: modules["1.6"]?.total ?? 0, blocked: modules["1.6"]?.critical ?? 0 },
+    { module: "1.6 Isolation", requests: modules["1.6"]?.total ?? 0, blocked: modules["1.6"]?.blocked ?? 0 },
     { module: "1.7 Guards", requests: modules["1.7"]?.total ?? 0, blocked: modules["1.7"]?.blocked ?? 0 },
   ];
 
@@ -916,7 +916,7 @@ export function AIMeshFirewallOverview({ onTabChange }) {
     { id: "1.3", name: "RAG & Vector DB",     total: modules["1.3"]?.total ?? 0, blockRate: modules["1.3"]?.total ? Math.round((modules["1.3"].blocked  / modules["1.3"].total) * 100) : 0 },
     { id: "1.4", name: "Context & MCP",       total: modules["1.4"]?.total ?? 0, blockRate: modules["1.4"]?.total ? Math.round((modules["1.4"].redacted / modules["1.4"].total) * 100) : 0 },
     { id: "1.5", name: "Multi-Model Gov.",    total: modules["1.5"]?.total ?? 0, blockRate: modules["1.5"]?.total ? Math.round((modules["1.5"].blocked  / modules["1.5"].total) * 100) : 0 },
-    { id: "1.6", name: "Isolation & Kill-Sw", total: modules["1.6"]?.total ?? 0, blockRate: modules["1.6"]?.total ? Math.round((modules["1.6"].critical / modules["1.6"].total) * 100) : 0 },
+    { id: "1.6", name: "Isolation & Kill-Sw", total: modules["1.6"]?.total ?? 0, blockRate: modules["1.6"]?.total ? Math.round((modules["1.6"].blocked / modules["1.6"].total) * 100) : 0 },
     { id: "1.7", name: "Output Guardrails",   total: modules["1.7"]?.total ?? 0, blockRate: modules["1.7"]?.total ? Math.round((modules["1.7"].blocked  / modules["1.7"].total) * 100) : 0 },
   ];
 
@@ -974,14 +974,14 @@ export function AIMeshFirewallOverview({ onTabChange }) {
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button
-                onClick={() => onTabChange?.("firewall-1-1")}
+                onClick={() => onTabChange?.("firewall-config")}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
               >
                 Open Gateway Controls
                 <ArrowRight className="h-4 w-4" />
               </button>
               <button
-                onClick={() => onTabChange?.("firewall-config")}
+                onClick={() => onTabChange?.("firewall-1-2")}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white/85 px-5 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-white dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-900"
               >
                 Configure Policies

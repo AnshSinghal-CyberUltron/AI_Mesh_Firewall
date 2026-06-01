@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from auth.utils import get_request_organization
+from core.admin_views import IsAdminOrSuperuser
 
 from .constants import ACTION_BLOCK, ACTION_REDACT
 from .engine import VALID_POLICY_DOMAINS, validate_policy_domain
@@ -53,6 +54,11 @@ _RULE_ID_PATH_PARAM = [
 ]
 
 logger = logging.getLogger(__name__)
+
+
+def _user_is_policy_admin(request) -> bool:
+    """Platform admin / staff / superuser — required to disable system policies or mutate their rules."""
+    return IsAdminOrSuperuser().has_permission(request, None)
 
 
 def _get_request_id(request):
@@ -489,9 +495,11 @@ class PolicyViewSet(ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        from auth.utils import get_request_organization
+        from rest_framework.exceptions import PermissionDenied
 
         org = get_request_organization(self.request)
+        if org is None:
+            raise PermissionDenied("Organization scope is required to create policies.")
         serializer.save(organization=org)
 
     def _build_policy_snapshot(self, policy):
@@ -527,7 +535,28 @@ class PolicyViewSet(ModelViewSet):
         }
 
     def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
         policy = serializer.instance
+        if policy.is_system:
+            blocked = set(serializer.validated_data.keys()) & {
+                "code",
+                "name",
+                "policy_domain",
+                "organization",
+                "is_system",
+            }
+            if blocked:
+                raise PermissionDenied(
+                    f"System policies cannot change: {', '.join(sorted(blocked))}. "
+                    "You may enable/disable or edit rules."
+                )
+            if (
+                "enabled" in serializer.validated_data
+                and serializer.validated_data["enabled"] is False
+                and not _user_is_policy_admin(self.request)
+            ):
+                raise PermissionDenied("Only platform admins can disable system policies.")
         client_version = serializer.validated_data.pop("version", None)
         if client_version is not None and policy.version != client_version:
             raise ConflictError(policy, client_version)
@@ -853,7 +882,26 @@ class RuleViewSet(ModelViewSet):
         policy = policy_qs.first()
         if not policy:
             return Response({"policy": "Policy not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = RuleWriteSerializer(data=request.data)
+        if policy.is_system and not _user_is_policy_admin(request):
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("Only platform admins can add rules to system policies.")
+        serializer = RuleWriteSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         serializer.save(policy=policy)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+
+        rule = serializer.instance
+        if rule.policy.is_system and not _user_is_policy_admin(self.request):
+            raise PermissionDenied("Only platform admins can edit system policy rules.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+
+        if instance.policy.is_system and not _user_is_policy_admin(self.request):
+            raise PermissionDenied("Only platform admins can delete system policy rules.")
+        instance.delete()

@@ -42,15 +42,12 @@ if "litellm" not in sys.modules:
     sys.modules["litellm"] = fake_litellm
     sys.modules["litellm.exceptions"] = fake_exceptions
 
-try:
-    from gateway.llm_router import LLMRouter
-except ModuleNotFoundError:
-    from llm_router import LLMRouter
+from ai_mesh_gateway.llm_router import LLMRouter
 
 
 class BedrockRoutingAdjudicationTests(unittest.TestCase):
     def test_adjudicator_can_override_preferred_model_with_valid_candidate(self):
-        router = LLMRouter({"litellm_config_path": ""})
+        router = LLMRouter({"org_only_inference": True})
 
         async def fake_acompletion(body, redacted_content=None):
             return 200, {
@@ -111,11 +108,11 @@ class BedrockRoutingAdjudicationTests(unittest.TestCase):
 
         self.assertIsNotNone(selection)
         self.assertEqual(selection.model_name, "bedrock-gpt-oss-120b")
-        self.assertEqual(selection.decision_source, "bedrock_adjudicator")
+        self.assertEqual(selection.decision_source, "policy_adjudicator")
         self.assertEqual(selection.evaluator_model, "bedrock-gpt-oss-120b")
 
     def test_adjudicator_falls_back_to_weighted_selection_on_invalid_output(self):
-        router = LLMRouter({"litellm_config_path": ""})
+        router = LLMRouter({"org_only_inference": True})
 
         async def fake_acompletion(body, redacted_content=None):
             return 200, {

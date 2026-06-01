@@ -3,10 +3,12 @@
  * Uses browser origin for gateway (Vite /v1 proxy) — not Docker internal hosts.
  */
 import { chromium } from "playwright";
+import fs from "node:fs";
 
 const BASE = (process.env.BASE_URL || "http://127.0.0.1:8180").replace(/\/$/, "");
 const EMAIL = process.env.TEST_EMAIL || "admin@zeroshield.io";
 const PASS = process.env.TEST_PASSWORD || "Adm1n!Pass#2024";
+const OUT = process.env.E2E_REPORT || "runs/playwright_firewall_features.json";
 
 const MODULES = [
   { tab: "firewall", name: "AI Mesh Firewall Overview", checks: ["SOC", "Threat"] },
@@ -95,6 +97,12 @@ async function main() {
           } else {
             row.notes.push("Run clicked; check result panel");
           }
+          // Content oracle (PLAN_v3_DELTA §5): prompt-injection probe should produce a redaction/block verdict
+          if (/REDACTED|\*\*\*|\[BLOCKED\]|sanitized|<redacted>|blocked|denied/i.test(after)) {
+            row.notes.push("oracle: output redaction/block marker present");
+          } else {
+            row.notes.push("oracle: output redaction marker MISSING (soft)");
+          }
         } else {
           row.notes.push("Run Pipeline disabled (empty prompt)");
         }
@@ -113,6 +121,9 @@ async function main() {
   await browser.close();
   console.log("---");
   console.log(JSON.stringify(results, null, 2));
+  fs.mkdirSync(OUT.substring(0, OUT.lastIndexOf("/")) || ".", { recursive: true });
+  fs.writeFileSync(OUT, JSON.stringify({ base: BASE, failed, results }, null, 2));
+  console.log("Report:", OUT);
   process.exit(failed ? 1 : 0);
 }
 

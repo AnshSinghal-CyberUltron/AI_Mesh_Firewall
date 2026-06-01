@@ -50,11 +50,16 @@ def load_config():
     tier2_execution_mode = get_env("GATEWAY_TIER2_EXECUTION_MODE", "sync_pre_llm").strip().lower()
     tier2_stream_hold_enabled = get_env("GATEWAY_TIER2_STREAM_HOLD_ENABLED", "false").lower() in ("true", "1", "yes")
     tier2_stream_hold_timeout_ms = int(get_env("GATEWAY_TIER2_STREAM_HOLD_TIMEOUT_MS", "1200"))
+    stream_preflight_fail_closed = get_env("GATEWAY_STREAM_PREFLIGHT_FAIL_CLOSED", "true").lower() in ("true", "1", "yes")
+    stream_max_buffer_bytes = int(get_env("GATEWAY_STREAM_MAX_BUFFER_BYTES", "4096"))
+    stream_max_buffer_chunks = int(get_env("GATEWAY_STREAM_MAX_BUFFER_CHUNKS", "64"))
+    stream_emit_debug_headers = get_env("GATEWAY_STREAM_EMIT_DEBUG_HEADERS", "false").lower() in ("true", "1", "yes")
+    stream_finalize_timeout_ms = int(get_env("GATEWAY_STREAM_FINALIZE_TIMEOUT_MS", "5000"))
     scan_buffer_max_bytes = int(get_env("GATEWAY_SCAN_BUFFER_MAX_BYTES", "4096"))
     scan_thread_pool_size = int(get_env("GATEWAY_SCAN_THREAD_POOL_SIZE", "4"))
     deep_scan_enabled = get_env("GATEWAY_DEEP_SCAN_ENABLED", "false").lower() in ("true", "1", "yes")
-    litellm_config_path = get_env("LITELLM_CONFIG_PATH", "litellm_config.yaml")
-    litellm_default_model = get_env("LITELLM_DEFAULT_MODEL", "gpt-4o-mini")
+    org_only_inference = get_env("GATEWAY_ORG_ONLY_INFERENCE", "true").lower() in ("true", "1", "yes")
+    litellm_default_model = (get_env("LITELLM_DEFAULT_MODEL", "") or "").strip()
     litellm_fallback_models = get_env("LITELLM_FALLBACK_MODELS", "gpt-4o-mini")
     litellm_request_timeout = int(get_env("LITELLM_REQUEST_TIMEOUT", "120"))
     litellm_num_retries = int(get_env("LITELLM_NUM_RETRIES", "2"))
@@ -64,6 +69,9 @@ def load_config():
     pinecone_environment = get_env("GATEWAY_PINECONE_ENVIRONMENT", "")
     milvus_uri = get_env("GATEWAY_MILVUS_URI", "")
     milvus_token = get_env("GATEWAY_MILVUS_TOKEN", "")
+    # Phase 1 F-3.1: local Chroma backend for the RAG Collection Manager.
+    chroma_url = get_env("CHROMA_URL", "") or get_env("GATEWAY_CHROMA_URL", "")
+    chroma_auth_token = get_env("GATEWAY_CHROMA_AUTH_TOKEN", "")
     vault_db_dsn = get_env("GATEWAY_VAULT_DB_DSN", "") or get_env("DATABASE_URL", "")
     rag_context_scan_enabled = get_env("GATEWAY_RAG_CONTEXT_SCAN_ENABLED", "true").lower() in ("true", "1", "yes")
     rag_anomaly_detection_enabled = get_env("GATEWAY_RAG_ANOMALY_DETECTION_ENABLED", "true").lower() in ("true", "1", "yes")
@@ -75,6 +83,7 @@ def load_config():
     telemetry_flush_interval = float(get_env("GATEWAY_TELEMETRY_FLUSH_INTERVAL", "2.0"))
     telemetry_buffer_size = int(get_env("GATEWAY_TELEMETRY_BUFFER_SIZE", "100"))
     output_guard_enabled = get_env("GATEWAY_OUTPUT_GUARD_ENABLED", "true").lower() in ("true", "1", "yes")
+    output_grounding_enabled = get_env("GATEWAY_OUTPUT_GROUNDING_ENABLED", "true").lower() in ("true", "1", "yes")
     output_block_on_credential = get_env("GATEWAY_OUTPUT_BLOCK_ON_CREDENTIAL", "true").lower() in ("true", "1", "yes")
     output_block_on_ip_leakage = get_env("GATEWAY_OUTPUT_BLOCK_ON_IP_LEAKAGE", "false").lower() in ("true", "1", "yes")
     hallucination_flag_enabled = get_env("GATEWAY_HALLUCINATION_FLAG_ENABLED", "true").lower() in ("true", "1", "yes")
@@ -124,10 +133,15 @@ def load_config():
         "tier2_execution_mode": tier2_execution_mode,
         "tier2_stream_hold_enabled": tier2_stream_hold_enabled,
         "tier2_stream_hold_timeout_ms": tier2_stream_hold_timeout_ms,
+        "stream_preflight_fail_closed": stream_preflight_fail_closed,
+        "stream_max_buffer_bytes": stream_max_buffer_bytes,
+        "stream_max_buffer_chunks": stream_max_buffer_chunks,
+        "stream_emit_debug_headers": stream_emit_debug_headers,
+        "stream_finalize_timeout_ms": stream_finalize_timeout_ms,
         "scan_buffer_max_bytes": scan_buffer_max_bytes,
         "scan_thread_pool_size": scan_thread_pool_size,
         "deep_scan_enabled": deep_scan_enabled,
-        "litellm_config_path": litellm_config_path,
+        "org_only_inference": org_only_inference,
         "litellm_default_model": litellm_default_model,
         "litellm_fallback_models": [m.strip() for m in litellm_fallback_models.split(",") if m.strip()] if litellm_fallback_models else None,
         "litellm_request_timeout": litellm_request_timeout,
@@ -138,6 +152,8 @@ def load_config():
         "pinecone_environment": pinecone_environment,
         "milvus_uri": milvus_uri,
         "milvus_token": milvus_token,
+        "chroma_url": chroma_url,
+        "chroma_auth_token": chroma_auth_token,
         "vault_db_dsn": vault_db_dsn,
         "rag_context_scan_enabled": rag_context_scan_enabled,
         "rag_anomaly_detection_enabled": rag_anomaly_detection_enabled,
@@ -149,6 +165,7 @@ def load_config():
         "telemetry_flush_interval": telemetry_flush_interval,
         "telemetry_buffer_size": telemetry_buffer_size,
         "output_guard_enabled": output_guard_enabled,
+        "output_grounding_enabled": output_grounding_enabled,
         "output_block_on_credential": output_block_on_credential,
         "output_block_on_ip_leakage": output_block_on_ip_leakage,
         "hallucination_flag_enabled": hallucination_flag_enabled,

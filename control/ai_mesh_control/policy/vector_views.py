@@ -15,6 +15,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
@@ -28,6 +29,24 @@ from policy.vector_serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# Bundle Q1 — per-user write throttle for vector-policy CRUD.
+# A misbehaving (or compromised) admin client can today create / update /
+# delete policies as fast as DRF will accept the requests, each of which
+# fans out to a Redis recompile + Pub/Sub publish in vector_compiler. The
+# throttle below caps a single user to a sustainable rate without
+# affecting list / retrieve reads. Mirrors Bundle B's PolicyCompileThrottle
+# pattern: declaring ``rate`` on the class is honoured by
+# SimpleRateThrottle.__init__, so no settings.py change is needed.
+class VectorPolicyWriteThrottle(UserRateThrottle):
+    scope = "vector_policy_write"
+    rate = "60/min"
+
+
+class VectorPolicyCompileThrottle(UserRateThrottle):
+    scope = "vector_policy_compile"
+    rate = "10/min"
 
 _ID_PATH_PARAM = [
     OpenApiParameter(
@@ -123,7 +142,15 @@ class VectorCollectionPolicyViewSet(ModelViewSet):
     """CRUD ViewSet for VectorCollectionPolicy with full OpenAPI documentation."""
 
     permission_classes = [IsAuthenticated]
+    # Reads (list / retrieve) are intentionally unthrottled; only mutating
+    # actions burn rate-limit budget. The base class applies throttles to
+    # every action, so the per-method gate below scopes it correctly.
     lookup_field = "id"
+
+    def get_throttles(self):
+        if self.action in {"create", "update", "partial_update", "destroy"}:
+            return [VectorPolicyWriteThrottle()]
+        return super().get_throttles()
 
     def _scoped_org(self):
         return get_request_organization(self.request)
@@ -191,6 +218,7 @@ class VectorPolicyCompileView(APIView):
     """Force vector policy recompilation and push to Redis."""
 
     permission_classes = [IsAdminUser]
+    throttle_classes = [VectorPolicyCompileThrottle]
 
     @extend_schema(
         tags=["Vector Policies"],

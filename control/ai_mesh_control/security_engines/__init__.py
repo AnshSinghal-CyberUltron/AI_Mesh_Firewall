@@ -3,7 +3,7 @@ Security Engines Package
 ========================
 
 Phase 2 - Part A: Threat Detection Algorithms
-Module 5 (AIGuardX) for ZeroShield Platform
+Core threat-detection engines for ZeroShield Platform
 
 This package provides AI security threat detection engines:
 - OWASP LLM Top 10 detection

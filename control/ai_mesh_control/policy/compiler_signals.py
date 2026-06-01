@@ -28,12 +28,14 @@ logger = logging.getLogger(__name__)
 
 DEBOUNCE_SECONDS = 0
 PENDING_CHANGES_KEY = "policies:pending_changes"
+PENDING_ORGS_KEY = "policies:pending_orgs"
 
 
 def _trigger_recompilation(
     sender_name: str,
     instance_repr: str,
     changed_policy_id: int | None = None,
+    organization_id: int | None = None,
 ) -> None:
     """
     Schedule a debounced policy recompilation via Celery after the
@@ -52,6 +54,9 @@ def _trigger_recompilation(
 
             if changed_policy_id is not None:
                 client.rpush(PENDING_CHANGES_KEY, str(changed_policy_id))
+
+            if organization_id is not None:
+                client.sadd(PENDING_ORGS_KEY, str(organization_id))
 
             acquired = client.set(
                 "policies:recompile_pending",
@@ -96,6 +101,7 @@ def recompile_on_policy_save(
         sender_name=f"Policy.post_save ({action})",
         instance_repr=str(instance),
         changed_policy_id=instance.pk,
+        organization_id=instance.organization_id,
     )
 
 
@@ -109,6 +115,7 @@ def recompile_on_policy_delete(
         sender_name="Policy.post_delete",
         instance_repr=str(instance),
         changed_policy_id=instance.pk,
+        organization_id=instance.organization_id,
     )
 
 
@@ -120,10 +127,16 @@ def recompile_on_rule_save(
     **kwargs: Any,
 ) -> None:
     action = "created" if created else "updated"
+    org_id = None
+    try:
+        org_id = instance.policy.organization_id
+    except Exception:
+        org_id = None
     _trigger_recompilation(
         sender_name=f"Rule.post_save ({action})",
         instance_repr=str(instance),
         changed_policy_id=instance.policy_id,
+        organization_id=org_id,
     )
 
 
@@ -133,8 +146,14 @@ def recompile_on_rule_delete(
     instance: Rule,
     **kwargs: Any,
 ) -> None:
+    org_id = None
+    try:
+        org_id = instance.policy.organization_id
+    except Exception:
+        org_id = None
     _trigger_recompilation(
         sender_name="Rule.post_delete",
         instance_repr=str(instance),
         changed_policy_id=instance.policy_id,
+        organization_id=org_id,
     )

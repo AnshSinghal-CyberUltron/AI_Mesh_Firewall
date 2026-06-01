@@ -89,17 +89,45 @@ class EmbeddingVault:
         self._threshold = similarity_threshold
         self._enabled = enabled and bool(self._pg_dsn)
         self._embedding_model = os.environ.get("GATEWAY_EMBEDDING_VAULT_MODEL", DEFAULT_EMBEDDING_MODEL)
+        try:
+            self._dim = int(os.environ.get("GATEWAY_EMBEDDING_VAULT_DIM", "1536"))
+        except ValueError:
+            self._dim = 1536
         self._executor = ThreadPoolExecutor(
             max_workers=thread_pool_size,
             thread_name_prefix="emb_vault",
         )
+        self._pool = None
         self._initialized = False
         LOG.info(
-            "EmbeddingVault created (pg_enabled=%s, threshold=%.3f, model=%s)",
+            "EmbeddingVault created (pg_enabled=%s, threshold=%.3f, model=%s, dim=%d)",
             self._enabled,
             similarity_threshold,
             self._embedding_model,
+            self._dim,
         )
+
+    def _get_pool(self):
+        """Lazily create a shared psycopg connection pool.
+
+        Previously every vault check opened a brand-new ``psycopg.connect()``
+        (full TCP + TLS + auth handshake) per request, which became a major
+        latency/throughput bottleneck under load. A bounded pool reuses warm
+        connections across the vault's thread pool.
+        """
+        if self._pool is None:
+            from psycopg_pool import ConnectionPool
+
+            min_size = int(os.environ.get("GATEWAY_VAULT_POOL_MIN", "1"))
+            max_size = int(os.environ.get("GATEWAY_VAULT_POOL_MAX", "8"))
+            self._pool = ConnectionPool(
+                conninfo=self._pg_dsn,
+                min_size=min_size,
+                max_size=max_size,
+                kwargs={"autocommit": True},
+                open=True,
+            )
+        return self._pool
 
     def _embed(self, text: str) -> list[float]:
         import litellm
@@ -111,7 +139,7 @@ class EmbeddingVault:
         if self._initialized or not self._enabled:
             return
 
-        with psycopg.connect(self._pg_dsn, autocommit=True) as conn:
+        with self._get_pool().connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
                 cur.execute(
@@ -120,7 +148,7 @@ class EmbeddingVault:
                         attack_id TEXT PRIMARY KEY,
                         attack_text TEXT NOT NULL,
                         attack_type TEXT NOT NULL,
-                        embedding VECTOR(1536) NOT NULL,
+                        embedding VECTOR({self._dim}) NOT NULL,
                         source TEXT NOT NULL DEFAULT 'seed',
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     );
@@ -155,7 +183,7 @@ class EmbeddingVault:
             query_embedding = self._embed(text)
             vector = _format_vector(query_embedding)
 
-            with psycopg.connect(self._pg_dsn) as conn:
+            with self._get_pool().connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(f"SELECT COUNT(*) FROM {VAULT_TABLE};")
                     vault_size = int(cur.fetchone()[0])
@@ -208,6 +236,13 @@ class EmbeddingVault:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(self._executor, self._check_sync, text)
 
+    def check_sync(self, text: str) -> VaultVerdict:
+        """Synchronous vault check for use from non-async contexts (e.g. inside
+        the InputScanner thread pool). Mirrors :meth:`check` semantics."""
+        if not text or not text.strip():
+            return VaultVerdict()
+        return self._check_sync(text)
+
     def _add_attack_sync(self, text: str, attack_type: str = "detected") -> bool:
         if not self._enabled:
             return False
@@ -215,7 +250,7 @@ class EmbeddingVault:
             self._ensure_schema()
             attack_id = f"detected-{hashlib.sha256(text.encode()).hexdigest()[:12]}"
             embedding = self._embed(text[:2000])
-            with psycopg.connect(self._pg_dsn, autocommit=True) as conn:
+            with self._get_pool().connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         f"""
@@ -247,7 +282,7 @@ class EmbeddingVault:
             return 0
         try:
             self._ensure_schema()
-            with psycopg.connect(self._pg_dsn) as conn:
+            with self._get_pool().connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(f"SELECT COUNT(*) FROM {VAULT_TABLE};")
                     return int(cur.fetchone()[0])

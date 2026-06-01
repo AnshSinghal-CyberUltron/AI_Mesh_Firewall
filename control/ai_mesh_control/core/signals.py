@@ -332,7 +332,14 @@ def _sync_all_llm_models(instance: LLMModelConfig | None = None) -> None:
             qs = LLMModelConfig.objects.filter(is_active=True, organization=org)
             entries = [m.build_litellm_entry() for m in qs]
             routing_entries = [m.build_routing_payload() for m in qs]
-            payload = json.dumps({"models": entries, "routing": routing_entries})
+            from core.routing_fallback import build_compliant_fallback_chains
+
+            fallback_chains = build_compliant_fallback_chains(routing_entries)
+            payload = json.dumps({
+                "models": entries,
+                "routing": routing_entries,
+                "fallback_chains": fallback_chains,
+            })
             client.set(redis_key, payload)
             logger.info("LLMModelConfig synced to Redis (%s): %d models", redis_key, len(entries))
 

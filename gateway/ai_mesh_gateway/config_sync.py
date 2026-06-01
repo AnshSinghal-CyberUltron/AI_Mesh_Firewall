@@ -49,6 +49,7 @@ class ConfigSync:
         self._config: dict[str, Any] = config
         self._config_by_org: dict[str, dict[str, Any]] = {}
         self._model_routing_by_org: dict[str, list[dict]] = {}
+        self._fallback_chains_by_org: dict[str, dict[str, Any]] = {}
         self._subscriber_task: Optional[asyncio.Task] = None
         self._running: bool = False
 
@@ -65,6 +66,12 @@ class ConfigSync:
         if org_slug and org_slug in self._model_routing_by_org:
             return self._model_routing_by_org[org_slug]
         return self._model_routing_by_org.get("default", [])
+
+    def get_fallback_chains(self, org_slug: str = "") -> dict[str, Any]:
+        """Return precomputed compliant fallback chains for an org."""
+        if org_slug and org_slug in self._fallback_chains_by_org:
+            return self._fallback_chains_by_org[org_slug]
+        return self._fallback_chains_by_org.get("default", {})
 
     @property
     def is_loaded(self) -> bool:
@@ -160,6 +167,8 @@ class ConfigSync:
                     slug = key.replace(LLM_MODEL_CONFIGS_PREFIX, "")
                     if isinstance(data, dict) and "routing" in data:
                         self._model_routing_by_org[slug] = data["routing"]
+                        if "fallback_chains" in data:
+                            self._fallback_chains_by_org[slug] = data["fallback_chains"]
 
             await client.aclose()
         except Exception:
@@ -326,6 +335,8 @@ class ConfigSync:
                     model_list = data.get("models", [])
                     routing_list = data.get("routing", [])
                     self._model_routing_by_org[slug] = routing_list
+                    if "fallback_chains" in data:
+                        self._fallback_chains_by_org[slug] = data["fallback_chains"]
                     all_models.extend(model_list)
                 elif isinstance(data, list):
                     all_models.extend(data)
@@ -334,7 +345,7 @@ class ConfigSync:
                 LOG.info("Empty model list from Redis; skipping reload")
                 return
 
-            import main as gateway_main
+            from ai_mesh_gateway import main as gateway_main
 
             if gateway_main.LLM_ROUTER is not None:
                 gateway_main.LLM_ROUTER.reload_models(all_models)

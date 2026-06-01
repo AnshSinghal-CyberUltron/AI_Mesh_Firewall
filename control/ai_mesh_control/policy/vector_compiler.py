@@ -98,10 +98,17 @@ class VectorPolicyCompiler:
 
         If no bundle is provided, compile_all() is called first.
 
-        Steps:
-        1. INCR vector:policies:version
-        2. SET vector:policies:compiled (inside MULTI/EXEC pipeline)
-        3. PUBLISH vector_policy_updates (inside MULTI/EXEC pipeline)
+        Atomicity (mirrors Bundle C1 fix in policy/compiler.py):
+        Wrap version-bump + bundle-set + publish in a single WATCH/MULTI/EXEC
+        transaction. Previously ``incr`` ran standalone BEFORE the pipeline
+        that wrote the bundle, so two concurrent compiles could interleave
+        and pair a high version (e.g. v=2) with a stale bundle's bytes.
+        Gateways then cached the wrong policies under a "newer" version
+        forever. The WATCH on ``version_key`` causes redis-py to auto-retry
+        this callable if anyone else bumps the version between WATCH and
+        EXEC, guaranteeing every (version, bundle) pair stored is
+        consistent and every published notification carries the version
+        that matches the bytes at ``REDIS_KEY_COMPILED``.
 
         Returns True on success, False on Redis failure.
         """
@@ -111,31 +118,46 @@ class VectorPolicyCompiler:
         try:
             client = _get_redis_client()
 
-            new_version: int = client.incr(REDIS_KEY_VERSION)
-            bundle["version"] = new_version
+            tx_state: dict[str, Any] = {"version": None, "policy_count": 0}
 
-            serialized_bundle = json.dumps(bundle, default=str)
+            def _atomic_publish(pipe: "redis.client.Pipeline") -> None:
+                current_raw = pipe.get(REDIS_KEY_VERSION)
+                try:
+                    current = int(current_raw) if current_raw is not None else 0
+                except (TypeError, ValueError):
+                    current = 0
+                new_version = current + 1
 
-            notification = json.dumps(
-                {
-                    "event": "vector_policy_compiled",
-                    "version": new_version,
-                    "policy_count": bundle.get("policy_count", 0),
-                    "compiled_at": bundle.get("compiled_at"),
-                    "trigger": trigger,
-                    "changed_policy_ids": changed_policy_ids or [],
-                }
-            )
+                # Mutate the bundle on every retry so the serialized payload
+                # always carries the version we are about to commit.
+                bundle["version"] = new_version
 
-            pipe = client.pipeline(transaction=True)
-            pipe.set(REDIS_KEY_COMPILED, serialized_bundle)
-            pipe.publish(PUBSUB_CHANNEL, notification)
-            pipe.execute()
+                serialized_bundle = json.dumps(bundle, default=str)
+                notification = json.dumps(
+                    {
+                        "event": "vector_policy_compiled",
+                        "version": new_version,
+                        "policy_count": bundle.get("policy_count", 0),
+                        "compiled_at": bundle.get("compiled_at"),
+                        "trigger": trigger,
+                        "changed_policy_ids": changed_policy_ids or [],
+                    }
+                )
+
+                pipe.multi()
+                pipe.set(REDIS_KEY_VERSION, new_version)
+                pipe.set(REDIS_KEY_COMPILED, serialized_bundle)
+                pipe.publish(PUBSUB_CHANNEL, notification)
+
+                tx_state["version"] = new_version
+                tx_state["policy_count"] = bundle.get("policy_count", 0)
+
+            client.transaction(_atomic_publish, REDIS_KEY_VERSION)
 
             logger.info(
                 "Pushed compiled vector policies to Redis (version=%d, policies=%d, trigger=%s)",
-                new_version,
-                bundle.get("policy_count", 0),
+                tx_state["version"],
+                tx_state["policy_count"],
                 trigger,
             )
             return True

@@ -8,11 +8,18 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from stream_orchestration import StreamRunMetrics
 
 import litellm
 from litellm import Router as LiteLLMRouter
+
+from ai_mesh_shared.llm_model_crypto import decrypt_api_key
+from ai_mesh_shared.litellm_byok import normalize_litellm_params
 
 from litellm.exceptions import (
     APIConnectionError,
@@ -97,38 +104,19 @@ class LLMRouter:
         litellm.num_retries = config.get("litellm_num_retries", 2)
         litellm.ssl_verify = config.get("litellm_ssl_verify", os.environ.get("SSL_VERIFY", "true").lower() not in ("false", "0", "no"))
         
-        yaml_path = config.get("litellm_config_path", "litellm_config.yaml")
-        if yaml_path and os.path.isfile(yaml_path):
-            LOG.info(f"Loading LiteLLM config from {yaml_path}")
-            self._init_from_yaml(yaml_path)
-        elif config.get("upstream_llm_url"):
+        org_only = bool(config.get("org_only_inference", True))
+        if config.get("upstream_llm_url") and not org_only:
             self._init_legacy(config)
-        else:
-            LOG.info("LiteLLM using native env var resolution (OPENAI_API_KEY, etc.)")
-
-    def _init_from_yaml(self, yaml_path: str):
-        """Initialize LiteLLM router from a YAML config file."""
-        import yaml
-
-        with open(yaml_path) as f:
-            yaml_config = yaml.safe_load(f)
-
-        model_list = yaml_config.get("model_list", [])
-        self._set_active_model_names(model_list)
-
-        settings = yaml_config.get("litellm_settings", {})
-        for key, val in settings.items():
-            setattr(litellm, key, val)
-
-        if model_list:
-            fallbacks = self._build_fallbacks(model_list)
-            self._router = LiteLLMRouter(
-                model_list=model_list,
-                num_retries=self._config.get("litellm_num_retries", 2),
-                timeout=self._config.get("litellm_request_timeout", 120),
-                fallbacks=fallbacks,
+        elif org_only:
+            LOG.info(
+                "Org-only inference enabled. LiteLLM router models load from "
+                "Redis (llm:model_configs:{org_slug}) after Control Plane sync."
             )
-            LOG.info(f"LiteLLM router initialized with {len(model_list)} models from YAML config", extra={"fallbacks": fallbacks if fallbacks else ""})
+        else:
+            LOG.warning(
+                "Org-only inference disabled without upstream URL; "
+                "router starts empty until Redis model reload."
+            )
 
     def _set_active_model_names(self, model_list: list[dict]) -> None:
         self._active_model_names = [
@@ -224,9 +212,10 @@ class LLMRouter:
         valid_models: list[dict] = []
         invalid_models: list[tuple[str, str]] = []
         for entry in model_list:
-            ok, reason = self._validate_reload_model_entry(entry)
+            prepared = self._prepare_reload_entry(entry)
+            ok, reason = self._validate_reload_model_entry(prepared)
             if ok:
-                valid_models.append(entry)
+                valid_models.append(prepared)
             else:
                 model_name = ""
                 model_id = ""
@@ -235,6 +224,27 @@ class LLMRouter:
                     model_id = str((entry.get("litellm_params") or {}).get("model") or "")
                 invalid_models.append((model_name or model_id or "unknown", reason))
         return valid_models, invalid_models
+
+    @staticmethod
+    def _prepare_reload_entry(entry: dict) -> dict:
+        """Decrypt encrypted API keys in-memory for LiteLLM; never persist plaintext."""
+        if not isinstance(entry, dict):
+            return entry
+        params = dict(entry.get("litellm_params") or {})
+        encrypted = params.pop("api_key_encrypted", None)
+        if encrypted and not params.get("api_key"):
+            fallback_secret = os.environ.get("DJANGO_SECRET_KEY", "") or os.environ.get(
+                "SECRET_KEY", ""
+            )
+            decrypted = decrypt_api_key(
+                str(encrypted),
+                fallback_secret=fallback_secret,
+            )
+            if decrypted:
+                params["api_key"] = decrypted
+        provider = str(entry.get("provider") or params.pop("provider", "") or "")
+        params = normalize_litellm_params(params, provider=provider)
+        return {**entry, "litellm_params": params}
 
     @staticmethod
     def _normalize_model_alias(model: str) -> str:
@@ -269,11 +279,24 @@ class LLMRouter:
                 break
         return {**body, "messages": messages}
 
-    def _build_kwargs(self, body: dict, stream: bool) -> dict:
+    def _build_kwargs(
+        self,
+        body: dict,
+        stream: bool,
+        inference_allowlist: set[str] | None = None,
+    ) -> dict:
         """Build kwargs for litellm.acompletion from request body."""
         requested_model = body.get("model") or self._default_fallback_model()
         requested_model = self._normalize_model_alias(requested_model)
-        model = self._resolve_runtime_model(requested_model)
+        if inference_allowlist and requested_model not in inference_allowlist:
+            if len(inference_allowlist) == 1:
+                model = next(iter(inference_allowlist))
+            else:
+                model = requested_model
+        else:
+            model = self._resolve_runtime_model(requested_model)
+        if inference_allowlist and model not in inference_allowlist:
+            model = requested_model
         if model != requested_model:
             LOG.warning(
                 "Requested model '%s' is not active in router model groups; remapping to '%s'",
@@ -291,6 +314,19 @@ class LLMRouter:
                 kwargs[param] = body[param]
         return kwargs
 
+    def _pop_inference_allowlist(self, body: dict) -> set[str] | None:
+        raw = body.pop("_inference_allowlist", None)
+        if not raw:
+            return None
+        return {self._normalize_model_alias(str(m)) for m in raw if m}
+
+    @staticmethod
+    def _pop_compliant_fallback_chain(body: dict) -> list[str]:
+        raw = body.pop("_compliant_fallback_chain", None)
+        if not raw:
+            return []
+        return [str(m) for m in raw if m]
+
     async def acompletion(
             self,
             body: dict,
@@ -298,7 +334,9 @@ class LLMRouter:
     ) -> tuple[int, dict]:
         """Non-streaming completion. Returns (http_status, response_dict)."""
         body = self._apply_redaction(body, redacted_content)
-        kwargs = self._build_kwargs(body, stream=False)
+        allowlist = self._pop_inference_allowlist(body)
+        compliant_chain = self._pop_compliant_fallback_chain(body)
+        kwargs = self._build_kwargs(body, stream=False, inference_allowlist=allowlist)
 
         if not kwargs['model']:
             return 400, {
@@ -311,6 +349,39 @@ class LLMRouter:
             response = await self._execute_completion(kwargs)
             return 200, response.model_dump()
         except (BadRequestError, NotFoundError) as exc:
+            if allowlist and compliant_chain:
+                primary = kwargs.get("model")
+                for candidate in compliant_chain:
+                    if candidate == primary:
+                        continue
+                    retry_kwargs = {**kwargs, "model": self._resolve_runtime_model(candidate)}
+                    try:
+                        response = await self._execute_completion(retry_kwargs)
+                        LOG.warning(
+                            "Compliant fallback retry: %s -> %s after %s",
+                            primary,
+                            candidate,
+                            type(exc).__name__,
+                        )
+                        return 200, response.model_dump()
+                    except (BadRequestError, NotFoundError):
+                        continue
+                    except tuple(_EXCEPTION_STATUS_MAP.keys()):
+                        continue
+            if allowlist:
+                status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
+                LOG.warning(
+                    "Org-scoped inference model '%s' failed (%s); no compliant fallback",
+                    kwargs.get("model"),
+                    type(exc).__name__,
+                )
+                return status, {
+                    "error": {
+                        "message": str(exc),
+                        "type": type(exc).__name__,
+                        "code": status,
+                    }
+                }
             fallback_model = self._resolve_runtime_model(self._default_fallback_model())
             if kwargs.get("model") != fallback_model:
                 LOG.warning(
@@ -369,14 +440,36 @@ class LLMRouter:
                 }
             }
     
+    async def _stream_chunks_from_response(self, response) -> AsyncGenerator[str, None]:
+        """Emit SSE chunks from an active LiteLLM streaming response."""
+        async for chunk in response:
+            chunk_dict = chunk.model_dump()
+            yield f"data: {json.dumps(chunk_dict)}\n\n"
+        yield "data: [DONE]\n\n"
+
     async def acompletion_stream(
             self,
             body: dict,
             redacted_content: str | None = None,
+            metrics: "StreamRunMetrics | None" = None,
     ) -> AsyncGenerator[str, None]:
-        """Streaming completion. Yields SSE-formatted chunks."""
+        """Streaming completion. Yields SSE-formatted chunks.
+
+        Optional ``metrics`` (from stream_orchestration) records provider start,
+        first-token time, and fallback-before-first-token (no mid-stream switch).
+        """
+        try:
+            from stream_orchestration import StreamRunMetrics
+        except ImportError:
+            from .stream_orchestration import StreamRunMetrics
+
+        local_metrics = metrics if metrics is not None else StreamRunMetrics()
+        local_metrics.provider_start_ts = time.perf_counter()
+
         body = self._apply_redaction(body, redacted_content)
-        kwargs = self._build_kwargs(body, stream=True)
+        allowlist = self._pop_inference_allowlist(body)
+        compliant_chain = self._pop_compliant_fallback_chain(body)
+        kwargs = self._build_kwargs(body, stream=True, inference_allowlist=allowlist)
 
         if not kwargs['model']:
             error_chunk = {
@@ -387,30 +480,83 @@ class LLMRouter:
             }
             yield f"data: {json.dumps(error_chunk)}\n\n"
             yield "data: [DONE]\n\n"
+            local_metrics.had_error = True
             return
+
+        emitted = False
+
+        try:
+            from stream_orchestration import _extract_usage_from_sse_line
+        except ImportError:
+            from .stream_orchestration import _extract_usage_from_sse_line
+
+        def _track_chunk(chunk: str) -> str:
+            nonlocal emitted
+            if chunk and chunk.strip().startswith("data: "):
+                payload = chunk.strip()[6:].strip()
+                if payload and payload != "[DONE]":
+                    if '"error"' in payload:
+                        local_metrics.had_error = True
+                    elif not emitted:
+                        local_metrics.first_token_ts = time.perf_counter()
+                        emitted = True
+                        local_metrics.chunks_emitted += 1
+                    else:
+                        local_metrics.chunks_emitted += 1
+                usage = _extract_usage_from_sse_line(chunk)
+                if usage:
+                    local_metrics.usage = usage
+            elif chunk:
+                local_metrics.chunks_emitted += 1
+            return chunk
+
         try:
             response = await self._execute_completion(kwargs)
-
-            async for chunk in response:
-                chunk_dict = chunk.model_dump()
-                yield f"data: {json.dumps(chunk_dict)}\n\n"
-            yield "data: [DONE]\n\n"
+            async for chunk in self._stream_chunks_from_response(response):
+                yield _track_chunk(chunk)
+            local_metrics.completed = True
         except (BadRequestError, NotFoundError) as exc:
+            if allowlist and compliant_chain and not emitted:
+                primary = kwargs.get("model")
+                for candidate in compliant_chain:
+                    if candidate == primary:
+                        continue
+                    retry_kwargs = {**kwargs, "model": self._resolve_runtime_model(candidate)}
+                    try:
+                        local_metrics.fallback_before_first_token = True
+                        response = await self._execute_completion(retry_kwargs)
+                        async for chunk in self._stream_chunks_from_response(response):
+                            yield _track_chunk(chunk)
+                        local_metrics.completed = True
+                        return
+                    except (BadRequestError, NotFoundError):
+                        continue
+                    except tuple(_EXCEPTION_STATUS_MAP.keys()):
+                        continue
+            if allowlist:
+                status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
+                error_chunk = {
+                    "error": {"message": str(exc), "type": type(exc).__name__, "code": status}
+                }
+                yield f"data: {json.dumps(error_chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+                local_metrics.had_error = True
+                return
             fallback_model = self._resolve_runtime_model(self._default_fallback_model())
-            if kwargs.get("model") != fallback_model:
+            if kwargs.get("model") != fallback_model and not emitted:
                 LOG.warning(
                     "Primary stream model '%s' failed (%s). Retrying once with fallback model '%s'.",
                     kwargs.get("model"),
                     type(exc).__name__,
                     fallback_model,
                 )
+                local_metrics.fallback_before_first_token = True
                 retry_kwargs = {**kwargs, "model": fallback_model}
                 try:
                     response = await self._execute_completion(retry_kwargs)
-                    async for chunk in response:
-                        chunk_dict = chunk.model_dump()
-                        yield f"data: {json.dumps(chunk_dict)}\n\n"
-                    yield "data: [DONE]\n\n"
+                    async for chunk in self._stream_chunks_from_response(response):
+                        yield _track_chunk(chunk)
+                    local_metrics.completed = True
                     return
                 except tuple(_EXCEPTION_STATUS_MAP.keys()) as retry_exc:
                     status = _EXCEPTION_STATUS_MAP.get(type(retry_exc), 502)
@@ -420,12 +566,14 @@ class LLMRouter:
                     }
                     yield f"data: {json.dumps(error_chunk)}\n\n"
                     yield "data: [DONE]\n\n"
+                    local_metrics.had_error = True
                     return
                 except Exception as retry_exc:
                     LOG.exception("Unexpected fallback retry LLM stream error")
                     error_chunk = {"error": {"message": str(retry_exc), "type": "internal_error"}}
                     yield f"data: {json.dumps(error_chunk)}\n\n"
                     yield "data: [DONE]\n\n"
+                    local_metrics.had_error = True
                     return
             status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
             LOG.warning("LiteLLM stream error [%s %d]: %s", type(exc).__name__, status, exc)
@@ -434,6 +582,7 @@ class LLMRouter:
             }
             yield f"data: {json.dumps(error_chunk)}\n\n"
             yield "data: [DONE]\n\n"
+            local_metrics.had_error = True
             return
         except tuple(_EXCEPTION_STATUS_MAP.keys()) as exc:
             status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
@@ -443,11 +592,13 @@ class LLMRouter:
             }
             yield f"data: {json.dumps(error_chunk)}\n\n"
             yield "data: [DONE]\n\n"
+            local_metrics.had_error = True
         except Exception as exc:
             LOG.exception("Unexpected LLM stream error")
             error_chunk = {"error": {"message": str(exc), "type": "internal_error"}}
             yield f"data: {json.dumps(error_chunk)}\n\n"
             yield "data: [DONE]\n\n"
+            local_metrics.had_error = True
     
     async def aembedding(
             self,
@@ -529,9 +680,8 @@ class LLMRouter:
         """
         Hot-reload the LiteLLM Router with an updated model list from Redis.
 
-        Merges Redis-sourced model configs with existing YAML-based models,
-        then recreates the Router instance. If model_list is empty, the
-        existing configuration is preserved.
+        Replaces the router with org-scoped entries only. If model_list is empty,
+        the existing configuration is preserved.
         """
         if not model_list:
             LOG.info("reload_models called with empty list; keeping current config")

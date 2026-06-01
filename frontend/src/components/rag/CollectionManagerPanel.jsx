@@ -1,17 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { Database, Plus, Trash2, RefreshCw, Loader2, AlertTriangle, CheckCircle, List, FolderOpen } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
+import { useAuth } from "../../context/AuthContext";
 
-const GATEWAY_URL_KEY = "zeroshield_gateway_url";
-const GATEWAY_KEY_KEY = "zeroshield_gateway_api_key";
-
-function gwUrl() {
-  const stored = localStorage.getItem(GATEWAY_URL_KEY);
-  if (stored) return stored.replace(/\/+$/, "");
-  const host = window.location.hostname || "127.0.0.1";
-  return `http://${host}:8300`;
-}
-function gwKey() { return localStorage.getItem(GATEWAY_KEY_KEY) || ""; }
+// Phase 1 F-3.1: collection management now flows through the Django admin
+// proxy (``/api/admin/gateway/rag/collections/``) instead of the per-tenant
+// gateway Bearer key. Django enforces IsAdminOrSuperuser, stamps the
+// caller's organization-derived project_id, and forwards to the gateway
+// with the server-side internal key.
 
 const PROVIDERS = [
   { value: "chroma", label: "ChromaDB" },
@@ -19,7 +15,10 @@ const PROVIDERS = [
   { value: "milvus", label: "Milvus" },
 ];
 
+const PROXY_URL = "/api/admin/gateway/rag/collections/";
+
 export function CollectionManagerPanel() {
+  const { fetchWithAuth } = useAuth();
   const [collections, setCollections] = useState({});
   const [loading, setLoading] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState("chroma");
@@ -29,42 +28,44 @@ export function CollectionManagerPanel() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
+  const unwrap = async (res) => {
+    let body = null;
+    try { body = await res.json(); } catch { body = null; }
+    if (!res.ok || !body || body.status !== "ok") {
+      const msg = body?.data?.message || body?.data?.error || `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return body.data || {};
+  };
+
   const fetchCollections = useCallback(async () => {
-    const key = gwKey();
-    if (!key) { setError("Set your Gateway API Key in the connection panel first."); return; }
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${gwUrl()}/v1/rag/collections`, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const res = await fetchWithAuth(PROXY_URL);
+      const data = await unwrap(res);
       setCollections(data.collections || {});
     } catch (err) {
       setError(`Failed to list collections: ${err.message}`);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchWithAuth]);
 
   useEffect(() => { fetchCollections(); }, [fetchCollections]);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
-    const key = gwKey();
-    if (!key) { setError("Gateway API Key required."); return; }
     setCreating(true);
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch(`${gwUrl()}/v1/rag/collections`, {
+      const res = await fetchWithAuth(PROXY_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ collection: newName.trim(), vector_db_type: selectedProvider }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      await unwrap(res);
       setSuccess(`Collection "${newName.trim()}" created in ${selectedProvider}.`);
       setNewName("");
       await fetchCollections();
@@ -76,19 +77,29 @@ export function CollectionManagerPanel() {
   };
 
   const handleDelete = async (provider, name) => {
-    const key = gwKey();
-    if (!key) { setError("Gateway API Key required."); return; }
+    // Bundle Z3 — destructive op requires explicit confirmation. The
+    // delete button is one click away from the row and there is no
+    // undo on the backend (collection drop is permanent), so a stray
+    // click previously vaporised the collection. Native ``confirm`` is
+    // sufficient here; we already use it for vector-policy deletion in
+    // VectorPolicyPanel.jsx so the UX stays consistent across the RAG
+    // surface.
+    if (!window.confirm(
+      `Delete collection "${name}" from ${provider}? ` +
+      `All vectors and metadata in this collection will be permanently lost.`,
+    )) {
+      return;
+    }
     setDeleting(`${provider}:${name}`);
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch(`${gwUrl()}/v1/rag/collections`, {
+      const res = await fetchWithAuth(PROXY_URL, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ collection: name, vector_db_type: provider }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || body.message || `HTTP ${res.status}`);
+      await unwrap(res);
       setSuccess(`Collection "${name}" deleted.`);
       await fetchCollections();
     } catch (err) {

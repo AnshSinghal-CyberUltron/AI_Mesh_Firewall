@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRealtimeNotifications } from "./useRealtimeNotifications";
 
@@ -15,7 +15,7 @@ const MODULE_SOURCE_MAP = {
   "1.2": "security_scan",
   "1.3": "security_scan",
   "1.4": "mcp_scan",
-  "1.5": null,
+  "1.5": "routing",
   "1.6": "policy",
   "1.7": "security_scan",
 };
@@ -31,15 +31,21 @@ export function useFirewallData(moduleId, timeRange = "24h") {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setSocKpis(null);
-    setThreatFeed([]);
-    setThreatFeedCount(null);
-    setAttackTrends([]);
-    setGatewayStats(null);
-    setRagPipelineKpis(null);
+  const hasLoadedOnce = useRef(false);
+
+  const fetchData = useCallback(async ({ background = false } = {}) => {
+    if (!background) {
+      setLoading(true);
+      setError(null);
+      if (!hasLoadedOnce.current) {
+        setSocKpis(null);
+        setThreatFeed([]);
+        setThreatFeedCount(null);
+        setAttackTrends([]);
+        setGatewayStats(null);
+        setRagPipelineKpis(null);
+      }
+    }
 
     const hours = TIME_RANGE_TO_HOURS[timeRange] || 24;
     const period = timeRange === "6h" ? "24h" : timeRange;
@@ -53,7 +59,9 @@ export function useFirewallData(moduleId, timeRange = "24h") {
         // capped at the page size. The backend supports up to 500.
         limit: "500",
       });
-      if (source) {
+      if (moduleId === "1.6") {
+        feedParams.set("module_id", "1.6");
+      } else if (source) {
         feedParams.set("source", source);
       }
 
@@ -111,25 +119,26 @@ export function useFirewallData(moduleId, timeRange = "24h") {
       setRagPipelineKpis(null);
       setError(err.message || "Failed to fetch firewall data");
     } finally {
+      hasLoadedOnce.current = true;
       setLoading(false);
     }
   }, [fetchWithAuth, moduleId, timeRange]);
 
   useEffect(() => {
-    fetchData();
+    hasLoadedOnce.current = false;
+    fetchData({ background: false });
   }, [fetchData]);
 
   useRealtimeNotifications({
     enabled: true,
-    onEnforcementEvent: fetchData,
+    onEnforcementEvent: () => fetchData({ background: true }),
   });
 
-    // Polling fallback: refresh every 15 s so recent activity is always live
-    // even if the WebSocket event is delayed by the telemetry drain cycle.
-    useEffect(() => {
-      const id = setInterval(fetchData, 15000);
-      return () => clearInterval(id);
-    }, [fetchData]);
+  // Polling fallback: refresh without clearing UI (avoids hero/table flicker).
+  useEffect(() => {
+    const id = setInterval(() => fetchData({ background: true }), 15000);
+    return () => clearInterval(id);
+  }, [fetchData]);
 
   const metrics = buildMetrics(moduleId, socKpis, gatewayStats, threatFeedCount);
 

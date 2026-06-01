@@ -6,9 +6,11 @@
  * hot-reloads routing weights without restart.
  */
 
-import { useState, useEffect, useCallback } from "react";
-import { Settings, Save, RotateCcw, Info, Sliders, Power } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Save, RotateCcw, Info, Sliders, Power, Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useFirewallConfig } from "../hooks/useFirewallConfig";
+import { PanelLoadingShell } from "./PanelLoadingShell";
 
 const WEIGHT_KEYS = [
   { key: "routing_risk_weight", label: "Risk Avoidance", color: "rose", description: "Prefer lower-risk models" },
@@ -53,8 +55,31 @@ const SENSITIVITY_ACTIVE_STYLES = {
   rose: "bg-rose-500/20 text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/50",
 };
 
+function routingFromConfig(data) {
+  const w = {
+    routing_risk_weight: data.routing_risk_weight ?? 0.30,
+    routing_cost_weight: data.routing_cost_weight ?? 0.20,
+    routing_latency_weight: data.routing_latency_weight ?? 0.20,
+    routing_priority_weight: data.routing_priority_weight ?? 0.30,
+  };
+  const sensitivity = data.default_data_sensitivity ?? "internal";
+  const routingEnabled = typeof data.routing_enabled === "boolean" ? data.routing_enabled : true;
+  return {
+    weights: w,
+    sensitivity,
+    routingEnabled,
+    defaultModel: data.default_model ?? "",
+    serverState: {
+      ...w,
+      default_data_sensitivity: sensitivity,
+      routing_enabled: routingEnabled,
+    },
+  };
+}
+
 export function RoutingGovernancePanel() {
   const { fetchWithAuth } = useAuth();
+  const { config, loading, refreshing, error: configError, mergeConfig } = useFirewallConfig();
   const [weights, setWeights] = useState({
     routing_risk_weight: 0.30,
     routing_cost_weight: 0.20,
@@ -63,65 +88,46 @@ export function RoutingGovernancePanel() {
   });
   const [sensitivity, setSensitivity] = useState("internal");
   const [routingEnabled, setRoutingEnabled] = useState(true);
-  const [defaultModel, setDefaultModel] = useState("gpt-4");
-  const [registeredModels, setRegisteredModels] = useState([]);
+  const [defaultModelDisplay, setDefaultModelDisplay] = useState("");
   const [serverState, setServerState] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchModels = useCallback(async () => {
-    try {
-      const res = await fetchWithAuth("/api/firewall/models/");
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : data.results ?? [];
-        setRegisteredModels(list.filter(m => m.is_active !== false));
-      }
-    } catch {
-      setRegisteredModels([]);
-    }
-  }, [fetchWithAuth]);
+  const isDirtyRef = useRef(false);
 
-  const fetchConfig = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetchWithAuth("/api/firewall/config/");
-      if (res.ok) {
-        const data = await res.json();
-        const w = {
-          routing_risk_weight: data.routing_risk_weight ?? 0.30,
-          routing_cost_weight: data.routing_cost_weight ?? 0.20,
-          routing_latency_weight: data.routing_latency_weight ?? 0.20,
-          routing_priority_weight: data.routing_priority_weight ?? 0.30,
-        };
-        setWeights(w);
-        setSensitivity(data.default_data_sensitivity ?? "internal");
-        const enabled = typeof data.routing_enabled === "boolean" ? data.routing_enabled : true;
-        setRoutingEnabled(enabled);
-        setDefaultModel(data.default_model ?? "gpt-4");
-        setServerState({ ...w, default_data_sensitivity: data.default_data_sensitivity ?? "internal", routing_enabled: enabled, default_model: data.default_model ?? "gpt-4" });
-      } else {
-        setError("Failed to load routing configuration.");
-      }
-    } catch {
-      setError("Network error loading routing configuration.");
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchWithAuth]);
-
-  useEffect(() => { fetchConfig(); fetchModels(); }, [fetchConfig, fetchModels]);
+  useEffect(() => {
+    if (!config) return;
+    setDefaultModelDisplay(config.default_model ?? "");
+    if (isDirtyRef.current) return;
+    const next = routingFromConfig(config);
+    setWeights(next.weights);
+    setSensitivity(next.sensitivity);
+    setRoutingEnabled(next.routingEnabled);
+    setServerState(next.serverState);
+  }, [config]);
 
   const total = Object.values(weights).reduce((s, v) => s + v, 0);
   const isDirty = serverState && (
     Object.keys(weights).some(k => Math.abs(weights[k] - serverState[k]) > 0.005) ||
     sensitivity !== serverState.default_data_sensitivity ||
-    routingEnabled !== serverState.routing_enabled ||
-    defaultModel !== serverState.default_model
+    routingEnabled !== serverState.routing_enabled
   );
+
+  isDirtyRef.current = Boolean(isDirty);
+
+  const handleDiscard = () => {
+    if (!serverState) return;
+    setWeights({
+      routing_risk_weight: serverState.routing_risk_weight,
+      routing_cost_weight: serverState.routing_cost_weight,
+      routing_latency_weight: serverState.routing_latency_weight,
+      routing_priority_weight: serverState.routing_priority_weight,
+    });
+    setSensitivity(serverState.default_data_sensitivity);
+    setRoutingEnabled(serverState.routing_enabled);
+    setError(null);
+  };
 
   const handleWeightChange = (key, raw) => {
     const val = Math.max(0, Math.min(1, parseFloat(raw) || 0));
@@ -137,7 +143,11 @@ export function RoutingGovernancePanel() {
     setSaveOk(false);
     setError(null);
     try {
-      const payload = { ...weights, default_data_sensitivity: sensitivity, routing_enabled: routingEnabled, default_model: defaultModel };
+      const payload = {
+        ...weights,
+        default_data_sensitivity: sensitivity,
+        routing_enabled: routingEnabled,
+      };
       const res = await fetchWithAuth("/api/firewall/config/", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -145,19 +155,13 @@ export function RoutingGovernancePanel() {
       });
       if (res.ok) {
         const data = await res.json();
-        const w = {
-          routing_risk_weight: data.routing_risk_weight ?? weights.routing_risk_weight,
-          routing_cost_weight: data.routing_cost_weight ?? weights.routing_cost_weight,
-          routing_latency_weight: data.routing_latency_weight ?? weights.routing_latency_weight,
-          routing_priority_weight: data.routing_priority_weight ?? weights.routing_priority_weight,
-        };
-        setWeights(w);
-        setSensitivity(data.default_data_sensitivity ?? sensitivity);
-        const enabled = typeof data.routing_enabled === "boolean" ? data.routing_enabled : routingEnabled;
-        setRoutingEnabled(enabled);
-        const dm = data.default_model ?? defaultModel;
-        setDefaultModel(dm);
-        setServerState({ ...w, default_data_sensitivity: data.default_data_sensitivity ?? sensitivity, routing_enabled: enabled, default_model: dm });
+        mergeConfig(data);
+        const next = routingFromConfig(data);
+        setWeights(next.weights);
+        setSensitivity(next.sensitivity);
+        setRoutingEnabled(next.routingEnabled);
+        setDefaultModelDisplay(next.defaultModel);
+        setServerState(next.serverState);
         setSaveOk(true);
         setTimeout(() => setSaveOk(false), 4000);
       } else {
@@ -171,19 +175,20 @@ export function RoutingGovernancePanel() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg p-6 animate-pulse">
-        <div className="h-6 bg-slate-300 dark:bg-slate-700 rounded w-48 mb-4" />
-        <div className="space-y-3">
-          {[1, 2, 3, 4].map(i => <div key={i} className="h-10 bg-slate-300/70 dark:bg-slate-700/50 rounded" />)}
-        </div>
-      </div>
-    );
+  const displayError = error || configError;
+
+  if (loading && !config) {
+    return <PanelLoadingShell variant="routing" />;
   }
 
   return (
-    <div className="bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+    <div className="relative bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+      {refreshing && (
+        <div
+          className="absolute inset-0 z-10 bg-white/40 dark:bg-slate-900/40 pointer-events-none"
+          aria-hidden
+        />
+      )}
       {/* Header */}
       <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -196,30 +201,36 @@ export function RoutingGovernancePanel() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {refreshing && (
+            <Loader2 className="w-4 h-4 text-purple-500 animate-spin" aria-label="Refreshing" />
+          )}
           {saveOk && <span className="text-xs text-emerald-700 dark:text-emerald-300">Saved &amp; synced to gateway</span>}
           {isDirty && (
             <button
-              onClick={fetchConfig}
-              className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white rounded transition-colors"
+              type="button"
+              onClick={handleDiscard}
+              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white rounded transition-colors"
               title="Discard changes"
+              aria-label="Discard changes"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
           )}
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving || !isDirty}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-500 text-white"
+            className="flex items-center gap-1.5 min-h-[44px] px-4 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-500 text-white"
           >
-            <Save className="w-3.5 h-3.5" />
-            {saving ? "Saving…" : "Save"}
+            <Save className="w-3.5 h-3.5" aria-hidden />
+            {saving ? "Saving…" : "Save routing"}
           </button>
         </div>
       </div>
 
-      {error && (
-        <div className="mx-5 mt-3 p-2 bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-xs rounded">
-          {error}
+      {displayError && (
+        <div className="mx-5 mt-3 p-2 bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-xs rounded" role="alert">
+          {displayError}
         </div>
       )}
 
@@ -239,7 +250,7 @@ export function RoutingGovernancePanel() {
             <button
               type="button"
               onClick={() => setRoutingEnabled((v) => !v)}
-              className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${routingEnabled ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/50" : "bg-slate-300 dark:bg-slate-700/70 text-slate-700 dark:text-slate-300 ring-1 ring-slate-400 dark:ring-slate-600"}`}
+              className={`min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${routingEnabled ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/50" : "bg-slate-300 dark:bg-slate-700/70 text-slate-700 dark:text-slate-300 ring-1 ring-slate-400 dark:ring-slate-600"}`}
             >
               {routingEnabled ? "Enabled" : "Disabled"}
             </button>
@@ -257,9 +268,10 @@ export function RoutingGovernancePanel() {
               const active = Object.keys(p.weights).every(k => Math.abs(weights[k] - p.weights[k]) < 0.005);
               return (
                 <button
+                  type="button"
                   key={p.name}
                   onClick={() => applyPreset(p)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  className={`min-h-[44px] px-4 py-2 rounded-full text-xs font-medium transition-all ${
                     active
                       ? "bg-purple-500/20 text-purple-700 dark:text-purple-300 ring-1 ring-purple-500/50"
                       : "bg-slate-300/60 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700"
@@ -322,9 +334,10 @@ export function RoutingGovernancePanel() {
           <div className="grid grid-cols-4 gap-2">
             {SENSITIVITY_OPTIONS.map(opt => (
               <button
+                type="button"
                 key={opt.value}
                 onClick={() => setSensitivity(opt.value)}
-                className={`px-3 py-2 rounded text-xs font-medium transition-all text-center ${
+                className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-medium transition-all text-center ${
                   sensitivity === opt.value
                     ? SENSITIVITY_ACTIVE_STYLES[opt.color]
                     : "bg-slate-300/60 dark:bg-slate-700/40 text-slate-700 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700/70"
@@ -339,26 +352,16 @@ export function RoutingGovernancePanel() {
           </p>
         </div>
 
-        {/* Default Fallback Model */}
-        <div>
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2 block">
-            Default Fallback Model
-          </label>
-          <select
-            value={defaultModel}
-            onChange={e => setDefaultModel(e.target.value)}
-            className="w-full bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-900 dark:text-white font-mono appearance-none cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 transition-colors"
-          >
-            <option value={defaultModel}>{defaultModel}</option>
-            {registeredModels
-              .filter(m => m.model_name !== defaultModel)
-              .map(m => (
-                <option key={m.id || m.model_name} value={m.model_name}>{m.model_name}</option>
-              ))
-            }
-          </select>
+        {/* Default model (read-only — edited in Model allowlist panel above) */}
+        <div className="bg-slate-200/40 dark:bg-slate-900/30 border border-slate-300 dark:border-slate-700/50 rounded-lg px-4 py-3">
+          <p className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+            Default fallback model
+          </p>
+          <p className="text-sm font-mono text-slate-900 dark:text-white">
+            {defaultModelDisplay || "— Not set —"}
+          </p>
           <p className="mt-1.5 text-[10px] text-slate-600 dark:text-slate-500">
-            Used when no model is specified in a request, when routing is disabled, or as last-resort fallback if all candidates are excluded.
+            Configure in the <strong>Model allowlist &amp; default</strong> panel above. Used when routing is off or no model is specified.
           </p>
         </div>
 

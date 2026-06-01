@@ -1,5 +1,5 @@
 """
-Organization-scoping helper for multi-tenant AIGuardX.
+Organization-scoping helper for multi-tenant ZeroShield.
 """
 
 

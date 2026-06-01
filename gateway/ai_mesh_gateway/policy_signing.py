@@ -13,8 +13,8 @@ serve no policies at all if nothing was ever loaded.
 
 from __future__ import annotations
 
-import hashlib
 import hmac
+import hashlib
 import json
 import logging
 import os
@@ -28,12 +28,19 @@ SIG_ALG = "HMAC-SHA256"
 
 
 def _get_signing_key() -> bytes | None:
+    """Return the HMAC signing key bytes, or None when not configured.
+
+    Phase 0 D-G1-v3: the prior DJANGO_SECRET_KEY fallback was removed because
+    it allowed the startup misconfig guard in main.py to never fire — any
+    deployment with a populated DJANGO_SECRET_KEY (i.e., all of them) would
+    silently use a derived key that no signer was using, and every bundle
+    would fail verification on the refresh path with no operator signal.
+
+    Operators MUST set POLICY_SIGNING_KEY explicitly. See docs/UPGRADE.md.
+    """
     raw = os.environ.get("POLICY_SIGNING_KEY", "").strip()
     if raw:
         return raw.encode("utf-8")
-    fallback = os.environ.get("DJANGO_SECRET_KEY", "").strip()
-    if fallback:
-        return hashlib.sha256(b"policy-bundle-signing:" + fallback.encode("utf-8")).digest()
     return None
 
 

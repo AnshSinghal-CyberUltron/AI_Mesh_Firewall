@@ -1,9 +1,8 @@
 from rest_framework import serializers
 
-from .models import GuardrailProfile, MCPEvent, MCPServerRegistration, MCPToolRegistration
+from .models import MCPEvent, MCPServerRegistration, MCPToolRegistration
 
 
-SUPPORTED_CONTEXTFORGE_TRANSPORTS = {"streamable-http", "sse"}
 ALL_TRANSPORTS = {"streamable-http", "sse", "stdio", "websocket"}
 
 
@@ -14,6 +13,7 @@ class AuthHeaderPairSerializer(serializers.Serializer):
 
 class MCPServerRegistrationSerializer(serializers.ModelSerializer):
     gateway_endpoint = serializers.ReadOnlyField()
+    oauth_authorized = serializers.ReadOnlyField()
 
     class Meta:
         model = MCPServerRegistration
@@ -27,7 +27,6 @@ class MCPServerRegistrationSerializer(serializers.ModelSerializer):
             "args",
             "env_vars",
             "description",
-            "contextforge_server_id",
             "is_active",
             "is_exposed_to_agents",
             "connection_status",
@@ -37,13 +36,22 @@ class MCPServerRegistrationSerializer(serializers.ModelSerializer):
             "last_health_status",
             "risk_level",
             "gateway_endpoint",
+            "default_presidio_action",
+            # Non-secret auth descriptor + sync diagnostics (secrets such as
+            # auth_token/auth_password/auth_header_value are intentionally
+            # NOT listed here — they live in write-only inputs only).
+            "auth_type",
+            "oauth_authorized",
+            "oauth_token_expires_at",
+            "last_sync_error",
+            "last_sync_attempt_at",
+            "needs_reauth",
             "created_at",
             "updated_at",
         ]
         read_only_fields = [
             "id",
             "server_slug",
-            "contextforge_server_id",
             "connection_status",
             "tools_count",
             "last_sync_at",
@@ -51,6 +59,11 @@ class MCPServerRegistrationSerializer(serializers.ModelSerializer):
             "last_health_status",
             "risk_level",
             "gateway_endpoint",
+            "oauth_authorized",
+            "oauth_token_expires_at",
+            "last_sync_error",
+            "last_sync_attempt_at",
+            "needs_reauth",
             "created_at",
             "updated_at",
         ]
@@ -63,6 +76,7 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
         ("basic", "Basic Auth"),
         ("authheaders", "Custom Header(s)"),
         ("query_param", "Query Parameter"),
+        ("oauth", "OAuth 2.1"),
     ]
 
     auth_type = serializers.ChoiceField(
@@ -100,10 +114,21 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
             "auth_headers",
             "auth_query_param_key",
             "auth_query_param_value",
+            "default_presidio_action",
         ]
 
     def validate(self, attrs):
-        transport = (attrs.get("transport") or "").strip().lower()
+        # On partial updates (PATCH) fall back to the instance's existing values
+        # so unrelated field edits (e.g. default_presidio_action) don't trip the
+        # transport/url/command/auth_type guards.
+        instance = getattr(self, "instance", None)
+
+        def _val(key, default=""):
+            if key in attrs:
+                return attrs[key]
+            return getattr(instance, key, default) if instance is not None else default
+
+        transport = (_val("transport") or "").strip().lower()
 
         if transport and transport not in ALL_TRANSPORTS:
             raise serializers.ValidationError(
@@ -112,14 +137,14 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
 
         # stdio requires command; url is optional
         if transport == "stdio":
-            if not attrs.get("command"):
+            if not _val("command"):
                 raise serializers.ValidationError({"command": "command is required for stdio transport."})
         else:
             # websocket, streamable-http, sse all require url
-            if not attrs.get("url"):
+            if not _val("url"):
                 raise serializers.ValidationError({"url": "url is required for this transport."})
 
-        auth_type = (attrs.get("auth_type") or "none").strip().lower()
+        auth_type = (_val("auth_type", "none") or "none").strip().lower()
         attrs["auth_type"] = auth_type
 
         if auth_type == "bearer" and not attrs.get("auth_token"):
@@ -179,52 +204,37 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def local_model_data(validated_data: dict) -> dict:
-        """Return only fields persisted in MCPServerRegistration."""
-        return {
-            "name": validated_data.get("name"),
-            "url": validated_data.get("url", ""),
-            "transport": validated_data.get("transport"),
-            "command": validated_data.get("command", ""),
-            "args": validated_data.get("args", []),
-            "env_vars": validated_data.get("env_vars", {}),
-            "description": validated_data.get("description", ""),
-        }
+        """Return only fields persisted in MCPServerRegistration.
 
-    @staticmethod
-    def contextforge_data(validated_data: dict) -> dict:
-        """Return local + optional upstream auth fields for ContextForge."""
-        keys = {
+        Emits ONLY keys actually present in `validated_data` so that PATCH
+        partial updates don't wipe untouched columns (DECISION-D Phase 1 bug
+        fix: previously every key defaulted to "" / [] / {} which trampled
+        existing rows on a one-field PATCH like default_presidio_action).
+        """
+        allowed = {
             "name",
             "url",
             "transport",
+            "command",
+            "args",
+            "env_vars",
             "description",
+            "default_presidio_action",
+            # ── BYOK auth (Phase B) ──────────────────────────────────
+            # Persisted to MCPServerRegistration; secret values land in
+            # EncryptedCharField columns (encrypted-at-rest transparently).
+            # The model only stores the single-header / bearer / basic
+            # shapes the gateway body-reader supports today; auth_headers[]
+            # and auth_query_param_* remain validated but unpersisted
+            # (deferred — bearer/basic/header cover the target servers).
             "auth_type",
             "auth_token",
             "auth_username",
             "auth_password",
             "auth_header_key",
             "auth_header_value",
-            "auth_headers",
-            "auth_query_param_key",
-            "auth_query_param_value",
         }
-        return {k: v for k, v in validated_data.items() if k in keys and v not in (None, "")}
-
-
-class GuardrailProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = GuardrailProfile
-        fields = [
-            "id",
-            "name",
-            "description",
-            "input_policy",
-            "output_policy",
-            "is_default",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        return {k: v for k, v in validated_data.items() if k in allowed}
 
 
 class MCPToolRegistrationSerializer(serializers.ModelSerializer):
@@ -241,6 +251,7 @@ class MCPToolRegistrationSerializer(serializers.ModelSerializer):
             "enabled",
             "sensitivity",
             "input_schema",
+            "presidio_action",
             "last_seen_at",
         ]
         read_only_fields = ["id", "server", "server_name", "tool_name", "description", "input_schema", "last_seen_at"]
@@ -262,6 +273,8 @@ class MCPEventSerializer(serializers.ModelSerializer):
             "latency_ms",
             "request_id",
             "metadata",
+            "compliance_tags",
+            "presidio_findings",
             "timestamp",
         ]
         read_only_fields = fields

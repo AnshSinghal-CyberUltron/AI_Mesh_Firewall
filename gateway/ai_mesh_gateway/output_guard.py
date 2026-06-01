@@ -9,7 +9,7 @@ Orchestrates all output inspection checks:
 5. Semantic leakage detection (optional, via SemanticLeakageDetector)
 
 Returns the highest-severity OutputVerdict across all checks.
-Action precedence: block(3) > redact(2) > flag(1) > allow(0).
+Action precedence: block(4) > redact(3) > rewrite(2) > flag(1) > allow(0).
 """
 from __future__ import annotations
 
@@ -38,7 +38,11 @@ except ImportError:
 
 LOG = logging.getLogger("gateway.output_guard")
 
-ACTION_PRIORITY = {"allow": 0, "flag": 1, "redact": 2, "block": 3}
+ACTION_PRIORITY = {"allow": 0, "flag": 1, "rewrite": 2, "redact": 3, "block": 4}
+
+# Per-detector output actions an operator may configure. Anything outside this
+# set falls back to the detector's default action.
+_VALID_OUTPUT_ACTIONS = frozenset({"block", "redact", "rewrite", "flag", "allow"})
 
 _STOPWORDS = frozenset({
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
@@ -95,15 +99,35 @@ class OutputGuard:
         self._scanner = scanner
         self._config = config or {}
         self._leakage_detector = None
+        self._grounding_guard = None  # type: ignore[assignment]
 
     def set_leakage_detector(self, detector) -> None:
         """Attach an optional SemanticLeakageDetector."""
         self._leakage_detector = detector
 
+    def set_grounding_guard(self, guard) -> None:
+        """Attach an optional :class:`rag_pipeline.grounding_guard.GroundingGuard`.
+
+        When attached, the ``hallucination_grounding_mode`` org-config field
+        (per migration 0022) selects the algorithm used to compute the
+        ``grounding_score`` component of the hallucination risk:
+
+        * ``"lexical"`` (default) — existing Jaccard token-overlap, no
+          embeddings used. Preserves legacy behavior.
+        * ``"semantic"`` — max Bedrock Titan v2 cosine similarity (fail-open
+          to lexical if the embedder is unavailable / circuit OPEN).
+        * ``"hybrid"`` — mean of lexical and semantic (fail-open to lexical
+          on embedder failure).
+        """
+        self._grounding_guard = guard
+
     async def inspect(
         self,
         text: str,
         context_chunks: list[str] | None = None,
+        *,
+        org_config: dict | None = None,
+        org_slug: str = "",
     ) -> OutputVerdict:
         """
         Run all output checks. Returns the combined highest-severity verdict.
@@ -116,28 +140,71 @@ class OutputGuard:
         5. Semantic leakage -> flag (if detector attached)
 
         The worst (highest-priority) action wins.
+
+        Args:
+            org_config: Per-tenant config (used to look up
+                ``hallucination_grounding_mode`` and
+                ``hallucination_grounding_threshold`` from migration 0022).
+                Falls back to the gateway-level ``self._config`` if omitted.
+            org_slug: Tenant identifier passed to the semantic grounding
+                backend for embedder cache isolation and telemetry.
         """
         if not text:
             return OutputVerdict()
 
         verdicts: list[OutputVerdict] = []
 
-        pii_verdict = await self._check_pii_secrets(text)
-        if pii_verdict.action != "allow":
-            verdicts.append(pii_verdict)
+        # Per-detector control reads from the per-tenant org_config first, then
+        # falls back to the gateway-level config. Each detector has an independent
+        # enable toggle and a configurable action (block/redact/rewrite/flag/allow).
+        cfg = org_config or self._config
 
-        cred_verdict = self._check_credential_exposure(text)
-        if cred_verdict.action != "allow":
-            verdicts.append(cred_verdict)
+        def _enabled(key: str, default: bool = True) -> bool:
+            return bool(cfg.get(key, default))
 
-        ip_verdict = self._check_ip_leakage(text)
-        if ip_verdict.action != "allow":
-            verdicts.append(ip_verdict)
+        def _action(key: str, default: str) -> str:
+            value = str(cfg.get(key, default) or default).lower()
+            return value if value in _VALID_OUTPUT_ACTIONS else default
 
-        if self._config.get("hallucination_flag_enabled", True):
-            hall_verdict = self._check_hallucination_markers(text, context_chunks)
-            if hall_verdict.action != "allow":
-                verdicts.append(hall_verdict)
+        if _enabled("output_pii_enabled", True):
+            pii_action = _action("output_pii_action", "redact")
+            if pii_action != "allow":
+                pii_verdict = await self._check_pii_secrets(text, pii_action)
+                if pii_verdict.action != "allow":
+                    verdicts.append(pii_verdict)
+
+        if _enabled("output_credential_enabled", True):
+            cred_action = _action(
+                "output_credential_action",
+                "block" if self._config.get("output_block_on_credential", True) else "redact",
+            )
+            if cred_action != "allow":
+                cred_verdict = self._check_credential_exposure(text, cred_action)
+                if cred_verdict.action != "allow":
+                    verdicts.append(cred_verdict)
+
+        if _enabled("output_ip_leakage_enabled", True):
+            ip_action = _action(
+                "output_ip_leakage_action",
+                "block" if self._config.get("output_block_on_ip_leakage", False) else "flag",
+            )
+            if ip_action != "allow":
+                ip_verdict = self._check_ip_leakage(text, ip_action)
+                if ip_verdict.action != "allow":
+                    verdicts.append(ip_verdict)
+
+        if cfg.get("hallucination_flag_enabled", self._config.get("hallucination_flag_enabled", True)):
+            hall_action = _action("output_hallucination_action", "flag")
+            if hall_action != "allow":
+                hall_verdict = await self._check_hallucination_markers(
+                    text,
+                    context_chunks,
+                    action=hall_action,
+                    org_config=org_config,
+                    org_slug=org_slug,
+                )
+                if hall_verdict.action != "allow":
+                    verdicts.append(hall_verdict)
 
         if self._leakage_detector is not None:
             leakage_verdict = self._check_semantic_leakage(text)
@@ -149,13 +216,13 @@ class OutputGuard:
 
         return self._select_highest_severity(verdicts)
 
-    async def _check_pii_secrets(self, text: str) -> OutputVerdict:
+    async def _check_pii_secrets(self, text: str, action: str = "redact") -> OutputVerdict:
         """Delegate PII/secret detection to the existing scanner."""
         verdict = await self._scanner.scan_output(text)
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
             pattern_keys = verdict.matched_patterns
             return OutputVerdict(
-                action="redact",
+                action=action,
                 threat_type=verdict.threat_type,
                 confidence=verdict.confidence,
                 detail=f"PII/secret detected in output: {', '.join(pattern_keys)}",
@@ -164,14 +231,13 @@ class OutputGuard:
             )
         return OutputVerdict()
 
-    def _check_credential_exposure(self, text: str) -> OutputVerdict:
+    def _check_credential_exposure(self, text: str, action: str = "block") -> OutputVerdict:
         """Check for exposed credentials (bearer tokens, connection strings, etc.)."""
         found = detect_credential_exposure(text)
         if not found:
             return OutputVerdict()
 
         pattern_keys = list(found.keys())
-        action = "block" if self._config.get("output_block_on_credential", True) else "redact"
         return OutputVerdict(
             action=action,
             threat_type="credential",
@@ -181,14 +247,13 @@ class OutputGuard:
             compliance_tags=get_compliance_tags(pattern_keys),
         )
 
-    def _check_ip_leakage(self, text: str) -> OutputVerdict:
+    def _check_ip_leakage(self, text: str, action: str = "flag") -> OutputVerdict:
         """Check for internal IP addresses, hostnames, and file paths."""
         found = detect_ip_leakage(text)
         if not found:
             return OutputVerdict()
 
         pattern_keys = list(found.keys())
-        action = "block" if self._config.get("output_block_on_ip_leakage", False) else "flag"
         return OutputVerdict(
             action=action,
             threat_type="ip_leakage",
@@ -198,19 +263,32 @@ class OutputGuard:
             compliance_tags=get_compliance_tags(pattern_keys),
         )
 
-    def _check_hallucination_markers(
+    async def _check_hallucination_markers(
         self,
         text: str,
         context_chunks: list[str] | None = None,
+        *,
+        action: str = "flag",
+        org_config: dict | None = None,
+        org_slug: str = "",
     ) -> OutputVerdict:
         """Enhanced hallucination check with numeric scoring."""
-        score = self.score_hallucination(text, context_chunks)
+        score = await self.score_hallucination(
+            text,
+            context_chunks,
+            org_config=org_config,
+            org_slug=org_slug,
+        )
 
-        if score.risk_score < 0.2:
+        # Per-tenant threshold from migration 0022 overrides the default.
+        cfg = org_config or self._config
+        threshold = float(cfg.get("hallucination_grounding_threshold", 0.2))
+
+        if score.risk_score < threshold:
             return OutputVerdict()
 
         return OutputVerdict(
-            action="flag",
+            action=action,
             threat_type="hallucination",
             confidence=score.risk_score,
             detail=score.detail,
@@ -232,17 +310,26 @@ class OutputGuard:
             )
         return OutputVerdict()
 
-    def score_hallucination(
+    async def score_hallucination(
         self,
         output_text: str,
         context_chunks: list[str] | None = None,
+        *,
+        org_config: dict | None = None,
+        org_slug: str = "",
     ) -> HallucinationScore:
         """
         Compute a numeric hallucination risk score.
 
         Components:
         1. Pattern score: count of hallucination marker matches, normalized
-        2. Grounding score: if context_chunks provided, measure lexical overlap
+        2. Grounding score: if context_chunks provided, measure overlap.
+           Algorithm is selected by the per-tenant
+           ``hallucination_grounding_mode`` field (migration 0022):
+           ``"lexical"`` (default), ``"semantic"``, or ``"hybrid"``. The
+           semantic backend (Bedrock Titan v2) is used only when a
+           :class:`GroundingGuard` has been attached via
+           :meth:`set_grounding_guard`; otherwise we fall back to lexical.
         3. Contradiction score: detect self-contradictions within the output
         """
         if not output_text:
@@ -252,10 +339,16 @@ class OutputGuard:
         pattern_count = len(found)
         pattern_score = min(pattern_count * 0.15, 1.0)
 
+        cfg = org_config or self._config
+        mode = str(cfg.get("hallucination_grounding_mode", "lexical") or "lexical").lower()
+
         grounding_score = 1.0
         if context_chunks:
-            grounding_score = self._compute_grounding_score(
-                output_text, context_chunks
+            grounding_score = await self._compute_grounding_score_with_mode(
+                output_text,
+                context_chunks,
+                mode=mode,
+                org_slug=org_slug,
             )
 
         contradiction_score = self._detect_contradictions(output_text)
@@ -278,10 +371,57 @@ class OutputGuard:
             detail=(
                 f"hallucination_risk={risk:.3f} "
                 f"(pattern={pattern_score:.2f}, "
-                f"grounding={grounding_score:.2f}, "
+                f"grounding={grounding_score:.2f} [{mode}], "
                 f"contradiction={contradiction_score:.2f})"
             ),
         )
+
+    async def _compute_grounding_score_with_mode(
+        self,
+        output_text: str,
+        context_chunks: list[str],
+        *,
+        mode: str,
+        org_slug: str,
+    ) -> float:
+        """Algorithm dispatcher for ``hallucination_grounding_mode``.
+
+        Returns a float in ``[0.0, 1.0]`` where higher == better-grounded
+        (matches the legacy lexical-Jaccard contract used by
+        ``score_hallucination``).
+
+        Fail-open behavior: any semantic-path failure (no guard attached,
+        circuit OPEN, embedder error) silently falls back to the lexical
+        result so the gateway never blocks on grounding-pipeline outages.
+        """
+        lexical = self._compute_grounding_score(output_text, context_chunks)
+
+        # Fast paths
+        if mode == "lexical" or self._grounding_guard is None:
+            return lexical
+        if mode not in {"semantic", "hybrid"}:
+            return lexical
+
+        try:
+            semantic = await self._grounding_guard.score(
+                answer_text=output_text,
+                context_chunks=list(context_chunks),
+                org_slug=org_slug,
+                assume_redacted=True,  # caller MUST have already redacted
+            )
+        except Exception:  # noqa: BLE001 — fail-OPEN to lexical
+            LOG.exception(
+                "OutputGuard: semantic grounding failed; falling back to lexical"
+            )
+            return lexical
+
+        if semantic is None:
+            return lexical
+
+        if mode == "semantic":
+            return float(semantic)
+        # hybrid
+        return float((lexical + semantic) / 2.0)
 
     @staticmethod
     def _compute_grounding_score(output: str, context_chunks: list[str]) -> float:

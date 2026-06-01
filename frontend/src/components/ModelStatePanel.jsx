@@ -37,27 +37,53 @@ function RiskGauge({ score, threshold }) {
 }
 
 export function ModelStatePanel() {
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, user } = useAuth();
+  const orgSlug = user?.organization?.slug || "";
   const [models, setModels] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [syncing, setSyncing] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
   const [expandedModel, setExpandedModel] = useState(null);
   const [showAudit, setShowAudit] = useState(false);
   const [polling, setPolling] = useState(true);
 
   const fetchModelStates = useCallback(async () => {
+    setLoadError(null);
     try {
       const res = await fetchWithAuth("/api/models/status/");
-      if (!res.ok) return;
+      if (!res.ok) {
+        setLoadError("Could not load model states.");
+        return;
+      }
       const dbData = await res.json();
-      const dbModels = Array.isArray(dbData) ? dbData : dbData.results || [];
+      const dbModels = Array.isArray(dbData) ? dbData : dbData.results || dbData.models || [];
 
       setModels(dbModels);
     } catch {
-      /* fail silently */
+      setLoadError("Network error loading model states.");
     }
   }, [fetchWithAuth]);
+
+  const handleSyncStates = async () => {
+    setSyncing(true);
+    setLoadError(null);
+    try {
+      const res = await fetchWithAuth("/api/models/sync/", { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setLoadError(err.error || "Sync failed.");
+        return;
+      }
+      const data = await res.json();
+      setModels(data.models || []);
+    } catch {
+      setLoadError("Network error during sync.");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const fetchAuditLogs = useCallback(async () => {
     try {
@@ -121,25 +147,41 @@ export function ModelStatePanel() {
 
   const handleThresholdChange = async (modelName, newThreshold) => {
     try {
-      await fetchWithAuth(`/api/models/status/${modelName}/`, {
+      const row = models.find((x) => x.model_name === modelName);
+      if (row && row.id == null) {
+        await handleSyncStates();
+      }
+      const res = await fetchWithAuth(`/api/models/status/${encodeURIComponent(modelName)}/`, {
         method: "PATCH",
         body: JSON.stringify({ threshold: newThreshold }),
       });
+      if (!res.ok) {
+        setLoadError("Could not update threshold. Try Sync states first.");
+        return;
+      }
       await fetchModelStates();
     } catch {
-      /* fail silently */
+      setLoadError("Network error updating threshold.");
     }
   };
 
   const handleActionChange = async (modelName, newAction) => {
     try {
-      await fetchWithAuth(`/api/models/status/${modelName}/`, {
+      const row = models.find((x) => x.model_name === modelName);
+      if (row && row.id == null) {
+        await handleSyncStates();
+      }
+      const res = await fetchWithAuth(`/api/models/status/${encodeURIComponent(modelName)}/`, {
         method: "PATCH",
         body: JSON.stringify({ action: newAction }),
       });
+      if (!res.ok) {
+        setLoadError("Could not update action. Try Sync states first.");
+        return;
+      }
       await fetchModelStates();
     } catch {
-      /* fail silently */
+      setLoadError("Network error updating action.");
     }
   };
 
@@ -160,9 +202,22 @@ export function ModelStatePanel() {
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Real-time org-scoped model health with rolling risk scores
+            {orgSlug ? (
+              <span className="ml-1 font-mono text-teal-700 dark:text-teal-300">({orgSlug})</span>
+            ) : null}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleSyncStates}
+            disabled={syncing}
+            className="flex min-h-[44px] items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-60 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            title="Create ModelState rows from active Model Connections"
+          >
+            {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+            Sync states
+          </button>
           <button
             onClick={() => setShowAudit(!showAudit)}
             className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
@@ -209,14 +264,29 @@ export function ModelStatePanel() {
         <div className="ml-auto text-[10px] text-slate-400">{polling ? "Auto-refresh: 5s" : "Paused"}</div>
       </div>
 
+      {loadError && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-800 dark:text-red-200" role="alert">
+          {loadError}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-5 h-5 text-teal-500 animate-spin" />
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading model states...</span>
         </div>
       ) : models.length === 0 ? (
-        <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
-          No model states configured. Register models to enable real-time risk monitoring.
+        <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400 space-y-3">
+          <p>No model states yet. Connect models on Module 1.5, then sync to enable risk monitoring.</p>
+          <button
+            type="button"
+            onClick={handleSyncStates}
+            disabled={syncing}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-60"
+          >
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+            Sync from Model Connections
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
@@ -238,6 +308,11 @@ export function ModelStatePanel() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">{m.model_name}</span>
+                        {m.is_bootstrapped === false && (
+                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                            pending sync
+                          </span>
+                        )}
                         <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase ${sc.text} border ${sc.border}`}>
                           {m.status}
                         </span>

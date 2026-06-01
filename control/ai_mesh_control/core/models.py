@@ -1,6 +1,8 @@
 import hashlib
+import os
 import secrets
 import uuid
+import base64
 from typing import Any
 
 from django.conf import settings
@@ -8,6 +10,13 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
+from ai_mesh_shared.llm_model_crypto import (
+    LLM_MODEL_KEY_ENCRYPTION_ENV,
+    build_llm_model_key_cipher,
+    decrypt_api_key as shared_decrypt_api_key,
+    encrypt_api_key as shared_encrypt_api_key,
+)
+from cryptography.fernet import InvalidToken
 
 AGENT_TYPE_CHOICES = [
     ("browser", "Browser"),
@@ -137,6 +146,15 @@ class AuditLog(models.Model):
         null=True,
         blank=True,
         related_name="audit_logs",
+    )
+    organization = models.ForeignKey(
+        "auth_api.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_index=True,
+        related_name="audit_logs",
+        help_text="Owning org for tenant-scoped retention/isolation. Null = system/orphan.",
     )
     action = models.CharField(max_length=128)
     resource = models.CharField(max_length=255, blank=True)
@@ -423,6 +441,26 @@ class GatewayAPIKey(models.Model):
         into every authenticated request.
         """
         org = self.organization
+        # ── G8: include the owning user's role names so downstream policy
+        # evaluation can match against `Policy.allowed_roles`. Roles are
+        # RBAC labels (e.g. "analyst", "org_admin"), not secrets — they
+        # live next to existing RBAC payload fields (`permissions`,
+        # `mcp_allowed_tools`) which are already cached here. We isolate
+        # the lookup in try/except + logger.warning so a transient DB
+        # error during the M2M traversal can't blank the whole payload
+        # (which would deny-by-default; never silent on failure).
+        roles: list[str] = []
+        try:
+            profile = getattr(self.owner, "profile", None)
+            if profile is not None:
+                roles = list(profile.roles.values_list("name", flat=True))
+        except Exception as exc:  # pragma: no cover - defensive
+            import logging
+            logging.getLogger(__name__).warning(
+                "GatewayAPIKey.build_redis_payload roles lookup failed key_id=%s err=%s",
+                self.id, exc,
+            )
+            roles = []
         return {
             "key_id": str(self.id),
             "prefix": self.prefix,
@@ -437,6 +475,7 @@ class GatewayAPIKey(models.Model):
             "max_context_tokens": self.max_context_tokens,
             "mcp_allowed_tools": self.mcp_allowed_tools,
             "mcp_max_tool_calls": self.mcp_max_tool_calls,
+            "roles": roles,
             "is_active": self.is_active,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
         }
@@ -475,6 +514,12 @@ class KillSwitch(models.Model):
         max_length=255,
         help_text="Model name to kill, or '__global__' for all models.",
     )
+    api_key_prefix = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Optional API key prefix for credential-scoped kill-switch. Blank = org-wide.",
+    )
     is_active = models.BooleanField(default=False, db_index=True)
     action = models.CharField(
         max_length=20,
@@ -503,7 +548,7 @@ class KillSwitch(models.Model):
         ordering = ["-updated_at"]
         verbose_name = "Kill Switch"
         verbose_name_plural = "Kill Switches"
-        unique_together = [("organization", "model_name")]
+        unique_together = [("organization", "model_name", "api_key_prefix")]
 
     def __str__(self) -> str:
         status = "ACTIVE" if self.is_active else "inactive"
@@ -513,6 +558,8 @@ class KillSwitch(models.Model):
         super().clean()
         if self.action == "reroute" and not self.fallback_model:
             raise ValidationError({"fallback_model": "Fallback model is required when action is 'reroute'."})
+        if self.fallback_model and self.fallback_model == self.model_name:
+            raise ValidationError({"fallback_model": "fallback_model must differ from model_name (self-loop)."})
 
     def _org_prefix(self) -> str:
         return self.organization.slug if self.organization_id else "default"
@@ -521,16 +568,31 @@ class KillSwitch(models.Model):
         prefix = self._org_prefix()
         if self.model_name == self.SCOPE_GLOBAL:
             return f"kill_switch:{prefix}:global"
+        credential_prefix = (self.api_key_prefix or "").strip()
+        if credential_prefix:
+            return f"kill_switch:{prefix}:credential:{credential_prefix}:model:{self.model_name}"
         return f"kill_switch:{prefix}:model:{self.model_name}"
 
     def build_redis_payload(self) -> dict:
+        org_slug = self._org_prefix()
+        if self.organization_id and self.organization and self.organization.slug != org_slug:
+            import logging
+
+            logging.getLogger(__name__).error(
+                "KillSwitch org_slug mismatch: organization.slug=%s payload org_slug=%s id=%s",
+                self.organization.slug,
+                org_slug,
+                self.pk,
+            )
+            org_slug = self.organization.slug
         return {
             "is_active": self.is_active,
             "action": self.action,
             "fallback_model": self.fallback_model,
             "reason": self.reason,
             "organization_id": self.organization_id,
-            "org_slug": self._org_prefix(),
+            "org_slug": org_slug,
+            "api_key_prefix": (self.api_key_prefix or "").strip(),
             "activated_at": self.activated_at.isoformat() if self.activated_at else None,
         }
 
@@ -539,6 +601,17 @@ ENFORCEMENT_MODE_CHOICES = [
     ("block", "Block"),
     ("monitor", "Monitor"),
     ("audit", "Audit"),
+]
+
+# Per-detector output guardrail actions (§1.7 Generator-Level Output Guardrails).
+# Each output detector (PII, credential, IP leakage, policy, hallucination) can be
+# independently routed to one of these actions, giving operators full control.
+OUTPUT_GUARD_ACTION_CHOICES = [
+    ("block", "Block"),
+    ("redact", "Redact"),
+    ("rewrite", "Rewrite"),
+    ("flag", "Flag"),
+    ("allow", "Allow"),
 ]
 
 LOG_LEVEL_CHOICES = [
@@ -632,13 +705,14 @@ class FirewallConfig(models.Model):
         help_text="Enforce strict model boundaries.",
     )
     allowed_models = models.TextField(
-        default="gpt-4, gpt-3.5-turbo, claude-3",
+        default="",
         blank=True,
         help_text="Comma-separated list of approved models.",
     )
     default_model = models.CharField(
         max_length=64,
-        default="gpt-4",
+        default="",
+        blank=True,
         help_text="Fallback model when none specified.",
     )
 
@@ -673,6 +747,36 @@ class FirewallConfig(models.Model):
         validators=[MinValueValidator(500), MaxValueValidator(2000)],
         help_text="Max pre-stream hold duration in milliseconds for Tier-2 block mode.",
     )
+    # Phase 0 D-G2-v3: per-org Tier-2 override + strict mode.
+    # tier2_enabled is a tri-state override over the gateway default:
+    #   None  -> inherit gateway-wide TIER2_ENABLED (no per-org opinion)
+    #   True  -> force-enable Tier-2 for this org
+    #   False -> force-disable Tier-2 for this org
+    # The gateway MUST use an "is None" identity check (not truthiness)
+    # to distinguish "no override" from "explicit False".
+    tier2_enabled = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Per-org override for Tier-2 (Bedrock LLM scan). "
+            "None = inherit gateway default; True/False = explicit override."
+        ),
+    )
+    # tier2_strict controls behavior when Tier-2 is unavailable (circuit
+    # breaker OPEN, Bedrock degraded, etc.). Per Security Hawk F5 override,
+    # default is True: refuse the request with HTTP 451 reason_code
+    # "tier2_unavailable_strict" rather than silently passing through
+    # Tier-1-only. Operators can opt into degraded-pass per-org by setting
+    # this to False; gateway emits a tier2_degraded_pass event in that case.
+    tier2_strict = models.BooleanField(
+        default=True,
+        help_text=(
+            "When Tier-2 is configured but unavailable, refuse the request "
+            "(HTTP 451) rather than passing through Tier-1-only. "
+            "Default True per Phase 0 D-G3-v3."
+        ),
+    )
     prompt_injection_threshold = models.FloatField(
         default=0.80,
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
@@ -688,6 +792,101 @@ class FirewallConfig(models.Model):
         default=False,
         help_text="Verify response accuracy (hallucination check).",
     )
+    # Phase 1 D_G10: per-org semantic-grounding configuration.
+    # Mode "lexical" preserves legacy Jaccard behaviour; "semantic" uses
+    # Bedrock Titan v2 embeddings; "hybrid" averages the two scores.
+    # Default lexical so a config rollout cannot change scoring before the
+    # operator opts in. See `runs/verification/D_G10.md` §1.6.
+    hallucination_grounding_mode = models.CharField(
+        max_length=16,
+        choices=[
+            ("lexical", "Lexical (Jaccard)"),
+            ("semantic", "Semantic (Bedrock Titan v2)"),
+            ("hybrid", "Hybrid (avg lex+sem)"),
+        ],
+        default="lexical",
+        help_text=(
+            "Hallucination grounding scoring mode. 'lexical' = legacy "
+            "Jaccard; 'semantic' = Bedrock Titan v2; 'hybrid' = average."
+        ),
+    )
+    hallucination_grounding_threshold = models.FloatField(
+        default=0.2,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+        help_text=(
+            "Minimum risk_score that flags a response as hallucinated. "
+            "Default 0.2 preserves the legacy guard threshold."
+        ),
+    )
+    hallucination_grounding_model = models.CharField(
+        max_length=128,
+        default="",
+        blank=True,
+        help_text=(
+            "Override embedding model id. Empty = use gateway default "
+            "(env BEDROCK_MODEL, typically 'amazon.titan-embed-text-v2:0')."
+        ),
+    )
+
+    # -- §1.7 Generator-Level Output Guardrails: per-detector control --
+    # Master switch is `response_filtering_enabled` (output_scan_enabled). Each
+    # detector below has an independent enable toggle and an action selector so
+    # operators have full control over the output path. The hallucination detector
+    # reuses `factuality_check_enabled` (enable) and `hallucination_grounding_threshold`.
+    output_pii_enabled = models.BooleanField(
+        default=True,
+        help_text="Detect PII / personal-data leakage in model responses.",
+    )
+    output_pii_action = models.CharField(
+        max_length=16,
+        choices=OUTPUT_GUARD_ACTION_CHOICES,
+        default="redact",
+        help_text="Action applied when PII is detected in a response.",
+    )
+    output_credential_enabled = models.BooleanField(
+        default=True,
+        help_text="Detect credential / secret exposure in model responses.",
+    )
+    output_credential_action = models.CharField(
+        max_length=16,
+        choices=OUTPUT_GUARD_ACTION_CHOICES,
+        default="block",
+        help_text="Action applied when credentials/secrets are detected.",
+    )
+    output_ip_leakage_enabled = models.BooleanField(
+        default=True,
+        help_text="Detect intellectual-property / infrastructure leakage in responses.",
+    )
+    output_ip_leakage_action = models.CharField(
+        max_length=16,
+        choices=OUTPUT_GUARD_ACTION_CHOICES,
+        default="flag",
+        help_text="Action applied when IP/infrastructure leakage is detected.",
+    )
+    output_policy_enabled = models.BooleanField(
+        default=True,
+        help_text="Enforce policy-engine verdicts on the output (post-LLM) path.",
+    )
+    output_policy_action = models.CharField(
+        max_length=16,
+        choices=OUTPUT_GUARD_ACTION_CHOICES,
+        default="block",
+        help_text="Action applied when an output policy violation is detected.",
+    )
+    output_hallucination_action = models.CharField(
+        max_length=16,
+        choices=OUTPUT_GUARD_ACTION_CHOICES,
+        default="flag",
+        help_text=(
+            "Action applied when hallucination risk is detected. Enable toggle is "
+            "`factuality_check_enabled`; threshold is `hallucination_grounding_threshold`."
+        ),
+    )
+    output_incident_logging_enabled = models.BooleanField(
+        default=True,
+        help_text="Log security incidents (telemetry + audit) for output-guard actions.",
+    )
+
     max_response_tokens = models.PositiveIntegerField(
         default=4096,
         validators=[MaxValueValidator(32000)],
@@ -864,9 +1063,29 @@ class FirewallConfig(models.Model):
             "tier2_execution_mode": self.tier2_execution_mode,
             "tier2_stream_hold_enabled": self.tier2_stream_hold_enabled,
             "tier2_stream_hold_timeout_ms": self.tier2_stream_hold_timeout_ms,
+            # Phase 0 D-G2-v3 / D-G3-v3: per-org Tier-2 override + strict mode.
+            # tier2_enabled is tri-state — preserve None so gateway can
+            # distinguish "no per-org opinion" from "explicit False".
+            "tier2_enabled": self.tier2_enabled,
+            "tier2_strict": self.tier2_strict,
             "prompt_injection_threshold": self.prompt_injection_threshold,
             "output_scan_enabled": self.response_filtering_enabled,
             "hallucination_flag_enabled": self.factuality_check_enabled,
+            # Phase 1 D_G10: gateway reads these to choose lex / sem / hybrid.
+            "hallucination_grounding_mode": self.hallucination_grounding_mode,
+            "hallucination_grounding_threshold": self.hallucination_grounding_threshold,
+            "hallucination_grounding_model": self.hallucination_grounding_model,
+            # §1.7 per-detector output guardrail controls.
+            "output_pii_enabled": self.output_pii_enabled,
+            "output_pii_action": self.output_pii_action,
+            "output_credential_enabled": self.output_credential_enabled,
+            "output_credential_action": self.output_credential_action,
+            "output_ip_leakage_enabled": self.output_ip_leakage_enabled,
+            "output_ip_leakage_action": self.output_ip_leakage_action,
+            "output_policy_enabled": self.output_policy_enabled,
+            "output_policy_action": self.output_policy_action,
+            "output_hallucination_action": self.output_hallucination_action,
+            "output_incident_logging_enabled": self.output_incident_logging_enabled,
             "max_response_tokens": self.max_response_tokens,
             "rag_enabled": self.rag_enabled,
             "vector_db_isolation": self.vector_db_isolation,
@@ -888,6 +1107,32 @@ class FirewallConfig(models.Model):
             "default_data_sensitivity": self.default_data_sensitivity,
             "routing_enabled": self.routing_enabled,
         }
+
+
+PLATFORM_GUARD_MODEL_NAMES = frozenset(
+    {
+        "zeroshield-guard-120b",
+        "bedrock-gpt-oss-120b",
+        "bedrock-gpt-oss-120b-long-context",
+    }
+)
+
+
+def platform_guard_model_names() -> frozenset[str]:
+    """Model names reserved for ZeroShield scanning (not user governance)."""
+    names = set(PLATFORM_GUARD_MODEL_NAMES)
+    env_name = os.getenv("ZEROSHIELD_GUARD_MODEL_NAME", "zeroshield-guard-120b").strip().lower()
+    if env_name:
+        names.add(env_name)
+    return frozenset(names)
+
+
+def is_platform_managed_llm_provider(provider: str) -> bool:
+    return (provider or "").strip().lower() == "internal"
+
+
+def is_platform_managed_llm_model_name(model_name: str) -> bool:
+    return (model_name or "").strip().lower() in platform_guard_model_names()
 
 
 LLM_PROVIDER_CHOICES = [
@@ -912,6 +1157,11 @@ DATA_SENSITIVITY_CHOICES = [
     ("confidential", "Confidential"),
     ("restricted", "Restricted"),
 ]
+
+def _build_llm_model_key_cipher():
+    configured = str(getattr(settings, LLM_MODEL_KEY_ENCRYPTION_ENV, "") or "").strip()
+    fallback = str(getattr(settings, "SECRET_KEY", "") or "zeroshield-model-keys")
+    return build_llm_model_key_cipher(configured_key=configured, fallback_secret=fallback)
 
 
 class LLMModelConfig(models.Model):
@@ -951,6 +1201,17 @@ class LLMModelConfig(models.Model):
         blank=True,
         default="",
         help_text="Environment variable name for the API key (e.g. OPENAI_API_KEY).",
+    )
+    encrypted_api_key = models.TextField(
+        blank=True,
+        default="",
+        help_text="Organization-provided provider API key encrypted at rest.",
+    )
+    api_key_last4 = models.CharField(
+        max_length=8,
+        blank=True,
+        default="",
+        help_text="Last 4 characters of the stored API key for operator verification.",
     )
     api_base = models.CharField(
         max_length=512,
@@ -1021,15 +1282,63 @@ class LLMModelConfig(models.Model):
         status = "active" if self.is_active else "disabled"
         return f"{self.model_name} ({self.provider}, {status})"
 
+    @property
+    def api_key_set(self) -> bool:
+        return bool(self.encrypted_api_key)
+
+    @property
+    def is_platform_managed(self) -> bool:
+        """True for ZeroShield guard / internal scan models (hidden from governance UI)."""
+        return is_platform_managed_llm_provider(self.provider) or is_platform_managed_llm_model_name(
+            self.model_name
+        )
+
+    @classmethod
+    def queryset_user_managed(cls, queryset):
+        """Exclude platform-default guard models from org-facing CRUD APIs."""
+        from django.db.models import Q
+
+        guard_filter = Q(provider__iexact="internal")
+        for name in platform_guard_model_names():
+            guard_filter |= Q(model_name__iexact=name)
+        return queryset.exclude(guard_filter)
+
+    def set_api_key(self, raw_key: str) -> None:
+        key = (raw_key or "").strip()
+        if not key:
+            self.encrypted_api_key = ""
+            self.api_key_last4 = ""
+            return
+        cipher = _build_llm_model_key_cipher()
+        self.encrypted_api_key = cipher.encrypt(key.encode("utf-8")).decode("utf-8")
+        self.api_key_last4 = key[-4:] if len(key) >= 4 else key
+
+    def get_api_key(self) -> str:
+        if not self.encrypted_api_key:
+            return ""
+        cipher = _build_llm_model_key_cipher()
+        try:
+            return cipher.decrypt(self.encrypted_api_key.encode("utf-8")).decode("utf-8")
+        except InvalidToken:
+            return ""
+        except Exception:
+            return ""
+
     def build_litellm_entry(self) -> dict[str, Any]:
-        """Build a LiteLLM model_list entry for this model."""
+        """Build a LiteLLM model_list entry for organization-owned inference."""
+        from ai_mesh_shared.litellm_byok import normalize_litellm_params
+
         params: dict[str, Any] = {"model": self.model_id}
-        if self.api_key_env_var:
+        if self.encrypted_api_key:
+            params["api_key_encrypted"] = self.encrypted_api_key
+        elif self.api_key_env_var:
             params["api_key"] = f"os.environ/{self.api_key_env_var}"
         if self.api_base:
             params["api_base"] = self.api_base
+        params = normalize_litellm_params(params, provider=self.provider)
         return {
             "model_name": self.model_name,
+            "provider": self.provider,
             "litellm_params": params,
         }
 
@@ -1048,6 +1357,7 @@ class LLMModelConfig(models.Model):
             "routing_priority": self.routing_priority,
             "rate_limit_rpm": self.rate_limit_rpm,
             "is_active": self.is_active,
+            "api_key_set": self.api_key_set,
         }
 
 
@@ -1130,6 +1440,11 @@ class ModelState(models.Model):
     def __str__(self) -> str:
         return f"ModelState({self.model_name}, {self.status}, risk={self.risk_score:.1f})"
 
+    def clean(self) -> None:
+        super().clean()
+        if self.fallback_model and self.fallback_model == self.model_name:
+            raise ValidationError({"fallback_model": "fallback_model must differ from model_name (self-loop)."})
+
     def build_redis_key(self) -> str:
         org_slug = self.organization.slug if self.organization_id else "default"
         return f"model_state:{org_slug}:{self.model_name}"
@@ -1198,7 +1513,6 @@ class PocSubmission(models.Model):
 
     SOURCE_CHOICES = [
         ("ai-mesh", "AI Mesh Firewall"),
-        ("aiguardx", "AIGuardX"),
     ]
 
     submitted_at = models.DateTimeField(auto_now_add=True, db_index=True)

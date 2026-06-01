@@ -22,7 +22,6 @@ rsync -a \
   --exclude 'agent_proxy.py' --exclude '_test_guardrails.py' \
   "$PARENT/gateway/" "$ROOT/gateway/ai_mesh_gateway/"
 rsync -a "$PARENT/gateway/pyproject.toml" "$ROOT/gateway/pyproject.toml"
-rsync -a "$PARENT/gateway/litellm_config.yaml" "$ROOT/gateway/" 2>/dev/null || true
 rsync -a "$PARENT/gateway/Dockerfile" "$ROOT/gateway/Dockerfile.monorepo" 2>/dev/null || true
 
 # --- control plane apps ---

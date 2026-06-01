@@ -1,0 +1,35 @@
+- generic [ref=e3]:
+  - generic [ref=e8]:
+    - img [ref=e10]
+    - heading "ZeroShield" [level=2] [ref=e12]
+    - paragraph [ref=e13]: AI Security Platform
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - img [ref=e17]
+        - generic [ref=e19]: AI Mesh Firewall protecting your LLM stack
+      - generic [ref=e20]:
+        - img [ref=e22]
+        - generic [ref=e25]: Real-time threat monitoring & behavioral analytics
+      - generic [ref=e26]:
+        - img [ref=e28]
+        - generic [ref=e31]: Policy-driven enforcement with MCP guardrails
+      - generic [ref=e32]:
+        - img [ref=e34]
+        - generic [ref=e36]: Sub-millisecond response with zero trust architecture
+  - generic [ref=e38]:
+    - heading "AISecShield" [level=1] [ref=e39]
+    - paragraph [ref=e40]: Sign in to your account
+    - generic [ref=e44]: or sign in with email
+    - generic [ref=e46]:
+      - generic [ref=e54]: Invalid email or password.
+      - generic [ref=e47]:
+        - generic [ref=e48]: Email
+        - textbox "Email" [ref=e49]:
+          - /placeholder: you@example.com
+          - text: admin@zeroshield.io
+      - generic [ref=e50]:
+        - generic [ref=e51]: Password
+        - textbox "Password" [ref=e52]:
+          - /placeholder: ••••••••
+          - text: Adm1n!Pass#2024
+      - button "Sign in" [ref=e53]

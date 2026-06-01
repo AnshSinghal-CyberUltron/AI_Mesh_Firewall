@@ -62,6 +62,21 @@ async def _ensure_collection():
         log.error("mongo telemetry init failed: %s", exc)
         _client = None
         _collection = None
+        return _collection
+
+    # Phase-0 CC-1: composite index covering the realistic ops triage query
+    # `event_class=X AND org_slug=Y ORDER BY ts DESC`. Org-first per triage
+    # Agent-B (cardinality). Background build so writes are not blocked.
+    # Idempotent in Mongo — second call is a metadata no-op. Wrapped in
+    # try/except so a perms failure cannot kill the sink.
+    try:
+        await _collection.create_index(
+            [("org_slug", 1), ("event_class", 1), ("ts", -1)],
+            background=True,
+            name="ev_org_evclass_ts",
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("mongo telemetry index ensure failed (non-fatal): %s", exc)
     return _collection
 
 

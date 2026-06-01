@@ -42,6 +42,9 @@ function clearStoredTokens() {
     localStorage.removeItem('zeroshield_gateway_api_key');
     localStorage.removeItem('simulator_gateway_api_key');
     localStorage.removeItem('gateway_api_key');
+    // Active storage key used by useSimulatorEngine; must be cleared on logout
+    // to prevent cross-user credential leakage on shared browsers.
+    localStorage.removeItem('zeroshield_gateway_key');
   } catch {}
 }
 
@@ -155,6 +158,21 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    let access = getStoredAccess();
+    if (!access) {
+      access = await refreshAccess();
+    }
+    if (!access) {
+      setUser(null);
+      return null;
+    }
+    const me = await fetchMe(access);
+    if (!me) return null;
+    setUser(me);
+    return me;
+  }, []);
+
   useEffect(() => {
     loadUser();
   }, [loadUser]);
@@ -253,6 +271,8 @@ export function AuthProvider({ children }) {
     getAccessToken: getStoredAccess,
     getValidAccessToken,
     fetchWithAuth,
+    refreshUser,
+    setUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

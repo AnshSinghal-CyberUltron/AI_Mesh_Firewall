@@ -2,20 +2,15 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Shield,
-  LayoutDashboard,
   ShieldAlert,
-  Activity,
-  Server,
-  Target,
-  ShieldCheck,
   ChevronLeft,
   ChevronRight,
   User,
-  Users,
   Settings,
   LogOut,
   ChevronUp,
   ChevronDown,
+  X,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../context/AuthContext";
@@ -44,31 +39,27 @@ function useOfferingVisibility(user) {
   const roles = user?.roles || [];
   const hasPlatform =
     user?.is_superuser || roles.some((r) => ["platform_admin", "platform_user"].includes(r));
-  const hasAiguardx =
-    user?.is_superuser || roles.some((r) => ["aiguardx_admin", "aiguardx_user"].includes(r));
   return {
-    hasPlatform: hasPlatform || (!hasPlatform && !hasAiguardx),
-    hasAiguardx,
+    hasPlatform: hasPlatform || !roles.length,
   };
 }
 
 export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMobile }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [hasManualCollapsePreference, setHasManualCollapsePreference] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [flyoutModule, setFlyoutModule] = useState(null);
   const { user, logout } = useAuth();
-  const { hasPlatform, hasAiguardx } = useOfferingVisibility(user);
-  const [expandedModules, setExpandedModules] = useState(() =>
-    hasAiguardx && !hasPlatform ? ["aiguardx"] : []
-  );
+  const { hasPlatform } = useOfferingVisibility(user);
+  const [expandedModules, setExpandedModules] = useState([]);
   const [hasCustomizedExpansion, setHasCustomizedExpansion] = useState(false);
-  const isAdmin = user?.is_superuser || (user?.roles || []).includes("aiguardx_admin");
+  const isAdmin = user?.is_superuser || (user?.roles || []).includes("platform_admin");
   const navigate = useNavigate();
   const displayName = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email : '';
 
   const visibleMenuItems = menuItems.filter((item) => {
     const offering = item.offering || "platform";
-    return (offering === "platform" && hasPlatform) || (offering === "aiguardx" && hasAiguardx);
+    return offering === "platform" && hasPlatform;
   });
 
   const effectiveExpandedModules = hasCustomizedExpansion
@@ -83,11 +74,39 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
       );
 
   useEffect(() => {
-    if (!hasAiguardx || hasPlatform) return;
-    setExpandedModules((modules) =>
-      modules.includes("aiguardx") ? modules : [...modules, "aiguardx"]
-    );
-  }, [hasAiguardx, hasPlatform]);
+    const syncCollapseForViewport = () => {
+      if (hasManualCollapsePreference) return;
+      if (window.innerWidth < 1024) {
+        setIsCollapsed(false);
+        return;
+      }
+      // Keep sidebar compact on smaller desktops and expanded on wider screens.
+      setIsCollapsed(window.innerWidth < 1360);
+    };
+
+    syncCollapseForViewport();
+    window.addEventListener("resize", syncCollapseForViewport);
+    return () => window.removeEventListener("resize", syncCollapseForViewport);
+  }, [hasManualCollapsePreference]);
+
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        onCloseMobile?.();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [mobileOpen, onCloseMobile]);
 
   const handleLogout = async () => {
     setShowAccountMenu(false);
@@ -119,14 +138,29 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-40 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex flex-col transition-transform duration-300 lg:static lg:translate-x-0 lg:z-auto lg:h-screen",
+        "fixed inset-y-0 left-0 z-40 w-[86vw] max-w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex flex-col transition-transform duration-300 lg:static lg:translate-x-0 lg:z-auto lg:h-screen lg:w-72 lg:max-w-none",
         mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         isCollapsed ? "lg:w-20" : "lg:w-72"
       )}
     >
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700 lg:hidden">
+        <div className="flex items-center gap-2">
+          <Shield className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Navigation</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => onCloseMobile?.()}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          aria-label="Close navigation"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
       {/* Header */}
       <div className="relative border-b border-slate-200 dark:border-slate-700">
-        <div className={cn("p-6", isCollapsed && "p-4")}>
+        <div className={cn("p-6", isCollapsed && "p-4", "hidden lg:block")}>
           <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
             <div className="relative flex-shrink-0">
               <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center shadow-sm">
@@ -147,7 +181,10 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
 
         {/* Collapse Toggle */}
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={() => {
+            setHasManualCollapsePreference(true);
+            setIsCollapsed(!isCollapsed);
+          }}
           className="absolute -right-3 top-1/2 -translate-y-1/2 hidden h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 lg:flex"
           title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
@@ -295,7 +332,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
 
       {/* Status Indicator */}
       {!isCollapsed && (
-        <div className="p-4 pt-0">
+        <div className="hidden p-4 pt-0 lg:block">
           <div className="relative bg-gradient-to-br from-slate-50 dark:from-slate-900 to-slate-100 dark:from-slate-800 dark:to-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
             <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-cyan-400/20 to-teal-400/20 rounded-full blur-2xl"></div>
             <div className="relative">

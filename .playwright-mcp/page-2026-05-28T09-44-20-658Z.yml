@@ -1,0 +1,336 @@
+- generic [ref=e1]:
+  - generic [ref=e56]:
+    - complementary [ref=e57]:
+      - generic [ref=e58]:
+        - img [ref=e63]
+        - button "Expand sidebar" [ref=e66]:
+          - img [ref=e67]
+      - navigation [ref=e69]:
+        - button "AI Mesh Firewall" [ref=e72]:
+          - img [ref=e73]
+      - button [ref=e76]:
+        - img [ref=e79]
+    - generic [ref=e82]:
+      - banner [ref=e83]:
+        - generic [ref=e84]:
+          - generic [ref=e85]:
+            - generic [ref=e87]:
+              - generic [ref=e88]: Context Assembly & MCP Guardrails
+              - generic [ref=e89]: DEV
+              - generic [ref=e90]: Connected
+            - generic [ref=e92]:
+              - img [ref=e93]
+              - textbox "Search models, policies, threats, or infrastructure..." [ref=e96]
+          - generic [ref=e97]:
+            - button "Scan Model" [ref=e98]:
+              - img [ref=e99]
+              - generic [ref=e100]: Scan Model
+            - button [ref=e102]:
+              - img [ref=e103]
+            - button [ref=e107]:
+              - img [ref=e108]
+            - button "Switch to dark mode" [ref=e112]:
+              - img [ref=e113]
+            - button "Ansh Singhal admin@zeroshield.io" [ref=e117]:
+              - generic [ref=e118]:
+                - paragraph [ref=e119]: Ansh Singhal
+                - paragraph [ref=e120]: admin@zeroshield.io
+              - img [ref=e122]
+      - main [ref=e125]:
+        - generic [ref=e1306]:
+          - generic [ref=e1308]:
+            - generic [ref=e1309]:
+              - generic [ref=e1310]: Submodule 1.4 · Context assembly lane
+              - generic [ref=e1312]:
+                - img [ref=e1314]
+                - generic [ref=e1317]:
+                  - heading "Context Assembly & MCP Guardrails" [level=1] [ref=e1319]
+                  - paragraph [ref=e1320]: The control surface for context minimization, MCP tool scope, data-access guardrails, and field-level redaction before generation.
+                  - paragraph [ref=e1321]: Operators can review tool scope, redaction pressure, and device context without leaving the MCP control surface.
+              - generic [ref=e1322]:
+                - generic [ref=e1323]:
+                  - generic [ref=e1324]: Context events
+                  - generic [ref=e1325]: "0"
+                  - generic [ref=e1326]: MCP and context assembly decisions in the current lens
+                - generic [ref=e1327]:
+                  - generic [ref=e1328]: Redactions applied
+                  - generic [ref=e1329]: "0"
+                  - generic [ref=e1330]: Context fields or tool outputs sanitized before assembly
+                - generic [ref=e1331]:
+                  - generic [ref=e1332]: Tools invoked
+                  - generic [ref=e1333]: "0"
+                  - generic [ref=e1334]: Distinct MCP tools observed in recent activity
+                - generic [ref=e1335]:
+                  - generic [ref=e1336]: Data scopes
+                  - generic [ref=e1337]: "0"
+                  - generic [ref=e1338]: Unique data scopes or assets referenced during context assembly
+            - generic [ref=e1339]:
+              - generic [ref=e1340]:
+                - generic [ref=e1341]:
+                  - generic [ref=e1342]:
+                    - generic [ref=e1343]: Operator lens
+                    - heading "Choose the time horizon" [level=3] [ref=e1344]
+                  - img [ref=e1345]
+                - generic [ref=e1348]:
+                  - button "1h" [ref=e1349]
+                  - button "6h" [ref=e1350]
+                  - button "24h" [ref=e1351]
+                  - button "7d" [ref=e1352]
+                  - button "30d" [ref=e1353]
+                - generic [ref=e1354]:
+                  - generic [ref=e1355]:
+                    - generic [ref=e1356]: Most-invoked tool
+                    - generic [ref=e1357]: None
+                    - generic [ref=e1358]: Tool creating the most recent MCP pressure
+                  - generic [ref=e1359]:
+                    - generic [ref=e1360]: Average risk
+                    - generic [ref=e1361]: 0%
+                    - generic [ref=e1362]: Risk score across recent context assembly events
+                  - generic [ref=e1363]:
+                    - generic [ref=e1364]: Latest source
+                    - generic [ref=e1365]: "--"
+                    - generic [ref=e1366]: Most recent MCP or context source observed in the lens
+              - generic [ref=e1367]:
+                - generic [ref=e1368]:
+                  - generic [ref=e1369]:
+                    - generic [ref=e1370]: Operator priorities
+                    - heading "What should dominate this page" [level=3] [ref=e1371]
+                  - img [ref=e1372]
+                - generic [ref=e1375]:
+                  - generic [ref=e1376]: Lead with least-privilege context assembly and tool scope.
+                  - generic [ref=e1377]: Keep scanner output, device state, and MCP simulations visible together.
+                  - generic [ref=e1378]: Make redaction pressure legible by surfacing tools invoked and data scopes accessed in the evidence table.
+                - button "Open detailed results" [ref=e1379]:
+                  - text: Open detailed results
+                  - img [ref=e1380]
+          - generic [ref=e1383]:
+            - button "Getting Started Operate MCP Guardrails & Audit For teams using AI agents with tool use (MCP servers)" [active] [ref=e1544]:
+              - generic [ref=e1385]:
+                - img [ref=e1387]
+                - generic [ref=e1389]:
+                  - generic [ref=e1390]: Getting Started
+                  - heading "Operate MCP Guardrails & Audit" [level=3] [ref=e1391]
+                  - generic [ref=e1392]: For teams using AI agents with tool use (MCP servers)
+              - img [ref=e1545]
+            - generic [ref=e1547]:
+              - paragraph [ref=e1548]: The MCP manager controls MCP server onboarding, tool gating, centralized MCP-domain policies, structured activity events, and incident visibility. All runtime decisions are shown through threat-feed and audit records, not raw backend log streams.
+              - generic [ref=e1549]:
+                - generic [ref=e1550]:
+                  - generic [ref=e1551]: Step-by-step
+                  - list [ref=e1552]:
+                    - listitem [ref=e1553]:
+                      - generic [ref=e1554]: "1"
+                      - generic [ref=e1555]:
+                        - generic [ref=e1556]: Click "Add Server" and connect
+                        - generic [ref=e1557]: Add a server with Streamable HTTP, SSE, or stdio transport. For OAuth-capable servers, the connect action opens the authorization flow automatically when required.
+                    - listitem [ref=e1558]:
+                      - generic [ref=e1559]: "2"
+                      - generic [ref=e1560]:
+                        - generic [ref=e1561]: Review tool inventory and risk analysis
+                        - generic [ref=e1562]: Use the Tools tab to inspect discovered permissions, risk category, risk score, and compliance tags before enabling access for agents.
+                    - listitem [ref=e1563]:
+                      - generic [ref=e1564]: "3"
+                      - generic [ref=e1565]:
+                        - generic [ref=e1566]: Create MCP-domain policies
+                        - generic [ref=e1567]: Create policies in the Policies tab (stored in the central Policy Management domain with policy_domain=mcp). Include tool scope, action, blocked params, redaction fields, and token limits in metadata.
+                    - listitem [ref=e1568]:
+                      - generic [ref=e1569]: "4"
+                      - generic [ref=e1570]:
+                        - generic [ref=e1571]: Monitor Activity & Incidents
+                        - generic [ref=e1572]: Use Activity & Incidents to track MCP threat-feed events and incident state changes (open, escalated, resolved) for operator response.
+                    - listitem [ref=e1573]:
+                      - generic [ref=e1574]: "5"
+                      - generic [ref=e1575]:
+                        - generic [ref=e1576]: Inspect structured audit records
+                        - generic [ref=e1577]: Use Audit Log for per-action records including actor, organization, input/output summaries, policy decision, duration, errors, and compliance tags.
+                - generic [ref=e1578]:
+                  - generic [ref=e1579]: Code examples
+                  - generic [ref=e1580]:
+                    - generic [ref=e1581]:
+                      - button "Streamable HTTP / SSE" [ref=e1582]
+                      - button "MCP Policy (API)" [ref=e1583]
+                      - button "Custom Stdio MCP" [ref=e1584]
+                      - button "VS Code / Cursor / Claude" [ref=e1585]
+                    - generic [ref=e1586]:
+                      - generic [ref=e1587]:
+                        - generic [ref=e1588]: bash
+                        - button "Copy" [ref=e1589]:
+                          - img [ref=e1590]
+                          - text: Copy
+                      - generic [ref=e1594]:
+                        - generic [ref=e1595]:
+                          - generic [ref=e1596]: "1"
+                          - text: "# Create an MCP server via Django API"
+                        - generic [ref=e1597]:
+                          - generic [ref=e1598]: "2"
+                          - text: curl -X POST http://localhost:8300/api/mcp/servers/ \
+                        - generic [ref=e1599]:
+                          - generic [ref=e1600]: "3"
+                          - text: "-H \"Content-Type: application/json\" \\"
+                        - generic [ref=e1601]:
+                          - generic [ref=e1602]: "4"
+                          - text: "-H \"Authorization: Bearer <JWT>\" \\"
+                        - generic [ref=e1603]:
+                          - generic [ref=e1604]: "5"
+                          - text: "-d '{"
+                        - generic [ref=e1605]:
+                          - generic [ref=e1606]: "6"
+                          - text: "\"name\": \"linear-gateway\","
+                        - generic [ref=e1607]:
+                          - generic [ref=e1608]: "7"
+                          - text: "\"transport\": \"streamable_http\","
+                        - generic [ref=e1609]:
+                          - generic [ref=e1610]: "8"
+                          - text: "\"url\": \"https://gateway.example.com/mcp/linear\""
+                        - generic [ref=e1611]:
+                          - generic [ref=e1612]: "9"
+                          - text: "}'"
+                        - generic [ref=e1614]: "10"
+                        - generic [ref=e1615]:
+                          - generic [ref=e1616]: "11"
+                          - text: "# Connect and discover tools"
+                        - generic [ref=e1617]:
+                          - generic [ref=e1618]: "12"
+                          - text: curl -X POST http://localhost:8300/api/mcp/servers/<server_id>/connect/ \
+                        - generic [ref=e1619]:
+                          - generic [ref=e1620]: "13"
+                          - text: "-H \"Content-Type: application/json\" \\"
+                        - generic [ref=e1621]:
+                          - generic [ref=e1622]: "14"
+                          - text: "-H \"Authorization: Bearer <JWT>\" \\"
+                        - generic [ref=e1623]:
+                          - generic [ref=e1624]: "15"
+                          - text: "-d '{\"redirect_uri\":\"http://localhost:5173/oauth/callback\"}'"
+              - generic [ref=e1625]:
+                - generic [ref=e1626]: Notes
+                - generic [ref=e1627]:
+                  - generic [ref=e1628]:
+                    - img [ref=e1629]
+                    - generic [ref=e1631]: Use Activity & Incidents and Audit Log for MCP visibility. Raw backend/service log streaming is intentionally not shown in this module.
+                  - generic [ref=e1632]:
+                    - img [ref=e1633]
+                    - generic [ref=e1635]: Linear's MCP server requires OAuth authentication via the mcp-remote OAuth flow. Complete auth in the browser popup that appears when first connecting.
+                  - generic [ref=e1636]:
+                    - img [ref=e1637]
+                    - generic [ref=e1639]: Tools with exec, filesystem, or credential permissions are automatically flagged for review regardless of risk score.
+          - generic [ref=e1401]:
+            - generic [ref=e1403]:
+              - generic [ref=e1404]: Workflow
+              - heading "Context minimization and MCP guardrails" [level=2] [ref=e1405]
+              - paragraph [ref=e1406]: Operators can review tool scope, redaction pressure, and device context without leaving the MCP control surface.
+            - generic [ref=e1407]:
+              - generic [ref=e1408]:
+                - generic [ref=e1409]:
+                  - generic [ref=e1410]: Context controls
+                  - generic [ref=e1412]:
+                    - tablist "MCP Connector sections" [ref=e1413]:
+                      - tab "MCP Servers" [selected] [ref=e1414]:
+                        - img [ref=e1415]
+                        - generic [ref=e1418]: MCP Servers
+                      - tab "Tool Discovery" [ref=e1419]:
+                        - img [ref=e1420]
+                        - generic [ref=e1422]: Tool Discovery
+                      - tab "Tool Execution" [ref=e1423]:
+                        - img [ref=e1424]
+                        - generic [ref=e1426]: Tool Execution
+                      - tab "MCP Protection" [ref=e1427]:
+                        - img [ref=e1428]
+                        - generic [ref=e1430]: MCP Protection
+                      - tab "Observability" [ref=e1431]:
+                        - img [ref=e1432]
+                        - generic [ref=e1434]: Observability
+                      - tab "Services Health" [ref=e1435]:
+                        - img [ref=e1436]
+                        - generic [ref=e1438]: Services Health
+                    - generic [ref=e1439]:
+                      - generic [ref=e1440]:
+                        - paragraph [ref=e1441]: MCP servers managed by the ZeroShield MCP control plane. Organizations can connect their own or public MCP servers here.
+                        - generic [ref=e1442]:
+                          - button "GitHub MCP(auth)" [ref=e1443]
+                          - button "Linear MCP" [ref=e1444]
+                          - button "Context7 MCP" [ref=e1445]
+                          - button "Playwright MCP" [ref=e1446]
+                          - button "Semgrep MCP" [ref=e1447]
+                          - button "Refresh" [ref=e1448]:
+                            - img [ref=e1449]
+                          - button "Register Server" [ref=e1454]:
+                            - img [ref=e1455]
+                            - text: Register Server
+                      - generic [ref=e1456]:
+                        - img [ref=e1457]
+                        - paragraph [ref=e1460]: No MCP servers registered yet.
+                        - paragraph [ref=e1461]: Click "Register Server" to connect an MCP server.
+                      - generic [ref=e1462]:
+                        - img [ref=e1463]
+                        - paragraph [ref=e1468]:
+                          - text: Gateway API Key Active
+                          - generic [ref=e1469]: 7gF4mqzD...
+                - generic [ref=e1470]:
+                  - generic [ref=e1471]: Guardrail exercises
+                  - generic [ref=e1473]:
+                    - generic [ref=e1474]:
+                      - generic [ref=e1475]:
+                        - generic [ref=e1476]:
+                          - img [ref=e1477]
+                          - heading "MCP Guardrail Simulator" [level=3] [ref=e1479]
+                        - paragraph [ref=e1480]: Pick a registered MCP server and tool, edit arguments, then run a dry-run policy evaluation or a real gateway call. The decision, matched policies, and matched rules are shown live.
+                      - button "Refresh" [ref=e1481]:
+                        - img [ref=e1482]
+                        - text: Refresh
+                    - generic [ref=e1487]:
+                      - generic [ref=e1488]:
+                        - generic [ref=e1489]:
+                          - generic [ref=e1490]:
+                            - img [ref=e1491]
+                            - text: MCP Server
+                          - combobox [ref=e1494]:
+                            - option "No servers registered" [selected]
+                        - generic [ref=e1495]:
+                          - generic [ref=e1496]:
+                            - img [ref=e1497]
+                            - text: Tool
+                          - combobox [disabled] [ref=e1499]:
+                            - option "No tools discovered for this server" [selected]
+                        - generic [ref=e1500]:
+                          - generic [ref=e1502]: Arguments (JSON)
+                          - textbox [ref=e1503]: "{}"
+                        - generic [ref=e1504]:
+                          - generic [ref=e1505]:
+                            - button "Dry-Run" [ref=e1506]
+                            - button "Live Call" [ref=e1507]
+                          - button "Evaluate Policies" [disabled] [ref=e1508]:
+                            - img [ref=e1509]
+                            - text: Evaluate Policies
+                      - generic [ref=e1512]:
+                        - img [ref=e1513]
+                        - text: Pick a server, choose a tool, edit arguments, then run
+                        - strong [ref=e1515]: Dry-Run
+                        - text: or
+                        - strong [ref=e1516]: Live Call
+                        - text: .
+              - generic [ref=e1518]:
+                - generic [ref=e1519]: Traffic path
+                - generic [ref=e1520]:
+                  - generic [ref=e1521]:
+                    - generic [ref=e1522]: Context Fields
+                    - generic [ref=e1523]: 0 assembled
+                  - generic [ref=e1524]:
+                    - generic [ref=e1525]: PII Redaction
+                    - generic [ref=e1526]: 0 sanitized
+                  - generic [ref=e1527]:
+                    - generic [ref=e1528]: Size Check
+                    - generic [ref=e1529]: 0 denied
+                  - generic [ref=e1530]:
+                    - generic [ref=e1531]: Final Context
+                    - generic [ref=e1532]: 0 approved
+          - generic [ref=e1533]:
+            - generic [ref=e1534]:
+              - generic [ref=e1535]:
+                - generic [ref=e1536]: Evidence
+                - heading "Recent MCP and context evidence" [level=2] [ref=e1537]
+                - paragraph [ref=e1538]: Tool invocations, data-access hints, and redaction pressure from recent context assembly flows.
+              - button "View full results" [ref=e1539]:
+                - text: View full results
+                - img [ref=e1540]
+            - generic [ref=e1543]: No recent module evidence is available for this time range.
+  - generic [ref=e907]: 13:30

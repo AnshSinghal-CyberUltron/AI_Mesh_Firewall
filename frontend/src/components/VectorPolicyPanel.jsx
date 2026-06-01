@@ -82,13 +82,26 @@ function VectorPolicyModal({ title, form, setForm, onSubmit, onClose, submitting
     }
   };
 
+  // Bundle Z2 — close-while-submitting guard. The form's Create/Update
+  // request is already in flight; if the user backdrop-clicks or hits the
+  // X mid-flight we previously unmounted the modal and lost the success
+  // toast / error surface, leaving the panel in an inconsistent state and
+  // potentially producing a duplicate POST on the next click. Lock both
+  // dismissal paths while ``submitting`` is true; the Cancel button stays
+  // active so the user can still bail out before submission starts.
+  const guardedClose = submitting ? () => {} : onClose;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/40" onClick={guardedClose} />
       <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors">
+          <button
+            onClick={guardedClose}
+            disabled={submitting}
+            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <X className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </button>
         </div>
@@ -325,7 +338,14 @@ export function VectorPolicyPanel({
   title = "Vector Collection Policies",
   description = "Manage access policies for vector database collections",
 }) {
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, user } = useAuth();
+  // Bundle Z4 — admin gate on the Compile button. The backend already
+  // returns 403 for non-admins (IsAdminUser on VectorPolicyCompileView)
+  // but rendering the affordance for users who cannot use it produced a
+  // confusing "Compilation failed: <html>" toast. Hide unless the
+  // authenticated user is a platform_admin or Django superuser — same
+  // role gate used by Sidebar.jsx for admin-only nav items.
+  const isAdminUser = !!user && (user.is_superuser || (user.roles || []).includes("platform_admin"));
   const [policies, setPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -476,9 +496,21 @@ export function VectorPolicyPanel({
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this vector policy? This cannot be undone.")) return;
     setActionLoading(id);
+    // Bundle Z1 — surface delete failures. Previously the await on a
+    // failing DELETE silently fell through to fetchPolicies(), so the
+    // user saw the row reappear with no explanation. Treat any non-2xx
+    // as an error, parse the JSON body for ``detail`` (DRF's standard
+    // error shape), and route it through the same banner the load path
+    // uses so the panel has a single error-display surface.
     try {
-      await fetchWithAuth(`/api/vector-policies/${id}/`, { method: "DELETE" });
+      const res = await fetchWithAuth(`/api/vector-policies/${id}/`, { method: "DELETE" });
+      if (!res.ok) {
+        throw new Error(await readErrorResponse(res));
+      }
+      setLoadError(null);
       await fetchPolicies();
+    } catch (err) {
+      setLoadError(err.message || "Failed to delete policy");
     } finally {
       setActionLoading(null);
     }
@@ -492,8 +524,13 @@ export function VectorPolicyPanel({
       if (res.ok) {
         setCompileStatus({ success: true });
       } else {
-        const text = await res.text();
-        setCompileStatus({ success: false, error: text || "Compilation failed" });
+        // Bundle Z1 — parse JSON body for ``detail`` instead of dumping
+        // raw HTML (auth/throttle responses) into the toast. Falls back
+        // to status-code message if the response is empty or non-JSON.
+        setCompileStatus({
+          success: false,
+          error: await readErrorResponse(res),
+        });
       }
     } catch (err) {
       setCompileStatus({ success: false, error: err.message });
@@ -517,15 +554,17 @@ export function VectorPolicyPanel({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleCompile}
-            disabled={compiling}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
-            title="Compile and push vector policies to gateway"
-          >
-            {compiling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-            Compile
-          </button>
+          {isAdminUser && (
+            <button
+              onClick={handleCompile}
+              disabled={compiling}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+              title="Compile and push vector policies to gateway"
+            >
+              {compiling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              Compile
+            </button>
+          )}
           <button
             onClick={() => {
               setForm({ ...EMPTY_FORM });

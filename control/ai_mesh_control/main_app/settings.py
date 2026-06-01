@@ -51,6 +51,13 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # G7/G8 (migration 0029): policy.Policy uses ArrayField for
+    # redaction_fields / allowed_user_ids / allowed_agent_ids /
+    # allowed_roles. ArrayField is a Postgres-only field provided by
+    # django.contrib.postgres, which must be installed for the system
+    # check (postgres.E005) to pass even though no migrations from the
+    # app itself are required.
+    "django.contrib.postgres",
     "rest_framework",
     "rest_framework_simplejwt",
     "corsheaders",
@@ -395,10 +402,10 @@ _gateway_url = GATEWAY_PUBLIC_URL or "http://127.0.0.1:8300"
 
 # drf-spectacular OpenAPI schema settings
 SPECTACULAR_SETTINGS = {
-    "TITLE": "AIGuardX (ZeroShield) API",
+    "TITLE": "ZeroShield API",
     "DESCRIPTION": (
         "## AI Mesh Firewall -- Control Plane API\n\n"
-        "AIGuardX (ZeroShield) is a Layer 7 AI Mesh Firewall that inspects semantic payloads "
+        "ZeroShield is a Layer 7 AI Mesh Firewall that inspects semantic payloads "
         "(prompts, responses, tool calls) to prevent AI-specific threats and enforce governance "
         "for LLM interactions.\n\n"
         "---\n\n"
@@ -670,7 +677,7 @@ SPECTACULAR_SETTINGS = {
         "```\n"
     ),
     "VERSION": "1.0.0",
-    "CONTACT": {"name": "AIGuardX Team"},
+    "CONTACT": {"name": "ZeroShield Team"},
     "LICENSE": {"name": "Proprietary"},
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/",

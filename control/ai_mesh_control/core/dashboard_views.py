@@ -19,7 +19,7 @@ from policy.security_views import OWASP_ALL_VECTORS
 try:
     from third_party_integrations.export_reporter import ExportReporter
 except ModuleNotFoundError:
-    class ExportReporter:  # noqa: D101 — AIGuardX export not in firewall SKU
+    class ExportReporter:  # noqa: D101 — export fallback for firewall SKU
         def _generate_html(self, template: str, context: dict) -> str:
             import json
             body = json.dumps(context, indent=2, default=str)
@@ -246,7 +246,7 @@ class DashboardReportView(APIView):
         )
 
         ts = timezone.now().strftime("%Y-%m-%d")
-        filename = f"AIGuardX-Executive-Report-{ts}.html"
+        filename = f"AI-Mesh-Firewall-Executive-Report-{ts}.html"
         resp = HttpResponse(html, content_type="text/html; charset=utf-8")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp

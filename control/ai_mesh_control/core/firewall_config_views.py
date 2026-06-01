@@ -31,13 +31,20 @@ class FirewallConfigView(APIView):
         return getattr(getattr(request.user, "profile", None), "organization", None)
 
     def get(self, request):
-        config = FirewallConfig.load(organization=self._get_org(request))
-        serializer = FirewallConfigSerializer(config)
+        org = self._get_org(request)
+        config = FirewallConfig.load(organization=org)
+        serializer = FirewallConfigSerializer(config, context={"organization": org})
         return Response(serializer.data)
 
     def put(self, request):
-        config = FirewallConfig.load(organization=self._get_org(request))
-        serializer = FirewallConfigSerializer(config, data=request.data, partial=True)
+        org = self._get_org(request)
+        config = FirewallConfig.load(organization=org)
+        serializer = FirewallConfigSerializer(
+            config,
+            data=request.data,
+            partial=True,
+            context={"organization": org},
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save(updated_by=request.user)
         logger.info(
@@ -51,7 +58,7 @@ class FirewallConfigView(APIView):
         config.refresh_from_db()
         compliance_warnings = validate_compliance_requirements(config)
 
-        response_data = FirewallConfigSerializer(config).data
+        response_data = FirewallConfigSerializer(config, context={"organization": org}).data
         if compliance_warnings:
             response_data["compliance_warnings"] = compliance_warnings
             logger.warning(

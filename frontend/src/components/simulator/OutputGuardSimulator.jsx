@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Shield, Eye, AlertTriangle, Lock } from "lucide-react";
 import { useSimulatorEngine } from "../../hooks/useSimulatorEngine";
-import { outputGuardChatBody, normalizeOutputGuardResult } from "../../utils/liveGateway";
+import { useSimulatorGatewayModels } from "../../hooks/useSimulatorGatewayModels";
+import { outputGuardChatBody, normalizeOutputGuardResult, normalizeStreamChatPipelineResult } from "../../utils/liveGateway";
 import { SimulatorShell } from "./SimulatorShell";
+import { SimulatorModelSelector } from "./SimulatorModelSelector";
 
 const SCENARIOS = [
   {
@@ -44,6 +46,7 @@ const SCENARIOS = [
 
 export function OutputGuardSimulator() {
   const engine = useSimulatorEngine();
+  const gatewayModels = useSimulatorGatewayModels();
   const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
   const [customText, setCustomText] = useState("");
@@ -70,13 +73,51 @@ export function OutputGuardSimulator() {
   const handleExecute = async () => {
     const text = selected?.text || customText;
     if (!text.trim()) return;
+    if (!gatewayModels.selectedModel) {
+      setResult({ error: "Connect at least one model with an API key under Model Connection.", success: false });
+      return;
+    }
 
-    const res = await engine.gatewayFetch("/v1/chat/completions", {
+    const body = outputGuardChatBody(text, selected?.context_chunks || [], gatewayModels.selectedModel);
+    body.stream = true;
+
+    const res = await engine.gatewayFetchStream("/v1/chat/completions", {
       method: "POST",
-      body: JSON.stringify(
-        outputGuardChatBody(text, selected?.context_chunks || []),
-      ),
+      body: JSON.stringify(body),
     });
+
+    if (res.sse?.isStream) {
+      const streamNorm = normalizeStreamChatPipelineResult(
+        res.sse,
+        res.status,
+        res.headers,
+        { prompt: text, maxTokens: 1024, requestedModel: gatewayModels.selectedModel },
+      );
+      setResult(
+        res.ok || streamNorm.final_action === "block"
+          ? {
+              ...normalizeOutputGuardResult(
+                {
+                  ...streamNorm,
+                  choices: [{ message: { content: streamNorm.aggregated_content || "" } }],
+                  zeroshield: streamNorm.zeroshield,
+                },
+                streamNorm.final_action === "block" ? 403 : res.status,
+              ),
+              stream: true,
+              stream_events: streamNorm.stream_events,
+              stream_scan_mode: streamNorm.stream_scan_mode,
+            }
+          : {
+              error: streamNorm.zeroshield?.detail
+                || res.sse?.terminalError?.message
+                || "Stream request failed",
+              success: false,
+            },
+      );
+      return;
+    }
+
     setResult(
       res.ok
         ? normalizeOutputGuardResult(res.data, res.status)
@@ -99,15 +140,32 @@ export function OutputGuardSimulator() {
       executing={engine.executing}
       result={result}
       customInput={
-        !selected && (
-          <textarea
-            value={customText}
-            onChange={(e) => setCustomText(e.target.value)}
-            rows={3}
-            placeholder="Paste LLM output text to inspect..."
-            className="w-full px-2 py-1.5 rounded-md bg-slate-100 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 placeholder:text-slate-500 dark:placeholder:text-slate-500 resize-none"
+        <div className="space-y-3">
+          <SimulatorModelSelector
+            eligibleModels={gatewayModels.eligibleModels}
+            selectedModel={gatewayModels.selectedModel}
+            onSelectModel={gatewayModels.setSelectedModel}
+            loading={gatewayModels.loading}
+            loadError={gatewayModels.loadError}
+            firewallDefault={gatewayModels.firewallDefault}
+            allowlistBlocksSimulator={gatewayModels.allowlistBlocksSimulator}
+            allowedModels={gatewayModels.allowedModels}
+            onSyncAllowlist={gatewayModels.syncSelectedToAllowlist}
+            allowlistSyncing={gatewayModels.allowlistSyncing}
+            allowlistSyncError={gatewayModels.allowlistSyncError}
+            showModelPicker={gatewayModels.showModelPicker}
+            isSingleModel={gatewayModels.isSingleModel}
           />
-        )
+          {!selected && (
+            <textarea
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+              rows={3}
+              placeholder="Paste LLM output text to inspect..."
+              className="w-full px-2 py-1.5 rounded-md bg-slate-100 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 placeholder:text-slate-500 dark:placeholder:text-slate-500 resize-none"
+            />
+          )}
+        </div>
       }
     >
       {result && !result.error && (

@@ -1,17 +1,7 @@
 """
 Gateway-local kill-switch enforcement.
-
-Checks Redis for global and per-model kill-switch status on every
-request. Two pipelined GETs per request (~0.1ms overhead).
-
-Redis key patterns:
-- ``kill_switch:global`` -- JSON payload for global kill-switch
-- ``kill_switch:model:{model_name}`` -- JSON payload for per-model switches
-
-When a kill-switch is active:
-- ``disable`` action: request rejected with 503
-- ``reroute`` action: request transparently rerouted to fallback model
 """
+from __future__ import annotations
 
 import json
 import logging
@@ -21,8 +11,9 @@ import redis.asyncio as aioredis
 
 LOG = logging.getLogger("gateway.kill_switch")
 
-GLOBAL_KEY = "kill_switch:global"
-MODEL_KEY_PREFIX = "kill_switch:model:"
+GLOBAL_SUFFIX = "global"
+MODEL_KEY_PREFIX = "model:"
+CREDENTIAL_KEY_PREFIX = "credential:"
 
 
 @dataclass
@@ -33,37 +24,60 @@ class KillSwitchVerdict:
     action: str = ""
     fallback_model: str = ""
     reason: str = ""
+    scope: str = ""  # credential | org_model | org_global | redis_unavailable
 
 
 async def check_kill_switch(
     redis_client: aioredis.Redis,
     model_name: str,
     org_slug: str = "",
+    key_prefix: str = "",
 ) -> KillSwitchVerdict:
     """
-    Check global and per-model kill switches via Redis pipeline.
+    Check kill switches via Redis pipeline (per-request canonical read).
 
-    Returns a KillSwitchVerdict indicating whether the model is killed
-    and what action to take (disable or reroute).
-
-    Global kill-switch takes precedence over per-model.
-    On Redis failure, returns allow (fail-open for kill-switch checks,
-    since the security posture is maintained by other layers).
+    Precedence: credential-scoped > per-model > global.
+    On Redis failure, fail-closed (disable).
     """
     prefix = org_slug or "default"
+    keys: list[tuple[str, str]] = []
+
+    if key_prefix:
+        keys.append(
+            (
+                "credential",
+                f"kill_switch:{prefix}:{CREDENTIAL_KEY_PREFIX}{key_prefix}:{MODEL_KEY_PREFIX}{model_name}",
+            )
+        )
+    keys.append(("org_model", f"kill_switch:{prefix}:{MODEL_KEY_PREFIX}{model_name}"))
+    keys.append(("org_global", f"kill_switch:{prefix}:{GLOBAL_SUFFIX}"))
+
     try:
-        global_key = f"kill_switch:{prefix}:global"
-        model_key = f"kill_switch:{prefix}:model:{model_name}"
         async with redis_client.pipeline(transaction=False) as pipe:
-            pipe.get(global_key)
-            pipe.get(model_key)
+            for _, redis_key in keys:
+                pipe.get(redis_key)
             results = await pipe.execute()
 
-        global_raw, model_raw = results
+        for (scope_name, redis_key), raw in zip(keys, results):
+            if not raw:
+                continue
+            payload = _parse_payload(raw)
+            if payload is None:
+                LOG.error(
+                    "Malformed kill-switch payload at %s — fail-CLOSED",
+                    redis_key,
+                )
+                return KillSwitchVerdict(
+                    is_killed=True,
+                    action="disable",
+                    fallback_model="",
+                    reason="Kill-switch payload corrupt — fail-closed",
+                    scope="malformed_payload",
+                )
+            if not payload.get("is_active"):
+                continue
 
-        if global_raw:
-            payload = _parse_payload(global_raw)
-            if payload and payload.get("is_active"):
+            if scope_name == "org_global":
                 LOG.warning(
                     "Global kill-switch active (reason: %s)",
                     payload.get("reason", ""),
@@ -73,39 +87,48 @@ async def check_kill_switch(
                     action="disable",
                     fallback_model="",
                     reason=payload.get("reason", "Global kill-switch active"),
+                    scope="org_global",
                 )
 
-        if model_raw:
-            payload = _parse_payload(model_raw)
-            if payload and payload.get("is_active"):
-                action = payload.get("action", "disable")
-                fallback = payload.get("fallback_model", "")
-                reason = payload.get("reason", "")
-                LOG.warning(
-                    "Kill-switch active for model '%s' (action=%s, fallback=%s, reason=%s)",
-                    model_name,
-                    action,
-                    fallback,
-                    reason,
-                )
-                return KillSwitchVerdict(
-                    is_killed=True,
-                    action=action,
-                    fallback_model=fallback,
-                    reason=reason,
-                )
+            action = payload.get("action", "disable")
+            fallback = payload.get("fallback_model", "")
+            reason = sanitize_kill_switch_reason(payload.get("reason", ""))
+            LOG.warning(
+                "Kill-switch active scope=%s model='%s' action=%s fallback=%s reason=%s",
+                scope_name,
+                model_name,
+                action,
+                fallback,
+                reason,
+            )
+            scope_label = "credential" if scope_name == "credential" else "org_model"
+            return KillSwitchVerdict(
+                is_killed=True,
+                action=action,
+                fallback_model=fallback,
+                reason=reason or f"Kill-switch active ({scope_label})",
+                scope=scope_label,
+            )
 
     except (aioredis.RedisError, OSError, ConnectionError) as exc:
-        # INVARIANT 6: Kill-switch fails closed — block on Redis errors
         LOG.error("Kill-switch Redis check failed (fail-CLOSED): %s", exc)
         return KillSwitchVerdict(
             is_killed=True,
             action="disable",
             fallback_model="",
             reason=f"Kill-switch Redis unavailable — fail-closed: {exc}",
+            scope="redis_unavailable",
         )
 
-    return KillSwitchVerdict(is_killed=False)
+    return KillSwitchVerdict(is_killed=False, scope="none")
+
+
+def sanitize_kill_switch_reason(reason: str, max_len: int = 500) -> str:
+    """Strip control chars and cap length before logs/telemetry (defense-in-depth)."""
+    if not reason:
+        return ""
+    cleaned = "".join(ch for ch in str(reason) if ch.isprintable() or ch in "\n\t")
+    return cleaned[:max_len]
 
 
 def _parse_payload(raw: str) -> dict | None:
@@ -113,5 +136,5 @@ def _parse_payload(raw: str) -> dict | None:
     try:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError):
-        LOG.warning("Malformed kill-switch payload in Redis: %s", raw[:100])
+        LOG.warning("Malformed kill-switch payload in Redis: %s", str(raw)[:100])
         return None

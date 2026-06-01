@@ -1,7 +1,12 @@
 import json
 import logging
+import os
 import time
+from base64 import b64encode
 from datetime import timedelta
+from html import escape
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import redis
 from celery import shared_task
@@ -11,6 +16,7 @@ from django.db.models import F, Value
 from django.db.models.functions import Least
 from django.utils import timezone
 
+from auth.models import Organization
 from core.models import AuditLog
 
 logger = logging.getLogger(__name__)
@@ -41,6 +47,8 @@ _EVENT_TYPE_TO_MODULE: dict[str, str] = {
     "output_guard": "1.7",
     "output_scan": "1.7",
     "request": "1.1",
+    "kill_switch": "1.6",
+    "model_isolation": "1.6",
 }
 
 _THREAT_TYPE_TO_OWASP: dict[str, str] = {
@@ -99,6 +107,18 @@ RISK_INCREMENT_MAP: dict[str, float] = {
 }
 RISK_SCORE_CAP: float = 1.0
 RISK_SCORE_DECAY_PER_DAY: float = 0.01
+_EMAIL_LOGO_PATH = Path(__file__).resolve().parent / "email_assets" / "zeroshield-logo.png"
+
+
+def _resolve_logo_src() -> str:
+    explicit_url = os.environ.get("ZEROSHIELD_LOGO_URL", "").strip()
+    if explicit_url:
+        return explicit_url
+    try:
+        encoded = b64encode(_EMAIL_LOGO_PATH.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except Exception:
+        return "https://zeroshield.ai/assets/zeroshield-logo.png"
 
 
 def _build_enforcement_metadata(event: dict) -> dict:
@@ -130,6 +150,10 @@ def _build_enforcement_metadata(event: dict) -> dict:
     owasp_code = _THREAT_TYPE_TO_OWASP.get(threat_type, "")
     security_risk_score = int(raw_risk * 100) if isinstance(raw_risk, float) else int(raw_risk)
 
+    is_isolation = event_type in ("kill_switch", "model_isolation", "circuit_breaker")
+    if is_isolation:
+        module_id = "1.6"
+
     result = {
         "event_type": event_type,
         "model": event.get("model", ""),
@@ -150,6 +174,7 @@ def _build_enforcement_metadata(event: dict) -> dict:
         "request_id": request_id,
         "module": module_id,
         "module_id": module_id,
+        "is_isolation_event": is_isolation,
         "event_timestamp": event.get("timestamp"),
         "intent": event.get("intent", ""),
         "extra": event.get("metadata", {}),
@@ -181,6 +206,28 @@ def _build_enforcement_metadata(event: dict) -> dict:
     if prompt_snippet:
         result["prompt_lineage"] = [{"prompt": prompt_snippet, "risk_score": security_risk_score}]
 
+    if event_type == "model_routed":
+        extra = result.get("extra") or {}
+        if isinstance(extra, dict):
+            requested = extra.get("original_model") or extra.get("requested_model") or ""
+            routed = extra.get("routed_model") or extra.get("selected_model") or result.get("model") or ""
+            result["requested_model"] = requested
+            result["original_model"] = extra.get("original_model") or requested
+            result["routed_model"] = routed
+            result["selected_model"] = extra.get("selected_model") or routed
+            for key in (
+                "routing_reason",
+                "decision_source",
+                "policy_summary",
+                "routing_score",
+                "rerouted",
+                "decision_factors",
+            ):
+                if key in extra:
+                    result[key] = extra[key]
+        result["module"] = "1.5"
+        result["module_id"] = "1.5"
+
     return result
 
 
@@ -204,8 +251,13 @@ def _build_notification_payload(ev) -> dict:
 
 
 @shared_task
-def log_audit(user_id, action, resource="", details="", ip=None):
-    """Create an AuditLog entry asynchronously. No-op if user_id is None."""
+def log_audit(user_id, action, resource="", details="", ip=None, organization_id=None):
+    """Create an AuditLog entry asynchronously. No-op if user_id is None.
+
+    ``organization_id`` scopes the record to a tenant so retention cleanup and
+    isolation can filter by org. When omitted it is derived from the user's
+    profile organization where available.
+    """
     if user_id is None:
         return
     user = None
@@ -216,8 +268,12 @@ def log_audit(user_id, action, resource="", details="", ip=None):
         except User.DoesNotExist:
             logger.warning("log_audit: user_id=%s not found", user_id)
             pass
+    if organization_id is None and user is not None:
+        # Best-effort: derive org from the user's profile (UserProfile.organization).
+        organization_id = getattr(getattr(user, "profile", None), "organization_id", None)
     AuditLog.objects.create(
         user=user,
+        organization_id=organization_id,
         action=action,
         resource=resource or "",
         details=details or "",
@@ -231,19 +287,26 @@ def log_audit(user_id, action, resource="", details="", ip=None):
     )
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=30)
-def send_critical_alert_email(
-    self,
+def deliver_critical_alert_email(
     recipients_str: str,
     threat_type: str,
     risk_score: float,
     detail: str,
     event_type: str,
+    organization_id: int | None = None,
+    user_id: int | None = None,
+    key_prefix: str = "",
+    source: str = "",
+    request_id: str = "",
+    endpoint: str = "",
+    model: str = "",
+    pipeline_stage: str = "",
 ) -> bool:
     """
     Send critical security alert email to configured recipients.
-    Runs as a separate task so email failures do not block telemetry processing.
-    Retries up to 3 times with 30-second delay on failure.
+
+    Prefers Microsoft Graph (application permissions) when TENANT_ID/CLIENT_ID/
+    CLIENT_SECRET are set; otherwise uses Django SMTP (EMAIL_* settings).
     """
     if not recipients_str:
         logger.debug("No alert recipients configured, skipping email")
@@ -254,36 +317,224 @@ def send_critical_alert_email(
         logger.warning("No valid email addresses in alert_recipients: %s", recipients_str)
         return False
 
-    from django.core.mail import send_mail
-
     risk_pct = int(risk_score * 100) if isinstance(risk_score, float) else risk_score
-    subject = f"[ZeroShield CRITICAL] {threat_type} detected (score: {risk_pct}%)"
+    org_name = "Unknown Organization"
+    if organization_id:
+        org_name = (
+            Organization.objects.filter(id=organization_id)
+            .values_list("name", flat=True)
+            .first()
+            or org_name
+        )
+    subject = f"AIMesh-Firewall Security Alert - {org_name}"
+    ist_now = timezone.now().astimezone(ZoneInfo("Asia/Kolkata"))
+    formatted_ts = ist_now.strftime("%d %b %Y, %I:%M:%S %p IST")
+    threat_label = (threat_type or "unknown").replace("_", " ").title()
+    event_type_label = (event_type or "unknown").replace("_", " ").title()
+    source_label = (source or "gateway").replace("_", " ").title()
+    pipeline_label = (pipeline_stage or "query").replace("_", " ").title()
+    endpoint_label = endpoint or "/v1/chat/completions"
+    request_id_label = request_id or "N/A"
+    user_label = str(user_id) if user_id is not None else "N/A"
+    key_prefix_label = key_prefix or "N/A"
+    model_label = model or "N/A"
+    detail_safe = escape(detail or "No additional threat description provided.")
+    threat_link = (
+        f"{os.environ.get('BACKEND_PUBLIC_URL', '').strip().rstrip('/')}/security-events"
+        if os.environ.get("BACKEND_PUBLIC_URL", "").strip()
+        else "https://app.zeroshield.ai/security-events"
+    )
+    logo_path = _resolve_logo_src()
     body = (
         f"ZeroShield Critical Security Alert\n"
         f"{'=' * 40}\n\n"
+        f"Organization: {org_name}\n"
         f"Threat Type: {threat_type}\n"
         f"Risk Score: {risk_pct}%\n"
         f"Event Type: {event_type}\n"
         f"Detail: {detail}\n"
-        f"Timestamp: {timezone.now().isoformat()}\n\n"
+        f"Timestamp: {formatted_ts}\n\n"
         f"This alert was generated by the ZeroShield AI Mesh Firewall.\n"
+        f"Threat Link: {threat_link}\n"
         f"Review the SOC dashboard for full details and forensic data."
     )
+    body_html = f"""
+<html>
+  <body style="margin:0;background:#f2f6ff;font-family:Arial,sans-serif;color:#112147;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="680" cellspacing="0" cellpadding="0" style="background:#ffffff;border:1px solid #dbe4ff;border-radius:12px;overflow:hidden;">
+            <tr>
+              <td style="background:#0d3f9e;padding:18px 24px;">
+                <div style="display:inline-block;background:#ffffff;border-radius:6px;padding:8px;margin-bottom:10px;">
+                  <img src="{escape(logo_path)}" alt="ZeroShield Logo" style="height:44px;display:block;" />
+                </div>
+                <div style="font-size:20px;font-weight:700;color:#ffffff;">AIMesh-Firewall Security Alert</div>
+                <div style="font-size:13px;color:#dce8ff;margin-top:4px;">Organization - {escape(org_name)}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px;">
+                <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;">
+                  A high risk security event was detected and requires immediate investigation.
+                </p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #e6ecff;">
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;width:180px;">Threat Type</td><td style="padding:10px 12px;">{escape(threat_label)}</td></tr>
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Risk Score</td><td style="padding:10px 12px;">{risk_pct}%</td></tr>
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Event Type</td><td style="padding:10px 12px;">{escape(event_type_label)}</td></tr>
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Service</td><td style="padding:10px 12px;">{escape(source_label)}</td></tr>
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Pipeline Stage</td><td style="padding:10px 12px;">{escape(pipeline_label)}</td></tr>
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Endpoint</td><td style="padding:10px 12px;">{escape(endpoint_label)}</td></tr>
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">User ID</td><td style="padding:10px 12px;">{escape(user_label)}</td></tr>
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Gateway API Key Prefix</td><td style="padding:10px 12px;">{escape(key_prefix_label)}</td></tr>
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Model</td><td style="padding:10px 12px;">{escape(model_label)}</td></tr>
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Request ID</td><td style="padding:10px 12px;">{escape(request_id_label)}</td></tr>
+                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Timestamp</td><td style="padding:10px 12px;">{escape(formatted_ts)}</td></tr>
+                </table>
+                <h3 style="margin:18px 0 8px 0;font-size:16px;">Threat Description</h3>
+                <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#243a6b;">{detail_safe}</p>
+                <a href="{escape(threat_link)}" style="display:inline-block;padding:10px 16px;background:#0d3f9e;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;">
+                  Open Security Investigation
+                </a>
+                <p style="margin:20px 0 0 0;font-size:12px;color:#5f6f95;">
+                  This is an automated message from ZeroShield AIMesh-Firewall.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+""".strip()
 
-    try:
-        send_mail(
+    from core.graph_mail import graph_mail_configured, send_graph_mail
+
+    if graph_mail_configured():
+        sent = send_graph_mail(
+            recipients=recipients,
             subject=subject,
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=recipients,
-            fail_silently=False,
+            body_text=body,
+            body_html=body_html,
         )
         logger.info(
-            "Critical alert email sent to %d recipients for %s",
+            "Critical alert email sent via Graph - org=%s user=%s key=%s source=%s event=%s request_id=%s recipients=%d",
+            organization_id,
+            user_label,
+            key_prefix_label,
+            source_label,
+            event_type_label,
+            request_id_label,
             len(recipients),
-            threat_type,
         )
-        return True
+        return sent
+
+    from django.core.mail import send_mail
+
+    send_mail(
+        subject=subject,
+        message=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=recipients,
+        fail_silently=False,
+    )
+    logger.info(
+        "Critical alert email (SMTP) sent to %d recipients for %s",
+        len(recipients),
+        threat_type,
+    )
+    return True
+
+
+def _dispatch_critical_alert_email(
+    *,
+    recipients_str: str,
+    threat_type: str,
+    risk_score: float,
+    detail: str,
+    event_type: str,
+    organization_id: int | None = None,
+    user_id: int | None = None,
+    key_prefix: str = "",
+    source: str = "",
+    request_id: str = "",
+    endpoint: str = "",
+    model: str = "",
+    pipeline_stage: str = "",
+) -> None:
+    """
+    Deliver alert email without blocking telemetry drain.
+
+    Default: synchronous delivery (standalone compose has no Celery worker).
+    Set ALERT_EMAIL_USE_CELERY=true when workers consume platform.batch.
+    """
+    kwargs = {
+        "recipients_str": recipients_str,
+        "threat_type": threat_type,
+        "risk_score": risk_score,
+        "detail": detail,
+        "event_type": event_type,
+        "organization_id": organization_id,
+        "user_id": user_id,
+        "key_prefix": key_prefix,
+        "source": source,
+        "request_id": request_id,
+        "endpoint": endpoint,
+        "model": model,
+        "pipeline_stage": pipeline_stage,
+    }
+    use_celery = str(getattr(settings, "ALERT_EMAIL_USE_CELERY", "false")).lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+    if use_celery:
+        send_critical_alert_email.delay(**kwargs)
+        return
+    try:
+        deliver_critical_alert_email(**kwargs)
+    except Exception:
+        logger.warning("Critical alert email delivery failed", exc_info=True)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=30)
+def send_critical_alert_email(
+    self,
+    recipients_str: str,
+    threat_type: str,
+    risk_score: float,
+    detail: str,
+    event_type: str,
+    organization_id: int | None = None,
+    user_id: int | None = None,
+    key_prefix: str = "",
+    source: str = "",
+    request_id: str = "",
+    endpoint: str = "",
+    model: str = "",
+    pipeline_stage: str = "",
+) -> bool:
+    """
+    Celery wrapper for deliver_critical_alert_email (retries on failure).
+    """
+    try:
+        return deliver_critical_alert_email(
+            recipients_str=recipients_str,
+            threat_type=threat_type,
+            risk_score=risk_score,
+            detail=detail,
+            event_type=event_type,
+            organization_id=organization_id,
+            user_id=user_id,
+            key_prefix=key_prefix,
+            source=source,
+            request_id=request_id,
+            endpoint=endpoint,
+            model=model,
+            pipeline_stage=pipeline_stage,
+        )
     except Exception as exc:
         logger.error("Failed to send critical alert email: %s", exc)
         raise self.retry(exc=exc) from exc
@@ -533,12 +784,20 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
             except Exception:
                 logger.warning("Failed to dispatch critical alert via WebSocket", exc_info=True)
 
-            send_critical_alert_email.delay(
+            _dispatch_critical_alert_email(
                 recipients_str=extra.get("alert_recipients", ""),
                 threat_type=meta.get("threat_type", "unknown"),
                 risk_score=meta.get("risk_score", 0),
                 detail=extra.get("detail", ""),
                 event_type=meta.get("event_type", ""),
+                organization_id=event_data.organization_id,
+                user_id=event_data.user_id,
+                key_prefix=meta.get("key_prefix", ""),
+                source=meta.get("source", ""),
+                request_id=meta.get("request_id", ""),
+                endpoint=meta.get("endpoint", ""),
+                model=meta.get("model", ""),
+                pipeline_stage=meta.get("pipeline_stage", ""),
             )
 
     return processed
@@ -664,7 +923,11 @@ def cleanup_old_audit_logs() -> dict:
             organization_id=org.id,
             created_at__lt=cutoff,
         ).delete()
+        # Tenant-scoped: only delete THIS org's audit logs. Previously this
+        # filtered by created_at alone, so the org with the shortest retention
+        # wiped every tenant's audit trail (cross-tenant data destruction).
         deleted_audit, _ = AuditLog.objects.filter(
+            organization_id=org.id,
             created_at__lt=cutoff,
         ).delete()
         total_deleted_events += deleted_events
@@ -683,6 +946,7 @@ def cleanup_old_audit_logs() -> dict:
         created_at__lt=default_cutoff,
     ).delete()
     orphan_audit, _ = AuditLog.objects.filter(
+        organization_id__isnull=True,
         created_at__lt=default_cutoff,
     ).delete()
     total_deleted_events += orphan_events
@@ -859,6 +1123,7 @@ def generate_compliance_report() -> dict:
 
         AuditLog.objects.create(
             user=None,
+            organization=org,
             action="compliance_report",
             resource="firewall_config",
             details=json.dumps(report, default=str),

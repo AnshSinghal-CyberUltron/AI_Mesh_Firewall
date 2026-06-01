@@ -33,6 +33,7 @@ urlpatterns = [
     path("token/refresh/", DecoratedTokenRefreshView.as_view(), name="token_refresh"),
     path("token/verify/", DecoratedTokenVerifyView.as_view(), name="token_verify"),
     path("me/", views.MeView.as_view(), name="me"),
+    path("me/profile/", views.MeProfileUpdateView.as_view(), name="me_profile_update"),
     path("logout/", views.LogoutView.as_view(), name="logout"),
     path("change-password/", ChangePasswordView.as_view(), name="change_password"),
     path("sessions/terminate/", views.SessionTerminateView.as_view(), name="session_terminate"),

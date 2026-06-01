@@ -188,6 +188,7 @@ class KillSwitchSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "model_name",
+            "api_key_prefix",
             "is_active",
             "action",
             "fallback_model",
@@ -211,13 +212,49 @@ class KillSwitchCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = KillSwitch
-        fields = ("model_name", "action", "fallback_model", "reason")
+        fields = ("model_name", "api_key_prefix", "action", "fallback_model", "reason")
 
     def validate(self, attrs: dict) -> dict:
         if attrs.get("action") == "reroute" and not attrs.get("fallback_model"):
             raise serializers.ValidationError(
                 {"fallback_model": "Fallback model is required when action is 'reroute'."}
             )
+        model_name = (attrs.get("model_name") or "").strip()
+        api_key_prefix = (attrs.get("api_key_prefix") or "").strip()
+        if model_name == KillSwitch.SCOPE_GLOBAL:
+            if api_key_prefix:
+                raise serializers.ValidationError(
+                    {
+                        "api_key_prefix": (
+                            "Org-wide emergency scope cannot use an API key prefix — "
+                            "Redis uses a single global key per organization."
+                        )
+                    }
+                )
+            if attrs.get("action") == "reroute":
+                raise serializers.ValidationError(
+                    {
+                        "action": (
+                            "Global kill-switch only supports disable at the gateway; "
+                            "reroute is not applied for org-wide scope."
+                        )
+                    }
+                )
+        request = self.context.get("request")
+        if request and model_name and model_name != KillSwitch.SCOPE_GLOBAL:
+            org = getattr(getattr(request.user, "profile", None), "organization", None)
+            if org:
+                from core.models import LLMModelConfig
+
+                if not LLMModelConfig.objects.filter(
+                    organization=org,
+                    model_name=model_name,
+                    is_active=True,
+                ).exists():
+                    attrs["_model_name_warning"] = (
+                        f'"{model_name}" is not an active connected model for this org. '
+                        "Use the registered model_name from Model Connections (not LiteLLM model_id)."
+                    )
         return attrs
 
 

@@ -1,4 +1,6 @@
-import { Component } from "react";
+import { Component, useCallback, useRef, useState } from "react";
+import { modelListSignature } from "../utils/modelListSignature";
+import { FirewallConfigProvider, useFirewallConfig } from "../hooks/useFirewallConfig";
 import { Zap, GitBranch, Database, Eye, Shield, AlertTriangle, Filter } from "lucide-react";
 import { GatewayKeyPanel } from "../components/GatewayKeyPanel";
 import { KillSwitchPanel } from "../components/KillSwitchPanel";
@@ -7,10 +9,12 @@ import { PolicyManagementPanel } from "../components/PolicyManagementPanel";
 import { PolicyAnalyticsPanel } from "../components/PolicyAnalyticsPanel";
 import { VectorPolicyPanel } from "../components/VectorPolicyPanel";
 import { ModelConnectionPanel } from "../components/ModelConnectionPanel";
+import { ModelGovernancePanel } from "../components/ModelGovernancePanel";
 import { RoutingAuditPanel } from "../components/RoutingAuditPanel";
 import { RoutingGovernancePanel } from "../components/RoutingGovernancePanel";
 import { OutputGovernancePanel } from "../components/OutputGovernancePanel";
 import { OutputGuardrailEngineCard } from "../components/OutputGuardrailEngineCard";
+import { OutputGuardrailControls } from "../components/OutputGuardrailControls";
 import { RAGPipelinePanel } from "../components/RAGPipelinePanel";
 import { RAGPipelineSimulator } from "../components/RAGPipelineSimulator";
 import { RAGPipelineTelemetry } from "../components/RAGPipelineTelemetry";
@@ -19,7 +23,8 @@ import { DatabaseConnectionPanel } from "../components/DatabaseConnectionPanel";
 import { VectorFirewallSimulator } from "../components/simulator/VectorFirewallSimulator";
 import { MCPGuardrailSimulator } from "../components/simulator/MCPGuardrailSimulator";
 import { ModelRoutingSimulator } from "../components/simulator/ModelRoutingSimulator";
-import { CircuitBreakerSimulator } from "../components/simulator/CircuitBreakerSimulator";
+import { IsolationOpsSimulator } from "../components/simulator/IsolationOpsSimulator";
+import { OrgIsolationBanner } from "../components/OrgIsolationBanner";
 import { OutputGuardSimulator } from "../components/simulator/OutputGuardSimulator";
 import { RAGIngestionPanel } from "../components/simulator/RAGIngestionPanel";
 import { VectorProviderConfigPanel } from "../components/rag/VectorProviderConfigPanel";
@@ -218,7 +223,35 @@ export function Firewall14Page({ onViewResults, onViewLogDetail, children }) {
 }
 
 // 1.5 Multi-Model Governance & Routing
-export function Firewall15Page({ onViewResults, onViewLogDetail }) {
+export function Firewall15Page(props) {
+  return (
+    <FirewallModuleErrorBoundary>
+      <FirewallConfigProvider>
+        <Firewall15PageInner {...props} />
+      </FirewallConfigProvider>
+    </FirewallModuleErrorBoundary>
+  );
+}
+
+function Firewall15PageInner({ onViewResults, onViewLogDetail }) {
+  const { invalidate } = useFirewallConfig();
+  const lastModelsSigRef = useRef("");
+
+  const handleConnectionsMutated = useCallback(() => {
+    lastModelsSigRef.current = "";
+    invalidate();
+  }, [invalidate]);
+
+  const handleModelsChanged = useCallback(
+    (models) => {
+      const sig = modelListSignature(models);
+      if (sig === lastModelsSigRef.current) return;
+      lastModelsSigRef.current = sig;
+      invalidate();
+    },
+    [invalidate],
+  );
+
   const flowNodes = [
     { label: "Request", format: (summary) => `${summary.total.toLocaleString()} decisions`, color: "blue" },
     { label: "Router", format: (summary) => `${summary.allowed.toLocaleString()} routed`, color: "purple" },
@@ -227,19 +260,29 @@ export function Firewall15Page({ onViewResults, onViewLogDetail }) {
   ];
 
   return (
-    <FirewallModuleErrorBoundary>
-      <FirewallModulePage
-        moduleId="1.5"
-        title="Multi-Model Governance & AI Mesh Routing"
-        description="A model-mesh governance surface for routing decisions, failover behavior, provider controls, and policy-aware execution targets."
-        icon={Shield}
-        flowNodes={flowNodes}
-        onViewResults={onViewResults}
-        onViewLogDetail={onViewLogDetail}
-        controlPanels={[<GatewayKeyPanel key="gateway-keys-routing" />, <ModelConnectionPanel key="model-connections" />, <RoutingGovernancePanel key="routing-governance" />, <RoutingAuditPanel key="routing-audit" />]}
-        simulatorPanels={[<ModelRoutingSimulator key="routing-simulator" />]}
-      />
-    </FirewallModuleErrorBoundary>
+    <FirewallModulePage
+      moduleId="1.5"
+      title="Multi-Model Governance & AI Mesh Routing"
+      description="A model-mesh governance surface for routing decisions, failover behavior, provider controls, and policy-aware execution targets."
+      icon={Shield}
+      flowNodes={flowNodes}
+      onViewResults={onViewResults}
+      onViewLogDetail={onViewLogDetail}
+      controlPanels={[
+        <GatewayKeyPanel key="gateway-keys-routing" />,
+        <ModelConnectionPanel
+          key="model-connections"
+          showProviderForm={false}
+          showGatewayCatalog={false}
+          onModelsChanged={handleModelsChanged}
+          onConnectionsMutated={handleConnectionsMutated}
+        />,
+        <ModelGovernancePanel key="model-governance" />,
+        <RoutingGovernancePanel key="routing-governance" />,
+      ]}
+      simulatorPanels={[<ModelRoutingSimulator key="routing-simulator" />]}
+      footerPanels={[<RoutingAuditPanel key="routing-audit" />]}
+    />
   );
 }
 
@@ -261,8 +304,13 @@ export function Firewall16Page({ onViewResults, onViewLogDetail, children }) {
       flowNodes={flowNodes}
       onViewResults={onViewResults}
       onViewLogDetail={onViewLogDetail}
-      controlPanels={[<ModelStatePanel key="model-state" />, <KillSwitchPanel key="kill-switch" />]}
-      simulatorPanels={[<CircuitBreakerSimulator key="circuit-breaker" />]}
+      controlPanels={[
+        <OrgIsolationBanner key="org-isolation-banner" />,
+        <GatewayKeyPanel key="gateway-keys-isolation" />,
+        <ModelStatePanel key="model-state" />,
+        <KillSwitchPanel key="kill-switch" />,
+      ]}
+      simulatorPanels={[<IsolationOpsSimulator key="isolation-ops" />]}
       inspectionPanels={children ? [children] : []}
     />
   );
@@ -287,6 +335,7 @@ export function Firewall17Page({ onViewResults, onViewLogDetail }) {
       onViewResults={onViewResults}
       onViewLogDetail={onViewLogDetail}
       controlPanels={[
+        <OutputGuardrailControls key="output-guardrail-controls" />,
         <OutputGuardrailEngineCard key="engine-card" />,
         <OutputGovernancePanel key="output-governance" />,
       ]}

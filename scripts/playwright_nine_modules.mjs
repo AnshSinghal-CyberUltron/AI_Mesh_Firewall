@@ -52,6 +52,17 @@ const MODULES = [
       const compile = page.getByRole("button", { name: /compile/i }).first();
       if (await compile.isVisible().catch(() => false)) {
         ctx.notes.push("Compile policies control visible");
+        // Content oracle (PLAN_v3_DELTA §5): on compile, response must include a 'compiled' marker
+        const [resp] = await Promise.all([
+          page.waitForResponse((r) => /\/api\/policies\/.*compile|\/api\/policies\/compile/.test(r.url()) && r.request().method() === "POST", { timeout: 8000 }).catch(() => null),
+          compile.click().catch(() => {}),
+        ]);
+        if (resp) {
+          const body = await resp.text();
+          ctx.notes.push(`compile status=${resp.status()}`);
+          if (/"compiled"|compiled_at|compiled_policy/i.test(body)) ctx.notes.push("oracle: compiled field present");
+          else ctx.notes.push("oracle: compiled field MISSING (soft)");
+        }
       }
     },
   },
@@ -67,6 +78,10 @@ const MODULES = [
         await runRag.click().catch(() => {});
         await page.waitForTimeout(5000);
         ctx.notes.push("RAG simulator action clicked");
+        // Content oracle: simulator panel should show blocked|sanitized|allowed verdict text
+        const t = await page.locator("body").innerText();
+        if (/blocked|sanitized|allowed|filtered|redacted/i.test(t)) ctx.notes.push("oracle: RAG verdict text present");
+        else ctx.notes.push("oracle: RAG verdict text MISSING (soft)");
       }
     },
   },
@@ -106,9 +121,19 @@ const MODULES = [
       await ctx.expectApiOk(page, "/api/kill-switches/");
       const sim = page.getByRole("button", { name: /simulate|trip|test/i }).first();
       if (await sim.isVisible().catch(() => false)) {
-        await sim.click().catch(() => {});
-        await page.waitForTimeout(4000);
+        const [resp] = await Promise.all([
+          page.waitForResponse((r) => /\/api\/kill-switches\//.test(r.url()) && ["POST","PATCH","PUT"].includes(r.request().method()), { timeout: 8000 }).catch(() => null),
+          sim.click().catch(() => {}),
+        ]);
+        await page.waitForTimeout(2000);
         ctx.notes.push("Circuit breaker simulator triggered");
+        // Content oracle: kill_switch_active=true expected after trip
+        if (resp) {
+          const body = await resp.text();
+          ctx.notes.push(`kill-switch resp ${resp.status()}`);
+          if (/kill_switch_active\s*[:=]\s*true|"active"\s*:\s*true/i.test(body)) ctx.notes.push("oracle: kill_switch_active=true");
+          else ctx.notes.push("oracle: kill_switch_active flag NOT confirmed (soft)");
+        }
       }
     },
   },
@@ -122,6 +147,10 @@ const MODULES = [
         await guard.click().catch(() => {});
         await page.waitForTimeout(5000);
         ctx.notes.push("Output guard simulator triggered");
+        // Content oracle: redacted output expected (REDACTED | *** | [BLOCKED])
+        const t = await page.locator("body").innerText();
+        if (/REDACTED|\*\*\*|\[BLOCKED\]|<redacted>/i.test(t)) ctx.notes.push("oracle: redaction marker present");
+        else ctx.notes.push("oracle: redaction marker MISSING (soft)");
       }
     },
   },

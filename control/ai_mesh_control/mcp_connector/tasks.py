@@ -32,6 +32,8 @@ def record_mcp_event_task(payload: dict) -> str:
         latency_ms=int(payload.get("latency_ms") or 0),
         request_id=payload.get("request_id", ""),
         metadata=payload.get("metadata") or {},
+        compliance_tags=payload.get("compliance_tags") or [],
+        presidio_findings=payload.get("presidio_findings") or [],
     )
     logger.info("record_mcp_event_task created MCPEvent id=%s", event.id)
     return str(event.id)

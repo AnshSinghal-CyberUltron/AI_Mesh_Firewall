@@ -14,6 +14,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from auth.utils import get_request_organization
@@ -28,10 +29,21 @@ from policy.compiler import (
 logger = logging.getLogger(__name__)
 
 
+class PolicyCompileThrottle(UserRateThrottle):
+    """Throttle PolicyCompileView. Each compile fans out to every gateway via
+    Redis pub/sub and recomputes the full org bundle; cap at 10/min/user to
+    prevent authorized-admin compile floods while leaving headroom for legit
+    rapid edits."""
+
+    scope = "policy_compile"
+    rate = "10/min"
+
+
 class PolicyCompileView(APIView):
     """Force policy recompilation and push to Redis."""
 
     permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
+    throttle_classes = [PolicyCompileThrottle]
 
     @extend_schema(
         tags=["Policies"],
@@ -39,7 +51,7 @@ class PolicyCompileView(APIView):
         description=(
             "Recompile all enabled policies and push the bundle to Redis. "
             "Triggers a Pub/Sub notification on `policy_updates` channel.\n\n"
-            "**Permission:** Admin (superuser, staff, or aiguardx_admin)."
+            "**Permission:** Admin (superuser, staff, or platform_admin)."
         ),
         request=None,
         responses={
@@ -59,7 +71,12 @@ class PolicyCompileView(APIView):
         },
     )
     def post(self, request: Request) -> Response:
-        org = getattr(getattr(request.user, "profile", None), "organization", None)
+        org = get_request_organization(request)
+        if org is None:
+            return Response(
+                {"detail": "Organization scope is required to compile policies."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         compiler = PolicyCompiler()
         bundle = compiler.compile_all(organization=org)
         success = compiler.push_to_redis(

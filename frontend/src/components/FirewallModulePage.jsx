@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, cloneElement, isValidElement } from "react";
 import { ArrowRight, ChevronRight, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { useFirewallData } from "../hooks/useFirewallData";
-import { buildModulePageData, getModulePageConfig } from "./firewall-module-utils";
+import { buildModulePageData, getModuleEvidenceEmptyMessage, getModulePageConfig } from "./firewall-module-utils";
 import { HowToUse } from "./HowToUse";
 
 function cn(...values) {
@@ -20,6 +20,7 @@ export function FirewallModulePage({
   simulatorPanels = [],
   inspectionPanels = [],
   secondaryPanels = [],
+  footerPanels = [],
 }) {
   const [timeRange, setTimeRange] = useState("24h");
   const firewallData = useFirewallData(moduleId, timeRange);
@@ -36,6 +37,20 @@ export function FirewallModulePage({
   );
 
   const isLoading = firewallData.loading;
+
+  const resolvedFooterPanels = useMemo(() => {
+    if (!footerPanels?.length) return [];
+    return footerPanels.map((panel) => {
+      if (isValidElement(panel) && panel.key === "routing-audit") {
+        return cloneElement(panel, {
+          events: firewallData.threatFeed,
+          loading: isLoading,
+          onRefresh: () => firewallData.refetch?.({ background: true }),
+        });
+      }
+      return panel;
+    });
+  }, [footerPanels, firewallData.threatFeed, firewallData.refetch, isLoading]);
 
   return (
     <div className="ai-mesh-shell space-y-8 pb-6">
@@ -181,9 +196,25 @@ export function FirewallModulePage({
         />
 
         <div className="ai-mesh-card rounded-[28px] p-6">
-          <EvidenceTable rows={pageData.rows} onViewLogDetail={onViewLogDetail} loading={isLoading} />
+          <EvidenceTable
+            moduleId={moduleId}
+            rows={pageData.rows}
+            onViewLogDetail={onViewLogDetail}
+            loading={isLoading}
+          />
         </div>
       </section>
+
+      {resolvedFooterPanels.length > 0 ? (
+        <section className="space-y-5">
+          <SectionHeading
+            eyebrow="Audit trail"
+            title="Routing audit trail"
+            description="Detailed requested-vs-routed decisions for chat completions, including policy context and failover metadata."
+          />
+          <div className="space-y-5">{resolvedFooterPanels}</div>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -259,13 +290,13 @@ function ChartCard({ title, children }) {
   );
 }
 
-function EvidenceTable({ rows, onViewLogDetail, loading }) {
+function EvidenceTable({ moduleId, rows, onViewLogDetail, loading }) {
   if (loading && rows.length === 0) {
     return <EmptyState message="Loading recent evidence..." />;
   }
 
   if (rows.length === 0) {
-    return <EmptyState message="No recent module evidence is available for this time range." />;
+    return <EmptyState message={getModuleEvidenceEmptyMessage(moduleId)} />;
   }
 
   const headers = rows[0].cells.map((cell) => cell.label);

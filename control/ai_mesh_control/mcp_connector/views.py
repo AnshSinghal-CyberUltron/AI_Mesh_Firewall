@@ -1,8 +1,9 @@
 """REST API views for MCP Connector.
 
-Provides endpoints for managing MCP servers (via ContextForge),
-guardrail profiles (via Secure-MCP-Gateway), tool discovery, tool controls,
-MCP-Firewall pre/post flight enforcement, and structured observability.
+Provides endpoints for managing MCP servers (registered locally), tool
+discovery, tool controls, MCP-Firewall pre/post flight enforcement, and
+structured observability. Guardrails are unified into the policy engine —
+the legacy Enkrypt Secure-MCP-Gateway profile layer has been removed.
 """
 
 import json
@@ -11,6 +12,7 @@ import os
 import secrets
 import time
 import uuid as uuid_mod
+from datetime import timedelta
 from functools import lru_cache
 
 import jsonschema
@@ -19,16 +21,16 @@ from auth.utils import get_request_organization
 from django.conf import settings
 from django.db import IntegrityError
 from django.db.models import Count, Q
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import contextforge_client, mcp_firewall_client, secure_gateway_client
-from .models import GuardrailProfile, MCPEvent, MCPServerRegistration, MCPToolRegistration
+from . import mcp_firewall_client
+from .models import MCPEvent, MCPServerRegistration, MCPToolRegistration
 from .serializers import (
-    GuardrailProfileSerializer,
     MCPEventSerializer,
     MCPServerCreateSerializer,
     MCPServerRegistrationSerializer,
@@ -36,6 +38,15 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# HTTP read timeout (seconds) for the control -> gateway discover-tools call.
+# This MUST be >= the gateway's stdio init timeout (MCP_STDIO_INIT_TIMEOUT,
+# default 120s) plus margin, otherwise a legitimate first-connect that fetches
+# a server package on-demand (npx/uvx cold download) is aborted control-side
+# before the gateway finishes initializing — surfacing as a misleading
+# "Read timed out" even though the server would have come up. Configurable so
+# operators can match it to their gateway init budget.
+_DISCOVER_HTTP_TIMEOUT = float(os.environ.get("MCP_DISCOVER_HTTP_TIMEOUT", "150"))
 
 
 def _gateway_internal_secret() -> str:
@@ -158,12 +169,127 @@ def _org_scoped_servers_queryset(request):
     return MCPServerRegistration.objects.filter(organization=org), org
 
 
-def _discover_tools_via_gateway(server, org) -> list[dict]:
+def _store_oauth_tokens(server, tok: dict) -> None:
+    """Persist an OAuth token response onto the server (encrypted fields).
+
+    The access token is stored in ``auth_token`` (the existing encrypted
+    bearer field) so the gateway forwards it as a normal ``Authorization:
+    Bearer`` with no OAuth awareness. Refresh token + expiry are stored for
+    silent renewal.
+    """
+    access = (tok.get("access_token") or "").strip()
+    update_fields = ["updated_at"]
+    if access:
+        server.auth_token = access
+        update_fields.append("auth_token")
+    new_refresh = tok.get("refresh_token")
+    if new_refresh:
+        server.oauth_refresh_token = new_refresh
+        update_fields.append("oauth_refresh_token")
+    expires_in = tok.get("expires_in")
+    server.oauth_token_expires_at = None
+    if expires_in:
+        try:
+            server.oauth_token_expires_at = timezone.now() + timedelta(seconds=int(expires_in))
+        except (TypeError, ValueError):
+            server.oauth_token_expires_at = None
+    update_fields.append("oauth_token_expires_at")
+    if tok.get("scope"):
+        server.oauth_scope = tok["scope"]
+        update_fields.append("oauth_scope")
+    server.auth_type = "oauth"
+    update_fields.append("auth_type")
+    server.save(update_fields=update_fields)
+
+
+def _ensure_oauth_token_fresh(server) -> bool:
+    """Refresh the OAuth access token in place when missing or near expiry.
+
+    Returns ``True`` when the server has a *usable* (fresh or just-refreshed)
+    token that is safe to forward upstream, ``False`` when re-authentication is
+    required. No-op-True for non-OAuth servers. On refresh failure we do NOT
+    raise (a hard failure here would 500 the hot path for every tool call);
+    instead we surface the cause per-org via ``last_sync_error`` +
+    ``needs_reauth`` so the operator sees an actionable "re-authenticate
+    <server>" signal while other orgs keep working. Critically we now also
+    return ``False`` so callers skip forwarding the expired token (which the
+    upstream rejects with an opaque ``invalid_token``).
+    """
+    if getattr(server, "auth_type", "") != "oauth":
+        return True
+    expires_at = getattr(server, "oauth_token_expires_at", None)
+    has_token = bool(server.auth_token)
+    near_expiry = bool(expires_at) and expires_at <= timezone.now() + timedelta(seconds=60)
+    if has_token and not near_expiry:
+        return True
+    refresh = getattr(server, "oauth_refresh_token", "") or ""
+    token_endpoint = getattr(server, "oauth_token_endpoint", "") or ""
+    if not refresh or not token_endpoint:
+        # Configured for OAuth but no usable refresh material — needs re-auth.
+        _mark_needs_reauth(
+            server,
+            "OAuth credentials missing or incomplete — re-authenticate this server.",
+        )
+        return False
+    try:
+        from . import oauth as oauth_mod
+
+        tok = oauth_mod.refresh_access_token(
+            token_endpoint,
+            refresh,
+            server.oauth_client_id,
+            server.oauth_client_secret,
+            server.oauth_resource,
+            server.oauth_scope,
+        )
+        _store_oauth_tokens(server, tok)
+        _clear_needs_reauth(server)
+        logger.info("Refreshed OAuth token for %s", server.server_slug)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.error("OAuth token refresh failed for %s: %s", server.server_slug, exc)
+        _mark_needs_reauth(
+            server,
+            f"OAuth token refresh failed ({exc}) — re-authenticate this server.",
+        )
+        return False
+
+
+def _mark_needs_reauth(server, message: str) -> None:
+    """Persist an actionable per-org auth error without raising."""
+    try:
+        server.needs_reauth = True
+        server.last_sync_error = message
+        server.last_sync_attempt_at = timezone.now()
+        server.save(update_fields=["needs_reauth", "last_sync_error", "last_sync_attempt_at"])
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to persist needs_reauth for %s: %s", server.server_slug, exc)
+
+
+def _clear_needs_reauth(server) -> None:
+    """Clear a previously-set auth error after a successful refresh."""
+    if not getattr(server, "needs_reauth", False) and not getattr(server, "last_sync_error", ""):
+        return
+    try:
+        server.needs_reauth = False
+        server.last_sync_error = ""
+        server.save(update_fields=["needs_reauth", "last_sync_error"])
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to clear needs_reauth for %s: %s", server.server_slug, exc)
+
+
+def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
     """Discover tools from an MCP server via the gateway's internal endpoint.
 
     Works for stdio, websocket, and streamable-http servers. The gateway
     routes the JSON-RPC tools/list call to the appropriate adapter or
     directly to the upstream MCP server.
+
+    Returns ``(tools, error)``. ``error`` is ``None`` on success or a short
+    human-readable string on failure. Previously this swallowed every
+    failure and returned ``[]``, which surfaced to the operator as a
+    misleading ``synced: 0`` with no cause -- the single biggest reason
+    the MCP sync feature appeared silently broken.
     """
     gateway_url = (
         (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
@@ -173,17 +299,35 @@ def _discover_tools_via_gateway(server, org) -> list[dict]:
     internal_key = _gateway_internal_secret()
     if not internal_key:
         logger.warning("Cannot discover tools via gateway: no GATEWAY_INTERNAL_API_KEY configured")
-        return []
+        return [], "Gateway internal key not configured (GATEWAY_INTERNAL_API_KEY)."
 
     payload = {
         "org_slug": org.slug,
         "server_slug": server.server_slug,
+        # Send the authoritative url/transport so the gateway overrides any
+        # stale TTL-cached config (fixes edit-then-resync using the old URL).
+        "url": server.url or "",
+        "transport": server.transport or "streamable-http",
     }
 
     # Pass auth credentials for upstream HTTP servers
     if server.transport in ("streamable-http", "sse") and hasattr(server, "auth_type"):
         auth_type = getattr(server, "auth_type", "none") or "none"
-        if auth_type != "none":
+        if auth_type == "oauth":
+            # Refresh if needed, then forward the OAuth access token as a
+            # normal bearer so the gateway needs no OAuth awareness. Only
+            # forward when the token is usable; an expired/unrefreshable token
+            # is rejected upstream as opaque ``invalid_token``, so instead we
+            # short-circuit with an actionable re-auth error.
+            if _ensure_oauth_token_fresh(server) and server.auth_token:
+                payload["auth_type"] = "bearer"
+                payload["auth_token"] = server.auth_token
+            else:
+                return [], (
+                    f"{server.server_slug} needs re-authentication — "
+                    "the OAuth token expired and could not be refreshed."
+                )
+        elif auth_type != "none":
             payload["auth_type"] = auth_type
             for field in ("auth_token", "auth_username", "auth_password",
                           "auth_header_key", "auth_header_value"):
@@ -199,7 +343,7 @@ def _discover_tools_via_gateway(server, org) -> list[dict]:
                 "Content-Type": "application/json",
                 "X-Gateway-Internal-Key": internal_key,
             },
-            timeout=45,
+            timeout=_DISCOVER_HTTP_TIMEOUT,
         )
         if resp.status_code != 200:
             logger.warning(
@@ -207,10 +351,16 @@ def _discover_tools_via_gateway(server, org) -> list[dict]:
                 resp.status_code, org.slug, server.server_slug,
                 resp.text[:500],
             )
-            return []
+            return [], f"Gateway returned HTTP {resp.status_code}: {resp.text[:200]}"
 
         data = resp.json()
         # JSON-RPC response: {"jsonrpc":"2.0","id":1,"result":{"tools":[...]}}
+        # A JSON-RPC error object means the upstream MCP rejected the call
+        # (e.g. auth failure) -- surface it rather than reporting 0 tools.
+        if isinstance(data, dict) and data.get("error"):
+            err = data["error"]
+            msg = err.get("message") if isinstance(err, dict) else str(err)
+            return [], f"Upstream MCP error: {msg}"
         result = data.get("result", {})
         tools = result.get("tools", [])
         if isinstance(tools, list):
@@ -218,22 +368,99 @@ def _discover_tools_via_gateway(server, org) -> list[dict]:
                 "Gateway discover-tools found %d tools for %s/%s",
                 len(tools), org.slug, server.server_slug,
             )
-            return tools
-        return []
+            return tools, None
+        return [], "Malformed tools/list response from gateway."
     except Exception as exc:
         logger.warning(
             "Gateway discover-tools failed for %s/%s: %s",
             org.slug, server.server_slug, exc,
         )
-        return []
+        return [], f"Discovery request failed: {exc}"
+
+
+def _resync_server_tools(server, org) -> dict:
+    """Discover tools via the gateway and persist them for *server*.
+
+    Shared by the API re-sync view (:class:`MCPServerToolListView`) and the
+    ``resync_mcp_servers`` management command so both paths handle pruning,
+    connection status, and ``last_sync_error`` identically. Returns a summary
+    dict ``{synced, pruned, error, connection_status}``.
+    """
+    server_tool_names: set[str] = set()
+    gateway_tools, sync_error = _discover_tools_via_gateway(server, org)
+    for tool in gateway_tools:
+        tname = tool.get("name", "")
+        if tname:
+            server_tool_names.add(tname)
+            MCPToolRegistration.objects.update_or_create(
+                server=server,
+                tool_name=tname,
+                defaults={
+                    "description": tool.get("description", ""),
+                    "input_schema": tool.get("inputSchema", {}),
+                    "organization": org,
+                    "last_seen_at": timezone.now(),
+                },
+            )
+    # Prune tools the upstream no longer advertises -- ONLY on success, so a
+    # transient upstream/auth failure does not wipe the operator's view.
+    pruned = 0
+    if sync_error is None:
+        stale = MCPToolRegistration.objects.filter(server=server).exclude(
+            tool_name__in=server_tool_names
+        )
+        pruned = stale.count()
+        stale.delete()
+    server.tools_count = MCPToolRegistration.objects.filter(server=server).count()
+    server.last_sync_at = timezone.now()
+    server.connection_status = "connected" if (sync_error is None) else "failed"
+    update_fields = ["tools_count", "last_sync_at", "connection_status", "updated_at"]
+    if hasattr(server, "last_sync_error"):
+        server.last_sync_error = sync_error or ""
+        update_fields.append("last_sync_error")
+    # Map an interactive-auth / BYOK-OAuth failure (e.g. a stdio `mcp-remote`
+    # server whose headless OAuth login the gateway detected and short-circuited)
+    # to an actionable ``needs_reauth`` badge instead of a generic "failed", so
+    # the operator sees "re-authenticate" rather than an opaque error. Cleared
+    # on success or any non-auth failure.
+    if hasattr(server, "needs_reauth"):
+        _err_l = (sync_error or "").lower()
+        server.needs_reauth = sync_error is not None and any(
+            h in _err_l
+            for h in (
+                "interactive authentication",
+                "requires re-authentication",
+                "re-authentication",
+                "re-authenticate",
+                "byok / oauth",
+                "needs_reauth",
+                # Bearer-token BYOK failures: an invalid/expired token the
+                # client supplied at runtime — actionable as "provide valid
+                # credentials" rather than an opaque generic failure.
+                "invalid_token",
+                "invalid token",
+                "unauthorized",
+            )
+        )
+        update_fields.append("needs_reauth")
+    if hasattr(server, "last_sync_attempt_at"):
+        server.last_sync_attempt_at = timezone.now()
+        update_fields.append("last_sync_attempt_at")
+    server.save(update_fields=update_fields)
+    return {
+        "synced": len(server_tool_names),
+        "pruned": pruned,
+        "error": sync_error,
+        "connection_status": server.connection_status,
+    }
 
 
 def _call_tool_via_gateway(server, org, tool_name: str, arguments: dict) -> dict:
     """Execute a tool through the gateway's internal MCP route.
 
-    This is used for servers that do not execute through ContextForge
-    discovery/execution, such as stdio/websocket registrations and any
-    gateway-managed MCP server without a ContextForge server id.
+    This is used for all MCP server transports (stdio, websocket,
+    streamable-http, sse). The gateway proxies directly to the upstream
+    URL (or spawns the stdio process) and enforces policy in-band.
     """
     gateway_url = (
         (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
@@ -251,11 +478,23 @@ def _call_tool_via_gateway(server, org, tool_name: str, arguments: dict) -> dict
         "server_slug": server.server_slug,
         "tool_name": tool_name,
         "arguments": arguments or {},
+        # Authoritative url/transport so the gateway overrides stale cached config.
+        "url": server.url or "",
+        "transport": server.transport or "streamable-http",
     }
 
     if server.transport in ("streamable-http", "sse") and hasattr(server, "auth_type"):
         auth_type = getattr(server, "auth_type", "none") or "none"
-        if auth_type != "none":
+        if auth_type == "oauth":
+            if _ensure_oauth_token_fresh(server) and server.auth_token:
+                payload["auth_type"] = "bearer"
+                payload["auth_token"] = server.auth_token
+            else:
+                raise requests.RequestException(
+                    f"{server.server_slug} needs re-authentication — "
+                    "the OAuth token expired and could not be refreshed."
+                )
+        elif auth_type != "none":
             payload["auth_type"] = auth_type
             for field in (
                 "auth_token",
@@ -304,32 +543,34 @@ def _call_tool_via_gateway(server, org, tool_name: str, arguments: dict) -> dict
 
 
 class MCPServicesHealthView(APIView):
-    """Health status of ContextForge, Secure-MCP-Gateway, and MCP-Firewall."""
+    """Health status of Secure-MCP-Gateway and MCP-Firewall.
+
+    ContextForge has been removed (DECISION-D Phase 0); the gateway proxies
+    streamable-http/sse directly to upstream URLs and spawns stdio processes
+    via the local adapter, so there is no upstream registry to probe.
+    """
 
     permission_classes = [IsAuthenticatedOrGatewayInternal]
 
+    # Detectors enforced in-band by the policy engine on every tool call.
+    # Enkrypt-only detectors (hallucination/toxicity) were never enforced on
+    # the hot path and have been removed to end the policy/guardrail duality.
     _BUILTIN_DETECTORS = [
         "pii_redaction", "injection_attack", "sensitive_data",
         "profanity", "topic_restriction",
         "policy_violation", "pii_leakage", "data_exfiltration",
     ]
-    _ENKRYPT_ONLY_DETECTORS = ["hallucination", "toxicity"]
 
     def get(self, request):
-        enkrypt_configured = secure_gateway_client.is_configured()
         return Response(
             {
-                "contextforge": contextforge_client.health(),
-                "secure_mcp_gateway": secure_gateway_client.health(),
                 "mcp_firewall": mcp_firewall_client.health(),
-                "enkrypt_configured": enkrypt_configured,
                 "builtin_detectors": self._BUILTIN_DETECTORS,
-                "enkrypt_only_detectors": self._ENKRYPT_ONLY_DETECTORS,
             }
         )
 
 
-# ── MCP Servers (via ContextForge) ───────────────────────────────────
+# ── MCP Servers ───────────────────────────────────────────────────
 
 
 class MCPServerListCreateView(APIView):
@@ -356,102 +597,37 @@ class MCPServerListCreateView(APIView):
         transport = (serializer.validated_data.get("transport") or "").strip().lower()
         local_data = MCPServerCreateSerializer.local_model_data(serializer.validated_data)
 
-        # stdio / websocket — register locally only (no ContextForge)
-        if transport in ("stdio", "websocket"):
-            try:
-                registration, created = MCPServerRegistration.objects.get_or_create(
-                    organization=org,
-                    name=local_data["name"],
-                    defaults={
-                        **{k: v for k, v in local_data.items() if k != "name"},
-                        "contextforge_server_id": "",
-                    },
-                )
-            except IntegrityError:
-                return Response(
-                    {"error": "An MCP server with this name already exists in your organization."},
-                    status=status.HTTP_409_CONFLICT,
-                )
-            if not created:
-                return Response(
-                    {
-                        "error": "An MCP server with this name already exists in your organization.",
-                        "existing_server": MCPServerRegistrationSerializer(registration).data,
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
-            logger.info(
-                "mcp_connector.server.registered_local org_id=%s user_id=%s server=%s transport=%s",
-                org.id,
-                request.user.id,
-                registration.name,
-                transport,
+        # DECISION-D Phase 0: ContextForge removed. All transports register
+        # locally; the gateway proxies streamable-http/sse directly to the
+        # upstream URL and spawns stdio processes via mcp_stdio_adapter.
+        # Policy enforcement (G7 redaction, G8 scope, tool toggles, compliance
+        # tagging) runs in-band on every tool call regardless of transport.
+        try:
+            registration, created = MCPServerRegistration.objects.get_or_create(
+                organization=org,
+                name=local_data["name"],
+                defaults={k: v for k, v in local_data.items() if k != "name"},
             )
-        else:
-            # Register with ContextForge for streamable-http / sse
-            cf_payload = {
-                **MCPServerCreateSerializer.contextforge_data(serializer.validated_data),
-            }
-            try:
-                cf_result = contextforge_client.register_server(cf_payload)
-            except ValueError as exc:
-                logger.warning("ContextForge payload validation failed: %s", exc)
-                return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-            except requests.RequestException as exc:
-                response = getattr(exc, "response", None)
-                if response is not None and response.status_code == 409:
-                    existing = contextforge_client.resolve_existing_server(cf_payload)
-                    if existing:
-                        cf_result = existing
-                        logger.info(
-                            "mcp_connector.server.reused org_id=%s user_id=%s server=%s contextforge_id=%s",
-                            org.id,
-                            request.user.id if getattr(request, "user", None) else None,
-                            serializer.validated_data.get("name", ""),
-                            existing.get("id", ""),
-                        )
-                    else:
-                        logger.error("ContextForge duplicate conflict but no matching gateway resolved: %s", exc)
-                        return Response(
-                            {"error": "Failed to register MCP server", "detail": _upstream_error_detail(exc)},
-                            status=status.HTTP_502_BAD_GATEWAY,
-                        )
-                else:
-                    logger.error("ContextForge registration failed: %s", exc)
-                    return Response(
-                        {"error": "Failed to register MCP server", "detail": _upstream_error_detail(exc)},
-                        status=status.HTTP_502_BAD_GATEWAY,
-                    )
-
-            try:
-                registration, created = MCPServerRegistration.objects.get_or_create(
-                    organization=org,
-                    name=local_data["name"],
-                    defaults={
-                        **{k: v for k, v in local_data.items() if k != "name"},
-                        "contextforge_server_id": cf_result.get("id", cf_result.get("server_id", "")),
-                    },
-                )
-            except IntegrityError:
-                return Response(
-                    {"error": "An MCP server with this name already exists in your organization."},
-                    status=status.HTTP_409_CONFLICT,
-                )
-            if not created:
-                return Response(
-                    {
-                        "error": "An MCP server with this name already exists in your organization.",
-                        "existing_server": MCPServerRegistrationSerializer(registration).data,
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
-            logger.info(
-                "mcp_connector.server.registered org_id=%s user_id=%s server=%s contextforge_id=%s",
-                org.id,
-                request.user.id,
-                registration.name,
-                registration.contextforge_server_id,
+        except IntegrityError:
+            return Response(
+                {"error": "An MCP server with this name already exists in your organization."},
+                status=status.HTTP_409_CONFLICT,
             )
+        if not created:
+            return Response(
+                {
+                    "error": "An MCP server with this name already exists in your organization.",
+                    "existing_server": MCPServerRegistrationSerializer(registration).data,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        logger.info(
+            "mcp_connector.server.registered org_id=%s user_id=%s server=%s transport=%s",
+            org.id,
+            request.user.id,
+            registration.name,
+            transport,
+        )
 
         # ── Auto-provision a default MCP gateway key for this org ──
         gw_key_info = {}
@@ -513,18 +689,9 @@ class MCPServerDetailView(APIView):
         serializer = MCPServerCreateSerializer(reg, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
-        # Update ContextForge if the server was registered there
-        if reg.contextforge_server_id:
-            try:
-                contextforge_client.update_server(
-                    reg.contextforge_server_id,
-                    MCPServerCreateSerializer.contextforge_data(serializer.validated_data),
-                )
-            except ValueError as exc:
-                return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-            except requests.RequestException as exc:
-                logger.warning("ContextForge update failed: %s", exc)
-
+        # DECISION-D Phase 0: no upstream registry to update; server config is
+        # the single source of truth and the gateway re-reads it via the
+        # `_get_server_config` Redis cache (TTL 120s) on next tool call.
         local_data = MCPServerCreateSerializer.local_model_data(serializer.validated_data)
         for field, value in local_data.items():
             setattr(reg, field, value)
@@ -538,25 +705,17 @@ class MCPServerDetailView(APIView):
         except MCPServerRegistration.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Delete from ContextForge
-        if reg.contextforge_server_id:
-            try:
-                contextforge_client.delete_server(reg.contextforge_server_id)
-            except requests.RequestException as exc:
-                logger.warning("ContextForge delete failed (continuing local delete): %s", exc)
-
         logger.info(
-            "mcp_connector.server.deleted org_id=%s user_id=%s server=%s contextforge_id=%s",
+            "mcp_connector.server.deleted org_id=%s user_id=%s server=%s",
             getattr(org, "id", None),
             request.user.id,
             reg.name,
-            reg.contextforge_server_id,
         )
         reg.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-# ── Tool Discovery (via ContextForge) ────────────────────────────────
+# ── Tool Discovery ──────────────────────────────────────────────────────
 
 
 class MCPToolListView(APIView):
@@ -577,89 +736,30 @@ class MCPToolListView(APIView):
                     {"error": "Server not found for this organization."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
-            allowed_server_names = {target_server.name}
-            allowed_contextforge_ids = {
-                target_server.contextforge_server_id
-            } if target_server.contextforge_server_id else set()
-        else:
-            allowed_server_names = {
-                name.strip()
-                for name in registrations.values_list("name", flat=True)
-                if isinstance(name, str) and name.strip()
-            }
-            allowed_contextforge_ids = {
-                sid.strip()
-                for sid in registrations.values_list("contextforge_server_id", flat=True)
-                if isinstance(sid, str) and sid.strip()
-            }
+            registrations = registrations.filter(server_slug=server_slug_hint)
 
-        try:
-            tools = contextforge_client.list_tools()
-        except requests.RequestException as exc:
-            return Response(
-                {"error": "Failed to fetch tools from ContextForge", "detail": _upstream_error_detail(exc)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-        # Strict org-scoped filtering: if the org has no registered servers,
-        # return no tools (prevents cross-tenant data leakage).
-        if isinstance(tools, list):
-            if not allowed_server_names and not allowed_contextforge_ids:
-                tools = []
-            else:
-                filtered_tools = []
-                for tool in tools:
-                    if not isinstance(tool, dict):
-                        continue
-                    server_name = (
-                        tool.get("server_name")
-                        or tool.get("server")
-                        or tool.get("gateway_name")
-                        or tool.get("gateway")
-                    )
-                    server_id = (
-                        tool.get("server_id")
-                        or tool.get("serverId")
-                        or tool.get("gateway_id")
-                        or tool.get("gatewayId")
-                    )
-                    if server_name in allowed_server_names or server_id in allowed_contextforge_ids:
-                        filtered_tools.append(tool)
-                tools = filtered_tools
-
-        # ── Include locally-registered tools for non-ContextForge servers ──
-        # stdio/websocket MCP servers are spawned directly by the gateway and
-        # never appear in ContextForge. Their tools live in MCPToolRegistration
-        # (populated on Sync via gateway introspection). Without this merge,
-        # the Tool Discovery tab would only show ContextForge-backed servers
-        # (e.g. Context7) and silently hide stdio tools.
-        if not isinstance(tools, list):
-            tools = []
-        seen_keys = {(t.get("server_name") or "", t.get("name") or "") for t in tools if isinstance(t, dict)}
-        local_servers_qs = registrations.filter(
-            Q(contextforge_server_id__isnull=True) | Q(contextforge_server_id="")
-        )
-        if server_slug_hint:
-            local_servers_qs = local_servers_qs.filter(server_slug=server_slug_hint)
-        local_tool_qs = MCPToolRegistration.objects.filter(
+        # Source tools from local inventory. Inventory is updated via the
+        # per-server sync endpoint which calls the gateway's
+        # /v1/mcp/internal/discover-tools route for every transport.       
+        tools = []
+        tool_qs = MCPToolRegistration.objects.filter(
             organization=org,
-            server__in=local_servers_qs,
+            server__in=registrations,
         ).select_related("server")
-        for tr in local_tool_qs:
-            key = (tr.server.name, tr.tool_name)
-            if key in seen_keys:
-                continue
-            seen_keys.add(key)
-            tools.append({
-                "name": tr.tool_name,
-                "description": tr.description or "",
-                "inputSchema": tr.input_schema or {},
-                "server_name": tr.server.name,
-                "server_id": str(tr.server.id),
-                "server_slug": tr.server.server_slug,
-                "transport": tr.server.transport,
-                "enabled": tr.enabled,
-                "source": "registration",
-            })
+        for tr in tool_qs:
+            tools.append(
+                {
+                    "name": tr.tool_name,
+                    "description": tr.description or "",
+                    "inputSchema": tr.input_schema or {},
+                    "server_name": tr.server.name,
+                    "server_id": str(tr.server.id),
+                    "server_slug": tr.server.server_slug,
+                    "transport": tr.server.transport,
+                    "enabled": tr.enabled,
+                    "source": "registration",
+                }
+            )
 
         logger.info(
             "mcp_connector.tools.listed org_id=%s user_id=%s tool_count=%s",
@@ -759,18 +859,48 @@ class MCPToolCallView(APIView):
         # ── PRE-FLIGHT: Built-in policy engine check (org+server scoped) ──
         from policy.engine import evaluate as policy_evaluate
         from policy.models import Policy as PolicyModel
+        from policy.redaction import apply_field_redaction, redact_structured
         from django.db.models import Q
+        from urllib.parse import unquote as _unquote
+
+        # ── G8: extract actor identifiers for per-user/agent/role policy
+        # scoping. user_id is JWT-authenticated (or trusted gateway
+        # header); agent_id is the API key prefix (8 chars, identity of
+        # the calling key); roles come from the gateway's signed Redis
+        # auth payload, forwarded as a comma-separated URL-quoted header.
+        # All three feed BOTH the policy queryset filter AND the engine
+        # context so rule conditions can also reference them.
+        agent_id = (request.headers.get("X-Gateway-Key-Prefix", "") or "").strip()
+        raw_roles_header = request.headers.get("X-Gateway-Roles", "") or ""
+        actor_roles: list[str] = []
+        if raw_roles_header:
+            for chunk in raw_roles_header.split(","):
+                chunk = chunk.strip()
+                if not chunk:
+                    continue
+                try:
+                    actor_roles.append(_unquote(chunk))
+                except Exception:
+                    actor_roles.append(chunk)
 
         arg_text = " ".join(str(v) for v in arguments.values()) if arguments else ""
         policy_context = {
             "prompt": f"tool:{tool_name} {arg_text}",
             "response": "",
+            # Structured tool arguments so scope='key' input rules can target
+            # a single argument by name (engine reads context["input_args"]).
+            "input_args": arguments or {},
+            "user_id": actor_user_id,
+            "agent_id": agent_id,
+            "roles": actor_roles,
         }
-        # Get policies: org-specific MCP + system-wide MCP (org=None) + server-specific
-        # System-wide policies have organization=None and apply to all orgs
+        # Get policies: org-specific + system-wide (org=None), in the MCP
+        # domain PLUS the universal 'global' baseline. Global policies apply
+        # everywhere; severity (ACTION_ORDER) resolves any overlap with MCP
+        # rules and redaction hints are unioned, so the two never conflict.
         policy_qs = PolicyModel.objects.filter(
             enabled=True,
-            policy_domain="mcp",
+            policy_domain__in=["mcp", "global"],
         ).filter(
             Q(organization=org) | Q(organization__isnull=True)
         ).prefetch_related("rules")
@@ -778,6 +908,51 @@ class MCPToolCallView(APIView):
             policy_qs = policy_qs.filter(
                 Q(mcp_server__isnull=True) | Q(mcp_server=resolved_server)
             )
+        # ── G8: actor allowlist filters. Each dimension uses
+        # "empty list = wildcard" semantics (existing rows after
+        # migration 0029 default to []). ``__isnull=True`` is included
+        # defensively in case any row predates the migration and was
+        # not backfilled. ``__contains=[v]`` is the correct ArrayField
+        # containment operator (Django 6 + Postgres array @>); we use
+        # ``__overlap`` for roles since a user may have multiple roles
+        # and we want match if ANY user role intersects the allowlist.
+        if actor_user_id is not None:
+            policy_qs = policy_qs.filter(
+                Q(allowed_user_ids__isnull=True)
+                | Q(allowed_user_ids=[])
+                | Q(allowed_user_ids__contains=[actor_user_id])
+            )
+        else:
+            # Anonymous/unauthenticated: only policies with empty
+            # allowlist (wildcard) may apply.
+            policy_qs = policy_qs.filter(
+                Q(allowed_user_ids__isnull=True) | Q(allowed_user_ids=[])
+            )
+        if agent_id:
+            policy_qs = policy_qs.filter(
+                Q(allowed_agent_ids__isnull=True)
+                | Q(allowed_agent_ids=[])
+                | Q(allowed_agent_ids__contains=[agent_id])
+            )
+        else:
+            policy_qs = policy_qs.filter(
+                Q(allowed_agent_ids__isnull=True) | Q(allowed_agent_ids=[])
+            )
+        if actor_roles:
+            policy_qs = policy_qs.filter(
+                Q(allowed_roles__isnull=True)
+                | Q(allowed_roles=[])
+                | Q(allowed_roles__overlap=actor_roles)
+            )
+        else:
+            policy_qs = policy_qs.filter(
+                Q(allowed_roles__isnull=True) | Q(allowed_roles=[])
+            )
+        # Materialization is deferred until AFTER ``policy_evaluate``
+        # because the engine calls ``.filter(policy_domain=...)`` on the
+        # queryset and would crash on a list. We re-query by id below
+        # to collect each matched policy's ``redaction_fields`` for
+        # post-call response scrubbing (G7).
         eval_result = policy_evaluate(policy_context, policies_qs=policy_qs, domain="mcp", tool_name=tool_name)
         if eval_result.action == "block":
             _record_event(
@@ -807,6 +982,25 @@ class MCPToolCallView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        # ── INPUT redaction: scrub sensitive data OUT of the tool arguments
+        # BEFORE they are forwarded to the gateway/tool. Driven by redact
+        # rules whose direction includes the input side (input|both). This
+        # prevents secrets in the prompt from ever reaching the downstream
+        # tool. ``arguments`` is replaced with a redacted copy used for the
+        # actual call; the original is not mutated.
+        if eval_result.action != "block" and eval_result.redaction_hints:
+            try:
+                redacted_args = redact_structured(
+                    arguments or {}, eval_result.redaction_hints, "input"
+                )
+                if isinstance(redacted_args, dict):
+                    arguments = redacted_args
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "mcp_connector.tool.input_redaction_failed org=%s tool=%s err=%s",
+                    org.id, tool_name, exc,
+                )
 
         # ── PRE-FLIGHT: MCP-Firewall policy check (external, best-effort) ──
         policy_result = mcp_firewall_client.preflight_check(
@@ -841,33 +1035,22 @@ class MCPToolCallView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # ── EXECUTE: via ContextForge ──
+        # ── EXECUTE: always via gateway (DECISION-D Phase 0) ──
         try:
-            use_gateway_execution = bool(
-                resolved_server
-                and (
-                    (resolved_server.transport or "").strip().lower() in {"stdio", "websocket"}
-                    or not (resolved_server.contextforge_server_id or "").strip()
+            if not resolved_server:
+                return Response(
+                    {"error": "Tool call failed", "detail": "No server resolved for tool", "request_id": request_id},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
+            logger.info(
+                "mcp_connector.tool.gateway_execution org_id=%s user_id=%s tool=%s server=%s transport=%s",
+                org.id,
+                actor_user_id,
+                tool_name,
+                resolved_server.server_slug,
+                (resolved_server.transport or "").strip().lower(),
             )
-
-            if use_gateway_execution:
-                logger.info(
-                    "mcp_connector.tool.gateway_execution org_id=%s user_id=%s tool=%s server=%s transport=%s",
-                    org.id,
-                    actor_user_id,
-                    tool_name,
-                    resolved_server.server_slug if resolved_server else "",
-                    (resolved_server.transport or "").strip().lower() if resolved_server else "",
-                )
-                result = _call_tool_via_gateway(resolved_server, org, tool_name, arguments)
-            else:
-                result = contextforge_client.call_tool(
-                    tool_name,
-                    arguments,
-                    server_id=resolved_server.contextforge_server_id if resolved_server else "",
-                    server_name=resolved_server.name if resolved_server else "",
-                )
+            result = _call_tool_via_gateway(resolved_server, org, tool_name, arguments)
         except requests.RequestException as exc:
             latency_ms = int((time.time() - t0) * 1000)
             mcp_firewall_client.postflight_audit(
@@ -893,6 +1076,118 @@ class MCPToolCallView(APIView):
 
         latency_ms = int((time.time() - t0) * 1000)
 
+        # ── OUTPUT evaluation: re-run the SAME policy set against the tool
+        # RESPONSE so rules whose direction targets the output side can act
+        # on returned data. Pre-call evaluation saw an empty response, so
+        # output rules could not have matched yet. We populate both a
+        # serialized ``response`` string (entire-scope rules) and the raw
+        # ``output_data`` dict (scope='key' rules).
+        try:
+            output_context = {
+                "prompt": "",
+                "response": json.dumps(result, ensure_ascii=False, default=str)
+                if not isinstance(result, str)
+                else result,
+                "output_data": result,
+                "user_id": actor_user_id,
+                "agent_id": agent_id,
+                "roles": actor_roles,
+            }
+            eval_out = policy_evaluate(
+                output_context, policies_qs=policy_qs, domain="mcp", tool_name=tool_name
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "mcp_connector.tool.output_eval_failed org=%s tool=%s err=%s",
+                org.id, tool_name, exc,
+            )
+            eval_out = None
+
+        # Output BLOCK: a rule decided the RESPONSE must not leave. The tool
+        # already executed, but we refuse to return its data to the caller.
+        if eval_out is not None and eval_out.action == "block":
+            _record_event(
+                org=org, request=request, tool_name=tool_name,
+                decision="block",
+                reason=eval_out.message or "blocked_by_output_policy",
+                policy_ids=eval_out.matched_policy_ids,
+                request_id=request_id, latency_ms=latency_ms,
+                server_name=resolved_server.name if resolved_server else "",
+                server_slug=resolved_server.server_slug if resolved_server else "",
+                metadata={
+                    "matched_policy_codes": list(eval_out.matched_policy_codes or []),
+                    "matched_rule_names": list(eval_out.matched_rule_names or []),
+                    "stage": "output",
+                },
+            )
+            logger.warning(
+                "mcp_connector.tool.output_blocked org=%s user=%s tool=%s policies=%s",
+                org.id, actor_user_id, tool_name, eval_out.matched_policy_codes,
+            )
+            return Response(
+                {
+                    "error": "Tool response blocked by policy",
+                    "reason": eval_out.message,
+                    "matched_policies": eval_out.matched_policy_codes,
+                    "matched_rules": eval_out.matched_rule_names,
+                    "request_id": request_id,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Output REDACTION: scrub the response via output-direction redact
+        # rules (regex/keyword for entire-scope, key replacement for
+        # scope='key'). Union of both input/both/output hints handled inside.
+        if eval_out is not None and eval_out.redaction_hints:
+            try:
+                result = redact_structured(result, eval_out.redaction_hints, "output")
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "mcp_connector.tool.output_redaction_failed org=%s tool=%s err=%s",
+                    org.id, tool_name, exc,
+                )
+
+        # Merge output-stage matches into the aggregate result used for
+        # event logging / G7 field-union below.
+        if eval_out is not None:
+            eval_result.matched_policy_ids = list(
+                dict.fromkeys(eval_result.matched_policy_ids + eval_out.matched_policy_ids)
+            )
+            eval_result.matched_policy_codes = list(
+                dict.fromkeys(eval_result.matched_policy_codes + eval_out.matched_policy_codes)
+            )
+            eval_result.matched_rule_names = list(
+                dict.fromkeys(eval_result.matched_rule_names + eval_out.matched_rule_names)
+            )
+
+        # ── G7: response-field redaction. Union of ``redaction_fields``
+        # from every matched policy is applied recursively to the tool
+        # result. The trigger condition (per adopted decision D6) is
+        # simply "policy matched AND has non-empty redaction_fields" —
+        # we deliberately do NOT gate on ``eval_result.action == 'redact'``
+        # because field redaction is an output-shaping concern that is
+        # orthogonal to the block/allow/redact verdict. If no matched
+        # policy lists any fields, this is a no-op and ``result`` flows
+        # through unchanged.
+        redacted_field_names: list[str] = []
+        if eval_result.matched_policy_ids:
+            try:
+                from policy.models import Policy as _PolicyModel
+                fields_union: set[str] = set()
+                for fields in _PolicyModel.objects.filter(
+                    id__in=list(eval_result.matched_policy_ids),
+                ).values_list("redaction_fields", flat=True):
+                    if fields:
+                        fields_union.update(f for f in fields if isinstance(f, str) and f)
+                if fields_union:
+                    redacted_field_names = sorted(fields_union)
+                    result = apply_field_redaction(result, redacted_field_names)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "mcp_connector.tool.field_redaction_failed org=%s tool=%s err=%s",
+                    org.id, tool_name, exc,
+                )
+
         # ── POST-FLIGHT: audit record ──
         mcp_firewall_client.postflight_audit(
             tool_name, org_id=str(org.id), user_id=str(actor_user_id or ""),
@@ -904,176 +1199,21 @@ class MCPToolCallView(APIView):
             decision="allow", request_id=request_id, latency_ms=latency_ms,
             server_name=resolved_server.name if resolved_server else "",
             server_slug=resolved_server.server_slug if resolved_server else "",
+            policy_ids=eval_result.matched_policy_ids,
+            metadata={
+                "matched_policy_codes": list(eval_result.matched_policy_codes or []),
+                "matched_rule_names": list(eval_result.matched_rule_names or []),
+                "redacted_field_names": redacted_field_names,
+                "actor_agent_id": agent_id,
+                "actor_roles": actor_roles,
+            },
         )
 
         logger.info(
-            "mcp_connector.tool.called org_id=%s user_id=%s tool=%s success=true latency_ms=%s",
-            org.id, actor_user_id, tool_name, latency_ms,
+            "mcp_connector.tool.called org_id=%s user_id=%s agent=%s tool=%s success=true latency_ms=%s redacted_fields=%s",
+            org.id, actor_user_id, agent_id, tool_name, latency_ms, redacted_field_names,
         )
         return Response({"result": result, "request_id": request_id, "decision": "allow"})
-
-
-# ── Guardrail Profiles ──────────────────────────────────────────────
-
-
-class GuardrailProfileListCreateView(APIView):
-    """List or create guardrail profiles (org-scoped)."""
-
-    permission_classes = [IsAuthenticatedOrGatewayInternal]
-
-    def get(self, request):
-        org = _request_org(request)
-        if org is None:
-            return Response(
-                {"error": "No organization context for this user."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        profiles = GuardrailProfile.objects.filter(organization=org)
-        return Response(GuardrailProfileSerializer(profiles, many=True).data)
-
-    def post(self, request):
-        org = _request_org(request)
-        if org is None:
-            return Response(
-                {"error": "No organization context for this user."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        serializer = GuardrailProfileSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(organization=org)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-
-class GuardrailProfileDetailView(APIView):
-    """Retrieve, update, or delete a guardrail profile (org-scoped)."""
-
-    permission_classes = [IsAuthenticatedOrGatewayInternal]
-
-    def _get_profile(self, request, pk):
-        org = _request_org(request)
-        if org is None:
-            return None, Response(
-                {"error": "No organization context for this user."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            return GuardrailProfile.objects.get(pk=pk, organization=org), None
-        except GuardrailProfile.DoesNotExist:
-            return None, Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
-
-    def get(self, request, pk):
-        profile, err = self._get_profile(request, pk)
-        if err:
-            return err
-        return Response(GuardrailProfileSerializer(profile).data)
-
-    def put(self, request, pk):
-        profile, err = self._get_profile(request, pk)
-        if err:
-            return err
-        serializer = GuardrailProfileSerializer(profile, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
-    def delete(self, request, pk):
-        profile, err = self._get_profile(request, pk)
-        if err:
-            return err
-        profile.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class ApplyGuardrailView(APIView):
-    """Apply a guardrail profile to an MCP server in Secure-MCP-Gateway.
-
-    When the Enkrypt gateway is not configured (no API key), the profile
-    is saved locally and built-in pattern detectors are used.  External
-    scanning via Enkrypt is only attempted when the key is present.
-    """
-
-    permission_classes = [IsAuthenticatedOrGatewayInternal]
-
-    # Detectors that work without Enkrypt API (regex / keyword patterns)
-    _BUILTIN_DETECTORS = {
-        "pii_redaction", "injection_attack", "sensitive_data",
-        "profanity", "topic_restriction",
-        "policy_violation", "pii_leakage", "data_exfiltration",
-    }
-
-    def post(self, request):
-        profile_id = request.data.get("profile_id")
-        config_id = request.data.get("config_id")
-        server_name = request.data.get("server_name")
-
-        if not all([profile_id, config_id, server_name]):
-            return Response(
-                {"error": "Required: profile_id, config_id, server_name"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            profile = GuardrailProfile.objects.get(pk=profile_id)
-        except GuardrailProfile.DoesNotExist:
-            return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        guardrails_payload = {}
-        if profile.input_policy:
-            guardrails_payload["input_policy"] = profile.input_policy
-        if profile.output_policy:
-            guardrails_payload["output_policy"] = profile.output_policy
-
-        if not secure_gateway_client.is_configured():
-            return Response({
-                "message": "Guardrail profile saved locally. Built-in pattern detectors active. "
-                           "Set SECURE_MCP_GATEWAY_ADMIN_KEY to enable Enkrypt AI scanning.",
-                "mode": "builtin",
-                "builtin_detectors": sorted(self._BUILTIN_DETECTORS),
-            })
-
-        try:
-            result = secure_gateway_client.update_server_guardrails(config_id, server_name, guardrails_payload)
-        except requests.RequestException as exc:
-            return Response({
-                "warning": "Enkrypt gateway unreachable — falling back to built-in detectors.",
-                "mode": "builtin_fallback",
-                "detail": str(exc),
-                "builtin_detectors": sorted(self._BUILTIN_DETECTORS),
-            })
-
-        return Response({"message": "Guardrails applied via Enkrypt", "mode": "enkrypt", "result": result})
-
-
-# ── Secure MCP Gateway Config Proxy ─────────────────────────────────
-
-
-class SecureGatewayConfigListView(APIView):
-    """Proxy to Secure-MCP-Gateway config listing."""
-
-    permission_classes = [IsAuthenticatedOrGatewayInternal]
-
-    def get(self, request):
-        try:
-            configs = secure_gateway_client.list_configs()
-        except requests.RequestException as exc:
-            return Response(
-                {"error": "Failed to fetch configs", "detail": str(exc)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-        return Response(configs)
-
-    def post(self, request):
-        config_name = request.data.get("config_name")
-        if not config_name:
-            return Response({"error": "Missing 'config_name'"}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            result = secure_gateway_client.create_config(config_name)
-        except requests.RequestException as exc:
-            return Response(
-                {"error": "Failed to create config", "detail": str(exc)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-        return Response(result, status=status.HTTP_201_CREATED)
 
 
 # ── Helper: Record structured MCP event ──────────────────────────────
@@ -1091,6 +1231,8 @@ def _record_event(
     server_name: str = "",
     server_slug: str = "",
     metadata: dict | None = None,
+    compliance_tags: list | None = None,
+    presidio_findings: list | None = None,
 ):
     """Write a structured MCPEvent record.
 
@@ -1144,6 +1286,8 @@ def _record_event(
             latency_ms=latency_ms,
             request_id=request_id,
             metadata=ev_metadata,
+            compliance_tags=compliance_tags or [],
+            presidio_findings=presidio_findings or [],
         )
 
         # ── Mirror to EnforcementEvent so AI Mesh Firewall dashboard
@@ -1317,7 +1461,12 @@ class MCPServerToolListView(APIView):
         return Response(MCPToolRegistrationSerializer(tools, many=True).data)
 
     def post(self, request, pk):
-        """Sync tools from ContextForge or via direct gateway discovery."""
+        """Sync tools by asking the gateway to discover them on the upstream server.
+
+        DECISION-D Phase 0: a single discovery path — the gateway's
+        /v1/mcp/internal/discover-tools route handles every transport
+        (stdio, websocket, streamable-http, sse) uniformly.
+        """
         registrations, org = _org_scoped_servers_queryset(request)
         if org is None:
             return Response({"error": "No org context"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1328,68 +1477,16 @@ class MCPServerToolListView(APIView):
 
         server_tool_names = set()
 
-        # ── Strategy 1: ContextForge (for servers registered there) ──
-        use_contextforge = bool(server.contextforge_server_id)
-        if use_contextforge:
-            try:
-                all_tools = contextforge_client.list_tools()
-            except requests.RequestException:
-                all_tools = []
-
-            if isinstance(all_tools, list):
-                for tool in all_tools:
-                    if not isinstance(tool, dict):
-                        continue
-                    sname = (
-                        tool.get("server_name") or tool.get("server")
-                        or tool.get("gateway_name") or tool.get("gateway") or ""
-                    )
-                    sid = (
-                        tool.get("server_id") or tool.get("serverId")
-                        or tool.get("gateway_id") or tool.get("gatewayId") or ""
-                    )
-                    if sname == server.name or sid == server.contextforge_server_id:
-                        tname = tool.get("name", "")
-                        if tname:
-                            server_tool_names.add(tname)
-                            MCPToolRegistration.objects.update_or_create(
-                                server=server,
-                                tool_name=tname,
-                                defaults={
-                                    "description": tool.get("description", ""),
-                                    "input_schema": tool.get("inputSchema", {}),
-                                    "organization": org,
-                                    "last_seen_at": timezone.now(),
-                                },
-                            )
-
-        # ── Strategy 2: Direct gateway discovery (stdio, websocket, or CF fallback) ──
-        if not server_tool_names:
-            gateway_tools = _discover_tools_via_gateway(server, org)
-            for tool in gateway_tools:
-                tname = tool.get("name", "")
-                if tname:
-                    server_tool_names.add(tname)
-                    MCPToolRegistration.objects.update_or_create(
-                        server=server,
-                        tool_name=tname,
-                        defaults={
-                            "description": tool.get("description", ""),
-                            "input_schema": tool.get("inputSchema", {}),
-                            "organization": org,
-                            "last_seen_at": timezone.now(),
-                        },
-                    )
-
-        # Update server metadata
-        server.tools_count = len(server_tool_names)
-        server.last_sync_at = timezone.now()
-        server.connection_status = "connected" if server_tool_names else "failed"
-        server.save(update_fields=["tools_count", "last_sync_at", "connection_status", "updated_at"])
+        result = _resync_server_tools(server, org)
+        sync_error = result["error"]
+        pruned = result["pruned"]
 
         tools = MCPToolRegistration.objects.filter(server=server)
         return Response({
-            "synced": len(server_tool_names),
+            "synced": result["synced"],
+            "pruned": pruned,
+            "error": sync_error,
+            "connection_status": server.connection_status,
             "tools": MCPToolRegistrationSerializer(tools, many=True).data,
         })
 
@@ -1419,6 +1516,10 @@ class MCPToolControlView(APIView):
             allowed = [c[0] for c in MCPToolRegistration.SENSITIVITY_CHOICES]
             if request.data["sensitivity"] in allowed:
                 tool.sensitivity = request.data["sensitivity"]
+        if "presidio_action" in request.data:
+            allowed_actions = {"inherit", "tag", "redact", "block"}
+            if request.data["presidio_action"] in allowed_actions:
+                tool.presidio_action = request.data["presidio_action"]
         tool.save()
         return Response(MCPToolRegistrationSerializer(tool).data)
 
@@ -1472,17 +1573,27 @@ class MCPGatewayEnabledToolsView(APIView):
             )
 
         regs = list(MCPToolRegistration.objects.filter(server=server).values(
-            "tool_name", "enabled",
+            "tool_name", "enabled", "presidio_action",
         ))
         known = [r["tool_name"] for r in regs]
         enabled = [r["tool_name"] for r in regs if r["enabled"]]
         disabled = [r["tool_name"] for r in regs if not r["enabled"]]
+        # DECISION-D Phase 1: surface per-tool Presidio action overrides plus the
+        # server-level fallback so the gateway can decide per call without an
+        # extra round-trip. Tools with "inherit" are omitted from tool_actions.
+        tool_actions = {
+            r["tool_name"]: r["presidio_action"]
+            for r in regs
+            if r.get("presidio_action") and r["presidio_action"] != "inherit"
+        }
         return Response({
             "server_slug": server_slug,
             "server_name": server.name,
             "known_tools": known,
             "enabled_tools": enabled,
             "disabled_tools": disabled,
+            "default_presidio_action": server.default_presidio_action,
+            "tool_presidio_actions": tool_actions,
         })
 
 
@@ -1542,8 +1653,55 @@ class MCPGatewayRecordEventView(APIView):
             server_name=server_name,
             server_slug=server_slug,
             metadata=data.get("metadata") or {},
+            compliance_tags=data.get("compliance_tags") or [],
+            presidio_findings=data.get("presidio_findings") or [],
         )
         return Response({"recorded": True}, status=status.HTTP_201_CREATED)
+
+
+class MCPGatewayNeedsReauthView(APIView):
+    """Gateway-internal endpoint to flag an org's MCP server as needing re-auth.
+
+    Closes the Flow-2 backprop gap: for mcp-remote (stdio) servers the gateway
+    holds the OAuth token and the control plane never learned about refresh
+    failures, so an expired token surfaced only as an opaque upstream
+    ``invalid_token``. The gateway now calls this when it cannot inject a
+    usable token, letting control set ``needs_reauth`` and surface an
+    actionable per-org "re-authenticate <server>" signal.
+
+    POST /api/mcp-connector/internal/needs-reauth/
+        Body: {"org_slug": "<slug>", "server_slug": "<slug>", "reason": "<text>"}
+    """
+
+    permission_classes = [IsAuthenticatedOrGatewayInternal]
+
+    def post(self, request):
+        org = _request_org(request)
+        if org is None:
+            return Response(
+                {"error": "No organization context."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data = request.data or {}
+        server_slug = (data.get("server_slug") or "").strip().lower()
+        if not server_slug:
+            return Response(
+                {"error": "server_slug required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        server = MCPServerRegistration.objects.filter(
+            organization=org, server_slug=server_slug,
+        ).first()
+        if server is None:
+            return Response(
+                {"error": "server not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        reason = (data.get("reason") or "").strip() or (
+            "OAuth token expired and refresh failed — re-authenticate this server."
+        )
+        _mark_needs_reauth(server, reason)
+        return Response({"needs_reauth": True}, status=status.HTTP_200_OK)
 
 
 # ── Org Gateway Key Provisioning ─────────────────────────────────────
@@ -1730,3 +1888,217 @@ class MCPEventSummaryView(APIView):
             "top_users": top_users,
             "recent": recent,
         })
+
+
+# ── OAuth 2.1 authorization (Phase C) ────────────────────────────────
+
+
+def _oauth_redirect_uri() -> str:
+    """Browser-reachable callback URI registered with the authorization server.
+
+    Must be a localhost or HTTPS URL per the MCP/OAuth spec. Overridable via
+    env so a production deployment can point at its public control host.
+    """
+    return os.environ.get(
+        "MCP_OAUTH_REDIRECT_URI",
+        "http://localhost:8100/api/mcp-connector/oauth/callback",
+    )
+
+
+def _oauth_frontend_return_url(ok: bool, server_name: str = "", error: str = "") -> str:
+    """Where the callback HTML bounces the browser back to after token exchange."""
+    base = os.environ.get("MCP_OAUTH_FRONTEND_URL", "http://localhost:8180/?tab=firewall-1-4")
+    return base
+
+
+class MCPServerOAuthStartView(APIView):
+    """Begin the OAuth 2.1 authorization-code (PKCE) flow for a server.
+
+    POST /servers/<pk>/oauth/authorize/ → run discovery + dynamic client
+    registration, generate PKCE + state, persist the transient flow state, and
+    return the authorization URL for the operator to open in their browser.
+    """
+
+    permission_classes = [IsAuthenticatedOrGatewayInternal]
+
+    def post(self, request, pk):
+        from . import oauth as oauth_mod
+
+        registrations, org = _org_scoped_servers_queryset(request)
+        if org is None:
+            return Response({"error": "No org context"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            server = registrations.get(pk=pk)
+        except MCPServerRegistration.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not server.url:
+            return Response(
+                {"error": "Server has no URL; OAuth is only for HTTP transports."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        redirect_uri = _oauth_redirect_uri()
+        try:
+            meta = oauth_mod.discover(server.url)
+        except oauth_mod.OAuthDiscoveryError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("OAuth discovery error for %s: %s", server.server_slug, exc)
+            return Response({"error": f"OAuth discovery failed: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+        # Reuse an existing registered client_id when present (idempotent
+        # re-auth); otherwise register a fresh public client via DCR.
+        client_id = server.oauth_client_id
+        client_secret = server.oauth_client_secret
+        if not client_id:
+            if not meta.get("registration_endpoint"):
+                return Response(
+                    {
+                        "error": (
+                            "Server does not advertise dynamic client registration. "
+                            "Provide a client_id/secret manually."
+                        )
+                    },
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            try:
+                reg = oauth_mod.register_client(
+                    meta["registration_endpoint"],
+                    redirect_uri,
+                    client_name=f"AI Mesh Firewall ({server.name})",
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("DCR failed for %s: %s", server.server_slug, exc)
+                return Response({"error": f"Client registration failed: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
+            client_id = reg.get("client_id", "")
+            client_secret = reg.get("client_secret", "") or ""
+            if not client_id:
+                return Response({"error": "Registration returned no client_id."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        verifier, challenge = oauth_mod.generate_pkce()
+        state = oauth_mod.generate_state()
+        # Prefer the server's configured scope; else the AS-advertised scopes.
+        scope = server.oauth_scope or " ".join(meta.get("scopes_supported") or [])
+
+        server.oauth_authorization_endpoint = meta["authorization_endpoint"]
+        server.oauth_token_endpoint = meta["token_endpoint"]
+        server.oauth_registration_endpoint = meta.get("registration_endpoint", "")
+        server.oauth_client_id = client_id
+        server.oauth_client_secret = client_secret
+        server.oauth_scope = scope
+        server.oauth_resource = meta["resource"]
+        server.oauth_code_verifier = verifier
+        server.oauth_state = state
+        server.auth_type = "oauth"
+        server.save(update_fields=[
+            "oauth_authorization_endpoint",
+            "oauth_token_endpoint",
+            "oauth_registration_endpoint",
+            "oauth_client_id",
+            "oauth_client_secret",
+            "oauth_scope",
+            "oauth_resource",
+            "oauth_code_verifier",
+            "oauth_state",
+            "auth_type",
+            "updated_at",
+        ])
+
+        authorize_url = oauth_mod.build_authorize_url(
+            meta["authorization_endpoint"],
+            client_id,
+            redirect_uri,
+            challenge,
+            state,
+            scope,
+            meta["resource"],
+        )
+        return Response({"authorize_url": authorize_url, "resource": meta["resource"]})
+
+
+class MCPOAuthCallbackView(APIView):
+    """OAuth redirect target. The browser lands here after user consent.
+
+    GET /oauth/callback/?code=...&state=... → match the server by ``state``,
+    exchange the code for tokens, store them (encrypted), clear the transient
+    PKCE/state, and bounce the browser back to the frontend.
+
+    Public endpoint (no JWT): the authorization server redirects the browser
+    here with no Authorization header. CSRF protection is provided by the
+    high-entropy, single-use ``state`` value.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+
+    def _html(self, ok: bool, message: str, server_name: str = "") -> HttpResponse:
+        return_url = _oauth_frontend_return_url(ok, server_name, message)
+        status_word = "succeeded" if ok else "failed"
+        color = "#16a34a" if ok else "#dc2626"
+        body = f"""<!doctype html><html><head><meta charset="utf-8">
+<title>MCP OAuth {status_word}</title>
+<meta http-equiv="refresh" content="3;url={return_url}">
+<style>body{{font-family:system-ui,sans-serif;background:#0b1020;color:#e5e7eb;
+display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}
+.card{{background:#111827;padding:32px 40px;border-radius:12px;max-width:520px;
+box-shadow:0 10px 40px rgba(0,0,0,.4);border:1px solid #1f2937}}
+h1{{color:{color};margin:0 0 12px;font-size:20px}}
+p{{margin:6px 0;line-height:1.5}} a{{color:#60a5fa}}</style></head>
+<body><div class="card"><h1>Authorization {status_word}</h1>
+<p>{message}</p>
+<p>Returning to the dashboard… <a href="{return_url}">click here</a> if you are not redirected.</p>
+</div></body></html>"""
+        return HttpResponse(body, content_type="text/html")
+
+    def get(self, request):
+        from . import oauth as oauth_mod
+
+        error = request.GET.get("error")
+        error_desc = request.GET.get("error_description", "")
+        code = request.GET.get("code", "")
+        state = request.GET.get("state", "")
+
+        if error:
+            return self._html(False, f"Authorization server returned: {error} {error_desc}".strip())
+        if not code or not state:
+            return self._html(False, "Missing authorization code or state in callback.")
+
+        try:
+            server = MCPServerRegistration.objects.get(oauth_state=state)
+        except MCPServerRegistration.DoesNotExist:
+            return self._html(False, "Unknown or expired authorization state (possible CSRF).")
+        except MCPServerRegistration.MultipleObjectsReturned:
+            return self._html(False, "Ambiguous authorization state.")
+
+        redirect_uri = _oauth_redirect_uri()
+        try:
+            tok = oauth_mod.exchange_code(
+                server.oauth_token_endpoint,
+                code,
+                redirect_uri,
+                server.oauth_client_id,
+                server.oauth_client_secret,
+                server.oauth_code_verifier,
+                server.oauth_resource,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("OAuth code exchange failed for %s: %s", server.server_slug, exc)
+            # Clear single-use state even on failure so it can't be replayed.
+            server.oauth_state = ""
+            server.oauth_code_verifier = ""
+            server.save(update_fields=["oauth_state", "oauth_code_verifier", "updated_at"])
+            return self._html(False, f"Token exchange failed: {exc}", server.name)
+
+        _store_oauth_tokens(server, tok)
+        # Clear transient single-use flow state.
+        server.oauth_state = ""
+        server.oauth_code_verifier = ""
+        server.save(update_fields=["oauth_state", "oauth_code_verifier", "updated_at"])
+
+        return self._html(
+            True,
+            f"“{server.name}” is now authorized. You can sync its tools.",
+            server.name,
+        )
+

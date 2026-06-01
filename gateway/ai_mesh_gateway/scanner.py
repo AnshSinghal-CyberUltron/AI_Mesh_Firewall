@@ -9,15 +9,23 @@ Runs in ThreadPoolExecutor to avoid blocking the async event loop.
 
 import asyncio
 import difflib
+import hashlib
 import logging
 import os
+import random
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
 try:
     from .bedrock_scanner import BedrockScanner
+    from .bedrock_tier2_breaker import BREAKER, Tier2UnavailableStrict
+    from .telemetry_ops import (
+        EVENT_CLASS_TIER2_DEGRADED_PASS,
+        emit_operational_event,
+    )
     from .patterns import (
         compile_pattern,
         detect_pii,
@@ -28,6 +36,11 @@ try:
     )
 except ImportError:
     from bedrock_scanner import BedrockScanner
+    from bedrock_tier2_breaker import BREAKER, Tier2UnavailableStrict  # type: ignore[no-redef]
+    from telemetry_ops import (  # type: ignore[no-redef]
+        EVENT_CLASS_TIER2_DEGRADED_PASS,
+        emit_operational_event,
+    )
     from patterns import (
         compile_pattern,
         detect_pii,
@@ -41,7 +54,10 @@ LOG = logging.getLogger("gateway.scanner")
 
 MAX_PROMPT_LENGTH = 10_000
 REPETITION_THRESHOLD = 0.30
-DEFAULT_THREAD_POOL_SIZE = 4
+# Scanner worker pool size. Sized via env so it can be raised per-instance
+# (e.g. to the worker's vCPU count) to avoid head-of-line blocking when blocking
+# scan work (Tier-2/vault) runs in the executor.
+DEFAULT_THREAD_POOL_SIZE = int(os.environ.get("GATEWAY_SCANNER_THREAD_POOL_SIZE", "8"))
 
 TOXICITY_INDICATORS: list[re.Pattern] = [
     re.compile(r"\b(?:kill|murder|attack|destroy|eliminate|exterminate)\b", re.IGNORECASE),
@@ -328,24 +344,57 @@ class InputScanner:
         self,
         thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,
         config: dict | None = None,
+        embedding_vault: Any = None,
     ) -> None:
         self._executor = ThreadPoolExecutor(
             max_workers=thread_pool_size,
             thread_name_prefix="scanner",
         )
+        # Dedicated pool for network-bound Tier-2 (Bedrock) calls. Keeping these
+        # off the CPU-bound Tier-1 scan pool prevents a slow/stalled Bedrock
+        # invocation from starving Tier-1 workers (the head-of-line blocking that
+        # caused the gateway to collapse under load).
+        bedrock_pool_size = int(os.environ.get("GATEWAY_BEDROCK_THREAD_POOL_SIZE", "16"))
+        self._bedrock_executor = ThreadPoolExecutor(
+            max_workers=bedrock_pool_size,
+            thread_name_prefix="bedrock",
+        )
         self._config = config or {}
+        self._embedding_vault = embedding_vault
         # Tier-2 (Bedrock) feature flag can be enabled via env var ENABLE_TIER2
         self.tier2_enabled = os.getenv("ENABLE_TIER2", "true").lower() in ("1", "true", "yes")
         self._bedrock_scanner: BedrockScanner | None = BedrockScanner() if self.tier2_enabled else None
+        # Tier-2 cost levers. The verdict cache stores the *Bedrock response*
+        # keyed by scanned text, so identical prompts don't re-invoke Bedrock
+        # (decision logic is unchanged). Sampling defaults to 1.0 (always run)
+        # so security posture is unchanged unless an operator opts in.
+        self._tier2_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._tier2_cache_ttl = float(os.environ.get("GATEWAY_TIER2_CACHE_TTL_SECONDS", "300"))
+        self._tier2_cache_max = int(os.environ.get("GATEWAY_TIER2_CACHE_MAX", "10000"))
+        self._tier2_sample_rate = max(
+            0.0, min(1.0, float(os.environ.get("GATEWAY_TIER2_SAMPLE_RATE", "1.0")))
+        )
         LOG.info(
-            "InputScanner initialized (thread_pool_size=%d, attack_categories=%d, pii_patterns=%d)",
+            "InputScanner initialized (thread_pool_size=%d, attack_categories=%d, pii_patterns=%d, embedding_vault=%s)",
             thread_pool_size,
             len(ATTACK_PATTERNS),
             len(PII_PATTERNS),
+            bool(self._embedding_vault and getattr(self._embedding_vault, "enabled", False)),
         )
 
-    async def scan_prompt(self, text: str, is_rag: bool = False) -> ScanVerdict:
-        """Asynchronously scan the prompt for threats and return a structured verdict."""
+    async def scan_prompt(
+        self,
+        text: str,
+        is_rag: bool = False,
+        toxicity_threshold: float | None = None,
+    ) -> ScanVerdict:
+        """Asynchronously scan the prompt for threats and return a structured verdict.
+
+        ``toxicity_threshold`` is an optional per-request override. When ``None``
+        the scanner falls back to the gateway-wide ``self._config`` value. It is
+        passed by value (not stored on the singleton) so concurrent requests from
+        different orgs cannot race on a shared mutable threshold.
+        """
         loop = asyncio.get_event_loop()
 
         return await loop.run_in_executor(
@@ -353,6 +402,7 @@ class InputScanner:
             self._scan_prompt_sync,
             text,
             is_rag,
+            toxicity_threshold,
         )
     async def scan_output(self, text: str) -> ScanVerdict:
         """Asynchronously scan the LLM output for PII/Secrets and return a structured verdict."""
@@ -364,7 +414,12 @@ class InputScanner:
             text,
         )
 
-    def _scan_prompt_sync(self, text: str, is_rag: bool) -> ScanVerdict:
+    def _scan_prompt_sync(
+        self,
+        text: str,
+        is_rag: bool,
+        toxicity_threshold: float | None = None,
+    ) -> ScanVerdict:
         """Synchronous prompt scanning logic, run in a thread to avoid blocking."""
         if not text:
             return ScanVerdict(
@@ -467,6 +522,37 @@ class InputScanner:
         if fuzzy_verdict is not None:
             return fuzzy_verdict
 
+        # ── Tier-1.6: semantic injection check via EmbeddingVault ──
+        # Zero-overhead when vault is unconfigured (enabled gate short-circuits).
+        vault = self._embedding_vault
+        if vault is not None and getattr(vault, "enabled", False):
+            try:
+                vault_verdict = vault.check_sync(text)
+            except Exception as exc:  # noqa: BLE001 - vault failures must not break scan
+                LOG.warning("EmbeddingVault check_sync raised: %s", exc)
+                vault_verdict = None
+            if vault_verdict is not None and vault_verdict.is_match:
+                match_ids = [m.attack_id for m in vault_verdict.matches]
+                LOG.warning(
+                    "Tier-1.6 semantic injection match: distance=%.3f confidence=%.3f matches=%s",
+                    vault_verdict.closest_distance,
+                    vault_verdict.confidence,
+                    match_ids,
+                )
+                return ScanVerdict(
+                    action="block",
+                    threat_type="semantic_injection",
+                    confidence=vault_verdict.confidence,
+                    detail=(
+                        f"Semantic match against known attack vault "
+                        f"(distance={vault_verdict.closest_distance:.3f}, "
+                        f"matches={','.join(match_ids) or 'n/a'})"
+                    ),
+                    matched_patterns=match_ids,
+                    tier="tier_1_6",
+                )
+
+
         pii_matched = detect_pii(text)
         if pii_matched:
             return ScanVerdict(
@@ -489,7 +575,7 @@ class InputScanner:
                 tier="tier_1",
             )
 
-        toxicity_verdict = self._check_toxicity(text)
+        toxicity_verdict = self._check_toxicity(text, toxicity_threshold)
         if toxicity_verdict is not None:
             return toxicity_verdict
 
@@ -543,13 +629,21 @@ class InputScanner:
         max_count = max(word_counts.values())
         return (max_count / len(words)) > REPETITION_THRESHOLD
 
-    def _check_toxicity(self, text: str) -> ScanVerdict | None:
+    def _check_toxicity(
+        self, text: str, toxicity_threshold: float | None = None
+    ) -> ScanVerdict | None:
         """
         Heuristic toxicity scoring based on indicator pattern matches.
-        Compares the computed score against the configurable toxicity_threshold
-        from the gateway firewall config.
+        Compares the computed score against the configurable toxicity_threshold.
+        A per-request ``toxicity_threshold`` override (passed by the caller from
+        the org-scoped config) takes precedence over the gateway-wide
+        ``self._config`` default.
         """
-        threshold = self._config.get("toxicity_threshold", 0.70)
+        threshold = (
+            toxicity_threshold
+            if toxicity_threshold is not None
+            else self._config.get("toxicity_threshold", 0.70)
+        )
         matched_indicators: list[str] = []
         for pattern in TOXICITY_INDICATORS:
             hits = pattern.findall(text)
@@ -690,7 +784,32 @@ class InputScanner:
             or reason in {"parse_failed", "client_error", "empty_response"}
         )
 
-    async def scan_prompt_with_tier2(self, text: str, is_rag: bool = False) -> ScanVerdict:
+    def _store_tier2_cache(self, key: str, value: dict[str, Any]) -> None:
+        """Insert a Bedrock response into the bounded TTL verdict cache.
+
+        Evicts the oldest entry when the cache is at capacity. The cache is
+        per-process (per gunicorn worker); correctness does not depend on it
+        being shared, since it only short-circuits an idempotent scan.
+        """
+        if self._tier2_cache_max <= 0:
+            return
+        if len(self._tier2_cache) >= self._tier2_cache_max:
+            try:
+                oldest = min(self._tier2_cache.items(), key=lambda kv: kv[1][0])[0]
+                self._tier2_cache.pop(oldest, None)
+            except ValueError:
+                pass
+        self._tier2_cache[key] = (time.monotonic(), value)
+
+    async def scan_prompt_with_tier2(
+        self,
+        text: str,
+        is_rag: bool = False,
+        org_tier2_override: bool | None = None,
+        org_slug: str = "",
+        org_tier2_strict: bool = True,
+        toxicity_threshold: float | None = None,
+    ) -> ScanVerdict:
         """
         Run Tier-1 regex/deterministic checks first. If no blocking verdict,
         and Tier-2 is enabled, call the Bedrock scanner (async via executor)
@@ -698,28 +817,132 @@ class InputScanner:
 
         Deobfuscated text is passed to Bedrock alongside the original so the
         model can see both raw and segmented versions.
+
+        ``org_tier2_override`` (Phase 0 D-G2-v3) is a tri-state per-org switch:
+            * ``None``  — no per-org opinion; use gateway-wide default
+              (``self.tier2_enabled`` from ENABLE_TIER2 env).
+            * ``True``  — force-enable Tier-2 for this org (requires a
+              ``_bedrock_scanner`` instance to actually be configured).
+            * ``False`` — force-disable Tier-2 for this org.
+        Callers MUST pass via identity (``org_config.get("tier2_enabled")``)
+        so that ``None`` is preserved and not coerced to ``False``.
+
+        ``org_slug`` + ``org_tier2_strict`` (Phase 0 D-G3-v3) feed the
+        per-(org, scanning_model_id) Bedrock circuit breaker. When the
+        breaker is OPEN:
+            * strict=True  -> ``Tier2UnavailableStrict`` is raised; the
+              gateway HTTP layer translates it to HTTP 451 with a
+              ``tier2_unavailable_strict`` degraded envelope.
+            * strict=False -> Tier-2 is skipped; the Tier-1 verdict is
+              returned and a ``tier2_degraded_pass`` event is emitted.
         """
-        tier1 = await self.scan_prompt(text, is_rag)
+        tier1 = await self.scan_prompt(text, is_rag, toxicity_threshold=toxicity_threshold)
         if tier1.action == "block":
             return tier1
 
-        if not self.tier2_enabled or not self._bedrock_scanner:
+        # Per-org override beats the gateway-wide default. Identity check
+        # (``is None``) distinguishes "no override" from "explicit False".
+        if org_tier2_override is False:
+            return tier1
+        if org_tier2_override is None and not self.tier2_enabled:
+            return tier1
+        if self._bedrock_scanner is None:
+            return tier1
+
+        # ---- G3 circuit breaker pre-check ----
+        scanner_model_id = getattr(self._bedrock_scanner, "model", "") or ""
+        allow_call = BREAKER.allow(
+            org_slug=org_slug,
+            model_id=scanner_model_id,
+            strict=org_tier2_strict,
+        )
+        if not allow_call:
+            # OPEN + non-strict: pass through with Tier-1 verdict and emit
+            # an operational event so ops can see the degradation.
+            try:
+                loop_for_emit = asyncio.get_event_loop()
+                if loop_for_emit.is_running():
+                    loop_for_emit.create_task(
+                        emit_operational_event(
+                            EVENT_CLASS_TIER2_DEGRADED_PASS,
+                            org_slug=org_slug or None,
+                            severity="warning",
+                            metadata={
+                                "model_id": scanner_model_id,
+                                "reason": "breaker_open_non_strict",
+                            },
+                        )
+                    )
+            except Exception:
+                pass
             return tier1
 
         deobfuscated = self._deobfuscate_text(text)
         bedrock_input = deobfuscated if deobfuscated != text.lower() else text
         original_context = text if bedrock_input != text else None
 
+        # ---- Tier-2 verdict cache (cost lever #1) ----
+        # Cache the Bedrock *response* (not the final decision) keyed by the
+        # exact scanned text so identical prompts skip the Bedrock round-trip.
+        # All downstream decision/normalization logic still runs on the cached
+        # payload, so security behaviour is identical to a fresh call.
+        cache_key = None
+        bedrock_normalized = None
+        if self._tier2_cache_ttl > 0:
+            cache_key = hashlib.sha256(
+                f"{bedrock_input}\x00{original_context or ''}".encode("utf-8", "ignore")
+            ).hexdigest()
+            entry = self._tier2_cache.get(cache_key)
+            if entry is not None:
+                ts, value = entry
+                if (time.monotonic() - ts) <= self._tier2_cache_ttl:
+                    bedrock_normalized = value
+                else:
+                    self._tier2_cache.pop(cache_key, None)
+
+        # ---- Tier-2 sampling (opt-in cost lever) ----
+        # When GATEWAY_TIER2_SAMPLE_RATE < 1.0, skip Bedrock for a fraction of
+        # prompts that Tier-1 found completely clean (action == "allow"). Never
+        # sample-skip a prompt Tier-1 flagged, and never skip on a cache hit.
+        if (
+            bedrock_normalized is None
+            and self._tier2_sample_rate < 1.0
+            and tier1.action == "allow"
+            and random.random() > self._tier2_sample_rate
+        ):
+            return tier1
+
         loop = asyncio.get_event_loop()
-        bedrock_normalized = await loop.run_in_executor(
-            self._executor, self._bedrock_scan_sync, bedrock_input, original_context,
-        )
+        if bedrock_normalized is None:
+            try:
+                bedrock_normalized = await loop.run_in_executor(
+                    self._bedrock_executor, self._bedrock_scan_sync, bedrock_input, original_context,
+                )
+            except Exception:
+                # Hard failure during Bedrock invocation counts toward the
+                # breaker. Re-raise so existing error-handling paths run.
+                BREAKER.record_result(org_slug, scanner_model_id, failure=True)
+                raise
+            # Only cache successful, non-degraded responses.
+            if cache_key is not None:
+                _cmeta = bedrock_normalized.get("meta", {})
+                if not _cmeta.get("error") and not _cmeta.get("parse_failed"):
+                    self._store_tier2_cache(cache_key, bedrock_normalized)
 
         meta = bedrock_normalized.get("meta", {})
         reason_code = str(meta.get("decision_reason", "")).strip().lower()
         recommended = self._normalize_bedrock_action(meta.get("recommended_action"))
         llm_guard = bedrock_normalized.get("llm_guard", {})
         score = self._normalize_score(llm_guard.get("score", 0.0))
+
+        # Feed the G3 breaker. A "failure" is a soft-degraded Bedrock
+        # response (HTTP error, parse failure, missing LLM-guard payload).
+        _bedrock_failed = bool(
+            meta.get("error")
+            or meta.get("parse_failed")
+            or (not meta.get("error") and not meta.get("parse_failed") and not llm_guard)
+        )
+        BREAKER.record_result(org_slug, scanner_model_id, failure=_bedrock_failed)
 
         raw_findings = meta.get("raw_findings") or []
         bedrock_categories: list[str] = []

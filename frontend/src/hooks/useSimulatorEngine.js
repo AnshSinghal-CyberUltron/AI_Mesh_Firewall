@@ -42,8 +42,45 @@ export function useSimulatorEngine() {
       ...(opts.headers || {}),
     };
     const res = await fetch(url, { ...opts, headers });
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("text/event-stream")) {
+      const sse = await import("../utils/liveGateway").then((m) => m.consumeSSEStream(res));
+      return {
+        ok: res.ok,
+        status: res.status,
+        headers: res.headers,
+        sse,
+        data: sse.data || sse.terminalError || null,
+        isStream: true,
+      };
+    }
     const data = await res.json().catch(() => null);
-    return { ok: res.ok, status: res.status, data };
+    return { ok: res.ok, status: res.status, data, isStream: false };
+  }, [gatewayUrl, gatewayKey]);
+
+  /**
+   * Explicit SSE path for simulators that exercise stream:true governance.
+   * Reason: output-guard blocks arrive mid-stream; JSON fetch cannot observe them.
+   */
+  const gatewayFetchStream = useCallback(async (path, opts = {}) => {
+    const url = `${gatewayUrl}${path}`;
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      ...(gatewayKey ? { Authorization: `Bearer ${gatewayKey}` } : {}),
+      ...(opts.headers || {}),
+    };
+    const res = await fetch(url, { ...opts, headers });
+    const { consumeSSEStream } = await import("../utils/liveGateway");
+    const sse = await consumeSSEStream(res);
+    return {
+      ok: res.ok,
+      status: res.status,
+      headers: res.headers,
+      sse,
+      data: sse.data || null,
+      isStream: true,
+    };
   }, [gatewayUrl, gatewayKey]);
 
   // Authenticated fetch to backend (through proxy)
@@ -153,6 +190,7 @@ export function useSimulatorEngine() {
     backendHealth,
     gatewayHealth,
     gatewayFetch,
+    gatewayFetchStream,
     backendFetch,
     executeScenario,
     executing,

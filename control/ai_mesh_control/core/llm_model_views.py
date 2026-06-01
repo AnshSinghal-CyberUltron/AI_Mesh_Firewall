@@ -1,5 +1,6 @@
 """API views for LLMModelConfig CRUD operations."""
 
+import json
 import logging
 
 from rest_framework import status
@@ -8,9 +9,70 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.llm_model_serializer import LLMModelConfigSerializer
-from core.models import LLMModelConfig
+from core.models import AuditLog, LLMModelConfig
 
 logger = logging.getLogger(__name__)
+
+AUDIT_ACTION_CREATED = "llm_model_credential.created"
+AUDIT_ACTION_UPDATED = "llm_model_credential.updated"
+AUDIT_ACTION_DELETED = "llm_model_credential.deleted"
+
+
+def _client_ip(request) -> str | None:
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")
+
+
+def _audit_model_credential(
+    request,
+    action: str,
+    *,
+    model_name: str = "",
+    provider: str = "",
+    model_pk: int | None = None,
+    api_key_changed: bool = False,
+    api_key_cleared: bool = False,
+) -> None:
+    org = getattr(getattr(request.user, "profile", None), "organization", None)
+    resource = f"llm_model:{model_pk}" if model_pk is not None else f"llm_model:{model_name}"
+    details = {
+        "model_name": model_name,
+        "provider": provider,
+        "api_key_changed": api_key_changed,
+        "api_key_cleared": api_key_cleared,
+    }
+    if org is not None:
+        details["organization_id"] = org.id
+        details["organization_slug"] = org.slug
+    try:
+        AuditLog.objects.create(
+            user=request.user if getattr(request.user, "is_authenticated", False) else None,
+            organization=org,
+            action=action,
+            resource=resource,
+            details=json.dumps(details, sort_keys=True),
+            ip_address=_client_ip(request),
+        )
+    except Exception:
+        logger.exception(
+            "Failed to write model credential audit log: action=%s model=%s",
+            action,
+            model_name,
+        )
+
+
+def _api_key_change_flags(request_data) -> tuple[bool, bool]:
+    if "api_key" not in request_data:
+        return False, False
+    raw = request_data.get("api_key")
+    if raw is None:
+        return False, False
+    stripped = str(raw).strip()
+    if not stripped:
+        return False, True
+    return True, False
 
 
 class LLMModelConfigListView(APIView):
@@ -32,6 +94,7 @@ class LLMModelConfigListView(APIView):
             qs = LLMModelConfig.objects.all()
         else:
             qs = LLMModelConfig.objects.none()
+        qs = LLMModelConfig.queryset_user_managed(qs)
         serializer = LLMModelConfigSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -40,6 +103,16 @@ class LLMModelConfigListView(APIView):
         serializer.is_valid(raise_exception=True)
         org = self._get_org(request)
         instance = serializer.save(organization=org)
+        key_changed, key_cleared = _api_key_change_flags(request.data)
+        _audit_model_credential(
+            request,
+            AUDIT_ACTION_CREATED,
+            model_name=instance.model_name,
+            provider=instance.provider,
+            model_pk=instance.pk,
+            api_key_changed=key_changed,
+            api_key_cleared=key_cleared,
+        )
         logger.info(
             "LLMModelConfig created: model_name=%s, provider=%s by user=%s",
             instance.model_name,
@@ -74,6 +147,8 @@ class LLMModelConfigDetailView(APIView):
             return None
         if org is None and not getattr(request.user, "is_superuser", False):
             return None
+        if obj.is_platform_managed:
+            return None
         return obj
 
     def get(self, request, pk):
@@ -90,6 +165,16 @@ class LLMModelConfigDetailView(APIView):
         serializer = LLMModelConfigSerializer(obj, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
+        key_changed, key_cleared = _api_key_change_flags(request.data)
+        _audit_model_credential(
+            request,
+            AUDIT_ACTION_UPDATED,
+            model_name=instance.model_name,
+            provider=instance.provider,
+            model_pk=instance.pk,
+            api_key_changed=key_changed,
+            api_key_cleared=key_cleared,
+        )
         logger.info(
             "LLMModelConfig updated: model_name=%s (fields=%s) by user=%s",
             instance.model_name,
@@ -106,7 +191,19 @@ class LLMModelConfigDetailView(APIView):
         if obj is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         model_name = obj.model_name
+        provider = obj.provider
+        model_pk = obj.pk
+        had_key = obj.api_key_set
         obj.delete()
+        _audit_model_credential(
+            request,
+            AUDIT_ACTION_DELETED,
+            model_name=model_name,
+            provider=provider,
+            model_pk=model_pk,
+            api_key_changed=False,
+            api_key_cleared=had_key,
+        )
         logger.info(
             "LLMModelConfig deleted: model_name=%s by user=%s",
             model_name,

@@ -7,12 +7,14 @@ from drf_spectacular.views import SpectacularAPIView
 
 from core.views import health_view, services_health_view
 from core.poc_views import poc_questionnaire_page, poc_questionnaire_submit
+from core.alertmanager_webhook_views import alertmanager_webhook_view
 from main_app.schema_views import docs_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/gateways/", include("core.gateway_urls")),
     path("api/kill-switches/", include("core.kill_switch_urls")),
+    path("api/webhooks/alertmanager/", alertmanager_webhook_view, name="alertmanager-webhook"),
     path("api/auth/", include("auth.urls")),
     path("api/health/", health_view),
     path("api/health/services/", services_health_view),

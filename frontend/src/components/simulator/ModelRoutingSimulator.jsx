@@ -1,8 +1,10 @@
 import { useState, useMemo } from "react";
 import { GitBranch, Sliders } from "lucide-react";
 import { useSimulatorEngine } from "../../hooks/useSimulatorEngine";
+import { useSimulatorGatewayModels } from "../../hooks/useSimulatorGatewayModels";
 import { chatCompletionBody, normalizeRoutingResult } from "../../utils/liveGateway";
 import { SimulatorShell } from "./SimulatorShell";
+import { SimulatorModelSelector } from "./SimulatorModelSelector";
 
 const SCENARIOS = [
   {
@@ -57,6 +59,7 @@ const WEIGHT_STYLES = {
 
 export function ModelRoutingSimulator() {
   const engine = useSimulatorEngine();
+  const gatewayModels = useSimulatorGatewayModels();
   const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
   const [weights, setWeights] = useState({ cost_weight: 0.25, latency_weight: 0.25, quality_weight: 0.25, risk_weight: 0.25 });
@@ -64,15 +67,26 @@ export function ModelRoutingSimulator() {
   const activeWeights = selected?.preferences || weights;
 
   const handleExecute = async () => {
+    if (!gatewayModels.selectedModel) {
+      setResult({ error: "Connect at least one model with an API key under Model Connection." });
+      return;
+    }
+    if (gatewayModels.allowlistBlocksSimulator) {
+      setResult({
+        error: `Model "${gatewayModels.selectedModel}" is not in the firewall Allowed Models list. Update Firewall Configuration, then retry.`,
+      });
+      return;
+    }
     const prefs = selected?.preferences || weights;
     const res = await engine.gatewayFetch("/v1/chat/completions", {
       method: "POST",
       body: JSON.stringify(
         chatCompletionBody({
           prompt: "Evaluate this prompt for model routing",
-          model: "auto",
+          model: gatewayModels.selectedModel,
           runInference: false,
           routingPreferences: {
+            preferred_model: gatewayModels.selectedModel,
             cost_weight: prefs.cost_weight,
             latency_weight: prefs.latency_weight,
             priority_weight: prefs.quality_weight,
@@ -82,10 +96,22 @@ export function ModelRoutingSimulator() {
         }),
       ),
     });
+    const allowlistDenied = res.status === 403
+      && (res.data?.code === "model_not_allowed"
+        || String(res.data?.message || "").includes("global allowlist"));
+
     setResult(
       res.ok
         ? normalizeRoutingResult(res.data)
-        : { error: res.data?.message || res.data?.error || "Request failed" },
+        : {
+            error: res.data?.message || res.data?.error || "Request failed",
+            action: allowlistDenied ? "block" : "error",
+            success: false,
+            httpStatus: res.status,
+            allowlistDenied,
+            requested_model: gatewayModels.selectedModel,
+            ...res.data,
+          },
     );
   };
 
@@ -111,6 +137,21 @@ export function ModelRoutingSimulator() {
       result={result}
       customInput={
         <div className="space-y-3">
+          <SimulatorModelSelector
+            eligibleModels={gatewayModels.eligibleModels}
+            selectedModel={gatewayModels.selectedModel}
+            onSelectModel={gatewayModels.setSelectedModel}
+            loading={gatewayModels.loading}
+            loadError={gatewayModels.loadError}
+            firewallDefault={gatewayModels.firewallDefault}
+            allowlistBlocksSimulator={gatewayModels.allowlistBlocksSimulator}
+            allowedModels={gatewayModels.allowedModels}
+            onSyncAllowlist={gatewayModels.syncSelectedToAllowlist}
+            allowlistSyncing={gatewayModels.allowlistSyncing}
+            allowlistSyncError={gatewayModels.allowlistSyncError}
+            showModelPicker={gatewayModels.showModelPicker}
+            isSingleModel={gatewayModels.isSingleModel}
+          />
           <label className="text-[11px] text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1">
             <Sliders className="w-3 h-3" /> Priority Weights
           </label>
@@ -139,6 +180,30 @@ export function ModelRoutingSimulator() {
         </div>
       }
     >
+      {result?.error && (
+        <div className="px-4 py-3 space-y-2">
+          <p className="text-sm text-red-700 dark:text-red-300">{result.error}</p>
+          {result.allowlistDenied && gatewayModels.selectedModel ? (
+            <button
+              type="button"
+              disabled={gatewayModels.allowlistSyncing}
+              onClick={async () => {
+                try {
+                  await gatewayModels.syncSelectedToAllowlist();
+                  setResult(null);
+                } catch {
+                  /* hook sets allowlistSyncError */
+                }
+              }}
+              className="rounded-lg bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-xs font-medium px-3 py-1.5"
+            >
+              {gatewayModels.allowlistSyncing
+                ? "Updating allowlist…"
+                : `Add ${gatewayModels.selectedModel} to allowed models and retry`}
+            </button>
+          ) : null}
+        </div>
+      )}
       {result && !result.error && (
         <div className="px-4 py-3 space-y-4">
           {/* Chosen model + fallback chain */}

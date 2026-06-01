@@ -25,7 +25,7 @@ def ensure_default_llm_model(org) -> None:
         organization=org,
         model_name=ZEROSHIELD_GUARD_MODEL_NAME,
         defaults={
-            "provider": "custom",
+            "provider": "internal",
             "model_id": model_id,
             "api_key_env_var": "AWS_ACCESS_KEY_ID",
             "is_active": True,
@@ -34,6 +34,58 @@ def ensure_default_llm_model(org) -> None:
             "compliance_tags": ["HIPAA", "SOC2"],
         },
     )
+
+
+def ensure_simulator_firewall_keywords_cleared(org) -> None:
+    """
+    Dev bootstrap: clear default blocked_keywords so Attack Simulator clean prompts pass.
+
+    Policy Management rules are unchanged; only the firewall keyword list is cleared.
+    """
+    if org is None:
+        return
+    clear_kw = os.getenv("SIMULATOR_CLEAR_BLOCKED_KEYWORDS", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    if not clear_kw:
+        return
+    from core.models import FirewallConfig
+
+    for config in FirewallConfig.objects.filter(organization=org):
+        if (config.blocked_keywords or "").strip():
+            config.blocked_keywords = ""
+            config.save(update_fields=["blocked_keywords"])
+
+
+def ensure_firewall_excludes_guard_model(org) -> None:
+    """
+    Strip the ZeroShield guard model from every firewall allowlist (self-healing).
+
+    The guard model is a platform-internal (``provider=internal``) tier-2 scanning
+    model invoked out-of-band; it is never a client inference model and must not
+    live in the user-facing ``allowed_models`` governance list. Leaving it there
+    makes the governance validator reject saves (it is excluded from the
+    user-managed connected set), so this bootstrap removes any stale guard entry.
+    """
+    from core.models import FirewallConfig, platform_guard_model_names
+
+    guard_names = {name.strip().lower() for name in platform_guard_model_names()}
+
+    configs = list(FirewallConfig.objects.all())
+    if org is not None:
+        config, _ = FirewallConfig.objects.get_or_create(organization=org)
+        if config not in configs:
+            configs.append(config)
+
+    for config in configs:
+        models = [m.strip() for m in (config.allowed_models or "").split(",") if m.strip()]
+        cleaned = [m for m in models if m.strip().lower() not in guard_names]
+        if cleaned != models:
+            config.allowed_models = ", ".join(cleaned)
+            config.save(update_fields=["allowed_models"])
 
 
 def ensure_simulator_default_gateway_key() -> bool:
@@ -56,12 +108,18 @@ def ensure_simulator_default_gateway_key() -> bool:
     redis_url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
 
     try:
-        from django.contrib.auth import get_user_model
-
         from auth.models import Organization
+        from core.models import GatewayAPIKey
 
-        org = Organization.objects.first()
+        org = None
+        sim_key = GatewayAPIKey.objects.filter(name="simulator-default").first()
+        if sim_key and sim_key.organization_id:
+            org = sim_key.organization
+        if org is None:
+            org = Organization.objects.first()
         ensure_default_llm_model(org)
+        ensure_firewall_excludes_guard_model(org)
+        ensure_simulator_firewall_keywords_cleared(org)
     except Exception:
         logger.warning("Simulator LLM model seed failed", exc_info=True)
 
@@ -82,7 +140,12 @@ def ensure_simulator_default_gateway_key() -> bool:
         from core.models import GatewayAPIKey
 
         User = get_user_model()
-        org = Organization.objects.first()
+        org = None
+        existing = GatewayAPIKey.objects.filter(name="simulator-default").first()
+        if existing and existing.organization_id:
+            org = existing.organization
+        if org is None:
+            org = Organization.objects.first()
         user = (
             User.objects.filter(email="admin@zeroshield.io").first()
             or User.objects.first()
@@ -97,7 +160,7 @@ def ensure_simulator_default_gateway_key() -> bool:
             project_id="simulator-default",
             allowed_models=[],
         )
-        if org and not inst.organization_id:
+        if org and inst.organization_id != org.id:
             inst.organization = org
             inst.save(update_fields=["organization"])
         client.set(SIMULATOR_DEFAULT_KEY_REDIS, raw)

@@ -14,6 +14,8 @@ import uuid
 
 from django.db import models
 
+from policy.encrypted_fields import EncryptedCharField
+
 VECTOR_PROVIDER_CHOICES = [
     ("pinecone", "Pinecone"),
     ("milvus", "Milvus"),
@@ -53,11 +55,16 @@ class VectorProviderConfig(models.Model):
         default="",
         help_text="Connection URL (e.g. URI for Milvus, endpoint URL for custom providers).",
     )
-    api_key = models.CharField(
+    api_key = EncryptedCharField(
         max_length=512,
         blank=True,
         default="",
-        help_text="Provider API key (Pinecone API key, Milvus token, etc.). Stored encrypted at rest.",
+        help_text=(
+            "Provider API key (Pinecone API key, Milvus token, etc.). "
+            "Encrypted at rest via Fernet (see policy.encrypted_fields). "
+            "Plaintext is only materialised in-process when building the "
+            "Redis bundle for the gateway."
+        ),
     )
     environment = models.CharField(
         max_length=128,

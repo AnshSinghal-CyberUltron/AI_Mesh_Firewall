@@ -843,21 +843,23 @@ print(response.choices[0].message.content)`,
     codeTabs: [
       {
         id: "rest-isolate",
-        label: "Emergency Isolation (API)",
+        label: "Live chat (gateway)",
         language: "bash",
-        code: `# Manually isolate a model via the gateway API (emergency use)
-curl -X POST https://aisecshieldgateway.zeroshield.ai/api/models/isolate \\
-  -H "Authorization: Bearer <your_gateway_api_key>" \\
+        code: `# Use a gateway API key from THIS org (see Gateway Keys panel).
+# "model" must be the registered model_name — not the LiteLLM model_id.
+curl -X POST http://127.0.0.1:8180/v1/chat/completions \\
+  -H "Authorization: Bearer <your_org_gateway_api_key>" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model_id": "gpt-4o",
-    "reason": "Anomalous output pattern detected in production",
-    "duration_seconds": 300
+    "model": "live-triage-openai",
+    "messages": [{"role": "user", "content": "What is the capital of France?"}],
+    "stream": false
   }'
 
-# Check isolation status
-curl https://aisecshieldgateway.zeroshield.ai/api/models/status \\
-  -H "Authorization: Bearer <your_gateway_api_key>"`,
+# Sync ModelState rows from Model Connections (control plane)
+curl -X POST http://127.0.0.1:8180/api/models/sync/ \\
+  -H "Authorization: Bearer <session_or_token>" \\
+  -H "Content-Type: application/json"`,
       },
       {
         id: "webhook",

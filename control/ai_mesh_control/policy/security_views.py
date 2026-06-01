@@ -20,6 +20,12 @@ from rest_framework.views import APIView
 from core.models import AGENT_TYPE_CHOICES, Agent, Endpoint
 from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
 from policy.models import EnforcementEvent, Notification, Policy
+from policy.module_16 import (
+    audit_log_to_threat_feed_item,
+    is_module_16_enforcement,
+    merge_module_16_feed_items,
+    module_16_enforcement_q,
+)
 from policy.threat_categories import get_incident_title
 from ws.notify import send_enforcement_notification
 
@@ -237,7 +243,7 @@ class ThreatFeedView(APIView):
                 type=str,
                 required=False,
                 description="Filter by event source",
-                enum=["security_scan", "mcp_scan", "agentic_scan", "policy"],
+                enum=["security_scan", "mcp_scan", "agentic_scan", "routing", "policy"],
             ),
             OpenApiParameter(
                 name="action",
@@ -257,6 +263,12 @@ class ThreatFeedView(APIView):
                 type=str,
                 required=False,
                 description="Filter by model name (case-insensitive substring match)",
+            ),
+            OpenApiParameter(
+                name="module_id",
+                type=str,
+                required=False,
+                description="Filter by firewall module (e.g. 1.6 for isolation/kill-switch lens)",
             ),
         ],
         responses={
@@ -319,6 +331,19 @@ class ThreatFeedView(APIView):
         action_filter = request.query_params.get("action")
         threat_type_filter = request.query_params.get("threat_type")
         model_filter = request.query_params.get("model")
+        module_id_filter = request.query_params.get("module_id")
+
+        if module_id_filter == "1.6":
+            return self._get_module_16_threat_feed(
+                request,
+                hours=hours,
+                limit=limit,
+                offset=offset,
+                source_filter=source_filter,
+                action_filter=action_filter,
+                threat_type_filter=threat_type_filter,
+                model_filter=model_filter,
+            )
 
         since = timezone.now() - timedelta(hours=hours)
         base_qs = EnforcementEvent.objects.filter(created_at__gte=since).select_related(
@@ -415,6 +440,7 @@ class ThreatFeedView(APIView):
             items.append(
                 {
                     "id": str(ev.id),
+                    "record_type": "enforcement_event",
                     "timestamp": ev.created_at.isoformat() if ev.created_at else None,
                     "severity": meta.get("security_risk_score") or meta.get("severity") or "medium",
                     "category": category,
@@ -446,6 +472,172 @@ class ThreatFeedView(APIView):
                 }
             )
         return Response({"count": total_count, "results": items})
+
+    def _get_module_16_threat_feed(
+        self,
+        request,
+        *,
+        hours: int,
+        limit: int,
+        offset: int,
+        source_filter: str | None,
+        action_filter: str | None,
+        threat_type_filter: str | None,
+        model_filter: str | None,
+    ):
+        """Merged gateway enforcement + control-plane audit log for Module 1.6."""
+        from auth.utils import get_request_organization
+        from core.models import KillSwitchAuditLog
+
+        since = timezone.now() - timedelta(hours=hours)
+        base_qs = EnforcementEvent.objects.filter(created_at__gte=since).select_related(
+            "policy", "rule", "agent", "agent__endpoint"
+        )
+        qs = _enforcement_events_for_request(request, base_qs).filter(module_16_enforcement_q())
+        if source_filter:
+            qs = qs.filter(metadata__source=source_filter)
+        if action_filter:
+            qs = qs.filter(action=action_filter)
+        if threat_type_filter:
+            qs = qs.filter(metadata__threat_category__icontains=threat_type_filter)
+        if model_filter:
+            qs = qs.filter(metadata__model__icontains=model_filter)
+
+        scan_cap = min(500, limit + offset + 100)
+        page_qs = list(qs.order_by("-created_at")[:scan_cap])
+        page_qs = [ev for ev in page_qs if is_module_16_enforcement(ev.metadata or {})]
+        enforcement_items = self._serialize_threat_feed_page(request, page_qs)
+
+        org = get_request_organization(request)
+        audit_items: list = []
+        if org is not None:
+            org_name = org.name
+            audit_qs = KillSwitchAuditLog.objects.filter(organization=org, timestamp__gte=since).order_by(
+                "-timestamp"
+            )[:scan_cap]
+            audit_items = [
+                audit_log_to_threat_feed_item(log, organization_name=org_name) for log in audit_qs
+            ]
+
+        merged = merge_module_16_feed_items(enforcement_items, audit_items)
+        total_count = len(merged)
+        page = merged[offset : offset + limit]
+        return Response(
+            {
+                "count": total_count,
+                "results": page,
+                "module_id": "1.6",
+                "streams": ["enforcement", "audit"],
+            }
+        )
+
+    def _serialize_threat_feed_page(self, request, page_qs: list) -> list:
+        """Build threat-feed dicts for a page of EnforcementEvent rows."""
+        from auth.models import Organization
+
+        endpoint_ids = list(
+            {ev.endpoint_id for ev in page_qs if ev.endpoint_id is not None}
+            | {
+                ev.agent.endpoint_id
+                for ev in page_qs
+                if getattr(ev, "agent", None) and getattr(ev.agent, "endpoint_id", None)
+            }
+        )
+        endpoint_map = {}
+        if endpoint_ids:
+            for ep in Endpoint.objects.filter(pk__in=endpoint_ids):
+                endpoint_map[ep.pk] = ep
+
+        org_ids_from_fk = {ev.organization_id for ev in page_qs if ev.organization_id is not None}
+        org_ids_from_meta = {
+            ev.metadata.get("organization_id")
+            for ev in page_qs
+            if ev.metadata and ev.metadata.get("organization_id") is not None
+        }
+        all_org_ids = list({*org_ids_from_fk, *org_ids_from_meta} - {None})
+        org_map: dict[int, str] = {}
+        if all_org_ids:
+            for org in Organization.objects.filter(pk__in=all_org_ids).values("id", "name"):
+                org_map[org["id"]] = org["name"]
+
+        user_ids = {ev.user_id for ev in page_qs if ev.user_id}
+        assignee_ids = {ev.escalated_by_id for ev in page_qs if ev.escalated_by_id}
+        all_user_ids = list({*(user_ids or []), *(assignee_ids or [])})
+        users_by_id = {}
+        if all_user_ids:
+            for u in User.objects.filter(id__in=all_user_ids):
+                users_by_id[u.id] = u
+
+        def _display_name(user_obj):
+            if not user_obj:
+                return None
+            full = getattr(user_obj, "get_full_name", lambda: "")() or ""
+            if full.strip():
+                return full
+            if getattr(user_obj, "username", ""):
+                return user_obj.username
+            if getattr(user_obj, "email", ""):
+                return user_obj.email
+            return f"User {user_obj.id}"
+
+        items = []
+        for ev in page_qs:
+            meta = ev.metadata or {}
+            category = meta.get("threat_category") or (ev.policy.name if ev.policy else None) or "Policy"
+            subcategory = (
+                meta.get("owasp_code") or meta.get("threat_subcategory") or (ev.rule.name if ev.rule else None) or ""
+            )
+            source = meta.get("source", "policy")
+            endpoint = (
+                endpoint_map.get(ev.endpoint_id)
+                if ev.endpoint_id
+                else (getattr(ev.agent, "endpoint", None) if getattr(ev, "agent", None) else None)
+            )
+            source_display = (endpoint.metadata or {}).get("endpoint_username") if endpoint else None
+            user_obj = users_by_id.get(ev.user_id) if ev.user_id else None
+            assignee_obj = users_by_id.get(ev.escalated_by_id) if ev.escalated_by_id else None
+
+            org_name = None
+            if ev.organization_id is not None:
+                org_name = org_map.get(ev.organization_id)
+            if not org_name:
+                meta_org_id = meta.get("organization_id")
+                if meta_org_id is not None:
+                    org_name = org_map.get(int(meta_org_id))
+
+            items.append(
+                {
+                    "id": str(ev.id),
+                    "record_type": "enforcement_event",
+                    "timestamp": ev.created_at.isoformat() if ev.created_at else None,
+                    "severity": meta.get("security_risk_score") or meta.get("severity") or "medium",
+                    "category": category,
+                    "subcategory": subcategory,
+                    "user_id": ev.user_id,
+                    "user_display": _display_name(user_obj),
+                    "endpoint_id": ev.endpoint_id,
+                    "endpoint_name": endpoint.name if endpoint else None,
+                    "endpoint_identifier": endpoint.identifier if endpoint else None,
+                    "organization_name": org_name,
+                    "agent_id": str(ev.agent_id) if ev.agent_id else None,
+                    "action": ev.action,
+                    "source": source,
+                    "source_display": source_display,
+                    "metadata": meta,
+                    "incident_title": get_incident_title(category, subcategory, source),
+                    "enforcement_action_text": _enforcement_action_text(ev.action, source, meta),
+                    "prompt_lineage": meta.get("prompt_lineage") or [],
+                    "tools_invoked": _tools_invoked_with_model(meta),
+                    "data_accessed": meta.get("data_accessed") or [],
+                    "assignee": _display_name(assignee_obj),
+                    "incident_status": ev.incident_status,
+                    "escalated_at": ev.escalated_at.isoformat() if ev.escalated_at else None,
+                    "escalated_by_id": ev.escalated_by_id,
+                    "resolved_at": ev.resolved_at.isoformat() if ev.resolved_at else None,
+                    "resolved_by_id": ev.resolved_by_id,
+                }
+            )
+        return items
 
 
 class AttackVectorTrendsView(APIView):
@@ -804,10 +996,15 @@ class ModuleKpisView(APIView):
             if source == "mcp_scan" or (owasp and owasp.startswith("MCP")):
                 self._increment(modules["1.4"], is_blocked, is_redacted, is_critical)
 
-            if source == "agentic_scan" or (owasp and owasp.startswith("AGENTIC")):
+            if (
+                source == "routing"
+                or event_type == "model_routed"
+                or source == "agentic_scan"
+                or (owasp and owasp.startswith("AGENTIC"))
+            ):
                 self._increment(modules["1.5"], is_blocked, is_redacted, is_critical)
 
-            if is_critical:
+            if is_module_16_enforcement(meta):
                 self._increment(modules["1.6"], is_blocked, is_redacted, is_critical)
 
             if event_type in ("output_guard", "output_scan"):
@@ -914,12 +1111,17 @@ class ModuleTrendsView(APIView):
             if source == "mcp_scan" or (owasp and owasp.startswith("MCP")):
                 module_buckets["1.4"][bucket_key] += 1
 
-            # 1.5: Multi-Model/Agentic
-            if source == "agentic_scan" or (owasp and owasp.startswith("AGENTIC")):
+            # 1.5: Multi-Model governance (routing + agentic)
+            if (
+                source == "routing"
+                or event_type == "model_routed"
+                or source == "agentic_scan"
+                or (owasp and owasp.startswith("AGENTIC"))
+            ):
                 module_buckets["1.5"][bucket_key] += 1
 
-            # 1.6: Isolation (critical only)
-            if risk_score >= self._CRITICAL_THRESHOLD:
+            # 1.6: Isolation / kill-switch (semantic, not risk>=80 only)
+            if is_module_16_enforcement(meta):
                 module_buckets["1.6"][bucket_key] += 1
 
             # 1.7: Output guards
@@ -1134,8 +1336,12 @@ _MODULE_SOURCE_FILTERS: dict[str, dict] = {
     "1.2": {"event_types": ["rag_pipeline"], "threat_types": ["data_leakage", "pii", "rag_poisoning"], "owasp_prefixes": ["LLM06", "LLM08"]},
     "1.3": {"threat_types": ["rag_poisoning"], "owasp_prefixes": ["LLM08"]},
     "1.4": {"sources": ["mcp_scan"], "owasp_prefixes": ["MCP"]},
-    "1.5": {"sources": ["agentic_scan"], "owasp_prefixes": ["AGENTIC"]},
-    "1.6": {"critical_only": True},
+    "1.5": {
+        "sources": ["routing", "agentic_scan"],
+        "event_types": ["model_routed"],
+        "owasp_prefixes": ["AGENTIC"],
+    },
+    "1.6": {"module_16": True},
     "1.7": {"event_types": ["output_guard", "output_scan"]},
 }
 
@@ -1207,6 +1413,9 @@ class ModuleChartsView(APIView):
         if "event_types" in filters:
             for et in filters["event_types"]:
                 q |= Q(metadata__event_type=et)
+        if filters.get("module_16"):
+            q = module_16_enforcement_q()
+
         if "critical_only" in filters:
             q &= Q(metadata__security_risk_score__gte=80)
 
@@ -1571,12 +1780,12 @@ class AttackGraphView(APIView):
         return Response({"nodes": nodes_list, "edges": edges_list})
 
 
-def _is_aiguardx_admin(user):
-    """Return True if the user is a superuser or has the aiguardx_admin role."""
+def _is_platform_admin(user):
+    """Return True if the user is a superuser or has the platform_admin role."""
     if user.is_superuser:
         return True
     try:
-        return user.profile.roles.filter(name="aiguardx_admin").exists()
+        return user.profile.roles.filter(name="platform_admin").exists()
     except Exception:
         return False
 
@@ -1630,8 +1839,8 @@ class EscalateIncidentView(APIView):
         )
         message = f"{escalator_name} escalated: {category} (incident #{ev.id})"
 
-        # Notify aiguardx_admin in the same organization as the event; superusers always receive.
-        admin_qs = User.objects.filter(Q(is_superuser=True) | Q(profile__roles__name="aiguardx_admin")).distinct()
+        # Notify platform_admin in the same organization as the event; superusers always receive.
+        admin_qs = User.objects.filter(Q(is_superuser=True) | Q(profile__roles__name="platform_admin")).distinct()
         if event_org_id is not None:
             admin_qs = admin_qs.filter(Q(profile__organization_id=event_org_id) | Q(is_superuser=True))
         admin_ids = list(admin_qs.values_list("id", flat=True))
@@ -1675,13 +1884,13 @@ class EscalateIncidentView(APIView):
 class ResolveIncidentView(APIView):
     """
     POST /api/security/incidents/{pk}/resolve/
-    Only aiguardx_admin or superuser can resolve an incident.
+    Only platform_admin or superuser can resolve an incident.
     """
 
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        if not _is_aiguardx_admin(request.user):
+        if not _is_platform_admin(request.user):
             raise PermissionDenied("Only admins can resolve incidents.")
 
         try:

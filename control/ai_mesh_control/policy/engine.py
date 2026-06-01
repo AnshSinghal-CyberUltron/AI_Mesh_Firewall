@@ -3,7 +3,9 @@ Policy engine: evaluate a request context against active policies and rules.
 Returns an EvaluationResult with action (allow/block/redact/monitor) and matched rules.
 """
 
+import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -11,6 +13,7 @@ from django.db.models import QuerySet
 from rest_framework.exceptions import ValidationError
 
 from policy.constants import DEFAULT_REDACTION_PLACEHOLDER
+from policy.mcp_presets import preset_regex, preset_replacement, preset_validator
 from policy.models import Policy, Rule
 
 
@@ -43,49 +46,167 @@ def validate_policy_domain(domain: str | None) -> str:
     return normalized
 
 
-def _get_text_to_check(context: dict[str, Any], field_hint: str) -> str:
-    """Return the text from context to evaluate (prompt, response, or both)."""
-    prompt = (context.get("prompt") or "") if isinstance(context.get("prompt"), str) else ""
-    response = (context.get("response") or "") if isinstance(context.get("response"), str) else ""
-    if field_hint == "prompt":
-        return prompt
-    if field_hint == "response":
-        return response
-    return f"{prompt}\n{response}"
+def _normalize_key(key: Any) -> str:
+    """NFKC + casefold a dict key for homoglyph-safe matching."""
+    if not isinstance(key, str):
+        return ""
+    return unicodedata.normalize("NFKC", key).lower()
+
+
+def _safe_json(value: Any) -> str:
+    """Serialize a structured value to text for 'entire' scope matching."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _collect_key_values(obj: Any, key: str, *, _depth: int = 0) -> list[str]:
+    """Recursively collect string-ified values stored under ``key``.
+
+    Walks dicts/lists; key match is NFKC + case-insensitive. Bounded depth
+    guards against pathological nesting. Used for scope='key' rules so an
+    operator can target a single argument/response field by name.
+    """
+    if _depth > 10 or not key:
+        return []
+    target = _normalize_key(key)
+    out: list[str] = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if _normalize_key(k) == target:
+                out.append(v if isinstance(v, str) else _safe_json(v))
+            else:
+                out.extend(_collect_key_values(v, key, _depth=_depth + 1))
+    elif isinstance(obj, list):
+        for item in obj:
+            out.extend(_collect_key_values(item, key, _depth=_depth + 1))
+    return out
+
+
+def _resolve_matcher(rule: Rule) -> dict[str, Any]:
+    """Resolve a rule's condition into a normalized matcher descriptor.
+
+    Backward compatible: legacy rules (no direction/scope/preset keys) fall
+    back to the previous prompt/response + regex/keywords behaviour.
+
+    Returns keys: direction (input|output|both), scope (entire|key), key,
+    regex, keywords, preset, replacement.
+    """
+    cond = rule.condition or {}
+
+    # Direction: new 'direction' (input/output/both) or legacy 'field'
+    # (prompt/response/both). prompt->input, response->output.
+    raw_dir = str(cond.get("direction") or cond.get("field") or "both").strip().lower()
+    direction = {
+        "prompt": "input",
+        "response": "output",
+        "input": "input",
+        "output": "output",
+        "both": "both",
+    }.get(raw_dir, "both")
+
+    scope = str(cond.get("scope") or "entire").strip().lower()
+    if scope not in ("entire", "key"):
+        scope = "entire"
+    key = str(cond.get("key") or "").strip()
+    if scope == "key" and not key:
+        # No key name given -> degrade gracefully to whole-payload scan.
+        scope = "entire"
+
+    preset = cond.get("preset")
+    regex = None
+    keywords = None
+    if preset:
+        regex = preset_regex(preset)
+    elif rule.rule_type == "keywords":
+        keywords = cond.get("keywords") or cond.get("keywords_list") or []
+    else:  # regex / pattern
+        regex = cond.get("regex") or cond.get("pattern")
+
+    redaction_cfg = rule.redaction_config or {}
+    replacement = (
+        redaction_cfg.get("replacement")
+        or (preset_replacement(preset) if preset else None)
+        or DEFAULT_REDACTION_PLACEHOLDER
+    )
+
+    return {
+        "direction": direction,
+        "scope": scope,
+        "key": key,
+        "regex": regex,
+        "keywords": [k for k in (keywords or []) if isinstance(k, str)],
+        "preset": preset,
+        "replacement": replacement,
+    }
+
+
+def _candidate_texts(context: dict[str, Any], matcher: dict[str, Any]) -> list[str]:
+    """Build the list of text fragments a rule should be matched against,
+    honouring direction (input/output/both) and scope (entire/key)."""
+    prompt = context.get("prompt") if isinstance(context.get("prompt"), str) else ""
+    response = context.get("response") if isinstance(context.get("response"), str) else ""
+    input_args = context.get("input_args")
+    output_data = context.get("output_data")
+
+    direction = matcher["direction"]
+    scope = matcher["scope"]
+    key = matcher["key"]
+    texts: list[str] = []
+
+    want_input = direction in ("input", "both")
+    want_output = direction in ("output", "both")
+
+    if want_input:
+        if scope == "key":
+            texts.extend(_collect_key_values(input_args, key))
+        else:
+            texts.append(prompt or _safe_json(input_args))
+    if want_output:
+        if scope == "key":
+            texts.extend(_collect_key_values(output_data, key))
+        else:
+            texts.append(response or _safe_json(output_data))
+
+    return [t for t in texts if t]
 
 
 def _evaluate_rule(rule: Rule, context: dict[str, Any]) -> bool:
-    """
-    Evaluate a single rule against context. Returns True if the rule matches.
-    """
-    condition = rule.condition or {}
-    field_hint = condition.get("field", "both")
-    text = _get_text_to_check(context, field_hint)
+    """Evaluate a single rule against context. Returns True if it matches."""
+    matcher = _resolve_matcher(rule)
+    texts = _candidate_texts(context, matcher)
+    if not texts:
+        return False
 
-    if rule.rule_type == "regex":
-        pattern = condition.get("regex") or condition.get("pattern")
-        if not pattern:
-            return False
+    if matcher["regex"]:
+        validator = preset_validator(matcher["preset"]) if matcher["preset"] else None
         try:
-            return bool(re.search(pattern, text, re.IGNORECASE))
+            compiled = re.compile(matcher["regex"], re.IGNORECASE)
         except re.error:
             return False
+        for text in texts:
+            if validator is None:
+                if compiled.search(text):
+                    return True
+            else:
+                # Validator-gated preset (e.g. Luhn): a regex hit only counts
+                # if at least one candidate match also passes the validator.
+                for m in compiled.finditer(text):
+                    if validator(m.group(0)):
+                        return True
+        return False
 
-    if rule.rule_type == "keywords":
-        keywords = condition.get("keywords") or condition.get("keywords_list") or []
-        if not keywords:
-            return False
-        text_lower = text.lower()
-        return any(kw.lower() in text_lower for kw in keywords if isinstance(kw, str))
-
-    if rule.rule_type == "pattern":
-        pattern = condition.get("pattern") or condition.get("regex")
-        if not pattern:
-            return False
-        try:
-            return bool(re.search(pattern, text, re.IGNORECASE))
-        except re.error:
-            return False
+    if matcher["keywords"]:
+        for text in texts:
+            text_lower = text.lower()
+            if any(kw.lower() in text_lower for kw in matcher["keywords"]):
+                return True
+        return False
 
     return False
 
@@ -119,7 +240,13 @@ def evaluate(
 
     if domain is not None:
         normalized_domain = validate_policy_domain(domain)
-        policies_qs = policies_qs.filter(policy_domain=normalized_domain)
+        if normalized_domain == "global":
+            policies_qs = policies_qs.filter(policy_domain="global")
+        else:
+            # A specific domain always inherits the universal 'global'
+            # baseline; severity (ACTION_ORDER) resolves any overlap and
+            # redaction hints are unioned, so global + domain never conflict.
+            policies_qs = policies_qs.filter(policy_domain__in=[normalized_domain, "global"])
 
     result = EvaluationResult(action="allow")
     best_action_rank = -1
@@ -146,25 +273,14 @@ def evaluate(
             if rank > best_action_rank:
                 best_action_rank = rank
                 result.action = rule.action
-                if rule.action == "redact" and rule.redaction_config:
-                    result.redaction_hints.append(
-                        {
-                            "rule_id": rule.id,
-                            "rule_name": rule.name,
-                            "config": rule.redaction_config,
-                            "condition": rule.condition,
-                        }
-                    )
-                if rule.action == "redact":
-                    cfg = _redaction_config_for_rule(rule)
-                    if cfg:
-                        result.redaction_hints.append(
-                            {
-                                "rule_id": rule.id,
-                                "rule_name": rule.name,
-                                "config": cfg,
-                            }
-                        )
+
+            # Collect a redaction hint for EVERY matched redact rule (not just
+            # the highest-ranked one) so output/input scrubbing can union all
+            # of them regardless of the final aggregate action.
+            if rule.action == "redact":
+                hint = _build_redaction_hint(rule)
+                if hint:
+                    result.redaction_hints.append(hint)
 
     if result.action == "block" and result.matched_rule_ids:
         result.message = "Request blocked by policy"
@@ -176,36 +292,30 @@ def evaluate(
     return result
 
 
-def _redaction_config_for_rule(rule: Rule) -> dict[str, Any] | None:
+def _build_redaction_hint(rule: Rule) -> dict[str, Any] | None:
+    """Build a structured redaction hint for a matched redact rule.
+
+    The hint carries BOTH:
+      * ``config`` (regex/keywords/replacement) so the legacy string
+        redactor ``apply_redaction`` keeps working for dry-run previews;
+      * ``direction`` / ``scope`` / ``key`` / ``preset`` so the MCP
+        enforcement path can scrub the right side (input args vs. tool
+        response) at the right granularity (whole payload vs. one field).
     """
-    Build a redaction config for a redact rule.
-    Priority:
-    1) rule.redaction_config (if provided)
-    2) synthesize from rule.condition so redact always has something to apply
-    """
-    cfg = rule.redaction_config or {}
-    if cfg:
-        return cfg
-
-    cond = rule.condition or {}
-    out: dict[str, Any] = {}
-
-    if rule.rule_type == "regex":
-        pattern = cond.get("regex") or cond.get("pattern")
-        if pattern:
-            out["regex"] = pattern
-    elif rule.rule_type == "pattern":
-        pattern = cond.get("pattern") or cond.get("regex")
-        if pattern:
-            # Treat pattern rules as regex for redaction substitution.
-            out["regex"] = pattern
-    elif rule.rule_type == "keywords":
-        keywords = cond.get("keywords") or cond.get("keywords_list") or []
-        if keywords:
-            out["keywords"] = keywords
-
-    if out:
-        out.setdefault("replacement", DEFAULT_REDACTION_PLACEHOLDER)
-        return out
-
-    return None
+    matcher = _resolve_matcher(rule)
+    config: dict[str, Any] = {"replacement": matcher["replacement"]}
+    if matcher["regex"]:
+        config["regex"] = matcher["regex"]
+    if matcher["keywords"]:
+        config["keywords"] = matcher["keywords"]
+    if not matcher["regex"] and not matcher["keywords"]:
+        return None
+    return {
+        "rule_id": rule.id,
+        "rule_name": rule.name,
+        "direction": matcher["direction"],
+        "scope": matcher["scope"],
+        "key": matcher["key"],
+        "preset": matcher["preset"],
+        "config": config,
+    }

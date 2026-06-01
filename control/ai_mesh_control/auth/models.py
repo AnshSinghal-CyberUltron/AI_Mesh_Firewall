@@ -4,7 +4,7 @@ from django.utils import timezone
 
 
 class Organization(models.Model):
-    """Organization for multi-tenant data isolation (AIGuardX)."""
+    """Organization for multi-tenant data isolation."""
 
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=64, unique=True, help_text="Unique identifier for URLs/keys")
@@ -41,6 +41,7 @@ class UserProfile(models.Model):
     )
     display_name = models.CharField(max_length=255, blank=True)
     timezone = models.CharField(max_length=64, default="UTC")
+    preferences = models.JSONField(default=dict, blank=True)
     organization = models.ForeignKey(
         Organization,
         on_delete=models.PROTECT,

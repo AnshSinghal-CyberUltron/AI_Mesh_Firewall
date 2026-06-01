@@ -29,10 +29,22 @@ try:
     from .config import load_config
     from .context_assembler import minimize_context
     from .jobs import enqueue_job
+    from .policy_signing import signing_enforced, _get_signing_key
+    from .telemetry_ops import (
+        emit_operational_event,
+        EVENT_CLASS_POLICY_HMAC_MISCONFIG,
+    )
+    from .bedrock_tier2_breaker import Tier2UnavailableStrict
 except ImportError:
     from config import load_config
     from context_assembler import minimize_context
     from jobs import enqueue_job
+    from policy_signing import signing_enforced, _get_signing_key
+    from telemetry_ops import (
+        emit_operational_event,
+        EVENT_CLASS_POLICY_HMAC_MISCONFIG,
+    )
+    from bedrock_tier2_breaker import Tier2UnavailableStrict  # type: ignore[no-redef]
 from ai_mesh_shared.openai_request_normalizer import normalize_openai_chat_request
 
 _gateway_public_url = (os.environ.get("GATEWAY_PUBLIC_URL", "") or "").strip().rstrip("/")
@@ -94,6 +106,52 @@ if _auth_enabled:
     app.add_middleware(AuthMiddleware, redis_url=_redis_url)
 
 from starlette.middleware.cors import CORSMiddleware
+
+# ── Prometheus observation middleware (Phase D) ──
+# Records every request as an Counter+Histogram observation. Decision label
+# distinguishes 2xx/3xx (allowed), 4xx (blocked), 5xx (error). Org label is
+# resolved from auth_context if AuthMiddleware ran first, else "anonymous".
+# Counters/gauges only, no PII in labels.
+try:
+    from .metrics import (
+        inc_active_connections as _prom_inc_active,
+        record_request as _prom_record_request,
+    )
+except ImportError:
+    from metrics import (  # type: ignore[no-redef]
+        inc_active_connections as _prom_inc_active,
+        record_request as _prom_record_request,
+    )
+
+
+@app.middleware("http")
+async def _prom_observe(request, call_next):
+    # Skip self-observation on the metrics endpoint to avoid recursion noise.
+    if request.url.path == "/metrics":
+        return await call_next(request)
+    _prom_inc_active(1)
+    _t0 = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = getattr(response, "status_code", 200)
+        return response
+    finally:
+        elapsed_s = time.perf_counter() - _t0
+        _prom_inc_active(-1)
+        auth_ctx = getattr(request.state, "auth_context", None)
+        org = getattr(auth_ctx, "org_slug", "") if auth_ctx else ""
+        if status >= 500:
+            decision = "error"
+        elif status >= 400:
+            decision = "blocked"
+        else:
+            decision = "allowed"
+        try:
+            _prom_record_request(org, decision, elapsed_s)
+        except Exception:
+            pass
+
 
 # SEC-01 FIX: Environment-based CORS origins instead of wildcard
 def _split_csv_env(value: str) -> list[str]:
@@ -169,6 +227,8 @@ OUTPUT_GUARD = None
 
 CIRCUIT_BREAKER = None
 RAG_PIPELINE = None
+BEDROCK_EMBEDDER = None
+GROUNDING_GUARD = None
 
 # Gateway version for auto-update check (should match backend expectation)
 GATEWAY_VERSION = "0.1.0"
@@ -265,12 +325,56 @@ def _parse_version(v):
 # STRICT RULE: NEVER return raw prompts, secrets, PII patterns, or detection rules to clients.
 # This is a CRITICAL SECURITY requirement.
 
+_SCAN_THREAT_CATEGORIES = frozenset({
+    "prompt_injection",
+    "jailbreak",
+    "goal_hijacking",
+    "pii",
+    "secret",
+    "toxicity",
+    "dos",
+    "tool_overreach",
+    "data_leakage",
+    "rag_poisoning",
+})
+
+
+def _resolve_pipeline_blocked_by(
+    *,
+    code: str,
+    threat_category: str,
+    detection_tier: str = "",
+) -> str:
+    """Map a block to the pipeline stage that actually enforced it (not always policy)."""
+    if code == "rate_limit_exceeded":
+        return "rate_limit"
+    if threat_category == "blocked_keyword":
+        return "firewall_keywords"
+    tier = (detection_tier or "").strip().lower()
+    if tier in {"tier_1", "tier_1_5", "tier_2", "input_scan"}:
+        return "input_scan"
+    if tier == "policy":
+        return "policy"
+    if tier == "output_guard":
+        return "output_guardrail"
+    if tier == "threat_intel":
+        return "policy"
+    if threat_category in _SCAN_THREAT_CATEGORIES:
+        return "input_scan"
+    if threat_category in {"policy_violation", "compliance_violation"}:
+        return "policy"
+    if threat_category in {"high_risk_actor", "threat_intel"}:
+        return "policy"
+    return "input_scan"
+
+
 def _build_safe_block_response(
     status_code: int,
     code: str,
     threat_category: str,
     request_id: str | None = None,
     internal_detail: str | None = None,
+    detection_tier: str = "",
 ) -> JSONResponse:
     """
     Build a client-safe error response for policy blocks.
@@ -313,7 +417,12 @@ def _build_safe_block_response(
             "[SECURITY_BLOCK] code=%s, category=%s, request_id=%s, detail=%s",
             code, threat_category, _request_id, internal_detail,
         )
-    
+
+    blocked_by = _resolve_pipeline_blocked_by(
+        code=code,
+        threat_category=threat_category,
+        detection_tier=detection_tier,
+    )
     return JSONResponse(
         status_code=status_code,
         content={
@@ -322,6 +431,9 @@ def _build_safe_block_response(
             "code": code,
             "request_id": _request_id,  # For support inquiries only
             "category": threat_category,  # Generic: NOT specific threat type
+            "blocked_by": blocked_by,
+            "detection_tier": detection_tier or "",
+            "pipeline_stage": blocked_by,
         },
     )
 
@@ -539,10 +651,13 @@ import hashlib as _hashlib
 import uuid as _uuid
 
 try:
-    from patterns import get_compliance_tags as _get_compliance_tags
+    from .patterns import get_compliance_tags as _get_compliance_tags
 except ImportError:
-    def _get_compliance_tags(pattern_keys: list[str]) -> list[str]:
-        return CONFIG.get("compliance_frameworks", [])
+    try:
+        from patterns import get_compliance_tags as _get_compliance_tags
+    except ImportError:
+        def _get_compliance_tags(pattern_keys: list[str]) -> list[str]:
+            return (CONFIG or {}).get("compliance_frameworks", [])
 
 
 def _build_zeroshield_metadata(
@@ -593,6 +708,23 @@ def _build_zeroshield_metadata(
     if routing:
         result["routing"] = routing
     return result
+
+
+def _estimate_request_tokens(prompt: str, max_tokens: int = 0) -> int:
+    """Rough token estimate for TPM pre-check (matches simulator: ~4 chars per token)."""
+    prompt_tokens = max(1, len(prompt or "") // 4)
+    completion_budget = max(0, int(max_tokens or 0))
+    return max(1, prompt_tokens + completion_budget)
+
+
+def _blocked_keyword_matches(prompt_lower: str, keyword: str) -> bool:
+    """Match firewall blocked keywords on word boundaries (avoids substring false positives)."""
+    kw = (keyword or "").strip().lower()
+    if not kw or not prompt_lower:
+        return False
+    if re.search(r"\s", kw):
+        return kw in prompt_lower
+    return bool(re.search(rf"\b{re.escape(kw)}\b", prompt_lower))
 
 
 def _coerce_string_list(*values) -> list[str]:
@@ -728,20 +860,389 @@ def _build_routing_metadata(
     }
 
 
+def _isolation_reroute_context(
+    org_slug: str,
+    routing_models: list,
+    routing_prefs: dict,
+    allowed_models: list | None,
+    body: dict | None = None,
+) -> dict:
+    """Shared context for compliant kill-switch / model-state reroutes."""
+    fallback_chains = CONFIG_SYNC.get_fallback_chains(org_slug) if CONFIG_SYNC else {}
+    allowed_set = None
+    if allowed_models:
+        allowed_set = {str(m).lower() for m in allowed_models if m}
+    body = body if isinstance(body, dict) else {}
+    metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+    data_sensitivity = (
+        routing_prefs.get("data_sensitivity")
+        or body.get("data_sensitivity")
+        or metadata.get("data_sensitivity")
+        or "public"
+    )
+    required_compliance = _coerce_string_list(
+        routing_prefs.get("required_compliance"),
+        body.get("compliance_requirements"),
+        metadata.get("compliance_requirements"),
+    )
+    return {
+        "routing_models": routing_models,
+        "fallback_chains": fallback_chains,
+        "data_sensitivity": data_sensitivity,
+        "required_compliance": required_compliance,
+        "allowed_set": allowed_set,
+    }
+
+
+def _apply_compliant_isolation_reroute(
+    *,
+    primary_model: str,
+    requested_fallback: str,
+    ctx: dict,
+    scope: str,
+    trigger_source: str,
+    reason: str,
+) -> tuple[str | None, dict]:
+    """
+    Resolve reroute target under the same hard eligibility filters as Stage-2.
+
+    Returns (selected_model_or_none, audit_metadata). None => disable-first block.
+    """
+    try:
+        from routing_isolation import (
+            build_isolation_audit_metadata,
+            resolve_compliant_fallback,
+        )
+    except ImportError:
+        from .routing_isolation import (
+            build_isolation_audit_metadata,
+            resolve_compliant_fallback,
+        )
+
+    compliant, reason_code = resolve_compliant_fallback(
+        primary_model=primary_model,
+        requested_fallback=requested_fallback,
+        routing_models=ctx["routing_models"],
+        fallback_chains=ctx["fallback_chains"],
+        data_sensitivity=ctx["data_sensitivity"],
+        required_compliance=ctx["required_compliance"],
+        allowed_models=ctx["allowed_set"],
+    )
+    chains = ctx.get("fallback_chains") or {}
+    audit_meta = build_isolation_audit_metadata(
+        event_kind="isolation_reroute",
+        scope=scope,
+        trigger_source=trigger_source,
+        action="reroute" if compliant else "block",
+        reason=reason or reason_code,
+        original_model=primary_model,
+        selected_model=compliant or "",
+        data_sensitivity=ctx["data_sensitivity"],
+        compliance_tags=ctx["required_compliance"],
+        fallback_chain_version=chains.get("version"),
+        fallback_reason_code=reason_code,
+    )
+    return compliant, audit_meta
+
+
+try:
+    from .stream_orchestration import (
+        StreamFinalizeHooks,
+        StreamLaunchContext,
+        StreamRunMetrics,
+        StreamScanMode,
+        build_base_stream_headers,
+        enrich_stream_headers,
+        resolve_scan_mode,
+        stream_with_finalize,
+        streaming_preflight_block_body,
+        wrap_secure_stream_if_needed,
+    )
+    from .metrics import record_stream_complete as _prom_record_stream_complete
+    from .metrics import record_stream_guard_action as _prom_record_stream_guard
+except ImportError:
+    from stream_orchestration import (
+        StreamFinalizeHooks,
+        StreamLaunchContext,
+        StreamRunMetrics,
+        StreamScanMode,
+        build_base_stream_headers,
+        enrich_stream_headers,
+        resolve_scan_mode,
+        stream_with_finalize,
+        streaming_preflight_block_body,
+        wrap_secure_stream_if_needed,
+    )
+    from metrics import record_stream_complete as _prom_record_stream_complete
+    from metrics import record_stream_guard_action as _prom_record_stream_guard
+
+
+def _stream_preflight_block_if_needed(org_config: dict) -> JSONResponse | None:
+    """Fail-closed JSON response before SSE when streaming preflight cannot complete."""
+    merged = {**CONFIG, **(org_config or {})}
+    block_body = streaming_preflight_block_body(
+        merged,
+        policy_sync_loaded=POLICY_SYNC is not None and POLICY_SYNC.is_loaded,
+    )
+    if block_body is None:
+        return None
+    METRICS["blocked"] += 1
+    return JSONResponse(status_code=503, content=block_body)
+
+
+def _stream_finalize_hooks() -> StreamFinalizeHooks:
+    def _record_stream(org_slug: str, model: str, decision: str, metrics: StreamRunMetrics, elapsed_ms: float, **_kw):
+        _prom_record_stream_complete(
+            org_slug,
+            model,
+            decision,
+            ttft_seconds=metrics.ttft_ms / 1000.0 if metrics.ttft_ms else 0.0,
+            duration_seconds=elapsed_ms / 1000.0,
+            had_error=metrics.had_error,
+            fallback_before_token=metrics.fallback_before_first_token,
+        )
+
+    return StreamFinalizeHooks(
+        circuit_breaker=CIRCUIT_BREAKER,
+        rate_limiter=RATE_LIMITER,
+        record_stream_complete=_record_stream,
+        emit_telemetry=_emit_telemetry,
+    )
+
+
+def _launch_chat_stream_response(
+    *,
+    request: Request,
+    body: dict,
+    org_config: dict,
+    org_slug: str,
+    auth_ctx,
+    redacted_prompt: str | None,
+    route_selection=None,
+    scan_verdict=None,
+    user_id=None,
+    project_id: str = "",
+    key_hash: str = "",
+    rate_limit_tpm: int = 0,
+    estimated_tokens: int = 20,
+    org_tpm_limit: int = 0,
+    secure_output_scan: bool = True,
+):
+    """
+    stream_phase + finalization_phase for /v1/chat/completions (SSE).
+
+    Assumes eligibility_phase and selection_phase already ran in proxy_chat.
+    """
+    scan_mode = resolve_scan_mode(
+        output_scan_enabled=bool(org_config.get("output_scan_enabled", CONFIG.get("output_scan_enabled", True))),
+        input_scanner=INPUT_SCANNER if secure_output_scan else None,
+        output_guard=OUTPUT_GUARD if secure_output_scan else None,
+    )
+    request_id = request.headers.get("X-Request-ID", f"zs-stream-{_uuid.uuid4().hex[:12]}")
+    model = body.get("model", "")
+    enforcement_mode = str(org_config.get("enforcement_mode", CONFIG.get("enforcement_mode", "block")))
+    ctx = StreamLaunchContext(
+        body=body,
+        redacted_prompt=redacted_prompt,
+        org_slug=org_slug or "default",
+        model=model,
+        key_hash=key_hash,
+        rate_limit_tpm=rate_limit_tpm or 0,
+        estimated_tokens=estimated_tokens,
+        org_tpm_limit=org_tpm_limit or 0,
+        route_selection=route_selection,
+        scan_verdict=scan_verdict,
+        scan_mode=scan_mode,
+        request_id=request_id,
+        user_id=user_id,
+        project_id=str(project_id or ""),
+        organization_id=getattr(auth_ctx, "organization_id", None) if auth_ctx else None,
+        source_ip=request.client.host if request.client else "",
+    )
+    headers = enrich_stream_headers(
+        build_base_stream_headers(),
+        route_selection=route_selection,
+        scan_verdict=scan_verdict,
+        redacted_prompt=redacted_prompt,
+        scan_mode=scan_mode,
+        emit_debug=bool(org_config.get("stream_emit_debug_headers", CONFIG.get("stream_emit_debug_headers", False))),
+    )
+    stream_metrics = StreamRunMetrics()
+
+    async def _provider_stream():
+        async for chunk in LLM_ROUTER.acompletion_stream(body, redacted_prompt, metrics=stream_metrics):
+            yield chunk
+
+    inner = _provider_stream()
+    if scan_mode != StreamScanMode.NONE and INPUT_SCANNER is not None and CONFIG.get("output_scan_enabled", True):
+        inner = wrap_secure_stream_if_needed(
+            inner,
+            scan_mode=scan_mode,
+            config={**CONFIG, **org_config},
+            input_scanner=INPUT_SCANNER,
+            output_guard=OUTPUT_GUARD,
+            telemetry=TELEMETRY,
+            ctx=ctx,
+            record_guard_metric=_prom_record_stream_guard,
+            stream_metrics=stream_metrics,
+            enforcement_mode=enforcement_mode,
+        )
+
+    finalized = stream_with_finalize(
+        inner,
+        ctx,
+        _stream_finalize_hooks(),
+        decision="allowed",
+        metrics=stream_metrics,
+        finalize_timeout_ms=int(
+            org_config.get("stream_finalize_timeout_ms", CONFIG.get("stream_finalize_timeout_ms", 5000))
+        ),
+    )
+    return StreamingResponse(
+        finalized,
+        media_type="text/event-stream",
+        headers=headers,
+    )
+
+
+_ROUTING_SENTINEL_MODELS = frozenset({"", "auto"})
+
+
+def _is_routing_sentinel_model(model: str) -> bool:
+    """Client hint meaning 'pick via router' — not an allowlist entry."""
+    return (model or "").strip().lower() in _ROUTING_SENTINEL_MODELS
+
+
+def _resolve_routing_hint_model(
+    requested_model: str,
+    org_config: dict,
+    inference_models: list[dict] | None,
+) -> str:
+    """Map auto/empty to org default_model or first connected inference model."""
+    current = (requested_model or "").strip()
+    if not _is_routing_sentinel_model(current):
+        return current
+    default = str(org_config.get("default_model") or "").strip()
+    if default and not _is_routing_sentinel_model(default):
+        return default
+    for entry in inference_models or []:
+        name = str(entry.get("model_name") or "").strip()
+        if name and not _is_guard_only_model(entry):
+            return name
+    return current
+
+
+def _guard_model_names() -> frozenset[str]:
+    """Models reserved for ZeroShield input/output scanning — never chat inference."""
+    names = {
+        os.getenv("ZEROSHIELD_GUARD_MODEL_NAME", "zeroshield-guard-120b").strip().lower(),
+        "zeroshield-guard-120b",
+        "bedrock-gpt-oss-120b-long-context",
+    }
+    return frozenset(n for n in names if n)
+
+
+def _is_guard_only_model(model: dict) -> bool:
+    name = str(model.get("model_name") or "").strip().lower()
+    if name in _guard_model_names():
+        return True
+    provider = str(model.get("provider") or "").strip().lower()
+    return provider == "internal"
+
+
 def _filter_inference_eligible_models(routing_models: list[dict] | None) -> list[dict]:
-    """Only externally configured provider models are eligible for inference responses."""
+    """Org-connected customer models only — not ZeroShield guard / internal scan models."""
     models = routing_models or []
     eligible: list[dict] = []
     for model in models:
-        provider = str(model.get("provider") or "").strip().lower()
-        if provider == "internal":
+        if _is_guard_only_model(model):
             continue
         if not model.get("is_active", True):
             continue
         if not (model.get("model_name") or model.get("model_id")):
             continue
+        provider = str(model.get("provider") or "").strip().lower()
+        api_key_set = bool(model.get("api_key_set"))
+        # Organization-owned inference must carry tenant credentials.
+        # Local/self-hosted ollama can run without an API key.
+        if provider not in {"ollama"} and not api_key_set:
+            continue
         eligible.append(model)
     return eligible
+
+
+def _build_no_inference_provider_response() -> JSONResponse:
+    """Client must connect their own LLM; developer guard credentials are not used for inference."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "no_provider_configured",
+            "message": (
+                "No organization inference model is configured. "
+                "Connect your provider API key under Firewall → Multi-Model Governance (1.5) → Model Connection. "
+                "Organization keys are encrypted at rest and used for inference billing. "
+                "ZeroShield guard models are used only for input and output scanning."
+            ),
+            "code": "no_provider_configured",
+            "blocked_by": "model_routing",
+            "category": "inference_not_configured",
+        },
+    )
+
+
+def _validate_org_inference_model(
+    *,
+    requested_model: str,
+    body: dict,
+    inference_models: list[dict],
+) -> JSONResponse | None:
+    """Return an error response when inference would use a non-org model."""
+    allowed = _routing_identity_set(inference_models)
+    if not allowed:
+        return _build_no_inference_provider_response()
+
+    final_model = str(body.get("model") or requested_model or "").strip()
+    if final_model.lower() in _guard_model_names():
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "guard_model_not_for_inference",
+                "message": (
+                    "ZeroShield Guard Model is for input/output scanning only. "
+                    "Connect your organization's inference model under Model Connection (module 1.5)."
+                ),
+                "code": "guard_model_not_for_inference",
+                "blocked_by": "model_routing",
+                "category": "inference_not_configured",
+            },
+        )
+    if final_model and final_model not in allowed and final_model != "auto":
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "model_not_configured",
+                "message": (
+                    f"Model '{final_model}' is not configured for organization inference. "
+                    "Add it under Model Connection with your provider API key."
+                ),
+                "code": "model_not_configured",
+                "blocked_by": "model_routing",
+                "category": "inference_not_configured",
+            },
+        )
+    if final_model == "auto" or not final_model:
+        return None
+    if final_model not in allowed:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "model_not_configured",
+                "message": f"Model '{final_model}' is not available for this organization.",
+                "code": "model_not_configured",
+                "blocked_by": "model_routing",
+            },
+        )
+    return None
 
 
 def _routing_identity_set(routing_models: list[dict] | None) -> set[str]:
@@ -876,14 +1377,45 @@ def _build_block_response(
     threat_category = zeroshield.get("threat_type", "policy_violation")
     request_id = zeroshield.get("request_id")
     internal_detail = zeroshield.get("detail")  # Will be logged server-side only
-    
+    detection_tier = str(zeroshield.get("detection_tier") or "")
+
     return _build_safe_block_response(
         status_code=status_code,
         code=code,
         threat_category=threat_category,
         request_id=request_id,
         internal_detail=internal_detail,
+        detection_tier=detection_tier,
     )
+
+
+def _audit_fire_and_forget(
+    *,
+    org_slug: str,
+    decision: str,
+    rule_code: str,
+    metadata: dict | None = None,
+) -> None:
+    """D_G5: emit a query-audit event without blocking the hot path.
+
+    Safe to call from anywhere; never raises. ``decision == "allow"`` is a
+    no-op inside ``emit_query_audit_event`` so callers don't have to branch.
+    """
+    if not org_slug:
+        return
+    try:
+        from telemetry_ops import emit_query_audit_event, _log_task_exception  # type: ignore
+        task = asyncio.create_task(
+            emit_query_audit_event(
+                org_slug=org_slug,
+                decision=decision,
+                rule_code=str(rule_code or "unknown"),
+                metadata=metadata or {},
+            )
+        )
+        task.add_done_callback(_log_task_exception)
+    except Exception as _exc:  # never break the request flow
+        LOG.debug("audit fire-and-forget skipped: %r", _exc)
 
 
 _CATEGORY_THREAT_MAP: dict[str, str] = {
@@ -908,8 +1440,37 @@ def _category_to_threat_type(category: str) -> str:
 import contextvars as _ctxvars
 
 _REQUEST_ORG_ID: _ctxvars.ContextVar[int | None] = _ctxvars.ContextVar("_req_org_id", default=None)
+_REQUEST_ORG_SLUG: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_org_slug", default="")
 _REQUEST_SOURCE_IP: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_src_ip", default="")
 _REQUEST_METHOD: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_method", default="POST")
+
+# Event types that represent isolation / kill-switch / circuit-breaker actions.
+# These are security-critical and MUST always be recorded, even when an org
+# has disabled audit logging — otherwise a tenant could silence its own
+# containment trail.
+_ALWAYS_AUDIT_EVENT_TYPES = ("kill_switch", "model_isolation", "circuit_breaker")
+
+
+def _org_audit_logging_enabled() -> bool:
+    """Resolve the current request org's ``audit_logging_enabled`` setting.
+
+    The control plane maps ``FirewallConfig.audit_logging_enabled`` onto the
+    gateway config key ``telemetry_enabled`` (per-org, synced to Redis). This
+    helper reads it for the *current request's* org so telemetry/audit
+    emission can be skipped when a tenant has turned audit logging off.
+
+    Defaults to ``True`` whenever no per-org value is resolvable, preserving
+    backward-compatible behavior for unauthenticated / no-org requests.
+    """
+    try:
+        slug = _REQUEST_ORG_SLUG.get()
+        if slug and CONFIG_SYNC is not None:
+            oc = CONFIG_SYNC.get_config(slug)
+            if oc is not None and "telemetry_enabled" in oc:
+                return bool(oc.get("telemetry_enabled", True))
+    except Exception:  # noqa: BLE001 — never let the audit gate break the hot path
+        pass
+    return bool(CONFIG.get("telemetry_enabled", True))
 
 
 def _emit_telemetry(status_code: int = 200, **kwargs):
@@ -921,6 +1482,19 @@ def _emit_telemetry(status_code: int = 200, **kwargs):
     kwargs.setdefault("source_ip", _REQUEST_SOURCE_IP.get())
     kwargs.setdefault("method", _REQUEST_METHOD.get())
     kwargs.setdefault("status_code", status_code)
+    event_type = kwargs.get("event_type") or ""
+    _is_isolation = event_type in _ALWAYS_AUDIT_EVENT_TYPES
+    # Per-org audit-logging gate (audit_logging_enabled → telemetry_enabled).
+    # When a tenant disables audit logging we skip emission, EXCEPT for
+    # isolation/kill-switch/circuit-breaker events which are always recorded.
+    if not _is_isolation and not _org_audit_logging_enabled():
+        return
+    if _is_isolation:
+        md = dict(kwargs.get("metadata") or {})
+        md["is_isolation_event"] = True
+        kwargs["metadata"] = md
+        if event_type == "kill_switch" and float(kwargs.get("risk_score") or 0) <= 0.60:
+            kwargs["risk_score"] = 0.85
     event = build_telemetry_event(**kwargs)
     TELEMETRY.emit(event)
     # Phase 1 pilot: best-effort fan-out to Mongo append-only sink.
@@ -937,22 +1511,86 @@ def _emit_telemetry(status_code: int = 200, **kwargs):
         pass
 
 
+async def _enforce_org_tpm_rate_limit(
+    auth_ctx,
+    *,
+    event_type: str,
+    model: str = "",
+    user_id: int | None = None,
+    project_id: str = "",
+    estimated_tokens: int = 20,
+) -> JSONResponse | None:
+    """
+    Phase 1 hardening (Module 1 §1.1): enforce the per-org TPM ceiling on
+    any endpoint that consumes upstream model / vector-DB capacity.
+
+    Thin shim — actual logic in rate_limit_enforcement.py so it can be unit-
+    tested without dragging the full main.py import chain (Py3.9 CI).
+    """
+    from rate_limit_enforcement import enforce_org_tpm_rate_limit
+
+    return await enforce_org_tpm_rate_limit(
+        auth_ctx,
+        rate_limiter=RATE_LIMITER,
+        config_sync=CONFIG_SYNC,
+        metrics=METRICS,
+        emit_telemetry=_emit_telemetry,
+        event_type=event_type,
+        model=model,
+        user_id=user_id,
+        project_id=project_id,
+        estimated_tokens=estimated_tokens,
+    )
+
+
+def _require_admin_role(request) -> JSONResponse | None:
+    """
+    Phase A.2b hardening (Module 1): gate /v1/admin/* endpoints behind an
+    admin RBAC check. Returns a JSONResponse (401/403) when the caller is
+    not admin — handler must return it verbatim.
+
+    Phase 1 Fx-2a: accept a server-to-server bypass when the request carries
+    ``X-Internal-Key`` matching ``GATEWAY_INTERNAL_API_KEY``. This lets the
+    control plane proxy admin reads/mutations on behalf of a Django-RBAC'd
+    user without exposing gateway admin endpoints to user JWTs directly.
+
+    Thin shim — actual predicate in admin_auth.py so it is Py3.9-testable
+    without dragging the full main.py import chain.
+    """
+    from admin_auth import require_admin
+
+    # Header name matches the existing mcp_proxy convention so the control
+    # plane can use a single shared secret for all server-to-server calls.
+    internal_key = os.environ.get("GATEWAY_INTERNAL_API_KEY", "").strip()
+    if internal_key:
+        header_key = (request.headers.get("x-gateway-internal-key") or "").strip()
+        if header_key and header_key == internal_key:
+            return None
+
+    auth_ctx = getattr(request.state, "auth_context", None)
+    return require_admin(auth_ctx)
+
+
 def _maybe_emit_critical_alert(
     threat_type: str,
     confidence: float,
     user_id: int | None = None,
     detail: str = "",
+    org_slug: str = "",
 ) -> None:
     """
     If alerting is enabled and the confidence score exceeds the critical
     threshold, emit a critical_alert telemetry event for backend processing.
     """
-    if not CONFIG.get("alerting_enabled", True):
+    alert_cfg = CONFIG
+    if org_slug and CONFIG_SYNC is not None:
+        alert_cfg = CONFIG_SYNC.get_config(org_slug)
+    if not alert_cfg.get("alerting_enabled", True):
         return
     if TELEMETRY is None:
         return
     risk_score_pct = int(confidence * 100)
-    critical_threshold = CONFIG.get("critical_alert_threshold", 90)
+    critical_threshold = alert_cfg.get("critical_alert_threshold", 90)
     if risk_score_pct >= critical_threshold:
         _emit_telemetry(
             event_type="critical_alert",
@@ -960,13 +1598,13 @@ def _maybe_emit_critical_alert(
             threat_type=threat_type,
             risk_score=confidence,
             user_id=user_id,
-            compliance_tags=CONFIG.get("compliance_frameworks", []),
+            compliance_tags=alert_cfg.get("compliance_frameworks", []),
             metadata={
                 "alert_level": "critical",
                 "risk_score_pct": risk_score_pct,
                 "critical_threshold": critical_threshold,
                 "detail": detail,
-                "alert_recipients": CONFIG.get("alert_recipients", ""),
+                "alert_recipients": alert_cfg.get("alert_recipients", ""),
                 "module": "1.2",
                 "module_id": "1.2",
             },
@@ -1009,11 +1647,34 @@ async def startup():
     global CONFIG, CONFIG_SYNC, LLM_ROUTER, POLICY_SYNC, RATE_LIMITER, INPUT_SCANNER
     global VECTOR_POLICY_SYNC, VECTOR_CLIENTS, CONTEXT_GUARD, VECTOR_PROVIDER_SYNC
     global REDIS_CLIENT, TELEMETRY, OUTPUT_GUARD, CIRCUIT_BREAKER
+    global BEDROCK_EMBEDDER, GROUNDING_GUARD
     import sys
 
     CONFIG = load_config()
     app.state.config = CONFIG
 
+    # Phase 0 D-G1-v3: detect POLICY_SIGNING_KEY misconfiguration at startup.
+    # We intentionally do NOT SystemExit here; that is deferred to release
+    # N+2 per docs/UPGRADE.md. Instead: log CRITICAL, emit a Mongo event,
+    # and let /health return 503 until operator fixes config.
+    if signing_enforced() and _get_signing_key() is None:
+        LOG.critical(
+            "POLICY_SIGNING_KEY is not set but GATEWAY_POLICY_SIGNING_REQUIRED is true. "
+            "Gateway will refuse all policy bundles and /health will report 503. "
+            "Set POLICY_SIGNING_KEY explicitly or set GATEWAY_POLICY_SIGNING_REQUIRED=false "
+            "for the cutover window only. SystemExit on this condition is deferred to "
+            "release N+2; see docs/UPGRADE.md."
+        )
+        asyncio.create_task(
+            emit_operational_event(
+                EVENT_CLASS_POLICY_HMAC_MISCONFIG,
+                severity="critical",
+                metadata={
+                    "reason": "POLICY_SIGNING_KEY missing while signing enforced",
+                    "site": "startup",
+                },
+            )
+        )
     from config_sync import ConfigSync
     CONFIG_SYNC = ConfigSync(redis_url=CONFIG["redis_url"], config=CONFIG)
     await CONFIG_SYNC.start()
@@ -1041,12 +1702,33 @@ async def startup():
 
     RATE_LIMITER = RateLimiter(redis_url=CONFIG["redis_url"])
 
+    # ── Embedding Vault (Tier-1.6 semantic injection check) ──
+    # Must be initialized BEFORE InputScanner so it can be injected.
+    # Vault auto-disables when DATABASE_URL/vault_db_dsn is unset (zero overhead).
+    _embedding_vault = None
+    if CONFIG.get("embedding_vault_enabled", True):
+        try:
+            from embedding_vault import EmbeddingVault
+            _embedding_vault = EmbeddingVault(
+                pg_dsn=CONFIG.get("vault_db_dsn", ""),
+                similarity_threshold=CONFIG.get("embedding_vault_threshold", 0.35),
+            )
+            LOG.info(
+                "Embedding Vault initialized (enabled=%s, threshold=%.2f)",
+                _embedding_vault.enabled,
+                CONFIG.get("embedding_vault_threshold", 0.35),
+            )
+        except Exception as exc:  # noqa: BLE001 - vault init failures must not block startup
+            LOG.warning("EmbeddingVault initialization failed: %s", exc)
+            _embedding_vault = None
+
     if CONFIG.get("input_scan_enabled", True):
         from scanner import InputScanner
 
         INPUT_SCANNER = InputScanner(
             thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
             config=CONFIG,
+            embedding_vault=_embedding_vault,
         )
 
     # Shared async Redis client for kill-switch + telemetry
@@ -1101,6 +1783,32 @@ async def startup():
         )
         LOG.info("Circuit breaker initialized")
 
+    # Semantic grounding (Bedrock Titan v2) -> attach to output guard
+    if (
+        OUTPUT_GUARD is not None
+        and CIRCUIT_BREAKER is not None
+        and CONFIG.get("output_grounding_enabled", True)
+    ):
+        try:
+            from rag_pipeline.bedrock_embedder import BedrockEmbedder
+            from rag_pipeline.grounding_guard import GroundingGuard
+            from bedrock_client import default_bedrock_client
+
+            BEDROCK_EMBEDDER = BedrockEmbedder(
+                bedrock_client=default_bedrock_client(),
+                circuit_breaker=CIRCUIT_BREAKER,
+            )
+            GROUNDING_GUARD = GroundingGuard(embedder=BEDROCK_EMBEDDER)
+            OUTPUT_GUARD.set_grounding_guard(GROUNDING_GUARD)
+            LOG.info(
+                "Semantic grounding (Bedrock Titan v2) attached to output guard"
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning(
+                "Failed to initialize semantic grounding guard: %s (lexical fallback in effect)",
+                exc,
+            )
+
     if CONFIG.get("policy_cache_enabled", True):
         from policy_sync import PolicySync
 
@@ -1109,11 +1817,25 @@ async def startup():
 
     if CONFIG.get("rag_enabled", False):
         from vector_policy_sync import VectorPolicySync
-        from vector_client import PineconeClient, MilvusClient
+        from vector_client import PineconeClient, MilvusClient, ChromaDBClient
         from context_guard import ContextGuard
 
         VECTOR_POLICY_SYNC = VectorPolicySync(redis_url=CONFIG["redis_url"])
         await VECTOR_POLICY_SYNC.start()
+
+        # Phase 1 F-3.1: local ChromaDB is the default zero-config backend
+        # for the RAG Collection Manager. Registered before the cloud
+        # providers so it surfaces first in the UI dropdown.
+        if CONFIG.get("chroma_url"):
+            try:
+                VECTOR_CLIENTS["chroma"] = ChromaDBClient(
+                    url=CONFIG["chroma_url"],
+                    auth_token=CONFIG.get("chroma_auth_token", ""),
+                    thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
+                )
+                LOG.info("ChromaDB vector client registered (url=%s)", CONFIG["chroma_url"])
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("ChromaDB client registration failed: %s", exc)
 
         if CONFIG.get("pinecone_api_key"):
             VECTOR_CLIENTS["pinecone"] = PineconeClient(
@@ -1165,14 +1887,9 @@ async def startup():
             _llm_judge = LLMJudge(model=_bedrock_model)
             LOG.info("LLM Judge initialized (bedrock_model=%s)", _bedrock_model)
 
-        _embedding_vault = None
-        if CONFIG.get("embedding_vault_enabled", True):
-            from embedding_vault import EmbeddingVault
-            _embedding_vault = EmbeddingVault(
-                pg_dsn=CONFIG.get("vault_db_dsn", ""),
-                similarity_threshold=CONFIG.get("embedding_vault_threshold", 0.35),
-            )
-            LOG.info("Embedding Vault initialized (threshold=%.2f)", CONFIG.get("embedding_vault_threshold", 0.35))
+        # Embedding Vault already initialized above (hoisted before InputScanner
+        # so it can be injected as the Tier-1.6 semantic-injection check).
+        # The same instance is reused here by the RAG pipeline.
 
         _canary_manager = None
         if CONFIG.get("canary_tokens_enabled", True):
@@ -1256,7 +1973,7 @@ async def startup():
     except Exception as exc:
         LOG.warning("Bedrock dedicated logger failed to initialize: %s", exc)
 
-    # MCP Proxy (ContextForge + Secure-MCP-Gateway)
+    # MCP Proxy (Secure-MCP-Gateway + direct upstream + stdio adapter)
     try:
         from mcp_proxy import router as mcp_proxy_router, org_gateway_router
     except ImportError:
@@ -1281,6 +1998,19 @@ async def startup():
         from .mcp_oauth_proxy import router as mcp_oauth_proxy_router
     app.include_router(mcp_oauth_proxy_router)
     LOG.info("MCP upstream OAuth proxy mounted (/gateway/{org}/mcp/{server}/oauth/*)")
+
+    # Vector Operations API (/v1/vector/*) — see vector_routes.py for the
+    # full route surface (query, upsert, delete, config). The router was
+    # historically defined but never mounted, leaving the documented
+    # vector data-plane unreachable; this restores it. Mounting is purely
+    # additive — endpoints enforce the same per-request firewall checks
+    # and SSRF/payload guards as the legacy gateway routes.
+    try:
+        from vector_routes import router as vector_router
+    except ImportError:
+        from .vector_routes import router as vector_router
+    app.include_router(vector_router)
+    LOG.info("Vector operations routes mounted at /v1/vector/*")
 
     # MCP Stdio & WebSocket adapter lifecycle
     try:
@@ -1502,7 +2232,39 @@ async def proxy_chat(
         except Exception:
             return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
 
-        body = normalize_openai_chat_request(raw_body, strip_unknown_top_level=True)
+        try:
+            body = normalize_openai_chat_request(raw_body, strip_unknown_top_level=True)
+        except (ValueError, TypeError) as exc:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_request",
+                    "message": str(exc) or "Invalid chat completion request body.",
+                    "code": "invalid_request_body",
+                },
+            )
+
+        messages_raw = body.get("messages")
+        if messages_raw is not None and not isinstance(messages_raw, list):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "invalid_request",
+                    "message": "'messages' must be an array.",
+                    "code": "invalid_messages",
+                },
+            )
+        if isinstance(messages_raw, list):
+            for idx, msg in enumerate(messages_raw):
+                if not isinstance(msg, dict):
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "error": "invalid_request",
+                            "message": f"messages[{idx}] must be an object.",
+                            "code": "invalid_messages",
+                        },
+                    )
 
         # Preserve routing controls that are not part of strict OpenAI payload schema.
         if isinstance(raw_body, dict):
@@ -1515,10 +2277,24 @@ async def proxy_chat(
                 body["enable_routing"] = raw_enable_routing
 
             raw_metadata = raw_body.get("metadata")
-            if isinstance(raw_metadata, dict) and isinstance(raw_metadata.get("enable_routing"), bool):
+            if isinstance(raw_metadata, dict):
                 metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
-                metadata["enable_routing"] = raw_metadata["enable_routing"]
-                body["metadata"] = metadata
+                if isinstance(raw_metadata.get("enable_routing"), bool):
+                    metadata["enable_routing"] = raw_metadata["enable_routing"]
+                if raw_metadata.get("data_sensitivity"):
+                    metadata["data_sensitivity"] = raw_metadata["data_sensitivity"]
+                raw_meta_compliance = raw_metadata.get("compliance_requirements")
+                if raw_meta_compliance is not None:
+                    metadata["compliance_requirements"] = raw_meta_compliance
+                if metadata:
+                    body["metadata"] = metadata
+
+            # Isolation / routing controls stripped by OpenAI normalizer — restore for gateway only.
+            if raw_body.get("data_sensitivity"):
+                body["data_sensitivity"] = raw_body["data_sensitivity"]
+            raw_compliance = raw_body.get("compliance_requirements")
+            if raw_compliance is not None:
+                body["compliance_requirements"] = raw_compliance
 
         # ── Identity: prefer auth_context from AuthMiddleware, fall back to legacy headers ──
         auth_ctx = getattr(request.state, "auth_context", None)
@@ -1537,26 +2313,20 @@ async def proxy_chat(
         inference_models = _filter_inference_eligible_models(routing_models)
         scan_verdict = None
         routing_prefs = _extract_chat_routing_preferences(body, org_config, auth_ctx, scan_verdict)
-        routing_active = bool(inference_models and LLM_ROUTER is not None and routing_prefs["routing_enabled"])
+        routing_active = bool(
+            inference_models and LLM_ROUTER is not None and routing_prefs["routing_enabled"]
+        )
 
         needs_inference = bool(body.get("stream")) or int(body.get("max_tokens") or 0) > 0
         if auth_ctx is not None and not inference_models and needs_inference:
-            return JSONResponse(
-                status_code=422,
-                content={
-                    "error": "no_provider_configured",
-                    "message": (
-                        "No inference model is configured for this organization. "
-                        "Add a model under Firewall → Model Connection, or use max_tokens: 0 for scan-only requests."
-                    ),
-                    "code": "no_provider_configured",
-                },
-            )
+            return _build_no_inference_provider_response()
 
         routing_identities = _routing_identity_set(inference_models)
+        isolation_reroute_locked = False
 
         # Set org context for telemetry enrichment
         _REQUEST_ORG_ID.set(auth_ctx.organization_id if auth_ctx else None)
+        _REQUEST_ORG_SLUG.set((getattr(auth_ctx, "org_slug", "") or "") if auth_ctx else "")
 
         # ── Master firewall toggle ──
         firewall_disabled = org_config.get("firewall_enabled") is False
@@ -1625,17 +2395,23 @@ async def proxy_chat(
         if not routing_allowed_models:
             routing_allowed_models = global_allowed_models or key_allowed_models
 
-        if not requested_model and inference_models:
-            requested_model = str(routing_prefs.get("preferred_model") or "").strip()
-            if not requested_model:
-                requested_model = str(inference_models[0].get("model_name") or "").strip()
-            if requested_model:
+        if _is_routing_sentinel_model(requested_model) and inference_models:
+            requested_model = _resolve_routing_hint_model(
+                requested_model, org_config, inference_models
+            )
+            if requested_model and not _is_routing_sentinel_model(requested_model):
                 body["model"] = requested_model
 
         # ── Global model isolation (from firewall config) ──
         if not firewall_disabled and org_config.get("model_isolation_enabled", False):
             global_allowed = global_allowed_models
-            if global_allowed and requested_model and requested_model not in global_allowed and not routing_active:
+            if (
+                global_allowed
+                and requested_model
+                and not _is_routing_sentinel_model(requested_model)
+                and requested_model not in global_allowed
+                and not routing_active
+            ):
                 if enforcement_mode == "block":
                     METRICS["blocked"] += 1
                     _emit_telemetry(
@@ -1701,30 +2477,109 @@ async def proxy_chat(
                         )
 
         # ── Kill-switch check (Redis, ~0.1ms) ──
-        if org_config.get("kill_switch_enabled", True) and REDIS_CLIENT is not None:
+        if org_config.get("kill_switch_enabled", True):
+            if REDIS_CLIENT is None:
+                METRICS["blocked"] += 1
+                _emit_telemetry(
+                    status_code=503,
+                    event_type="kill_switch",
+                    model=requested_model,
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_prefix=auth_ctx.prefix if auth_ctx else "",
+                    action="block",
+                    risk_score=0.60,
+                    threat_type="kill_switch",
+                    metadata={
+                        "reason": "Kill-switch Redis unavailable — fail-closed",
+                        "trigger_source": "kill_switch",
+                        "kill_switch_truth_mode": "per_request_redis",
+                    },
+                )
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "error": "service_unavailable",
+                        "message": "Kill-switch enforcement unavailable.",
+                        "code": "kill_switch_active",
+                    },
+                )
             from kill_switch import check_kill_switch
+            try:
+                from .metrics import record_kill_switch as _prom_ks
+            except ImportError:
+                from metrics import record_kill_switch as _prom_ks  # type: ignore[no-redef]
 
-            ks_verdict = await check_kill_switch(REDIS_CLIENT, requested_model, org_slug=org_slug)
+            ks_key_prefix = auth_ctx.prefix if auth_ctx else ""
+            ks_verdict = await check_kill_switch(
+                REDIS_CLIENT,
+                requested_model,
+                org_slug=org_slug,
+                key_prefix=ks_key_prefix,
+            )
             if ks_verdict.is_killed:
-                if ks_verdict.action == "reroute" and ks_verdict.fallback_model:
-                    LOG.warning(
-                        "Kill-switch reroute: %s -> %s (reason: %s)",
-                        requested_model, ks_verdict.fallback_model, ks_verdict.reason,
+                _prom_ks(requested_model, ks_verdict.action or "block")
+                ks_original = requested_model
+                iso_ctx = _isolation_reroute_context(
+                    org_slug, routing_models, routing_prefs, allowed_models, body=body
+                )
+                if ks_verdict.action == "reroute":
+                    compliant_model, ks_audit = _apply_compliant_isolation_reroute(
+                        primary_model=ks_original,
+                        requested_fallback=ks_verdict.fallback_model,
+                        ctx=iso_ctx,
+                        scope=ks_verdict.scope or "org_model",
+                        trigger_source="kill_switch",
+                        reason=ks_verdict.reason,
                     )
-                    body["model"] = ks_verdict.fallback_model
-                    requested_model = ks_verdict.fallback_model
-                    _emit_telemetry(
-                        event_type="kill_switch",
-                        model=requested_model,
-                        user_id=user_id,
-                        project_id=str(project_id or ""),
-                        key_prefix=auth_ctx.prefix if auth_ctx else "",
-                        action="reroute",
-                        risk_score=0.60,
-                        threat_type="kill_switch",
-                        metadata={"reason": ks_verdict.reason, "original_model": body.get("model", "")},
-                    )
-                else:
+                    if compliant_model:
+                        LOG.warning(
+                            "Kill-switch reroute: %s -> %s (reason: %s)",
+                            ks_original, compliant_model, ks_verdict.reason,
+                        )
+                        body["model"] = compliant_model
+                        requested_model = compliant_model
+                        isolation_reroute_locked = True
+                        ks_audit["kill_switch_action"] = "reroute"
+                        _emit_telemetry(
+                            event_type="kill_switch",
+                            model=requested_model,
+                            user_id=user_id,
+                            project_id=str(project_id or ""),
+                            key_prefix=ks_key_prefix,
+                            action="reroute",
+                            risk_score=0.60,
+                            threat_type="kill_switch",
+                            metadata=ks_audit,
+                        )
+                    else:
+                        block_reason = (
+                            f"{ks_verdict.reason}; no compliant fallback "
+                            f"({ks_audit.get('fallback_reason_code', 'ineligible')})"
+                        )
+                        METRICS["blocked"] += 1
+                        ks_audit["kill_switch_action"] = "block"
+                        _emit_telemetry(
+                            status_code=503,
+                            event_type="kill_switch",
+                            model=ks_original,
+                            user_id=user_id,
+                            project_id=str(project_id or ""),
+                            key_prefix=ks_key_prefix,
+                            action="block",
+                            risk_score=0.60,
+                            threat_type="kill_switch",
+                            metadata={**ks_audit, "reason": block_reason},
+                        )
+                        return JSONResponse(
+                            status_code=503,
+                            content={
+                                "error": "service_unavailable",
+                                "message": f"Model '{ks_original}' is disabled (no compliant fallback).",
+                                "code": "kill_switch_active",
+                            },
+                        )
+                if ks_verdict.is_killed and ks_verdict.action != "reroute":
                     METRICS["blocked"] += 1
                     _emit_telemetry(
                         status_code=503,
@@ -1736,13 +2591,19 @@ async def proxy_chat(
                         action="block",
                         risk_score=0.60,
                         threat_type="kill_switch",
-                        metadata={"reason": ks_verdict.reason},
+                        metadata={
+                            "reason": ks_verdict.reason,
+                            "original_model": ks_original,
+                            "isolation_scope": ks_verdict.scope,
+                            "trigger_source": "kill_switch",
+                            "kill_switch_truth_mode": "per_request_redis",
+                        },
                     )
                     return JSONResponse(
                         status_code=503,
                         content={
                             "error": "service_unavailable",
-                            "message": f"Model '{requested_model}' is currently disabled.",
+                            "message": f"Model '{ks_original}' is currently disabled.",
                             "code": "kill_switch_active",
                         },
                     )
@@ -1752,26 +2613,102 @@ async def proxy_chat(
             from model_state import check_model_state
 
             ms_verdict = await check_model_state(REDIS_CLIENT, requested_model, org_slug=org_slug or "default")
+            ms_original = requested_model
+            iso_ctx = _isolation_reroute_context(
+                org_slug, routing_models, routing_prefs, allowed_models, body=body
+            )
+
+            if ms_verdict.status == "suspended":
+                METRICS["blocked"] += 1
+                _emit_telemetry(
+                    status_code=503,
+                    event_type="model_isolation",
+                    model=ms_original,
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_prefix=auth_ctx.prefix if auth_ctx else "",
+                    action="block",
+                    risk_score=1.0,
+                    threat_type="model_state_unavailable",
+                    metadata={
+                        "reason": ms_verdict.reason,
+                        "original_model": ms_original,
+                        "status": "suspended",
+                        "trigger_source": "model_state",
+                        "kill_switch_truth_mode": "per_request_redis",
+                    },
+                )
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "error": "service_unavailable",
+                        "message": f"Model state unavailable for '{ms_original}'.",
+                        "code": "model_state_unavailable",
+                        "reason": ms_verdict.reason,
+                    },
+                )
+
             if ms_verdict.status == "isolated":
-                if ms_verdict.action == "reroute" and ms_verdict.fallback_model:
-                    LOG.warning(
-                        "Model-state reroute: %s -> %s (reason: %s)",
-                        requested_model, ms_verdict.fallback_model, ms_verdict.reason,
+                if ms_verdict.action == "reroute":
+                    compliant_model, ms_audit = _apply_compliant_isolation_reroute(
+                        primary_model=ms_original,
+                        requested_fallback=ms_verdict.fallback_model,
+                        ctx=iso_ctx,
+                        scope="org_model",
+                        trigger_source="model_state",
+                        reason=ms_verdict.reason,
                     )
-                    body["model"] = ms_verdict.fallback_model
-                    requested_model = ms_verdict.fallback_model
-                    _emit_telemetry(
-                        event_type="model_isolation",
-                        model=requested_model,
-                        user_id=user_id,
-                        project_id=str(project_id or ""),
-                        key_prefix=auth_ctx.prefix if auth_ctx else "",
-                        action="reroute",
-                        risk_score=ms_verdict.risk_score / 100.0,
-                        threat_type="model_isolated",
-                        metadata={"reason": ms_verdict.reason, "original_model": body.get("model", ""), "risk_score": ms_verdict.risk_score, "threshold": ms_verdict.threshold},
-                    )
-                elif ms_verdict.action == "alert":
+                    if compliant_model:
+                        LOG.warning(
+                            "Model-state reroute: %s -> %s (reason: %s)",
+                            ms_original, compliant_model, ms_verdict.reason,
+                        )
+                        body["model"] = compliant_model
+                        requested_model = compliant_model
+                        isolation_reroute_locked = True
+                        ms_audit["risk_score"] = ms_verdict.risk_score
+                        ms_audit["threshold"] = ms_verdict.threshold
+                        _emit_telemetry(
+                            event_type="model_isolation",
+                            model=requested_model,
+                            user_id=user_id,
+                            project_id=str(project_id or ""),
+                            key_prefix=auth_ctx.prefix if auth_ctx else "",
+                            action="reroute",
+                            risk_score=ms_verdict.risk_score / 100.0,
+                            threat_type="model_isolated",
+                            metadata=ms_audit,
+                        )
+                    else:
+                        block_reason = (
+                            f"{ms_verdict.reason}; no compliant fallback "
+                            f"({ms_audit.get('fallback_reason_code', 'ineligible')})"
+                        )
+                        METRICS["blocked"] += 1
+                        ms_audit["risk_score"] = ms_verdict.risk_score
+                        ms_audit["threshold"] = ms_verdict.threshold
+                        _emit_telemetry(
+                            status_code=503,
+                            event_type="model_isolation",
+                            model=ms_original,
+                            user_id=user_id,
+                            project_id=str(project_id or ""),
+                            key_prefix=auth_ctx.prefix if auth_ctx else "",
+                            action="block",
+                            risk_score=ms_verdict.risk_score / 100.0,
+                            threat_type="model_isolated",
+                            metadata={**ms_audit, "reason": block_reason},
+                        )
+                        return JSONResponse(
+                            status_code=503,
+                            content={
+                                "error": "service_unavailable",
+                                "message": f"Model '{ms_original}' is isolated (no compliant fallback).",
+                                "code": "model_isolated",
+                                "reason": block_reason,
+                            },
+                        )
+                if ms_verdict.status == "isolated" and ms_verdict.action == "alert":
                     LOG.warning(
                         "Model '%s' isolated with alert-only (risk=%.1f, reason=%s)",
                         requested_model, ms_verdict.risk_score, ms_verdict.reason,
@@ -1785,27 +2722,38 @@ async def proxy_chat(
                         action="alert",
                         risk_score=ms_verdict.risk_score / 100.0,
                         threat_type="model_isolated",
-                        metadata={"reason": ms_verdict.reason, "risk_score": ms_verdict.risk_score},
+                        metadata={
+                            "reason": ms_verdict.reason,
+                            "risk_score": ms_verdict.risk_score,
+                            "original_model": ms_original,
+                            "trigger_source": "model_state",
+                        },
                     )
-                else:
+                elif ms_verdict.status == "isolated":
                     METRICS["blocked"] += 1
                     _emit_telemetry(
                         status_code=503,
                         event_type="model_isolation",
-                        model=requested_model,
+                        model=ms_original,
                         user_id=user_id,
                         project_id=str(project_id or ""),
                         key_prefix=auth_ctx.prefix if auth_ctx else "",
                         action="block",
                         risk_score=ms_verdict.risk_score / 100.0,
                         threat_type="model_isolated",
-                        metadata={"reason": ms_verdict.reason, "risk_score": ms_verdict.risk_score, "threshold": ms_verdict.threshold},
+                        metadata={
+                            "reason": ms_verdict.reason,
+                            "risk_score": ms_verdict.risk_score,
+                            "threshold": ms_verdict.threshold,
+                            "original_model": ms_original,
+                            "trigger_source": "model_state",
+                        },
                     )
                     return JSONResponse(
                         status_code=503,
                         content={
                             "error": "service_unavailable",
-                            "message": f"Model '{requested_model}' is currently isolated (risk score: {ms_verdict.risk_score:.1f}).",
+                            "message": f"Model '{ms_original}' is currently isolated (risk score: {ms_verdict.risk_score:.1f}).",
                             "code": "model_isolated",
                             "reason": ms_verdict.reason,
                             "risk_score": ms_verdict.risk_score,
@@ -1813,17 +2761,21 @@ async def proxy_chat(
                         },
                     )
 
-        # ── Global RPM + burst rate limiting (from firewall config) ──
+        # ── Per-org RPM + burst rate limiting (from firewall config) ──
         if (
             not firewall_disabled
-            and CONFIG.get("rate_limit_enabled", True)
+            and org_config.get("rate_limit_enabled", CONFIG.get("rate_limit_enabled", True))
             and REDIS_CLIENT is not None
         ):
+            # Each org enforces its own configured limit against its own Redis
+            # counter. Unauthenticated requests (empty org_slug) share a single
+            # "global" bucket so the key is never "ratelimit::...".
+            rl_scope = org_slug or "global"
             now_ts = int(time.time())
             try:
-                burst_limit = CONFIG.get("burst_limit", 150)
+                burst_limit = org_config.get("burst_limit", CONFIG.get("burst_limit", 150))
                 second_bucket = now_ts
-                burst_key = f"ratelimit:global:burst:{second_bucket}"
+                burst_key = f"ratelimit:{rl_scope}:burst:{second_bucket}"
                 current_burst = await REDIS_CLIENT.incr(burst_key)
                 if current_burst == 1:
                     await REDIS_CLIENT.expire(burst_key, 2)
@@ -1859,9 +2811,9 @@ async def proxy_chat(
             except Exception:
                 LOG.warning("Burst rate check failed, skipping", exc_info=True)
 
-            rpm_limit = CONFIG.get("requests_per_minute", 1000)
+            rpm_limit = org_config.get("requests_per_minute", CONFIG.get("requests_per_minute", 1000))
             minute_bucket = now_ts // 60
-            rpm_key = f"ratelimit:global:{minute_bucket}"
+            rpm_key = f"ratelimit:{rl_scope}:{minute_bucket}"
             try:
                 current_rpm = await REDIS_CLIENT.incr(rpm_key)
                 if current_rpm == 1:
@@ -1879,24 +2831,31 @@ async def proxy_chat(
                             action="block",
                             risk_score=0.30,
                             threat_type="rate_limit_rpm",
-                            metadata={"detail": f"Global RPM limit exceeded ({current_rpm}/{rpm_limit})"},
+                            metadata={"detail": f"RPM limit exceeded ({current_rpm}/{rpm_limit})"},
                         )
                         return JSONResponse(
                             status_code=429,
                             content={
                                 "error": "rate_limited",
-                                "message": f"Global rate limit exceeded ({current_rpm}/{rpm_limit} RPM).",
-                                "code": "global_rate_limit_exceeded",
+                                "message": f"Rate limit exceeded ({current_rpm}/{rpm_limit} RPM).",
+                                "code": "rate_limit_exceeded",
                             },
                             headers={"Retry-After": "60"},
                         )
                     else:
                         LOG.warning(
-                            "MONITOR: global RPM limit exceeded (%d/%d)",
+                            "MONITOR: RPM limit exceeded (%d/%d)",
                             current_rpm, rpm_limit,
                         )
             except Exception:
-                LOG.warning("Global RPM check failed, skipping", exc_info=True)
+                LOG.warning("RPM check failed, skipping", exc_info=True)
+
+        messages = body.get("messages") or []
+        prompt_for_estimate = _extract_prompt_from_messages(messages)
+        estimated_request_tokens = _estimate_request_tokens(
+            prompt_for_estimate,
+            int(body.get("max_tokens") or 0),
+        )
 
         # ── Per-org TPM rate limit enforcement (Phase 1 hardening) ──
         # Fail-CLOSED Lua check; org_tpm_limit=0 disables the ceiling.
@@ -1910,7 +2869,9 @@ async def proxy_chat(
                     org_tpm_limit = 0
             if org_tpm_limit:
                 org_allowed, org_current = await RATE_LIMITER.check_org_rate_limit(
-                    auth_ctx.org_slug, org_tpm_limit,
+                    auth_ctx.org_slug,
+                    org_tpm_limit,
+                    estimated_request_tokens,
                 )
                 if not org_allowed:
                     METRICS["blocked"] += 1
@@ -1943,7 +2904,9 @@ async def proxy_chat(
         # ── Per-key TPM rate limit enforcement ──
         if RATE_LIMITER is not None and auth_ctx is not None and rate_limit_tpm:
             rate_allowed, current_usage = await RATE_LIMITER.check_rate_limit(
-                auth_ctx.key_hash, rate_limit_tpm,
+                auth_ctx.key_hash,
+                rate_limit_tpm,
+                estimated_request_tokens,
             )
             if not rate_allowed:
                 METRICS["blocked"] += 1
@@ -1957,19 +2920,32 @@ async def proxy_chat(
                     action="block",
                     risk_score=0.30,
                     threat_type="rate_limit_tpm",
-                    metadata={"detail": f"Token rate limit exceeded ({current_usage}/{rate_limit_tpm} TPM)"},
+                    metadata={
+                        "detail": (
+                            f"Token rate limit exceeded ({current_usage}/{rate_limit_tpm} TPM, "
+                            f"est {estimated_request_tokens} tokens this request)"
+                        ),
+                    },
                 )
                 return JSONResponse(
                     status_code=429,
                     content={
                         "error": "rate_limited",
-                        "message": f"Token rate limit exceeded ({current_usage}/{rate_limit_tpm} TPM).",
+                        "message": (
+                            f"Token rate limit exceeded ({current_usage}/{rate_limit_tpm} TPM, "
+                            f"estimated {estimated_request_tokens} tokens for this request)."
+                        ),
                         "code": "rate_limit_exceeded",
+                        "blocked_by": "rate_limit",
+                        "rate_limit": {
+                            "scope": "gateway_tpm",
+                            "current_tpm": current_usage,
+                            "limit_tpm": rate_limit_tpm,
+                            "estimated_tokens": estimated_request_tokens,
+                        },
                     },
                     headers={"Retry-After": "60"},
                 )
-
-        messages = body.get("messages") or []
 
         max_ctx = getattr(auth_ctx, "max_context_tokens", 0) if auth_ctx else 0
         if not max_ctx:
@@ -1978,7 +2954,7 @@ async def proxy_chat(
             messages = minimize_context(messages, max_ctx)
             body["messages"] = messages
 
-        prompt = _extract_prompt_from_messages(messages)
+        prompt = prompt_for_estimate or _extract_prompt_from_messages(messages)
         _prompt_snippet = prompt[:500] if prompt else ""
         agent_data = _extract_agent_data(body, x_agent_data)
 
@@ -1995,7 +2971,10 @@ async def proxy_chat(
             custom_blocked = org_config.get("blocked_keywords", [])
             if custom_blocked and isinstance(custom_blocked, list):
                 prompt_lower = prompt.lower()
-                matched_kw = [kw for kw in custom_blocked if kw.lower() in prompt_lower]
+                matched_kw = [
+                    kw for kw in custom_blocked
+                    if _blocked_keyword_matches(prompt_lower, kw)
+                ]
                 if matched_kw:
                     if enforcement_mode == "block":
                         METRICS["blocked"] += 1
@@ -2013,6 +2992,16 @@ async def proxy_chat(
                             metadata={"detail": f"Blocked keyword(s): {', '.join(matched_kw)}"},
                             prompt_snippet=_prompt_snippet,
                             endpoint_id=endpoint_id,
+                        )
+                        _audit_fire_and_forget(
+                            org_slug=org_slug or "",
+                            decision="block",
+                            rule_code=(matched_kw[0] if matched_kw else "custom_keyword_block"),
+                            metadata={
+                                "input_bytes": len((prompt or "").encode("utf-8")),
+                                "model_id": body.get("model", ""),
+                                "matched_keywords": matched_kw,
+                            },
                         )
                         return _build_block_response(403, "content_blocked", _build_zeroshield_metadata(
                             action="block",
@@ -2040,10 +3029,26 @@ async def proxy_chat(
             is_stream = body.get("stream", False)
             if is_stream:
                 METRICS["allowed"] += 1
-                return StreamingResponse(
-                    LLM_ROUTER.acompletion_stream(body, None),
-                    media_type="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                _audit_fire_and_forget(
+                    org_slug=org_slug or "",
+                    decision="allow",
+                    rule_code="firewall_disabled_stream",
+                    metadata={"stream": True, "model": body.get("model", "")},
+                )
+                return _launch_chat_stream_response(
+                    request=request,
+                    body=body,
+                    org_config=org_config,
+                    org_slug=org_slug,
+                    auth_ctx=auth_ctx,
+                    redacted_prompt=None,
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_hash=auth_ctx.key_hash if auth_ctx else "",
+                    rate_limit_tpm=rate_limit_tpm or 0,
+                    estimated_tokens=estimated_request_tokens,
+                    org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
+                    secure_output_scan=False,
                 )
             code, resp = await LLM_ROUTER.acompletion(body, None)
             METRICS["allowed"] += 1
@@ -2128,6 +3133,14 @@ async def proxy_chat(
 
             action = check_resp.get("action") or "allow"
             if action == "block":
+                has_policy_match = bool(
+                    check_resp.get("matched_policies")
+                    or check_resp.get("matched_rules")
+                    or check_resp.get("matched_policy_names")
+                )
+                if not has_policy_match:
+                    return _ambiguous_policy_block_response(org_slug=org_slug or "")
+            if action == "block":
                 if enforcement_mode == "block":
                     METRICS["blocked"] += 1
                     elapsed_ms = (time.perf_counter() - start) * 1000
@@ -2152,6 +3165,17 @@ async def proxy_chat(
                             prompt_snippet=_prompt_snippet,
                             endpoint_id=endpoint_id,
                         )
+                    _audit_fire_and_forget(
+                        org_slug=org_slug or "",
+                        decision="block",
+                        rule_code=((check_resp.get("matched_rules") or ["policy_block"])[0]),
+                        metadata={
+                            "input_bytes": len((prompt or "").encode("utf-8")),
+                            "model_id": body.get("model", ""),
+                            "matched_rules": check_resp.get("matched_rules") or [],
+                            "matched_policies": check_resp.get("matched_policies") or [],
+                        },
+                    )
                     return _build_block_response(403, "content_blocked", _build_zeroshield_metadata(
                         action="block",
                         reason=check_resp.get("message") or "Request blocked by policy engine.",
@@ -2195,6 +3219,16 @@ async def proxy_chat(
                         prompt_snippet=_prompt_snippet,
                         endpoint_id=endpoint_id,
                 )
+                _audit_fire_and_forget(
+                    org_slug=org_slug or "",
+                    decision="rewrite",
+                    rule_code=((matched_rules or ["policy_rewrite"])[0]),
+                    metadata={
+                        "input_bytes": len((prompt or "").encode("utf-8")),
+                        "model_id": body.get("model", ""),
+                        "matched_rules": matched_rules,
+                    },
+                )
                 LOG.info("Rewrite action applied (user=%s, rules=%s)", user_id, matched_rules)
 
             # ── Model downgrade action: switch to cheaper/safer model ──
@@ -2220,6 +3254,16 @@ async def proxy_chat(
                         prompt_snippet=_prompt_snippet,
                         endpoint_id=endpoint_id,
                 )
+                _audit_fire_and_forget(
+                    org_slug=org_slug or "",
+                    decision="downgrade",
+                    rule_code=((check_resp.get("matched_rules") or ["policy_downgrade"])[0]),
+                    metadata={
+                        "input_bytes": len((prompt or "").encode("utf-8")),
+                        "model_id": original_model,
+                        "downgrade_to": downgrade_to,
+                    },
+                )
                 LOG.info("Model downgrade: %s -> %s (user=%s)", original_model, downgrade_to, user_id)
 
         if INPUT_SCANNER is not None and org_config.get("input_scan_enabled", True):
@@ -2242,33 +3286,69 @@ async def proxy_chat(
                     )
 
             scan_start = time.perf_counter()
-            if force_sync_tier2:
-                verdict = await INPUT_SCANNER.scan_prompt_with_tier2(
-                    effective_prompt, is_rag=is_rag_request
-                )
-                if verdict and verdict.tier == "tier_2":
-                    stage_metrics["tier2_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
+            # Phase 0 D-G2-v3: per-org tri-state Tier-2 override. Use .get()
+            # without a default so ``None`` (no per-org opinion) survives and
+            # is distinguishable from explicit ``False`` (force-disable).
+            org_tier2_override = org_config.get("tier2_enabled")
+            # Phase 0 D-G3-v3: per-org Tier-2 strictness governs behaviour
+            # when the Bedrock circuit breaker is OPEN. Default True (fail
+            # closed with HTTP 451) per Adversarial Triage F5.
+            org_tier2_strict = bool(org_config.get("tier2_strict", True))
+            # Per-org toxicity threshold (passed by value, never stored on the
+            # shared scanner singleton, so concurrent orgs cannot race on it).
+            org_toxicity_threshold = org_config.get("toxicity_threshold")
+            try:
+                if force_sync_tier2:
+                    verdict = await INPUT_SCANNER.scan_prompt_with_tier2(
+                        effective_prompt,
+                        is_rag=is_rag_request,
+                        org_tier2_override=org_tier2_override,
+                        org_slug=org_slug or "",
+                        org_tier2_strict=org_tier2_strict,
+                        toxicity_threshold=org_toxicity_threshold,
+                    )
+                    if verdict and verdict.tier == "tier_2":
+                        stage_metrics["tier2_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
+                    else:
+                        stage_metrics["tier1_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
                 else:
+                    verdict = await INPUT_SCANNER.scan_prompt(
+                        effective_prompt, is_rag=is_rag_request,
+                        toxicity_threshold=org_toxicity_threshold,
+                    )
                     stage_metrics["tier1_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
-            else:
-                verdict = await INPUT_SCANNER.scan_prompt(
-                    effective_prompt, is_rag=is_rag_request
-                )
-                stage_metrics["tier1_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
-                await enqueue_job(
-                    job_type="tier2_post_scan",
-                    request_id=request.headers.get("X-Request-ID", f"zs-tier2-{_uuid.uuid4().hex[:12]}"),
-                    org_id=getattr(auth_ctx, "organization_id", None) if auth_ctx else None,
-                    payload={
-                        "request_id": request.headers.get("X-Request-ID", ""),
-                        "organization_id": getattr(auth_ctx, "organization_id", None) if auth_ctx else None,
-                        "user_id": user_id,
-                        "project_id": str(project_id or ""),
-                        "prompt": effective_prompt,
-                        "execution_mode": tier2_execution_mode,
-                        "is_rag": bool(is_rag_request),
-                        "is_stream": bool(is_stream_request),
+                    await enqueue_job(
+                        job_type="tier2_post_scan",
+                        request_id=request.headers.get("X-Request-ID", f"zs-tier2-{_uuid.uuid4().hex[:12]}"),
+                        org_id=getattr(auth_ctx, "organization_id", None) if auth_ctx else None,
+                        payload={
+                            "request_id": request.headers.get("X-Request-ID", ""),
+                            "organization_id": getattr(auth_ctx, "organization_id", None) if auth_ctx else None,
+                            "user_id": user_id,
+                            "project_id": str(project_id or ""),
+                            "prompt": effective_prompt,
+                            "execution_mode": tier2_execution_mode,
+                            "is_rag": bool(is_rag_request),
+                            "is_stream": bool(is_stream_request),
+                        },
+                    )
+            except Tier2UnavailableStrict as _t2err:
+                # G3 breaker OPEN + tier2_strict=True. Return HTTP 451 with
+                # the standardized degraded envelope and ``Retry-After``.
+                METRICS["blocked"] += 1
+                retry_after = int(_t2err.retry_after_seconds)
+                return JSONResponse(
+                    status_code=451,
+                    content={
+                        "status": "degraded",
+                        "reason": "tier2_unavailable_strict",
+                        "retry_after": retry_after,
+                        "detail": (
+                            "Tier-2 scanner circuit breaker is open; refusing request "
+                            "while strict mode is enabled."
+                        ),
                     },
+                    headers={"Retry-After": str(retry_after)},
                 )
 
             scan_verdict = verdict
@@ -2284,6 +3364,16 @@ async def proxy_chat(
                 if enforcement_mode == "block":
                     METRICS["blocked"] += 1
                     elapsed_ms = (time.perf_counter() - start) * 1000
+                    _audit_fire_and_forget(
+                        org_slug=org_slug or "",
+                        decision="block",
+                        rule_code="tier2_degraded",
+                        metadata={
+                            "input_bytes": len((prompt or "").encode("utf-8")),
+                            "model_id": body.get("model", ""),
+                            "reason_code": getattr(verdict, "reason_code", ""),
+                        },
+                    )
                     return _build_block_response(403, "tier2_degraded", _build_zeroshield_metadata(
                         action="block",
                         reason="Tier-2 Bedrock scanner degraded; fail-closed policy blocked the request.",
@@ -2349,11 +3439,23 @@ async def proxy_chat(
                     confidence=verdict.confidence,
                     user_id=user_id,
                     detail=verdict.detail,
+                    org_slug=org_slug or "",
                 )
                 if enforcement_mode == "block":
                     METRICS["blocked"] += 1
                     elapsed_ms = (time.perf_counter() - start) * 1000
-                    tier_label = {"tier_1": "Tier 1 regex", "tier_1_5": "Tier 1.5 fuzzy", "tier_2": "Tier 2 ML"}.get(verdict.tier, verdict.tier)
+                    tier_label = {"tier_1": "Tier 1 regex", "tier_1_5": "Tier 1.5 fuzzy", "tier_1_6": "Tier 1.6 semantic", "tier_2": "Tier 2 ML"}.get(verdict.tier, verdict.tier)
+                    _audit_fire_and_forget(
+                        org_slug=org_slug or "",
+                        decision="block",
+                        rule_code=f"{verdict.tier or 'tier_1'}_{verdict.threat_type}",
+                        metadata={
+                            "input_bytes": len((prompt or "").encode("utf-8")),
+                            "model_id": body.get("model", ""),
+                            "score": verdict.confidence,
+                            "matched_patterns": verdict.matched_patterns,
+                        },
+                    )
                     return _build_block_response(403, "content_blocked", _build_zeroshield_metadata(
                         action="block",
                         reason=f"{tier_label} scanner detected {verdict.threat_type}: {verdict.detail}",
@@ -2371,7 +3473,16 @@ async def proxy_chat(
                         verdict.threat_type, verdict.confidence, user_id,
                     )
 
-            if verdict.action in ("block", "redact") and verdict.threat_type in ("pii", "secret"):
+            # pii_detection_enabled (mapped to scan_block_on_pii in the gateway
+            # payload) is org-scoped. When an org disables PII detection we skip
+            # PII redaction for that org. Secrets/credentials are ALWAYS redacted
+            # regardless of this toggle.
+            pii_detection_enabled = bool(org_config.get("scan_block_on_pii", True))
+            _redact_threat = verdict.threat_type in ("pii", "secret") and (
+                verdict.threat_type == "secret" or pii_detection_enabled
+            )
+
+            if verdict.action in ("block", "redact") and _redact_threat:
                 LOG.info(
                     "PII/secret detected, redacting before LLM call (type=%s, patterns=%s, user=%s)",
                     verdict.threat_type, verdict.matched_patterns, user_id,
@@ -2381,11 +3492,21 @@ async def proxy_chat(
                     confidence=verdict.confidence,
                     user_id=user_id,
                     detail=f"PII/secret detected and redacted: {', '.join(verdict.matched_patterns)}",
+                    org_slug=org_slug or "",
                 )
                 effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt)
                 redacted_prompt = effective_prompt
+            elif (
+                verdict.threat_type == "pii"
+                and not pii_detection_enabled
+                and verdict.action in ("block", "redact", "flag")
+            ):
+                LOG.info(
+                    "PII detected but org has PII detection disabled; allowing prompt unredacted (user=%s)",
+                    user_id,
+                )
 
-            if verdict.action == "flag" and verdict.threat_type in ("pii", "secret"):
+            if verdict.action == "flag" and _redact_threat:
                 LOG.info("PII/secret flagged in prompt, redacting before LLM call (user=%s)", user_id)
                 effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt)
                 redacted_prompt = effective_prompt
@@ -2414,17 +3535,24 @@ async def proxy_chat(
                     metadata={"stage_metrics_ms": stage_metrics},
                 )
                 stage_metrics["telemetry_enqueue_ms"] = round((time.perf_counter() - telemetry_start) * 1000, 2)
-                stream_headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
-                if scan_verdict and scan_verdict.tier:
-                    stream_headers["X-ZeroShield-Detection-Tier"] = scan_verdict.tier
-                if redacted_prompt is not None:
-                    stream_headers["X-ZeroShield-Action"] = "redacted"
-                elif scan_verdict and scan_verdict.action == "flag":
-                    stream_headers["X-ZeroShield-Action"] = "flag"
-                return StreamingResponse(
-                    LLM_ROUTER.acompletion_stream(body, redacted_prompt),
-                    media_type="text/event-stream",
-                    headers=stream_headers,
+                preflight_block = _stream_preflight_block_if_needed(org_config)
+                if preflight_block is not None:
+                    return preflight_block
+                return _launch_chat_stream_response(
+                    request=request,
+                    body=body,
+                    org_config=org_config,
+                    org_slug=org_slug,
+                    auth_ctx=auth_ctx,
+                    redacted_prompt=redacted_prompt,
+                    scan_verdict=scan_verdict,
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_hash=auth_ctx.key_hash if auth_ctx else "",
+                    rate_limit_tpm=rate_limit_tpm or 0,
+                    estimated_tokens=estimated_request_tokens,
+                    org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
+                    secure_output_scan=bool(CONFIG.get("output_scan_enabled", True)),
                 )
             upstream_start = time.perf_counter()
             code, resp = await LLM_ROUTER.acompletion(body, redacted_prompt)
@@ -2501,7 +3629,12 @@ async def proxy_chat(
 
         # ── Dynamic model routing for every /v1/chat/completions request ──
         routing_prefs = _extract_chat_routing_preferences(body, org_config, auth_ctx, scan_verdict)
-        routing_active = bool(routing_models and LLM_ROUTER is not None and routing_prefs["routing_enabled"])
+        routing_active = bool(
+            inference_models
+            and LLM_ROUTER is not None
+            and routing_prefs["routing_enabled"]
+            and not isolation_reroute_locked
+        )
         if routing_active:
             selection = await LLM_ROUTER.adjudicate_model_selection(
                 routing_models=inference_models,
@@ -2586,8 +3719,43 @@ async def proxy_chat(
                 "weights": routing_prefs["weights"],
             }
 
+        if _is_routing_sentinel_model(requested_model):
+            resolved = _resolve_routing_hint_model(
+                requested_model, org_config, inference_models
+            )
+            if resolved and not _is_routing_sentinel_model(resolved):
+                requested_model = resolved
+                body["model"] = resolved
+
+        routing_probe_only = not needs_inference
+        if routing_probe_only and _is_routing_sentinel_model(requested_model):
+            if not inference_models:
+                return _build_no_inference_provider_response()
+            if route_selection is None:
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "error": "routing_target_unresolved",
+                        "message": (
+                            "Could not resolve a routing target. Connect an inference model "
+                            "under Model Connection (with API key), enable Dynamic Routing, and "
+                            "set Default Fallback Model in Routing Governance."
+                        ),
+                        "code": "routing_target_unresolved",
+                        "blocked_by": "model_routing",
+                        "category": "inference_not_configured",
+                        "zeroshield": {"routing": route_metadata or {}},
+                    },
+                )
+
         # ── Final allowlist enforcement against the routed model ──
-        if allowed_models and requested_model and requested_model not in allowed_models:
+        if (
+            not routing_probe_only
+            and allowed_models
+            and requested_model
+            and not _is_routing_sentinel_model(requested_model)
+            and requested_model not in allowed_models
+        ):
             METRICS["blocked"] += 1
             return JSONResponse(
                 status_code=403,
@@ -2603,7 +3771,13 @@ async def proxy_chat(
 
         if not firewall_disabled and org_config.get("model_isolation_enabled", False):
             global_allowed = global_allowed_models
-            if global_allowed and requested_model and requested_model not in global_allowed:
+            if (
+                global_allowed
+                and requested_model
+                and not _is_routing_sentinel_model(requested_model)
+                and requested_model not in global_allowed
+                and not routing_probe_only
+            ):
                 if enforcement_mode == "block":
                     METRICS["blocked"] += 1
                     return JSONResponse(
@@ -2625,8 +3799,13 @@ async def proxy_chat(
             model_cfg = next((m for m in routing_models if m.get("model_name") == requested_model), None) if routing_models else None
             if model_cfg and model_cfg.get("rate_limit_rpm", 0) > 0:
                 model_allowed, model_count = await RATE_LIMITER.check_model_rate_limit(
-                    requested_model, model_cfg["rate_limit_rpm"]
+                    requested_model, model_cfg["rate_limit_rpm"], org_slug=org_slug
                 )
+                try:
+                    from .metrics import record_rate_limit as _prom_rl
+                except ImportError:
+                    from metrics import record_rate_limit as _prom_rl  # type: ignore[no-redef]
+                _prom_rl(org_slug, requested_model, model_allowed)
                 if not model_allowed:
                     METRICS["blocked"] += 1
                     return JSONResponse(
@@ -2641,6 +3820,13 @@ async def proxy_chat(
 
         # ── Optional: backend deep scan (Tier 2, async parallel) ──
         deep_scan_task = None
+
+        def _cancel_deep_scan() -> None:
+            nonlocal deep_scan_task
+            if deep_scan_task is not None and not deep_scan_task.done():
+                deep_scan_task.cancel()
+                deep_scan_task = None
+
         if org_config.get("deep_scan_enabled") and org_config.get("input_scan_enabled", True) and AGENT_ID and CONFIG["backend_url"]:
             deep_scan_task = asyncio.create_task(
                 asyncio.to_thread(_security_scan, effective_prompt, "")
@@ -2648,11 +3834,40 @@ async def proxy_chat(
 
         is_stream = body.get("stream", False)
 
+        if auth_ctx is not None and needs_inference:
+            inference_err = _validate_org_inference_model(
+                requested_model=requested_model,
+                body=body,
+                inference_models=inference_models,
+            )
+            if inference_err is not None:
+                _cancel_deep_scan()
+                return inference_err
+            body["_inference_allowlist"] = sorted(_routing_identity_set(inference_models))
+            if route_selection and route_selection.fallback_chain:
+                body["_compliant_fallback_chain"] = list(route_selection.fallback_chain)
+            elif CONFIG_SYNC is not None:
+                try:
+                    from routing_isolation import fallback_profile_key
+                except ImportError:
+                    from .routing_isolation import fallback_profile_key
+                fb_payload = CONFIG_SYNC.get_fallback_chains(org_slug)
+                profile_key = fallback_profile_key(
+                    routing_prefs.get("data_sensitivity", "public"),
+                    routing_prefs.get("required_compliance"),
+                )
+                profile_chain = (fb_payload.get("chains") or {}).get(profile_key, [])
+                per_primary = (fb_payload.get("per_primary") or {}).get(requested_model)
+                body["_compliant_fallback_chain"] = per_primary or [
+                    m for m in profile_chain if m != requested_model
+                ]
+
         # ── Circuit breaker check ──
         if CIRCUIT_BREAKER is not None:
             cb_status = await CIRCUIT_BREAKER.check(requested_model)
             if cb_status.should_block:
                 METRICS["blocked"] += 1
+                _cancel_deep_scan()
                 return JSONResponse(
                     status_code=503,
                     content={
@@ -2664,50 +3879,43 @@ async def proxy_chat(
                 )
 
         if is_stream:
-            METRICS["allowed"] += 1
-            inner_gen = LLM_ROUTER.acompletion_stream(body, redacted_prompt)
-            stream_headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+            _cancel_deep_scan()
+            preflight_block = _stream_preflight_block_if_needed(org_config)
+            if preflight_block is not None:
+                return preflight_block
             if route_selection is not None:
-                stream_headers["X-ZeroShield-Original-Model"] = route_selection.requested_model or "auto"
-                stream_headers["X-ZeroShield-Routed-Model"] = route_selection.model_name
-                stream_headers["X-ZeroShield-Routing-Source"] = route_selection.decision_source
-                stream_headers["X-ZeroShield-Rerouted"] = "true" if route_selection.requested_model and route_selection.requested_model != "auto" and route_selection.model_name != route_selection.requested_model else "false"
-                if route_selection.reason:
-                    stream_headers["X-ZeroShield-Routing-Reason"] = route_selection.reason[:180]
-                if route_selection.policy_summary:
-                    stream_headers["X-ZeroShield-Routing-Policy-Summary"] = route_selection.policy_summary[:180]
-            if scan_verdict and scan_verdict.tier:
-                stream_headers["X-ZeroShield-Detection-Tier"] = scan_verdict.tier
-            if redacted_prompt is not None:
-                stream_headers["X-ZeroShield-Action"] = "redacted"
-            elif scan_verdict and scan_verdict.action == "flag":
-                stream_headers["X-ZeroShield-Action"] = "flag"
-            if INPUT_SCANNER is not None and CONFIG.get("output_scan_enabled", True):
-                from secure_streaming import SecureStreamingResponse as SSR
-
-                secure_gen = SSR(
-                    inner_generator=inner_gen,
-                    scanner=INPUT_SCANNER,
-                    redaction_enabled=True,
-                    buffer_max_bytes=CONFIG.get("scan_buffer_max_bytes", 4096),
-                    output_guard=OUTPUT_GUARD,
-                    telemetry=TELEMETRY,
-                    user_id=user_id,
-                    organization_id=getattr(auth_ctx, "organization_id", None) if auth_ctx else None,
-                    model=body.get("model", ""),
-                    project_id=str(project_id or ""),
-                    source_ip=request.client.host if request.client else "",
-                    request_id=request.headers.get("X-Request-ID", f"zs-stream-{_uuid.uuid4().hex[:12]}"),
-                )
-                return StreamingResponse(
-                    secure_gen.__aiter__(),
-                    media_type="text/event-stream",
-                    headers=stream_headers,
-                )
-            return StreamingResponse(
-                inner_gen,
-                media_type="text/event-stream",
-                headers=stream_headers,
+                requested = getattr(route_selection, "requested_model", None) or "auto"
+                routed = getattr(route_selection, "model_name", "") or ""
+                rerouted = bool(requested and requested != "auto" and routed and routed != requested)
+                if rerouted:
+                    _audit_fire_and_forget(
+                        org_slug=org_slug or "",
+                        decision="downgrade",
+                        rule_code="model_routed_stream",
+                        metadata={
+                            "stream": True,
+                            "selected_model": routed,
+                            "requested_model": requested,
+                            "decision_source": getattr(route_selection, "decision_source", ""),
+                        },
+                    )
+            METRICS["allowed"] += 1
+            return _launch_chat_stream_response(
+                request=request,
+                body=body,
+                org_config=org_config,
+                org_slug=org_slug,
+                auth_ctx=auth_ctx,
+                redacted_prompt=redacted_prompt,
+                route_selection=route_selection,
+                scan_verdict=scan_verdict,
+                user_id=user_id,
+                project_id=str(project_id or ""),
+                key_hash=auth_ctx.key_hash if auth_ctx else "",
+                rate_limit_tpm=rate_limit_tpm or 0,
+                estimated_tokens=estimated_request_tokens,
+                org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
+                secure_output_scan=bool(CONFIG.get("output_scan_enabled", True)),
             )
         upstream_start = time.perf_counter()
         code, llm_resp = await LLM_ROUTER.acompletion(body, redacted_prompt)
@@ -2715,7 +3923,7 @@ async def proxy_chat(
         if code != 200:
             # Record circuit breaker error
             if CIRCUIT_BREAKER is not None and code >= 500:
-                await CIRCUIT_BREAKER.record_error(requested_model)
+                await CIRCUIT_BREAKER.record_error(requested_model, org_slug=org_slug or "default")
             # Record risk event for model errors
             if REDIS_CLIENT is not None and code >= 400:
                 from model_state import record_risk_event, check_auto_isolate
@@ -2741,17 +3949,31 @@ async def proxy_chat(
 
         # Record circuit breaker success
         if CIRCUIT_BREAKER is not None:
-            await CIRCUIT_BREAKER.record_success(requested_model)
+            await CIRCUIT_BREAKER.record_success(requested_model, org_slug=org_slug or "default")
 
         # Optional: post-response policy check
         response_text = _extract_response_from_completion(llm_resp)
 
         # ── Output guard (non-streaming) ──
-        if OUTPUT_GUARD is not None and response_text and CONFIG.get("output_guard_enabled", True):
-            context_chunks = [
-                m.get("content", "") for m in body.get("messages", [])
-                if m.get("role") in ("system", "user") and m.get("content")
-            ]
+        # Respect per-org master toggle (response_filtering_enabled → output_scan_enabled)
+        # in addition to the global GATEWAY_OUTPUT_GUARD_ENABLED env default.
+        _output_guard_active = (
+            OUTPUT_GUARD is not None
+            and response_text
+            and CONFIG.get("output_guard_enabled", True)
+            and org_config.get("output_scan_enabled", CONFIG.get("output_scan_enabled", True))
+        )
+        if _output_guard_active:
+            # Hallucination grounding must score the answer against ACTUAL
+            # retrieved RAG context — never against the user's own prompt.
+            # Previously context_chunks was seeded from the request's own
+            # system/user messages, so every benign non-RAG answer scored
+            # grounding≈0 (the answer necessarily introduces new tokens absent
+            # from the question) and was rewritten into a "cannot verify"
+            # refusal. Populate context ONLY from real RAG retrieval; with no
+            # retrieval the list stays empty and score_hallucination() takes
+            # its safe no-context branch (grounding_score=1.0).
+            context_chunks: list[str] = []
             # RAG context binding: enrich grounding with retrieved documents
             rag_context_id = request.headers.get("X-ZeroShield-RAG-Context-ID", "")
             if rag_context_id and REDIS_CLIENT is not None:
@@ -2763,9 +3985,28 @@ async def proxy_chat(
                         context_chunks.extend(rag_chunks)
                 except Exception:
                     pass  # fail-open: context binding is best-effort
-            output_verdict = await OUTPUT_GUARD.inspect(response_text, context_chunks=context_chunks)
+            output_verdict = await OUTPUT_GUARD.inspect(
+                response_text,
+                context_chunks=context_chunks,
+                org_config=(CONFIG_SYNC.get_config(org_slug) if (CONFIG_SYNC is not None and org_slug) else None),
+                org_slug=org_slug or "",
+            )
             # Capture raw output before any redaction for pipeline visibility
             _raw_model_output = response_text[:500] if response_text else ""
+            # §1.7 incident-logging control: when output_incident_logging_enabled is
+            # false, non-blocking output-guard actions (redact/flag/rewrite) skip
+            # telemetry + audit. Hard blocks always log (and the control-plane
+            # compliance floor forces this on under strict frameworks).
+            _output_incident_logging = bool(org_config.get("output_incident_logging_enabled", True))
+
+            def _emit_output_incident_telemetry(**_tel_kwargs):
+                if _output_incident_logging:
+                    _emit_telemetry(**_tel_kwargs)
+
+            def _audit_output_incident(**_audit_kwargs):
+                if _output_incident_logging:
+                    _audit_fire_and_forget(**_audit_kwargs)
+
             if output_verdict.action == "block":
                 METRICS["blocked"] += 1
                 # Record risk event for output guard block
@@ -2800,6 +4041,17 @@ async def proxy_chat(
                     endpoint_id=endpoint_id,
                 )
                 elapsed_ms = (time.perf_counter() - start) * 1000
+                _audit_fire_and_forget(
+                    org_slug=org_slug or "",
+                    decision="block",
+                    rule_code=f"output_guard_{output_verdict.threat_type}",
+                    metadata={
+                        "input_bytes": len((response_text or "").encode("utf-8")),
+                        "model_id": body.get("model", ""),
+                        "score": getattr(output_verdict, "confidence", 0.9),
+                        "matched_patterns": getattr(output_verdict, "matched_patterns", []),
+                    },
+                )
                 return _build_block_response(403, "output_blocked", _build_zeroshield_metadata(
                     action="block",
                     reason=f"Output guard detected {output_verdict.threat_type} in LLM response.",
@@ -2832,7 +4084,7 @@ async def proxy_chat(
                         "redacted_response": redacted_response,
                     },
                 )
-                _emit_telemetry(
+                _emit_output_incident_telemetry(
                     status_code=200,
                     event_type="output_guard",
                     model=body.get("model", ""),
@@ -2848,6 +4100,64 @@ async def proxy_chat(
                     metadata={"detail": output_verdict.detail, "response_snippet": _raw_model_output, "raw_output": _raw_model_output, "sanitized_output": response_text[:500] if response_text else "", "guardrail_reasoning": output_verdict.detail, "matched_patterns": getattr(output_verdict, 'matched_patterns', [])},
                     prompt_snippet=_prompt_snippet,
                     endpoint_id=endpoint_id,
+                )
+                _audit_output_incident(
+                    org_slug=org_slug or "",
+                    decision="rewrite",
+                    rule_code=f"output_guard_redact_{output_verdict.threat_type}",
+                    metadata={
+                        "input_bytes": len((response_text or "").encode("utf-8")),
+                        "model_id": body.get("model", ""),
+                        "score": getattr(output_verdict, "confidence", 0.7),
+                        "matched_patterns": getattr(output_verdict, "matched_patterns", []),
+                    },
+                )
+            if output_verdict.action == "rewrite":
+                LOG.info("Output rewrite triggered (type=%s, user=%s)", output_verdict.threat_type, user_id)
+                rewritten_response = _rewrite_output_response_text(output_verdict.threat_type, output_verdict.detail)
+                _set_completion_response_text(llm_resp, rewritten_response)
+                response_text = rewritten_response
+                output_enforcement = _merge_output_enforcement_state(
+                    output_enforcement,
+                    {
+                        "action": "rewrite",
+                        "reason": f"Output guard rewrote {output_verdict.threat_type or 'unsafe'} content before delivery.",
+                        "detail": output_verdict.detail,
+                        "detection_tier": "output_guard",
+                        "threat_type": output_verdict.threat_type,
+                        "confidence": getattr(output_verdict, "confidence", 0.65),
+                        "matched_patterns": getattr(output_verdict, "matched_patterns", []),
+                        "compliance_tags": getattr(output_verdict, "compliance_tags", []),
+                        "rewritten_response": rewritten_response,
+                    },
+                )
+                _emit_output_incident_telemetry(
+                    status_code=200,
+                    event_type="output_guard",
+                    model=body.get("model", ""),
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_prefix=auth_ctx.prefix if auth_ctx else "",
+                    action="rewrite",
+                    risk_score=getattr(output_verdict, 'confidence', 0.65),
+                    threat_type=output_verdict.threat_type,
+                    compliance_tags=output_verdict.compliance_tags,
+                    pipeline_stage="generator",
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    metadata={"detail": output_verdict.detail, "response_snippet": _raw_model_output, "raw_output": _raw_model_output, "sanitized_output": response_text[:500] if response_text else "", "guardrail_reasoning": output_verdict.detail, "matched_patterns": getattr(output_verdict, 'matched_patterns', [])},
+                    prompt_snippet=_prompt_snippet,
+                    endpoint_id=endpoint_id,
+                )
+                _audit_output_incident(
+                    org_slug=org_slug or "",
+                    decision="rewrite",
+                    rule_code=f"output_guard_rewrite_{output_verdict.threat_type}",
+                    metadata={
+                        "input_bytes": len((response_text or "").encode("utf-8")),
+                        "model_id": body.get("model", ""),
+                        "score": getattr(output_verdict, "confidence", 0.65),
+                        "matched_patterns": getattr(output_verdict, "matched_patterns", []),
+                    },
                 )
             if output_verdict.action == "flag":
                 if output_verdict.threat_type == "hallucination":
@@ -2867,7 +4177,7 @@ async def proxy_chat(
                         "factuality_warning": output_verdict.threat_type == "hallucination",
                     },
                 )
-                _emit_telemetry(
+                _emit_output_incident_telemetry(
                     status_code=200,
                     event_type="output_guard",
                     model=body.get("model", ""),
@@ -2963,7 +4273,7 @@ async def proxy_chat(
             except Exception:
                 LOG.exception("Backend deep scan failed, continuing with local scan results")
 
-        if response_text and AGENT_ID:
+        if response_text and AGENT_ID and org_config.get("output_policy_enabled", True):
             _, resp_check = await asyncio.to_thread(
                 _policy_check_cached,
                 effective_prompt,
@@ -2977,6 +4287,13 @@ async def proxy_chat(
                 org_slug,
             )
             resp_action = _normalize_output_action(resp_check.get("action") if resp_check else "allow")
+            # §1.7 output policy control: the operator-configured output_policy_action
+            # is authoritative for the output path. When the policy engine reports a
+            # violation, route it through the configured action (block/redact/rewrite/
+            # flag/allow). action="allow" lets operators monitor without enforcing.
+            # Monitor normalizes to flag — do not escalate flag/monitor to block.
+            if resp_check and resp_action not in ("allow", "flag"):
+                resp_action = _normalize_output_action(org_config.get("output_policy_action", "block"))
             if resp_check and resp_action == "block":
                 METRICS["blocked"] += 1
                 elapsed_ms = (time.perf_counter() - start) * 1000
@@ -3001,6 +4318,17 @@ async def proxy_chat(
                         prompt_snippet=_prompt_snippet,
                         endpoint_id=endpoint_id,
                     )
+                _audit_fire_and_forget(
+                    org_slug=org_slug or "",
+                    decision="block",
+                    rule_code=((resp_check.get("matched_rules") or ["policy_response_block"])[0]),
+                    metadata={
+                        "input_bytes": len((response_text or "").encode("utf-8")),
+                        "model_id": body.get("model", ""),
+                        "matched_rules": resp_check.get("matched_rules") or [],
+                        "matched_policies": resp_check.get("matched_policies") or [],
+                    },
+                )
                 return _build_block_response(403, "content_blocked", _build_zeroshield_metadata(
                     action="block",
                     reason=resp_check.get("message") or "Response blocked by post-LLM policy check.",
@@ -3067,6 +4395,17 @@ async def proxy_chat(
                         prompt_snippet=_prompt_snippet,
                         endpoint_id=endpoint_id,
                     )
+                _audit_fire_and_forget(
+                    org_slug=org_slug or "",
+                    decision="rewrite",
+                    rule_code=((resp_check.get("matched_rules") or ["policy_response_rewrite"])[0]),
+                    metadata={
+                        "input_bytes": len((response_text or "").encode("utf-8")),
+                        "model_id": body.get("model", ""),
+                        "matched_rules": resp_check.get("matched_rules") or [],
+                        "matched_policies": resp_check.get("matched_policies") or [],
+                    },
+                )
             elif resp_check and resp_action == "flag":
                 resp_categories = resp_check.get("matched_policy_categories") or []
                 resp_threat_type = _category_to_threat_type(resp_categories[0]) if resp_categories else "policy_violation"
@@ -3243,8 +4582,15 @@ async def proxy_chat(
                 response_headers_final["X-ZeroShield-Routing-Source"] = route_selection.decision_source
                 response_headers_final["X-ZeroShield-Rerouted"] = "true" if route_selection.requested_model and route_selection.requested_model != "auto" and route_selection.model_name != route_selection.requested_model else "false"
                 response_headers_final["X-ZeroShield-Routing-Reason"] = route_selection.reason[:180]
-                if route_selection.policy_summary:
-                    response_headers_final["X-ZeroShield-Routing-Policy-Summary"] = route_selection.policy_summary[:180]
+                if route_selection.policy_summary and bool(
+                    org_config.get(
+                        "stream_emit_debug_headers",
+                        CONFIG.get("stream_emit_debug_headers", False),
+                    )
+                ):
+                    response_headers_final["X-ZeroShield-Routing-Policy-Summary"] = (
+                        route_selection.policy_summary[:180]
+                    )
                 if isinstance(llm_resp.get("zeroshield"), dict):
                     llm_resp["zeroshield"]["selected_model"] = route_selection.model_name
                     llm_resp["zeroshield"]["original_model"] = route_selection.requested_model or "auto"
@@ -3259,6 +4605,17 @@ async def proxy_chat(
             llm_resp["zeroshield"] = _redact_for_client_response(llm_resp["zeroshield"]) or {}
         
         return JSONResponse(content=llm_resp, headers=response_headers_final)
+
+    except Exception as exc:
+        LOG.exception("Unhandled error in proxy_chat")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "internal_error",
+                "message": "An internal gateway error occurred.",
+                "code": "gateway_internal_error",
+            },
+        )
 
     finally:
         METRICS["active_connections"] -= 1
@@ -3360,6 +4717,27 @@ async def proxy_embeddings(request: Request):
                     "message": "LLM router not initialized.",
                 },
             )
+
+        # ── Phase 1 §1.1: per-org TPM ceiling (fail-CLOSED) ──
+        # Embeddings can be a high-volume vector for resource exhaustion across
+        # tenants; enforce the same ceiling as /v1/chat. Estimate token cost from
+        # the `input` payload (string or list of strings).
+        _emb_input = body.get("input") or ""
+        if isinstance(_emb_input, list):
+            _emb_text = " ".join(str(x) for x in _emb_input if x)
+        else:
+            _emb_text = str(_emb_input)
+        _emb_est_tokens = _estimate_request_tokens(_emb_text)
+        _rl_resp = await _enforce_org_tpm_rate_limit(
+            auth_ctx,
+            event_type="embedding_blocked",
+            model=body.get("model", "text-embedding-3-small"),
+            user_id=user_id,
+            project_id=str(project_id or ""),
+            estimated_tokens=_emb_est_tokens,
+        )
+        if _rl_resp is not None:
+            return _rl_resp
 
         status, result = await LLM_ROUTER.aembedding(body)
 
@@ -3590,6 +4968,18 @@ async def rag_query(request: Request):
                 },
             )
         project_id = auth_ctx.project_id
+
+        # ── Phase 1 §1.1: per-org TPM ceiling on RAG query traffic ──
+        _rl_resp = await _enforce_org_tpm_rate_limit(
+            auth_ctx,
+            event_type="rag_query_blocked",
+            model=body.get("embedding_model", "") or "",
+            user_id=getattr(auth_ctx, "user_id", None),
+            project_id=str(project_id or ""),
+            estimated_tokens=_estimate_request_tokens(query_text),
+        )
+        if _rl_resp is not None:
+            return _rl_resp
 
         policy = VECTOR_POLICY_SYNC.get_policy(str(project_id), collection_name)
         if policy is None:
@@ -3861,6 +5251,19 @@ async def rag_ingest(request: Request):
             return JSONResponse(status_code=403, content={"error": "Authentication required."})
         project_id = str(auth_ctx.project_id)
 
+        # ── Phase 1 §1.1: per-org TPM ceiling on RAG ingest (largest write surface) ──
+        _ingest_text = " ".join(str(d) for d in documents if d)
+        _rl_resp = await _enforce_org_tpm_rate_limit(
+            auth_ctx,
+            event_type="rag_ingest_blocked",
+            model="",
+            user_id=getattr(auth_ctx, "user_id", None),
+            project_id=project_id,
+            estimated_tokens=_estimate_request_tokens(_ingest_text),
+        )
+        if _rl_resp is not None:
+            return _rl_resp
+
         # ── Policy enforcement ──
         policy = VECTOR_POLICY_SYNC.get_policy(project_id, collection_name)
         if policy is None:
@@ -4063,6 +5466,18 @@ async def rag_delete_documents(request: Request):
             return JSONResponse(status_code=403, content={"error": "Authentication required."})
         project_id = str(auth_ctx.project_id)
 
+        # ── Phase 1 §1.1: per-org TPM ceiling on RAG delete (abuse vector) ──
+        _rl_resp = await _enforce_org_tpm_rate_limit(
+            auth_ctx,
+            event_type="rag_delete_blocked",
+            model="",
+            user_id=getattr(auth_ctx, "user_id", None),
+            project_id=project_id,
+            estimated_tokens=max(20, len(doc_ids) * 4),
+        )
+        if _rl_resp is not None:
+            return _rl_resp
+
         policy = VECTOR_POLICY_SYNC.get_policy(project_id, collection_name)
         if policy and "delete" not in policy.get("allowed_operations", []):
             METRICS["blocked"] += 1
@@ -4122,6 +5537,17 @@ async def rag_list_collections(request: Request):
     if auth_ctx is None:
         return JSONResponse(status_code=403, content={"error": "Authentication required."})
     project_id = str(auth_ctx.project_id)
+
+    rl_block = await _enforce_org_tpm_rate_limit(
+        auth_ctx,
+        event_type="rag_collections_list_blocked",
+        user_id=getattr(auth_ctx, "user_id", None),
+        project_id=project_id,
+        estimated_tokens=20,
+    )
+    if rl_block is not None:
+        return rl_block
+
     namespaced_prefix = f"{project_id}__"
 
     result: dict[str, list[str]] = {}
@@ -4180,6 +5606,16 @@ async def rag_create_collection(request: Request):
         return JSONResponse(status_code=403, content={"error": "Authentication required."})
     project_id = str(auth_ctx.project_id)
     org_id = getattr(auth_ctx, "organization_id", None)
+
+    rl_block = await _enforce_org_tpm_rate_limit(
+        auth_ctx,
+        event_type="rag_collection_create_blocked",
+        user_id=getattr(auth_ctx, "user_id", None),
+        project_id=project_id,
+        estimated_tokens=20,
+    )
+    if rl_block is not None:
+        return rl_block
 
     client, _ = _resolve_vector_client(vector_db_type, org_id=org_id)
     if client is None:
@@ -4253,6 +5689,16 @@ async def rag_delete_collection(request: Request):
         return JSONResponse(status_code=403, content={"error": "Authentication required."})
     project_id = str(auth_ctx.project_id)
 
+    rl_block = await _enforce_org_tpm_rate_limit(
+        auth_ctx,
+        event_type="rag_collection_delete_blocked",
+        user_id=getattr(auth_ctx, "user_id", None),
+        project_id=project_id,
+        estimated_tokens=20,
+    )
+    if rl_block is not None:
+        return rl_block
+
     # Check policy allows delete
     policy = VECTOR_POLICY_SYNC.get_policy(project_id, collection_name) if VECTOR_POLICY_SYNC else None
     if policy and "delete" not in policy.get("allowed_operations", []):
@@ -4310,6 +5756,9 @@ async def rag_delete_collection(request: Request):
 )
 async def admin_db_test(request: Request):
     """Test connectivity to a vector database (Pinecone, Milvus, or custom Milvus-compatible URI)."""
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
     body = await request.json()
     provider = body.get("provider", "").lower()
     connection_url = body.get("connection_url", "")
@@ -4385,6 +5834,9 @@ async def admin_db_test(request: Request):
 )
 async def admin_bedrock_test(request: Request):
     """Test AWS Bedrock API connectivity and optionally scan a test prompt."""
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
     body = await request.json()
     check_health = body.get("check_health", False)
     prompt = body.get("prompt", "")
@@ -4461,6 +5913,9 @@ async def admin_bedrock_test(request: Request):
     tags=["Admin"],
 )
 async def admin_circuit_breaker_state(request: Request):
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
     if not CIRCUIT_BREAKER or not REDIS_CLIENT:
         return JSONResponse(content={"models": [], "enabled": False})
 
@@ -4501,6 +5956,9 @@ async def admin_circuit_breaker_state(request: Request):
     tags=["Admin"],
 )
 async def admin_circuit_breaker_trigger(request: Request):
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
     if not CIRCUIT_BREAKER:
         return JSONResponse(status_code=503, content={"error": "Circuit breaker not initialized"})
     try:
@@ -4527,6 +5985,9 @@ async def admin_circuit_breaker_trigger(request: Request):
     tags=["Admin"],
 )
 async def admin_circuit_breaker_reset(request: Request):
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
     if not REDIS_CLIENT:
         return JSONResponse(status_code=503, content={"error": "Redis not available"})
     try:
@@ -4546,6 +6007,146 @@ async def admin_circuit_breaker_reset(request: Request):
     return JSONResponse(content={"model": model, "keys_deleted": deleted, "state": "closed"})
 
 
+# --- Phase 1 F-3.1: admin proxy for RAG collection management ------------
+# Per-tenant `/v1/rag/collections` requires an org Bearer key (per-org RBAC).
+# The control plane cannot retrieve the raw key (only SHA-256 hash is
+# stored). These admin variants take ``project_id`` explicitly, are gated
+# by ``_require_admin_role`` (which accepts the GATEWAY_INTERNAL_API_KEY),
+# and reuse the same vector-client logic. Downstream RBAC therefore lives
+# in the Django proxy layer (IsAdminOrSuperuser).
+def _strip_namespace(name: str, prefix: str) -> str:
+    if isinstance(name, str) and name.startswith(prefix):
+        return name[len(prefix):]
+    return name
+
+
+@app.get(
+    "/v1/admin/rag/collections",
+    summary="List vector DB collections for a given project (admin)",
+    tags=["Admin"],
+)
+async def admin_rag_list_collections(request: Request, project_id: str = ""):
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
+    if not VECTOR_CLIENTS:
+        return JSONResponse(status_code=503, content={"error": "No vector clients configured."})
+    project_id = (project_id or "").strip()
+    if not project_id:
+        return JSONResponse(status_code=400, content={"error": "Missing 'project_id' query parameter."})
+
+    prefix = f"{project_id}__"
+    result: dict[str, list[str]] = {}
+    for provider_name, client in VECTOR_CLIENTS.items():
+        try:
+            if hasattr(client, "list_collections"):
+                cols = await client.list_collections(project_id=project_id)
+                result[provider_name] = [_strip_namespace(n, prefix) for n in (cols or [])]
+            else:
+                result[provider_name] = []
+        except Exception as exc:
+            LOG.warning("admin_rag_list_collections: %s failed: %s", provider_name, exc)
+            result[provider_name] = []
+    return JSONResponse(content={"project_id": project_id, "collections": result})
+
+
+@app.post(
+    "/v1/admin/rag/collections",
+    summary="Create a vector DB collection for a given project (admin)",
+    tags=["Admin"],
+)
+async def admin_rag_create_collection(request: Request):
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
+    if not VECTOR_CLIENTS:
+        return JSONResponse(status_code=503, content={"error": "No vector clients configured."})
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
+    project_id = (body.get("project_id") or "").strip()
+    collection_name = (body.get("collection") or "").strip()
+    vector_db_type = (body.get("vector_db_type") or "pinecone").strip()
+    if not project_id:
+        return JSONResponse(status_code=400, content={"error": "Missing 'project_id'."})
+    if not collection_name:
+        return JSONResponse(status_code=400, content={"error": "Missing 'collection'."})
+    if not _is_valid_collection_name(collection_name):
+        return JSONResponse(status_code=403, content={
+            "error": "forbidden",
+            "message": "Invalid collection identifier. Use plain names without tenant prefixes.",
+            "code": "rag_namespace_violation",
+        })
+
+    client, _ = _resolve_vector_client(vector_db_type, org_id=None)
+    if client is None:
+        return JSONResponse(status_code=400, content={"error": f"Unknown provider: {vector_db_type}"})
+    try:
+        if hasattr(client, "create_collection"):
+            namespaced = await client.create_collection(collection_name=collection_name, project_id=project_id)
+        else:
+            namespaced = f"{project_id}__{collection_name}"
+        return JSONResponse(content={
+            "status": "created", "collection": collection_name,
+            "namespaced_name": namespaced, "provider": vector_db_type,
+            "project_id": project_id,
+        })
+    except Exception as exc:
+        LOG.exception("admin_rag_create_collection failed: %s", collection_name)
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.delete(
+    "/v1/admin/rag/collections",
+    summary="Delete a vector DB collection for a given project (admin)",
+    tags=["Admin"],
+)
+async def admin_rag_delete_collection(request: Request):
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
+    if not VECTOR_CLIENTS:
+        return JSONResponse(status_code=503, content={"error": "No vector clients configured."})
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
+    project_id = (body.get("project_id") or "").strip()
+    collection_name = (body.get("collection") or "").strip()
+    vector_db_type = (body.get("vector_db_type") or "pinecone").strip()
+    if not project_id:
+        return JSONResponse(status_code=400, content={"error": "Missing 'project_id'."})
+    if not collection_name:
+        return JSONResponse(status_code=400, content={"error": "Missing 'collection'."})
+    if not _is_valid_collection_name(collection_name):
+        return JSONResponse(status_code=403, content={
+            "error": "forbidden",
+            "message": "Invalid collection identifier. Use plain names without tenant prefixes.",
+            "code": "rag_namespace_violation",
+        })
+
+    client = VECTOR_CLIENTS.get(vector_db_type)
+    if client is None:
+        client, _ = _resolve_vector_client(vector_db_type, org_id=None)
+    if client is None:
+        return JSONResponse(status_code=400, content={"error": f"Unknown provider: {vector_db_type}"})
+    try:
+        if hasattr(client, "delete_collection"):
+            ok = await client.delete_collection(collection_name=collection_name, project_id=project_id)
+        else:
+            ok = False
+        return JSONResponse(content={
+            "status": "deleted" if ok else "not_found",
+            "collection": collection_name,
+            "provider": vector_db_type,
+            "project_id": project_id,
+        })
+    except Exception as exc:
+        LOG.exception("admin_rag_delete_collection failed: %s", collection_name)
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
 @app.get(
     "/v1/admin/logs",
     summary="Stream gateway logs via SSE",
@@ -4553,6 +6154,9 @@ async def admin_circuit_breaker_reset(request: Request):
 )
 async def admin_logs(request: Request, service: str = "all", level: str = "DEBUG"):
     """Stream real-time gateway logs as Server-Sent Events."""
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
     try:
         from log_buffer import LOG_BUFFER
     except ImportError:
@@ -4591,8 +6195,11 @@ async def admin_logs(request: Request, service: str = "all", level: str = "DEBUG
     ),
     tags=["Admin", "Bedrock"],
 )
-async def admin_bedrock_logs(limit: int = 100, level: str = "DEBUG"):
+async def admin_bedrock_logs(request: Request, limit: int = 100, level: str = "DEBUG"):
     """Return recent Bedrock logs from the in-memory ring buffer."""
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
     try:
         from bedrock_logger import BEDROCK_LOG_RING
     except ImportError:
@@ -4621,6 +6228,9 @@ async def admin_bedrock_logs(limit: int = 100, level: str = "DEBUG"):
 )
 async def admin_bedrock_logs_stream(request: Request, level: str = "DEBUG"):
     """Stream real-time Bedrock logs as Server-Sent Events."""
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
     try:
         from bedrock_logger import BEDROCK_LOG_RING
     except ImportError:
@@ -4681,8 +6291,11 @@ async def admin_bedrock_logs_stream(request: Request, level: str = "DEBUG"):
     description="Returns the current bedrock.log file content for download or inspection.",
     tags=["Admin", "Bedrock"],
 )
-async def admin_bedrock_logs_file(tail: int = 200):
+async def admin_bedrock_logs_file(request: Request, tail: int = 200):
     """Return the last N lines of the bedrock.log file."""
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
     import os as _os
     log_dir = _os.getenv("BEDROCK_LOG_DIR", "/var/log/bedrock")
     log_path = _os.path.join(log_dir, "bedrock.log")
@@ -4713,8 +6326,106 @@ async def admin_bedrock_logs_file(tail: int = 200):
 # ─────────────────────────────────────────────────────────────────────
 # Lightweight policy-check endpoint — Phase 1 hot-path benchmark surface.
 #
-# Exercises the full hot path (auth → per-key TPM → org TPM → cached
-# policy evaluation) WITHOUT forwarding to an LLM. This isolates the
+def _ambiguous_policy_block_response(*, org_slug: str) -> JSONResponse:
+    """Fail-closed when policy engine returns block without matched rules."""
+    LOG.error(
+        "Policy check returned block without matched rules (org=%s); fail-closed",
+        org_slug,
+    )
+    METRICS["blocked"] += 1
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": "service_unavailable",
+            "message": (
+                "Policy engine returned an ambiguous block. "
+                "Request denied (fail-closed)."
+            ),
+            "code": "policy_ambiguous_block",
+        },
+    )
+
+
+def _should_block_tier1_verdict(verdict, org_config: dict) -> bool:
+    """Return True when a tier-1 scan verdict should block the request."""
+    injection_threshold = org_config.get("prompt_injection_threshold", 0.80)
+    _INJECTION_THREAT_TYPES = {"prompt_injection", "jailbreak", "goal_hijacking"}
+    _is_injection = verdict.threat_type in _INJECTION_THREAT_TYPES
+    _should_block = (
+        verdict.action == "block"
+        and verdict.threat_type not in ("pii", "secret")
+    )
+    if _is_injection:
+        _should_block = (
+            _should_block
+            and org_config.get("scan_block_on_injection", True)
+            and verdict.confidence >= injection_threshold
+        )
+    return _should_block
+
+
+async def _policy_check_tier1_scan_block(
+    *,
+    prompt: str,
+    org_config: dict,
+    request: Request,
+    auth_ctx,
+    model: str = "",
+) -> JSONResponse | None:
+    """Run tier-1 input scan for /v1/policy/check; return 403 JSON if blocked."""
+    if INPUT_SCANNER is None or not org_config.get("input_scan_enabled", True) or not prompt:
+        return None
+    try:
+        verdict = await INPUT_SCANNER.scan_prompt(prompt)
+    except Exception as exc:
+        LOG.warning("Tier-1 scan failed on /v1/policy/check: %s", exc)
+        return None
+    if not _should_block_tier1_verdict(verdict, org_config):
+        return None
+    _emit_telemetry(
+        status_code=403,
+        event_type="input_blocked",
+        model=model or "",
+        user_id=getattr(auth_ctx, "user_id", None),
+        project_id=getattr(auth_ctx, "project_id", "") or "",
+        key_prefix=getattr(auth_ctx, "key_prefix", "") or "",
+        action="block",
+        risk_score=verdict.confidence,
+        threat_type=verdict.threat_type,
+        compliance_tags=org_config.get("compliance_frameworks", []),
+        pipeline_stage="query",
+        metadata={
+            "detail": verdict.detail,
+            "confidence": verdict.confidence,
+            "matched_patterns": verdict.matched_patterns,
+            "endpoint": "/v1/policy/check",
+        },
+    )
+    METRICS["blocked"] += 1
+    tier_label = {
+        "tier_1": "Tier 1 regex",
+        "tier_1_5": "Tier 1.5 fuzzy",
+        "tier_1_6": "Tier 1.6 semantic",
+        "tier_2": "Tier 2 ML",
+    }.get(verdict.tier, verdict.tier or "tier_1")
+    return _build_block_response(
+        403,
+        f"{verdict.tier or 'tier_1'}_{verdict.threat_type}",
+        _build_zeroshield_metadata(
+            action="block",
+            reason=f"Input blocked by {tier_label} scanner.",
+            detection_tier=verdict.tier or "tier_1",
+            threat_type=verdict.threat_type,
+            confidence=verdict.confidence,
+            matched_patterns=verdict.matched_patterns,
+            original_prompt=prompt,
+            detail=verdict.detail,
+        ),
+    )
+
+
+# Exercises the full hot path (auth → per-key TPM → org TPM → tier-1 scan →
+# cached policy evaluation) WITHOUT forwarding to an LLM. This isolates the
 # firewall overhead for p99 measurement under load (target: < 50 ms p99).
 # ─────────────────────────────────────────────────────────────────────
 @app.post(
@@ -4735,13 +6446,19 @@ async def policy_check_endpoint(request: Request):
     except Exception:
         body = {}
     prompt = (body.get("prompt") or "")[:8000]
+    if not prompt and isinstance(body, dict) and body.get("messages"):
+        prompt = _extract_prompt_from_messages(body.get("messages"))[:8000]
     response_text = (body.get("response") or "")[:8000]
 
     # Per-key TPM
     rate_limit_tpm = getattr(auth_ctx, "rate_limit_tpm", 0) or 0
+    policy_est_tokens = _estimate_request_tokens(
+        prompt or "",
+        int(body.get("max_tokens") or 0) if isinstance(body, dict) else 0,
+    )
     if RATE_LIMITER is not None and rate_limit_tpm:
         allowed, current = await RATE_LIMITER.check_rate_limit(
-            auth_ctx.key_hash, rate_limit_tpm,
+            auth_ctx.key_hash, rate_limit_tpm, policy_est_tokens,
         )
         if not allowed:
             return JSONResponse(
@@ -4764,8 +6481,12 @@ async def policy_check_endpoint(request: Request):
         except Exception:
             org_tpm = 0
     if RATE_LIMITER is not None and org_tpm:
+        policy_est_tokens = _estimate_request_tokens(
+            prompt or "",
+            int(body.get("max_tokens") or 0) if isinstance(body, dict) else 0,
+        )
         org_allowed, org_current = await RATE_LIMITER.check_org_rate_limit(
-            auth_ctx.org_slug, org_tpm,
+            auth_ctx.org_slug, org_tpm, policy_est_tokens,
         )
         if not org_allowed:
             return JSONResponse(
@@ -4778,6 +6499,23 @@ async def policy_check_endpoint(request: Request):
                 },
                 headers={"Retry-After": "60"},
             )
+
+    org_cfg: dict = {}
+    if CONFIG_SYNC is not None and auth_ctx.org_slug:
+        try:
+            org_cfg = CONFIG_SYNC.get_config(auth_ctx.org_slug) or {}
+        except Exception:
+            org_cfg = {}
+
+    tier1_block = await _policy_check_tier1_scan_block(
+        prompt=prompt,
+        org_config=org_cfg,
+        request=request,
+        auth_ctx=auth_ctx,
+        model=body.get("model") if isinstance(body, dict) else "",
+    )
+    if tier1_block is not None:
+        return tier1_block
 
     import time as _t
     _t0 = _t.perf_counter()
@@ -4797,6 +6535,7 @@ async def policy_check_endpoint(request: Request):
         _action = "block" if status in (403, 451) else "allow"
         _decision = (result or {}).get("decision") if isinstance(result, dict) else None
         _REQUEST_ORG_ID.set(getattr(auth_ctx, "organization_id", None))
+        _REQUEST_ORG_SLUG.set(getattr(auth_ctx, "org_slug", "") or "")
         _REQUEST_SOURCE_IP.set(request.client.host if request.client else "")
         _REQUEST_METHOD.set("POST")
         _emit_telemetry(
@@ -4836,6 +6575,19 @@ async def policy_check_endpoint(request: Request):
     },
 )
 async def health():
+    # Phase 0 D-G1-v3: signing-key misconfig check MUST run before any
+    # CONFIG access — health is also called from probes during startup
+    # before _bootstrap() initialises CONFIG, and we want a deterministic
+    # 503 with structured reason rather than a 500 from None.get().
+    if signing_enforced() and _get_signing_key() is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "degraded",
+                "reason": "policy_signing_key_missing",
+                "agent_id": AGENT_ID,
+            },
+        )
     policy_info = {}
     if POLICY_SYNC is not None:
         policy_info = {
@@ -4844,7 +6596,7 @@ async def health():
             "policy_count": POLICY_SYNC.policy_count,
         }
     config_info = {}
-    if CONFIG_SYNC is not None:
+    if CONFIG_SYNC is not None and CONFIG is not None:
         config_info = {
             "config_sync_loaded": CONFIG_SYNC.is_loaded,
             "firewall_enabled": CONFIG.get("firewall_enabled", True),
@@ -4864,7 +6616,7 @@ async def health():
             runtime_metrics["telemetry_queue_depth"] = int(await REDIS_CLIENT.llen("telemetry:events"))
         except Exception:
             runtime_metrics["telemetry_queue_depth"] = -1
-    cache_required = CONFIG.get("policy_cache_require_loaded", True)
+    cache_required = CONFIG.get("policy_cache_require_loaded", True) if CONFIG is not None else True
     cache_loaded = bool(policy_info.get("policy_cache_loaded", False)) if policy_info else False
     if cache_required and not cache_loaded:
         return JSONResponse(
@@ -4888,6 +6640,27 @@ async def health():
         **vector_info,
         **runtime_metrics,
     }
+
+
+@app.get(
+    "/metrics",
+    summary="Prometheus metrics",
+    description=(
+        "Prometheus text-format metrics for the AI Mesh Firewall gateway. "
+        "Exposes counters/gauges/histograms only — no PII in label values. "
+        "Should be bound to an internal/scraper-only network in production."
+    ),
+    tags=["Health"],
+    include_in_schema=False,
+)
+async def prometheus_metrics():
+    try:
+        from .metrics import render_latest
+    except ImportError:
+        from metrics import render_latest  # type: ignore[no-redef]
+    body, content_type = render_latest()
+    from starlette.responses import Response
+    return Response(content=body, media_type=content_type)
 
 
 @app.get(
@@ -4950,13 +6723,28 @@ class _HealthEndpointAccessFilter(logging.Filter):
         return not any(path in msg for path in self._SUPPRESSED)
 
 
+_LOGGING_CONFIGURED = False
+
+
 def _configure_logging() -> None:
     """Configure root logging level from GATEWAY_LOG_LEVEL env var.
 
     Falls back to INFO when the env var is absent (production default).
     When GATEWAY_LOG_JSON=true, emits every record as a compact JSON line
     so structured log aggregators (Loki, CloudWatch, Datadog) can parse them.
+
+    Idempotent: safe to call from both ``main()`` and module import. This
+    matters because the production container launches the app via
+    ``uvicorn ai_mesh_gateway.main:app``, which imports the ``app`` object
+    directly and never calls ``main()`` — without the import-time call below,
+    application loggers (``gateway.*``) would only emit via Python's bare
+    ``lastResort`` handler (WARNING+ only, no formatting), silently dropping
+    INFO diagnostics such as the stdio-adapter's stderr-tail capture.
     """
+    global _LOGGING_CONFIGURED
+    if _LOGGING_CONFIGURED:
+        return
+
     raw_level = os.environ.get("GATEWAY_LOG_LEVEL", "INFO").upper()
     level = getattr(logging, raw_level, logging.INFO)
 
@@ -4996,6 +6784,17 @@ def _configure_logging() -> None:
     # stream even when --log-level debug is active.
     uvicorn_access_log = logging.getLogger("uvicorn.access")
     uvicorn_access_log.addFilter(_HealthEndpointAccessFilter())
+
+    _LOGGING_CONFIGURED = True
+
+
+# Configure logging at import time so application loggers are wired even when the
+# app is launched via ``uvicorn ai_mesh_gateway.main:app`` (which never calls
+# ``main()``). The idempotent guard above makes the later ``main()`` call a no-op.
+try:
+    _configure_logging()
+except Exception:  # pragma: no cover — logging setup must never break startup
+    pass
 
 
 def main():

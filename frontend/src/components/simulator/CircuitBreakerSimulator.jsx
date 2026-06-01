@@ -20,10 +20,20 @@ export function CircuitBreakerSimulator() {
   const [riskInjecting, setRiskInjecting] = useState(false);
 
   // Load circuit breaker state
+  // Phase 1 Fx-3: route through Django admin proxy (IsAdminOrSuperuser)
+  // instead of calling /v1/admin/* directly with a per-org gateway key.
+  // Response envelope: { status: "ok" | "error", data: <gateway_json> }.
   const loadState = useCallback(async () => {
-    const res = await engine.gatewayFetch("/v1/admin/circuit-breaker-state");
-    if (res.ok) setCbState(res.data);
-  }, [engine.gatewayFetch]);
+    const res = await fetchWithAuth("/api/admin/gateway/circuit-breaker/state/");
+    if (!res.ok) return;
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      return;
+    }
+    if (body && body.status === "ok") setCbState(body.data);
+  }, [fetchWithAuth]);
 
   useEffect(() => {
     if (engine.connectionStatus !== "disconnected") {
@@ -39,17 +49,43 @@ export function CircuitBreakerSimulator() {
   }, [polling, loadState]);
 
   const handleTrigger = async () => {
-    const res = await engine.executeScenario({
-      endpoint: "/v1/admin/circuit-breaker-trigger",
-      payload: { model: targetModel, error_count: errorCount, error_type: "simulated_overload" },
+    // Phase 1 Fx-3: proxy trigger through Django admin RBAC instead of
+    // engine.executeScenario which uses the per-org gateway key (non-admin).
+    let parsed = null;
+    let httpOk = false;
+    try {
+      const httpRes = await fetchWithAuth(
+        "/api/admin/gateway/circuit-breaker/trigger/",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            model: targetModel,
+            error_count: errorCount,
+            error_type: "simulated_overload",
+          }),
+        },
+      );
+      httpOk = httpRes.ok;
+      try {
+        parsed = await httpRes.json();
+      } catch {
+        parsed = null;
+      }
+    } catch (err) {
+      parsed = { status: "error", data: { message: String(err) } };
+    }
+    // Normalise to the {ok, data} shape the rest of the panel expects.
+    setResult({
+      ok: httpOk && parsed?.status === "ok",
+      data: parsed?.data ?? null,
     });
-    setResult(res);
     setPolling(true);
     await loadState();
   };
 
   const handleReset = async () => {
-    await engine.gatewayFetch("/v1/admin/circuit-breaker-reset", {
+    // Phase 1 Fx-3: proxy reset through Django admin RBAC.
+    await fetchWithAuth("/api/admin/gateway/circuit-breaker/reset/", {
       method: "POST",
       body: JSON.stringify({ model: targetModel }),
     });

@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { modelListSignature } from "../utils/modelListSignature";
 import {
   Plus, Pencil, Trash2, X, Loader2, Server,
   CheckCircle, AlertTriangle, Power, PowerOff,
@@ -9,11 +10,36 @@ import { InfoTooltip } from "./InfoTooltip";
 import {
   ZEROSHIELD_GUARD_MODEL,
   ZEROSHIELD_GUARD_MODEL_LABEL,
+  filterUserManagedModels,
 } from "../constants/zeroshieldBrand";
+import { mergeModelsIntoFirewallAllowlist } from "../utils/firewallAllowlist";
 
 const PROVIDERS = [
-  { value: "zeroshield", label: "ZeroShield", models: [ZEROSHIELD_GUARD_MODEL] },
   { value: "openai", label: "Open AI", models: ["gpt-5.2", "gpt-4.1", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "text-embedding-3-large", "gpt-5.2-codex", "gpt-image-1.5", "o1", "o1-mini"] },
+  {
+    value: "anthropic",
+    label: "Anthropic",
+    models: [
+      "claude-opus-4-7",
+      "claude-sonnet-4-6",
+      "claude-haiku-4-5",
+      "claude-opus-4-6",
+      "claude-sonnet-4-5",
+      "claude-opus-4-5",
+      "claude-opus-4-1",
+      "claude-opus-4",
+      "claude-sonnet-4",
+      "claude-3.7-sonnet",
+      "claude-3.5-sonnet",
+      "claude-3.5-haiku",
+      "claude-3-opus",
+      "claude-3-sonnet",
+      "claude-3-haiku",
+      "claude-2.1",
+      "claude-2",
+      "claude-instant-1.2",
+    ],
+  },
   { value: "meta", label: "Meta Llama", models: ["llama-3-70b", "llama-3-8b", "llama-4-maverick-17b"] },
   { value: "mistral", label: "Mistral AI", models: ["mistral-large-3", "ministral-14b", "voxtral-realtime", "magistral-small-2509"] },
   { value: "huggingface", label: "Hugging Face", models: ["falcon-40b-instruct", "falcon-7b", "gpt-neox-20b", "gpt-j-6b", "vicuna-13b", "flan-t5-large"] },
@@ -34,14 +60,26 @@ const MODEL_ID_MAP = {
   "gpt-image-1.5": "openai/gpt-image-1.5",
   "o1": "openai/o1",
   "o1-mini": "openai/o1-mini",
+  "claude-opus-4-7": "anthropic/claude-opus-4-7",
+  "claude-sonnet-4-6": "anthropic/claude-sonnet-4-6",
+  "claude-haiku-4-5": "anthropic/claude-haiku-4-5",
+  "claude-opus-4-6": "anthropic/claude-opus-4-6",
   "claude-opus-4.6": "anthropic/claude-opus-4-6",
-  "claude-sonnet-4": "anthropic/claude-sonnet-4",
-  "claude-3.7-sonnet": "anthropic/claude-3-7-sonnet",
-  "claude-opus-code": "anthropic/claude-opus-code",
+  "claude-sonnet-4-5": "anthropic/claude-sonnet-4-5-20250929",
+  "claude-opus-4-5": "anthropic/claude-opus-4-5-20251101",
+  "claude-opus-4-1": "anthropic/claude-opus-4-1-20250805",
+  "claude-opus-4": "anthropic/claude-opus-4-20250514",
+  "claude-sonnet-4": "anthropic/claude-sonnet-4-20250514",
+  "claude-3.7-sonnet": "anthropic/claude-3-7-sonnet-20250219",
+  "claude-opus-code": "anthropic/claude-opus-4-6",
   "claude-3-opus": "anthropic/claude-3-opus-20240229",
   "claude-3-sonnet": "anthropic/claude-3-sonnet-20240229",
   "claude-3-haiku": "anthropic/claude-3-haiku-20240307",
-  "claude-3.5-sonnet": "anthropic/claude-3.5-sonnet-20241022",
+  "claude-3.5-sonnet": "anthropic/claude-3-5-sonnet-20241022",
+  "claude-3.5-haiku": "anthropic/claude-3-5-haiku-20241022",
+  "claude-2.1": "anthropic/claude-2.1",
+  "claude-2": "anthropic/claude-2",
+  "claude-instant-1.2": "anthropic/claude-instant-1.2",
   "azure-gpt-4o": "azure/gpt-4o",
   "azure-gpt-4-turbo": "azure/gpt-4-turbo",
   "gemini-3.1-pro": "gemini/gemini-3.1-pro",
@@ -74,16 +112,6 @@ const MODEL_ID_MAP = {
   "local-codellama": "ollama/codellama",
 };
 
-const DEFAULT_API_KEY_ENV = {
-  zeroshield: "AWS_ACCESS_KEY_ID",
-  openai: "OPENAI_API_KEY",
-  google: "GOOGLE_API_KEY",
-  mistral: "MISTRAL_API_KEY",
-  meta: "HF_TOKEN",
-  huggingface: "HF_TOKEN",
-  custom: "",
-};
-
 function displayModelName(modelName) {
   if (modelName === ZEROSHIELD_GUARD_MODEL) return ZEROSHIELD_GUARD_MODEL_LABEL;
   return modelName;
@@ -94,7 +122,6 @@ const INITIAL_FORM = {
   model_name: "",
   model_id: "",
   api_key: "",
-  api_key_env: "OPENAI_API_KEY",
   api_base_url: "",
   region: "",
   is_active: true,
@@ -110,7 +137,6 @@ const INITIAL_FORM = {
 
 const GATEWAY_URL_KEY = "zeroshield_gateway_url";
 const GATEWAY_KEY_KEY = "zeroshield_gateway_api_key";
-const PROVIDER_CREDENTIALS_KEY = "zeroshield_provider_credentials";
 
 const PROVIDER_DISPLAY = {
   zeroshield: "ZeroShield",
@@ -133,30 +159,6 @@ const PROVIDER_DISPLAY = {
   custom: "Custom",
 };
 
-const INITIAL_PROVIDER_CREDENTIALS_FORM = {
-  provider: "openai",
-  apiKey: "",
-  apiBaseUrl: "",
-  region: "",
-};
-
-function loadProviderCredentials() {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(PROVIDER_CREDENTIALS_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function persistProviderCredentials(nextCredentials) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(PROVIDER_CREDENTIALS_KEY, JSON.stringify(nextCredentials));
-}
-
 function readLocalStorageValue(key) {
   if (typeof window === "undefined") return "";
   try {
@@ -164,12 +166,6 @@ function readLocalStorageValue(key) {
   } catch {
     return "";
   }
-}
-
-function maskCredential(secret) {
-  if (!secret) return "";
-  if (secret.length <= 8) return "•".repeat(secret.length);
-  return `${secret.slice(0, 4)}${"•".repeat(Math.max(secret.length - 8, 4))}${secret.slice(-4)}`;
 }
 
 function formatApiError(errData, fallbackMessage) {
@@ -193,10 +189,19 @@ function formatApiError(errData, fallbackMessage) {
   return fieldErrors.length ? fieldErrors.join(" | ") : fallbackMessage;
 }
 
-export function ModelConnectionPanel({ showProviderForm = true, showConnectionsTable = true }) {
+export function ModelConnectionPanel({
+  showProviderForm = true,
+  showConnectionsTable = true,
+  showGatewayCatalog = false,
+  onModelsChanged,
+  onConnectionsMutated,
+}) {
   const { fetchWithAuth } = useAuth();
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(showConnectionsTable);
+  const modelsRef = useRef([]);
+  const lastNotifySigRef = useRef("");
+  const onModelsChangedRef = useRef(onModelsChanged);
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -210,29 +215,44 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
   const [gatewayModelsExpanded, setGatewayModelsExpanded] = useState(true);
   const [gatewaySearch, setGatewaySearch] = useState("");
   const [gatewayProviderFilter, setGatewayProviderFilter] = useState("all");
-  const [providerCredentials, setProviderCredentials] = useState(() => loadProviderCredentials());
-  const [credentialsForm, setCredentialsForm] = useState(INITIAL_PROVIDER_CREDENTIALS_FORM);
-  const [credentialsMessage, setCredentialsMessage] = useState("");
   const [providerApiKeys, setProviderApiKeys] = useState({});
 
+  useEffect(() => {
+    onModelsChangedRef.current = onModelsChanged;
+  }, [onModelsChanged]);
+
+  const notifyModelsChanged = useCallback((managed) => {
+    const sig = modelListSignature(managed);
+    if (sig === lastNotifySigRef.current) return;
+    lastNotifySigRef.current = sig;
+    onModelsChangedRef.current?.(managed);
+  }, []);
+
   const fetchModels = useCallback(async () => {
-    setLoading(true);
+    if (modelsRef.current.length === 0) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await fetchWithAuth("/api/firewall/models/");
       if (res.ok) {
         const data = await res.json();
-        setModels(Array.isArray(data) ? data : data.results || []);
+        const list = Array.isArray(data) ? data : data.results || [];
+        const managed = filterUserManagedModels(list);
+        modelsRef.current = managed;
+        setModels(managed);
+        notifyModelsChanged(managed);
       } else {
         setError(`Failed to load model configurations (${res.status}).`);
       }
     } catch (fetchError) {
       setModels([]);
+      modelsRef.current = [];
       setError(fetchError?.message || "Failed to load model configurations.");
     } finally {
       setLoading(false);
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, notifyModelsChanged]);
 
   useEffect(() => {
     if (showConnectionsTable) {
@@ -241,6 +261,7 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
   }, [fetchModels, showConnectionsTable]);
 
   const fetchGatewayModels = useCallback(async () => {
+    if (!showGatewayCatalog) return;
     const stored = readLocalStorageValue(GATEWAY_URL_KEY);
     const gatewayUrl = stored || `http://${typeof window !== "undefined" ? window.location.hostname || "127.0.0.1" : "127.0.0.1"}:8300`;
     const gatewayKey = readLocalStorageValue(GATEWAY_KEY_KEY);
@@ -262,44 +283,29 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
     } finally {
       setGatewayModelsLoading(false);
     }
-  }, []);
+  }, [showGatewayCatalog]);
 
   useEffect(() => {
-    if (showConnectionsTable) {
+    if (showConnectionsTable && showGatewayCatalog) {
       fetchGatewayModels();
     }
-  }, [fetchGatewayModels, showConnectionsTable]);
+  }, [fetchGatewayModels, showConnectionsTable, showGatewayCatalog]);
 
   const selectedProvider = PROVIDERS.find((p) => p.value === formData.provider);
   const useCustomModelName = formData.model_name === "__custom__";
   const showBaseUrl = formData.provider === "custom";
   const showRegion = false;
   const activeApiKey = providerApiKeys[formData.provider] || "";
-  const savedProviderCredential = providerCredentials[formData.provider] || null;
-  const selectedCredentialEntry = providerCredentials[credentialsForm.provider] || null;
-
-  useEffect(() => {
-    const nextCredential = providerCredentials[credentialsForm.provider];
-    setCredentialsForm((current) => ({
-      ...current,
-      apiKey: nextCredential?.apiKey || "",
-      apiBaseUrl: nextCredential?.apiBaseUrl || "",
-      region: nextCredential?.region || "",
-    }));
-  }, [credentialsForm.provider, providerCredentials]);
 
   const handleProviderChange = (provider) => {
-    const envVar = DEFAULT_API_KEY_ENV[provider] || "";
-    const nextCredential = providerCredentials[provider] || null;
     setFormData({
       ...formData,
       provider,
       model_name: "",
       model_id: "",
       api_key: "",
-      api_key_env: envVar,
-      api_base_url: nextCredential?.apiBaseUrl || "",
-      region: nextCredential?.region || "",
+      api_base_url: "",
+      region: "",
       custom_model_name: "",
     });
   };
@@ -322,66 +328,11 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
     setModalOpen(true);
   };
 
-  const handleCredentialsProviderChange = (provider) => {
-    const nextCredential = providerCredentials[provider] || null;
-    setCredentialsForm({
-      provider,
-      apiKey: nextCredential?.apiKey || "",
-      apiBaseUrl: nextCredential?.apiBaseUrl || "",
-      region: nextCredential?.region || "",
-    });
-    setCredentialsMessage("");
-  };
-
-  const handleSaveProviderCredentials = () => {
-    if (!credentialsForm.apiKey.trim()) {
-      setCredentialsMessage("Enter an API key before saving provider credentials.");
-      return;
-    }
-
-    const nextCredentials = {
-      ...providerCredentials,
-      [credentialsForm.provider]: {
-        apiKey: credentialsForm.apiKey.trim(),
-        apiBaseUrl: credentialsForm.apiBaseUrl.trim(),
-        region: credentialsForm.region.trim(),
-        updatedAt: new Date().toISOString(),
-      },
-    };
-    persistProviderCredentials(nextCredentials);
-    setProviderCredentials(nextCredentials);
-    setCredentialsMessage(`${getProviderLabel(credentialsForm.provider)} credentials saved locally in this browser.`);
-  };
-
-  const handleDeleteProviderCredentials = (provider) => {
-    const nextCredentials = { ...providerCredentials };
-    delete nextCredentials[provider];
-    persistProviderCredentials(nextCredentials);
-    setProviderCredentials(nextCredentials);
-    setCredentialsForm((current) => current.provider === provider ? {
-      provider,
-      apiKey: "",
-      apiBaseUrl: "",
-      region: "",
-    } : current);
-    setCredentialsMessage(`${getProviderLabel(provider)} credentials removed from this browser.`);
-  };
-
-  const handleApplySavedProviderSettings = () => {
-    if (!savedProviderCredential) return;
-    setFormData((current) => ({
-      ...current,
-      api_base_url: savedProviderCredential.apiBaseUrl || current.api_base_url,
-      region: savedProviderCredential.region || current.region,
-    }));
-  };
-
   const openEditModal = (model) => {
     setFormData({
       provider: model.provider || "openai",
       model_name: model.model_name || "",
       model_id: model.model_id || "",
-      api_key_env: model.api_key_env_var || "",
       api_base_url: model.api_base || "",
       region: model.region || "",
       is_active: model.is_active,
@@ -413,13 +364,16 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
         provider: formData.provider,
         model_name: resolvedModelName,
         model_id: formData.model_id,
-        api_key_env_var: formData.api_key_env,
         is_active: editingModel ? formData.is_active : true,
         data_sensitivity_level: formData.data_sensitivity_level || "public",
         compliance_tags: formData.compliance_tags
           ? formData.compliance_tags.split(",").map((t) => t.trim()).filter(Boolean)
           : [],
       };
+      const submittedApiKey = activeApiKey.trim();
+      if (submittedApiKey) {
+        payload.api_key = submittedApiKey;
+      }
 
       const assignOptionalNumericField = ({ key, label, rawValue, parseFn }) => {
         if (rawValue === "") {
@@ -497,9 +451,18 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
         body: JSON.stringify(payload),
       });
       if (res.ok) {
+        const modelName = (payload.model_name || formData.model_name || formData.custom_model_name || "").trim();
+        if (modelName) {
+          try {
+            await mergeModelsIntoFirewallAllowlist(fetchWithAuth, [modelName]);
+          } catch {
+            /* allowlist sync is best-effort; model row is already saved */
+          }
+        }
         setModalOpen(false);
         setEditingModel(null);
         await fetchModels();
+        onConnectionsMutated?.();
       } else {
         const errData = await res.json().catch(() => ({}));
         setError(
@@ -522,6 +485,7 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
         body: JSON.stringify({ is_active: !model.is_active }),
       });
       await fetchModels();
+      onConnectionsMutated?.();
     } finally {
       setActionLoading(null);
     }
@@ -533,6 +497,7 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
     try {
       await fetchWithAuth(`/api/firewall/models/${id}/`, { method: "DELETE" });
       await fetchModels();
+      onConnectionsMutated?.();
     } finally {
       setActionLoading(null);
     }
@@ -561,241 +526,18 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
         </div>
         {showConnectionsTable && (
           <button
+            type="button"
             onClick={openCreateModal}
-            className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-lg transition-colors"
+            className="flex items-center gap-1.5 min-h-[44px] px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-lg transition-colors"
           >
-            <Plus className="w-3.5 h-3.5" />
-            Add Model
+            <Plus className="w-3.5 h-3.5" aria-hidden />
+            Add model
           </button>
         )}
       </div>
 
-      <div className="mb-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/30 p-4">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div>
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-teal-600" />
-              Provider API Keys
-              <InfoTooltip title="How to Use">{"Store provider API keys locally in this browser while you onboard models. The gateway still reads provider credentials from the env-var name configured on each model, so this panel is for operator setup and reference rather than backend secret storage."}</InfoTooltip>
-            </h4>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Add provider credentials directly on the routing page instead of relying on hidden environment-variable knowledge.
-            </p>
-          </div>
-          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200 max-w-xs">
-            Stored locally only. Runtime routing still uses the API key env var configured on each model.
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Provider</label>
-            <select
-              value={credentialsForm.provider}
-              onChange={(e) => handleCredentialsProviderChange(e.target.value)}
-              className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            >
-              {PROVIDERS.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">API Key</label>
-            <input
-              type="password"
-              value={credentialsForm.apiKey}
-              onChange={(e) => setCredentialsForm((current) => ({ ...current, apiKey: e.target.value }))}
-              placeholder="Paste provider API key"
-              className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">API Base URL</label>
-            <input
-              type="text"
-              value={credentialsForm.apiBaseUrl}
-              onChange={(e) => setCredentialsForm((current) => ({ ...current, apiBaseUrl: e.target.value }))}
-              placeholder="Optional override endpoint"
-              className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Region</label>
-            <input
-              type="text"
-              value={credentialsForm.region}
-              onChange={(e) => setCredentialsForm((current) => ({ ...current, region: e.target.value }))}
-              placeholder="Optional region"
-              className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleSaveProviderCredentials}
-            className="px-3 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition-colors"
-          >
-            Save Provider Key
-          </button>
-          {selectedCredentialEntry && (
-            <button
-              type="button"
-              onClick={() => handleDeleteProviderCredentials(credentialsForm.provider)}
-              className="px-3 py-2 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 text-xs font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >
-              Remove Saved Key
-            </button>
-          )}
-          {credentialsMessage && (
-            <span className="text-xs text-slate-600 dark:text-slate-300">{credentialsMessage}</span>
-          )}
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {PROVIDERS.filter((provider) => providerCredentials[provider.value]).map((provider) => {
-            const entry = providerCredentials[provider.value];
-            return (
-              <div key={provider.value} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-100">{provider.label}</div>
-                    <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">{maskCredential(entry.apiKey)}</div>
-                  </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-800/30 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                    <CheckCircle className="w-3 h-3" /> Saved
-                  </span>
-                </div>
-                <div className="mt-2 space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-                  <div>Env var: <span className="font-mono text-slate-700 dark:text-slate-300">{DEFAULT_API_KEY_ENV[provider.value] || "custom"}</span></div>
-                  <div>Base URL: <span className="font-mono text-slate-700 dark:text-slate-300">{entry.apiBaseUrl || "default"}</span></div>
-                  <div>Region: <span className="font-mono text-slate-700 dark:text-slate-300">{entry.region || "--"}</span></div>
-                </div>
-              </div>
-            );
-          })}
-          {Object.keys(providerCredentials).length === 0 && (
-            <div className="md:col-span-2 xl:col-span-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-4 py-5 text-xs text-slate-500 dark:text-slate-400 text-center">
-              No provider API keys saved yet. Add one here so model onboarding has a visible setup path.
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="mb-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/30 p-4">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div>
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-teal-600" />
-              Provider API Keys
-              <InfoTooltip title="How to Use">{"Store provider API keys locally in this browser while you onboard models. The gateway still reads provider credentials from the env-var name configured on each model, so this panel is for operator setup and reference rather than backend secret storage."}</InfoTooltip>
-            </h4>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Add provider credentials directly on the routing page instead of relying on hidden environment-variable knowledge.
-            </p>
-          </div>
-          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200 max-w-xs">
-            Stored locally only. Runtime routing still uses the API key env var configured on each model.
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Provider</label>
-            <select
-              value={credentialsForm.provider}
-              onChange={(e) => handleCredentialsProviderChange(e.target.value)}
-              className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            >
-              {PROVIDERS.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">API Key</label>
-            <input
-              type="password"
-              value={credentialsForm.apiKey}
-              onChange={(e) => setCredentialsForm((current) => ({ ...current, apiKey: e.target.value }))}
-              placeholder="Paste provider API key"
-              className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">API Base URL</label>
-            <input
-              type="text"
-              value={credentialsForm.apiBaseUrl}
-              onChange={(e) => setCredentialsForm((current) => ({ ...current, apiBaseUrl: e.target.value }))}
-              placeholder="Optional override endpoint"
-              className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Region</label>
-            <input
-              type="text"
-              value={credentialsForm.region}
-              onChange={(e) => setCredentialsForm((current) => ({ ...current, region: e.target.value }))}
-              placeholder="Optional region"
-              className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleSaveProviderCredentials}
-            className="px-3 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition-colors"
-          >
-            Save Provider Key
-          </button>
-          {selectedCredentialEntry && (
-            <button
-              type="button"
-              onClick={() => handleDeleteProviderCredentials(credentialsForm.provider)}
-              className="px-3 py-2 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 text-xs font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >
-              Remove Saved Key
-            </button>
-          )}
-          {credentialsMessage && (
-            <span className="text-xs text-slate-600 dark:text-slate-300">{credentialsMessage}</span>
-          )}
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {PROVIDERS.filter((provider) => providerCredentials[provider.value]).map((provider) => {
-            const entry = providerCredentials[provider.value];
-            return (
-              <div key={provider.value} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-100">{provider.label}</div>
-                    <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">{maskCredential(entry.apiKey)}</div>
-                  </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-800/30 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                    <CheckCircle className="w-3 h-3" /> Saved
-                  </span>
-                </div>
-                <div className="mt-2 space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-                  <div>Env var: <span className="font-mono text-slate-700 dark:text-slate-300">{DEFAULT_API_KEY_ENV[provider.value] || "custom"}</span></div>
-                  <div>Base URL: <span className="font-mono text-slate-700 dark:text-slate-300">{entry.apiBaseUrl || "default"}</span></div>
-                  <div>Region: <span className="font-mono text-slate-700 dark:text-slate-300">{entry.region || "--"}</span></div>
-                </div>
-              </div>
-            );
-          })}
-          {Object.keys(providerCredentials).length === 0 && (
-            <div className="md:col-span-2 xl:col-span-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-4 py-5 text-xs text-slate-500 dark:text-slate-400 text-center">
-              No provider API keys saved yet. Add one here so model onboarding has a visible setup path.
-            </div>
-          )}
-        </div>
+      <div className="mb-4 rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/80 dark:bg-teal-900/20 px-4 py-3 text-xs text-teal-900 dark:text-teal-100">
+        <span className="font-medium">Organization API keys</span> are stored encrypted on the server when you add or edit a model. Keys are never cached in this browser.
       </div>
 
       {showProviderForm && (
@@ -841,8 +583,19 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading model configurations...</span>
         </div>
       ) : models.length === 0 ? (
-        <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
-          No model configurations found. Add one to configure LLM routing.
+        <div className="text-center py-10 px-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-900/30">
+          <p className="text-sm text-slate-600 dark:text-slate-300">No LLM connections yet.</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+            Add a provider and API key to connect models for routing and governance.
+          </p>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="mt-4 inline-flex items-center gap-1.5 min-h-[44px] px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" aria-hidden />
+            Add model
+          </button>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -852,7 +605,7 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Provider</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Model Name</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Model ID</th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">API Key Env</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Credential</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Region</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Sensitivity</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Priority</th>
@@ -870,7 +623,11 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
                   <td className="px-3 py-2.5 font-mono text-xs text-slate-600 dark:text-slate-400 max-w-[200px] truncate">
                     {m.model_name === ZEROSHIELD_GUARD_MODEL ? ZEROSHIELD_GUARD_MODEL_LABEL : (m.model_id || "--")}
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-slate-600 dark:text-slate-400">{m.api_key_env_var || "--"}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">
+                    {m.api_key_set
+                      ? `Encrypted key set${m.api_key_last4 ? ` (••••${m.api_key_last4})` : ""}`
+                      : (m.provider === "ollama" ? "Local (no key)" : "Not configured")}
+                  </td>
                   <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">{m.region || "--"}</td>
                   <td className="px-3 py-2.5">
                     <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${
@@ -899,15 +656,18 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
                       ) : (
                         <>
                           <button
+                            type="button"
                             onClick={() => openEditModal(m)}
-                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-500 transition-colors"
+                            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-500 transition-colors"
                             title="Edit routing config"
+                            aria-label="Edit model"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleToggleActive(m)}
-                            className={`p-1.5 rounded transition-colors ${
+                            className={`p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded transition-colors ${
                               m.is_active
                                 ? "hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"
                                 : "hover:bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600"
@@ -921,9 +681,11 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
                             )}
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleDelete(m.id)}
-                            className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-500 transition-colors"
+                            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-500 transition-colors"
                             title="Delete"
+                            aria-label="Delete model"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -938,11 +700,11 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
         </div>
       ))}
 
-      {showConnectionsTable && (
+      {showConnectionsTable && showGatewayCatalog && (
       <div className="mt-6 border-t border-slate-200 dark:border-slate-700 pt-6">
         <button
           onClick={() => setGatewayModelsExpanded(!gatewayModelsExpanded)}
-          className="flex items-center gap-2 w-full text-left mb-3"
+          className="flex items-center gap-2 w-full text-left mb-3 min-h-[44px]"
         >
           {gatewayModelsExpanded ? (
             <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400" />
@@ -1086,7 +848,7 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
                   className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 />
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                  This key is stored in the browser session for configuration convenience.
+                  When you click Add/Save Model, this key is sent to backend and encrypted at rest per organization.
                 </p>
               </div>
 
@@ -1141,40 +903,6 @@ export function ModelConnectionPanel({ showProviderForm = true, showConnectionsT
                   className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">Auto-populated from model selection. Override if needed.</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">API Key Env Variable</label>
-                <input
-                  type="text"
-                  value={formData.api_key_env}
-                  onChange={(e) => setFormData({ ...formData, api_key_env: e.target.value })}
-                  placeholder="e.g. OPENAI_API_KEY"
-                  className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                />
-                <div className="mt-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 px-3 py-2 text-[11px] text-slate-500 dark:text-slate-400">
-                  {savedProviderCredential ? (
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span>
-                        Local {getProviderLabel(formData.provider)} key saved as {maskCredential(savedProviderCredential.apiKey)}.
-                        The gateway still reads <span className="font-mono text-slate-700 dark:text-slate-300">{formData.api_key_env || DEFAULT_API_KEY_ENV[formData.provider] || "an env var"}</span> at runtime.
-                      </span>
-                      {(savedProviderCredential.apiBaseUrl || savedProviderCredential.region) && (
-                        <button
-                          type="button"
-                          onClick={handleApplySavedProviderSettings}
-                          className="rounded-md border border-slate-300 dark:border-slate-600 px-2 py-1 text-[10px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                        >
-                          Apply saved endpoint settings
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <span>
-                      No local {getProviderLabel(formData.provider)} key saved yet. Use the Provider API Keys panel above if you want to capture the provider key directly in the frontend.
-                    </span>
-                  )}
-                </div>
               </div>
 
               {showBaseUrl && (

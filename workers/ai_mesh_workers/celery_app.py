@@ -21,3 +21,10 @@ import django
 
 django.setup()
 app.autodiscover_tasks(["ai_mesh_workers.tasks"])
+
+app.conf.beat_schedule = {
+    "scan-model-risk-scores": {
+        "task": "isolation.scan_model_risk_scores",
+        "schedule": 60.0,
+    },
+}

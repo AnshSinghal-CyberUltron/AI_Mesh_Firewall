@@ -1,0 +1,50 @@
+[
+  {
+    "id": "task-architect-docs-tests-layout",
+    "key": "architect-docs-tests-layout",
+    "content": "Task completed: architect-docs-tests-layout",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1779344867234
+  },
+  {
+    "id": "task-architect-module1-job-fabric",
+    "key": "architect-module1-job-fabric",
+    "content": "Task completed: architect-module1-job-fabric",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1779355021378
+  },
+  {
+    "id": "task-architect-module1-hybrid",
+    "key": "architect-module1-hybrid",
+    "content": "Task completed: architect-module1-hybrid",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1779355077148
+  },
+  {
+    "id": "task-architect-monolith-split-2026-05-25",
+    "key": "architect-monolith-split-2026-05-25",
+    "content": "Task completed: architect-monolith-split-2026-05-25",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1779688081813
+  }
+]

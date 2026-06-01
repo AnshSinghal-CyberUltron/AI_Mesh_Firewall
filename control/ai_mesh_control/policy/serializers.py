@@ -66,6 +66,10 @@ class PolicySerializer(serializers.ModelSerializer):
             "mcp_server_slug",
             "mcp_server_name",
             "version",
+            "redaction_fields",
+            "allowed_user_ids",
+            "allowed_agent_ids",
+            "allowed_roles",
             "rules",
             "created_at",
             "updated_at",
@@ -97,6 +101,10 @@ class PolicyListSerializer(serializers.ModelSerializer):
             "mcp_server_slug",
             "mcp_server_name",
             "version",
+            "redaction_fields",
+            "allowed_user_ids",
+            "allowed_agent_ids",
+            "allowed_roles",
             "created_at",
             "updated_at",
         ]
@@ -164,11 +172,26 @@ class PolicyWriteSerializer(serializers.ModelSerializer):
         required=False, allow_null=True, help_text="Client version for conflict check (PATCH)"
     )
     mcp_server = serializers.PrimaryKeyRelatedField(
-        queryset=Policy.mcp_server.field.related_model.objects.all(),
+        queryset=Policy.mcp_server.field.related_model.objects.none(),
         required=False,
         allow_null=True,
         help_text="Optional MCP server UUID to bind this policy to (MCP domain only)",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request is not None:
+            from auth.utils import get_request_organization
+
+            org = get_request_organization(request)
+            mcp_model = Policy.mcp_server.field.related_model
+            if org is not None:
+                self.fields["mcp_server"].queryset = mcp_model.objects.filter(organization=org)
+            elif getattr(request.user, "is_superuser", False):
+                self.fields["mcp_server"].queryset = mcp_model.objects.all()
+            else:
+                self.fields["mcp_server"].queryset = mcp_model.objects.none()
 
     class Meta:
         model = Policy
@@ -185,6 +208,10 @@ class PolicyWriteSerializer(serializers.ModelSerializer):
             "policy_domain",
             "mcp_server",
             "version",
+            "redaction_fields",
+            "allowed_user_ids",
+            "allowed_agent_ids",
+            "allowed_roles",
         ]
         extra_kwargs = {"version": {"read_only": False}}
 

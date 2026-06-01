@@ -17,16 +17,17 @@ import {
 import { useAuth } from "../../context/AuthContext";
 
 /**
- * MCPGuardrailSimulator — live tool-call sandbox for the active org.
+ * MCPGuardrailSimulator — live MCP tool-call sandbox for the active org.
  *
  * Lists MCP servers + tools registered for the current organization,
  * lets the operator pick one, edit JSON arguments, then either:
  *   • Dry-Run  → POST /api/policies/test/   (no enforcement event, no tool exec)
  *   • Live     → POST /api/mcp-connector/tools/call/ (real call, real audit)
  *
- * Renders the policy decision (action, matched policies/rules) and the
- * raw tool result side-by-side. Surfaces the org's default guardrail
- * profile so users can see which input/output guards are active.
+ * Renders the unified policy decision (action, matched policies/rules)
+ * and the raw tool result side-by-side. Enforcement is driven entirely
+ * by the org's MCP Security Policies — there is no separate guardrail
+ * profile layer.
  */
 
 const MODE_DRYRUN = "dryrun";
@@ -142,27 +143,18 @@ export function MCPGuardrailSimulator() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  const [guardrails, setGuardrails] = useState([]);
   const [loadError, setLoadError] = useState(null);
 
-  // Initial load: org servers + guardrail profiles
+  // Initial load: org MCP servers
   const loadAll = useCallback(async () => {
     setLoadError(null);
     try {
-      const [srvRes, grRes] = await Promise.all([
-        fetchWithAuth("/api/mcp-connector/servers/"),
-        fetchWithAuth("/api/mcp-connector/guardrails/"),
-      ]);
+      const srvRes = await fetchWithAuth("/api/mcp-connector/servers/");
       if (!srvRes.ok) throw new Error(`servers HTTP ${srvRes.status}`);
       const srvData = await srvRes.json();
       const list = Array.isArray(srvData) ? srvData : srvData.results || [];
       setServers(list);
       setServerId((prev) => prev || (list.length ? list[0].id : ""));
-
-      if (grRes.ok) {
-        const grData = await grRes.json();
-        setGuardrails(Array.isArray(grData) ? grData : grData.results || []);
-      }
     } catch (e) {
       setLoadError(e.message || "Failed to load org context.");
     }
@@ -230,10 +222,6 @@ export function MCPGuardrailSimulator() {
       serverTools.find((t) => (t?.tool_name || t?.name) === toolName) || null,
     [serverTools, toolName],
   );
-  const defaultProfile = useMemo(
-    () => guardrails.find((g) => g.is_default) || guardrails[0] || null,
-    [guardrails],
-  );
 
   const parsedArgs = useMemo(() => {
     try {
@@ -264,6 +252,10 @@ export function MCPGuardrailSimulator() {
           method: "POST",
           body: JSON.stringify({
             policy_domain: "mcp",
+            // Structured args drive per-key (scope=key) matching server-side.
+            input_args: parsedArgs.value,
+            // Flattened prompt kept for back-compat with entire-scope text
+            // rules and older evaluators.
             prompt: `tool:${toolName} ${flattenArgs(parsedArgs.value)}`,
             response: "",
             metadata: {
@@ -308,6 +300,8 @@ export function MCPGuardrailSimulator() {
         matched_rules: data?.matched_rules || [],
         message: data?.message || data?.detail || "",
         blocked: action === "block",
+        redacted_input_args: data?.redacted_input_args,
+        redacted_output: data?.redacted_output,
       };
     }
     if (status === 403) {
@@ -348,7 +342,7 @@ export function MCPGuardrailSimulator() {
           <div className="flex items-center gap-2">
             <FlaskConical className="h-5 w-5 text-indigo-600 dark:text-indigo-300" />
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              MCP Guardrail Simulator
+              MCP Policy Simulator
             </h3>
           </div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -520,41 +514,6 @@ export function MCPGuardrailSimulator() {
               {mode === MODE_DRYRUN ? "Evaluate Policies" : "Invoke Tool"}
             </button>
           </div>
-
-          {defaultProfile && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[12px] dark:border-slate-700 dark:bg-slate-900">
-              <div className="mb-1 flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-200">
-                <Shield className="h-3.5 w-3.5 text-indigo-500" />
-                Active Org Guardrail Profile
-                {defaultProfile.is_default && (
-                  <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
-                    default
-                  </span>
-                )}
-              </div>
-              <div className="text-slate-600 dark:text-slate-300">
-                {defaultProfile.name}
-              </div>
-              {defaultProfile.description && (
-                <div className="mt-1 line-clamp-2 text-[11px] text-slate-500 dark:text-slate-400">
-                  {defaultProfile.description}
-                </div>
-              )}
-              <details className="mt-2">
-                <summary className="cursor-pointer text-[11px] text-indigo-600 hover:underline dark:text-indigo-300">
-                  Show input/output policies
-                </summary>
-                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <pre className="max-h-40 overflow-auto rounded border border-slate-200 bg-white p-2 text-[10px] text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
-{pretty(defaultProfile.input_policy)}
-                  </pre>
-                  <pre className="max-h-40 overflow-auto rounded border border-slate-200 bg-white p-2 text-[10px] text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
-{pretty(defaultProfile.output_policy)}
-                  </pre>
-                </div>
-              </details>
-            </div>
-          )}
         </div>
 
         {/* RIGHT: Result */}
@@ -637,6 +596,33 @@ export function MCPGuardrailSimulator() {
                     The arguments did not trigger any active policy/rule for the
                     {" "}<code className="font-mono">mcp</code> domain in this org.
                   </p>
+                </div>
+              )}
+
+              {result.mode === MODE_DRYRUN &&
+                (verdict.redacted_input_args !== undefined ||
+                  (verdict.redacted_output !== undefined && verdict.redacted_output !== "")) && (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {verdict.redacted_input_args !== undefined && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-700/60 dark:bg-amber-900/20">
+                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                        Redacted Input Preview
+                      </div>
+                      <pre className="max-h-48 overflow-auto text-[11px] text-amber-900 dark:text-amber-100">
+{pretty(verdict.redacted_input_args)}
+                      </pre>
+                    </div>
+                  )}
+                  {verdict.redacted_output !== undefined && verdict.redacted_output !== "" && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-700/60 dark:bg-amber-900/20">
+                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                        Redacted Output Preview
+                      </div>
+                      <pre className="max-h-48 overflow-auto text-[11px] text-amber-900 dark:text-amber-100">
+{pretty(verdict.redacted_output)}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               )}
 

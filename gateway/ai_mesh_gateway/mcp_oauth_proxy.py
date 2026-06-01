@@ -240,6 +240,16 @@ async def get_stored_token(org_slug: str, server_url: str) -> str | None:
     return data.get("access_token")
 
 
+async def has_stored_token(org_slug: str, server_url: str) -> bool:
+    """True if *any* OAuth token record exists for this org+server.
+
+    Lets callers distinguish "this server was OAuth-authenticated but the token
+    expired and could not be refreshed" (needs re-auth) from "this server was
+    never OAuth-authenticated" (nothing to do). Does NOT trigger a refresh.
+    """
+    return bool(await _token_load(org_slug, server_url))
+
+
 # ── Internal helpers ────────────────────────────────────────────────
 
 def _callback_url() -> str:

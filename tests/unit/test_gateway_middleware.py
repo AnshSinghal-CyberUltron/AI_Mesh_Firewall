@@ -226,13 +226,4 @@ def test_mcp_routes_are_not_auth_excluded():
     """
     MCP proxy routes must not bypass authentication at middleware level.
     """
-    assert "/v1/mcp/contextforge/" not in EXCLUDED_PATH_PREFIXES
-    assert "/v1/mcp/secure-gateway/" not in EXCLUDED_PATH_PREFIXES
-
-
-def test_mcp_routes_are_not_auth_excluded():
-    """
-    MCP proxy routes must not bypass authentication at middleware level.
-    """
-    assert "/v1/mcp/contextforge/" not in EXCLUDED_PATH_PREFIXES
     assert "/v1/mcp/secure-gateway/" not in EXCLUDED_PATH_PREFIXES

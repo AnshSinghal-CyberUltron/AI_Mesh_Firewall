@@ -29,6 +29,16 @@ const EMPTY_POLICY_FORM = {
   priority: 0,
   metadata: {},
   scope: "global",
+  // G7: comma-separated JSON-path-like field names to redact from MCP
+  // tool responses when this policy matches (e.g. "ssn, email, api_key").
+  // Recursive: matches keys at any nesting depth (NFKC-normalized).
+  redaction_fields: "",
+  // G8: actor allowlists. Empty string = wildcard (policy applies to all
+  // actors in that dimension). Backend stores as ArrayField; UI keeps a
+  // free-text comma-separated representation for ergonomics.
+  allowed_user_ids: "",   // integers, e.g. "3, 7, 12"
+  allowed_agent_ids: "",  // API key prefixes (8 chars each), e.g. "V-OwdAAx, abc12def"
+  allowed_roles: "",      // role names, e.g. "admin, analyst"
 };
 
 const EMPTY_RULE_FORM = {
@@ -78,6 +88,21 @@ function normalizePolicyScope(policy) {
 
 function buildPolicyPayload(form, enforcedScope, mcpServerId) {
   const resolvedScope = !enforcedScope || enforcedScope === "all" ? (form.scope || "global") : enforcedScope;
+  // G7/G8 helpers: convert UI comma-strings into the array shapes the
+  // backend's PostgreSQL ArrayField columns expect. Empty / whitespace
+  // input must produce [] (wildcard — "applies to everyone"), NOT
+  // undefined, otherwise the DRF serializer would keep the previous DB
+  // value on PATCH and the admin's intent to "clear the allowlist"
+  // would be silently dropped.
+  const splitCSV = (s) =>
+    String(s || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+  const splitCSVInts = (s) =>
+    splitCSV(s)
+      .map((x) => parseInt(x, 10))
+      .filter((n) => Number.isInteger(n));
   const payload = {
     name: form.name,
     code: form.code,
@@ -91,6 +116,10 @@ function buildPolicyPayload(form, enforcedScope, mcpServerId) {
       ...(form.metadata || {}),
       policy_scope: resolvedScope,
     },
+    redaction_fields: splitCSV(form.redaction_fields),
+    allowed_user_ids: splitCSVInts(form.allowed_user_ids),
+    allowed_agent_ids: splitCSV(form.allowed_agent_ids),
+    allowed_roles: splitCSV(form.allowed_roles),
     ...(form.version != null ? { version: form.version } : {}),
   };
   if (mcpServerId) payload.mcp_server = mcpServerId;
@@ -140,13 +169,22 @@ function ActionBadge({ action }) {
 }
 
 function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, error, scopeLocked = false }) {
+  // B5: while a submit is in-flight, suppress backdrop-close and disable the
+  // close X button so a stray click cannot discard the user's draft mid-save
+  // (race could also leave a server-side write half-applied with no UI).
+  const guardedClose = submitting ? () => {} : onClose;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/40" onClick={guardedClose} />
       <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors">
+          <button
+            onClick={guardedClose}
+            disabled={submitting}
+            aria-label={submitting ? "Saving… close disabled" : "Close"}
+            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <X className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </button>
         </div>
@@ -254,6 +292,97 @@ function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, erro
               className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
             />
           </div>
+          {/*
+            G7 + G8 advanced controls. Each input is a comma-separated
+            free-text field; `buildPolicyPayload` splits them into the
+            ArrayField shapes the backend expects. ``confirmClear`` (see
+            below) protects against accidentally wiping a populated
+            allowlist \u2014 going from a real list to an empty string flips
+            the policy from "scoped to N actors" to "applies to everyone",
+            which is a security-relevant widening and warrants a prompt.
+          */}
+          {/*
+            G8 advanced actor-scope controls. MCP-only: per-user/agent/role
+            allowlists are an MCP tool-call concept and would be confusing
+            (and unenforced) on global/pipeline/rag policies, so the whole
+            block is hidden unless the policy is in the MCP section.
+
+            G7 response-field redaction was REMOVED here: "what to redact"
+            now lives entirely inside MCP rules (action=redact, scope=key +
+            key name), eliminating the previous double-entry where the same
+            redaction targets were set both on the policy and on its rules.
+
+            Each input is a comma-separated free-text field; `buildPolicyPayload`
+            splits them into the ArrayField shapes the backend expects.
+            ``confirmClear`` protects against accidentally wiping a populated
+            allowlist \u2014 going from a real list to an empty string flips the
+            policy from "scoped to N actors" to "applies to everyone".
+          */}
+          {(form.scope === "mcp") && (() => {
+            const confirmClear = (fieldKey, label) => (next) => {
+              const prev = String(form[fieldKey] || "").trim();
+              const wantsClear = !String(next || "").trim();
+              if (prev && wantsClear) {
+                // window.confirm is intentional: this control panel is
+                // already gated behind an authenticated admin session, so
+                // a synchronous browser-native dialog is acceptable UX
+                // and removes any chance of a stale React state racing
+                // with the API call.
+                const ok = window.confirm(
+                  `Clearing \"${label}\" widens this policy to apply to ALL ${label.toLowerCase()}. Continue?`,
+                );
+                if (!ok) return;
+              }
+              setForm({ ...form, [fieldKey]: next });
+            };
+            return (
+              <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Advanced \u00b7 Actor Scope (MCP only)
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-2">
+                  Restrict who this policy applies to. Leave empty to apply to everyone.
+                  Configure what to redact/block in the policy's rules below.
+                </p>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Allowed user IDs (G8)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.allowed_user_ids || ""}
+                    onChange={(e) => confirmClear("allowed_user_ids", "Allowed user IDs")(e.target.value)}
+                    placeholder="empty = all users"
+                    className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Allowed agent IDs / API key prefixes (G8)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.allowed_agent_ids || ""}
+                    onChange={(e) => confirmClear("allowed_agent_ids", "Allowed agent IDs")(e.target.value)}
+                    placeholder="empty = all agents"
+                    className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Allowed roles (G8)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.allowed_roles || ""}
+                    onChange={(e) => confirmClear("allowed_roles", "Allowed roles")(e.target.value)}
+                    placeholder="empty = all roles"
+                    className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+            );
+          })()}
           <div className="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
@@ -277,9 +406,35 @@ function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, erro
   );
 }
 
-function RuleModal({ title, form, setForm, onSubmit, onClose, submitting, error }) {
+function RuleModal({ title, form, setForm, onSubmit, onClose, submitting, error, isMcp = false, presets = [] }) {
   const handleConditionChange = (key, value) => {
     setForm({ ...form, condition: { ...form.condition, [key]: value } });
+  };
+
+  // MCP "match mode": preset (built-in detector) | regex | keywords.
+  // Derived from the rule shape so editing an existing rule restores the
+  // right control. Switching mode clears the other mode's condition keys
+  // so we never send an ambiguous rule (e.g. both preset AND regex).
+  const matchMode = form.condition?.preset
+    ? "preset"
+    : form.rule_type === "keywords"
+      ? "keywords"
+      : "regex";
+  const setMatchMode = (mode) => {
+    const nextCond = { ...(form.condition || {}) };
+    delete nextCond.preset;
+    delete nextCond.regex;
+    delete nextCond.keywords;
+    if (mode === "preset") {
+      nextCond.preset = presets[0]?.key || "credit_card";
+      setForm({ ...form, rule_type: "regex", condition: nextCond });
+    } else if (mode === "keywords") {
+      nextCond.keywords = [];
+      setForm({ ...form, rule_type: "keywords", condition: nextCond });
+    } else {
+      nextCond.regex = "";
+      setForm({ ...form, rule_type: "regex", condition: nextCond });
+    }
   };
 
   return (
@@ -311,16 +466,30 @@ function RuleModal({ title, form, setForm, onSubmit, onClose, submitting, error 
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Rule Type</label>
-              <select
-                value={form.rule_type}
-                onChange={(e) => setForm({ ...form, rule_type: e.target.value })}
-                className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="keywords">Keywords</option>
-                <option value="regex">Regex</option>
-                <option value="pattern">Pattern</option>
-              </select>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                {isMcp ? "Match Using" : "Rule Type"}
+              </label>
+              {isMcp ? (
+                <select
+                  value={matchMode}
+                  onChange={(e) => setMatchMode(e.target.value)}
+                  className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="preset">Built-in preset (PII / secret)</option>
+                  <option value="regex">Custom regex</option>
+                  <option value="keywords">Custom keywords</option>
+                </select>
+              ) : (
+                <select
+                  value={form.rule_type}
+                  onChange={(e) => setForm({ ...form, rule_type: e.target.value })}
+                  className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="keywords">Keywords</option>
+                  <option value="regex">Regex</option>
+                  <option value="pattern">Pattern</option>
+                </select>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Action</label>
@@ -335,57 +504,133 @@ function RuleModal({ title, form, setForm, onSubmit, onClose, submitting, error 
               </select>
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-              {form.rule_type === "regex" ? "Regex Pattern" : "Keywords (comma-separated)"}
-            </label>
-            {form.rule_type === "regex" ? (
-              <input
-                type="text"
-                value={form.condition.regex || ""}
-                onChange={(e) => handleConditionChange("regex", e.target.value)}
-                placeholder="e.g. \\b\\d{3}-\\d{2}-\\d{4}\\b"
-                className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-            ) : (
-              <input
-                type="text"
-                value={Array.isArray(form.condition.keywords) ? form.condition.keywords.join(", ") : ""}
-                onChange={(e) =>
-                  handleConditionChange(
-                    "keywords",
-                    e.target.value.split(",").map((k) => k.trim()).filter(Boolean)
-                  )
-                }
-                placeholder="e.g. ignore, override, bypass"
-                className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+          {/* What to match against */}
+          {isMcp && matchMode === "preset" ? (
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Field</label>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Preset</label>
               <select
-                value={form.condition.field || "prompt"}
-                onChange={(e) => handleConditionChange("field", e.target.value)}
+                value={form.condition?.preset || ""}
+                onChange={(e) => handleConditionChange("preset", e.target.value)}
                 className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
               >
-                <option value="prompt">Prompt</option>
-                <option value="response">Response</option>
-                <option value="both">Both</option>
+                {presets.length === 0 && <option value="">Loading presets…</option>}
+                {presets.map((p) => (
+                  <option key={p.key} value={p.key}>{p.label}</option>
+                ))}
               </select>
+              {(() => {
+                const sel = presets.find((p) => p.key === form.condition?.preset);
+                return sel?.description ? (
+                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{sel.description}</p>
+                ) : null;
+              })()}
             </div>
+          ) : (
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
-              <input
-                type="number"
-                min="0"
-                value={form.priority}
-                onChange={(e) => setForm({ ...form, priority: parseInt(e.target.value, 10) || 0 })}
-                className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                {(isMcp ? matchMode === "regex" : form.rule_type === "regex") ? "Regex Pattern" : "Keywords (comma-separated)"}
+              </label>
+              {(isMcp ? matchMode === "regex" : form.rule_type === "regex") ? (
+                <input
+                  type="text"
+                  value={form.condition.regex || ""}
+                  onChange={(e) => handleConditionChange("regex", e.target.value)}
+                  placeholder="e.g. \\b\\d{3}-\\d{2}-\\d{4}\\b"
+                  className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={Array.isArray(form.condition.keywords) ? form.condition.keywords.join(", ") : ""}
+                  onChange={(e) =>
+                    handleConditionChange(
+                      "keywords",
+                      e.target.value.split(",").map((k) => k.trim()).filter(Boolean)
+                    )
+                  }
+                  placeholder="e.g. ignore, override, bypass"
+                  className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              )}
             </div>
-          </div>
+          )}
+          {isMcp ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Apply To</label>
+                <select
+                  value={form.condition?.direction || "both"}
+                  onChange={(e) => handleConditionChange("direction", e.target.value)}
+                  className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="input">Input (tool arguments)</option>
+                  <option value="output">Output (tool response)</option>
+                  <option value="both">Both</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Scope</label>
+                <select
+                  value={form.condition?.scope || "entire"}
+                  onChange={(e) => handleConditionChange("scope", e.target.value)}
+                  className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="entire">Entire payload</option>
+                  <option value="key">Specific key</option>
+                </select>
+              </div>
+              {form.condition?.scope === "key" && (
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Key name</label>
+                  <input
+                    type="text"
+                    value={form.condition?.key || ""}
+                    onChange={(e) => handleConditionChange("key", e.target.value)}
+                    placeholder="e.g. ssn, account_number, email"
+                    className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    Case-insensitive key match at any depth in the tool args / response.
+                  </p>
+                </div>
+              )}
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.priority}
+                  onChange={(e) => setForm({ ...form, priority: parseInt(e.target.value, 10) || 0 })}
+                  className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Field</label>
+                <select
+                  value={form.condition.field || "prompt"}
+                  onChange={(e) => handleConditionChange("field", e.target.value)}
+                  className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="prompt">Prompt</option>
+                  <option value="response">Response</option>
+                  <option value="both">Both</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.priority}
+                  onChange={(e) => setForm({ ...form, priority: parseInt(e.target.value, 10) || 0 })}
+                  className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          )}
           {form.action === "redact" && (
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Redaction Replacement</label>
@@ -445,7 +690,32 @@ function RuleModal({ title, form, setForm, onSubmit, onClose, submitting, error 
   );
 }
 
-function RulesTable({ rules, loading, onAddRule, onEditRule, onDeleteRule }) {
+function EnableToggle({ checked, disabled, onChange, ariaLabel }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange(!checked);
+      }}
+      className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
+        checked ? "bg-teal-600" : "bg-slate-300 dark:bg-slate-600"
+      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+    >
+      <span
+        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+          checked ? "translate-x-4" : "translate-x-1"
+        }`}
+      />
+    </button>
+  );
+}
+
+function RulesTable({ rules, loading, onAddRule, onEditRule, onDeleteRule, onToggleRule, ruleToggleLoadingId }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-4">
@@ -494,9 +764,17 @@ function RulesTable({ rules, loading, onAddRule, onEditRule, onDeleteRule }) {
                   <td className="px-2 py-1.5"><ActionBadge action={rule.action} /></td>
                   <td className="px-2 py-1.5 text-slate-500 dark:text-slate-400">{rule.priority}</td>
                   <td className="px-2 py-1.5">
-                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${rule.enabled ? "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700" : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"}`}>
-                      {rule.enabled ? "Active" : "Disabled"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <EnableToggle
+                        checked={rule.enabled !== false}
+                        disabled={ruleToggleLoadingId === rule.id}
+                        ariaLabel={`${rule.enabled !== false ? "Disable" : "Enable"} rule ${rule.name}`}
+                        onChange={(next) => onToggleRule?.(rule, next)}
+                      />
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${rule.enabled ? "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700" : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"}`}>
+                        {rule.enabled ? "Active" : "Disabled"}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-2 py-1.5 text-right">
                     <button
@@ -535,7 +813,12 @@ export function PolicyManagementPanel({
   mcpServerSlug = null,
   mcpServerId = null,
 }) {
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, user } = useAuth();
+  // B3: gate the Compile & Push button on admin role. Backend already enforces
+  // IsAdminOrSuperuser, but a visible button that returns 403 is misleading UX
+  // and trains users to ignore errors. Match Sidebar/Header admin pattern.
+  const isAdminUser =
+    !!user && (user.is_superuser || (user.roles || []).includes("platform_admin"));
   const [policies, setPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedPolicy, setExpandedPolicy] = useState(null);
@@ -556,7 +839,12 @@ export function PolicyManagementPanel({
   const [compiling, setCompiling] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
+  const [enabledFilter, setEnabledFilter] = useState("");
   const [loadError, setLoadError] = useState(null);
+  // Data-driven MCP preset catalogue (key/label/description). Fetched once
+  // so the MCP rule builder can render the preset dropdown without
+  // hard-coding the list in the client.
+  const [mcpPresets, setMcpPresets] = useState([]);
 
   const fetchPolicies = useCallback(async () => {
     setLoading(true);
@@ -569,6 +857,8 @@ export function PolicyManagementPanel({
         const params = new URLSearchParams();
         params.set("policy_domain", domain);
         if (severityFilter) params.set("severity", severityFilter);
+        if (enabledFilter === "enabled") params.set("enabled", "true");
+        if (enabledFilter === "disabled") params.set("enabled", "false");
         if (mcpServerSlug) params.set("mcp_server_slug", mcpServerSlug);
 
         let nextUrl = `/api/policies/?${params.toString()}`;
@@ -599,11 +889,26 @@ export function PolicyManagementPanel({
     } finally {
       setLoading(false);
     }
-  }, [fetchWithAuth, severityFilter, scope, mcpServerSlug]);
+  }, [fetchWithAuth, severityFilter, enabledFilter, scope, mcpServerSlug]);
 
   useEffect(() => {
     fetchPolicies();
   }, [fetchPolicies]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchWithAuth("/api/policies/mcp-presets/");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setMcpPresets(Array.isArray(data?.presets) ? data.presets : []);
+      } catch {
+        /* non-fatal: rule builder falls back to custom regex/keywords */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [fetchWithAuth]);
 
   const fetchRules = useCallback(
     async (policyId) => {
@@ -718,18 +1023,113 @@ export function PolicyManagementPanel({
       metadata: policy.metadata || {},
       scope: normalizePolicyScope(policy),
       version: policy.version,
+      // G7/G8: server returns arrays, UI edits as comma-separated text.
+      // Use Array.isArray guard because legacy policies created before
+      // migration 0029 may surface these as null on stale browser tabs.
+      redaction_fields: Array.isArray(policy.redaction_fields) ? policy.redaction_fields.join(", ") : "",
+      allowed_user_ids: Array.isArray(policy.allowed_user_ids) ? policy.allowed_user_ids.join(", ") : "",
+      allowed_agent_ids: Array.isArray(policy.allowed_agent_ids) ? policy.allowed_agent_ids.join(", ") : "",
+      allowed_roles: Array.isArray(policy.allowed_roles) ? policy.allowed_roles.join(", ") : "",
     });
     setEditPolicyId(policy.id);
     setFormError(null);
     setEditModalOpen(true);
   };
 
+  const handleTogglePolicyEnabled = async (policy, nextEnabled) => {
+    const loadingKey = `toggle-${policy.id}`;
+    setActionLoading(loadingKey);
+    setFormError(null);
+    const previous = policy.enabled;
+    setPolicies((prev) => prev.map((p) => (p.id === policy.id ? { ...p, enabled: nextEnabled } : p)));
+    try {
+      const res = await fetchWithAuth(`/api/policies/${policy.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: nextEnabled, version: policy.version }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        let errBody = {};
+        try { errBody = JSON.parse(text); } catch {}
+        throw new Error(errBody.detail || text || `HTTP ${res.status}`);
+      }
+      const updated = await res.json();
+      setPolicies((prev) => prev.map((p) => (p.id === policy.id ? { ...p, ...updated } : p)));
+      // Signals debounce compile; admins can nudge gateway sync immediately.
+      fetchWithAuth("/api/policies/compile/", { method: "POST" }).catch(() => {});
+    } catch (err) {
+      setPolicies((prev) => prev.map((p) => (p.id === policy.id ? { ...p, enabled: previous } : p)));
+      setFormError(err.message || "Failed to update policy status");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleToggleRuleEnabled = async (policyId, rule, nextEnabled) => {
+    setActionLoading(`rule-toggle-${rule.id}`);
+    setFormError(null);
+    const previous = rule.enabled !== false;
+    setPolicyRules((prev) => ({
+      ...prev,
+      [policyId]: (prev[policyId] || []).map((r) => (r.id === rule.id ? { ...r, enabled: nextEnabled } : r)),
+    }));
+    try {
+      const res = await fetchWithAuth(`/api/policies/rules/${rule.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: nextEnabled }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        let errBody = {};
+        try { errBody = JSON.parse(text); } catch {}
+        throw new Error(errBody.detail || text || `HTTP ${res.status}`);
+      }
+      const updated = await res.json();
+      setPolicyRules((prev) => ({
+        ...prev,
+        [policyId]: (prev[policyId] || []).map((r) => (r.id === rule.id ? { ...r, ...updated } : r)),
+      }));
+      fetchWithAuth("/api/policies/compile/", { method: "POST" }).catch(() => {});
+    } catch (err) {
+      setPolicyRules((prev) => ({
+        ...prev,
+        [policyId]: (prev[policyId] || []).map((r) => (r.id === rule.id ? { ...r, enabled: previous } : r)),
+      }));
+      setFormError(err.message || "Failed to update rule status");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleDeletePolicy = async (id) => {
     if (!window.confirm("Delete this policy and all its rules? This cannot be undone.")) return;
     setActionLoading(id);
+    setFormError(null);
     try {
-      await fetchWithAuth(`/api/policies/${id}/`, { method: "DELETE" });
+      // B2: previously the response status was never inspected; a 403/404/500
+      // returned here would silently "succeed" and the UI would refetch as if
+      // the policy were gone. Surface the failure so the user can retry.
+      const res = await fetchWithAuth(`/api/policies/${id}/`, { method: "DELETE" });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const text = await res.text();
+          if (text) {
+            try {
+              const body = JSON.parse(text);
+              detail = body.detail || body.error || text;
+            } catch {
+              detail = text;
+            }
+          }
+        } catch {
+          /* ignore body read failure */
+        }
+        throw new Error(detail);
+      }
       await fetchPolicies();
+    } catch (err) {
+      setFormError(err.message || "Failed to delete policy");
     } finally {
       setActionLoading(null);
     }
@@ -789,17 +1189,41 @@ export function PolicyManagementPanel({
 
   const handleDeleteRule = async (policyId, ruleId) => {
     if (!window.confirm("Delete this rule?")) return;
+    setFormError(null);
     try {
-      await fetchWithAuth(`/api/policies/rules/${ruleId}/`, { method: "DELETE" });
+      // B1: previously this swallowed all errors silently — a failed DELETE
+      // (auth expiry, optimistic-lock conflict, server error) left the rule
+      // visible and the user assumed success. Now we check res.ok and surface
+      // the failure via setFormError so the user can retry.
+      const res = await fetchWithAuth(`/api/policies/rules/${ruleId}/`, { method: "DELETE" });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const text = await res.text();
+          if (text) {
+            try {
+              const body = JSON.parse(text);
+              detail = body.detail || body.error || text;
+            } catch {
+              detail = text;
+            }
+          }
+        } catch {
+          /* ignore body read failure */
+        }
+        throw new Error(detail);
+      }
       await fetchRules(policyId);
-    } catch {
-      // silent
+    } catch (err) {
+      setFormError(err.message || "Failed to delete rule");
     }
   };
 
   const openRuleModal = (policyId, rule = null) => {
     setRuleTargetPolicyId(policyId);
     setEditRuleId(rule?.id || null);
+    const targetPolicy = policies.find((p) => p.id === policyId);
+    const targetIsMcp = targetPolicy ? normalizePolicyScope(targetPolicy) === "mcp" : false;
     setRuleForm(rule ? {
       name: rule.name || "",
       rule_type: rule.rule_type || "keywords",
@@ -809,7 +1233,18 @@ export function PolicyManagementPanel({
       priority: rule.priority || 0,
       enabled: rule.enabled !== false,
       description: rule.description || "",
-    } : { ...EMPTY_RULE_FORM });
+    } : (targetIsMcp ? {
+      // New MCP rule defaults: built-in preset, redact, both directions,
+      // whole-payload scope — the most common "protect PII everywhere" case.
+      name: "",
+      rule_type: "regex",
+      condition: { preset: mcpPresets[0]?.key || "credit_card", direction: "both", scope: "entire" },
+      action: "redact",
+      redaction_config: {},
+      priority: 0,
+      enabled: true,
+      description: "",
+    } : { ...EMPTY_RULE_FORM }));
     setFormError(null);
     setRuleModalOpen(true);
   };
@@ -825,7 +1260,17 @@ export function PolicyManagementPanel({
           const data = await statusRes.json();
           setCompileStatus({ success: true, data });
         } else {
-          setCompileStatus({ success: true, data: { message: "Compiled successfully" } });
+          // B4: do not lie. The compile POST succeeded but we could not
+          // confirm the resulting Redis state. Mark as partial so the UI can
+          // render a warning state instead of a green "Compiled successfully".
+          setCompileStatus({
+            success: true,
+            partial: true,
+            data: {
+              message:
+                "Compile triggered; status fetch failed — verify via /api/policies/compile/status/ or redis-cli.",
+            },
+          });
         }
       } else {
         const text = await res.text();
@@ -875,7 +1320,7 @@ export function PolicyManagementPanel({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {showCompileButton ? (
+          {showCompileButton && isAdminUser ? (
             <button
               onClick={handleCompile}
               disabled={compiling}
@@ -901,10 +1346,30 @@ export function PolicyManagementPanel({
       </div>
 
       {compileStatus && (
-        <div className={`mb-4 p-3 rounded-lg text-xs flex items-start gap-2 ${compileStatus.success ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700" : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700"}`}>
-          {compileStatus.success ? <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />}
+        // B4: distinguish success / partial (compile fired but status fetch
+        // failed) / error. Without the partial path the UI showed a green
+        // "Policies compiled" banner even when we had no proof the gateway
+        // cache had been updated.
+        <div
+          className={`mb-4 p-3 rounded-lg text-xs flex items-start gap-2 ${
+            compileStatus.success && !compileStatus.partial
+              ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700"
+              : compileStatus.partial
+              ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700"
+              : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700"
+          }`}
+        >
+          {compileStatus.success && !compileStatus.partial ? (
+            <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          )}
           <div>
-            {compileStatus.success ? "Policies compiled and pushed to gateway successfully." : `Compilation failed: ${compileStatus.error}`}
+            {compileStatus.success && !compileStatus.partial
+              ? "Policies compiled and pushed to gateway successfully."
+              : compileStatus.partial
+              ? compileStatus.data?.message || "Compile triggered; status unknown."
+              : `Compilation failed: ${compileStatus.error}`}
             {compileStatus.data?.policy_count != null && (
               <span className="ml-1">({compileStatus.data.policy_count} policies, {compileStatus.data.rule_count || 0} rules)</span>
             )}
@@ -934,6 +1399,15 @@ export function PolicyManagementPanel({
               className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
+          <select
+            value={enabledFilter}
+            onChange={(e) => setEnabledFilter(e.target.value)}
+            className="bg-white dark:bg-slate-800 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-teal-500"
+          >
+            <option value="">All statuses</option>
+            <option value="enabled">Enabled only</option>
+            <option value="disabled">Disabled only</option>
+          </select>
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
@@ -996,8 +1470,19 @@ export function PolicyManagementPanel({
                     <span className="text-[10px] text-slate-400">Priority: {policy.priority}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                  {actionLoading === policy.id ? (
+                <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <EnableToggle
+                    checked={policy.enabled !== false}
+                    disabled={actionLoading === `toggle-${policy.id}`}
+                    ariaLabel={`${policy.enabled ? "Disable" : "Enable"} policy ${policy.name}`}
+                    onChange={(next) => handleTogglePolicyEnabled(policy, next)}
+                  />
+                  {policy.is_system ? (
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-violet-600 dark:text-violet-300">
+                      System
+                    </span>
+                  ) : null}
+                  {actionLoading === policy.id || actionLoading === `toggle-${policy.id}` ? (
                     <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
                   ) : (
                     <>
@@ -1008,13 +1493,15 @@ export function PolicyManagementPanel({
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        onClick={() => handleDeletePolicy(policy.id)}
-                        className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-400 hover:text-red-600 transition-colors"
-                        title="Delete Policy"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {!policy.is_system ? (
+                        <button
+                          onClick={() => handleDeletePolicy(policy.id)}
+                          className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-400 hover:text-red-600 transition-colors"
+                          title="Delete Policy"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      ) : null}
                     </>
                   )}
                 </div>
@@ -1035,6 +1522,8 @@ export function PolicyManagementPanel({
                     onAddRule={() => openRuleModal(policy.id)}
                     onEditRule={(rule) => openRuleModal(policy.id, rule)}
                     onDeleteRule={(ruleId) => handleDeleteRule(policy.id, ruleId)}
+                    onToggleRule={(rule, next) => handleToggleRuleEnabled(policy.id, rule, next)}
+                    ruleToggleLoadingId={String(actionLoading || "").startsWith("rule-toggle-") ? Number(String(actionLoading).replace("rule-toggle-", "")) : null}
                   />
                 </div>
               )}
@@ -1078,6 +1567,11 @@ export function PolicyManagementPanel({
           onClose={() => { setRuleModalOpen(false); setEditRuleId(null); }}
           submitting={submitting}
           error={formError}
+          isMcp={(() => {
+            const tp = policies.find((p) => p.id === ruleTargetPolicyId);
+            return tp ? normalizePolicyScope(tp) === "mcp" : false;
+          })()}
+          presets={mcpPresets}
         />
       )}
     </div>

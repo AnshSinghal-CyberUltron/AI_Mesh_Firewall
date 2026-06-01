@@ -19,8 +19,16 @@ import redis.asyncio as aioredis
 
 try:
     from .policy_signing import signing_enforced, verify_bundle
+    from .telemetry_ops import (
+        emit_operational_event,
+        EVENT_CLASS_POLICY_HMAC_FAILURE,
+    )
 except ImportError:
     from policy_signing import signing_enforced, verify_bundle
+    from telemetry_ops import (
+        emit_operational_event,
+        EVENT_CLASS_POLICY_HMAC_FAILURE,
+    )
 
 LOG = logging.getLogger("gateway.policy_sync")
 
@@ -47,6 +55,11 @@ class PolicySync:
         self._version: int = 0
         self._subscriber_task: Optional[asyncio.Task] = None
         self._running: bool = False
+        # Phase 1 Fx-1: distinguishes "sync has run (possibly empty)" from
+        # "sync has never run". /health treats the former as healthy because
+        # zero-policy bundles are a valid state for a fresh org — only an
+        # unreachable control plane should mark the gateway as degraded.
+        self._sync_completed: bool = False
 
     def get_policies(self, org_slug: str = "default") -> list[dict[str, Any]]:
         """Return compiled policy entries for a specific org."""
@@ -91,8 +104,14 @@ class PolicySync:
 
     @property
     def is_loaded(self) -> bool:
-        """Return True if the cache has been populated at least once."""
-        return bool(self._org_caches) or self._cache is not None
+        """Return True if the cache has been populated at least once OR if a
+        successful sync from the control plane completed with zero bundles
+        (a valid state for a fresh org with no policies yet)."""
+        return (
+            bool(self._org_caches)
+            or self._cache is not None
+            or self._sync_completed
+        )
 
     @property
     def policy_count(self) -> int:
@@ -168,6 +187,20 @@ class PolicySync:
                             slug,
                             key,
                         )
+                        # Phase 0 D-G1-v3: emit operational event with
+                        # site=initial_load so dashboards can disambiguate
+                        # cold-start failures from refresh failures.
+                        asyncio.create_task(
+                            emit_operational_event(
+                                EVENT_CLASS_POLICY_HMAC_FAILURE,
+                                org_slug=slug,
+                                severity="critical",
+                                metadata={
+                                    "site": "initial_load",
+                                    "redis_key": key,
+                                },
+                            )
+                        )
                         continue
                     LOG.warning(
                         "Loading unsigned policy bundle for org '%s' "
@@ -194,6 +227,17 @@ class PolicySync:
                     )
 
             await client.aclose()
+            # Phase 1 Fx-1: sync round-trip with control plane succeeded.
+            # An empty result is valid (fresh org) — mark loaded so /health
+            # reports 200. Per user choice: WARN every sync that returns 0
+            # bundles so operator misconfiguration cannot stay silent.
+            self._sync_completed = True
+            if not self._org_caches:
+                LOG.warning(
+                    "PolicySync initial load completed with ZERO policy bundles. "
+                    "Gateway will allow all requests until backend compiles per-org bundles. "
+                    "If this persists, verify backend policy_compiler ran and Redis is reachable."
+                )
         except Exception:
             LOG.warning(
                 "Failed to load initial policy bundles from Redis. "
@@ -299,6 +343,20 @@ class PolicySync:
                         "retaining previous cache (version=%d)",
                         org_slug,
                         self._org_versions.get(org_slug, 0),
+                    )
+                    # Phase 0 D-G1-v3: site=refresh so we can alert on
+                    # post-startup tampering (more suspicious than init).
+                    asyncio.create_task(
+                        emit_operational_event(
+                            EVENT_CLASS_POLICY_HMAC_FAILURE,
+                            org_slug=org_slug,
+                            severity="critical",
+                            metadata={
+                                "site": "refresh",
+                                "redis_key": redis_key,
+                                "current_version": self._org_versions.get(org_slug, 0),
+                            },
+                        )
                     )
                     return
                 LOG.warning(

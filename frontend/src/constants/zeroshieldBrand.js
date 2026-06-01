@@ -31,6 +31,26 @@ export function formatDetectionTier(tier) {
   return tier;
 }
 
+const PLATFORM_GUARD_MODEL_NAMES = new Set([
+  ZEROSHIELD_GUARD_MODEL,
+  "bedrock-gpt-oss-120b",
+  "bedrock-gpt-oss-120b-long-context",
+]);
+
+/** True for internal / ZeroShield guard entries (not shown in model governance UI). */
+export function isPlatformManagedModel(model) {
+  if (!model) return false;
+  const name = String(model.model_name || "").trim().toLowerCase();
+  const provider = String(model.provider || "").trim().toLowerCase();
+  if (provider === "internal") return true;
+  return PLATFORM_GUARD_MODEL_NAMES.has(name);
+}
+
+/** Org-owned models only — excludes platform guard model from governance tables. */
+export function filterUserManagedModels(models) {
+  return (models || []).filter((m) => !isPlatformManagedModel(m));
+}
+
 /** Map model id from API responses for display */
 export function formatModelDisplayName(modelId) {
   if (!modelId) return modelId;

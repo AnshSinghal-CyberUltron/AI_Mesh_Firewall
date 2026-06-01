@@ -1,16 +1,15 @@
-"""Gateway proxy routes for MCP traffic via ContextForge + Secure-MCP-Gateway.
+"""Gateway proxy routes for MCP traffic via Secure-MCP-Gateway and direct upstreams.
 
-Provides transparent proxying from the gateway's data plane to the two OSS
-MCP services so that frontend/clients can reach them through a single endpoint.
-
-Also provides an external MCP proxy so that ContextForge (which may have
-OpenSSL compatibility issues) can reach external MCP servers through the
-gateway container's working TLS stack.
+Provides transparent proxying from the gateway's data plane to upstream MCP
+servers (streamable-http, sse, websocket) and stdio adapter execution, plus
+an external proxy for hostnames that have OpenSSL compatibility issues when
+called from internal containers.
 
 Additionally provides org-scoped external gateway routes at
 /gateway/{org_slug}/mcp/{server_slug}/* for agent/SDK consumption.
 """
 
+import hmac
 import json
 import logging
 import os
@@ -22,6 +21,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from jobs import enqueue_job
 
+from presidio_engine import get_engine as _get_presidio_engine
+
 LOG = logging.getLogger("gateway.mcp_proxy")
 
 router = APIRouter(prefix="/v1/mcp", tags=["MCP Proxy"])
@@ -29,13 +30,29 @@ router = APIRouter(prefix="/v1/mcp", tags=["MCP Proxy"])
 # Org-scoped external gateway router — auth IS enforced on this router.
 org_gateway_router = APIRouter(prefix="/gateway", tags=["MCP Org Gateway"])
 
-_CONTEXTFORGE_URL = os.environ.get("CONTEXTFORGE_URL", "http://contextforge:4444")
-_SECURE_GW_URL = os.environ.get("SECURE_MCP_GATEWAY_URL", "http://secure-mcp-gateway:8000")
 _MCP_FIREWALL_URL = os.environ.get("MCP_FIREWALL_URL", "http://mcp-firewall:8080")
-_BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8000")
+_BACKEND_URL = (
+    os.environ.get("BACKEND_URL")
+    or os.environ.get("AIGUARDX_BACKEND_URL")
+    or os.environ.get("AI_MESH_CONTROL_URL")
+    or "http://control:8000"
+)
 _GATEWAY_INTERNAL_API_KEY = os.environ.get(
     "GATEWAY_INTERNAL_API_KEY", os.environ.get("AGENT_API_KEY", "")
 )
+
+
+def _valid_internal_key(presented: str) -> bool:
+    """Constant-time validation of the server-to-server internal key.
+
+    Replaces a naive ``==`` comparison to remove a timing side channel:
+    these internal endpoints are gated solely by this shared secret, so
+    the comparison must not leak length/prefix information.
+    """
+    if not presented or not _GATEWAY_INTERNAL_API_KEY:
+        return False
+    return hmac.compare_digest(presented, _GATEWAY_INTERNAL_API_KEY)
+
 _TIMEOUT = float(os.environ.get("MCP_PROXY_TIMEOUT", "30"))
 _GATEWAY_ASYNC_MCP_AUDIT = os.environ.get("GATEWAY_ASYNC_MCP_AUDIT", "false").strip().lower() in ("1", "true", "yes")
 
@@ -142,6 +159,37 @@ async def _get_server_config(org_slug: str, server_slug: str) -> dict | None:
     return None
 
 
+def _apply_fresh_config_overrides(
+    config: dict | None, body: dict, org_slug: str, server_slug: str
+) -> dict | None:
+    """Override (TTL-)cached server config with authoritative values from the body.
+
+    The control plane sends the current ``url``/``transport`` in every internal
+    discover/call request. Without this, an operator who edits a server's URL or
+    transport and re-syncs within ``_CONFIG_CACHE_TTL`` (120s) would hit the STALE
+    cached config -- which previously made a fixed Cloudflare server still look
+    broken (the gateway kept using the old /sse URL). We prefer the body-supplied
+    values and refresh the shared cache so the data-plane sees the new config too.
+
+    Returns the effective config (possibly ``None`` if neither cache nor body
+    yields a usable config, so the caller can return 404).
+    """
+    override: dict = {}
+    url = (body.get("url") or "").strip()
+    transport = (body.get("transport") or "").strip().lower()
+    if url:
+        override["url"] = url
+    if transport:
+        override["transport"] = transport
+    if not override:
+        return config
+    merged = {**(config or {}), **override}
+    cache_key = f"{org_slug}/{server_slug}"
+    _server_config_cache[cache_key] = merged
+    _server_config_ttl[cache_key] = time.time()
+    return merged
+
+
 # ── Per-tool enable/disable enforcement (works for ALL transports) ──
 
 async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
@@ -152,6 +200,13 @@ async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
     """
     if not org_slug or not server_slug:
         return None
+    # TODO(D10, G7/G8): Cache key is currently per-(org, server) only. If
+    # per-user/per-agent/per-role tool enablement is ever introduced upstream
+    # (control plane), this key MUST be widened to include the actor dimension
+    # (e.g. key_prefix or user_id or sorted(roles)) to avoid cross-actor cache
+    # bleed where actor A's enabled-tool view would mask actor B's restrictions.
+    # Today, tool enable/disable is server-scoped (not actor-scoped), so the
+    # current key is correct; this comment marks the invariant for future work.
     cache_key = f"{org_slug}/{server_slug}"
     now = time.time()
     if cache_key in _enabled_tools_cache:
@@ -186,6 +241,12 @@ async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
                 "known": set(data.get("known_tools") or []),
                 "enabled": set(data.get("enabled_tools") or []),
                 "disabled": set(data.get("disabled_tools") or []),
+                # DECISION-D Phase 1: propagate Presidio enforcement controls
+                # so _effective_presidio_action(tool, enabled_info) can resolve
+                # the per-tool override and server default without an extra
+                # backend round-trip per call.
+                "default_presidio_action": data.get("default_presidio_action") or "tag",
+                "tool_presidio_actions": data.get("tool_presidio_actions") or {},
             }
             _enabled_tools_cache[cache_key] = result
             _enabled_tools_ttl[cache_key] = now
@@ -233,6 +294,8 @@ async def _record_gateway_event(
     request_id: str = "",
     latency_ms: int = 0,
     metadata: dict | None = None,
+    compliance_tags: list | None = None,
+    presidio_findings: list | None = None,
 ) -> None:
     """Best-effort record of MCP events via async queue or legacy HTTP path."""
     if not org_slug:
@@ -253,6 +316,8 @@ async def _record_gateway_event(
                 "request_id": request_id,
                 "latency_ms": latency_ms,
                 "metadata": metadata or {},
+                "compliance_tags": compliance_tags or [],
+                "presidio_findings": presidio_findings or [],
             },
         )
         return
@@ -273,6 +338,8 @@ async def _record_gateway_event(
         "request_id": request_id,
         "latency_ms": latency_ms,
         "metadata": metadata or {},
+        "compliance_tags": compliance_tags or [],
+        "presidio_findings": presidio_findings or [],
     }
     try:
         async with httpx.AsyncClient(timeout=5) as client:
@@ -286,60 +353,68 @@ async def _record_gateway_event(
                     org_slug, tool_name, exc)
 
 
-# ── ContextForge proxy ───────────────────────────────────────────────
-
-@router.api_route(
-    "/contextforge/{path:path}",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    summary="Proxy to ContextForge API",
-)
-async def contextforge_proxy(path: str, request: Request):
-    """Transparent proxy to IBM ContextForge for server/tool management."""
-    return await _proxy(_CONTEXTFORGE_URL, path, request)
+# ── DECISION-D Phase 1: Presidio scan helpers ────────────────────────
 
 
-# ── Secure MCP Gateway proxy ────────────────────────────────────────
+def _effective_presidio_action(tool_name: str, enabled_info: dict | None) -> str:
+    """Resolve the effective Presidio action for a tool call.
 
-@router.api_route(
-    "/secure-gateway/{path:path}",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    summary="Proxy to Secure MCP Gateway API",
-)
-async def secure_gateway_proxy(path: str, request: Request):
-    """Transparent proxy to Enkrypt Secure MCP Gateway for guardrails."""
-    return await _proxy(_SECURE_GW_URL, path, request)
+    Order of precedence:
+      1. Per-tool override (``MCPToolRegistration.presidio_action``)
+      2. Server default (``MCPServerRegistration.default_presidio_action``)
+      3. ``"tag"`` (safe default — observe only, never mutate)
+
+    The ``enabled_info`` dict comes from ``_get_enabled_tools`` and is
+    populated by the control plane (``MCPGatewayEnabledToolsView``).
+    Missing / stale info degrades to ``"tag"`` so the gateway never
+    blocks traffic based on a partial cache.
+    """
+    if not enabled_info:
+        return "tag"
+    per_tool = (enabled_info.get("tool_presidio_actions") or {}).get(tool_name)
+    if per_tool and per_tool != "inherit":
+        return per_tool
+    return enabled_info.get("default_presidio_action") or "tag"
+
+
+async def _presidio_scan(
+    payload,
+    *,
+    direction: str,
+    action: str,
+):
+    """Wrap ``presidio_engine.get_engine().scan_payload`` with a thread
+    offload so the gateway event loop is not blocked by Presidio's
+    synchronous spaCy work in library mode.
+
+    Returns ``(possibly_mutated_payload, ScanResult)``.
+    """
+    import anyio  # local import — anyio ships with FastAPI/Starlette
+
+    engine = _get_presidio_engine()
+    if engine.mode == "disabled":
+        return payload, None
+
+    def _do():
+        return engine.scan_payload(payload, direction=direction, action=action)
+
+    try:
+        return await anyio.to_thread.run_sync(_do)
+    except Exception as exc:
+        LOG.warning("Presidio scan failed (direction=%s): %s", direction, exc)
+        return payload, None
 
 
 # ── Health (aggregated) ──────────────────────────────────────────────
 
 @router.get("/health", summary="MCP services health check")
 async def mcp_health():
-    """Check health of all MCP infrastructure services.
+    """Check health of MCP infrastructure services.
 
-    - ContextForge: standard REST /health endpoint.
-    - Secure MCP Gateway: MCP Streamable HTTP at /mcp/ (returns 400/406 when alive).
     - MCP-Firewall: CLI tool, not a standalone service — reports not_configured if unreachable.
     """
     results = {}
     async with httpx.AsyncClient(timeout=5) as client:
-        # ContextForge — standard REST health endpoint
-        try:
-            resp = await client.get(f"{_CONTEXTFORGE_URL}/health")
-            results["contextforge"] = {"status": "healthy" if resp.is_success else "unhealthy"}
-        except httpx.RequestError:
-            results["contextforge"] = {"status": "unreachable"}
-
-        # Secure MCP Gateway — probe MCP Streamable HTTP endpoint
-        # Any HTTP response (200/400/405/406) means the service is alive
-        try:
-            resp = await client.get(f"{_SECURE_GW_URL}/mcp/")
-            if resp.status_code in (200, 400, 405, 406):
-                results["secure_mcp_gateway"] = {"status": "healthy"}
-            else:
-                results["secure_mcp_gateway"] = {"status": "unhealthy"}
-        except httpx.RequestError:
-            results["secure_mcp_gateway"] = {"status": "unreachable"}
-
         # MCP-Firewall — CLI tool, may not be running as a service
         try:
             resp = await client.get(f"{_MCP_FIREWALL_URL}/health")
@@ -355,7 +430,7 @@ async def mcp_health():
 
 
 # ── External MCP Server Proxy ────────────────────────────────────────
-# Allows ContextForge (which may have OpenSSL issues) to reach external
+# Allows internal containers with older OpenSSL stacks to reach external
 # MCP servers through the gateway's working TLS stack.
 
 
@@ -466,8 +541,9 @@ async def ext_mcp_proxy(path: str, request: Request):
 
 
 # ── Internal MCP Tool Discovery ──────────────────────────────────────
-# Called by the backend during tool sync for servers that skip ContextForge
-# (stdio, websocket, or any server where ContextForge discovery fails).
+# Called by the backend during tool sync for every transport (stdio,
+# websocket, streamable-http, sse). Replaces the previous ContextForge-based
+# discovery path that was removed in DECISION-D Phase 0.
 # Auth: validated via X-Gateway-Internal-Key (same shared secret as backend).
 
 
@@ -483,7 +559,7 @@ async def internal_discover_tools(request: Request):
     For streamable-http/sse: sends JSON-RPC directly to the upstream server URL.
     """
     internal_key = (request.headers.get("X-Gateway-Internal-Key") or "").strip()
-    if not internal_key or not _GATEWAY_INTERNAL_API_KEY or internal_key != _GATEWAY_INTERNAL_API_KEY:
+    if not _valid_internal_key(internal_key):
         return JSONResponse(content={"error": "Unauthorized"}, status_code=401)
 
     try:
@@ -500,6 +576,7 @@ async def internal_discover_tools(request: Request):
         )
 
     config = await _get_server_config(org_slug, server_slug)
+    config = _apply_fresh_config_overrides(config, body, org_slug, server_slug)
     if not config:
         return JSONResponse(content={"error": "Server not found"}, status_code=404)
 
@@ -612,7 +689,7 @@ async def internal_discover_tools(request: Request):
 async def internal_tools_call(request: Request):
     """Execute a tool on an MCP server via the appropriate gateway transport path."""
     internal_key = (request.headers.get("X-Gateway-Internal-Key") or "").strip()
-    if not internal_key or not _GATEWAY_INTERNAL_API_KEY or internal_key != _GATEWAY_INTERNAL_API_KEY:
+    if not _valid_internal_key(internal_key):
         return JSONResponse(content={"error": "Unauthorized"}, status_code=401)
 
     try:
@@ -631,6 +708,7 @@ async def internal_tools_call(request: Request):
         )
 
     config = await _get_server_config(org_slug, server_slug)
+    config = _apply_fresh_config_overrides(config, body, org_slug, server_slug)
     if not config:
         return JSONResponse(content={"error": "Server not found"}, status_code=404)
 
@@ -805,11 +883,49 @@ def _backend_proxy_headers(request: Request, org_slug: str, server_slug: str = "
             headers["X-Gateway-Key-Prefix"] = str(auth.prefix)
         if getattr(auth, "project_id", None):
             headers["X-Gateway-Project-Id"] = str(auth.project_id)
+        # G8: forward role names so backend policy engine can evaluate
+        # Policy.allowed_roles. Comma-separated, URL-quoted to survive
+        # exotic role names (spaces, commas) — backend splits + unquotes.
+        roles = getattr(auth, "roles", None) or []
+        if roles:
+            from urllib.parse import quote as _q
+            headers["X-Gateway-Roles"] = ",".join(_q(str(r), safe="") for r in roles)
 
     return headers
 
 
-async def _maybe_inject_oauth_header(args: list[str], org_slug: str) -> None:
+async def _notify_control_needs_reauth(org_slug: str, server_slug: str, reason: str) -> None:
+    """Tell the control plane an org's stdio OAuth token can't be refreshed.
+
+    Closes the Flow-2 gap: for mcp-remote (stdio) servers the gateway holds the
+    OAuth token in Redis and the control plane has no visibility into refresh
+    failures, so an expired token surfaced only as an opaque upstream
+    ``invalid_token``. This best-effort backprop lets control set
+    ``needs_reauth`` and prompt the operator. Failures here must NEVER break
+    the hot path.
+    """
+    if not server_slug or not _GATEWAY_INTERNAL_API_KEY:
+        return
+    headers = {
+        "Content-Type": "application/json",
+        "X-Org-Slug": org_slug,
+        "X-Server-Slug": server_slug,
+        "X-Gateway-Auth": "true",
+        "X-Gateway-Internal-Key": _GATEWAY_INTERNAL_API_KEY,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                f"{_BACKEND_URL}/api/mcp-connector/internal/needs-reauth/",
+                headers=headers,
+                json={"org_slug": org_slug, "server_slug": server_slug, "reason": reason},
+            )
+    except Exception as exc:
+        LOG.warning("needs-reauth backprop failed (org=%s server=%s): %s",
+                    org_slug, server_slug, exc)
+
+
+async def _maybe_inject_oauth_header(args: list[str], org_slug: str, server_slug: str = "") -> None:
     """If *args* invoke mcp-remote and we have a stored OAuth token, append --header."""
     # Check if this is a mcp-remote invocation by scanning args
     mcp_url = None
@@ -824,7 +940,7 @@ async def _maybe_inject_oauth_header(args: list[str], org_slug: str) -> None:
     if not mcp_url:
         return
     try:
-        from mcp_oauth_proxy import get_stored_token
+        from mcp_oauth_proxy import get_stored_token, has_stored_token
         token = await get_stored_token(org_slug, mcp_url)
     except ImportError:
         return
@@ -838,6 +954,18 @@ async def _maybe_inject_oauth_header(args: list[str], org_slug: str) -> None:
                 return
         args.extend(["--header", f"Authorization: Bearer {token}"])
         LOG.info("Injected OAuth header for mcp-remote %s (org=%s)", mcp_url, org_slug)
+        return
+    # No usable token. If a token record EXISTS for this org+server it means the
+    # token expired and could not be refreshed -> genuine re-auth needed. (A
+    # server that was never OAuth-authenticated has no record and is skipped.)
+    try:
+        if await has_stored_token(org_slug, mcp_url):
+            await _notify_control_needs_reauth(
+                org_slug, server_slug,
+                "OAuth token expired and refresh failed — re-authenticate this server.",
+            )
+    except Exception as exc:
+        LOG.warning("needs-reauth check failed for %s: %s", mcp_url, exc)
 
 
 async def _adapter_forward(
@@ -858,7 +986,7 @@ async def _adapter_forward(
 
             # Inject stored OAuth token as --header for mcp-remote servers
             args = list(server_config.get("args", []))
-            await _maybe_inject_oauth_header(args, org_slug)
+            await _maybe_inject_oauth_header(args, org_slug, server_slug)
 
             result = await stdio_send(
                 org_slug=org_slug,
@@ -1086,7 +1214,76 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                 status_code=200,
             )
 
+        # ── DECISION-D Phase 1: inbound Presidio scan ──
+        # Resolved action drives both inbound (arguments) and outbound
+        # (response body) scans below. "block" short-circuits here; "redact"
+        # mutates ``arguments``; "tag" only annotates the audit event.
+        _presidio_action = _effective_presidio_action(tool_name, enabled_info)
+        _inbound_tags: list[str] = []
+        _inbound_findings: list[dict] = []
+        if _presidio_action != "tag" or True:  # always scan; tag is the cheapest path
+            _scanned_args, _in_result = await _presidio_scan(
+                arguments, direction="inbound", action=_presidio_action,
+            )
+            if _in_result is not None and _in_result.has_findings:
+                _inbound_tags = list(_in_result.compliance_tags)
+                _inbound_findings = [f.to_dict() for f in _in_result.findings]
+                if _in_result.blocked:
+                    await _record_gateway_event(
+                        org_slug=org_slug,
+                        server_slug=server_slug,
+                        tool_name=tool_name,
+                        decision="block",
+                        reason="presidio_blocked_inbound",
+                        latency_ms=int((time.time() - call_t0) * 1000),
+                        metadata={
+                            "transport": transport,
+                            "enforced_at": "gateway",
+                            "presidio_direction": "inbound",
+                            "presidio_action": _presidio_action,
+                        },
+                        compliance_tags=_inbound_tags,
+                        presidio_findings=_inbound_findings,
+                    )
+                    return JSONResponse(
+                        content={
+                            "jsonrpc": jsonrpc,
+                            "id": msg_id,
+                            "result": {
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": (
+                                            f"[BLOCKED] Tool '{tool_name}' arguments matched "
+                                            f"compliance tags: {', '.join(_inbound_tags) or 'PII'}."
+                                        ),
+                                    }
+                                ],
+                                "isError": True,
+                            },
+                        },
+                        status_code=200,
+                    )
+                if _presidio_action == "redact":
+                    arguments = _scanned_args
+                    params["arguments"] = arguments  # propagate into body for backend call
+
         if is_adapter_transport and server_config:
+            # ── KNOWN GAP (D5, security review 2025-Q1): the adapter
+            # transport path (stdio / websocket) calls the MCP server
+            # directly and bypasses the backend MCPToolCallView, so
+            # G7 response-field redaction and G8 per-user/role policy
+            # filtering ARE NOT APPLIED here. Production deployments
+            # should prefer streamable-http MCP servers for security
+            # parity. Routing adapter calls through the backend (so
+            # the same policy engine fires) is tracked as follow-up.
+            # TODO(G7+G8): apply field-based redaction to adapter_resp
+            # by calling /internal/policy-eval/ on the backend before
+            # returning. For now, log a warning so the gap is visible.
+            LOG.warning(
+                "mcp_proxy.adapter_transport_bypasses_policy org=%s server=%s tool=%s transport=%s",
+                org_slug, server_slug, tool_name, transport,
+            )
             adapter_resp = await _adapter_forward(
                 transport, server_config, org_slug, server_slug, body, jsonrpc, msg_id,
             )
@@ -1101,6 +1298,43 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
             if isinstance(payload, dict) and payload.get("error"):
                 decision = "error"
                 reason = str(payload["error"].get("message", ""))[:255]
+            # ── DECISION-D Phase 1: outbound Presidio scan on adapter response ──
+            _out_tags = list(_inbound_tags)
+            _out_findings = list(_inbound_findings)
+            if isinstance(payload, dict):
+                _scan_target = payload.get("result") if "result" in payload else payload
+                _scanned_out, _out_result = await _presidio_scan(
+                    _scan_target, direction="outbound", action=_presidio_action,
+                )
+                if _out_result is not None and _out_result.has_findings:
+                    for t in _out_result.compliance_tags:
+                        if t not in _out_tags:
+                            _out_tags.append(t)
+                    _out_findings.extend(f.to_dict() for f in _out_result.findings)
+                    if _out_result.blocked:
+                        decision = "block"
+                        reason = "presidio_blocked_outbound"
+                        adapter_resp = JSONResponse(
+                            content={
+                                "jsonrpc": jsonrpc,
+                                "id": msg_id,
+                                "result": {
+                                    "content": [{
+                                        "type": "text",
+                                        "text": (
+                                            f"[BLOCKED] Response from '{tool_name}' matched "
+                                            f"compliance tags: {', '.join(_out_tags) or 'PII'}."
+                                        ),
+                                    }],
+                                    "isError": True,
+                                },
+                            },
+                            status_code=200,
+                        )
+                    elif _presidio_action == "redact" and "result" in payload:
+                        decision = "redact"
+                        payload["result"] = _scanned_out
+                        adapter_resp = JSONResponse(content=payload, status_code=200)
             await _record_gateway_event(
                 org_slug=org_slug,
                 server_slug=server_slug,
@@ -1108,7 +1342,13 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                 decision=decision,
                 reason=reason,
                 latency_ms=int((time.time() - call_t0) * 1000),
-                metadata={"transport": transport, "enforced_at": "gateway_adapter"},
+                metadata={
+                    "transport": transport,
+                    "enforced_at": "gateway_adapter",
+                    "presidio_action": _presidio_action,
+                },
+                compliance_tags=_out_tags,
+                presidio_findings=_out_findings,
             )
             return adapter_resp
 
@@ -1148,6 +1388,71 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
 
                     # Normal successful response
                     result_content = data.get("result") or data.get("content")
+                    # ── DECISION-D Phase 1: outbound Presidio scan on backend result ──
+                    _out_tags2 = list(_inbound_tags)
+                    _out_findings2 = list(_inbound_findings)
+                    _scanned_content, _out_res2 = await _presidio_scan(
+                        result_content, direction="outbound", action=_presidio_action,
+                    )
+                    if _out_res2 is not None and _out_res2.has_findings:
+                        for t in _out_res2.compliance_tags:
+                            if t not in _out_tags2:
+                                _out_tags2.append(t)
+                        _out_findings2.extend(f.to_dict() for f in _out_res2.findings)
+                        if _out_res2.blocked:
+                            await _record_gateway_event(
+                                org_slug=org_slug,
+                                server_slug=server_slug,
+                                tool_name=tool_name,
+                                decision="block",
+                                reason="presidio_blocked_outbound",
+                                latency_ms=int((time.time() - call_t0) * 1000),
+                                metadata={
+                                    "transport": transport,
+                                    "enforced_at": "gateway",
+                                    "presidio_direction": "outbound",
+                                    "presidio_action": _presidio_action,
+                                },
+                                compliance_tags=_out_tags2,
+                                presidio_findings=_out_findings2,
+                            )
+                            return JSONResponse(
+                                content={
+                                    "jsonrpc": jsonrpc,
+                                    "id": msg_id,
+                                    "result": {
+                                        "content": [{
+                                            "type": "text",
+                                            "text": (
+                                                f"[BLOCKED] Response from '{tool_name}' matched "
+                                                f"compliance tags: {', '.join(_out_tags2) or 'PII'}."
+                                            ),
+                                        }],
+                                        "isError": True,
+                                    },
+                                },
+                                status_code=200,
+                            )
+                        if _presidio_action == "redact":
+                            result_content = _scanned_content
+                    # Audit annotation (allow + tags/findings).
+                    if _out_tags2 or _out_findings2:
+                        await _record_gateway_event(
+                            org_slug=org_slug,
+                            server_slug=server_slug,
+                            tool_name=tool_name,
+                            decision=("redact" if _presidio_action == "redact" and _out_findings2 else "allow"),
+                            reason="presidio_findings",
+                            latency_ms=int((time.time() - call_t0) * 1000),
+                            metadata={
+                                "transport": transport,
+                                "enforced_at": "gateway",
+                                "presidio_action": _presidio_action,
+                            },
+                            compliance_tags=_out_tags2,
+                            presidio_findings=_out_findings2,
+                        )
+
                     if isinstance(result_content, list):
                         content = result_content
                     elif isinstance(result_content, str):
@@ -1166,6 +1471,26 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         status_code=200,
                     )
                 else:
+                    # DECISION-D Phase 1: record inbound Presidio findings even
+                    # when the backend rejects the tool call, so audit history
+                    # captures the PII attempt regardless of upstream success.
+                    if _inbound_tags or _inbound_findings:
+                        await _record_gateway_event(
+                            org_slug=org_slug,
+                            server_slug=server_slug,
+                            tool_name=tool_name,
+                            decision="error",
+                            reason=f"backend_error_http_{resp.status_code}",
+                            latency_ms=int((time.time() - call_t0) * 1000),
+                            metadata={
+                                "transport": transport,
+                                "enforced_at": "gateway",
+                                "presidio_direction": "inbound",
+                                "presidio_action": _presidio_action,
+                            },
+                            compliance_tags=_inbound_tags,
+                            presidio_findings=_inbound_findings,
+                        )
                     return JSONResponse(
                         content={
                             "jsonrpc": jsonrpc,

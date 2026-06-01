@@ -117,16 +117,23 @@ class RateLimiter:
         self,
         model_name: str,
         max_rpm: int,
+        org_slug: str = "",
     ) -> tuple[bool, int]:
         """
         Check per-model RPM limit using a fixed-window counter.
         Returns (allowed, current_count).
+
+        The counter is scoped per ``org_slug`` so one tenant's traffic on a
+        shared model identifier cannot exhaust another tenant's per-model
+        budget. ``org_slug`` defaults to the literal ``"default"`` for
+        backwards compatibility with callers that have no tenant context.
         """
         if max_rpm <= 0:
             return True, 0
 
+        scope = org_slug or "default"
         bucket = int(time.time()) // WINDOW_SECONDS
-        redis_key = f"ratelimit:model:{model_name}:{bucket}"
+        redis_key = f"ratelimit:model:{scope}:{model_name}:{bucket}"
         try:
             client = self._client()
             current = await client.incr(redis_key)
@@ -230,3 +237,36 @@ class RateLimiter:
         except Exception as exc:
             # Not a security issue (gate is fail-closed), but worth monitoring
             LOG.error("Rate limit record_usage failed (non-critical): %s", exc)
+
+    async def record_org_usage(
+        self,
+        org_slug: str,
+        actual_tokens: int,
+        estimated_tokens: int = 20,
+    ) -> None:
+        """
+        Reconcile org TPM bucket after stream/non-stream completion.
+
+        ``check_org_rate_limit`` pre-charges ``estimated_tokens``; this applies
+        the delta once actual usage is known.
+        """
+        if not org_slug:
+            return
+        delta = actual_tokens - estimated_tokens
+        if delta == 0:
+            return
+
+        bucket = int(time.time()) // WINDOW_SECONDS
+        redis_key = f"ratelimit:org:tpm:{org_slug}:{bucket}"
+        try:
+            client = self._client()
+            await client.incrby(redis_key, delta)
+            LOG.debug(
+                "Org TPM record_usage: org=%s delta=%+d (actual=%d, est=%d)",
+                org_slug,
+                delta,
+                actual_tokens,
+                estimated_tokens,
+            )
+        except Exception as exc:
+            LOG.error("Org rate limit record_usage failed (non-critical): %s", exc)

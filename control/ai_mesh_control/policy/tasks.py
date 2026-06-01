@@ -15,22 +15,22 @@ from celery import shared_task
 logger = logging.getLogger(__name__)
 
 PENDING_CHANGES_KEY = "policies:pending_changes"
+PENDING_ORGS_KEY = "policies:pending_orgs"
 
 
 @shared_task(name="policy.compile_policies")
 def compile_policies_task(trigger: str = "signal") -> bool:
     """
-    Compile all enabled policies and push the bundle to Redis.
+    Compile enabled policies per affected organization and push org-scoped bundles to Redis.
 
     Clears the debounce lock before compiling so that new changes
     arriving while compilation is in progress can schedule a fresh task.
-
-    Reads and clears the pending changes list to include affected
-    policy IDs in the Pub/Sub notification.
     """
+    from auth.models import Organization
     from policy.compiler import PolicyCompiler, _get_redis_client
 
     changed_policy_ids: list[int] = []
+    org_ids: set[int] = set()
     try:
         client = _get_redis_client()
         client.delete("policies:recompile_pending")
@@ -38,18 +38,49 @@ def compile_policies_task(trigger: str = "signal") -> bool:
         raw_ids = client.lrange(PENDING_CHANGES_KEY, 0, -1)
         client.delete(PENDING_CHANGES_KEY)
         changed_policy_ids = list({int(pid) for pid in raw_ids if pid})
+
+        raw_org_ids = client.smembers(PENDING_ORGS_KEY)
+        client.delete(PENDING_ORGS_KEY)
+        for raw in raw_org_ids or []:
+            try:
+                org_ids.add(int(raw))
+            except (TypeError, ValueError):
+                continue
     except Exception:
         logger.warning("Could not clear recompile_pending key or read pending changes from Redis")
 
+    if not org_ids and changed_policy_ids:
+        from policy.models import Policy
+
+        org_ids = set(
+            Policy.objects.filter(pk__in=changed_policy_ids)
+            .exclude(organization_id__isnull=True)
+            .values_list("organization_id", flat=True)
+        )
+
     compiler = PolicyCompiler()
-    success = compiler.compile_and_push(
-        trigger=trigger,
-        changed_policy_ids=changed_policy_ids,
-    )
+    if not org_ids:
+        success = compiler.compile_and_push(
+            trigger=trigger,
+            changed_policy_ids=changed_policy_ids,
+        )
+    else:
+        success = True
+        for org_id in sorted(org_ids):
+            org = Organization.objects.filter(pk=org_id).first()
+            if not org:
+                continue
+            ok = compiler.compile_and_push(
+                trigger=trigger,
+                changed_policy_ids=changed_policy_ids,
+                organization=org,
+            )
+            success = success and ok
 
     if success:
         logger.info(
-            "Policy compilation task completed successfully (changed_ids=%s)",
+            "Policy compilation task completed successfully (orgs=%s, changed_ids=%s)",
+            sorted(org_ids),
             changed_policy_ids,
         )
     else:

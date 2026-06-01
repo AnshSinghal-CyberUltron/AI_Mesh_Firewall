@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.utils import timezone
 
@@ -50,6 +51,41 @@ class Policy(models.Model):
     priority = models.PositiveIntegerField(default=0, help_text="Higher = evaluated first")
     metadata = models.JSONField(default=dict, blank=True)
     version = models.PositiveIntegerField(default=1, help_text="Incremented on each update for conflict detection")
+    # ── G7: response field redaction allowlist ───────────────────────────
+    # Field names listed here will be replaced with "[REDACTED]" in MCP
+    # tool-call responses whenever this policy matches. Case-insensitive
+    # exact key match (NFKC-normalized) is applied recursively to dict/list
+    # values returned by the tool. Empty list = no field redaction.
+    redaction_fields = ArrayField(
+        models.CharField(max_length=128),
+        default=list,
+        blank=True,
+        help_text="Top-level / nested dict keys to redact in tool responses (case-insensitive exact match).",
+    )
+    # ── G8: per-user / per-agent / per-role allowlist ────────────────────
+    # Empty list = wildcard (policy applies to everyone). Non-empty list =
+    # strict allowlist (policy only matches when the request's actor is in
+    # the list). actor_user_id matches allowed_user_ids; the calling API
+    # key prefix matches allowed_agent_ids; the user's profile roles must
+    # overlap allowed_roles.
+    allowed_user_ids = ArrayField(
+        models.IntegerField(),
+        default=list,
+        blank=True,
+        help_text="Empty = any user. Non-empty = only these user IDs are subject to this policy.",
+    )
+    allowed_agent_ids = ArrayField(
+        models.CharField(max_length=128),
+        default=list,
+        blank=True,
+        help_text="Empty = any agent. Non-empty = only these agent IDs (API key prefix) are subject to this policy.",
+    )
+    allowed_roles = ArrayField(
+        models.CharField(max_length=64),
+        default=list,
+        blank=True,
+        help_text="Empty = any role. Non-empty = only users with at least one of these role names are subject to this policy.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -149,6 +185,21 @@ class EnforcementEvent(models.Model):
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
 
+    # Phase-0 CC-1: discriminator for operational event streams.
+    # Free-form string (no `choices=`) because the gateway is the source of
+    # truth for event-class values and may extend them independently. See
+    # gateway/ai_mesh_gateway/telemetry_ops.py:KNOWN_EVENT_CLASSES.
+    # Default backfills pre-existing rows as plain enforcement events.
+    event_class = models.CharField(
+        max_length=64,
+        default="enforcement",
+        db_index=True,
+        help_text=(
+            "Operational event discriminator. Gateway-owned protocol "
+            "constant (see gateway/ai_mesh_gateway/telemetry_ops.py)."
+        ),
+    )
+
     # Incident lifecycle fields for MTTR tracking
     incident_status = models.CharField(
         max_length=16,
@@ -163,6 +214,16 @@ class EnforcementEvent(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            # Phase-0 CC-1: composite covering the realistic SOC query
+            # `WHERE organization=X AND event_class=Y ORDER BY created_at DESC`.
+            # Org-first per triage Agent-B: high-cardinality filter eliminates
+            # the most rows first.
+            models.Index(
+                fields=["organization", "event_class", "-created_at"],
+                name="ev_org_evclass_ts_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.action} policy={self.policy_id} rule={self.rule_id} @ {self.created_at}"
@@ -354,6 +415,59 @@ class SecurityIncident(models.Model):
 
     def __str__(self):
         return f"Incident({self.severity}/{self.status}): {self.title[:50]}"
+
+
+class ComplianceTag(models.Model):
+    """Catalog of compliance/regulatory tags for audit annotation.
+
+    DECISION-D Phase 1: seeded from policy.compliance_tags.COMPLIANCE_TAG_METADATA
+    via data migration 0030. Admins may add custom tags or override
+    label/description/severity; the ``code`` is the stable join key used by
+    the gateway when annotating audit events with Presidio findings.
+
+    Severity scale aligns with MCPToolRegistration.SENSITIVITY_CHOICES.
+    """
+
+    SEVERITY_CHOICES = [
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
+        ("critical", "Critical"),
+    ]
+
+    code = models.CharField(
+        max_length=32,
+        primary_key=True,
+        help_text="Stable upper-case code (e.g. 'GDPR-PII'). Used as the join key.",
+    )
+    label = models.CharField(max_length=128)
+    regulation = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text="Citation (e.g. 'EU GDPR Art. 4(1)').",
+    )
+    description = models.TextField(blank=True, default="")
+    severity = models.CharField(
+        max_length=16,
+        choices=SEVERITY_CHOICES,
+        default="medium",
+    )
+    is_seeded = models.BooleanField(
+        default=False,
+        help_text="True for tags created by the seed migration; admins may still edit them.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["code"]
+        verbose_name = "Compliance Tag"
+        verbose_name_plural = "Compliance Tags"
+
+    def __str__(self):
+        return f"{self.code} ({self.severity})"
 
 
 from policy.vector_models import VectorCollectionPolicy  # noqa: E402, F401

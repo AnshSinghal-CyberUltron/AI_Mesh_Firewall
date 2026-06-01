@@ -17,7 +17,6 @@ import fakeredis
 import fakeredis.aioredis
 import pytest
 import pytest_asyncio
-import yaml
 
 
 @pytest.fixture()
@@ -193,46 +192,10 @@ def streaming_chunks():
 
 
 @pytest.fixture()
-def sample_yaml_config(tmp_path):
-    """Write a temporary litellm_config.yaml and return its path."""
-    config = {
-        "model_list": [
-            {
-                "model_name": "gpt-4o-mini",
-                "litellm_params": {
-                    "model": "openai/gpt-4o-mini",
-                    "api_key": "sk-test-key",
-                },
-            },
-            {
-                "model_name": "claude-3-haiku",
-                "litellm_params": {
-                    "model": "anthropic/claude-3-haiku-20240307",
-                    "api_key": "sk-ant-test",
-                },
-            },
-            {
-                "model_name": "local-llama",
-                "litellm_params": {
-                    "model": "ollama/llama3",
-                    "api_base": "http://localhost:11434",
-                },
-            },
-        ],
-        "litellm_settings": {
-            "drop_params": True,
-        },
-    }
-    yaml_file = tmp_path / "litellm_config.yaml"
-    yaml_file.write_text(yaml.dump(config))
-    return str(yaml_file)
-
-
-@pytest.fixture()
 def router_config():
-    """Base gateway config dict for LLMRouter initialization (no YAML)."""
+    """Base gateway config dict for LLMRouter initialization (Redis-backed models)."""
     return {
-        "litellm_config_path": "",
+        "org_only_inference": True,
         "upstream_llm_url": "",
         "litellm_default_model": "gpt-4o-mini",
         "litellm_drop_params": True,

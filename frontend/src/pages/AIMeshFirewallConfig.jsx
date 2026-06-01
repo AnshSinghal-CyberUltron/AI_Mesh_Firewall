@@ -6,6 +6,9 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { ModelConnectionPanel } from "../components/ModelConnectionPanel";
+import { ModelGovernanceFields } from "../components/ModelGovernanceFields";
+import { OutputGuardrailControls } from "../components/OutputGuardrailControls";
+import { formatAllowedModelsForApi, parseAllowedModels } from "../utils/firewallAllowlist";
 import { DatabaseConnectionPanel } from "../components/DatabaseConnectionPanel";
 import { ZeroShieldGuardModelTestPanel } from "../components/BedrockTestPanel";
 import {
@@ -24,8 +27,8 @@ const DEFAULT_CONFIG = {
   toxicityThreshold: 0.7,
   contentFilteringEnabled: true,
   blockedKeywords: "password, secret, api_key, token",
-  allowedModels: "gpt-4, gpt-3.5-turbo, claude-3",
-  defaultModel: "gpt-4",
+  allowedModels: "",
+  defaultModel: "",
   modelIsolationEnabled: true,
   promptInjectionThreshold: 0.8,
   jailbreakDetectionEnabled: true,
@@ -64,7 +67,9 @@ function apiToFrontend(data) {
     toxicityThreshold: data.toxicity_threshold ?? DEFAULT_CONFIG.toxicityThreshold,
     blockedKeywords: data.blocked_keywords ?? DEFAULT_CONFIG.blockedKeywords,
     modelIsolationEnabled: data.model_isolation_enabled ?? DEFAULT_CONFIG.modelIsolationEnabled,
-    allowedModels: data.allowed_models ?? DEFAULT_CONFIG.allowedModels,
+    allowedModels: formatAllowedModelsForApi(
+      data.allowed_models_list ?? parseAllowedModels(data.allowed_models),
+    ),
     defaultModel: data.default_model ?? DEFAULT_CONFIG.defaultModel,
     jailbreakDetectionEnabled: data.jailbreak_detection_enabled ?? DEFAULT_CONFIG.jailbreakDetectionEnabled,
     semanticAnalysisEnabled: data.semantic_analysis_enabled ?? DEFAULT_CONFIG.semanticAnalysisEnabled,
@@ -136,10 +141,23 @@ export function AIMeshFirewallConfig() {
   const { fetchWithAuth } = useAuth();
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [serverConfig, setServerConfig] = useState(null);
+  const [connectedModels, setConnectedModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState(null);
+
+  const refreshConnectedModels = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/api/firewall/config/");
+      if (res.ok) {
+        const data = await res.json();
+        setConnectedModels(Array.isArray(data.connected_models) ? data.connected_models : []);
+      }
+    } catch {
+      /* non-blocking refresh */
+    }
+  }, [fetchWithAuth]);
 
   const fetchConfig = useCallback(async () => {
     setLoading(true);
@@ -151,6 +169,7 @@ export function AIMeshFirewallConfig() {
         const mapped = apiToFrontend(data);
         setConfig(mapped);
         setServerConfig(mapped);
+        setConnectedModels(Array.isArray(data.connected_models) ? data.connected_models : []);
       } else if (res.status === 401) {
         setError("Authentication required. Please log in again.");
       } else {
@@ -183,6 +202,7 @@ export function AIMeshFirewallConfig() {
         const mapped = apiToFrontend(data);
         setConfig(mapped);
         setServerConfig(mapped);
+        setConnectedModels(Array.isArray(data.connected_models) ? data.connected_models : []);
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 4000);
       } else if (res.status === 400) {
@@ -288,7 +308,11 @@ export function AIMeshFirewallConfig() {
         )}
       </div>
 
-      <ModelConnectionPanel showProviderForm={true} showConnectionsTable={false} />
+      <ModelConnectionPanel
+        showProviderForm={true}
+        showConnectionsTable={false}
+        onModelsChanged={refreshConnectedModels}
+      />
 
       {/* Configuration Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -339,16 +363,15 @@ export function AIMeshFirewallConfig() {
         <ConfigSection title="Model Governance & Routing" icon={Database} iconColor="from-purple-500 to-pink-600">
           <ToggleField label="Model Isolation Enabled" description="Enforce strict model boundaries"
             checked={config.modelIsolationEnabled} onChange={(v) => setConfig({ ...config, modelIsolationEnabled: v })} />
-          <TextAreaField label="Allowed Models" description="Comma-separated list of approved models"
-            value={config.allowedModels} onChange={(v) => setConfig({ ...config, allowedModels: v })}
-            placeholder="gpt-4, claude-3, llama-2" />
-          <SelectField label="Default Model" description="Fallback model when none specified"
-            value={config.defaultModel} onChange={(v) => setConfig({ ...config, defaultModel: v })}
-            options={[
-              { value: "gpt-4", label: "GPT-4" },
-              { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
-              { value: "claude-3", label: "Claude 3" },
-            ]} />
+          <ModelGovernanceFields
+            connectedModels={connectedModels}
+            allowedModelsValue={config.allowedModels}
+            defaultModel={config.defaultModel}
+            modelIsolationEnabled={config.modelIsolationEnabled}
+            disabled={isSaving}
+            onAllowedChange={(v) => setConfig({ ...config, allowedModels: v })}
+            onDefaultChange={(v) => setConfig({ ...config, defaultModel: v })}
+          />
         </ConfigSection>
 
         <ConfigSection title="Prompt Security & Injection Protection" icon={Lock} iconColor="from-red-500 to-orange-600">
@@ -380,6 +403,9 @@ export function AIMeshFirewallConfig() {
           <NumberField label="Max Response Tokens" description="Maximum tokens in model response"
             value={config.maxResponseTokens} onChange={(v) => setConfig({ ...config, maxResponseTokens: v })}
             min={100} max={32000} unit="tokens" />
+          <div className="md:col-span-2">
+            <OutputGuardrailControls onSaved={fetchConfig} />
+          </div>
         </ConfigSection>
 
         <ConfigSection title="RAG Security & Vector DB Protection" icon={Database} iconColor="from-green-500 to-emerald-600">
@@ -491,7 +517,11 @@ export function AIMeshFirewallConfig() {
       </div>
 
       {/* Service Connections & Tools */}
-      <ModelConnectionPanel showProviderForm={false} showConnectionsTable={true} />
+      <ModelConnectionPanel
+        showProviderForm={false}
+        showConnectionsTable={true}
+        onModelsChanged={refreshConnectedModels}
+      />
       <DatabaseConnectionPanel />
       <ZeroShieldGuardModelTestPanel />
     </div>

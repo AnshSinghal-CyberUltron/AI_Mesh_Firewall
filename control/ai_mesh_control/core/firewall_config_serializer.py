@@ -2,7 +2,24 @@
 
 from rest_framework import serializers
 
+from core.firewall_model_governance import (
+    format_allowed_models,
+    get_connected_models,
+    parse_allowed_models,
+    stale_allowed_models,
+    validate_governance_fields,
+)
 from core.models import FirewallConfig
+
+
+class AllowedModelsField(serializers.Field):
+    """Accept comma-separated string or JSON array; store as comma-separated text."""
+
+    def to_representation(self, value):
+        return value if value is not None else ""
+
+    def to_internal_value(self, data):
+        return format_allowed_models(parse_allowed_models(data))
 
 
 class FirewallConfigSerializer(serializers.ModelSerializer):
@@ -13,10 +30,26 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
     ``updated_at`` is read-only so clients see when the config was last saved.
     """
 
+    connected_models = serializers.SerializerMethodField()
+    allowed_models_list = serializers.SerializerMethodField()
+    governance_stale_models = serializers.SerializerMethodField()
+    allowed_models = AllowedModelsField(required=False, allow_null=True)
+
     class Meta:
         model = FirewallConfig
         exclude = ("id", "updated_by")
-        read_only_fields = ("updated_at",)
+        read_only_fields = ("updated_at", "connected_models", "allowed_models_list", "governance_stale_models")
+
+    def get_connected_models(self, obj) -> list:
+        org = self.context.get("organization")
+        return get_connected_models(org)
+
+    def get_allowed_models_list(self, obj) -> list:
+        return parse_allowed_models(obj.allowed_models)
+
+    def get_governance_stale_models(self, obj) -> list:
+        org = self.context.get("organization")
+        return stale_allowed_models(parse_allowed_models(obj.allowed_models), org)
 
     def validate(self, attrs):
         compliance_frameworks = attrs.get(
@@ -37,4 +70,70 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+
+        # §1.7 output-guardrail compliance floor: under strict data-protection
+        # frameworks, sensitive-data detectors cannot be disabled or set to
+        # "allow", and security-incident logging cannot be turned off. This makes
+        # exfiltration/compliance gaps structurally impossible (defense-in-depth).
+        strict_data_frameworks = {"HIPAA", "PCI-DSS", "SOC2"}
+        if strict_data_frameworks.intersection(set(compliance_frameworks)):
+            active = ", ".join(
+                sorted(strict_data_frameworks.intersection(set(compliance_frameworks)))
+            )
+
+            def _cur(name, default):
+                return attrs.get(name, getattr(self.instance, name, default))
+
+            floor_errors = {}
+            if not _cur("output_pii_enabled", True):
+                floor_errors["output_pii_enabled"] = (
+                    f"PII output detection cannot be disabled under {active}."
+                )
+            if _cur("output_pii_action", "redact") == "allow":
+                floor_errors["output_pii_action"] = (
+                    f"PII output action cannot be 'allow' under {active}."
+                )
+            if not _cur("output_credential_enabled", True):
+                floor_errors["output_credential_enabled"] = (
+                    f"Credential output detection cannot be disabled under {active}."
+                )
+            if _cur("output_credential_action", "block") == "allow":
+                floor_errors["output_credential_action"] = (
+                    f"Credential output action cannot be 'allow' under {active}."
+                )
+            if not _cur("output_incident_logging_enabled", True):
+                floor_errors["output_incident_logging_enabled"] = (
+                    f"Security incident logging cannot be disabled under {active}."
+                )
+            if floor_errors:
+                raise serializers.ValidationError(floor_errors)
+
+        org = self.context.get("organization")
+        # Only (re)validate model-governance fields when this request actually
+        # modifies one of them. A partial PUT that touches unrelated settings
+        # (e.g. §1.7 output-guardrail actions) must not be rejected because of a
+        # pre-existing/stale allowed_models value the caller is not changing.
+        governance_keys = {"allowed_models", "default_model", "model_isolation_enabled"}
+        if governance_keys.intersection(attrs.keys()):
+            allowed_raw = attrs.get(
+                "allowed_models",
+                getattr(self.instance, "allowed_models", ""),
+            )
+            default_model = attrs.get(
+                "default_model",
+                getattr(self.instance, "default_model", ""),
+            )
+            model_isolation = attrs.get(
+                "model_isolation_enabled",
+                getattr(self.instance, "model_isolation_enabled", True),
+            )
+            gov_errors = validate_governance_fields(
+                organization=org,
+                allowed_models=allowed_raw,
+                default_model=default_model,
+                model_isolation_enabled=model_isolation,
+            )
+            if gov_errors:
+                raise serializers.ValidationError(gov_errors)
+
         return attrs

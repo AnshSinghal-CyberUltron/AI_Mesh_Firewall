@@ -1,6 +1,6 @@
 import unittest
 
-from policy_engine import evaluate
+from ai_mesh_gateway.policy_engine import evaluate
 
 
 class PolicyEngineActionParityTests(unittest.TestCase):
