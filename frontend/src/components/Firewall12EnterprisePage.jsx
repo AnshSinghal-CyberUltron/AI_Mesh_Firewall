@@ -60,9 +60,11 @@ function KpiCard({ icon: Icon, label, value, change, up = true }) {
         <Icon className="h-4 w-4 text-slate-400" />
       </div>
       <p className="mt-3 text-4xl font-semibold leading-none text-slate-900 dark:text-slate-100">{value}</p>
-      <p className={`mt-3 text-xs font-medium ${up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-        {up ? "↗" : "↘"} {change}
-      </p>
+      {change ? (
+        <p className={`mt-3 text-xs font-medium ${up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+          {up ? "↗" : "↘"} {change}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -245,11 +247,11 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <KpiCard icon={Activity} label="Total Events" value={numberOrDash(totalEvents)} change="12.5% vs last period" up={true} />
-        <KpiCard icon={CircleSlash2} label="Blocked" value={numberOrDash(blocked)} change="8.3% vs last period" up={false} />
-        <KpiCard icon={Eye} label="Redacted" value={numberOrDash(redacted)} change="5.2% vs last period" up={true} />
-        <KpiCard icon={AlertTriangle} label="Critical" value={numberOrDash(critical)} change="15.7% vs last period" up={false} />
-        <KpiCard icon={CheckCircle2} label="Success Rate" value={percentOrDash(successRate)} change="2.1% vs last period" up={true} />
+        <KpiCard icon={Activity} label="Total Events" value={numberOrDash(totalEvents)} />
+        <KpiCard icon={CircleSlash2} label="Blocked" value={numberOrDash(blocked)} />
+        <KpiCard icon={Eye} label="Redacted" value={numberOrDash(redacted)} />
+        <KpiCard icon={AlertTriangle} label="Critical" value={numberOrDash(critical)} />
+        <KpiCard icon={CheckCircle2} label="Success Rate" value={percentOrDash(successRate)} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">

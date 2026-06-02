@@ -33,6 +33,7 @@ services:
   # Lightweight, no external creds needed. Persisted to a named volume so
   # collections survive container recreates.
   chromadb:
+    profiles: ["chroma"]
     image: chromadb/chroma:0.5.20
     ports: ["8001:8000"]
     environment:
@@ -179,9 +180,9 @@ services:
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:8180}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-http://127.0.0.1:8180}
       GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://127.0.0.1:8180,http://localhost:8180,http://127.0.0.1:5173,http://localhost:5173}
-      # Phase 1 F-3.1: RAG firewall + local Chroma backend.
-      GATEWAY_RAG_ENABLED: "true"
-      CHROMA_URL: http://chromadb:8000
+      # Phase 1 F-3.1: RAG firewall (vector backends via org config or --profile chroma).
+      GATEWAY_RAG_ENABLED: ${GATEWAY_RAG_ENABLED:-true}
+      CHROMA_URL: ${CHROMA_URL:-}
       # On-demand stdio MCP server fetch tuning. Packages are pulled via
       # npx/uvx at client connect time (NOT baked into the image); the first
       # connect must download+resolve the package before answering the MCP
@@ -199,7 +200,6 @@ services:
     depends_on:
       control: { condition: service_healthy }
       redis: { condition: service_healthy }
-      chromadb: { condition: service_healthy }
 
   guardrails:
     image: python:3.12-slim

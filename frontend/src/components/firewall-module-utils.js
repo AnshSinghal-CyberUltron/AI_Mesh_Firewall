@@ -12,6 +12,11 @@ const MODULE_FILTERS = {
     owaspPrefixes: ["LLM06", "LLM08"],
   },
   "1.3": {
+    // RAG/vector events are stamped event_type=rag_pipeline (+ embedding/vector
+    // queries). The old filter only matched rag_poisoning/LLM08, which no live
+    // event carries, so the whole 1.3 page rendered empty. Match the real RAG
+    // event types so vector-firewall evidence actually surfaces.
+    eventTypes: ["rag_pipeline", "embedding_request", "vector_query"],
     threatTypes: ["rag_poisoning"],
     owaspPrefixes: ["LLM08"],
   },
@@ -421,7 +426,12 @@ function buildSummaryCards(moduleId, summary, events, extras) {
 }
 
 function buildSpotlightCards(moduleId, summary, events, extras) {
-  const gatewayHealth = extras.gatewayStats?.count || extras.gatewayStats?.results?.length || 0;
+  // /api/gateways/stats/ returns a bare JSON array, so prefer .length; fall back
+  // to {count}/{results} shapes for forward-compat. Without the Array check this
+  // card was permanently 0 even when gateways exist.
+  const gatewayHealth = Array.isArray(extras.gatewayStats)
+    ? extras.gatewayStats.length
+    : (extras.gatewayStats?.count || extras.gatewayStats?.results?.length || 0);
   const avgRisk = average(events.map((event) => getRiskScore(event)).filter(Boolean));
   const latestSource = events[0] ? getSource(events[0]) || "--" : "--";
 

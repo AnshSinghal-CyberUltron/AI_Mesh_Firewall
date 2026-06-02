@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# Pull ECR images and start full stack on EC2 (c8g.2xlarge / private VPC).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+command -v docker >/dev/null 2>&1 || die "docker not installed"
+command -v aws >/dev/null 2>&1 || die "aws CLI not installed (needed for ECR login)"
+
+_ensure_compose() {
+  if docker compose version >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v docker-compose >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "==> Installing Docker Compose v2 plugin (one-time)"
+  local arch plugin_dir="/usr/local/lib/docker/cli-plugins"
+  arch="$(uname -m)"
+  case "${arch}" in
+    aarch64|arm64) arch="aarch64" ;;
+    x86_64|amd64) arch="x86_64" ;;
+    *) die "unsupported arch ${arch} for compose install" ;;
+  esac
+  if command -v sudo >/dev/null 2>&1; then
+    sudo mkdir -p "${plugin_dir}"
+    sudo curl -fsSL "https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-${arch}" \
+      -o "${plugin_dir}/docker-compose"
+    sudo chmod +x "${plugin_dir}/docker-compose"
+  else
+    mkdir -p "${HOME}/.docker/cli-plugins"
+    curl -fsSL "https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-${arch}" \
+      -o "${HOME}/.docker/cli-plugins/docker-compose"
+    chmod +x "${HOME}/.docker/cli-plugins/docker-compose"
+  fi
+  docker compose version >/dev/null 2>&1 || die "Docker Compose install failed"
+}
+
+_ensure_compose
+
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
+elif command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE=(docker-compose -f docker-compose.yml -f docker-compose.prod.yml)
+else
+  die "Docker Compose not available after install"
+fi
+
+if [[ ! -f .env ]]; then
+  [[ -f .env.ec2.sample ]] && cp .env.ec2.sample .env && die "Created .env — set ECR_REGISTRY, IMAGE_TAG, secrets, then re-run"
+  die "missing .env"
+fi
+
+set -a && source .env && set +a
+
+[[ -n "${ECR_REGISTRY:-}" ]] || die "set ECR_REGISTRY in .env"
+[[ -n "${IMAGE_TAG:-}" ]] || die "set IMAGE_TAG in .env"
+
+export FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-https://${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}}"
+export BACKEND_PUBLIC_URL="${BACKEND_PUBLIC_URL:-https://${BACKEND_HOST:-aimeshbackend.zeroshield.ai}}"
+export GATEWAY_PUBLIC_URL="${GATEWAY_PUBLIC_URL:-https://${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}}"
+export GATEWAY_CORS_ORIGINS="${GATEWAY_CORS_ORIGINS:-${FRONTEND_ORIGIN},${BACKEND_PUBLIC_URL}}"
+export ALLOWED_HOSTS="${ALLOWED_HOSTS:-${BACKEND_HOST},${FRONTEND_HOST},${GATEWAY_HOST},localhost,127.0.0.1,control}"
+
+VITE_FRONTEND_BASE_URL="${VITE_FRONTEND_BASE_URL:-$FRONTEND_ORIGIN}"
+VITE_BACKEND_BASE_URL="${VITE_BACKEND_BASE_URL:-$BACKEND_PUBLIC_URL}"
+VITE_GATEWAY_BASE_URL="${VITE_GATEWAY_BASE_URL:-$GATEWAY_PUBLIC_URL}"
+
+REGION="${AWS_REGION:-ap-south-1}"
+
+_has_instance_role() {
+  local arn
+  arn="$(AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY= AWS_SESSION_TOKEN= \
+    aws sts get-caller-identity --query Arn --output text 2>/dev/null || true)"
+  [[ "${arn}" == *":assumed-role/"* ]]
+}
+
+# Quarantined/compromised IAM users (e.g. AWSCompromisedKeyQuarantineV3) cannot call ECR.
+# On EC2, use an instance profile instead of BedrockAPIKey-* user keys in .env.
+if [[ "${USE_EC2_INSTANCE_ROLE:-true}" == "true" ]] && _has_instance_role; then
+  echo "==> EC2 instance IAM role detected — using it for ECR (not static .env keys)"
+  unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+  if grep -qE '^(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY)=' .env 2>/dev/null; then
+    cp -f .env ".env.bak.$(date +%s)"
+    sed -i.tmp -E '/^(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)=/d' .env
+    rm -f .env.tmp
+    set -a && source .env && set +a
+  fi
+elif [[ -n "${AWS_ACCESS_KEY_ID:-}" ]]; then
+  echo "==> Using AWS_ACCESS_KEY_ID from environment/.env for ECR"
+  if ! aws sts get-caller-identity --region "${REGION}" >/dev/null 2>&1; then
+    die "AWS credentials in .env are invalid. Attach an EC2 instance role (deploy/ec2-instance-role-policy.json) or rotate IAM keys."
+  fi
+fi
+
+echo "==> ECR login (${ECR_REGISTRY})"
+ECR_PASSWORD="$(aws ecr get-login-password --region "${REGION}")" \
+  || die "ecr:GetAuthorizationToken failed — attach deploy/ec2-instance-role-policy.json to this EC2 role"
+printf '%s' "${ECR_PASSWORD}" | docker login --username AWS --password-stdin "${ECR_REGISTRY%%/*}"
+
+if command -v sudo >/dev/null 2>&1; then
+  sudo tee /etc/sysctl.d/99-ai-mesh.conf >/dev/null <<'EOF' || true
+net.core.somaxconn = 65535
+net.ipv4.ip_local_port_range = 1024 65535
+fs.file-max = 1048576
+EOF
+  sudo sysctl -p /etc/sysctl.d/99-ai-mesh.conf 2>/dev/null || true
+fi
+
+echo "==> Build frontend for subdomains"
+mkdir -p frontend/dist
+docker run --rm \
+  -e VITE_FRONTEND_BASE_URL="${VITE_FRONTEND_BASE_URL}" \
+  -e VITE_BACKEND_BASE_URL="${VITE_BACKEND_BASE_URL}" \
+  -e VITE_GATEWAY_BASE_URL="${VITE_GATEWAY_BASE_URL}" \
+  -v "$ROOT/frontend:/app" \
+  -w /app \
+  node:22-alpine \
+  sh -c "npm ci && npm run build"
+
+echo "==> Pull application images from ECR"
+"${COMPOSE[@]}" pull gateway control workers workers-beat
+
+echo "==> Start infrastructure"
+"${COMPOSE[@]}" up -d --no-build postgres redis rabbitmq
+
+for _ in $(seq 1 30); do
+  "${COMPOSE[@]}" exec -T postgres pg_isready -U "${POSTGRES_USER:-ai_mesh_firewall}" >/dev/null 2>&1 && break
+  sleep 2
+done
+
+echo "==> Control + migrations"
+"${COMPOSE[@]}" up -d --no-build control
+for _ in $(seq 1 45); do
+  curl -sf "http://127.0.0.1:8100/api/health/" >/dev/null 2>&1 && break
+  sleep 2
+done
+"${COMPOSE[@]}" exec -T control python manage.py migrate --noinput
+
+if [[ "${SKIP_ADMIN:-}" != "1" ]]; then
+  "${COMPOSE[@]}" exec -T control python manage.py ensure_zeroshield_admin \
+    ${ZEROSHIELD_ADMIN_PASSWORD:+--password "$ZEROSHIELD_ADMIN_PASSWORD"} || true
+fi
+
+echo "==> Gateway, workers, nginx (restart: unless-stopped)"
+"${COMPOSE[@]}" --profile workers up -d --no-build gateway workers workers-beat nginx
+
+for _ in $(seq 1 30); do
+  curl -sf "http://127.0.0.1:8300/health" >/dev/null 2>&1 && break
+  sleep 2
+done
+
+FH="${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}"
+BH="${BACKEND_HOST:-aimeshbackend.zeroshield.ai}"
+GH="${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}"
+
+curl -sf -H "Host: ${FH}" "http://127.0.0.1/" -o /dev/null || die "nginx UI vhost failed"
+curl -sf -H "Host: ${BH}" "http://127.0.0.1/api/health/" || die "nginx backend vhost failed"
+curl -sf -H "Host: ${GH}" "http://127.0.0.1/health" || die "nginx gateway vhost failed"
+
+cat <<EOF
+
+Stack is up (ECR ${IMAGE_TAG}).
+
+  UI       : https://${FH}  (nginx :80)
+  Control  : https://${BH}/api/
+  Gateway  : https://${GH}/v1/
+
+Point Route53 A records for all three hosts to this EC2.
+Open SG inbound :80 (and :443 when TLS is added).
+
+Redeploy after new images:
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+EOF

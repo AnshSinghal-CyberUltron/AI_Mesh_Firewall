@@ -196,22 +196,17 @@ export function useFirewallData(moduleId, timeRange = "24h") {
     raw: ev,
   }));
 
-  const latencyData = (socKpis?.latency_distribution?.length > 0)
+  // Live-only: the backend SocKpisView always returns latency_distribution and
+  // health_radar (shape {metric, value}) derived from real EnforcementEvent data.
+  // No synthetic fallback — if the backend has nothing, render an empty chart
+  // (handled by the consuming component's empty-state) rather than fabricating
+  // constants like Uptime:95 / Policy Coverage:85.
+  const latencyData = socKpis?.latency_distribution?.length > 0
     ? socKpis.latency_distribution
-    : socKpis?.avg_latency_ms
-      ? [{ range: `~${Math.round(socKpis.avg_latency_ms)}ms`, count: socKpis.total_threats || 1 }]
-      : [];
-  const healthRadarData = (socKpis?.health_radar?.length > 0)
+    : [];
+  const healthRadarData = socKpis?.health_radar?.length > 0
     ? socKpis.health_radar
-    : socKpis?.total_threats != null
-      ? [
-          { metric: "Threat Detection", score: Math.min(100, (socKpis.blocked_threats || socKpis.blocked || 0) * 5 + 20) },
-          { metric: "Uptime", score: 95 },
-          { metric: "Latency", score: socKpis.avg_latency_ms ? Math.max(10, 100 - Math.round(socKpis.avg_latency_ms / 10)) : 80 },
-          { metric: "Policy Coverage", score: 85 },
-          { metric: "Scan Rate", score: Math.min(100, (socKpis.total_threats || 0) / 2 + 20) },
-        ]
-      : [];
+    : [];
 
   return {
     socKpis,

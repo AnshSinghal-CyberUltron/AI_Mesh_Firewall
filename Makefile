@@ -23,3 +23,18 @@ migrate:
 
 extract-plan:
 	@echo "See docs/MIGRATION_FROM_AIGUARDX.md for phased copy from parent AI_Security repo"
+
+deploy-ec2:
+	bash scripts/deploy-ec2.sh
+
+sync-ec2:
+	bash scripts/sync-to-ec2.sh
+
+sync-ec2-deploy:
+	bash scripts/sync-to-ec2.sh --deploy
+
+ecr-push:
+	bash infra/scripts/build-push-images.sh $(TAG)
+
+attach-ec2-iam:
+	bash scripts/attach-ec2-iam-policy.sh

@@ -16,7 +16,6 @@ import {
   Tag,
   Wrench,
   Play,
-  Activity,
   AlertTriangle,
   Copy,
   Eye,
@@ -28,6 +27,7 @@ import {
   Key,
   Layers,
   ArrowRight,
+  X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { toAbsoluteGatewayUrl, resolveGatewayBaseUrl } from "../utils/environmentUrls";
@@ -291,7 +291,6 @@ const TABS = [
   { id: "scan-matrix", label: "Scan Controls", icon: Layers },
   { id: "protection", label: "MCP Security Policies", icon: Shield },
   { id: "observability", label: "Observability", icon: BarChart3 },
-  { id: "health", label: "Services Health", icon: Activity },
 ];
 
 /* ════════════════════════════════════════════════════ */
@@ -455,12 +454,11 @@ function MCPConnectorPanelInner() {
 
   /* ── tab-switched loaders ── */
   useEffect(() => {
-    if (tab === "servers") { loadServers(); loadOrgGatewayKey(); }
+    if (tab === "servers") { loadServers(); loadOrgGatewayKey(); loadHealth(); }
     if (tab === "tools") loadTools();
     if (tab === "execute") loadTools();
     if (tab === "protection") { loadServers(); }
     if (tab === "observability") { loadEvents(); loadEventSummary(); }
-    if (tab === "health") loadHealth();
   }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadEventSummary, loadOrgGatewayKey]);
 
   /* ────────── actions ────────── */
@@ -2008,84 +2006,6 @@ function MCPConnectorPanelInner() {
     );
   };
 
-  const renderHealth = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Status of ZeroShield MCP service planes.
-        </p>
-        <Tooltip content="Refresh">
-          <Button variant="ghost" size="icon" aria-label="Refresh health" onClick={loadHealth}>
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-        </Tooltip>
-      </div>
-
-      {!health && !loading && (
-        <EmptyState icon={Activity} title="Unable to load service health" />
-      )}
-
-      {health && (
-        <div className="space-y-4">
-          {/* Policy Engine — the single source of MCP enforcement */}
-          <Card>
-            <CardContent className="p-5" aria-label="Policy engine status">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
-                  <Ban className="w-5 h-5 text-orange-600" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-medium text-slate-900 dark:text-white">ZeroShield Policy Engine</h4>
-                  <p className="text-xs text-slate-500">Inline Regex, Keyword &amp; Pattern Enforcement</p>
-                </div>
-                <StatusDot status={health.mcp_firewall?.status} />
-              </div>
-              <Badge
-                variant={
-                  health.mcp_firewall?.status === "healthy"
-                    ? "success"
-                    : health.mcp_firewall?.status === "not_configured"
-                    ? "secondary"
-                    : "danger"
-                }
-              >
-                {health.mcp_firewall?.status || "unknown"}
-              </Badge>
-              {health.mcp_firewall?.detail && (
-                <p className="text-xs text-slate-500 mt-2">{health.mcp_firewall.detail}</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Built-in detectors — the unified guard set enforced in-band on every call */}
-          {Array.isArray(health.builtin_detectors) && health.builtin_detectors.length > 0 && (
-            <Card>
-              <CardContent className="p-5" aria-label="Built-in detectors">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center">
-                    <Shield className="w-5 h-5 text-violet-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-slate-900 dark:text-white">Built-in Detectors</h4>
-                    <p className="text-xs text-slate-500">Enforced in-band by the policy engine on every tool call</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {health.builtin_detectors.map((d) => (
-                    <Badge key={d} variant="info">
-                      <CheckCircle className="w-3 h-3 mr-1" />
-                      {String(d).replace(/_/g, " ")}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
   /* ────────── main render ────────── */
 
   return (
@@ -2182,7 +2102,6 @@ function MCPConnectorPanelInner() {
             <TabsContent value="scan-matrix">{renderScanMatrix()}</TabsContent>
             <TabsContent value="protection">{renderProtection()}</TabsContent>
             <TabsContent value="observability">{renderObservability()}</TabsContent>
-            <TabsContent value="health">{renderHealth()}</TabsContent>
           </div>
         )}
       </Tabs>

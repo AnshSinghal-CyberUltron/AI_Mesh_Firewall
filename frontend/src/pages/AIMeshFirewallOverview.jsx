@@ -566,7 +566,7 @@ function GlobalTrafficOverview({ socKpis, timeSeriesData, loading, compact = fal
             </div>
             <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-teal-500" /> Total</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Blocked</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Prompt injection</span>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={compact ? 230 : 280}>
@@ -602,7 +602,7 @@ function GlobalTrafficOverview({ socKpis, timeSeriesData, loading, compact = fal
               />
               <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#94a3b8", strokeWidth: 1, strokeDasharray: "4 4" }} />
               <Area type="monotone" dataKey="total" stroke="#14b8a6" strokeWidth={2.4} fill="url(#mesh-traffic)" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name="Total" />
-              <Area type="monotone" dataKey="blocked" stroke="#ef4444" strokeWidth={1.8} fill="url(#mesh-blocked)" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name="Blocked" />
+              <Area type="monotone" dataKey="blocked" stroke="#ef4444" strokeWidth={1.8} fill="url(#mesh-blocked)" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name="Prompt injection" />
             </AreaChart>
           </ResponsiveContainer>
         </div>

@@ -16,7 +16,7 @@ export function TabsList({ children, className }) {
     <div
       role="tablist"
       className={cn(
-        "flex items-center gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-700",
+        "flex flex-wrap items-center gap-1 border-b border-slate-200 dark:border-slate-700",
         className
       )}
     >

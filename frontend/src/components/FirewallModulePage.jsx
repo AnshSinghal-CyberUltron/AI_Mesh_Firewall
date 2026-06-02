@@ -8,6 +8,14 @@ function cn(...values) {
   return values.filter(Boolean).join(" ");
 }
 
+// Modules whose enforcement events fire infrequently (isolation/kill-switch,
+// output guardrails) age out of a 24h window, leaving the board blank on load.
+// Open them on a wider lens so operators see real recent activity by default.
+const DEFAULT_TIME_RANGE_BY_MODULE = {
+  "1.6": "7d",
+  "1.7": "7d",
+};
+
 export function FirewallModulePage({
   moduleId,
   title,
@@ -22,7 +30,7 @@ export function FirewallModulePage({
   secondaryPanels = [],
   footerPanels = [],
 }) {
-  const [timeRange, setTimeRange] = useState("24h");
+  const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE_BY_MODULE[moduleId] || "24h");
   const firewallData = useFirewallData(moduleId, timeRange);
 
   const pageConfig = getModulePageConfig(moduleId);
