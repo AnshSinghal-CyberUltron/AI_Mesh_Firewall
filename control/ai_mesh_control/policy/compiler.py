@@ -17,6 +17,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 import redis
+from ai_mesh_shared.redis_pool import connection_pool_kwargs
 from django.conf import settings
 
 if TYPE_CHECKING:
@@ -41,10 +42,12 @@ def _get_redis_pool() -> redis.ConnectionPool:
         _redis_pool = redis.ConnectionPool.from_url(
             getattr(settings, "REDIS_URL", "redis://localhost:6379/0"),
             decode_responses=True,
-            max_connections=50,
-            socket_timeout=3,
-            socket_connect_timeout=2,
-            retry_on_timeout=True,
+            **connection_pool_kwargs(
+                max_connections=50,
+                socket_timeout=3,
+                socket_connect_timeout=2,
+                retry_on_timeout=True,
+            ),
         )
     return _redis_pool
 

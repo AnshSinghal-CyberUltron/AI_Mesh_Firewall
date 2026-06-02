@@ -10,11 +10,13 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import json
 import os
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
+from ai_mesh_shared.redis_pool import connection_pool_kwargs
 from celery.schedules import crontab
 from kombu import Queue
 from django.core.exceptions import ImproperlyConfigured
@@ -192,12 +194,12 @@ if _cache_backend == "redis" and _redis_url:
             "LOCATION": _redis_url,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                "CONNECTION_POOL_KWARGS": {
-                    "max_connections": int(os.environ.get("DJANGO_CACHE_MAX_CONNECTIONS", "200")),
-                    "socket_connect_timeout": 1,
-                    "socket_timeout": 2,
-                    "retry_on_timeout": True,
-                },
+                "CONNECTION_POOL_KWARGS": connection_pool_kwargs(
+                    max_connections=int(os.environ.get("DJANGO_CACHE_MAX_CONNECTIONS", "200")),
+                    socket_connect_timeout=1,
+                    socket_timeout=2,
+                    retry_on_timeout=True,
+                ),
             },
             "KEY_PREFIX": os.environ.get("DJANGO_CACHE_KEY_PREFIX", "cache"),
             "TIMEOUT": int(os.environ.get("DJANGO_CACHE_TIMEOUT_SECONDS", "300")),
@@ -295,7 +297,27 @@ ORG_MSI_REQUIRED_FOR_UPSTREAM_CA = os.environ.get("ORG_MSI_REQUIRED_FOR_UPSTREAM
 )
 
 # Celery
-CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "amqp://guest:guest@localhost:5672//")
+_celery_broker_url = os.environ.get("CELERY_BROKER_URL", "amqp://guest:guest@localhost:5672//")
+CELERY_BROKER_URL = _celery_broker_url
+if _celery_broker_url.startswith("sqs://"):
+    _aws_region = os.environ.get("AWS_DEFAULT_REGION", os.environ.get("BEDROCK_REGION", "ap-south-1"))
+    _sqs_transport: dict = {
+        "region": _aws_region,
+        "visibility_timeout": int(os.environ.get("CELERY_SQS_VISIBILITY_TIMEOUT", "300")),
+        "polling_interval": float(os.environ.get("CELERY_SQS_POLLING_INTERVAL", "1")),
+    }
+    _predefined_raw = os.environ.get("CELERY_SQS_PREDEFINED_QUEUES", "").strip()
+    if _predefined_raw:
+        try:
+            _queue_urls = json.loads(_predefined_raw)
+        except json.JSONDecodeError as exc:
+            raise ImproperlyConfigured("CELERY_SQS_PREDEFINED_QUEUES must be valid JSON") from exc
+        if not isinstance(_queue_urls, dict):
+            raise ImproperlyConfigured("CELERY_SQS_PREDEFINED_QUEUES must be a JSON object")
+        _sqs_transport["predefined_queues"] = {
+            name: {"url": url} for name, url in _queue_urls.items()
+        }
+    CELERY_BROKER_TRANSPORT_OPTIONS = _sqs_transport
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_TASK_DEFAULT_QUEUE = "platform.batch"
@@ -891,6 +913,12 @@ LOGGING = {
         "django.db.backends": {
             "handlers": ["console"],
             "level": SQL_LOG_LEVEL,
+            "propagate": False,
+        },
+        # redis-py maintenance-notification handshake noise on Redis < 7.2
+        "redis.connection": {
+            "handlers": ["console"],
+            "level": "WARNING",
             "propagate": False,
         },
     },

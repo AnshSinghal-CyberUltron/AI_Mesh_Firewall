@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import MCPEvent, MCPServerRegistration, MCPToolRegistration
+from .models import MCPEvent, MCPServerRegistration, MCPScanControl, MCPToolRegistration
 
 
 ALL_TRANSPORTS = {"streamable-http", "sse", "stdio", "websocket"}
@@ -36,7 +36,7 @@ class MCPServerRegistrationSerializer(serializers.ModelSerializer):
             "last_health_status",
             "risk_level",
             "gateway_endpoint",
-            "default_presidio_action",
+            "default_scan_action",
             # Non-secret auth descriptor + sync diagnostics (secrets such as
             # auth_token/auth_password/auth_header_value are intentionally
             # NOT listed here — they live in write-only inputs only).
@@ -114,12 +114,12 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
             "auth_headers",
             "auth_query_param_key",
             "auth_query_param_value",
-            "default_presidio_action",
+            "default_scan_action",
         ]
 
     def validate(self, attrs):
         # On partial updates (PATCH) fall back to the instance's existing values
-        # so unrelated field edits (e.g. default_presidio_action) don't trip the
+        # so unrelated field edits (e.g. default_scan_action) don't trip the
         # transport/url/command/auth_type guards.
         instance = getattr(self, "instance", None)
 
@@ -209,7 +209,7 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
         Emits ONLY keys actually present in `validated_data` so that PATCH
         partial updates don't wipe untouched columns (DECISION-D Phase 1 bug
         fix: previously every key defaulted to "" / [] / {} which trampled
-        existing rows on a one-field PATCH like default_presidio_action).
+        existing rows on a one-field PATCH like default_scan_action).
         """
         allowed = {
             "name",
@@ -219,7 +219,7 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
             "args",
             "env_vars",
             "description",
-            "default_presidio_action",
+            "default_scan_action",
             # ── BYOK auth (Phase B) ──────────────────────────────────
             # Persisted to MCPServerRegistration; secret values land in
             # EncryptedCharField columns (encrypted-at-rest transparently).
@@ -251,10 +251,60 @@ class MCPToolRegistrationSerializer(serializers.ModelSerializer):
             "enabled",
             "sensitivity",
             "input_schema",
-            "presidio_action",
+            "scan_action",
             "last_seen_at",
         ]
         read_only_fields = ["id", "server", "server_name", "tool_name", "description", "input_schema", "last_seen_at"]
+
+
+class MCPScanControlSerializer(serializers.ModelSerializer):
+    server_id = serializers.UUIDField(source="server.id", read_only=True, allow_null=True)
+    server_slug = serializers.CharField(source="server.server_slug", read_only=True, allow_null=True)
+
+    class Meta:
+        model = MCPScanControl
+        fields = [
+            "id",
+            "organization",
+            "server",
+            "server_id",
+            "server_slug",
+            "tool_name",
+            "tier",
+            "enabled",
+            "direction",
+            "scope_type",
+            "target_mode",
+            "key_path",
+            "strict_mode",
+            "action",
+            "priority",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "organization", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        scope = attrs.get("scope_type") or getattr(self.instance, "scope_type", "org")
+        server = attrs.get("server") if "server" in attrs else getattr(self.instance, "server", None)
+        tool_name = (attrs.get("tool_name") or getattr(self.instance, "tool_name", "") or "").strip()
+        target_mode = attrs.get("target_mode") or getattr(self.instance, "target_mode", "entire")
+        key_path = (attrs.get("key_path") or getattr(self.instance, "key_path", "") or "").strip()
+
+        if scope == "server" and not server:
+            raise serializers.ValidationError({"server": "Required for server scope."})
+        if scope == "tool":
+            if not server:
+                raise serializers.ValidationError({"server": "Required for tool scope."})
+            if not tool_name:
+                raise serializers.ValidationError({"tool_name": "Required for tool scope."})
+        if scope == "org" and server:
+            raise serializers.ValidationError({"server": "Must be empty for org scope."})
+        if target_mode == "key_path" and not key_path:
+            raise serializers.ValidationError({"key_path": "Required when target_mode is key_path."})
+        if target_mode == "entire" and key_path:
+            attrs["key_path"] = ""
+        return attrs
 
 
 class MCPEventSerializer(serializers.ModelSerializer):
@@ -274,7 +324,7 @@ class MCPEventSerializer(serializers.ModelSerializer):
             "request_id",
             "metadata",
             "compliance_tags",
-            "presidio_findings",
+            "scan_findings",
             "timestamp",
         ]
         read_only_fields = fields

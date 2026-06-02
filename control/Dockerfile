@@ -7,10 +7,11 @@ COPY control/manage.py /app/control/manage.py
 COPY control/ai_mesh_control /app/control/ai_mesh_control
 WORKDIR /app/control
 RUN pip install --no-cache-dir \
-    django djangorestframework psycopg[binary] redis celery \
+    django djangorestframework psycopg[binary] redis "celery[sqs]" \
     django-cors-headers django-redis djangorestframework-simplejwt \
     channels channels-redis daphne drf-spectacular whitenoise httpx \
-    boto3 cryptography pyyaml jsonschema msal python-dotenv regex dataclasses-json
+    boto3 cryptography pyyaml jsonschema msal python-dotenv regex dataclasses-json \
+    gunicorn
 ENV PYTHONPATH=/app/shared:/app/control/ai_mesh_control
 EXPOSE 8000
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000", "--noreload"]
+CMD ["gunicorn", "main_app.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "2", "--timeout", "120"]

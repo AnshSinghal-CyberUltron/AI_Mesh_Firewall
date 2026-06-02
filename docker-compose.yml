@@ -19,7 +19,8 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    # 7.2+ required for CLIENT MAINT_NOTIFICATIONS (redis-py handshake)
+    image: redis:7.4-alpine
     command: redis-server --appendonly yes
     ports: ["6379:6379"]
     volumes: [redis_data:/data]
@@ -181,13 +182,6 @@ services:
       # Phase 1 F-3.1: RAG firewall + local Chroma backend.
       GATEWAY_RAG_ENABLED: "true"
       CHROMA_URL: http://chromadb:8000
-      # DECISION-D Phase 1: Presidio PII scanning (auto = sidecar first,
-      # fall back to library, fall back to disabled).
-      PRESIDIO_MODE: ${PRESIDIO_MODE:-auto}
-      PRESIDIO_ANALYZER_URL: ${PRESIDIO_ANALYZER_URL:-http://presidio-analyzer:3000}
-      PRESIDIO_ANONYMIZER_URL: ${PRESIDIO_ANONYMIZER_URL:-http://presidio-anonymizer:3001}
-      PRESIDIO_LANGUAGE: en
-      PRESIDIO_MIN_SCORE: ${PRESIDIO_MIN_SCORE:-0.5}
       # On-demand stdio MCP server fetch tuning. Packages are pulled via
       # npx/uvx at client connect time (NOT baked into the image); the first
       # connect must download+resolve the package before answering the MCP
@@ -206,30 +200,6 @@ services:
       control: { condition: service_healthy }
       redis: { condition: service_healthy }
       chromadb: { condition: service_healthy }
-
-  # DECISION-D Phase 1: Microsoft Presidio sidecars for PII detection.
-  # Pinned to ``latest`` tag (Microsoft does not publish stable semver
-  # tags). English-only recognizers; multi-language requires a custom
-  # spaCy model in the analyzer image.
-  presidio-analyzer:
-    image: mcr.microsoft.com/presidio-analyzer:latest
-    ports: ["3010:3000"]
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:3000/health', timeout=2).status==200 else 1)\""]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-
-  presidio-anonymizer:
-    image: mcr.microsoft.com/presidio-anonymizer:latest
-    ports: ["3011:3000"]
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:3000/health', timeout=2).status==200 else 1)\""]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
 
   guardrails:
     image: python:3.12-slim

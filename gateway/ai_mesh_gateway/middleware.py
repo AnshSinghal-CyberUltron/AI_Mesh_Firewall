@@ -270,16 +270,14 @@ class AuthMiddleware:
         # enforced by ``_require_admin_role`` (which also recognises this
         # header) so the bypass cannot widen privileges beyond admin.
         #
-        # MCP-SYNC FIX: additionally allow the *read-only* tool-discovery
-        # endpoint ``/v1/mcp/internal/discover-tools``. The control plane
-        # calls it (with this same shared secret) to enumerate a server's
-        # tool schemas during "Sync tools". It performs no data mutation
-        # and returns only tool metadata, so its blast radius on a leaked
-        # secret is limited to read-only schema disclosure -- materially
-        # smaller than the tenant data path ``/v1/mcp/internal/tools-call``,
-        # which is deliberately NOT widened here. The handler itself also
-        # re-validates the secret (defence in depth).
-        if path.startswith("/v1/admin/") or path == "/v1/mcp/internal/discover-tools":
+        # MCP-SYNC FIX: additionally allow read-only tool-discovery and
+        # internal tool execution when the control plane presents the shared
+        # secret. Both handlers re-validate the secret (defence in depth).
+        _INTERNAL_MCP_PATHS = (
+            "/v1/mcp/internal/discover-tools",
+            "/v1/mcp/internal/tools-call",
+        )
+        if path.startswith("/v1/admin/") or path in _INTERNAL_MCP_PATHS:
             internal_secret = os.environ.get("GATEWAY_INTERNAL_API_KEY", "").strip()
             if internal_secret:
                 header_secret: str | None = None

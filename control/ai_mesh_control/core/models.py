@@ -763,6 +763,16 @@ class FirewallConfig(models.Model):
             "None = inherit gateway default; True/False = explicit override."
         ),
     )
+    # MCP-specific Tier-2 gate (separate from chat ``tier2_enabled``).
+    mcp_tier2_enabled = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Per-org override for MCP Tier-2 (Bedrock) after Tier-1 allows. "
+            "None = inherit gateway default; True/False = explicit override."
+        ),
+    )
     # tier2_strict controls behavior when Tier-2 is unavailable (circuit
     # breaker OPEN, Bedrock degraded, etc.). Per Security Hawk F5 override,
     # default is True: refuse the request with HTTP 451 reason_code
@@ -1067,6 +1077,7 @@ class FirewallConfig(models.Model):
             # tier2_enabled is tri-state — preserve None so gateway can
             # distinguish "no per-org opinion" from "explicit False".
             "tier2_enabled": self.tier2_enabled,
+            "mcp_tier2_enabled": self.mcp_tier2_enabled,
             "tier2_strict": self.tier2_strict,
             "prompt_injection_threshold": self.prompt_injection_threshold,
             "output_scan_enabled": self.response_filtering_enabled,

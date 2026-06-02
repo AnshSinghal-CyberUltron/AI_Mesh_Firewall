@@ -79,6 +79,8 @@ class ScanVerdict:
     matched_patterns: list[str] = field(default_factory=list)
     tier: str = ""
     reason_code: str = ""
+    owasp_codes: list[str] = field(default_factory=list)
+    scan_meta: dict = field(default_factory=dict)
 
 ATTACK_PATTERNS: dict[str, list[str]] = {
     "prompt_injection": [
@@ -947,12 +949,17 @@ class InputScanner:
         raw_findings = meta.get("raw_findings") or []
         bedrock_categories: list[str] = []
         bedrock_evidence: list[str] = []
+        bedrock_owasp: list[str] = []
         max_confidence = 0.0
         for finding in raw_findings:
             if isinstance(finding, dict):
                 cat = finding.get("category", "")
                 if cat:
                     bedrock_categories.append(cat)
+                rid = str(finding.get("rule_id") or finding.get("owasp_code") or "").strip().upper()
+                if rid and rid[:3] in ("LLM", "MCP", "AGE") and len(rid) >= 5:
+                    if rid not in bedrock_owasp:
+                        bedrock_owasp.append(rid)
                 ev = finding.get("evidence", "")
                 if ev:
                     bedrock_evidence.append(ev)
@@ -960,8 +967,31 @@ class InputScanner:
                 if conf > max_confidence:
                     max_confidence = conf
 
+        def _bedrock_verdict(**kwargs: Any) -> ScanVerdict:
+            verdict = ScanVerdict(**kwargs)
+            findings: list[dict[str, Any]] = []
+            for finding in raw_findings or []:
+                if not isinstance(finding, dict):
+                    continue
+                findings.append(
+                    {
+                        "category": finding.get("category") or "",
+                        "confidence": self._normalize_score(finding.get("confidence", 0.0)),
+                        "evidence": finding.get("evidence") or "",
+                        "rule_id": finding.get("rule_id") or finding.get("owasp_code") or "",
+                    }
+                )
+            verdict.scan_meta = {
+                "scanner": "zeroshield_guard_model",
+                "recommended_action": recommended,
+                "decision_reason": str(meta.get("decision_reason") or ""),
+                "llm_guard_score": score,
+                "findings": findings[:8],
+            }
+            return verdict
+
         if recommended == "block":
-            return ScanVerdict(
+            return _bedrock_verdict(
                 action="block",
                 threat_type=bedrock_categories[0] if bedrock_categories else "bedrock",
                 confidence=max_confidence or 1.0,
@@ -969,9 +999,10 @@ class InputScanner:
                 matched_patterns=bedrock_evidence[:5] or [],
                 tier="tier_2",
                 reason_code=reason_code or "model_recommended_block",
+                owasp_codes=bedrock_owasp,
             )
         if recommended == "redact":
-            return ScanVerdict(
+            return _bedrock_verdict(
                 action="flag",
                 threat_type=bedrock_categories[0] if bedrock_categories else "bedrock_redact",
                 confidence=max_confidence or 0.9,
@@ -979,6 +1010,7 @@ class InputScanner:
                 matched_patterns=bedrock_evidence[:5] or [],
                 tier="tier_2",
                 reason_code=reason_code or "model_recommended_redact",
+                owasp_codes=bedrock_owasp,
             )
         if self._is_tier2_degraded(meta, llm_guard):
             degraded_reason = reason_code or "bedrock_degraded"
@@ -989,7 +1021,7 @@ class InputScanner:
                 degraded_detail = "Bedrock scanner error; unable to confidently validate prompt"
             elif meta.get("parse_failed"):
                 degraded_detail = "Bedrock response unparseable; unable to confidently validate prompt"
-            return ScanVerdict(
+            return _bedrock_verdict(
                 action="flag",
                 threat_type="bedrock_degraded",
                 confidence=max(score, 0.5),
@@ -998,7 +1030,7 @@ class InputScanner:
                 reason_code=degraded_reason,
             )
         if recommended == "monitor":
-            return ScanVerdict(
+            return _bedrock_verdict(
                 action="flag",
                 threat_type=bedrock_categories[0] if bedrock_categories else "bedrock",
                 confidence=max_confidence or float(score),
@@ -1012,7 +1044,7 @@ class InputScanner:
         BEDROCK_FLAG_THRESHOLD = 0.40
 
         if score >= BEDROCK_BLOCK_THRESHOLD:
-            return ScanVerdict(
+            return _bedrock_verdict(
                 action="block",
                 threat_type=bedrock_categories[0] if bedrock_categories else "bedrock_score",
                 confidence=score,
@@ -1023,7 +1055,7 @@ class InputScanner:
             )
 
         if score >= BEDROCK_FLAG_THRESHOLD:
-            return ScanVerdict(
+            return _bedrock_verdict(
                 action="flag",
                 threat_type=bedrock_categories[0] if bedrock_categories else "bedrock_score",
                 confidence=score,
@@ -1034,7 +1066,7 @@ class InputScanner:
             )
 
         if bedrock_categories and recommended == "allow":
-            return ScanVerdict(
+            return _bedrock_verdict(
                 action="flag",
                 threat_type=bedrock_categories[0],
                 confidence=max_confidence or 0.5,
@@ -1044,7 +1076,7 @@ class InputScanner:
                 reason_code=reason_code or "findings_with_allow",
             )
 
-        return ScanVerdict(
+        return _bedrock_verdict(
             action="allow",
             threat_type="none",
             confidence=score,

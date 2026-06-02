@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plus, Pencil, Trash2, X, Loader2, Database, CheckCircle, AlertTriangle,
   RefreshCw, Upload, Shield, Lock,
@@ -337,6 +337,7 @@ function VectorPolicyModal({ title, form, setForm, onSubmit, onClose, submitting
 export function VectorPolicyPanel({
   title = "Vector Collection Policies",
   description = "Manage access policies for vector database collections",
+  externalCreateSignal = 0,
 }) {
   const { fetchWithAuth, user } = useAuth();
   // Bundle Z4 — admin gate on the Compile button. The backend already
@@ -358,6 +359,7 @@ export function VectorPolicyPanel({
   const [compileStatus, setCompileStatus] = useState(null);
   const [compiling, setCompiling] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const lastHandledExternalCreateSignal = useRef(0);
 
   const fetchPolicies = useCallback(async () => {
     setLoading(true);
@@ -395,6 +397,15 @@ export function VectorPolicyPanel({
   useEffect(() => {
     fetchPolicies();
   }, [fetchPolicies]);
+
+  useEffect(() => {
+    if (!externalCreateSignal) return;
+    if (externalCreateSignal <= lastHandledExternalCreateSignal.current) return;
+    lastHandledExternalCreateSignal.current = externalCreateSignal;
+    setForm({ ...EMPTY_FORM });
+    setFormError(null);
+    setCreateModalOpen(true);
+  }, [externalCreateSignal]);
 
   const handleCreate = async (e) => {
     e.preventDefault();

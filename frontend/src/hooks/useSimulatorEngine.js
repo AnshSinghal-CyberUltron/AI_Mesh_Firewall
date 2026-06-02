@@ -55,7 +55,7 @@ export function useSimulatorEngine() {
       };
     }
     const data = await res.json().catch(() => null);
-    return { ok: res.ok, status: res.status, data, isStream: false };
+    return { ok: res.ok, status: res.status, headers: res.headers, data, isStream: false };
   }, [gatewayUrl, gatewayKey]);
 
   /**

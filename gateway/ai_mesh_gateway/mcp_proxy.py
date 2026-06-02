@@ -21,7 +21,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from jobs import enqueue_job
 
-from presidio_engine import get_engine as _get_presidio_engine
+from mcp_scan_orchestrator import scan_mcp_payload
 
 LOG = logging.getLogger("gateway.mcp_proxy")
 
@@ -241,12 +241,28 @@ async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
                 "known": set(data.get("known_tools") or []),
                 "enabled": set(data.get("enabled_tools") or []),
                 "disabled": set(data.get("disabled_tools") or []),
-                # DECISION-D Phase 1: propagate Presidio enforcement controls
-                # so _effective_presidio_action(tool, enabled_info) can resolve
-                # the per-tool override and server default without an extra
-                # backend round-trip per call.
-                "default_presidio_action": data.get("default_presidio_action") or "tag",
-                "tool_presidio_actions": data.get("tool_presidio_actions") or {},
+                # Propagate scan enforcement controls so _effective_scan_action
+                # (tool, enabled_info) can resolve the per-tool override and the
+                # server default without an extra backend round-trip per call.
+                # Dual-read: prefer the new ``scan_action`` keys, fall back to the
+                # legacy ``presidio_action`` keys during the deprecation window so a
+                # stale (<=30s) cache never silently fails open to "tag".
+                "default_scan_action": (
+                    data.get("default_scan_action")
+                    or data.get("default_presidio_action")
+                    or "tag"
+                ),
+                "tool_scan_actions": (
+                    data.get("tool_scan_actions")
+                    or data.get("tool_presidio_actions")
+                    or {}
+                ),
+                "server_id": data.get("server_id"),
+                "scan_controls_configured": True,
+                "effective_scan_controls": data.get("effective_scan_controls") or {},
+                "effective_scan_controls_by_tool": data.get("effective_scan_controls_by_tool") or {},
+                "mcp_tier2_enabled": data.get("mcp_tier2_enabled"),
+                "tier2_strict": data.get("tier2_strict", True),
             }
             _enabled_tools_cache[cache_key] = result
             _enabled_tools_ttl[cache_key] = now
@@ -295,7 +311,7 @@ async def _record_gateway_event(
     latency_ms: int = 0,
     metadata: dict | None = None,
     compliance_tags: list | None = None,
-    presidio_findings: list | None = None,
+    scan_findings: list | None = None,
 ) -> None:
     """Best-effort record of MCP events via async queue or legacy HTTP path."""
     if not org_slug:
@@ -317,7 +333,9 @@ async def _record_gateway_event(
                 "latency_ms": latency_ms,
                 "metadata": metadata or {},
                 "compliance_tags": compliance_tags or [],
-                "presidio_findings": presidio_findings or [],
+                "scan_findings": scan_findings or [],
+                # legacy alias retained during the presidio->scan rename window
+                "presidio_findings": scan_findings or [],
             },
         )
         return
@@ -339,7 +357,9 @@ async def _record_gateway_event(
         "latency_ms": latency_ms,
         "metadata": metadata or {},
         "compliance_tags": compliance_tags or [],
-        "presidio_findings": presidio_findings or [],
+        "scan_findings": scan_findings or [],
+        # legacy alias retained during the presidio->scan rename window
+        "presidio_findings": scan_findings or [],
     }
     try:
         async with httpx.AsyncClient(timeout=5) as client:
@@ -353,56 +373,99 @@ async def _record_gateway_event(
                     org_slug, tool_name, exc)
 
 
-# ── DECISION-D Phase 1: Presidio scan helpers ────────────────────────
+# ── Scan enforcement helpers ─────────────────────────────────────────
 
 
-def _effective_presidio_action(tool_name: str, enabled_info: dict | None) -> str:
-    """Resolve the effective Presidio action for a tool call.
+def _effective_scan_action(tool_name: str, enabled_info: dict | None) -> str:
+    """Resolve the effective scan enforcement action for a tool call.
 
     Order of precedence:
-      1. Per-tool override (``MCPToolRegistration.presidio_action``)
-      2. Server default (``MCPServerRegistration.default_presidio_action``)
+      1. Per-tool override (``MCPToolRegistration.scan_action``)
+      2. Server default (``MCPServerRegistration.default_scan_action``)
       3. ``"tag"`` (safe default — observe only, never mutate)
 
     The ``enabled_info`` dict comes from ``_get_enabled_tools`` and is
     populated by the control plane (``MCPGatewayEnabledToolsView``).
     Missing / stale info degrades to ``"tag"`` so the gateway never
-    blocks traffic based on a partial cache.
+    blocks traffic based on a partial cache. Each lookup falls back to the
+    legacy ``presidio_action`` keys so a stale cache during the rename
+    deprecation window resolves correctly instead of failing open.
     """
     if not enabled_info:
         return "tag"
-    per_tool = (enabled_info.get("tool_presidio_actions") or {}).get(tool_name)
+    per_tool_map = (
+        enabled_info.get("tool_scan_actions")
+        or enabled_info.get("tool_presidio_actions")
+        or {}
+    )
+    per_tool = per_tool_map.get(tool_name)
     if per_tool and per_tool != "inherit":
         return per_tool
-    return enabled_info.get("default_presidio_action") or "tag"
+    return (
+        enabled_info.get("default_scan_action")
+        or enabled_info.get("default_presidio_action")
+        or "tag"
+    )
 
 
-async def _presidio_scan(
+def _effective_scan_controls_for_tool(
+    enabled_info: dict | None,
+    tool_name: str,
+) -> dict:
+    if not enabled_info:
+        return {}
+    by_tool = enabled_info.get("effective_scan_controls_by_tool") or {}
+    if tool_name and tool_name in by_tool:
+        return by_tool[tool_name]
+    return enabled_info.get("effective_scan_controls") or {}
+
+
+async def _mcp_security_scan(
     payload,
     *,
-    direction: str,
-    action: str,
-):
-    """Wrap ``presidio_engine.get_engine().scan_payload`` with a thread
-    offload so the gateway event loop is not blocked by Presidio's
-    synchronous spaCy work in library mode.
+    scan_direction: str,
+    tool_name: str,
+    enabled_info: dict | None,
+    org_slug: str = "",
+    server_slug: str = "",
+) -> tuple[object, bool, list[str], list[dict], dict]:
+    """Scan MCP payload via two-tier orchestrator. Returns (payload, blocked, tags, findings, metadata)."""
+    action = _effective_scan_action(tool_name, enabled_info)
+    mcp_direction = "inbound" if scan_direction == "input" else "outbound"
+    effective = _effective_scan_controls_for_tool(enabled_info, tool_name)
+    if not effective:
+        effective = {
+            "scan_controls_configured": True,
+            "tier1_input": {"enabled": True, "target_mode": "entire", "key_path": "", "strict_mode": "fail_open"},
+            "tier1_output": {"enabled": True, "target_mode": "entire", "key_path": "", "strict_mode": "fail_open"},
+            "tier2_input": {"enabled": False, "target_mode": "entire", "key_path": "", "strict_mode": "strict"},
+            "tier2_output": {"enabled": False, "target_mode": "entire", "key_path": "", "strict_mode": "strict"},
+        }
 
-    Returns ``(possibly_mutated_payload, ScanResult)``.
-    """
-    import anyio  # local import — anyio ships with FastAPI/Starlette
-
-    engine = _get_presidio_engine()
-    if engine.mode == "disabled":
-        return payload, None
-
-    def _do():
-        return engine.scan_payload(payload, direction=direction, action=action)
-
-    try:
-        return await anyio.to_thread.run_sync(_do)
-    except Exception as exc:
-        LOG.warning("Presidio scan failed (direction=%s): %s", direction, exc)
-        return payload, None
+    scanned, result = await scan_mcp_payload(
+        payload,
+        scan_direction=scan_direction,
+        enforcement=action,
+        effective_controls=effective,
+        enabled_info=enabled_info,
+        org_slug=org_slug,
+        server_slug=server_slug,
+        tool_name=tool_name,
+    )
+    meta = {
+        "scan_trace": result.scan_trace,
+        "scan_direction": mcp_direction,
+        "scan_action": action,
+        "scan_pipeline": "two_tier",
+        "monitored": result.monitored,
+    }
+    return (
+        scanned,
+        result.blocked,
+        result.compliance_tags,
+        [f.to_finding_dict() for f in result.findings],
+        meta,
+    )
 
 
 # ── Health (aggregated) ──────────────────────────────────────────────
@@ -1214,59 +1277,66 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                 status_code=200,
             )
 
-        # ── DECISION-D Phase 1: inbound Presidio scan ──
-        # Resolved action drives both inbound (arguments) and outbound
-        # (response body) scans below. "block" short-circuits here; "redact"
-        # mutates ``arguments``; "tag" only annotates the audit event.
-        _presidio_action = _effective_presidio_action(tool_name, enabled_info)
+        # ── MCP security scan (two-tier policy + optional Bedrock) ──
+        _scan_action = _effective_scan_action(tool_name, enabled_info)
+        # Stable per-call id for audit correlation + gateway/backend de-dup.
+        _req_id = str(msg_id) if msg_id is not None else ""
+        _in_redacted = False
         _inbound_tags: list[str] = []
         _inbound_findings: list[dict] = []
-        if _presidio_action != "tag" or True:  # always scan; tag is the cheapest path
-            _scanned_args, _in_result = await _presidio_scan(
-                arguments, direction="inbound", action=_presidio_action,
-            )
-            if _in_result is not None and _in_result.has_findings:
-                _inbound_tags = list(_in_result.compliance_tags)
-                _inbound_findings = [f.to_dict() for f in _in_result.findings]
-                if _in_result.blocked:
-                    await _record_gateway_event(
-                        org_slug=org_slug,
-                        server_slug=server_slug,
-                        tool_name=tool_name,
-                        decision="block",
-                        reason="presidio_blocked_inbound",
-                        latency_ms=int((time.time() - call_t0) * 1000),
-                        metadata={
-                            "transport": transport,
-                            "enforced_at": "gateway",
-                            "presidio_direction": "inbound",
-                            "presidio_action": _presidio_action,
+        _scan_meta_in: dict = {}
+        _scanned_args, _in_blocked, _in_tags, _in_findings, _scan_meta_in = await _mcp_security_scan(
+            arguments,
+            scan_direction="input",
+            tool_name=tool_name,
+            enabled_info=enabled_info,
+            org_slug=org_slug,
+            server_slug=server_slug,
+        )
+        if _in_tags or _in_findings:
+            _inbound_tags = list(_in_tags)
+            _inbound_findings = list(_in_findings)
+            if _in_blocked:
+                await _record_gateway_event(
+                    org_slug=org_slug,
+                    server_slug=server_slug,
+                    tool_name=tool_name,
+                    decision="block",
+                    reason="pii_blocked_inbound",
+                    request_id=_req_id,
+                    latency_ms=int((time.time() - call_t0) * 1000),
+                    metadata={
+                        "transport": transport,
+                        "enforced_at": "gateway",
+                        **_scan_meta_in,
+                    },
+                    compliance_tags=_inbound_tags,
+                    scan_findings=_inbound_findings,
+                )
+                return JSONResponse(
+                    content={
+                        "jsonrpc": jsonrpc,
+                        "id": msg_id,
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        f"[BLOCKED] Tool '{tool_name}' arguments matched "
+                                        f"compliance tags: {', '.join(_inbound_tags) or 'PII'}."
+                                    ),
+                                }
+                            ],
+                            "isError": True,
                         },
-                        compliance_tags=_inbound_tags,
-                        presidio_findings=_inbound_findings,
-                    )
-                    return JSONResponse(
-                        content={
-                            "jsonrpc": jsonrpc,
-                            "id": msg_id,
-                            "result": {
-                                "content": [
-                                    {
-                                        "type": "text",
-                                        "text": (
-                                            f"[BLOCKED] Tool '{tool_name}' arguments matched "
-                                            f"compliance tags: {', '.join(_inbound_tags) or 'PII'}."
-                                        ),
-                                    }
-                                ],
-                                "isError": True,
-                            },
-                        },
-                        status_code=200,
-                    )
-                if _presidio_action == "redact":
-                    arguments = _scanned_args
-                    params["arguments"] = arguments  # propagate into body for backend call
+                    },
+                    status_code=200,
+                )
+            if _scanned_args is not arguments:
+                # orchestrator applied per-tier inbound redaction
+                arguments = _scanned_args
+                params["arguments"] = arguments
+                _in_redacted = True
 
         if is_adapter_transport and server_config:
             # ── KNOWN GAP (D5, security review 2025-Q1): the adapter
@@ -1295,25 +1365,33 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                 payload = None
             decision = "allow"
             reason = ""
+            _scan_meta_out: dict = {}
             if isinstance(payload, dict) and payload.get("error"):
                 decision = "error"
                 reason = str(payload["error"].get("message", ""))[:255]
-            # ── DECISION-D Phase 1: outbound Presidio scan on adapter response ──
+            # ── Outbound two-tier scan on adapter response ──
             _out_tags = list(_inbound_tags)
             _out_findings = list(_inbound_findings)
             if isinstance(payload, dict):
                 _scan_target = payload.get("result") if "result" in payload else payload
-                _scanned_out, _out_result = await _presidio_scan(
-                    _scan_target, direction="outbound", action=_presidio_action,
+                _scanned_out, _out_blocked, _out_tags_new, _out_find_new, _scan_meta_out = (
+                    await _mcp_security_scan(
+                        _scan_target,
+                        scan_direction="output",
+                        tool_name=tool_name,
+                        enabled_info=enabled_info,
+                        org_slug=org_slug,
+                        server_slug=server_slug,
+                    )
                 )
-                if _out_result is not None and _out_result.has_findings:
-                    for t in _out_result.compliance_tags:
+                if _out_tags_new or _out_find_new:
+                    for t in _out_tags_new:
                         if t not in _out_tags:
                             _out_tags.append(t)
-                    _out_findings.extend(f.to_dict() for f in _out_result.findings)
-                    if _out_result.blocked:
+                    _out_findings.extend(_out_find_new)
+                    if _out_blocked:
                         decision = "block"
-                        reason = "presidio_blocked_outbound"
+                        reason = "pii_blocked_outbound"
                         adapter_resp = JSONResponse(
                             content={
                                 "jsonrpc": jsonrpc,
@@ -1331,24 +1409,36 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                             },
                             status_code=200,
                         )
-                    elif _presidio_action == "redact" and "result" in payload:
+                    elif _scanned_out is not _scan_target and "result" in payload:
                         decision = "redact"
                         payload["result"] = _scanned_out
                         adapter_resp = JSONResponse(content=payload, status_code=200)
+            # Monitor: findings under a 'monitor' action are allowed but audited.
+            if decision == "allow" and bool(
+                (_scan_meta_in or {}).get("monitored")
+                or (_scan_meta_out or {}).get("monitored")
+            ):
+                decision = "monitor"
             await _record_gateway_event(
                 org_slug=org_slug,
                 server_slug=server_slug,
                 tool_name=tool_name,
                 decision=decision,
                 reason=reason,
+                request_id=_req_id,
                 latency_ms=int((time.time() - call_t0) * 1000),
                 metadata={
                     "transport": transport,
                     "enforced_at": "gateway_adapter",
-                    "presidio_action": _presidio_action,
+                    "scan_action": _scan_action,
+                    "scan_pipeline": "two_tier",
+                    "scan_trace": (
+                        list(_scan_meta_in.get("scan_trace") or [])
+                        + (list(_scan_meta_out.get("scan_trace") or []) if isinstance(payload, dict) else [])
+                    ),
                 },
                 compliance_tags=_out_tags,
-                presidio_findings=_out_findings,
+                scan_findings=_out_findings,
             )
             return adapter_resp
 
@@ -1356,7 +1446,10 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
             try:
                 resp = await client.post(
                     f"{_BACKEND_URL}/api/mcp-connector/tools/call/",
-                    headers=_backend_proxy_headers(request, org_slug, server_slug),
+                    headers={
+                        **_backend_proxy_headers(request, org_slug, server_slug),
+                        "X-Request-Id": _req_id,
+                    },
                     json={
                         "name": tool_name,
                         "arguments": arguments,
@@ -1367,8 +1460,28 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
 
                 # Adapt backend response to MCP JSON-RPC response
                 if resp.status_code == 200 and isinstance(data, dict):
+                    _merged_trace_base = list(_scan_meta_in.get("scan_trace") or [])
                     # Check for policy-blocked responses
                     if data.get("blocked"):
+                        await _record_gateway_event(
+                            org_slug=org_slug,
+                            server_slug=server_slug,
+                            tool_name=tool_name,
+                            decision="block",
+                            reason="backend_policy_blocked",
+                            request_id=_req_id,
+                            latency_ms=int((time.time() - call_t0) * 1000),
+                            metadata={
+                                "transport": transport,
+                                "enforced_at": "backend",
+                                "scan_action": _scan_action,
+                                "scan_pipeline": "two_tier",
+                                "scan_trace": _merged_trace_base,
+                                "backend_detail": str(data.get("detail", ""))[:255],
+                            },
+                            compliance_tags=_inbound_tags,
+                            scan_findings=_inbound_findings,
+                        )
                         return JSONResponse(
                             content={
                                 "jsonrpc": jsonrpc,
@@ -1386,72 +1499,91 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                             status_code=200,
                         )
 
-                    # Normal successful response
+                    # Normal successful response — run outbound two-tier scan.
                     result_content = data.get("result") or data.get("content")
-                    # ── DECISION-D Phase 1: outbound Presidio scan on backend result ──
                     _out_tags2 = list(_inbound_tags)
                     _out_findings2 = list(_inbound_findings)
-                    _scanned_content, _out_res2 = await _presidio_scan(
-                        result_content, direction="outbound", action=_presidio_action,
+                    _scanned_content, _out_blocked2, _out_tags_new2, _out_find_new2, _scan_meta_out2 = (
+                        await _mcp_security_scan(
+                            result_content,
+                            scan_direction="output",
+                            tool_name=tool_name,
+                            enabled_info=enabled_info,
+                            org_slug=org_slug,
+                            server_slug=server_slug,
+                        )
                     )
-                    if _out_res2 is not None and _out_res2.has_findings:
-                        for t in _out_res2.compliance_tags:
-                            if t not in _out_tags2:
-                                _out_tags2.append(t)
-                        _out_findings2.extend(f.to_dict() for f in _out_res2.findings)
-                        if _out_res2.blocked:
-                            await _record_gateway_event(
-                                org_slug=org_slug,
-                                server_slug=server_slug,
-                                tool_name=tool_name,
-                                decision="block",
-                                reason="presidio_blocked_outbound",
-                                latency_ms=int((time.time() - call_t0) * 1000),
-                                metadata={
-                                    "transport": transport,
-                                    "enforced_at": "gateway",
-                                    "presidio_direction": "outbound",
-                                    "presidio_action": _presidio_action,
-                                },
-                                compliance_tags=_out_tags2,
-                                presidio_findings=_out_findings2,
-                            )
-                            return JSONResponse(
-                                content={
-                                    "jsonrpc": jsonrpc,
-                                    "id": msg_id,
-                                    "result": {
-                                        "content": [{
-                                            "type": "text",
-                                            "text": (
-                                                f"[BLOCKED] Response from '{tool_name}' matched "
-                                                f"compliance tags: {', '.join(_out_tags2) or 'PII'}."
-                                            ),
-                                        }],
-                                        "isError": True,
-                                    },
-                                },
-                                status_code=200,
-                            )
-                        if _presidio_action == "redact":
-                            result_content = _scanned_content
-                    # Audit annotation (allow + tags/findings).
-                    if _out_tags2 or _out_findings2:
+                    for t in _out_tags_new2:
+                        if t not in _out_tags2:
+                            _out_tags2.append(t)
+                    _out_findings2.extend(_out_find_new2)
+                    # One merged two-tier trace (inbound + outbound) per call.
+                    _monitored = bool(
+                        (_scan_meta_in or {}).get("monitored")
+                        or (_scan_meta_out2 or {}).get("monitored")
+                    )
+                    _merged_meta = {
+                        "transport": transport,
+                        "enforced_at": "gateway",
+                        "scan_action": _scan_action,
+                        "scan_pipeline": "two_tier",
+                        "monitored": _monitored,
+                        "scan_trace": _merged_trace_base + list(_scan_meta_out2.get("scan_trace") or []),
+                    }
+                    if _out_blocked2:
                         await _record_gateway_event(
                             org_slug=org_slug,
                             server_slug=server_slug,
                             tool_name=tool_name,
-                            decision=("redact" if _presidio_action == "redact" and _out_findings2 else "allow"),
-                            reason="presidio_findings",
+                            decision="block",
+                            reason="pii_blocked_outbound",
+                            request_id=_req_id,
                             latency_ms=int((time.time() - call_t0) * 1000),
-                            metadata={
-                                "transport": transport,
-                                "enforced_at": "gateway",
-                                "presidio_action": _presidio_action,
-                            },
+                            metadata=_merged_meta,
                             compliance_tags=_out_tags2,
-                            presidio_findings=_out_findings2,
+                            scan_findings=_out_findings2,
                         )
+                        return JSONResponse(
+                            content={
+                                "jsonrpc": jsonrpc,
+                                "id": msg_id,
+                                "result": {
+                                    "content": [{
+                                        "type": "text",
+                                        "text": (
+                                            f"[BLOCKED] Response from '{tool_name}' matched "
+                                            f"compliance tags: {', '.join(_out_tags2) or 'PII'}."
+                                        ),
+                                    }],
+                                    "isError": True,
+                                },
+                            },
+                            status_code=200,
+                        )
+                    # The orchestrator already applied any per-tier redaction and
+                    # returns the mutated content; swap it in whenever it changed.
+                    _was_redacted = _in_redacted or (_scanned_content is not result_content)
+                    if _scanned_content is not result_content:
+                        result_content = _scanned_content
+                    # Decision precedence: block (handled above) > redact > monitor > allow.
+                    _decision = (
+                        "redact" if _was_redacted
+                        else ("monitor" if _monitored else "allow")
+                    )
+                    # Always record exactly one audit event per call (incl. clean allow),
+                    # so every scanned call is provably auditable, not just findings.
+                    await _record_gateway_event(
+                        org_slug=org_slug,
+                        server_slug=server_slug,
+                        tool_name=tool_name,
+                        decision=_decision,
+                        reason=("scan_findings" if _out_findings2 else "clean"),
+                        request_id=_req_id,
+                        latency_ms=int((time.time() - call_t0) * 1000),
+                        metadata=_merged_meta,
+                        compliance_tags=_out_tags2,
+                        scan_findings=_out_findings2,
+                    )
 
                     if isinstance(result_content, list):
                         content = result_content
@@ -1471,26 +1603,27 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         status_code=200,
                     )
                 else:
-                    # DECISION-D Phase 1: record inbound Presidio findings even
-                    # when the backend rejects the tool call, so audit history
-                    # captures the PII attempt regardless of upstream success.
-                    if _inbound_tags or _inbound_findings:
-                        await _record_gateway_event(
-                            org_slug=org_slug,
-                            server_slug=server_slug,
-                            tool_name=tool_name,
-                            decision="error",
-                            reason=f"backend_error_http_{resp.status_code}",
-                            latency_ms=int((time.time() - call_t0) * 1000),
-                            metadata={
-                                "transport": transport,
-                                "enforced_at": "gateway",
-                                "presidio_direction": "inbound",
-                                "presidio_action": _presidio_action,
-                            },
-                            compliance_tags=_inbound_tags,
-                            presidio_findings=_inbound_findings,
-                        )
+                    # Record the failed call too, so audit history captures the
+                    # attempt (and any inbound findings) regardless of success.
+                    await _record_gateway_event(
+                        org_slug=org_slug,
+                        server_slug=server_slug,
+                        tool_name=tool_name,
+                        decision="error",
+                        reason=f"backend_error_http_{resp.status_code}",
+                        request_id=_req_id,
+                        latency_ms=int((time.time() - call_t0) * 1000),
+                        metadata={
+                            "transport": transport,
+                            "enforced_at": "gateway",
+                            "scan_direction": "inbound",
+                            "scan_action": _scan_action,
+                            "scan_pipeline": "two_tier",
+                            "scan_trace": list(_scan_meta_in.get("scan_trace") or []),
+                        },
+                        compliance_tags=_inbound_tags,
+                        scan_findings=_inbound_findings,
+                    )
                     return JSONResponse(
                         content={
                             "jsonrpc": jsonrpc,

@@ -33,7 +33,9 @@ def record_mcp_event_task(payload: dict) -> str:
         request_id=payload.get("request_id", ""),
         metadata=payload.get("metadata") or {},
         compliance_tags=payload.get("compliance_tags") or [],
-        presidio_findings=payload.get("presidio_findings") or [],
+        # Accept the new ``scan_findings`` key, falling back to the legacy
+        # ``presidio_findings`` for in-flight envelopes during the rename window.
+        scan_findings=payload.get("scan_findings") or payload.get("presidio_findings") or [],
     )
     logger.info("record_mcp_event_task created MCPEvent id=%s", event.id)
     return str(event.id)

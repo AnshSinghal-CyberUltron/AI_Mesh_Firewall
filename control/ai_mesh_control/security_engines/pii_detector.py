@@ -1,9 +1,9 @@
 """
 PII/PHI/PCI Detector using regex patterns.
 
-Lightweight replacement for Presidio-based detection. Detects structured sensitive
-data (SSN, credit cards, emails, etc.) with regex. Semantic PII (person names in
-unstructured text, locations) is deferred to Bedrock Tier-2 scanning.
+Lightweight regex-based detection of structured sensitive data (SSN, credit
+cards, emails, etc.). Semantic PII (person names in unstructured text,
+locations) is deferred to Bedrock Tier-2 scanning.
 """
 
 from __future__ import annotations
@@ -95,9 +95,8 @@ class PIIDetector:
     """
     Regex-based PII/PHI/PCI detection.
 
-    Drop-in replacement for the former Presidio-based detector. Maintains
-    the same PIIResult interface so callers (integrated_scanner, risk_scorer)
-    require zero changes.
+    Exposes a stable PIIResult interface so callers (integrated_scanner,
+    risk_scorer) require zero changes.
     """
 
     def __init__(self) -> None:

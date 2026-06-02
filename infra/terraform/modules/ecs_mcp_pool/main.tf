@@ -12,23 +12,69 @@
 #   * an EFS volume for per-org OAuth tokens (MCP_REMOTE_CONFIG_DIR).
 ###############################################################################
 
-variable "name"               { type = string }
-variable "cluster_arn"        { type = string }
-variable "subnet_ids"         { type = list(string) }
-variable "security_group_id"  { type = string }
-variable "data_subnet_ids"    { type = list(string) }
-variable "image"              { type = string }
-variable "capacity_provider"  { type = string }
-variable "execution_role_arn" { type = string }
-variable "task_role_arn"      { type = string }
-variable "region"             { type = string }
-variable "log_group"          { type = string }
-variable "environment"        { type = map(string), default = {} }
-variable "secret_arns"        { type = map(string), default = {} }
-variable "cpu"                { type = number, default = 2048 }
-variable "memory"             { type = number, default = 6144 }
-variable "desired_count"      { type = number, default = 2 }
-variable "tags"               { type = map(string), default = {} }
+variable "name" {
+
+  type = string
+
+}
+variable "cluster_arn" {
+  type = string
+}
+variable "subnet_ids" {
+  type = list(string)
+}
+variable "security_group_id" {
+  type = string
+}
+variable "data_subnet_ids" {
+  type = list(string)
+}
+variable "image" {
+  type = string
+}
+variable "capacity_provider" {
+  type = string
+}
+variable "execution_role_arn" {
+  type = string
+}
+variable "task_role_arn" {
+  type = string
+}
+variable "region" {
+  type = string
+}
+variable "log_group" {
+  type = string
+}
+variable "environment" {
+  type = map(string)
+
+  default = {
+}
+}
+variable "secret_arns" {
+  type = map(string)
+  default = {
+}
+}
+variable "cpu" {
+  type = number
+  default = 2048
+}
+variable "memory" {
+  type = number
+  default = 6144
+}
+variable "desired_count" {
+  type = number
+  default = 2
+}
+variable "tags" {
+  type = map(string)
+  default = {
+}
+}
 
 # ── EFS for warm caches + OAuth tokens ──
 resource "aws_efs_file_system" "mcp" {

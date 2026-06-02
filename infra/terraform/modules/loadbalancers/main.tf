@@ -9,13 +9,37 @@
 # WAF (avoids added latency + per-request WAF cost on the high-volume path).
 ###############################################################################
 
-variable "name"               { type = string }
-variable "vpc_id"             { type = string }
-variable "public_subnet_ids" { type = list(string) }
-variable "nlb_sg_id"         { type = string }
-variable "alb_sg_id"         { type = string }
-variable "certificate_arn"   { type = string } # ACM cert for both LBs
-variable "tags"              { type = map(string), default = {} }
+variable "name" {
+
+  type = string
+
+}
+variable "vpc_id" {
+  type = string
+}
+variable "public_subnet_ids" {
+  type = list(string)
+}
+variable "nlb_sg_id" {
+  type = string
+}
+variable "alb_sg_id" {
+  type = string
+}
+variable "certificate_arn" {
+  type = string
+} # ACM cert for both LBs
+variable "control_idle_timeout" {
+  type = number
+  description = "ALB idle timeout (seconds) for long-lived admin/SSE streams"
+  default     = 4000
+}
+variable "tags" {
+  type = map(string)
+
+  default = {
+}
+}
 
 ###############################################################################
 # Data-plane NLB → gateway target group (IP targets for Fargate)
@@ -73,7 +97,7 @@ resource "aws_lb" "control" {
   load_balancer_type = "application"
   subnets            = var.public_subnet_ids
   security_groups    = [var.alb_sg_id]
-  idle_timeout       = 120
+  idle_timeout       = var.control_idle_timeout
   tags               = merge(var.tags, { Name = "${var.name}-alb" })
 }
 

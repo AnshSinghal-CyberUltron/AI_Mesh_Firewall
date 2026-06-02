@@ -9,7 +9,7 @@ writing a regex by hand. The SAME catalogue is used by:
   * live MCP tool-call enforcement (`mcp_connector.views`)
 
 so what the operator previews in the Simulator is exactly what the
-gateway enforces — no ML/Presidio drift between preview and production.
+gateway enforces — no ML/engine drift between preview and production.
 
 Each preset exposes:
 

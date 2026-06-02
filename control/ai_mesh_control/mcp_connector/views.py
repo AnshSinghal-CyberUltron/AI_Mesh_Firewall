@@ -29,11 +29,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import mcp_firewall_client
-from .models import MCPEvent, MCPServerRegistration, MCPToolRegistration
+from .models import MCPEvent, MCPServerRegistration, MCPScanControl, MCPToolRegistration
+from .scan_controls import resolve_effective_controls, serialize_control
 from .serializers import (
     MCPEventSerializer,
     MCPServerCreateSerializer,
     MCPServerRegistrationSerializer,
+    MCPScanControlSerializer,
     MCPToolRegistrationSerializer,
 )
 
@@ -807,8 +809,25 @@ class MCPToolCallView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-        request_id = str(uuid_mod.uuid4())[:16]
+        # Prefer the gateway-forwarded stable id so gateway + control rows for the
+        # same call correlate; fall back to a fresh id for direct API callers.
+        request_id = (
+            (request.headers.get("X-Request-Id", "") or "").strip()
+            or str(uuid_mod.uuid4())[:16]
+        )[:64]
         t0 = time.time()
+
+        # De-dup: a gateway-originated tool call is recorded once by the gateway
+        # data plane (with the full two-tier scan_trace) via /internal/record-event/.
+        # Shadow _record_event locally so this view SKIPS the duplicate control-plane
+        # MCPEvent for those calls; direct (non-gateway) API callers still record.
+        _gateway_originated = _is_gateway_internal_request(request)
+        _record_event_impl = globals()["_record_event"]
+
+        def _record_event(*_a, **_kw):  # noqa: A001 — intentional local shadow
+            if _gateway_originated:
+                return None
+            return _record_event_impl(*_a, **_kw)
 
         # ── Tool enable/disable check ──
         tool_reg_qs = MCPToolRegistration.objects.filter(
@@ -983,13 +1002,39 @@ class MCPToolCallView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # Resolve the per-tier INPUT action from the MCPScanControl matrix (the
+        # SAME source the gateway uses) so the control-plane input path honors
+        # the operator's per-tier posture. 'monitor' = observe-only: the gateway
+        # has already enforced the matrix on input, so the control plane must NOT
+        # additionally mutate the arguments under a monitor posture.
+        _input_action = "inherit"
+        try:
+            from mcp_connector.scan_controls import (
+                resolve_effective_controls as _resolve_ctrls,
+                serialize_control as _ser_ctrl,
+            )
+            _in_rows = [
+                _ser_ctrl(c) for c in MCPScanControl.objects.filter(organization=org)
+            ]
+            _in_eff = _resolve_ctrls(
+                _in_rows,
+                server_id=str(resolved_server.id) if resolved_server else None,
+                tool_name=tool_name,
+            )
+            _input_action = ((_in_eff.get("tier1_input") or {}).get("action") or "inherit")
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "mcp_connector.tool.input_action_resolve_failed org=%s tool=%s err=%s",
+                org.id, tool_name, exc,
+            )
+
         # ── INPUT redaction: scrub sensitive data OUT of the tool arguments
         # BEFORE they are forwarded to the gateway/tool. Driven by redact
-        # rules whose direction includes the input side (input|both). This
-        # prevents secrets in the prompt from ever reaching the downstream
-        # tool. ``arguments`` is replaced with a redacted copy used for the
+        # rules whose direction includes the input side (input|both). Skipped
+        # under a 'monitor' posture (observe-only — the matrix said detect, not
+        # mutate). ``arguments`` is replaced with a redacted copy used for the
         # actual call; the original is not mutated.
-        if eval_result.action != "block" and eval_result.redaction_hints:
+        if _input_action != "monitor" and eval_result.action != "block" and eval_result.redaction_hints:
             try:
                 redacted_args = redact_structured(
                     arguments or {}, eval_result.redaction_hints, "input"
@@ -1135,20 +1180,8 @@ class MCPToolCallView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Output REDACTION: scrub the response via output-direction redact
-        # rules (regex/keyword for entire-scope, key replacement for
-        # scope='key'). Union of both input/both/output hints handled inside.
-        if eval_out is not None and eval_out.redaction_hints:
-            try:
-                result = redact_structured(result, eval_out.redaction_hints, "output")
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning(
-                    "mcp_connector.tool.output_redaction_failed org=%s tool=%s err=%s",
-                    org.id, tool_name, exc,
-                )
-
         # Merge output-stage matches into the aggregate result used for
-        # event logging / G7 field-union below.
+        # event logging / G7 field-union and the block decision below.
         if eval_out is not None:
             eval_result.matched_policy_ids = list(
                 dict.fromkeys(eval_result.matched_policy_ids + eval_out.matched_policy_ids)
@@ -1160,15 +1193,52 @@ class MCPToolCallView(APIView):
                 dict.fromkeys(eval_result.matched_rule_names + eval_out.matched_rule_names)
             )
 
-        # ── G7: response-field redaction. Union of ``redaction_fields``
-        # from every matched policy is applied recursively to the tool
-        # result. The trigger condition (per adopted decision D6) is
-        # simply "policy matched AND has non-empty redaction_fields" —
-        # we deliberately do NOT gate on ``eval_result.action == 'redact'``
-        # because field redaction is an output-shaping concern that is
-        # orthogonal to the block/allow/redact verdict. If no matched
-        # policy lists any fields, this is a no-op and ``result`` flows
-        # through unchanged.
+        # ── Resolve effective scan enforcement (per-tool override → server
+        #    default → 'tag'). 'block' is a FLOOR: detected OUTPUT PII BLOCKS the
+        #    call instead of being silently redacted-and-allowed. This is the A4
+        #    fix for the streamable-http path: the gateway's outbound scan only
+        #    ever sees the POST-redaction response, so the block decision must be
+        #    made here, where the raw tool output and the policy match coexist.
+        _tool_action = getattr(tool_reg, "scan_action", "inherit") if tool_reg else "inherit"
+        if _tool_action and _tool_action != "inherit":
+            _scan_action = _tool_action
+        elif resolved_server is not None:
+            _scan_action = getattr(resolved_server, "default_scan_action", "tag") or "tag"
+        else:
+            _scan_action = "tag"
+        # Source the action from the MCPScanControl matrix (tier1_output) — the
+        # SAME source the gateway uses — so control-plane and gateway never
+        # split-brain on the output decision. 'inherit' (or no row) keeps the
+        # per-tool/server fallback resolved just above.
+        try:
+            from mcp_connector.scan_controls import (
+                resolve_effective_controls,
+                serialize_control,
+            )
+            _scan_rows = [
+                serialize_control(c)
+                for c in MCPScanControl.objects.filter(organization=org)
+            ]
+            _eff_ctrls = resolve_effective_controls(
+                _scan_rows,
+                server_id=str(resolved_server.id) if resolved_server else None,
+                tool_name=tool_name,
+            )
+            _row_action = ((_eff_ctrls.get("tier1_output") or {}).get("action") or "inherit")
+            if _row_action and _row_action != "inherit":
+                _scan_action = _row_action
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "mcp_connector.tool.scan_control_action_resolve_failed org=%s tool=%s err=%s",
+                org.id, tool_name, exc,
+            )
+
+        # ── G7: compute the response-field redaction union (recursively over the
+        # tool result). Trigger (per decision D6) is "policy matched AND has
+        # non-empty redaction_fields" — NOT gated on action == 'redact', because
+        # field redaction is an output-shaping concern orthogonal to the verdict.
+        # We compute the field set FIRST (without mutating ``result``) so the
+        # block-vs-redact decision below can see whether output PII was found.
         redacted_field_names: list[str] = []
         if eval_result.matched_policy_ids:
             try:
@@ -1181,7 +1251,67 @@ class MCPToolCallView(APIView):
                         fields_union.update(f for f in fields if isinstance(f, str) and f)
                 if fields_union:
                     redacted_field_names = sorted(fields_union)
-                    result = apply_field_redaction(result, redacted_field_names)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "mcp_connector.tool.field_redaction_failed org=%s tool=%s err=%s",
+                    org.id, tool_name, exc,
+                )
+
+        _output_pii_detected = bool(
+            (eval_out is not None and (eval_out.matched_rule_ids or eval_out.redaction_hints))
+            or redacted_field_names
+        )
+        if _scan_action == "block" and _output_pii_detected:
+            latency_ms = int((time.time() - t0) * 1000)
+            mcp_firewall_client.postflight_audit(
+                tool_name, org_id=str(org.id), user_id=str(actor_user_id or ""),
+                decision="block", success=False, latency_ms=latency_ms,
+                server_name=resolved_server.name if resolved_server else "",
+            )
+            _record_event(
+                org=org, request=request, tool_name=tool_name,
+                decision="block", reason="pii_blocked_outbound", request_id=request_id,
+                latency_ms=latency_ms,
+                server_name=resolved_server.name if resolved_server else "",
+                server_slug=resolved_server.server_slug if resolved_server else "",
+                policy_ids=eval_result.matched_policy_ids,
+                metadata={
+                    "matched_policy_codes": list(eval_result.matched_policy_codes or []),
+                    "matched_rule_names": list(eval_result.matched_rule_names or []),
+                    "redacted_field_names": redacted_field_names,
+                    "scan_action": _scan_action,
+                    "stage": "output",
+                },
+            )
+            return Response(
+                {
+                    "blocked": True,
+                    "decision": "block",
+                    "detail": (
+                        f"Response from '{tool_name}' withheld: output matched a "
+                        f"compliance policy under a 'block' enforcement posture."
+                    ),
+                    "matched_policies": list(eval_result.matched_policy_codes or []),
+                    "request_id": request_id,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # 'monitor' posture: detect + audit but DO NOT mutate (observe-only).
+        # Anything else (redact / tag / inherit-fallback) applies the prior
+        # output redaction (output-direction hints then G7 field redaction).
+        _output_monitor = _scan_action == "monitor" and _output_pii_detected
+        if eval_out is not None and eval_out.redaction_hints and not _output_monitor:
+            try:
+                result = redact_structured(result, eval_out.redaction_hints, "output")
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "mcp_connector.tool.output_redaction_failed org=%s tool=%s err=%s",
+                    org.id, tool_name, exc,
+                )
+        if redacted_field_names and not _output_monitor:
+            try:
+                result = apply_field_redaction(result, redacted_field_names)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning(
                     "mcp_connector.tool.field_redaction_failed org=%s tool=%s err=%s",
@@ -1189,14 +1319,17 @@ class MCPToolCallView(APIView):
                 )
 
         # ── POST-FLIGHT: audit record ──
+        # decision='monitor' when a monitor-posture control detected output PII
+        # (observe-only: allowed, unmutated, audited); else 'allow'.
+        _final_decision = "monitor" if _output_monitor else "allow"
         mcp_firewall_client.postflight_audit(
             tool_name, org_id=str(org.id), user_id=str(actor_user_id or ""),
-            decision="allow", success=True, latency_ms=latency_ms,
+            decision=_final_decision, success=True, latency_ms=latency_ms,
             server_name=resolved_server.name if resolved_server else "",
         )
         _record_event(
             org=org, request=request, tool_name=tool_name,
-            decision="allow", request_id=request_id, latency_ms=latency_ms,
+            decision=_final_decision, request_id=request_id, latency_ms=latency_ms,
             server_name=resolved_server.name if resolved_server else "",
             server_slug=resolved_server.server_slug if resolved_server else "",
             policy_ids=eval_result.matched_policy_ids,
@@ -1204,16 +1337,18 @@ class MCPToolCallView(APIView):
                 "matched_policy_codes": list(eval_result.matched_policy_codes or []),
                 "matched_rule_names": list(eval_result.matched_rule_names or []),
                 "redacted_field_names": redacted_field_names,
+                "scan_action": _scan_action,
+                "monitored": _output_monitor,
                 "actor_agent_id": agent_id,
                 "actor_roles": actor_roles,
             },
         )
 
         logger.info(
-            "mcp_connector.tool.called org_id=%s user_id=%s agent=%s tool=%s success=true latency_ms=%s redacted_fields=%s",
-            org.id, actor_user_id, agent_id, tool_name, latency_ms, redacted_field_names,
+            "mcp_connector.tool.called org_id=%s user_id=%s agent=%s tool=%s success=true latency_ms=%s decision=%s redacted_fields=%s",
+            org.id, actor_user_id, agent_id, tool_name, latency_ms, _final_decision, redacted_field_names,
         )
-        return Response({"result": result, "request_id": request_id, "decision": "allow"})
+        return Response({"result": result, "request_id": request_id, "decision": _final_decision})
 
 
 # ── Helper: Record structured MCP event ──────────────────────────────
@@ -1232,7 +1367,7 @@ def _record_event(
     server_slug: str = "",
     metadata: dict | None = None,
     compliance_tags: list | None = None,
-    presidio_findings: list | None = None,
+    scan_findings: list | None = None,
 ):
     """Write a structured MCPEvent record.
 
@@ -1287,7 +1422,7 @@ def _record_event(
             request_id=request_id,
             metadata=ev_metadata,
             compliance_tags=compliance_tags or [],
-            presidio_findings=presidio_findings or [],
+            scan_findings=scan_findings or [],
         )
 
         # ── Mirror to EnforcementEvent so AI Mesh Firewall dashboard
@@ -1379,6 +1514,7 @@ def _record_event(
                     "source": "mcp_scan",
                     "threat_category": _threat_category,
                     "owasp_code": _owasp,
+                    "owasp_codes": [_owasp] if _owasp else [],
                     "decision": decision,
                     "reason": reason or "",
                     "tool_name": tool_name,
@@ -1516,15 +1652,80 @@ class MCPToolControlView(APIView):
             allowed = [c[0] for c in MCPToolRegistration.SENSITIVITY_CHOICES]
             if request.data["sensitivity"] in allowed:
                 tool.sensitivity = request.data["sensitivity"]
-        if "presidio_action" in request.data:
+        # Accept the new ``scan_action`` key (and the legacy ``presidio_action``
+        # during the rename window) for the per-tool enforcement override.
+        _scan_action = request.data.get("scan_action", request.data.get("presidio_action"))
+        if _scan_action is not None:
             allowed_actions = {"inherit", "tag", "redact", "block"}
-            if request.data["presidio_action"] in allowed_actions:
-                tool.presidio_action = request.data["presidio_action"]
+            if _scan_action in allowed_actions:
+                tool.scan_action = _scan_action
         tool.save()
         return Response(MCPToolRegistrationSerializer(tool).data)
 
 
 # ── Gateway-internal: enable/disable enforcement helpers ─────────────
+
+
+class MCPScanControlListCreateView(APIView):
+    """List or create MCP scan controls for the current organization."""
+
+    permission_classes = [IsAuthenticatedOrGatewayInternal]
+
+    def get(self, request):
+        org = _request_org(request)
+        if org is None:
+            return Response({"error": "No organization context."}, status=status.HTTP_400_BAD_REQUEST)
+        qs = MCPScanControl.objects.filter(organization=org).select_related("server")
+        server_id = request.query_params.get("server_id")
+        if server_id:
+            qs = qs.filter(server_id=server_id)
+        return Response(MCPScanControlSerializer(qs, many=True).data)
+
+    def post(self, request):
+        org = _request_org(request)
+        if org is None:
+            return Response({"error": "No organization context."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = MCPScanControlSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save(organization=org)
+        return Response(MCPScanControlSerializer(instance).data, status=status.HTTP_201_CREATED)
+
+
+class MCPScanControlDetailView(APIView):
+    """Retrieve, update, or delete a single MCP scan control."""
+
+    permission_classes = [IsAuthenticatedOrGatewayInternal]
+
+    def _get_object(self, request, pk):
+        org = _request_org(request)
+        if org is None:
+            return None, Response({"error": "No organization context."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            return MCPScanControl.objects.select_related("server").get(pk=pk, organization=org), None
+        except MCPScanControl.DoesNotExist:
+            return None, Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def get(self, request, pk):
+        obj, err = self._get_object(request, pk)
+        if err:
+            return err
+        return Response(MCPScanControlSerializer(obj).data)
+
+    def patch(self, request, pk):
+        obj, err = self._get_object(request, pk)
+        if err:
+            return err
+        serializer = MCPScanControlSerializer(obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(MCPScanControlSerializer(obj).data)
+
+    def delete(self, request, pk):
+        obj, err = self._get_object(request, pk)
+        if err:
+            return err
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class MCPGatewayEnabledToolsView(APIView):
@@ -1573,27 +1774,69 @@ class MCPGatewayEnabledToolsView(APIView):
             )
 
         regs = list(MCPToolRegistration.objects.filter(server=server).values(
-            "tool_name", "enabled", "presidio_action",
+            "tool_name", "enabled", "scan_action",
         ))
         known = [r["tool_name"] for r in regs]
         enabled = [r["tool_name"] for r in regs if r["enabled"]]
         disabled = [r["tool_name"] for r in regs if not r["enabled"]]
-        # DECISION-D Phase 1: surface per-tool Presidio action overrides plus the
-        # server-level fallback so the gateway can decide per call without an
-        # extra round-trip. Tools with "inherit" are omitted from tool_actions.
+        # Surface per-tool scan-action overrides plus the server-level fallback so
+        # the gateway can decide per call without an extra round-trip. Tools with
+        # "inherit" are omitted from tool_actions.
         tool_actions = {
-            r["tool_name"]: r["presidio_action"]
+            r["tool_name"]: r["scan_action"]
             for r in regs
-            if r.get("presidio_action") and r["presidio_action"] != "inherit"
+            if r.get("scan_action") and r["scan_action"] != "inherit"
         }
+
+        scan_rows = [
+            serialize_control(c)
+            for c in MCPScanControl.objects.filter(organization=org)
+        ]
+        effective_by_tool: dict[str, dict] = {}
+        for tool in known:
+            effective_by_tool[tool] = resolve_effective_controls(
+                scan_rows,
+                server_id=str(server.id),
+                tool_name=tool,
+            )
+        org_effective = resolve_effective_controls(
+            scan_rows,
+            server_id=str(server.id),
+            tool_name="",
+        )
+
+        mcp_tier2_enabled = None
+        tier2_strict = True
+        try:
+            from core.models import FirewallConfig
+
+            fw = FirewallConfig.objects.filter(organization=org).first()
+            if fw is not None:
+                mcp_tier2_enabled = fw.mcp_tier2_enabled
+                tier2_strict = fw.tier2_strict
+        except Exception:
+            pass
+
         return Response({
             "server_slug": server_slug,
             "server_name": server.name,
+            "server_id": str(server.id),
             "known_tools": known,
             "enabled_tools": enabled,
             "disabled_tools": disabled,
-            "default_presidio_action": server.default_presidio_action,
+            # New engine-agnostic keys; legacy presidio_* aliases retained so a
+            # gateway running mid-rename (reading from its <=30s cache) never
+            # fails open to "tag". Remove the aliases once all gateways are updated.
+            "default_scan_action": server.default_scan_action,
+            "tool_scan_actions": tool_actions,
+            "default_presidio_action": server.default_scan_action,
             "tool_presidio_actions": tool_actions,
+            "scan_controls": scan_rows,
+            "scan_controls_configured": True,
+            "effective_scan_controls": org_effective,
+            "effective_scan_controls_by_tool": effective_by_tool,
+            "mcp_tier2_enabled": mcp_tier2_enabled,
+            "tier2_strict": tier2_strict,
         })
 
 
@@ -1627,7 +1870,11 @@ class MCPGatewayRecordEventView(APIView):
             )
         data = request.data or {}
         decision = (data.get("decision") or "").strip().lower()
-        if decision not in ("allow", "block", "redact", "error"):
+        # Validate against the model's own decision choices so this allow-list
+        # never drifts again when a new decision (e.g. 'monitor') is added to
+        # MCPEvent.DECISION_CHOICES.
+        _valid_decisions = {c[0] for c in MCPEvent._meta.get_field("decision").choices}
+        if decision not in _valid_decisions:
             return Response(
                 {"error": "invalid decision"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1654,7 +1901,7 @@ class MCPGatewayRecordEventView(APIView):
             server_slug=server_slug,
             metadata=data.get("metadata") or {},
             compliance_tags=data.get("compliance_tags") or [],
-            presidio_findings=data.get("presidio_findings") or [],
+            scan_findings=data.get("scan_findings") or data.get("presidio_findings") or [],
         )
         return Response({"recorded": True}, status=status.HTTP_201_CREATED)
 

@@ -375,6 +375,7 @@ def _build_safe_block_response(
     request_id: str | None = None,
     internal_detail: str | None = None,
     detection_tier: str = "",
+    pipeline_trace: dict | None = None,
 ) -> JSONResponse:
     """
     Build a client-safe error response for policy blocks.
@@ -423,19 +424,19 @@ def _build_safe_block_response(
         threat_category=threat_category,
         detection_tier=detection_tier,
     )
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "error": "blocked",
-            "message": message,
-            "code": code,
-            "request_id": _request_id,  # For support inquiries only
-            "category": threat_category,  # Generic: NOT specific threat type
-            "blocked_by": blocked_by,
-            "detection_tier": detection_tier or "",
-            "pipeline_stage": blocked_by,
-        },
-    )
+    content = {
+        "error": "blocked",
+        "message": message,
+        "code": code,
+        "request_id": _request_id,  # For support inquiries only
+        "category": threat_category,  # Generic: NOT specific threat type
+        "blocked_by": blocked_by,
+        "detection_tier": detection_tier or "",
+        "pipeline_stage": blocked_by,
+    }
+    if pipeline_trace:
+        content["pipeline_trace"] = pipeline_trace
+    return JSONResponse(status_code=status_code, content=content)
 
 
 def _redact_for_client_response(zeroshield_dict: dict | None) -> dict | None:
@@ -446,8 +447,35 @@ def _redact_for_client_response(zeroshield_dict: dict | None) -> dict | None:
     if not zeroshield_dict or not isinstance(zeroshield_dict, dict):
         return None
     
-    # KEEP ONLY:
-    safe_fields = {"request_id", "action", "detection_tier", "processing_time_ms"}
+    # Operator dashboard fields (Module 1.1 simulator) — no raw prompts/responses.
+    safe_fields = {
+        "request_id",
+        "action",
+        "detection_tier",
+        "processing_time_ms",
+        "reason",
+        "detail",
+        "threat_type",
+        "confidence",
+        "matched_patterns",
+        "routing_reason",
+        "decision_source",
+        "policy_summary",
+        "decision_factors",
+        "weights",
+        "selected_model",
+        "original_model",
+        "routed_model",
+        "rerouted",
+        "routing",
+        "reason_code",
+        "guard_reason",
+        "guard_action",
+        "guard_model",
+        "recommended_action",
+        "guard_findings",
+        "enforcement_source",
+    }
     redacted = {k: v for k, v in zeroshield_dict.items() if k in safe_fields}
     
     # DO NOT include:
@@ -1368,16 +1396,43 @@ def _build_block_response(
     status_code: int,
     code: str,
     zeroshield: dict,
+    *,
+    stage_metrics: dict | None = None,
+    prompt: str = "",
+    route_metadata: dict | None = None,
+    requested_model: str = "",
+    scan_verdict=None,
+    output_scan_verdict=None,
 ) -> JSONResponse:
     """
     Build a unified blocked JSONResponse with zeroshield metadata.
     CRITICAL: Uses _build_safe_block_response to NEVER expose sensitive details.
     In zeroshield dict: extracts threat category, redacts internal details, and keeps only safe metadata.
     """
+    from pipeline_trace import build_pipeline_trace
+
     threat_category = zeroshield.get("threat_type", "policy_violation")
     request_id = zeroshield.get("request_id")
     internal_detail = zeroshield.get("detail")  # Will be logged server-side only
     detection_tier = str(zeroshield.get("detection_tier") or "")
+    blocked_stage = _resolve_pipeline_blocked_by(
+        code=code,
+        threat_category=threat_category,
+        detection_tier=detection_tier,
+    )
+    pipeline_trace = build_pipeline_trace(
+        prompt=prompt,
+        stage_metrics=stage_metrics,
+        final_action="block",
+        blocked_stage=blocked_stage,
+        http_status=status_code,
+        scan_verdict=scan_verdict,
+        zeroshield=zeroshield,
+        route_metadata=route_metadata,
+        blocked_detail=internal_detail or "",
+        requested_model=requested_model,
+        output_scan_verdict=output_scan_verdict,
+    )
 
     return _build_safe_block_response(
         status_code=status_code,
@@ -1386,6 +1441,7 @@ def _build_block_response(
         request_id=request_id,
         internal_detail=internal_detail,
         detection_tier=detection_tier,
+        pipeline_trace=pipeline_trace,
     )
 
 
@@ -1471,6 +1527,18 @@ def _org_audit_logging_enabled() -> bool:
     except Exception:  # noqa: BLE001 — never let the audit gate break the hot path
         pass
     return bool(CONFIG.get("telemetry_enabled", True))
+
+
+def _telemetry_owasp_metadata(threat_type: str = "", *, verdict=None, extra: dict | None = None) -> dict:
+    """Resolve OWASP vector codes for gateway telemetry metadata."""
+    from ai_mesh_shared.owasp_telemetry import resolve_owasp_codes
+
+    payload = dict(extra or {})
+    codes_from_verdict = list(getattr(verdict, "owasp_codes", None) or [])
+    if codes_from_verdict:
+        payload.setdefault("owasp_codes", codes_from_verdict)
+    codes = resolve_owasp_codes(threat_type or "", payload)
+    return {"owasp_codes": codes} if codes else {}
 
 
 def _emit_telemetry(status_code: int = 200, **kwargs):
@@ -3374,17 +3442,26 @@ async def proxy_chat(
                             "reason_code": getattr(verdict, "reason_code", ""),
                         },
                     )
-                    return _build_block_response(403, "tier2_degraded", _build_zeroshield_metadata(
-                        action="block",
-                        reason="Tier-2 Bedrock scanner degraded; fail-closed policy blocked the request.",
-                        detection_tier=verdict.tier,
-                        threat_type=verdict.threat_type,
-                        confidence=verdict.confidence,
-                        matched_patterns=verdict.matched_patterns,
-                        original_prompt=prompt,
-                        detail=verdict.detail,
-                        processing_time_ms=elapsed_ms,
-                    ))
+                    return _build_block_response(
+                        403,
+                        "tier2_degraded",
+                        _build_zeroshield_metadata(
+                            action="block",
+                            reason="Tier-2 Bedrock scanner degraded; fail-closed policy blocked the request.",
+                            detection_tier=verdict.tier,
+                            threat_type=verdict.threat_type,
+                            confidence=verdict.confidence,
+                            matched_patterns=verdict.matched_patterns,
+                            original_prompt=prompt,
+                            detail=verdict.detail,
+                            processing_time_ms=elapsed_ms,
+                        ),
+                        stage_metrics=stage_metrics,
+                        prompt=prompt,
+                        route_metadata=route_metadata,
+                        requested_model=body.get("model", ""),
+                        scan_verdict=verdict,
+                    )
                 LOG.warning(
                     "MONITOR: Tier-2 degraded request allowed due to enforcement_mode=%s (user=%s)",
                     enforcement_mode,
@@ -3430,6 +3507,7 @@ async def proxy_chat(
                         "detail": verdict.detail,
                         "confidence": verdict.confidence,
                         "matched_patterns": verdict.matched_patterns,
+                        **_telemetry_owasp_metadata(verdict.threat_type, verdict=verdict),
                     },
                     prompt_snippet=_prompt_snippet,
                     endpoint_id=endpoint_id,
@@ -3456,17 +3534,26 @@ async def proxy_chat(
                             "matched_patterns": verdict.matched_patterns,
                         },
                     )
-                    return _build_block_response(403, "content_blocked", _build_zeroshield_metadata(
-                        action="block",
-                        reason=f"{tier_label} scanner detected {verdict.threat_type}: {verdict.detail}",
-                        detection_tier=verdict.tier,
-                        threat_type=verdict.threat_type,
-                        confidence=verdict.confidence,
-                        matched_patterns=verdict.matched_patterns,
-                        original_prompt=prompt,
-                        processing_time_ms=elapsed_ms,
-                        intent=_request_intent,
-                    ))
+                    return _build_block_response(
+                        403,
+                        "content_blocked",
+                        _build_zeroshield_metadata(
+                            action="block",
+                            reason=f"{tier_label} scanner detected {verdict.threat_type}: {verdict.detail}",
+                            detection_tier=verdict.tier,
+                            threat_type=verdict.threat_type,
+                            confidence=verdict.confidence,
+                            matched_patterns=verdict.matched_patterns,
+                            original_prompt=prompt,
+                            processing_time_ms=elapsed_ms,
+                            intent=_request_intent,
+                        ),
+                        stage_metrics=stage_metrics,
+                        prompt=prompt,
+                        route_metadata=route_metadata,
+                        requested_model=body.get("model", ""),
+                        scan_verdict=verdict,
+                    )
                 else:
                     LOG.warning(
                         "MONITOR: would block %s (confidence=%.2f, user=%s)",
@@ -3957,6 +4044,7 @@ async def proxy_chat(
         # ── Output guard (non-streaming) ──
         # Respect per-org master toggle (response_filtering_enabled → output_scan_enabled)
         # in addition to the global GATEWAY_OUTPUT_GUARD_ENABLED env default.
+        output_verdict = None
         _output_guard_active = (
             OUTPUT_GUARD is not None
             and response_text
@@ -4036,7 +4124,15 @@ async def proxy_chat(
                     compliance_tags=output_verdict.compliance_tags,
                     pipeline_stage="generator",
                     latency_ms=(time.perf_counter() - start) * 1000,
-                    metadata={"detail": output_verdict.detail, "response_snippet": _raw_model_output, "raw_output": _raw_model_output, "sanitized_output": "[BLOCKED]", "guardrail_reasoning": output_verdict.detail, "matched_patterns": getattr(output_verdict, 'matched_patterns', [])},
+                    metadata={
+                        "detail": output_verdict.detail,
+                        "response_snippet": _raw_model_output,
+                        "raw_output": _raw_model_output,
+                        "sanitized_output": "[BLOCKED]",
+                        "guardrail_reasoning": output_verdict.detail,
+                        "matched_patterns": getattr(output_verdict, "matched_patterns", []),
+                        **_telemetry_owasp_metadata(output_verdict.threat_type),
+                    },
                     prompt_snippet=_prompt_snippet,
                     endpoint_id=endpoint_id,
                 )
@@ -4052,19 +4148,29 @@ async def proxy_chat(
                         "matched_patterns": getattr(output_verdict, "matched_patterns", []),
                     },
                 )
-                return _build_block_response(403, "output_blocked", _build_zeroshield_metadata(
-                    action="block",
-                    reason=f"Output guard detected {output_verdict.threat_type} in LLM response.",
-                    detection_tier="output_guard",
-                    threat_type=output_verdict.threat_type,
-                    confidence=getattr(output_verdict, 'confidence', 0.9),
-                    matched_patterns=getattr(output_verdict, 'matched_patterns', []),
-                    compliance_tags=getattr(output_verdict, 'compliance_tags', []),
-                    original_prompt=prompt,
-                    detail=output_verdict.detail,
-                    processing_time_ms=elapsed_ms,
-                    security_incident=True,
-                ))
+                return _build_block_response(
+                    403,
+                    "output_blocked",
+                    _build_zeroshield_metadata(
+                        action="block",
+                        reason=f"Output guard detected {output_verdict.threat_type} in LLM response.",
+                        detection_tier="output_guard",
+                        threat_type=output_verdict.threat_type,
+                        confidence=getattr(output_verdict, "confidence", 0.9),
+                        matched_patterns=getattr(output_verdict, "matched_patterns", []),
+                        compliance_tags=getattr(output_verdict, "compliance_tags", []),
+                        original_prompt=prompt,
+                        detail=output_verdict.detail,
+                        processing_time_ms=elapsed_ms,
+                        security_incident=True,
+                    ),
+                    stage_metrics=stage_metrics,
+                    prompt=prompt,
+                    route_metadata=route_metadata,
+                    requested_model=body.get("model", ""),
+                    scan_verdict=scan_verdict,
+                    output_scan_verdict=output_verdict,
+                )
             if output_verdict.action == "redact":
                 LOG.info("Output redaction triggered (type=%s, user=%s)", output_verdict.threat_type, user_id)
                 redacted_response = INPUT_SCANNER.redact_pii(response_text)
@@ -4097,7 +4203,15 @@ async def proxy_chat(
                     compliance_tags=output_verdict.compliance_tags,
                     pipeline_stage="generator",
                     latency_ms=(time.perf_counter() - start) * 1000,
-                    metadata={"detail": output_verdict.detail, "response_snippet": _raw_model_output, "raw_output": _raw_model_output, "sanitized_output": response_text[:500] if response_text else "", "guardrail_reasoning": output_verdict.detail, "matched_patterns": getattr(output_verdict, 'matched_patterns', [])},
+                    metadata={
+                        "detail": output_verdict.detail,
+                        "response_snippet": _raw_model_output,
+                        "raw_output": _raw_model_output,
+                        "sanitized_output": response_text[:500] if response_text else "",
+                        "guardrail_reasoning": output_verdict.detail,
+                        "matched_patterns": getattr(output_verdict, "matched_patterns", []),
+                        **_telemetry_owasp_metadata(output_verdict.threat_type),
+                    },
                     prompt_snippet=_prompt_snippet,
                     endpoint_id=endpoint_id,
                 )
@@ -4144,7 +4258,15 @@ async def proxy_chat(
                     compliance_tags=output_verdict.compliance_tags,
                     pipeline_stage="generator",
                     latency_ms=(time.perf_counter() - start) * 1000,
-                    metadata={"detail": output_verdict.detail, "response_snippet": _raw_model_output, "raw_output": _raw_model_output, "sanitized_output": response_text[:500] if response_text else "", "guardrail_reasoning": output_verdict.detail, "matched_patterns": getattr(output_verdict, 'matched_patterns', [])},
+                    metadata={
+                        "detail": output_verdict.detail,
+                        "response_snippet": _raw_model_output,
+                        "raw_output": _raw_model_output,
+                        "sanitized_output": response_text[:500] if response_text else "",
+                        "guardrail_reasoning": output_verdict.detail,
+                        "matched_patterns": getattr(output_verdict, "matched_patterns", []),
+                        **_telemetry_owasp_metadata(output_verdict.threat_type),
+                    },
                     prompt_snippet=_prompt_snippet,
                     endpoint_id=endpoint_id,
                 )
@@ -4599,11 +4721,31 @@ async def proxy_chat(
                     llm_resp["zeroshield"]["decision_source"] = route_selection.decision_source
                     llm_resp["zeroshield"]["policy_summary"] = route_selection.policy_summary
         
+        # Operator pipeline trace (Module 1.1 simulator) — built before zeroshield redaction.
+        if isinstance(llm_resp, dict):
+            from pipeline_trace import build_pipeline_trace
+
+            _zs_full = llm_resp.get("zeroshield") if isinstance(llm_resp.get("zeroshield"), dict) else {}
+            _final = _zs_full.get("action") or "allow"
+            llm_resp["pipeline_trace"] = build_pipeline_trace(
+                prompt=prompt,
+                stage_metrics=stage_metrics,
+                final_action=_final,
+                blocked_stage="",
+                http_status=200,
+                scan_verdict=scan_verdict,
+                route_metadata=route_metadata,
+                zeroshield=_zs_full,
+                response_text=response_text or "",
+                requested_model=body.get("model", ""),
+                output_scan_verdict=output_verdict,
+            )
+
         # ── SECURITY FIX: Redact sensitive fields from zeroshield metadata before returning to client ──
         # The zeroshield object contains internal security details that MUST NOT be exposed to clients.
         if isinstance(llm_resp.get("zeroshield"), dict):
             llm_resp["zeroshield"] = _redact_for_client_response(llm_resp["zeroshield"]) or {}
-        
+
         return JSONResponse(content=llm_resp, headers=response_headers_final)
 
     except Exception as exc:

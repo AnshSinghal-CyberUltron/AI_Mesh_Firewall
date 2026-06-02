@@ -46,5 +46,17 @@
       "quality": 0.85
     },
     "createdAt": 1779688081813
+  },
+  {
+    "id": "task-triage-agent-c-performance-design",
+    "key": "triage-agent-c-performance-design",
+    "content": "Task completed: triage-agent-c-performance-design",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1780328183420
   }
 ]

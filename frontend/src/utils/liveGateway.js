@@ -241,6 +241,31 @@ function inferFinalAction(data, httpStatus, zs) {
   return "allow";
 }
 
+/**
+ * Stage where the gateway actually stopped the request (403/429/block only).
+ * Do NOT treat detection_tier tier_1/tier_2 as a block — scans can run and still allow.
+ */
+export function inferTerminalBlockedStage(data, httpStatus, zs, finalAction = "") {
+  const resolvedFinal = finalAction || inferFinalAction(data, httpStatus, zs);
+  if (resolvedFinal !== "block" && httpStatus < 400) {
+    return "";
+  }
+
+  return inferBlockedStage(data, httpStatus, zs);
+}
+
+/** Last pipeline stage that ran input/output scanning (informational, not a block). */
+export function inferDetectionCheckpoint(data, zs) {
+  const tier = String(data?.detection_tier || zs?.detection_tier || "").toLowerCase();
+  if (!tier || tier === "none" || tier === "output_guard" || tier === "output_guardrail") {
+    return "";
+  }
+  if (tier.startsWith("tier") || tier.includes("scan") || tier.includes("guard")) {
+    return "input_scan";
+  }
+  return "";
+}
+
 /** Map gateway response to the pipeline stage where processing stopped. */
 function inferBlockedStage(data, httpStatus, zs) {
   const code = String(data?.code || "").toLowerCase();
@@ -265,13 +290,8 @@ function inferBlockedStage(data, httpStatus, zs) {
   if (code === "model_not_allowed" || code === "model_not_configured") return "model_routing";
   if (code === "output_blocked" || category === "output_guard") return "output_guardrail";
 
-  // ZeroShield input scan (Tier 1/2 guard) — not Policy Management rules
   if (
-    tier === "tier_1"
-    || tier === "tier_1_5"
-    || tier === "tier_2"
-    || tier === "input_scan"
-    || category === "prompt_injection"
+    category === "prompt_injection"
     || category === "jailbreak"
     || category === "goal_hijacking"
     || category.includes("injection")
@@ -350,17 +370,144 @@ function formatPolicyBlockDetail(data, zs) {
   return "Request blocked by Policy Management";
 }
 
-function formatInputScanBlockDetail(data, zs) {
+function formatInputScanDetail(data, zs, { blocked = false } = {}) {
+  if (zs?.guard_reason) {
+    return String(zs.guard_reason).split("\n")[0];
+  }
   const tierLabel = formatDetectionTier(data?.detection_tier || zs?.detection_tier || "");
-  const category = (data?.category || zs?.threat_type || "threat").replace(/_/g, " ");
+  const category = (data?.category || zs?.threat_type || "").replace(/_/g, " ");
   const conf = zs?.confidence ?? data?.confidence;
-  const confPart = conf != null && conf > 0 ? ` (confidence ${Math.round(conf * 100)}%)` : "";
+  const confPart = conf != null && conf > 0 ? ` (${Math.round(conf * 100)}% confidence)` : "";
   const tierPart = tierLabel ? `${tierLabel}: ` : "";
-  return `${tierPart}ZeroShield input scan detected ${category}${confPart}. Not a Policy Management rule.`;
+  const reason = zs?.reason || zs?.detail || data?.message || "";
+  if (blocked) {
+    const cat = category || "threat";
+    return reason || `${tierPart}Input blocked — ${cat}${confPart}. Not a Policy Management rule.`;
+  }
+  if (category && category !== "none") {
+    return reason || `${tierPart}Scan completed — flagged ${category}${confPart}; request allowed through.`;
+  }
+  return reason || `${tierPart}Input scan completed — no threats detected.`;
+}
+
+function formatInputScanBlockDetail(data, zs) {
+  return formatInputScanDetail(data, zs, { blocked: true });
+}
+
+function scanStageAction(finalAction, blockedStage, httpStatus) {
+  if (blockedStage === "input_scan" && (finalAction === "block" || httpStatus === 403)) {
+    return "block";
+  }
+  if (finalAction === "redact") return "redact";
+  if (finalAction === "flag") return "flag";
+  return "allow";
 }
 
 function stageIndex(name) {
   return PIPELINE_STAGE_ORDER.indexOf(name);
+}
+
+function roundMs(value, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.round(n * 10) / 10;
+}
+
+function truncateText(text, limit = 1200) {
+  const raw = String(text || "").trim();
+  if (raw.length <= limit) return raw;
+  return `${raw.slice(0, limit)}…`;
+}
+
+/** Read routing telemetry from gateway response headers when zeroshield is redacted. */
+export function extractRoutingFromHeaders(headers) {
+  if (!headers) return {};
+  const get = (key) => {
+    if (typeof headers.get === "function") return headers.get(key) || "";
+    return headers[key] || "";
+  };
+  return {
+    requested_model: get("X-ZeroShield-Original-Model"),
+    original_model: get("X-ZeroShield-Original-Model"),
+    selected_model: get("X-ZeroShield-Routed-Model"),
+    routed_model: get("X-ZeroShield-Routed-Model"),
+    routing_reason: get("X-ZeroShield-Routing-Reason"),
+    decision_source: get("X-ZeroShield-Routing-Source"),
+    policy_summary: get("X-ZeroShield-Routing-Policy-Summary"),
+    rerouted: get("X-ZeroShield-Rerouted") === "true",
+  };
+}
+
+function metricsFromPayload(data, context = {}) {
+  const fromBody = data?.stage_metrics_ms || data?.pipeline_trace?.stage_metrics_ms || {};
+  const fromContext = context.stageMetrics || {};
+  return { ...fromBody, ...fromContext };
+}
+
+function latencyForStage(stageName, stageMetrics, zs = {}, context = {}) {
+  const tier1 = roundMs(stageMetrics.tier1_ms);
+  const tier2 = roundMs(stageMetrics.tier2_ms);
+  const map = {
+    auth: roundMs(stageMetrics.auth_ms, 0.1),
+    rate_limit: roundMs(stageMetrics.rate_limit_ms, 0.1),
+    policy: roundMs(stageMetrics.policy_ms, 0.2),
+    input_scan: roundMs(tier1 + tier2, roundMs(zs.processing_time_ms, 0.5)),
+    kill_switch: roundMs(stageMetrics.kill_switch_ms, 0.1),
+    model_routing: roundMs(stageMetrics.routing_ms, 0.5),
+    model_input: roundMs(stageMetrics.model_input_ms, 0.1),
+    model_output: roundMs(stageMetrics.upstream_ms, roundMs(zs.processing_time_ms, 0)),
+    output_guardrail: roundMs(stageMetrics.output_guard_ms, 0.2),
+  };
+  if (map[stageName] > 0) return map[stageName];
+  const total = roundMs(context.totalLatencyMs);
+  if (total > 0) {
+    const idx = stageIndex(stageName);
+    if (idx >= 0) return roundMs(total / PIPELINE_STAGE_ORDER.length, 0.1);
+  }
+  return 0.1;
+}
+
+export function ensureStageLatency(stage, stageMetrics, zs, context) {
+  const next = { ...stage };
+  if (next.latency_ms === undefined || next.latency_ms === null || Number.isNaN(Number(next.latency_ms))) {
+    next.latency_ms = latencyForStage(next.name, stageMetrics, zs, context);
+  } else {
+    next.latency_ms = roundMs(next.latency_ms, 0.1);
+  }
+  return next;
+}
+
+function enrichStages(stages, data, zs, context) {
+  const stageMetrics = metricsFromPayload(data, context);
+  const promptPreview = truncateText(
+    context.prompt || data?.pipeline_trace?.prompt_preview || "",
+  );
+  return (stages || []).map((stage) => {
+    const enriched = ensureStageLatency({ ...stage }, stageMetrics, zs, context);
+    if (stage.name === "input_scan" && !enriched.prompt_submitted) {
+      enriched.prompt_submitted = promptPreview;
+    }
+    if (stage.name === "model_input") {
+      if (!enriched.content && enriched.action !== "skip" && promptPreview) {
+        enriched.content = promptPreview;
+      }
+      if (!enriched.prompt_submitted) enriched.prompt_submitted = promptPreview;
+    }
+    if (stage.name === "model_routing") {
+      const routing = zs.routing || {};
+      enriched.requested_model = enriched.requested_model || routing.original_model || routing.requested_model || context.requestedModel || "";
+      enriched.selected_model = enriched.selected_model || routing.selected_model || routing.routed_model || zs.selected_model || "";
+      enriched.routing_reason = enriched.routing_reason || routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "";
+      enriched.decision_source = enriched.decision_source || routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "";
+      enriched.policy_summary = enriched.policy_summary || routing.policy_summary || zs.policy_summary || context.routingHeaders?.policy_summary || "";
+      enriched.decision_factors = enriched.decision_factors || routing.decision_factors || zs.decision_factors || [];
+      enriched.weights = enriched.weights || routing.weights || zs.weights || {};
+      if (!enriched.detail && enriched.routing_reason) {
+        enriched.detail = enriched.routing_reason;
+      }
+    }
+    return enriched;
+  });
 }
 
 function skipDetail(stageName, blockedStage) {
@@ -380,7 +527,9 @@ function skipDetail(stageName, blockedStage) {
 }
 
 function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, context = {}) {
-  const routing = zs.routing || {};
+  const routing = { ...(zs.routing || {}), ...(context.routingHeaders || {}) };
+  const stageMetrics = metricsFromPayload(data, context);
+  const promptPreview = truncateText(context.prompt || "");
   const blockedIdx = blockedStage ? stageIndex(blockedStage) : -1;
   const isBlocked = finalAction === "block";
   const isError = finalAction === "error" || (httpStatus >= 400 && !isBlocked);
@@ -410,7 +559,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     stages.push({
       name: "auth",
       action: at === "blocked" ? "block" : "allow",
-      latency_ms: 0,
+      latency_ms: latencyForStage("auth", stageMetrics, zs, context),
       detail: at === "blocked" ? "Gateway API key invalid or missing" : "Gateway API key accepted",
     });
   }
@@ -422,7 +571,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     stages.push({
       name: "rate_limit",
       action: rateBlocked ? "block" : at === "after" ? "skip" : "allow",
-      latency_ms: 0,
+      latency_ms: latencyForStage("rate_limit", stageMetrics, zs, context),
       detail: rateBlocked
         ? formatRateLimitDetail(data, context)
         : at === "after"
@@ -445,7 +594,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
         : at === "after"
           ? "skip"
           : (finalAction === "redact" || finalAction === "flag" ? finalAction : "allow"),
-      latency_ms: 0,
+      latency_ms: latencyForStage("policy", stageMetrics, zs, context),
       detail: policyBlocked
         ? formatPolicyBlockDetail(data, zs)
         : at === "after"
@@ -459,39 +608,43 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
   // 4 — Input scan
   {
     const at = stageAt("input_scan");
-    const scanBlocked = blockedStage === "input_scan";
+    const scanBlocked = blockedStage === "input_scan" && (finalAction === "block" || httpStatus === 403);
     const tier = zs.detection_tier || "";
-    if (at === "past" && !scanBlocked && (tier || zs.threat_type) && finalAction !== "block") {
-      stages.push({
-        name: "input_scan",
-        action: finalAction === "redact" ? "redact" : finalAction === "flag" ? "flag" : "allow",
-        latency_ms: zs.processing_time_ms || 0,
-        detail: zs.detail || zs.reason || "No input threats detected",
-        threat_type: zs.threat_type || "",
-        confidence: zs.confidence ?? 0,
-        tier: formatDetectionTier(tier) || tier,
-        matched_patterns: zs.matched_patterns || [],
-      });
-    } else if (scanBlocked) {
+    const scanRan = Boolean(tier || zs.threat_type || zs.reason || zs.detail);
+    if (scanBlocked) {
       stages.push({
         name: "input_scan",
         action: "block",
-        latency_ms: zs.processing_time_ms || 0,
+        latency_ms: latencyForStage("input_scan", stageMetrics, zs, context) || roundMs(zs.processing_time_ms, 0.5),
         detail: formatInputScanBlockDetail(data, zs),
         threat_type: zs.threat_type || data?.category || "",
         confidence: zs.confidence ?? 0,
         tier: formatDetectionTier(tier) || tier,
         matched_patterns: zs.matched_patterns || [],
+        prompt_submitted: promptPreview,
+      });
+    } else if (at === "after") {
+      stages.push({
+        name: "input_scan",
+        action: "skip",
+        latency_ms: latencyForStage("input_scan", stageMetrics, zs, context),
+        prompt_submitted: promptPreview,
+        detail: skipDetail("input_scan", blockedStage),
+        tier: "skipped",
       });
     } else {
       stages.push({
         name: "input_scan",
-        action: at === "after" ? "skip" : "allow",
-        latency_ms: at === "after" ? undefined : 0,
-        detail: at === "after"
-          ? skipDetail("input_scan", blockedStage)
-          : "No input threats detected",
-        tier: at === "after" ? "skipped" : "",
+        action: scanStageAction(finalAction, blockedStage, httpStatus),
+        latency_ms: latencyForStage("input_scan", stageMetrics, zs, context) || roundMs(zs.processing_time_ms, 0.5),
+        detail: scanRan
+          ? formatInputScanDetail(data, zs, { blocked: false })
+          : "Input scan not invoked for this request",
+        threat_type: zs.threat_type && zs.threat_type !== "none" ? zs.threat_type : "",
+        confidence: zs.confidence ?? 0,
+        tier: formatDetectionTier(tier) || tier || "",
+        matched_patterns: zs.matched_patterns || [],
+        prompt_submitted: promptPreview,
       });
     }
   }
@@ -503,7 +656,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     stages.push({
       name: "kill_switch",
       action: ksBlocked ? "block" : at === "after" ? "skip" : "allow",
-      latency_ms: undefined,
+      latency_ms: latencyForStage("kill_switch", stageMetrics, zs, context),
       detail: ksBlocked
         ? (data?.message || "Model kill-switch is active")
         : at === "after"
@@ -545,7 +698,12 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       requested_model: routing.original_model || data?.model || routing.requested_model || "",
       selected_model: routing.selected_model || zs.selected_model || "",
       routed_model: routing.routed_model || routing.selected_model || "",
-      routing_reason: routing.routing_reason || zs.routing_reason || "",
+      routing_reason: routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "",
+      decision_source: routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "",
+      policy_summary: routing.policy_summary || zs.policy_summary || context.routingHeaders?.policy_summary || "",
+      decision_factors: routing.decision_factors || zs.decision_factors || [],
+      weights: routing.weights || zs.weights || {},
+      latency_ms: latencyForStage("model_routing", stageMetrics, zs, context),
     });
   }
 
@@ -555,10 +713,12 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     stages.push({
       name: "model_input",
       action: isBlocked && at !== "past" ? "skip" : at === "blocked" ? "block" : "allow",
+      latency_ms: latencyForStage("model_input", stageMetrics, zs, context),
       detail: isBlocked
-        ? "[BLOCKED — prompt was not sent to the model]"
+        ? "Prompt was not sent to the model (blocked upstream)"
         : "Sanitized prompt delivered to LLM after firewall processing",
-      content: isBlocked ? "[BLOCKED — prompt was not sent to the model]" : "",
+      content: isBlocked ? "[BLOCKED — prompt was not sent to the model]" : promptPreview,
+      prompt_submitted: promptPreview,
     });
   }
 
@@ -571,6 +731,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       stages.push({
         name: "model_output",
         action: "allow",
+        latency_ms: latencyForStage("model_output", stageMetrics, zs, context),
         detail: `Model: ${formatModelDisplayName(data.model || zs.selected_model || "unknown")}`,
         content: data.choices[0]?.message?.content || "",
         model: data.model || zs.selected_model,
@@ -586,6 +747,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
             : isBlocked || !hasChoices
               ? "skip"
               : "allow",
+        latency_ms: latencyForStage("model_output", stageMetrics, zs, context),
         detail: needsModel
           ? "Inference skipped — connect an organization model under Module 1.5 (Model Connection)"
           : inferenceBlocked || isError
@@ -611,6 +773,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       stages.push({
         name: "output_guardrail",
         action: "block",
+        latency_ms: latencyForStage("output_guardrail", stageMetrics, zs, context),
         detail: data?.message || zs.reason || zs.detail || "Output guard blocked the response",
         content: outContent,
       });
@@ -618,6 +781,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       stages.push({
         name: "output_guardrail",
         action: finalAction === "allow" ? "allow" : finalAction,
+        latency_ms: latencyForStage("output_guardrail", stageMetrics, zs, context),
         detail: zs.reason || zs.detail || "Output guard inspection completed",
         content: outContent,
       });
@@ -625,6 +789,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       stages.push({
         name: "output_guardrail",
         action: isBlocked ? "skip" : "allow",
+        latency_ms: latencyForStage("output_guardrail", stageMetrics, zs, context),
         detail: isBlocked
           ? skipDetail("output_guardrail", blockedStage)
           : outContent
@@ -649,32 +814,114 @@ function hasOutputGuardSignal(zs, data) {
 
 /** Map /v1/chat/completions response into Attack Simulator shape (full stages + final_action). */
 export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
-  if (Array.isArray(data?.stages) && data.stages.length >= 6) {
-    const zs = data.zeroshield || {};
+  const routingHeaders = extractRoutingFromHeaders(context.responseHeaders);
+  const mergedContext = {
+    ...context,
+    routingHeaders,
+  };
+
+  const mergeScanFieldsFromTrace = (zs, trace) => {
+    const inputStage = (trace?.stages || []).find((s) => s.name === "input_scan");
+    const outputStage = (trace?.stages || []).find((s) => s.name === "output_guardrail");
+    const summary = trace?.guard_summary;
+    const guardSource = summary || inputStage || outputStage;
+    if (!inputStage && !summary) return zs;
+    return {
+      ...zs,
+      reason: zs.reason || inputStage?.detail || summary?.guard_reason,
+      detail: zs.detail || inputStage?.detail || summary?.guard_reason,
+      threat_type: zs.threat_type || inputStage?.threat_type || summary?.threat_type,
+      confidence: zs.confidence ?? inputStage?.confidence ?? summary?.confidence,
+      matched_patterns: zs.matched_patterns?.length
+        ? zs.matched_patterns
+        : (inputStage?.matched_patterns || summary?.guard_findings),
+      detection_tier: zs.detection_tier || inputStage?.tier,
+      guard_reason: zs.guard_reason || guardSource?.guard_reason,
+      guard_action: zs.guard_action || guardSource?.guard_action,
+      guard_model: zs.guard_model || guardSource?.guard_model,
+      reason_code: zs.reason_code || guardSource?.reason_code,
+      recommended_action: zs.recommended_action || guardSource?.recommended_action,
+      guard_findings: zs.guard_findings?.length ? zs.guard_findings : guardSource?.guard_findings,
+      enforcement_source: zs.enforcement_source || guardSource?.enforcement_source,
+    };
+  };
+
+  if (data?.pipeline_trace?.stages?.length >= 6) {
+    const zs = mergeScanFieldsFromTrace(data.zeroshield || {}, data.pipeline_trace);
     const finalAction = inferFinalAction(data, httpStatus, zs);
+    const blockedStage = inferTerminalBlockedStage(data, httpStatus, zs, finalAction);
+    const stages = enrichStages(data.pipeline_trace.stages, data, zs, mergedContext);
     return {
       ...data,
       final_action: finalAction,
-      blocked_by: data.blocked_by || inferBlockedStage(data, httpStatus, zs),
+      blocked_by: blockedStage || "",
+      detection_checkpoint: inferDetectionCheckpoint(data, zs),
       zeroshield: zs,
+      guard_summary: data.pipeline_trace.guard_summary || null,
       request_id: data.request_id || zs.request_id,
+      stages,
+      total_latency_ms: data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs,
+      estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
+      pipeline_live: true,
     };
   }
 
-  const zs = data?.zeroshield || {};
-  const finalAction = inferFinalAction(data, httpStatus, zs);
-  const blockedStage = inferBlockedStage(data, httpStatus, zs);
-  const blockedBy = data?.blocked_by || blockedStage || "";
-  const stages = buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, context);
+  if (Array.isArray(data?.stages) && data.stages.length >= 6) {
+    const zs = data.zeroshield || {};
+    const finalAction = inferFinalAction(data, httpStatus, zs);
+    const blockedStage = inferTerminalBlockedStage(data, httpStatus, zs, finalAction);
+    return {
+      ...data,
+      final_action: finalAction,
+      blocked_by: blockedStage || "",
+      detection_checkpoint: inferDetectionCheckpoint(data, zs),
+      zeroshield: zs,
+      request_id: data.request_id || zs.request_id,
+      stages: enrichStages(data.stages, data, zs, mergedContext),
+      total_latency_ms: context.totalLatencyMs,
+      pipeline_live: true,
+    };
+  }
+
+  const zs = mergeScanFieldsFromTrace(
+    { ...(data?.zeroshield || {}), ...routingHeaders, routing: { ...(data?.zeroshield?.routing || {}), ...routingHeaders } },
+    data?.pipeline_trace,
+  );
+  const payload = { ...(data || {}), zeroshield: zs };
+  const finalAction = inferFinalAction(payload, httpStatus, zs);
+  const blockedStage = inferTerminalBlockedStage(payload, httpStatus, zs, finalAction);
+  const stages = enrichStages(
+    buildSimulatorStages(payload, httpStatus, zs, finalAction, blockedStage, mergedContext),
+    payload,
+    zs,
+    mergedContext,
+  );
+
+  const inputStage = stages.find((s) => s.name === "input_scan");
+  const guardSummary = payload.pipeline_trace?.guard_summary
+    || (inputStage?.guard_reason
+      ? {
+        guard_model: inputStage.guard_model,
+        guard_action: inputStage.guard_action,
+        guard_reason: inputStage.guard_reason,
+        reason_code: inputStage.reason_code,
+        recommended_action: inputStage.recommended_action,
+        guard_findings: inputStage.guard_findings,
+      }
+      : null);
 
   return {
-    ...data,
+    ...payload,
     final_action: finalAction,
-    blocked_by: blockedBy,
+    blocked_by: blockedStage || "",
+    detection_checkpoint: inferDetectionCheckpoint(payload, zs),
     stages,
     zeroshield: zs,
-    request_id: data.request_id || zs.request_id,
+    guard_summary: guardSummary,
+    request_id: payload.request_id || zs.request_id,
+    total_latency_ms: context.totalLatencyMs ?? payload.pipeline_trace?.total_latency_ms,
     estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
+    pipeline_live: true,
   };
 }
 

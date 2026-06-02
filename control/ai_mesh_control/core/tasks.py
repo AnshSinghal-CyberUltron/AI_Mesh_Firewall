@@ -16,6 +16,12 @@ from django.db.models import F, Value
 from django.db.models.functions import Least
 from django.utils import timezone
 
+from ai_mesh_shared.owasp_telemetry import (
+    primary_owasp_code,
+    resolve_owasp_codes,
+    THREAT_TYPE_TO_OWASP,
+)
+
 from auth.models import Organization
 from core.models import AuditLog
 
@@ -51,48 +57,7 @@ _EVENT_TYPE_TO_MODULE: dict[str, str] = {
     "model_isolation": "1.6",
 }
 
-_THREAT_TYPE_TO_OWASP: dict[str, str] = {
-    "prompt_injection": "LLM01",
-    "injection": "LLM01",
-    "insecure_output": "LLM02",
-    "toxicity": "LLM02",
-    "training_data_poisoning": "LLM03",
-    "jailbreak": "LLM02",
-    "dos": "LLM04",
-    "supply_chain": "LLM05",
-    "data_leakage": "LLM06",
-    "pii": "LLM06",
-    "secret": "LLM06",
-    "sensitive_disclosure": "LLM06",
-    "plugin_vulnerability": "LLM07",
-    "rag_poisoning": "LLM08",
-    "excessive_agency": "LLM08",
-    "overreliance": "LLM09",
-    "model_theft": "LLM10",
-    "goal_hijacking": "AGENTIC01",
-    "memory_poisoning": "AGENTIC02",
-    "privilege_escalation": "AGENTIC03",
-    "resource_abuse": "AGENTIC04",
-    "identity_spoofing": "AGENTIC05",
-    "action_misalignment": "AGENTIC06",
-    "cascading_hallucination": "AGENTIC07",
-    "context_leakage": "AGENTIC08",
-    "rogue_agent": "AGENTIC09",
-    "audit_evasion": "AGENTIC10",
-    "model_not_allowed": "LLM09",
-    "high_risk_actor": "LLM10",
-    "rate_limit_burst": "",
-    "rate_limit_rpm": "",
-    "rate_limit_tpm": "",
-    "blocked_keyword": "LLM01",
-    "policy_violation": "LLM01",
-    "compliance_violation": "",
-    "access_violation": "LLM09",
-    "kill_switch": "LLM09",
-    "credential": "LLM06",
-    "ip_leakage": "LLM06",
-    "hallucination": "LLM09",
-}
+_THREAT_TYPE_TO_OWASP = THREAT_TYPE_TO_OWASP
 
 RISK_INCREMENT_MAP: dict[str, float] = {
     "prompt_injection": 0.10,
@@ -147,7 +112,9 @@ def _build_enforcement_metadata(event: dict) -> dict:
         or event.get("prompt_hash")
         or f"evt-{int(time.time() * 1000)}"
     )
-    owasp_code = _THREAT_TYPE_TO_OWASP.get(threat_type, "")
+    extra_payload = dict(event_metadata)
+    owasp_codes = resolve_owasp_codes(threat_type, extra_payload, event_type=event_type)
+    owasp_code = primary_owasp_code(owasp_codes) or _THREAT_TYPE_TO_OWASP.get(threat_type, "")
     security_risk_score = int(raw_risk * 100) if isinstance(raw_risk, float) else int(raw_risk)
 
     is_isolation = event_type in ("kill_switch", "model_isolation", "circuit_breaker")
@@ -167,6 +134,7 @@ def _build_enforcement_metadata(event: dict) -> dict:
         "compliance_tags": event.get("compliance_tags", []),
         "source": source,
         "owasp_code": owasp_code,
+        "owasp_codes": owasp_codes,
         "threat_category": threat_type,
         "security_risk_score": security_risk_score,
         "pipeline_stage": event.get("pipeline_stage", ""),

@@ -4,7 +4,7 @@
  * Backend proxy: /api/mcp-connector/*
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Server,
   Shield,
@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Plus,
   Trash2,
-  X,
   Tag,
   Wrench,
   Play,
@@ -21,17 +20,41 @@ import {
   AlertTriangle,
   Copy,
   Eye,
+  EyeOff,
   BarChart3,
   Clock,
   Ban,
   Hash,
   Key,
-  ToggleLeft,
-  ToggleRight,
+  Layers,
+  ArrowRight,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { toAbsoluteGatewayUrl, resolveGatewayBaseUrl } from "../utils/environmentUrls";
+import { MCPScanControlMatrix } from "./MCPScanControlMatrix";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
+
+import { Card, CardContent } from "./ui/Card";
+import { Button } from "./ui/Button";
+import { Badge } from "./ui/Badge";
+import { Spinner } from "./ui/Spinner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/Tabs";
+import { Dialog, DialogHeader, DialogBody, DialogFooter } from "./ui/Dialog";
+import { Switch } from "./ui/Switch";
+import { Tooltip } from "./ui/Tooltip";
+import { Select } from "./ui/Select";
+import { SegmentedControl } from "./ui/SegmentedControl";
+import { ToastProvider, useToast } from "./ui/Toast";
+import { EmptyState } from "./ui/EmptyState";
+import { Skeleton } from "./ui/Skeleton";
+import { PanelHeader } from "./ui/PanelHeader";
+import {
+  connectionInfo,
+  riskBadge,
+  sensitivityBadge,
+  actionInfo,
+  decisionInfo,
+} from "../lib/mcpColors";
 
 /* ────────────── helpers ────────────── */
 
@@ -231,42 +254,50 @@ function StatusDot({ status }) {
   );
 }
 
-const CONNECTION_STATUS_STYLES = {
-  connected: "bg-emerald-100 text-emerald-700 dark:bg-emerald-800/30 dark:text-emerald-300",
-  disconnected: "bg-red-100 text-red-700 dark:bg-red-800/30 dark:text-red-300",
-  // Backend MCPServerToolListView returns connection_status="failed" when a
-  // tools sync hits an upstream/transport error (HTTP 200 body, see A2 fix).
-  failed: "bg-red-100 text-red-700 dark:bg-red-800/30 dark:text-red-300",
-  unknown: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
-  syncing: "bg-blue-100 text-blue-700 dark:bg-blue-800/30 dark:text-blue-300",
-};
+/** Compact stat card for the status strip. */
+function StatCard({ icon: Icon, label, value, sub, tone = "slate" }) {
+  const toneStyles = {
+    slate: "text-slate-500 dark:text-slate-400",
+    teal: "text-teal-600 dark:text-teal-400",
+    emerald: "text-emerald-600 dark:text-emerald-400",
+    red: "text-red-600 dark:text-red-400",
+    amber: "text-amber-600 dark:text-amber-400",
+    blue: "text-blue-600 dark:text-blue-400",
+  };
+  return (
+    <Card className="shadow-none">
+      <CardContent className="flex items-center gap-3 p-4">
+        {Icon ? (
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700/60 ${toneStyles[tone]}`}>
+            <Icon className="h-5 w-5" aria-hidden="true" />
+          </div>
+        ) : null}
+        <div className="min-w-0">
+          <p className="text-lg font-semibold leading-tight text-slate-900 dark:text-white tabular-nums">{value}</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{label}</p>
+          {sub ? <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{sub}</p> : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-const RISK_LEVEL_STYLES = {
-  low: "bg-emerald-100 text-emerald-700 dark:bg-emerald-800/30 dark:text-emerald-300",
-  medium: "bg-amber-100 text-amber-700 dark:bg-amber-800/30 dark:text-amber-300",
-  high: "bg-orange-100 text-orange-700 dark:bg-orange-800/30 dark:text-orange-300",
-  critical: "bg-red-100 text-red-700 dark:bg-red-800/30 dark:text-red-300",
-};
-
-const SENSITIVITY_STYLES = {
-  low: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
-  medium: "bg-amber-100 text-amber-700 dark:bg-amber-800/30 dark:text-amber-300",
-  high: "bg-orange-100 text-orange-700 dark:bg-orange-800/30 dark:text-orange-300",
-  critical: "bg-red-100 text-red-700 dark:bg-red-800/30 dark:text-red-300",
-};
+const EVENTS_PAGE_SIZE = 50;
 
 const TABS = [
   { id: "servers", label: "MCP Servers", icon: Server },
   { id: "tools", label: "Tool Discovery", icon: Wrench },
   { id: "execute", label: "Tool Execution", icon: Play },
+  { id: "scan-matrix", label: "Scan Controls", icon: Layers },
   { id: "protection", label: "MCP Security Policies", icon: Shield },
   { id: "observability", label: "Observability", icon: BarChart3 },
   { id: "health", label: "Services Health", icon: Activity },
 ];
 
 /* ════════════════════════════════════════════════════ */
-export function MCPConnectorPanel() {
+function MCPConnectorPanelInner() {
   const { fetchWithAuth, user } = useAuth();
+  const { toast } = useToast();
 
   const [tab, setTab] = useState("servers");
   const [obsHours, setObsHours] = useState(24); // 0 = all-time, 1/24/168/720
@@ -299,15 +330,21 @@ export function MCPConnectorPanel() {
   /* ── observability ── */
   const [events, setEvents] = useState([]);
   const [eventSummary, setEventSummary] = useState(null);
+  // BUG FIX (c): client-side pagination instead of rendering all 500 events.
+  const [eventsVisible, setEventsVisible] = useState(EVENTS_PAGE_SIZE);
 
   /* ── server tools (per-server control) ── */
   const [serverToolsMap, setServerToolsMap] = useState({});
   const [expandedServer, setExpandedServer] = useState(null);
   const [copiedEndpoint, setCopiedEndpoint] = useState(null);
   const [syncingServer, setSyncingServer] = useState(null);
+  const [keyRevealed, setKeyRevealed] = useState(false);
 
   /* ── org gateway key (auto-provisioned for MCP) ── */
   const [orgGatewayKey, setOrgGatewayKey] = useState(null); // { has_gateway_key, prefix, key, ... }
+
+  /* ── OAuth polling interval (BUG FIX a: tracked + cleaned up) ── */
+  const oauthPollRef = useRef(null);
 
   /* ────────── loaders ────────── */
 
@@ -375,6 +412,7 @@ export function MCPConnectorPanel() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setEvents(Array.isArray(data) ? data : data.results ?? []);
+      setEventsVisible(EVENTS_PAGE_SIZE); // BUG FIX (c): reset paging on reload
     } catch { setEvents([]); }
   }, [fetchWithAuth, obsHours]);
 
@@ -454,8 +492,10 @@ export function MCPConnectorPanel() {
       setAddOpen(false);
       setAddForm(makeEmptyAddForm());
       await loadServers();
+      toast(`Registered "${payload.name}"`, { tone: "success" });
     } catch (e) {
       setError(`Add server failed: ${e.message}`);
+      toast(`Add server failed: ${e.message}`, { tone: "error" });
     } finally {
       setAddSaving(false);
     }
@@ -467,8 +507,10 @@ export function MCPConnectorPanel() {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${pk}/`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
       await loadServers();
+      toast("Server deleted", { tone: "success" });
     } catch (e) {
       setError(`Delete failed: ${e.message}`);
+      toast(`Delete failed: ${e.message}`, { tone: "error" });
     }
   };
 
@@ -512,8 +554,10 @@ export function MCPConnectorPanel() {
         throw new Error(body.detail || body.error || `HTTP ${res.status}`);
       }
       await loadServers();
+      toast(`Registered "${preset.name}"`, { tone: "success" });
     } catch (e) {
       setError(`Preset registration failed: ${e.message}`);
+      toast(`Preset registration failed: ${e.message}`, { tone: "error" });
     } finally {
       setAddSaving(false);
     }
@@ -534,13 +578,16 @@ export function MCPConnectorPanel() {
       }
       if (body.error || body.connection_status === "failed") {
         setError(`Sync failed for server: ${body.error || "upstream discovery error"}`);
+        toast(`Sync failed: ${body.error || "upstream discovery error"}`, { tone: "error" });
       } else {
         setError(null);
+        toast(`Synced ${body.synced ?? ""} tool${body.synced === 1 ? "" : "s"}`.replace(/\s+/g, " ").trim(), { tone: "success" });
       }
       await loadServerTools(serverId);
       await loadServers();
     } catch (e) {
       setError(`Sync tools failed: ${e.message}`);
+      toast(`Sync tools failed: ${e.message}`, { tone: "error" });
     } finally {
       setSyncingServer(null);
     }
@@ -557,38 +604,43 @@ export function MCPConnectorPanel() {
       await loadServerTools(serverId);
     } catch (e) {
       setError(`Toggle tool failed: ${e.message}`);
+      toast(`Toggle tool failed: ${e.message}`, { tone: "error" });
     }
   };
 
-  // DECISION-D Phase 1: per-tool Presidio action override.
-  // "inherit" falls back to MCPServerRegistration.default_presidio_action,
-  // which itself defaults to "tag". Block short-circuits at the gateway.
-  const setToolPresidioAction = async (serverId, toolName, action) => {
+  // Per-tool scan enforcement override. "inherit" falls back to the server's
+  // default_scan_action (which itself defaults to "tag"). Block short-circuits
+  // at the gateway.
+  const setToolScanAction = async (serverId, toolName, action) => {
     try {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/tools/${encodeURIComponent(toolName)}/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ presidio_action: action }),
+        body: JSON.stringify({ scan_action: action }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await loadServerTools(serverId);
+      toast(`Tool scan action: ${action}`, { tone: "success" });
     } catch (e) {
-      setError(`Update Presidio action failed: ${e.message}`);
+      setError(`Update scan action failed: ${e.message}`);
+      toast(`Update scan action failed: ${e.message}`, { tone: "error" });
     }
   };
 
-  // DECISION-D Phase 1: server-level Presidio default action.
-  const setServerPresidioDefault = async (serverId, action) => {
+  // Server-level default scan enforcement action.
+  const setServerScanDefault = async (serverId, action) => {
     try {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ default_presidio_action: action }),
+        body: JSON.stringify({ default_scan_action: action }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await loadServers();
+      toast(`Server scan default: ${action}`, { tone: "success" });
     } catch (e) {
-      setError(`Update server Presidio default failed: ${e.message}`);
+      setError(`Update server scan default failed: ${e.message}`);
+      toast(`Update server scan default failed: ${e.message}`, { tone: "error" });
     }
   };
 
@@ -660,7 +712,7 @@ export function MCPConnectorPanel() {
       setError("Cannot determine MCP server URL from args.");
       return;
     }
-    
+
     // UX-02 FIX: Pre-open popup SYNCHRONOUSLY before async fetch to avoid popup blocker.
     // Browser will block window.open() after await unless it's in the same call stack as user click.
     const popup = window.open("about:blank", "mcp-oauth", "width=600,height=700");
@@ -668,7 +720,7 @@ export function MCPConnectorPanel() {
       setError("Popup blocked. Please allow popups for this site and try again.");
       return;
     }
-    
+
     setOauthBusy(srv.id);
     setError(null);
     try {
@@ -700,6 +752,7 @@ export function MCPConnectorPanel() {
         ? "Browser blocked the gateway request. Check gateway CORS or network configuration."
         : rawMessage;
       setError(`OAuth start failed: ${message}`);
+      toast(`OAuth start failed: ${message}`, { tone: "error" });
     } finally {
       setOauthBusy(null);
     }
@@ -733,6 +786,12 @@ export function MCPConnectorPanel() {
       }
       popup.location.href = data.authorize_url;
 
+      // BUG FIX (a): clear any previous poll before starting a new one.
+      if (oauthPollRef.current) {
+        clearInterval(oauthPollRef.current);
+        oauthPollRef.current = null;
+      }
+
       // Poll the org-scoped server detail until the callback stores the token.
       let elapsed = 0;
       const interval = setInterval(async () => {
@@ -743,30 +802,46 @@ export function MCPConnectorPanel() {
             const s = await r.json();
             if (s.oauth_authorized) {
               clearInterval(interval);
+              oauthPollRef.current = null; // BUG FIX (a): clear ref on success
               setOauthBusy(null);
               if (!popup.closed) popup.close();
               await loadServers();
               await syncServerTools(srv.id);
+              toast("OAuth authorized", { tone: "success" });
               return;
             }
           }
         } catch (_) { /* transient — keep polling */ }
         if (elapsed >= 180000 || popup.closed) {
           clearInterval(interval);
+          oauthPollRef.current = null; // BUG FIX (a): clear ref on timeout/close
           setOauthBusy(null);
           await loadServers();
         }
       }, 3000);
+      oauthPollRef.current = interval; // BUG FIX (a): track for unmount cleanup
     } catch (e) {
       if (popup && !popup.closed) popup.close();
       setOauthBusy(null);
       setError(`OAuth authorize failed: ${e.message}`);
+      toast(`OAuth authorize failed: ${e.message}`, { tone: "error" });
     }
   };
 
-  // Listen for OAuth popup completion
+  // BUG FIX (a): clear the OAuth poll interval on unmount.
   useEffect(() => {
-    const handler = (event) => {
+    return () => {
+      if (oauthPollRef.current) {
+        clearInterval(oauthPollRef.current);
+        oauthPollRef.current = null;
+      }
+    };
+  }, []);
+
+  // BUG FIX (b): OAuth popup completion handler wrapped in useCallback with
+  // explicit deps so the listener never reads a stale `servers` closure.
+  const handleOAuthMessage = useCallback(
+    (event) => {
       if (event.data?.type === "mcp-oauth-complete") {
         loadServers();
         // Auto-sync tools after successful OAuth
@@ -775,10 +850,16 @@ export function MCPConnectorPanel() {
           setTimeout(() => syncServerTools(srv.id), 1000);
         }
       }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, [servers, loadServers]); // eslint-disable-line react-hooks/exhaustive-deps
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [servers, loadServers]
+  );
+
+  // Listen for OAuth popup completion
+  useEffect(() => {
+    window.addEventListener("message", handleOAuthMessage);
+    return () => window.removeEventListener("message", handleOAuthMessage);
+  }, [handleOAuthMessage]);
 
   const executeTool = async () => {
     if (!selectedExecuteTool) {
@@ -822,235 +903,239 @@ export function MCPConnectorPanel() {
     }
   };
 
+  /* ────────── derived status-strip values ────────── */
+
+  const connectedCount = servers.filter(
+    (s) => connectionInfo(s.connection_status).badge === "success"
+  ).length;
+  const toolsDiscovered = servers.reduce((acc, s) => acc + (s.tools_count || 0), 0);
+  const tier2On =
+    health?.mcp_tier2_enabled ??
+    health?.tier2_enabled ??
+    (Array.isArray(health?.builtin_detectors) && health.builtin_detectors.length > 0
+      ? true
+      : null);
+  const decisionCounts = eventSummary?.decisions || {};
+
   /* ────────── renderers ────────── */
 
-  const renderServers = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          MCP servers managed by the ZeroShield MCP control plane.
-          Organizations can connect their own or public MCP servers here.
-        </p>
-        <div className="flex gap-2 flex-wrap justify-end">
-          {MCP_PRESETS.map((preset) => (
-            <button
-              key={preset.name}
-              onClick={() => registerPreset(preset)}
-              disabled={addSaving}
-              className="px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
-              title={`Quick register ${preset.name}`}
-            >
-              {preset.name}
-              {preset.requiresAuth && <span className="ml-1 text-[10px] text-amber-600">(auth)</span>}
-            </button>
-          ))}
-          <button onClick={loadServers} className="btn-icon" title="Refresh">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button onClick={() => setAddOpen(true)} className="btn-primary text-sm flex items-center gap-1">
-            <Plus className="w-4 h-4" /> Register Server
-          </button>
-        </div>
-      </div>
-
-      {servers.length === 0 && !loading && (
-        <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-          <Server className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p>No MCP servers registered yet.</p>
-          <p className="text-xs mt-1">Click &quot;Register Server&quot; to connect an MCP server.</p>
-        </div>
-      )}
-
-      {/* Gateway API Key banner */}
-      {orgGatewayKey?.has_gateway_key ? (
-        <div className="flex items-center gap-3 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
-          <Key className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-emerald-800 dark:text-emerald-300">
-              Gateway API Key Active
-              {orgGatewayKey.prefix && (
-                <span className="ml-2 font-mono text-emerald-600 dark:text-emerald-400">
-                  {orgGatewayKey.prefix}...
-                </span>
-              )}
-            </p>
-            {orgGatewayKey.key && (
-              <div className="mt-1 flex items-center gap-2">
-                <code className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded font-mono text-emerald-700 dark:text-emerald-300 break-all">
-                  {orgGatewayKey.key}
+  const renderGatewayKeyBanner = () => {
+    if (orgGatewayKey?.has_gateway_key) {
+      const masked = orgGatewayKey.prefix
+        ? `${orgGatewayKey.prefix}••••••••••••••••`
+        : "••••••••••••••••";
+      return (
+        <Card className="border-teal-200 bg-teal-50/60 dark:border-teal-800 dark:bg-teal-900/20 shadow-none">
+          <CardContent className="flex items-start gap-3 p-4">
+            <Key className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-teal-800 dark:text-teal-300">Gateway API Key Active</p>
+              <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                <code className="text-[11px] bg-teal-100 dark:bg-teal-900/40 px-2 py-1 rounded font-mono text-teal-700 dark:text-teal-300 break-all">
+                  {keyRevealed && orgGatewayKey.key ? orgGatewayKey.key : masked}
                 </code>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(orgGatewayKey.key);
-                    setCopiedEndpoint("gw-key");
-                    setTimeout(() => setCopiedEndpoint(null), 3000);
-                  }}
-                  className="text-emerald-500 hover:text-emerald-700 transition-colors"
-                  title="Copy gateway API key"
-                >
-                  {copiedEndpoint === "gw-key"
-                    ? <CheckCircle className="w-3.5 h-3.5" />
-                    : <Copy className="w-3.5 h-3.5" />}
-                </button>
+                {orgGatewayKey.key && (
+                  <Tooltip content={keyRevealed ? "Hide key" : "Reveal key"}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      aria-label={keyRevealed ? "Hide gateway API key" : "Reveal gateway API key"}
+                      onClick={() => setKeyRevealed((v) => !v)}
+                    >
+                      {keyRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </Button>
+                  </Tooltip>
+                )}
+                {orgGatewayKey.key && (
+                  <Tooltip content="Copy gateway API key">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      aria-label="Copy gateway API key"
+                      onClick={() => {
+                        navigator.clipboard.writeText(orgGatewayKey.key);
+                        setCopiedEndpoint("gw-key");
+                        setTimeout(() => setCopiedEndpoint(null), 3000);
+                        toast("Gateway key copied", { tone: "success" });
+                      }}
+                    >
+                      {copiedEndpoint === "gw-key"
+                        ? <CheckCircle className="w-3.5 h-3.5 text-teal-500" />
+                        : <Copy className="w-3.5 h-3.5" />}
+                    </Button>
+                  </Tooltip>
+                )}
               </div>
-            )}
-            {orgGatewayKey.key && (
-              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
-                <AlertTriangle className="w-3 h-3 inline mr-1" />
-                Copy this key now — it won&apos;t be shown again.
-              </p>
-            )}
-          </div>
-        </div>
-      ) : orgGatewayKey && !orgGatewayKey.has_gateway_key ? (
-        <div className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
-          <Key className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-          <div className="flex-1">
-            <p className="text-xs text-amber-800 dark:text-amber-300">
+              {orgGatewayKey.key && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Copy this key now — it won&apos;t be shown again.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+    if (orgGatewayKey && !orgGatewayKey.has_gateway_key) {
+      return (
+        <Card className="border-amber-200 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-900/20 shadow-none">
+          <CardContent className="flex items-center gap-3 p-4">
+            <Key className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <p className="flex-1 text-xs text-amber-800 dark:text-amber-300">
               No gateway API key provisioned. MCP Config snippets will use a placeholder.
             </p>
-          </div>
-          <button
-            onClick={provisionGatewayKey}
-            className="text-xs px-3 py-1.5 rounded bg-amber-600 text-white hover:bg-amber-700 font-medium shrink-0"
-          >
-            Provision Key
-          </button>
-        </div>
-      ) : null}
+            <Button variant="default" size="sm" onClick={provisionGatewayKey} className="bg-amber-600 hover:bg-amber-700">
+              Provision Key
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    return null;
+  };
 
-      <div className="grid gap-3">
-        {servers.map((srv) => (
-          <div key={srv.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <h4 className="font-medium text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
-                  <Server className="w-4 h-4 text-blue-500 shrink-0" />
-                  {srv.name}
-                  {srv.is_active && <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
-                  {/* Connection status chip */}
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${CONNECTION_STATUS_STYLES[srv.connection_status] || CONNECTION_STATUS_STYLES.unknown}`}>
-                    {srv.connection_status || "unknown"}
-                  </span>
-                  {/* Risk level badge */}
-                  {srv.risk_level && srv.risk_level !== "low" && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${RISK_LEVEL_STYLES[srv.risk_level] || RISK_LEVEL_STYLES.low}`}>
-                      {srv.risk_level} risk
-                    </span>
-                  )}
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{srv.url}</p>
-                {srv.description && <p className="text-xs text-slate-400 mt-0.5">{srv.description}</p>}
-                {/* Tools count + last sync */}
-                <div className="flex items-center gap-3 mt-2 flex-wrap">
-                  {srv.tools_count != null && (
-                    <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <Wrench className="w-3 h-3" /> {srv.tools_count} tools
-                    </span>
-                  )}
-                  {srv.last_sync_at && (
-                    <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> Synced {new Date(srv.last_sync_at).toLocaleString()}
-                    </span>
-                  )}
-                </div>
-                {/* Last sync error banner (A2: surfaced from HTTP-200 body) */}
-                {srv.last_sync_error && (
-                  <div className="mt-2 flex items-start gap-1.5 text-[10px] text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded px-2 py-1">
-                    <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
-                    <span className="break-all">{srv.last_sync_error}</span>
-                  </div>
+  const renderServerCard = (srv) => {
+    const conn = connectionInfo(srv.connection_status);
+    const risk = riskBadge(srv.risk_level);
+    const absUrl = srv.gateway_endpoint ? toAbsoluteGatewayUrl(srv.gateway_endpoint) : null;
+    return (
+      <Card key={srv.id}>
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h4 className="font-medium text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                <Server className="w-4 h-4 text-teal-500 shrink-0" />
+                {srv.name}
+                {srv.is_active && <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
+                <Badge variant={conn.badge}>
+                  <span className={`mr-1.5 inline-block w-1.5 h-1.5 rounded-full ${conn.dot}`} />
+                  {conn.label}
+                </Badge>
+                {srv.risk_level && srv.risk_level !== "low" && (
+                  <Badge variant={risk}>{srv.risk_level} risk</Badge>
                 )}
-                {/* Gateway endpoint with copy */}
-                {srv.gateway_endpoint && (
-                  <div className="mt-2 space-y-1">
-                    <div className="flex items-center gap-1.5">
-                      <code className="text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded font-mono text-slate-600 dark:text-slate-300 break-all">
-                        {toAbsoluteGatewayUrl(srv.gateway_endpoint)}
-                      </code>
-                      <button
-                        onClick={() => copyEndpoint(toAbsoluteGatewayUrl(srv.gateway_endpoint))}
-                        className="text-slate-400 hover:text-blue-500 transition-colors"
-                        title="Copy gateway URL only"
-                      >
-                        {copiedEndpoint === toAbsoluteGatewayUrl(srv.gateway_endpoint)
-                          ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                          : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => copyMcpConfig(srv)}
-                      className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded transition-colors"
-                      title="Copy full MCP config JSON with auth headers (paste into VS Code / Cursor mcp.json)"
-                    >
-                      {copiedEndpoint === `config:${srv.id}`
-                        ? <><CheckCircle className="w-3 h-3 text-emerald-500" /> Config Copied!</>
-                        : <><Copy className="w-3 h-3" /> {orgGatewayKey?.key ? "Copy MCP Config" : "Copy MCP Config (key placeholder)"}</>}
-                    </button>
-                  </div>
+                {srv.needs_reauth && <Badge variant="warning">needs re-auth</Badge>}
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-all">{srv.url}</p>
+              {srv.description && <p className="text-xs text-slate-400 mt-0.5">{srv.description}</p>}
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                {srv.tools_count != null && (
+                  <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                    <Wrench className="w-3 h-3" /> {srv.tools_count} tools
+                  </span>
+                )}
+                {srv.last_sync_at && (
+                  <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Synced {new Date(srv.last_sync_at).toLocaleString()}
+                  </span>
                 )}
               </div>
-              <div className="flex items-center gap-2 shrink-0 ml-3">
-                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                  {srv.transport}
-                </span>
-                {/* DECISION-D Phase 1: server-level Presidio default action.
-                    Per-tool override (set on each tool row) takes precedence. */}
-                <select
-                  value={srv.default_presidio_action || "tag"}
-                  onChange={(e) => setServerPresidioDefault(srv.id, e.target.value)}
-                  className="text-[11px] bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5"
-                  title="Default Presidio PII enforcement for tools on this server"
-                >
-                  <option value="tag">PII default: tag</option>
-                  <option value="redact">PII default: redact</option>
-                  <option value="block">PII default: block</option>
-                </select>
-                {/* OAuth Authorize button for mcp-remote servers */}
-                {serverNeedsOAuth(srv) && (
-                  <button
+              {srv.last_sync_error && (
+                <div className="mt-2 flex items-start gap-1.5 text-[10px] text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded px-2 py-1">
+                  <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                  <span className="break-all">{srv.last_sync_error}</span>
+                </div>
+              )}
+              {srv.gateway_endpoint && (
+                <div className="mt-2 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <code className="text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded font-mono text-slate-600 dark:text-slate-300 break-all">
+                      {absUrl}
+                    </code>
+                    <Tooltip content="Copy gateway URL only">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        aria-label="Copy gateway URL"
+                        onClick={() => copyEndpoint(absUrl)}
+                      >
+                        {copiedEndpoint === absUrl
+                          ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                          : <Copy className="w-3.5 h-3.5" />}
+                      </Button>
+                    </Tooltip>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyMcpConfig(srv)}
+                    className="text-[11px]"
+                    title="Copy full MCP config JSON with auth headers (paste into VS Code / Cursor mcp.json)"
+                  >
+                    {copiedEndpoint === `config:${srv.id}`
+                      ? <><CheckCircle className="w-3 h-3 text-emerald-500" /> Config Copied!</>
+                      : <><Copy className="w-3 h-3" /> {orgGatewayKey?.key ? "Copy MCP Config" : "Copy MCP Config (key placeholder)"}</>}
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Badge variant="secondary">{srv.transport}</Badge>
+              <Select
+                value={srv.default_scan_action || "tag"}
+                onChange={(e) => setServerScanDefault(srv.id, e.target.value)}
+                aria-label="Default scan enforcement"
+                className="w-auto text-[11px] py-1"
+                title="Default scan enforcement after Tier-1/Tier-2 (tag = observe only)"
+              >
+                <option value="tag">Scan: tag</option>
+                <option value="redact">Scan: redact</option>
+                <option value="block">Scan: block</option>
+              </Select>
+              {serverNeedsOAuth(srv) && (
+                <Tooltip content="Authorize OAuth — opens popup for upstream provider login">
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => startOAuth(srv)}
                     disabled={oauthBusy === srv.id}
-                    className="text-xs px-2 py-1 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 disabled:opacity-50 flex items-center gap-1 font-medium"
-                    title="Authorize OAuth — opens popup for upstream provider login"
+                    className="text-indigo-600 dark:text-indigo-400"
                   >
-                    {oauthBusy === srv.id
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <Shield className="w-3 h-3" />}
+                    {oauthBusy === srv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
                     Authorize
-                  </button>
-                )}
-                {/* OAuth 2.1 Authorize button for HTTP servers (control-plane DCR + PKCE) */}
-                {srv.auth_type === "oauth" && (
-                  <button
+                  </Button>
+                </Tooltip>
+              )}
+              {srv.auth_type === "oauth" && (
+                <Tooltip
+                  content={srv.oauth_authorized
+                    ? "Re-authorize OAuth 2.1 — opens provider consent popup"
+                    : "Authorize OAuth 2.1 — token is stored encrypted per-org"}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => startControlOAuth(srv)}
                     disabled={oauthBusy === srv.id}
-                    className={`text-xs px-2 py-1 rounded disabled:opacity-50 flex items-center gap-1 font-medium ${
-                      srv.oauth_authorized
-                        ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
-                        : "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
-                    }`}
-                    title={srv.oauth_authorized
-                      ? "Re-authorize OAuth 2.1 — opens provider consent popup"
-                      : "Authorize OAuth 2.1 — opens provider consent popup; token is stored encrypted per-org"}
+                    className={srv.oauth_authorized ? "text-emerald-600 dark:text-emerald-400" : "text-indigo-600 dark:text-indigo-400"}
                   >
-                    {oauthBusy === srv.id
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <Shield className="w-3 h-3" />}
+                    {oauthBusy === srv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
                     {srv.oauth_authorized ? "Re-authorize" : "Authorize"}
-                  </button>
-                )}
-                <button
+                  </Button>
+                </Tooltip>
+              )}
+              <Tooltip content="Sync tools from server">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Sync tools from server"
                   onClick={() => syncServerTools(srv.id)}
                   disabled={syncingServer === srv.id}
-                  className="text-blue-500 hover:text-blue-700 disabled:opacity-50"
-                  title="Sync tools from server"
                 >
-                  {syncingServer === srv.id
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <RefreshCw className="w-4 h-4" />}
-                </button>
-                <button
+                  {syncingServer === srv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                </Button>
+              </Tooltip>
+              <Tooltip content="View tool controls">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="View tool controls"
                   onClick={() => {
                     if (expandedServer === srv.id) {
                       setExpandedServer(null);
@@ -1059,346 +1144,392 @@ export function MCPConnectorPanel() {
                       if (!serverToolsMap[srv.id]) loadServerTools(srv.id);
                     }
                   }}
-                  className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                  title="View tool controls"
                 >
                   <Eye className="w-4 h-4" />
-                </button>
-                <button onClick={() => deleteServerById(srv.id)} className="text-red-500 hover:text-red-700" title="Delete">
+                </Button>
+              </Tooltip>
+              <Tooltip content="Delete server">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-red-500 hover:text-red-700"
+                  aria-label="Delete server"
+                  onClick={() => deleteServerById(srv.id)}
+                >
                   <Trash2 className="w-4 h-4" />
-                </button>
+                </Button>
+              </Tooltip>
+            </div>
+          </div>
+
+          {/* Expanded tool controls */}
+          {expandedServer === srv.id && (
+            <div className="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Tool Controls</span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={() => syncServerTools(srv.id)}
+                  disabled={syncingServer === srv.id}
+                  className="h-auto p-0 text-xs"
+                >
+                  {syncingServer === srv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  Sync
+                </Button>
+              </div>
+              {(!serverToolsMap[srv.id] || serverToolsMap[srv.id].length === 0) && (
+                <p className="text-[10px] text-slate-400 text-center py-3">
+                  No tools synced. Click &quot;Sync&quot; to discover tools from this server.
+                </p>
+              )}
+              <div className="space-y-1.5">
+                {(serverToolsMap[srv.id] || []).map((tool) => (
+                  <div key={tool.tool_name} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded px-3 py-2 gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Switch
+                        checked={!!tool.enabled}
+                        onCheckedChange={() => toggleToolEnabled(srv.id, tool.tool_name, tool.enabled)}
+                        label={tool.enabled ? `Disable ${tool.tool_name}` : `Enable ${tool.tool_name}`}
+                      />
+                      <span className={`text-xs font-mono truncate ${tool.enabled ? "text-slate-900 dark:text-white" : "text-slate-400 line-through"}`}>
+                        {tool.tool_name}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Select
+                        value={tool.scan_action || "inherit"}
+                        onChange={(e) => setToolScanAction(srv.id, tool.tool_name, e.target.value)}
+                        aria-label={`Scan enforcement for ${tool.tool_name}`}
+                        className="w-auto text-[10px] py-1"
+                        title="Scan enforcement for this tool (inherit = server default)"
+                      >
+                        <option value="inherit">Scan: inherit</option>
+                        <option value="tag">Scan: tag</option>
+                        <option value="redact">Scan: redact</option>
+                        <option value="block">Scan: block</option>
+                      </Select>
+                      <Badge variant={sensitivityBadge(tool.sensitivity)}>{tool.sensitivity}</Badge>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-            {/* Expanded tool controls */}
-            {expandedServer === srv.id && (
-              <div className="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Tool Controls</span>
-                  <button
-                    onClick={() => syncServerTools(srv.id)}
-                    disabled={syncingServer === srv.id}
-                    className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1"
-                  >
-                    {syncingServer === srv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                    Sync
-                  </button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderServers = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xl">
+          MCP servers managed by the ZeroShield MCP control plane.
+          Organizations can connect their own or public MCP servers here.
+        </p>
+        <div className="flex gap-2 flex-wrap justify-end">
+          {MCP_PRESETS.map((preset) => (
+            <Button
+              key={preset.name}
+              variant="outline"
+              size="sm"
+              onClick={() => registerPreset(preset)}
+              disabled={addSaving}
+              title={`Quick register ${preset.name}`}
+            >
+              {preset.name}
+              {preset.requiresAuth && <span className="text-[10px] text-amber-600">(auth)</span>}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {renderGatewayKeyBanner()}
+
+      {servers.length === 0 && !loading ? (
+        <EmptyState
+          icon={Server}
+          title="No MCP servers registered yet"
+          description='Click "Register Server" to connect an MCP server for centralized discovery and governance.'
+          action={<Button onClick={() => setAddOpen(true)}><Plus className="w-4 h-4" /> Register Server</Button>}
+        />
+      ) : (
+        <div className="grid gap-3">
+          {servers.map((srv) => renderServerCard(srv))}
+        </div>
+      )}
+
+      {/* ── Add Server Modal ── */}
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} labelledBy="mcp-add-server-title">
+        <DialogHeader
+          id="mcp-add-server-title"
+          title="Register MCP Server"
+          description="Register an MCP server endpoint for centralized ZeroShield discovery and governance."
+          onClose={() => setAddOpen(false)}
+        />
+        <DialogBody>
+          {/* Connection section */}
+          <section className="space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Connection</h4>
+            <div>
+              <label className="block text-sm font-medium mb-1">Name</label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                value={addForm.name}
+                onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                placeholder="my-mcp-server"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">URL</label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                value={addForm.url}
+                onChange={(e) => setAddForm({ ...addForm, url: e.target.value })}
+                placeholder={addForm.transport === "stdio" ? "(not required for stdio)" : "https://my-server.example.com/mcp"}
+                disabled={addForm.transport === "stdio"}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Transport</label>
+              <Select
+                value={addForm.transport}
+                onChange={(e) => setAddForm({ ...addForm, transport: e.target.value })}
+                aria-label="Transport"
+              >
+                {TRANSPORT_OPTIONS.map((t) => (
+                  <option key={t.value} value={t.value} disabled={!t.supported}>
+                    {t.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                Supports HTTP, SSE, WebSocket, and Stdio (subprocess) transports.
+                Stdio runs the command inside the gateway container.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Description</label>
+              <textarea
+                className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                rows={2}
+                value={addForm.description}
+                onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
+                placeholder="Optional description"
+              />
+            </div>
+          </section>
+
+          {/* Stdio-specific section */}
+          {addForm.transport === "stdio" && (
+            <section className="border border-teal-200 dark:border-teal-800 rounded-lg p-3 space-y-3 bg-teal-50/50 dark:bg-teal-900/20">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">Stdio Transport Settings</h4>
+              <p className="text-xs text-teal-700/80 dark:text-teal-300/80">
+                Command must be an allow-listed interpreter (<code>npx</code>, <code>node</code>,
+                <code> python</code>, <code>python3</code>) — not a path. The package's own
+                runtime dependency must also be installed in the gateway container
+                (e.g. Semgrep MCP requires the <code>semgrep</code> binary). Missing
+                dependencies surface a clear error below the server.
+              </p>
+              <div>
+                <label className="block text-sm font-medium mb-1">Command</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                  value={addForm.command || ""}
+                  onChange={(e) => setAddForm({ ...addForm, command: e.target.value })}
+                  placeholder="npx"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Arguments (comma-separated)</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                  value={Array.isArray(addForm.args) ? addForm.args.join(", ") : ""}
+                  onChange={(e) => setAddForm({ ...addForm, args: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
+                  placeholder="-y, @playwright/mcp@latest"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Environment Variables (KEY=VALUE, one per line)</label>
+                <textarea
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono dark:bg-slate-800 dark:border-slate-600"
+                  rows={2}
+                  value={
+                    addForm.env_vars && typeof addForm.env_vars === "object"
+                      ? Object.entries(addForm.env_vars).map(([k, v]) => `${k}=${v}`).join("\n")
+                      : ""
+                  }
+                  onChange={(e) => {
+                    const vars = {};
+                    e.target.value.split("\n").forEach((line) => {
+                      const idx = line.indexOf("=");
+                      if (idx > 0) vars[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+                    });
+                    setAddForm({ ...addForm, env_vars: vars });
+                  }}
+                  placeholder="GITHUB_TOKEN=ghp_xxx"
+                />
+              </div>
+            </section>
+          )}
+
+          {/* Authentication section */}
+          <section className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Authentication</h4>
+            <div>
+              <label className="block text-sm font-medium mb-1">Upstream Authentication</label>
+              <Select
+                value={addForm.auth_type}
+                onChange={(e) => setAddForm({ ...addForm, auth_type: e.target.value })}
+                aria-label="Upstream authentication type"
+              >
+                {AUTH_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </Select>
+            </div>
+
+            {addForm.auth_type === "bearer" && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Bearer Token</label>
+                <input
+                  type="password"
+                  className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                  value={addForm.auth_token}
+                  onChange={(e) => setAddForm({ ...addForm, auth_token: e.target.value })}
+                  placeholder="Paste MCP access token"
+                />
+              </div>
+            )}
+
+            {addForm.auth_type === "basic" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Username</label>
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                    value={addForm.auth_username}
+                    onChange={(e) => setAddForm({ ...addForm, auth_username: e.target.value })}
+                    placeholder="username"
+                  />
                 </div>
-                {(!serverToolsMap[srv.id] || serverToolsMap[srv.id].length === 0) && (
-                  <p className="text-[10px] text-slate-400 text-center py-3">
-                    No tools synced. Click &quot;Sync&quot; to discover tools from this server.
-                  </p>
-                )}
-                <div className="space-y-1.5">
-                  {(serverToolsMap[srv.id] || []).map((tool) => (
-                    <div key={tool.tool_name} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded px-3 py-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <button
-                          onClick={() => toggleToolEnabled(srv.id, tool.tool_name, tool.enabled)}
-                          className="shrink-0"
-                          title={tool.enabled ? "Disable tool" : "Enable tool"}
-                        >
-                          {tool.enabled
-                            ? <ToggleRight className="w-5 h-5 text-emerald-500" />
-                            : <ToggleLeft className="w-5 h-5 text-slate-400" />}
-                        </button>
-                        <span className={`text-xs font-mono truncate ${tool.enabled ? "text-slate-900 dark:text-white" : "text-slate-400 line-through"}`}>
-                          {tool.tool_name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* DECISION-D Phase 1: per-tool Presidio action.
-                            "inherit" defers to the server-level default. */}
-                        <select
-                          value={tool.presidio_action || "inherit"}
-                          onChange={(e) => setToolPresidioAction(srv.id, tool.tool_name, e.target.value)}
-                          className="text-[10px] bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5"
-                          title="Presidio PII enforcement for this tool"
-                        >
-                          <option value="inherit">PII: inherit</option>
-                          <option value="tag">PII: tag</option>
-                          <option value="redact">PII: redact</option>
-                          <option value="block">PII: block</option>
-                        </select>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SENSITIVITY_STYLES[tool.sensitivity] || SENSITIVITY_STYLES.low}`}>
-                          {tool.sensitivity}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Password</label>
+                  <input
+                    type="password"
+                    className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                    value={addForm.auth_password}
+                    onChange={(e) => setAddForm({ ...addForm, auth_password: e.target.value })}
+                    placeholder="password"
+                  />
                 </div>
               </div>
             )}
-          </div>
-        ))}
-      </div>
 
-      {/* ── Add Server Modal ── */}
-      {addOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg p-6 relative">
-            <button onClick={() => setAddOpen(false)} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600">
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="text-lg font-semibold mb-4">Register MCP Server</h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Register an MCP server endpoint for centralized ZeroShield discovery and governance.
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
-                <input
-                  className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                  value={addForm.name}
-                  onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
-                  placeholder="my-mcp-server"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">URL</label>
-                <input
-                  className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                  value={addForm.url}
-                  onChange={(e) => setAddForm({ ...addForm, url: e.target.value })}
-                  placeholder={addForm.transport === "stdio" ? "(not required for stdio)" : "https://my-server.example.com/mcp"}
-                  disabled={addForm.transport === "stdio"}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Transport</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                  value={addForm.transport}
-                  onChange={(e) => setAddForm({ ...addForm, transport: e.target.value })}
-                >
-                  {TRANSPORT_OPTIONS.map((t) => (
-                    <option key={t.value} value={t.value} disabled={!t.supported}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-slate-500 mt-1">
-                  Supports HTTP, SSE, WebSocket, and Stdio (subprocess) transports.
-                  Stdio runs the command inside the gateway container.
-                </p>
-              </div>
-
-              {/* Stdio-specific fields */}
-              {addForm.transport === "stdio" && (
-                <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-3 bg-blue-50/50 dark:bg-blue-900/20">
-                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300">Stdio Transport Settings</p>
-                  <p className="text-xs text-blue-700/80 dark:text-blue-300/80">
-                    Command must be an allow-listed interpreter (<code>npx</code>, <code>node</code>,
-                    <code> python</code>, <code>python3</code>) — not a path. The package's own
-                    runtime dependency must also be installed in the gateway container
-                    (e.g. Semgrep MCP requires the <code>semgrep</code> binary). Missing
-                    dependencies surface a clear error below the server.
-                  </p>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Command</label>
-                    <input
-                      className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                      value={addForm.command || ""}
-                      onChange={(e) => setAddForm({ ...addForm, command: e.target.value })}
-                      placeholder="npx"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Arguments (comma-separated)</label>
-                    <input
-                      className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                      value={Array.isArray(addForm.args) ? addForm.args.join(", ") : ""}
-                      onChange={(e) => setAddForm({ ...addForm, args: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
-                      placeholder="-y, @playwright/mcp@latest"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Environment Variables (KEY=VALUE, one per line)</label>
-                    <textarea
-                      className="w-full border rounded-lg px-3 py-2 text-sm font-mono dark:bg-slate-700 dark:border-slate-600"
-                      rows={2}
-                      value={
-                        addForm.env_vars && typeof addForm.env_vars === "object"
-                          ? Object.entries(addForm.env_vars).map(([k, v]) => `${k}=${v}`).join("\n")
-                          : ""
-                      }
-                      onChange={(e) => {
-                        const vars = {};
-                        e.target.value.split("\n").forEach((line) => {
-                          const idx = line.indexOf("=");
-                          if (idx > 0) vars[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-                        });
-                        setAddForm({ ...addForm, env_vars: vars });
-                      }}
-                      placeholder="GITHUB_TOKEN=ghp_xxx"
-                    />
-                  </div>
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium mb-1">Description</label>
-                <textarea
-                  className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                  rows={2}
-                  value={addForm.description}
-                  onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
-                  placeholder="Optional description"
-                />
-              </div>
-
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Upstream Authentication</label>
-                  <select
-                    className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                    value={addForm.auth_type}
-                    onChange={(e) => setAddForm({ ...addForm, auth_type: e.target.value })}
-                  >
-                    {AUTH_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {addForm.auth_type === "bearer" && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Bearer Token</label>
-                    <input
-                      type="password"
-                      className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                      value={addForm.auth_token}
-                      onChange={(e) => setAddForm({ ...addForm, auth_token: e.target.value })}
-                      placeholder="Paste MCP access token"
-                    />
-                  </div>
-                )}
-
-                {addForm.auth_type === "basic" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {addForm.auth_type === "authheaders" && (
+              <div className="space-y-2">
+                {(Array.isArray(addForm.auth_headers) ? addForm.auth_headers : []).map((header, index) => (
+                  <div key={`auth-header-${index}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Username</label>
+                      <label className="block text-sm font-medium mb-1">Header Key</label>
                       <input
-                        className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                        value={addForm.auth_username}
-                        onChange={(e) => setAddForm({ ...addForm, auth_username: e.target.value })}
-                        placeholder="username"
+                        className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                        value={header.key}
+                        onChange={(e) => {
+                          const nextHeaders = [...(addForm.auth_headers || [])];
+                          nextHeaders[index] = { ...nextHeaders[index], key: e.target.value };
+                          setAddForm({ ...addForm, auth_headers: nextHeaders });
+                        }}
+                        placeholder="Authorization"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Password</label>
+                      <label className="block text-sm font-medium mb-1">Header Value</label>
                       <input
                         type="password"
-                        className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                        value={addForm.auth_password}
-                        onChange={(e) => setAddForm({ ...addForm, auth_password: e.target.value })}
-                        placeholder="password"
+                        className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                        value={header.value}
+                        onChange={(e) => {
+                          const nextHeaders = [...(addForm.auth_headers || [])];
+                          nextHeaders[index] = { ...nextHeaders[index], value: e.target.value };
+                          setAddForm({ ...addForm, auth_headers: nextHeaders });
+                        }}
+                        placeholder="Bearer ..."
                       />
                     </div>
-                  </div>
-                )}
-
-                {addForm.auth_type === "authheaders" && (
-                  <div className="space-y-2">
-                    {(Array.isArray(addForm.auth_headers) ? addForm.auth_headers : []).map((header, index) => (
-                      <div key={`auth-header-${index}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Header Key</label>
-                          <input
-                            className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                            value={header.key}
-                            onChange={(e) => {
-                              const nextHeaders = [...(addForm.auth_headers || [])];
-                              nextHeaders[index] = { ...nextHeaders[index], key: e.target.value };
-                              setAddForm({ ...addForm, auth_headers: nextHeaders });
-                            }}
-                            placeholder="Authorization"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Header Value</label>
-                          <input
-                            type="password"
-                            className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                            value={header.value}
-                            onChange={(e) => {
-                              const nextHeaders = [...(addForm.auth_headers || [])];
-                              nextHeaders[index] = { ...nextHeaders[index], value: e.target.value };
-                              setAddForm({ ...addForm, auth_headers: nextHeaders });
-                            }}
-                            placeholder="Bearer ..."
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          title="Remove Header"
-                          onClick={() => {
-                            const nextHeaders = (addForm.auth_headers || []).filter((_, idx) => idx !== index);
-                            setAddForm({
-                              ...addForm,
-                              auth_headers: nextHeaders.length > 0 ? nextHeaders : [{ key: "", value: "" }],
-                            });
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-
-                    <button
+                    <Button
                       type="button"
-                      className="btn-secondary text-xs inline-flex items-center gap-1"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Remove header"
+                      title="Remove Header"
                       onClick={() => {
+                        const nextHeaders = (addForm.auth_headers || []).filter((_, idx) => idx !== index);
                         setAddForm({
                           ...addForm,
-                          auth_headers: [...(addForm.auth_headers || []), { key: "", value: "" }],
+                          auth_headers: nextHeaders.length > 0 ? nextHeaders : [{ key: "", value: "" }],
                         });
                       }}
                     >
-                      <Plus className="w-3 h-3" />
-                      Add Header
-                    </button>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
-                )}
+                ))}
 
-                {addForm.auth_type === "query_param" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Param Key</label>
-                      <input
-                        className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                        value={addForm.auth_query_param_key}
-                        onChange={(e) => setAddForm({ ...addForm, auth_query_param_key: e.target.value })}
-                        placeholder="api_key"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Param Value</label>
-                      <input
-                        type="password"
-                        className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-                        value={addForm.auth_query_param_value}
-                        onChange={(e) => setAddForm({ ...addForm, auth_query_param_value: e.target.value })}
-                        placeholder="secret value"
-                      />
-                    </div>
-                  </div>
-                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setAddForm({
+                      ...addForm,
+                      auth_headers: [...(addForm.auth_headers || []), { key: "", value: "" }],
+                    });
+                  }}
+                >
+                  <Plus className="w-3 h-3" />
+                  Add Header
+                </Button>
               </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setAddOpen(false)} className="btn-secondary text-sm">Cancel</button>
-              <button
-                onClick={addServer}
-                disabled={addSaving || !addForm.name || (addForm.transport === "stdio" ? !addForm.command : !addForm.url)}
-                className="btn-primary text-sm flex items-center gap-1"
-              >
-                {addSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                Register
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            )}
+
+            {addForm.auth_type === "query_param" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Param Key</label>
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                    value={addForm.auth_query_param_key}
+                    onChange={(e) => setAddForm({ ...addForm, auth_query_param_key: e.target.value })}
+                    placeholder="api_key"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Param Value</label>
+                  <input
+                    type="password"
+                    className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                    value={addForm.auth_query_param_value}
+                    onChange={(e) => setAddForm({ ...addForm, auth_query_param_value: e.target.value })}
+                    placeholder="secret value"
+                  />
+                </div>
+              </div>
+            )}
+          </section>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => setAddOpen(false)}>Cancel</Button>
+          <Button
+            onClick={addServer}
+            disabled={addSaving || !addForm.name || (addForm.transport === "stdio" ? !addForm.command : !addForm.url)}
+          >
+            {addSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+            Register
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 
@@ -1408,48 +1539,54 @@ export function MCPConnectorPanel() {
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Tools discovered across all connected MCP servers.
         </p>
-        <button onClick={loadTools} className="btn-icon" title="Refresh">
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <Tooltip content="Refresh">
+          <Button variant="ghost" size="icon" aria-label="Refresh tools" onClick={loadTools}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </Tooltip>
       </div>
 
-      {Array.isArray(tools) && tools.length === 0 && !loading && (
-        <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-          <Wrench className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p>No tools discovered yet.</p>
-          <p className="text-xs mt-1">Register MCP servers first, then tools will appear here.</p>
+      {loading && (
+        <div className="grid gap-2">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
         </div>
       )}
 
-      <div className="grid gap-2">
-        {(Array.isArray(tools) ? tools : []).map((tool, idx) => (
-          <div key={tool.name || idx} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <h4 className="font-mono text-sm font-medium text-slate-900 dark:text-white">
-                  {tool.name}
-                </h4>
-                {tool.description && (
-                  <p className="text-xs text-slate-500 mt-0.5">{tool.description}</p>
+      {!loading && Array.isArray(tools) && tools.length === 0 ? (
+        <EmptyState
+          icon={Wrench}
+          title="No tools discovered yet"
+          description="Register MCP servers first, then tools will appear here."
+        />
+      ) : (
+        <div className="grid gap-2">
+          {(Array.isArray(tools) ? tools : []).map((tool, idx) => (
+            <Card key={tool.name || idx}>
+              <CardContent className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h4 className="font-mono text-sm font-medium text-slate-900 dark:text-white truncate">
+                      {tool.name}
+                    </h4>
+                    {tool.description && (
+                      <p className="text-xs text-slate-500 mt-0.5">{tool.description}</p>
+                    )}
+                  </div>
+                  {tool.server_name && <Badge variant="info">{tool.server_name}</Badge>}
+                </div>
+                {tool.inputSchema && (
+                  <details className="mt-2">
+                    <summary className="text-xs text-slate-400 cursor-pointer">Input Schema</summary>
+                    <pre className="text-[10px] mt-1 bg-slate-50 dark:bg-slate-900 rounded p-2 overflow-x-auto">
+                      {JSON.stringify(tool.inputSchema, null, 2)}
+                    </pre>
+                  </details>
                 )}
-              </div>
-              {tool.server_name && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300">
-                  {tool.server_name}
-                </span>
-              )}
-            </div>
-            {tool.inputSchema && (
-              <details className="mt-2">
-                <summary className="text-xs text-slate-400 cursor-pointer">Input Schema</summary>
-                <pre className="text-[10px] mt-1 bg-slate-50 dark:bg-slate-900 rounded p-2 overflow-x-auto">
-                  {JSON.stringify(tool.inputSchema, null, 2)}
-                </pre>
-              </details>
-            )}
-          </div>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -1459,21 +1596,23 @@ export function MCPConnectorPanel() {
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
           <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter policies by server:</label>
-          <select
-            className="border rounded-lg px-3 py-1.5 text-sm dark:bg-slate-700 dark:border-slate-600 min-w-[200px]"
-            value={policyServerFilter}
-            onChange={(e) => setPolicyServerFilter(e.target.value)}
-          >
-            <option value="">All MCP servers (org-wide)</option>
-            {servers.map((s) => (
-              <option key={s.id} value={s.server_slug}>{s.name} ({s.server_slug})</option>
-            ))}
-          </select>
+          <div className="min-w-[220px]">
+            <Select
+              value={policyServerFilter}
+              onChange={(e) => setPolicyServerFilter(e.target.value)}
+              aria-label="Filter policies by server"
+            >
+              <option value="">All MCP servers (org-wide)</option>
+              {servers.map((s) => (
+                <option key={s.id} value={s.server_slug}>{s.name} ({s.server_slug})</option>
+              ))}
+            </Select>
+          </div>
           {policyServerFilter && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-800/30 text-blue-700 dark:text-blue-300 text-xs">
-              <Server className="w-3 h-3" />
+            <Badge variant="info">
+              <Server className="w-3 h-3 mr-1" />
               Filtering: {selectedServer?.name || policyServerFilter}
-            </span>
+            </Badge>
           )}
         </div>
         <PolicyManagementPanel
@@ -1494,6 +1633,10 @@ export function MCPConnectorPanel() {
     );
   };
 
+  const renderScanMatrix = () => (
+    <MCPScanControlMatrix fetchWithAuth={fetchWithAuth} servers={servers} />
+  );
+
   const renderProtection = () => renderPolicies();
 
   const renderExecute = () => (
@@ -1502,216 +1645,235 @@ export function MCPConnectorPanel() {
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Invoke a discovered MCP tool through ZeroShield orchestration.
         </p>
-        <button onClick={loadTools} className="btn-icon" title="Refresh tools">
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <Tooltip content="Refresh tools">
+          <Button variant="ghost" size="icon" aria-label="Refresh tools" onClick={loadTools}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </Tooltip>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
-        <div>
-          <label className="block text-sm font-medium mb-1">Server</label>
-          <select
-            className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-            value={executeServerSlug}
-            onChange={(e) => setExecuteServerSlug(e.target.value)}
-          >
-            <option value="">Select server...</option>
-            {servers.map((server) => (
-              <option key={server.id} value={server.server_slug}>
-                {server.name} ({server.server_slug})
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Scope execution to one MCP server so the backend can route the tool call deterministically.
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Tool</label>
-          <select
-            className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-700 dark:border-slate-600"
-            value={executeToolKey}
-            onChange={(e) => setExecuteToolKey(e.target.value)}
-            disabled={!executeServerSlug}
-          >
-            <option value="">{executeServerSlug ? "Select tool..." : "Choose a server first..."}</option>
-            {executableTools.map((tool, idx) => (
-              <option key={`${makeExecuteToolKey(tool)}-${idx}`} value={makeExecuteToolKey(tool)}>
-                {tool.name || `tool-${idx}`} {tool.server_name ? `• ${tool.server_name}` : ""}
-              </option>
-            ))}
-          </select>
-          {executeServerSlug && (
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">Server</label>
+            <Select
+              value={executeServerSlug}
+              onChange={(e) => setExecuteServerSlug(e.target.value)}
+              aria-label="Execution server"
+            >
+              <option value="">Select server...</option>
+              {servers.map((server) => (
+                <option key={server.id} value={server.server_slug}>
+                  {server.name} ({server.server_slug})
+                </option>
+              ))}
+            </Select>
             <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-              {executableTools.length} tool{executableTools.length === 1 ? "" : "s"} available on this server.
+              Scope execution to one MCP server so the backend can route the tool call deterministically.
             </p>
-          )}
-        </div>
+          </div>
 
-        {selectedExecuteTool && (
-          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3 space-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-slate-900 dark:text-white">{selectedExecuteTool.name}</p>
-                {selectedExecuteTool.description && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{selectedExecuteTool.description}</p>
-                )}
+          <div>
+            <label className="block text-sm font-medium mb-1">Tool</label>
+            <Select
+              value={executeToolKey}
+              onChange={(e) => setExecuteToolKey(e.target.value)}
+              disabled={!executeServerSlug}
+              aria-label="Tool to execute"
+            >
+              <option value="">{executeServerSlug ? "Select tool..." : "Choose a server first..."}</option>
+              {executableTools.map((tool, idx) => (
+                <option key={`${makeExecuteToolKey(tool)}-${idx}`} value={makeExecuteToolKey(tool)}>
+                  {tool.name || `tool-${idx}`} {tool.server_name ? `• ${tool.server_name}` : ""}
+                </option>
+              ))}
+            </Select>
+            {executeServerSlug && (
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                {executableTools.length} tool{executableTools.length === 1 ? "" : "s"} available on this server.
+              </p>
+            )}
+          </div>
+
+          {selectedExecuteTool && (
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3 space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{selectedExecuteTool.name}</p>
+                  {selectedExecuteTool.description && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{selectedExecuteTool.description}</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap justify-end gap-1">
+                  {selectedExecuteTool.server_name && <Badge variant="info">{selectedExecuteTool.server_name}</Badge>}
+                  {selectedExecuteTool.transport && <Badge variant="secondary">{selectedExecuteTool.transport}</Badge>}
+                  {selectedExecuteTool.source && <Badge variant="outline">{selectedExecuteTool.source}</Badge>}
+                </div>
               </div>
-              <div className="flex flex-wrap justify-end gap-1 text-[10px]">
-                {selectedExecuteTool.server_name && (
-                  <span className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300">
-                    {selectedExecuteTool.server_name}
-                  </span>
-                )}
-                {selectedExecuteTool.transport && (
-                  <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                    {selectedExecuteTool.transport}
-                  </span>
-                )}
-                {selectedExecuteTool.source && (
-                  <span className="px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-300">
-                    {selectedExecuteTool.source}
-                  </span>
-                )}
-              </div>
+              {getToolSchema(selectedExecuteTool) && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    This tool publishes an input schema. Use it to seed valid JSON arguments.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setExecuteArguments(JSON.stringify(buildExampleFromSchema(getToolSchema(selectedExecuteTool)), null, 2))}
+                  >
+                    Fill from Schema
+                  </Button>
+                </div>
+              )}
             </div>
-            {getToolSchema(selectedExecuteTool) && (
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  This tool publishes an input schema. Use it to seed valid JSON arguments.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setExecuteArguments(JSON.stringify(buildExampleFromSchema(getToolSchema(selectedExecuteTool)), null, 2))}
-                  className="px-2.5 py-1 text-xs rounded border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800"
-                >
-                  Fill from Schema
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+          )}
 
-        <div>
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <label className="block text-sm font-medium">Arguments (JSON)</label>
-            {selectedExecuteTool && getToolSchema(selectedExecuteTool) && (
-              <details className="text-[11px] text-slate-500 dark:text-slate-400">
-                <summary className="cursor-pointer">View schema</summary>
-                <pre className="mt-2 w-[min(48rem,80vw)] max-h-64 overflow-auto rounded bg-slate-100 dark:bg-slate-950 p-2 text-[10px] text-left">
-                  {JSON.stringify(getToolSchema(selectedExecuteTool), null, 2)}
-                </pre>
-              </details>
-            )}
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <label className="block text-sm font-medium">Arguments (JSON)</label>
+              {selectedExecuteTool && getToolSchema(selectedExecuteTool) && (
+                <details className="text-[11px] text-slate-500 dark:text-slate-400">
+                  <summary className="cursor-pointer">View schema</summary>
+                  <pre className="mt-2 w-[min(48rem,80vw)] max-h-64 overflow-auto rounded bg-slate-100 dark:bg-slate-950 p-2 text-[10px] text-left">
+                    {JSON.stringify(getToolSchema(selectedExecuteTool), null, 2)}
+                  </pre>
+                </details>
+              )}
+            </div>
+            <textarea
+              className="w-full border rounded-lg px-3 py-2 text-xs font-mono dark:bg-slate-800 dark:border-slate-600"
+              rows={6}
+              value={executeArguments}
+              onChange={(e) => setExecuteArguments(e.target.value)}
+            />
           </div>
-          <textarea
-            className="w-full border rounded-lg px-3 py-2 text-xs font-mono dark:bg-slate-700 dark:border-slate-600"
-            rows={6}
-            value={executeArguments}
-            onChange={(e) => setExecuteArguments(e.target.value)}
-          />
-        </div>
 
-        <div className="flex justify-end">
-          <button
-            onClick={executeTool}
-            disabled={executeBusy || !selectedExecuteTool}
-            className="btn-primary text-sm flex items-center gap-1 disabled:opacity-50"
-          >
-            {executeBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            Execute Tool
-          </button>
-        </div>
-      </div>
+          <div className="flex justify-end">
+            <Button onClick={executeTool} disabled={executeBusy || !selectedExecuteTool}>
+              {executeBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              Execute Tool
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {executeResult && (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <h4 className="text-sm font-medium">Execution Response</h4>
-            <div className="flex flex-wrap gap-2 text-[10px]">
-              {executeResult.decision && (
-                <span className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300 uppercase">
-                  {executeResult.decision}
-                </span>
-              )}
-              {executeResult.request_id && (
-                <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono">
-                  {executeResult.request_id}
-                </span>
-              )}
-              {executeResult.status && (
-                <span className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-300">
-                  HTTP {executeResult.status}
-                </span>
-              )}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <h4 className="text-sm font-medium">Execution Response</h4>
+              <div className="flex flex-wrap gap-2">
+                {executeResult.decision && (
+                  <Badge variant={decisionInfo(executeResult.decision).badge}>
+                    {decisionInfo(executeResult.decision).label}
+                  </Badge>
+                )}
+                {executeResult.request_id && (
+                  <Badge variant="secondary" className="font-mono">{executeResult.request_id}</Badge>
+                )}
+                {executeResult.status && (
+                  <Badge variant="warning">HTTP {executeResult.status}</Badge>
+                )}
+              </div>
             </div>
-          </div>
-          {extractExecutionPreview(executeResult) && (
-            <div className="mb-3 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3 text-xs whitespace-pre-wrap text-slate-700 dark:text-slate-200">
-              {extractExecutionPreview(executeResult)}
-            </div>
-          )}
-          <pre className="text-xs bg-slate-50 dark:bg-slate-900 rounded p-3 overflow-x-auto">
-            {JSON.stringify(executeResult, null, 2)}
-          </pre>
-        </div>
+            {extractExecutionPreview(executeResult) && (
+              <div className="mb-3 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3 text-xs whitespace-pre-wrap text-slate-700 dark:text-slate-200">
+                {extractExecutionPreview(executeResult)}
+              </div>
+            )}
+            <pre className="text-xs bg-slate-50 dark:bg-slate-900 rounded p-3 overflow-x-auto">
+              {JSON.stringify(executeResult, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
 
+  /** Compact two-tier scan-trace pipeline view (Tier-1 → Tier-2). */
+  const renderScanTrace = (trace) => {
+    if (!Array.isArray(trace) || trace.length === 0) return null;
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {trace.map((step, i) => {
+          const tier = step.tier || step.tier_label || `tier${i + 1}`;
+          const dir = step.direction || step.io || "";
+          const act = step.action || step.scan_action;
+          const findings = step.finding_count ?? (Array.isArray(step.findings) ? step.findings.length : null);
+          const ai = act ? actionInfo(act) : null;
+          return (
+            <div key={i} className="flex items-center gap-1.5">
+              {i > 0 && <ArrowRight className="w-3 h-3 text-slate-300 dark:text-slate-600" />}
+              <span className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-1.5 py-0.5 text-[10px]">
+                <span className="font-semibold text-slate-600 dark:text-slate-300">{String(tier).replace(/_/g, " ")}</span>
+                {dir && <span className="text-slate-400">{dir}</span>}
+                {ai && <Badge variant={ai.badge} className="px-1 py-0 text-[9px]">{ai.label}</Badge>}
+                {findings != null && findings > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400">{findings} finding{findings === 1 ? "" : "s"}</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderObservability = () => {
-    const DECISION_COLORS = {
-      allow: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-300",
-      block: "text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-300",
-      redact: "text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300",
-      error: "text-orange-600 bg-orange-50 dark:bg-orange-900/20 dark:text-orange-300",
-    };
+    const visibleEvents = events.slice(0, eventsVisible);
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xl">
             Real-time MCP policy enforcement events. All tool calls are audited with pre-flight and post-flight checks.
           </p>
           <div className="flex items-center gap-2">
-            <select
-              value={obsHours}
-              onChange={(e) => {
-                const h = Number(e.target.value);
+            <SegmentedControl
+              value={String(obsHours)}
+              onChange={(v) => {
+                const h = Number(v);
                 setObsHours(h);
                 loadEvents(h);
                 loadEventSummary(h);
               }}
-              className="text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-slate-700 dark:text-slate-200"
-              title="Time window"
-            >
-              <option value={1}>Last hour</option>
-              <option value={24}>Last 24 hours</option>
-              <option value={168}>Last 7 days</option>
-              <option value={720}>Last 30 days</option>
-              <option value={0}>All time</option>
-            </select>
-            <button onClick={() => { loadEvents(); loadEventSummary(); }} className="btn-icon" title="Refresh">
-              <RefreshCw className="w-4 h-4" />
-            </button>
+              aria-label="Time window"
+              options={[
+                { value: "1", label: "1h" },
+                { value: "24", label: "24h" },
+                { value: "168", label: "7d" },
+                { value: "720", label: "30d" },
+                { value: "0", label: "All" },
+              ]}
+            />
+            <Tooltip content="Refresh">
+              <Button variant="ghost" size="icon" aria-label="Refresh events" onClick={() => { loadEvents(); loadEventSummary(); }}>
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            </Tooltip>
           </div>
         </div>
 
         {/* Summary cards */}
         {eventSummary && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">{eventSummary.total || 0}</p>
-              <p className="text-xs text-slate-500 mt-1">Total Events</p>
-            </div>
-            {Object.entries(eventSummary.decisions || {}).map(([decision, count]) => (
-              <div key={decision} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 text-center">
-                <p className={`text-2xl font-bold ${decision === "allow" ? "text-emerald-600" : decision === "block" ? "text-red-600" : "text-amber-600"}`}>
-                  {count}
-                </p>
-                <p className="text-xs text-slate-500 mt-1 capitalize">{decision}</p>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+            <Card className="text-center shadow-none">
+              <CardContent className="p-4">
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{eventSummary.total || 0}</p>
+                <p className="text-xs text-slate-500 mt-1">Total Events</p>
+              </CardContent>
+            </Card>
+            {["allow", "block", "redact", "monitor", "error"].map((d) => {
+              const di = decisionInfo(d);
+              const count = decisionCounts[d] || 0;
+              return (
+                <Card key={d} className="text-center shadow-none">
+                  <CardContent className="p-4">
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{count}</p>
+                    <Badge variant={di.badge} className="mt-1">{di.label}</Badge>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
@@ -1719,92 +1881,128 @@ export function MCPConnectorPanel() {
         {eventSummary && (
           <div className="grid gap-4 sm:grid-cols-2">
             {eventSummary.top_tools && eventSummary.top_tools.length > 0 && (
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                  <Wrench className="w-4 h-4 text-blue-500" /> Top Tools
-                </h4>
-                <div className="space-y-2">
-                  {eventSummary.top_tools.map((t) => (
-                    <div key={t.tool_name} className="flex items-center justify-between text-xs">
-                      <span className="font-mono text-slate-700 dark:text-slate-300 truncate">{t.tool_name}</span>
-                      <span className="text-slate-500 font-medium shrink-0 ml-2">{t.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Card>
+                <CardContent className="p-4">
+                  <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Wrench className="w-4 h-4 text-teal-500" /> Top Tools
+                  </h4>
+                  <div className="space-y-2">
+                    {eventSummary.top_tools.map((t) => (
+                      <div key={t.tool_name} className="flex items-center justify-between text-xs">
+                        <span className="font-mono text-slate-700 dark:text-slate-300 truncate">{t.tool_name}</span>
+                        <span className="text-slate-500 font-medium shrink-0 ml-2">{t.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
             {eventSummary.top_users && eventSummary.top_users.length > 0 && (
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                  <Hash className="w-4 h-4 text-violet-500" /> Top Users
-                </h4>
-                <div className="space-y-2">
-                  {eventSummary.top_users.map((u) => (
-                    <div key={u.username || u.user_id} className="flex items-center justify-between text-xs">
-                      <span className="text-slate-700 dark:text-slate-300 truncate">{u.username || u.user_id}</span>
-                      <span className="text-slate-500 font-medium shrink-0 ml-2">{u.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Card>
+                <CardContent className="p-4">
+                  <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Hash className="w-4 h-4 text-violet-500" /> Top Users
+                  </h4>
+                  <div className="space-y-2">
+                    {eventSummary.top_users.map((u) => (
+                      <div key={u.username || u.user_id} className="flex items-center justify-between text-xs">
+                        <span className="text-slate-700 dark:text-slate-300 truncate">{u.username || u.user_id}</span>
+                        <span className="text-slate-500 font-medium shrink-0 ml-2">{u.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
         )}
 
         {/* Event list */}
         <div>
-          <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-2">Recent Events</h4>
-          {events.length === 0 && (
-            <div className="text-center py-8 text-slate-400">
-              <BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p>No MCP events recorded yet.</p>
-              <p className="text-xs mt-1">Execute a tool call to see enforcement events appear here.</p>
-            </div>
-          )}
-          <div className="space-y-2">
-            {events.map((evt) => (
-              <div key={evt.id || evt.request_id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase ${DECISION_COLORS[evt.decision] || ""}`}>
-                      {evt.decision}
-                    </span>
-                    <span className="text-xs font-mono text-slate-700 dark:text-slate-300">{evt.tool_name}</span>
-                    {evt.server_name && (
-                      <span className="text-[10px] text-slate-400">on {evt.server_name}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 shrink-0">
-                    {evt.latency_ms != null && <span>{evt.latency_ms}ms</span>}
-                    {evt.timestamp && <span>{new Date(evt.timestamp).toLocaleString()}</span>}
-                  </div>
-                </div>
-                {evt.policy_reason && (
-                  <p className="text-[10px] text-slate-500 mt-1">{evt.policy_reason}</p>
-                )}
-                {/* DECISION-D Phase 1: surface compliance tags + Presidio finding count
-                    so operators can see PII enforcement at a glance. */}
-                {Array.isArray(evt.compliance_tags) && evt.compliance_tags.length > 0 && (
-                  <div className="flex items-center gap-1 mt-1 flex-wrap">
-                    <span className="text-[10px] text-slate-400">Compliance:</span>
-                    {evt.compliance_tags.map((tag) => (
-                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium">
-                        {tag}
-                      </span>
-                    ))}
-                    {Array.isArray(evt.presidio_findings) && evt.presidio_findings.length > 0 && (
-                      <span className="text-[10px] text-slate-400">
-                        ({evt.presidio_findings.length} finding{evt.presidio_findings.length === 1 ? "" : "s"})
-                      </span>
-                    )}
-                  </div>
-                )}
-                {evt.username && (
-                  <p className="text-[10px] text-slate-400 mt-0.5">User: {evt.username}</p>
-                )}
+          <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-2">
+            Recent Events
+            {events.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-slate-400">
+                showing {visibleEvents.length} of {events.length}
+              </span>
+            )}
+          </h4>
+          {events.length === 0 ? (
+            <EmptyState
+              icon={BarChart3}
+              title="No MCP events recorded yet"
+              description="Execute a tool call to see enforcement events appear here."
+            />
+          ) : (
+            <>
+              <div className="space-y-2">
+                {visibleEvents.map((evt) => {
+                  const di = decisionInfo(evt.decision);
+                  return (
+                    <Card key={evt.id || evt.request_id}>
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant={di.badge}>{di.label}</Badge>
+                            <span className="text-xs font-mono text-slate-700 dark:text-slate-300">{evt.tool_name}</span>
+                            {evt.server_name && (
+                              <span className="text-[10px] text-slate-400">on {evt.server_name}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400 shrink-0">
+                            {evt.latency_ms != null && <span>{evt.latency_ms}ms</span>}
+                            {evt.timestamp && <span>{new Date(evt.timestamp).toLocaleString()}</span>}
+                          </div>
+                        </div>
+                        {evt.policy_reason && (
+                          <p className="text-[10px] text-slate-500 mt-1">{evt.policy_reason}</p>
+                        )}
+                        {(evt.metadata?.scan_pipeline || Array.isArray(evt.metadata?.scan_trace)) && (
+                          <p className="text-[10px] text-slate-500 mt-1 font-mono">
+                            pipeline: {evt.metadata?.scan_pipeline || "two_tier"}
+                            {Array.isArray(evt.metadata?.scan_trace) && evt.metadata.scan_trace.length > 0
+                              ? ` · ${evt.metadata.scan_trace.length} trace step(s)`
+                              : ""}
+                            {evt.metadata?.scan_action ? ` · action: ${evt.metadata.scan_action}` : ""}
+                            {evt.metadata?.monitored ? " · monitored" : ""}
+                          </p>
+                        )}
+                        {renderScanTrace(evt.metadata?.scan_trace)}
+                        {Array.isArray(evt.compliance_tags) && evt.compliance_tags.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                            <span className="text-[10px] text-slate-400">Compliance:</span>
+                            {evt.compliance_tags.map((tag) => (
+                              <Badge key={tag} variant="warning">{tag}</Badge>
+                            ))}
+                            {Array.isArray(evt.scan_findings) && evt.scan_findings.length > 0 && (
+                              <span className="text-[10px] text-slate-400">
+                                ({evt.scan_findings.length} scan finding{evt.scan_findings.length === 1 ? "" : "s"})
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {evt.username && (
+                          <p className="text-[10px] text-slate-400 mt-0.5">User: {evt.username}</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+              {/* BUG FIX (c): Load more instead of rendering all 500 events. */}
+              {eventsVisible < events.length && (
+                <div className="flex justify-center mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEventsVisible((v) => v + EVENTS_PAGE_SIZE)}
+                  >
+                    Load more ({events.length - eventsVisible} remaining)
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     );
@@ -1816,70 +2014,72 @@ export function MCPConnectorPanel() {
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Status of ZeroShield MCP service planes.
         </p>
-        <button onClick={loadHealth} className="btn-icon" title="Refresh">
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <Tooltip content="Refresh">
+          <Button variant="ghost" size="icon" aria-label="Refresh health" onClick={loadHealth}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </Tooltip>
       </div>
 
       {!health && !loading && (
-        <div className="text-center py-12 text-slate-400">
-          <Activity className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p>Unable to load service health.</p>
-        </div>
+        <EmptyState icon={Activity} title="Unable to load service health" />
       )}
 
       {health && (
         <div className="space-y-4">
           {/* Policy Engine — the single source of MCP enforcement */}
-          <section aria-label="Policy engine status" className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
-                <Ban className="w-5 h-5 text-orange-600" />
+          <Card>
+            <CardContent className="p-5" aria-label="Policy engine status">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
+                  <Ban className="w-5 h-5 text-orange-600" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium text-slate-900 dark:text-white">ZeroShield Policy Engine</h4>
+                  <p className="text-xs text-slate-500">Inline Regex, Keyword &amp; Pattern Enforcement</p>
+                </div>
+                <StatusDot status={health.mcp_firewall?.status} />
               </div>
-              <div>
-                <h4 className="font-medium text-slate-900 dark:text-white">ZeroShield Policy Engine</h4>
-                <p className="text-xs text-slate-500">Inline Regex, Keyword &amp; Pattern Enforcement</p>
-              </div>
-              <StatusDot status={health.mcp_firewall?.status} />
-            </div>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-              health.mcp_firewall?.status === "healthy"
-                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-800/30 dark:text-emerald-300"
-                : health.mcp_firewall?.status === "not_configured"
-                ? "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                : "bg-red-100 text-red-700 dark:bg-red-800/30 dark:text-red-300"
-            }`}>
-              {health.mcp_firewall?.status || "unknown"}
-            </span>
-            {health.mcp_firewall?.detail && (
-              <p className="text-xs text-slate-500 mt-2">{health.mcp_firewall.detail}</p>
-            )}
-          </section>
+              <Badge
+                variant={
+                  health.mcp_firewall?.status === "healthy"
+                    ? "success"
+                    : health.mcp_firewall?.status === "not_configured"
+                    ? "secondary"
+                    : "danger"
+                }
+              >
+                {health.mcp_firewall?.status || "unknown"}
+              </Badge>
+              {health.mcp_firewall?.detail && (
+                <p className="text-xs text-slate-500 mt-2">{health.mcp_firewall.detail}</p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Built-in detectors — the unified guard set enforced in-band on every call */}
           {Array.isArray(health.builtin_detectors) && health.builtin_detectors.length > 0 && (
-            <section aria-label="Built-in detectors" className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center">
-                  <Shield className="w-5 h-5 text-violet-600" />
+            <Card>
+              <CardContent className="p-5" aria-label="Built-in detectors">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-lg bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center">
+                    <Shield className="w-5 h-5 text-violet-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-slate-900 dark:text-white">Built-in Detectors</h4>
+                    <p className="text-xs text-slate-500">Enforced in-band by the policy engine on every tool call</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-medium text-slate-900 dark:text-white">Built-in Detectors</h4>
-                  <p className="text-xs text-slate-500">Enforced in-band by the policy engine on every tool call</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {health.builtin_detectors.map((d) => (
+                    <Badge key={d} variant="info">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      {String(d).replace(/_/g, " ")}
+                    </Badge>
+                  ))}
                 </div>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {health.builtin_detectors.map((d) => (
-                  <span
-                    key={d}
-                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-violet-100 dark:bg-violet-800/30 text-violet-700 dark:text-violet-300 font-medium"
-                  >
-                    <CheckCircle className="w-3 h-3" />
-                    {String(d).replace(/_/g, " ")}
-                  </span>
-                ))}
-              </div>
-            </section>
+              </CardContent>
+            </Card>
           )}
         </div>
       )}
@@ -1890,49 +2090,48 @@ export function MCPConnectorPanel() {
 
   return (
     <div className="space-y-4">
-      {/* Tab bar */}
-      <div
-        role="tablist"
-        aria-label="MCP Connector sections"
-        className="sticky top-0 z-10 flex gap-1 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-slate-900/60 overflow-x-auto scrollbar-thin"
-      >
-        {TABS.map(({ id, label, icon: Icon }) => {
-          const count =
-            id === "servers" ? servers.length :
-            id === "tools" ? tools.length :
-            id === "observability" ? events.length :
-            null;
-          const isActive = tab === id;
-          return (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={`mcp-tab-${id}`}
-              onClick={() => setTab(id)}
-              className={`group flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-slate-900 rounded-t ${
-                isActive
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-200"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{label}</span>
-              {count != null && count > 0 && (
-                <span
-                  className={`ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums ${
-                    isActive
-                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200"
-                      : "bg-slate-100 text-slate-600 group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
-                  }`}
-                  aria-label={`${count} ${label}`}
-                >
-                  {count > 999 ? "999+" : count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <PanelHeader
+        icon={Server}
+        title="MCP Guardrails"
+        description="Register, govern, and observe Model Context Protocol servers through the ZeroShield control plane."
+        actions={
+          <>
+            <Tooltip content="Refresh">
+              <Button variant="outline" size="icon" aria-label="Refresh" onClick={loadServers}>
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+            <Button onClick={() => setAddOpen(true)}>
+              <Plus className="w-4 h-4" /> Register Server
+            </Button>
+          </>
+        }
+      />
+
+      {/* Status strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <StatCard
+          icon={Server}
+          tone="teal"
+          value={`${connectedCount}/${servers.length}`}
+          label="Servers connected"
+        />
+        <StatCard icon={Wrench} tone="blue" value={toolsDiscovered} label="Tools discovered" />
+        <StatCard
+          icon={Layers}
+          tone={tier2On === true ? "emerald" : tier2On === false ? "slate" : "slate"}
+          value={tier2On === true ? "On" : tier2On === false ? "Off" : "—"}
+          label="Tier-2 MCP scan"
+        />
+        <StatCard icon={CheckCircle} tone="emerald" value={decisionCounts.allow || 0} label="Allowed" />
+        <StatCard icon={Ban} tone="red" value={decisionCounts.block || 0} label="Blocked" />
+        <StatCard
+          icon={Tag}
+          tone="amber"
+          value={(decisionCounts.redact || 0) + (decisionCounts.monitor || 0)}
+          label="Redact / Monitor"
+          sub={`${decisionCounts.redact || 0} redact · ${decisionCounts.monitor || 0} monitor`}
+        />
       </div>
 
       {/* Error banner */}
@@ -1940,36 +2139,62 @@ export function MCPConnectorPanel() {
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {error}
-          <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-auto h-7 w-7 text-red-500 hover:text-red-700"
+            aria-label="Dismiss error"
+            onClick={() => setError(null)}
+          >
             <X className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
       )}
 
-      {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-6">
-          <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-        </div>
-      )}
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="sticky top-0 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 supports-[backdrop-filter]:dark:bg-slate-900/60">
+          {TABS.map(({ id, label, icon: Icon }) => {
+            const count =
+              id === "servers" ? servers.length :
+              id === "tools" ? tools.length :
+              id === "observability" ? events.length :
+              null;
+            return (
+              <TabsTrigger key={id} value={id} icon={Icon} count={count != null && count > 0 ? count : null}>
+                {label}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
 
-      {/* Tab content */}
-      {!loading && (
-        <div
-          role="tabpanel"
-          id={`mcp-tab-${tab}`}
-          aria-label={TABS.find((t) => t.id === tab)?.label}
-          tabIndex={0}
-          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-lg"
-        >
-          {tab === "servers" && renderServers()}
-          {tab === "tools" && renderTools()}
-          {tab === "execute" && renderExecute()}
-          {tab === "protection" && renderProtection()}
-          {tab === "observability" && renderObservability()}
-          {tab === "health" && renderHealth()}
-        </div>
-      )}
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center py-6">
+            <Spinner size="sm" className="text-teal-500" />
+          </div>
+        )}
+
+        {!loading && (
+          <div className="pt-4">
+            <TabsContent value="servers">{renderServers()}</TabsContent>
+            <TabsContent value="tools">{renderTools()}</TabsContent>
+            <TabsContent value="execute">{renderExecute()}</TabsContent>
+            <TabsContent value="scan-matrix">{renderScanMatrix()}</TabsContent>
+            <TabsContent value="protection">{renderProtection()}</TabsContent>
+            <TabsContent value="observability">{renderObservability()}</TabsContent>
+            <TabsContent value="health">{renderHealth()}</TabsContent>
+          </div>
+        )}
+      </Tabs>
     </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════ */
+export function MCPConnectorPanel() {
+  return (
+    <ToastProvider>
+      <MCPConnectorPanelInner />
+    </ToastProvider>
   );
 }

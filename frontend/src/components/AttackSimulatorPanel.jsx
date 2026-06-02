@@ -235,11 +235,14 @@ export function AttackSimulatorPanel() {
           prompt: activePrompt,
           maxTokens: 32,
           requestedModel: gatewayModels.selectedModel,
+          responseHeaders: res.headers,
+          totalLatencyMs: elapsed,
         });
         setResult({
           ...normalized,
           httpStatus: res.status,
           elapsed,
+          total_latency_ms: normalized.total_latency_ms ?? elapsed,
           action: "needs_model",
           final_action: "needs_model",
         });
@@ -260,11 +263,14 @@ export function AttackSimulatorPanel() {
           prompt: activePrompt,
           maxTokens: 32,
           requestedModel: gatewayModels.selectedModel,
+          responseHeaders: res.headers,
+          totalLatencyMs: elapsed,
         });
         setResult({
           ...normalized,
           httpStatus: res.status,
           elapsed,
+          total_latency_ms: normalized.total_latency_ms ?? elapsed,
           action: "error",
           final_action: "error",
         });
@@ -277,12 +283,15 @@ export function AttackSimulatorPanel() {
             prompt: activePrompt,
             maxTokens: 32,
             requestedModel: gatewayModels.selectedModel,
+            responseHeaders: res.headers,
+            totalLatencyMs: elapsed,
           },
         );
         setResult({
           ...normalized,
           httpStatus: res.status,
           elapsed,
+          total_latency_ms: normalized.total_latency_ms ?? elapsed,
           action: normalized.final_action || (res.status === 403 ? "block" : res.status >= 400 ? "error" : "allow"),
           stream: true,
         });
@@ -291,11 +300,14 @@ export function AttackSimulatorPanel() {
           prompt: activePrompt,
           maxTokens: 32,
           requestedModel: gatewayModels.selectedModel,
+          responseHeaders: res.headers,
+          totalLatencyMs: elapsed,
         });
         setResult({
           ...normalized,
           httpStatus: res.status,
           elapsed,
+          total_latency_ms: normalized.total_latency_ms ?? elapsed,
           action: normalized.final_action || (res.status === 403 ? "block" : res.status >= 400 ? "error" : "allow"),
         });
       }
@@ -661,6 +673,25 @@ export function AttackSimulatorPanel() {
         </div>
       )}
 
+      {result?.pipeline_live && (
+        <p className="mb-3 text-[11px] text-slate-500 dark:text-slate-400">
+          Live gateway pipeline — this is a real <code className="font-mono">POST /v1/chat/completions</code> call, not a mock.
+          {result.detection_checkpoint && !result.blocked_by && (
+            <span>
+              {" "}
+              Input scan ran at <span className="font-medium">{result.detection_checkpoint.replace(/_/g, " ")}</span>
+              {result.zeroshield?.detection_tier ? ` (${result.zeroshield.detection_tier})` : ""}; request was allowed through.
+            </span>
+          )}
+          {result.blocked_by && (
+            <span className="text-red-600 dark:text-red-400">
+              {" "}
+              Stopped at <span className="font-medium">{result.blocked_by.replace(/_/g, " ")}</span>.
+            </span>
+          )}
+        </p>
+      )}
+
       {/* Pipeline Stage Timeline */}
       {result?.stages && (
         <div className="mb-4">
@@ -691,6 +722,28 @@ export function AttackSimulatorPanel() {
               </button>
             </div>
 
+            {(result.guard_summary?.guard_reason || result.zeroshield?.guard_reason) && (
+              <div className="mb-3 rounded-xl border border-violet-200 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-950/40">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300 mb-1">
+                  {result.guard_summary?.guard_model || result.zeroshield?.guard_model || "ZeroShield Guard Model"}
+                </div>
+                <pre className="whitespace-pre-wrap text-xs leading-relaxed text-slate-800 dark:text-slate-100 font-sans">
+                  {result.guard_summary?.guard_reason || result.zeroshield?.guard_reason}
+                </pre>
+                {(result.guard_summary?.reason_code || result.zeroshield?.reason_code) && (
+                  <p className="mt-2 text-[10px] text-violet-600 dark:text-violet-400">
+                    Action taken:{" "}
+                    <span className="font-semibold uppercase">
+                      {result.guard_summary?.guard_action || result.zeroshield?.guard_action || result.final_action}
+                    </span>
+                    {" · "}
+                    Reason code:{" "}
+                    <span className="font-mono">{result.guard_summary?.reason_code || result.zeroshield?.reason_code}</span>
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Stage summary stats */}
             {result.stages && (
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
@@ -704,6 +757,9 @@ export function AttackSimulatorPanel() {
                       stage.action === "flag" ? "text-amber-600" : "text-emerald-600"
                     }`}>
                       {stage.action.toUpperCase()}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {Number.isFinite(Number(stage.latency_ms)) ? `${stage.latency_ms}ms` : "0.1ms"}
                     </div>
                   </div>
                 ))}

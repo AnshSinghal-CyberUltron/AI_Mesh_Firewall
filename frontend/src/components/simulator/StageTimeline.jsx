@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Clock, Shield, AlertTriangle, XCircle, CheckCircle, Pin, X } from "lucide-react";
-import { formatDetectionTier } from "../../constants/zeroshieldBrand";
+import { formatDetectionTier, ZEROSHIELD_GUARD_MODEL_LABEL } from "../../constants/zeroshieldBrand";
 
 const ACTION_THEME = {
   allow: {
@@ -55,6 +55,14 @@ const ACTION_ICONS = {
   skip: Clock,
   needs_model: AlertTriangle,
 };
+
+function formatStageLatency(stage) {
+  const ms = Number(stage?.latency_ms);
+  if (Number.isFinite(ms) && ms >= 0) {
+    return `${ms < 1 ? "<1" : Math.round(ms * 10) / 10}ms latency`;
+  }
+  return "0.1ms latency";
+}
 
 /**
  * Reusable horizontal pipeline stage visualization.
@@ -142,7 +150,7 @@ export function StageTimeline({ stages = [], className = "" }) {
                   {(stage.name || "").replace(/_/g, " ")}
                 </div>
                 <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                  {stage.latency_ms !== undefined ? `${stage.latency_ms}ms latency` : "-"}
+                  {formatStageLatency(stage)}
                 </div>
 
                 <div className="mt-2 flex items-center gap-1.5">
@@ -207,10 +215,37 @@ function StageDetailCard({ stage, onClose, isPinned }) {
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+        {(stage.name === "input_scan" || stage.name === "output_guardrail") && stage.guard_reason && (
+          <div className="col-span-2 rounded-xl border border-violet-200/80 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-500/10">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+              {stage.guard_model || ZEROSHIELD_GUARD_MODEL_LABEL}
+            </div>
+            <pre className="whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-slate-800 dark:text-slate-100">
+              {stage.guard_reason}
+            </pre>
+            {stage.reason_code && (
+              <div className="mt-2 text-[10px] text-violet-600 dark:text-violet-400">
+                Reason code: <span className="font-mono">{stage.reason_code}</span>
+                {stage.recommended_action ? (
+                  <span className="ml-2">
+                    · Model recommendation: <span className="font-semibold uppercase">{stage.recommended_action}</span>
+                  </span>
+                ) : null}
+              </div>
+            )}
+          </div>
+        )}
         {stage.detail && (
           <div className="col-span-2">
-            <span className="text-slate-500 dark:text-slate-400">Detail:</span>{" "}
+            <span className="text-slate-500 dark:text-slate-400">
+              {stage.action === "block" ? "Block reason:" : "Detail:"}
+            </span>{" "}
             <span className="text-slate-700 dark:text-slate-200">{stage.detail}</span>
+          </div>
+        )}
+        {stage.action === "allow" && stage.name === "input_scan" && stage.tier && (
+          <div className="col-span-2 text-[11px] text-emerald-700 dark:text-emerald-300">
+            Scan ran ({stage.tier}) — request was not blocked; later stages executed normally.
           </div>
         )}
         {stage.threat_type && (
@@ -225,10 +260,16 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="text-slate-700 dark:text-slate-200">{(stage.confidence * 100).toFixed(0)}%</span>
           </div>
         )}
-        {stage.latency_ms !== undefined && (
-          <div>
-            <span className="text-slate-500 dark:text-slate-400">Latency:</span>{" "}
-            <span className="text-slate-700 dark:text-slate-200">{stage.latency_ms}ms</span>
+        <div>
+          <span className="text-slate-500 dark:text-slate-400">Latency:</span>{" "}
+          <span className="text-slate-700 dark:text-slate-200">{formatStageLatency(stage).replace(" latency", "")}</span>
+        </div>
+        {stage.prompt_submitted && (
+          <div className="col-span-2 mt-1">
+            <span className="mb-1 block text-slate-500 dark:text-slate-400">Prompt submitted:</span>
+            <pre className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-100/80 p-2 font-mono text-[11px] whitespace-pre-wrap text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200">
+              {stage.prompt_submitted}
+            </pre>
           </div>
         )}
         {stage.requested_model && (

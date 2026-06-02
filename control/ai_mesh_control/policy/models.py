@@ -423,7 +423,7 @@ class ComplianceTag(models.Model):
     DECISION-D Phase 1: seeded from policy.compliance_tags.COMPLIANCE_TAG_METADATA
     via data migration 0030. Admins may add custom tags or override
     label/description/severity; the ``code`` is the stable join key used by
-    the gateway when annotating audit events with Presidio findings.
+    the gateway when annotating audit events with scan findings.
 
     Severity scale aligns with MCPToolRegistration.SENSITIVITY_CHOICES.
     """

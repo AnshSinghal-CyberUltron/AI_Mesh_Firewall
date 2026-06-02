@@ -107,9 +107,12 @@ class MCPServerRegistration(models.Model):
         null=True,
         blank=True,
     )
-    # DECISION-D Phase 1: default Presidio action applied to every tool on this
-    # server unless the tool overrides via MCPToolRegistration.presidio_action.
-    default_presidio_action = models.CharField(
+    # Default scan enforcement action applied to every tool on this server
+    # unless the tool overrides via MCPToolRegistration.scan_action. Drives the
+    # Tier-1/Tier-2 scan outcome (tag = observe only, redact, block). Formerly
+    # ``default_presidio_action``; Presidio is removed and detection is now
+    # engine-agnostic (regex Tier-1 + Bedrock Tier-2).
+    default_scan_action = models.CharField(
         max_length=8,
         choices=[("tag", "Tag only"), ("redact", "Redact"), ("block", "Block")],
         default="tag",
@@ -244,9 +247,9 @@ class MCPToolRegistration(models.Model):
         null=True,
         blank=True,
     )
-    # DECISION-D Phase 1: per-tool Presidio action override. ``inherit`` defers
-    # to the parent server's ``default_presidio_action``.
-    presidio_action = models.CharField(
+    # Per-tool scan enforcement override. ``inherit`` defers to the parent
+    # server's ``default_scan_action``. Formerly ``presidio_action``.
+    scan_action = models.CharField(
         max_length=8,
         choices=[
             ("inherit", "Inherit from server"),
@@ -277,6 +280,7 @@ class MCPEvent(models.Model):
         ("allow", "Allow"),
         ("block", "Block"),
         ("redact", "Redact"),
+        ("monitor", "Monitor"),
         ("error", "Error"),
     ]
 
@@ -299,12 +303,13 @@ class MCPEvent(models.Model):
     latency_ms = models.IntegerField(default=0)
     request_id = models.CharField(max_length=64, blank=True, default="")
     metadata = models.JSONField(default=dict, blank=True)
-    # DECISION-D Phase 1: Presidio + ComplianceTag annotations.
-    # ``compliance_tags`` is a sorted list of ComplianceTag.code values
-    # (e.g. ["GDPR-PII", "PCI-CARD"]). ``presidio_findings`` is a list of
-    # {entity_type, score, start, end, direction} dicts captured at scan time.
+    # Scan annotations. ``compliance_tags`` is a sorted list of ComplianceTag.code
+    # values (e.g. ["GDPR-PII", "PCI-CARD"]). ``scan_findings`` is a list of
+    # {entity_type, score, start, end, direction, tier, threat_type, detail} dicts
+    # captured at scan time (Tier-1 regex + Tier-2 Bedrock). Formerly
+    # ``presidio_findings``.
     compliance_tags = models.JSONField(default=list, blank=True)
-    presidio_findings = models.JSONField(default=list, blank=True)
+    scan_findings = models.JSONField(default=list, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -317,3 +322,124 @@ class MCPEvent(models.Model):
 
     def __str__(self):
         return f"{self.decision}: {self.tool_name} @ {self.timestamp}"
+
+
+class MCPScanControl(models.Model):
+    """Per-org MCP scan control matrix (Tier-1 static / Tier-2 Bedrock).
+
+    Additive to the per-server/per-tool ``default_scan_action`` / ``scan_action``
+    enforcement fields.
+    The gateway resolves effective controls per tool call using precedence:
+    tool → server → org (then ``priority`` within the same scope level).
+    """
+
+    TIER_CHOICES = [
+        ("tier1", "Tier 1 (static)"),
+        ("tier2", "Tier 2 (Bedrock)"),
+    ]
+    DIRECTION_CHOICES = [
+        ("input", "Input"),
+        ("output", "Output"),
+        ("both", "Both"),
+    ]
+    SCOPE_CHOICES = [
+        ("org", "Organization"),
+        ("server", "Server"),
+        ("tool", "Tool"),
+    ]
+    TARGET_CHOICES = [
+        ("entire", "Entire payload"),
+        ("key_path", "Key path"),
+    ]
+    STRICT_CHOICES = [
+        ("strict", "Strict (fail closed)"),
+        ("fail_open", "Fail open (degraded pass)"),
+    ]
+    ACTION_CHOICES = [
+        ("inherit", "Inherit from server/tool default"),
+        ("monitor", "Monitor (detect + tag, allow)"),
+        ("redact", "Redact"),
+        ("block", "Block"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        "auth_api.Organization",
+        on_delete=models.CASCADE,
+        related_name="mcp_scan_controls",
+    )
+    server = models.ForeignKey(
+        MCPServerRegistration,
+        on_delete=models.CASCADE,
+        related_name="scan_controls",
+        null=True,
+        blank=True,
+    )
+    tool_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Required when scope_type=tool; must match MCPToolRegistration.tool_name.",
+    )
+    tier = models.CharField(max_length=8, choices=TIER_CHOICES)
+    enabled = models.BooleanField(default=True)
+    direction = models.CharField(
+        max_length=8,
+        choices=DIRECTION_CHOICES,
+        default="both",
+    )
+    scope_type = models.CharField(
+        max_length=8,
+        choices=SCOPE_CHOICES,
+        default="org",
+    )
+    target_mode = models.CharField(
+        max_length=16,
+        choices=TARGET_CHOICES,
+        default="entire",
+    )
+    key_path = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="Dot path (e.g. arguments.email) or simple key name for key_path mode.",
+    )
+    strict_mode = models.CharField(
+        max_length=16,
+        choices=STRICT_CHOICES,
+        default="fail_open",
+        help_text="Tier-2 degradation behaviour when Bedrock is unavailable.",
+    )
+    action = models.CharField(
+        max_length=8,
+        choices=ACTION_CHOICES,
+        default="inherit",
+        help_text=(
+            "Enforcement action for THIS tier+direction+scope row, independent "
+            "per tier. 'inherit' defers to MCPToolRegistration.scan_action then "
+            "MCPServerRegistration.default_scan_action then 'monitor' (safe "
+            "observe-only default). Precedence within a request: block > redact "
+            "> monitor; a Tier-1 block short-circuits Tier-2 (Bedrock never runs)."
+        ),
+    )
+    priority = models.IntegerField(
+        default=100,
+        help_text="Higher wins within the same scope_type + tier + direction.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-priority", "tier", "direction"]
+        indexes = [
+            models.Index(fields=["organization", "tier", "enabled"]),
+            models.Index(fields=["server", "tool_name"]),
+        ]
+
+    def __str__(self) -> str:
+        scope = self.scope_type
+        if self.tool_name:
+            scope = f"tool:{self.tool_name}"
+        elif self.server_id:
+            scope = f"server:{self.server_id}"
+        return f"{self.tier}/{self.direction}/{self.action}@{scope}"

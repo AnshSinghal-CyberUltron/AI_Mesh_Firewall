@@ -6,18 +6,47 @@
 #   FARGATE_SPOT  — burst capacity (gateway scale-out, ~70% cheaper)
 #   EC2 (c7i ASG) — MCP stdio pool (needs real processes + warm uv/npm cache)
 #
-# x86 (c7i), NOT Graviton: MCP npx/uvx fetch arch-specific native binaries and
-# the Presidio sidecar images are amd64-only.
+# x86 (c7i), NOT Graviton: MCP npx/uvx fetch arch-specific native binaries that
+# are amd64-only.
 ###############################################################################
 
-variable "name"              { type = string }
-variable "private_subnet_ids" { type = list(string) }
-variable "app_sg_id"          { type = string }
-variable "mcp_instance_type"  { type = string, default = "c7i.2xlarge" }
-variable "mcp_min_size"       { type = number, default = 1 }
-variable "mcp_max_size"       { type = number, default = 6 }
-variable "mcp_desired"        { type = number, default = 2 }
-variable "tags"               { type = map(string), default = {} }
+variable "name" {
+
+  type = string
+
+}
+variable "az_count" {
+  type = number
+
+  default = 3
+}
+variable "private_subnet_ids" {
+  type = list(string)
+}
+variable "app_sg_id" {
+  type = string
+}
+variable "mcp_instance_type" {
+  type    = string
+  default = "c7i.2xlarge"
+}
+variable "mcp_min_size" {
+  type = number
+  default = 1
+}
+variable "mcp_max_size" {
+  type = number
+  default = 6
+}
+variable "mcp_desired" {
+  type = number
+  default = 2
+}
+variable "tags" {
+  type = map(string)
+  default = {
+}
+}
 
 resource "aws_ecs_cluster" "this" {
   name = var.name
@@ -129,22 +158,19 @@ resource "aws_ecs_cluster_capacity_providers" "this" {
   capacity_providers = [
     "FARGATE",
     "FARGATE_SPOT",
+    aws_ecs_capacity_provider.gateway.name,
     aws_ecs_capacity_provider.mcp.name,
   ]
-  # Gateway default: keep an On-Demand floor, burst on Spot.
+  # Control/workers default to Fargate when no strategy is set on the service.
   default_capacity_provider_strategy {
     capacity_provider = "FARGATE"
-    base              = 2
+    base              = 1
     weight            = 1
-  }
-  default_capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
-    base              = 0
-    weight            = 3
   }
 }
 
-output "cluster_id"           { value = aws_ecs_cluster.this.id }
-output "cluster_name"         { value = aws_ecs_cluster.this.name }
-output "cluster_arn"          { value = aws_ecs_cluster.this.arn }
-output "mcp_capacity_provider" { value = aws_ecs_capacity_provider.mcp.name }
+output "cluster_id"                { value = aws_ecs_cluster.this.id }
+output "cluster_name"              { value = aws_ecs_cluster.this.name }
+output "cluster_arn"               { value = aws_ecs_cluster.this.arn }
+output "gateway_capacity_provider" { value = aws_ecs_capacity_provider.gateway.name }
+output "mcp_capacity_provider"     { value = aws_ecs_capacity_provider.mcp.name }

@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plus, Pencil, Trash2, X, Loader2, Shield, ChevronDown, ChevronRight,
-  CheckCircle, AlertTriangle, RefreshCw, Upload, Search, Filter,
+  CheckCircle, AlertTriangle, RefreshCw, Upload, Search, Filter, Activity,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
+import { resolvePolicyCreateBehavior } from "../utils/policyCreateBehavior";
 
 const SEVERITY_CONFIG = {
   CRITICAL: { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700", border: "border-red-200 dark:border-red-800" },
@@ -86,8 +87,10 @@ function normalizePolicyScope(policy) {
   return "global";
 }
 
-function buildPolicyPayload(form, enforcedScope, mcpServerId) {
-  const resolvedScope = !enforcedScope || enforcedScope === "all" ? (form.scope || "global") : enforcedScope;
+function buildPolicyPayload(form, enforcedScope, mcpServerId, scopeLocked = false) {
+  const resolvedScope = (scopeLocked && enforcedScope && enforcedScope !== "all")
+    ? enforcedScope
+    : (form.scope || "global");
   // G7/G8 helpers: convert UI comma-strings into the array shapes the
   // backend's PostgreSQL ArrayField columns expect. Empty / whitespace
   // input must produce [] (wildcard — "applies to everyone"), NOT
@@ -165,6 +168,27 @@ function ActionBadge({ action }) {
     <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${cfg.bg} ${cfg.text}`}>
       {action}
     </span>
+  );
+}
+
+function StatCard({ icon: Icon, label, value, tone = "teal" }) {
+  const toneClass = {
+    teal: "bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-200",
+    violet: "bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-200",
+    amber: "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
+    rose: "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200",
+  }[tone];
+
+  return (
+    <div className="rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white/90 dark:bg-slate-900/50 p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
+        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg ${toneClass}`}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+      </div>
+      <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{value}</p>
+    </div>
   );
 }
 
@@ -812,6 +836,9 @@ export function PolicyManagementPanel({
   emptyStateMessage,
   mcpServerSlug = null,
   mcpServerId = null,
+  externalCreateSignal = 0,
+  externalCreateScope = "global",
+  externalCreateScopeLocked = false,
 }) {
   const { fetchWithAuth, user } = useAuth();
   // B3: gate the Compile & Push button on admin role. Backend already enforces
@@ -825,6 +852,7 @@ export function PolicyManagementPanel({
   const [policyRules, setPolicyRules] = useState({});
   const [rulesLoading, setRulesLoading] = useState({});
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createScopeLocked, setCreateScopeLocked] = useState(scope !== "all");
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [ruleTargetPolicyId, setRuleTargetPolicyId] = useState(null);
@@ -845,6 +873,9 @@ export function PolicyManagementPanel({
   // so the MCP rule builder can render the preset dropdown without
   // hard-coding the list in the client.
   const [mcpPresets, setMcpPresets] = useState([]);
+  // External create triggers are monotonic signals from parent pages.
+  // Guard against replay on tab/scope changes: only consume each signal once.
+  const lastHandledExternalCreateSignal = useRef(0);
 
   const fetchPolicies = useCallback(async () => {
     setLoading(true);
@@ -894,6 +925,17 @@ export function PolicyManagementPanel({
   useEffect(() => {
     fetchPolicies();
   }, [fetchPolicies]);
+
+  useEffect(() => {
+    if (!externalCreateSignal) return;
+    if (externalCreateSignal <= lastHandledExternalCreateSignal.current) return;
+    lastHandledExternalCreateSignal.current = externalCreateSignal;
+    const behavior = resolvePolicyCreateBehavior(externalCreateScope || scope, "header");
+    setPolicyForm({ ...EMPTY_POLICY_FORM, scope: behavior.scope });
+    setCreateScopeLocked(Boolean(externalCreateScopeLocked));
+    setFormError(null);
+    setCreateModalOpen(true);
+  }, [externalCreateSignal, externalCreateScope, externalCreateScopeLocked, scope]);
 
   useEffect(() => {
     let cancelled = false;
@@ -963,7 +1005,7 @@ export function PolicyManagementPanel({
     setFormError(null);
     setSubmitting(true);
     try {
-      const payload = buildPolicyPayload(policyForm, scope, mcpServerId);
+      const payload = buildPolicyPayload(policyForm, scope, mcpServerId, createScopeLocked);
       const res = await fetchWithAuth("/api/policies/", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -989,7 +1031,7 @@ export function PolicyManagementPanel({
     setFormError(null);
     setSubmitting(true);
     try {
-      const payload = buildPolicyPayload(policyForm, scope, mcpServerId);
+      const payload = buildPolicyPayload(policyForm, scope, mcpServerId, scope !== "all");
       const res = await fetchWithAuth(`/api/policies/${editPolicyId}/`, {
         method: "PATCH",
         body: JSON.stringify(payload),
@@ -1299,6 +1341,11 @@ export function PolicyManagementPanel({
     return true;
   });
 
+  const totalPolicies = policies.length;
+  const enabledPolicies = policies.filter((policy) => policy.enabled !== false).length;
+  const criticalPolicies = policies.filter((policy) => policy.severity === "CRITICAL").length;
+  const totalRules = Object.values(policyRules).reduce((sum, rules) => sum + (Array.isArray(rules) ? rules.length : 0), 0);
+
   const resolvedEmptyStateMessage = emptyStateMessage || (
     scope === "all"
       ? "No policies created. Create one to define enforcement rules."
@@ -1311,11 +1358,15 @@ export function PolicyManagementPanel({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 shadow-sm p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-5">
         <div>
-          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center">{title}<InfoTooltip title="How to Use">{infoTooltip}</InfoTooltip></h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Shield className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+            {title}
+            <InfoTooltip title="How to Use">{infoTooltip}</InfoTooltip>
+          </h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
             {description}
           </p>
         </div>
@@ -1324,7 +1375,7 @@ export function PolicyManagementPanel({
             <button
               onClick={handleCompile}
               disabled={compiling}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-xl transition-colors disabled:opacity-50"
               title="Compile and push policies to gateway"
             >
               {compiling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
@@ -1333,16 +1384,25 @@ export function PolicyManagementPanel({
           ) : null}
           <button
             onClick={() => {
-              setPolicyForm({ ...EMPTY_POLICY_FORM, scope: scope === "all" ? "global" : scope });
+              const behavior = resolvePolicyCreateBehavior(scope, "panel");
+              setPolicyForm({ ...EMPTY_POLICY_FORM, scope: behavior.scope });
+              setCreateScopeLocked(scope !== "all");
               setFormError(null);
               setCreateModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             Create Policy
           </button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <StatCard icon={Shield} label="Total Policies" value={totalPolicies} tone="teal" />
+        <StatCard icon={CheckCircle} label="Enabled Policies" value={enabledPolicies} tone="violet" />
+        <StatCard icon={AlertTriangle} label="Critical Severity" value={criticalPolicies} tone="rose" />
+        <StatCard icon={Activity} label="Loaded Rules" value={totalRules} tone="amber" />
       </div>
 
       {compileStatus && (
@@ -1388,7 +1448,14 @@ export function PolicyManagementPanel({
       ) : null}
 
       {showFilters ? (
-        <div className="flex items-center gap-2 mb-4">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/40 p-3 mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Filter className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+            <span className="text-xs font-semibold tracking-wide uppercase text-slate-500 dark:text-slate-400">
+              Filters
+            </span>
+          </div>
+          <div className="flex flex-col md:flex-row md:items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input
@@ -1396,13 +1463,13 @@ export function PolicyManagementPanel({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search policies..."
-              className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full pl-8 pr-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
           <select
             value={enabledFilter}
             onChange={(e) => setEnabledFilter(e.target.value)}
-            className="bg-white dark:bg-slate-800 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-teal-500"
+            className="bg-white dark:bg-slate-800 px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-teal-500"
           >
             <option value="">All statuses</option>
             <option value="enabled">Enabled only</option>
@@ -1411,7 +1478,7 @@ export function PolicyManagementPanel({
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
-            className="bg-white dark:bg-slate-800 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-teal-500"
+            className="bg-white dark:bg-slate-800 px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-teal-500"
           >
             <option value="">All Severities</option>
             <option value="CRITICAL">Critical</option>
@@ -1419,9 +1486,10 @@ export function PolicyManagementPanel({
             <option value="MEDIUM">Medium</option>
             <option value="LOW">Low</option>
           </select>
-          <button onClick={fetchPolicies} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Refresh">
+          <button onClick={fetchPolicies} className="inline-flex items-center justify-center p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" title="Refresh">
             <RefreshCw className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
           </button>
+          </div>
         </div>
       ) : null}
 
@@ -1437,11 +1505,11 @@ export function PolicyManagementPanel({
             : "No policies match your search criteria."}
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {filteredPolicies.map((policy) => (
-            <div key={policy.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+            <div key={policy.id} className="border border-slate-200/90 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900/30 shadow-sm">
               <div
-                className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                className="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
                 onClick={() => toggleExpand(policy.id)}
               >
                 <button className="flex-shrink-0 text-slate-400">
@@ -1451,8 +1519,8 @@ export function PolicyManagementPanel({
                 </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{policy.name}</span>
-                    <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">{policy.code}</span>
+                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{policy.name}</span>
+                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-md">{policy.code}</span>
                     <SeverityBadge severity={policy.severity} />
                     {!policy.enabled && (
                       <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
@@ -1460,9 +1528,9 @@ export function PolicyManagementPanel({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5">
+                  <div className="flex items-center flex-wrap gap-2.5 mt-1">
                     {policy.category && (
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400">{policy.category}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-1.5 py-0.5">{policy.category}</span>
                     )}
                     <span className="text-[10px] text-slate-400">
                       {policy.rule_count != null ? `${policy.rule_count} rules` : ""}
@@ -1488,7 +1556,7 @@ export function PolicyManagementPanel({
                     <>
                       <button
                         onClick={() => openEditModal(policy)}
-                        className="p-1.5 hover:bg-slate-200 rounded text-slate-500 dark:text-slate-400 transition-colors"
+                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-500 dark:text-slate-300 transition-colors"
                         title="Edit Policy"
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -1507,7 +1575,7 @@ export function PolicyManagementPanel({
                 </div>
               </div>
               {expandedPolicy === policy.id && (
-                <div className="px-4 pb-3 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/50/50">
+                <div className="px-4 pb-3 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/80 dark:bg-slate-800/40">
                   {policy.description && (
                     <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 mb-2">{policy.description}</p>
                   )}
@@ -1538,10 +1606,13 @@ export function PolicyManagementPanel({
           form={policyForm}
           setForm={setPolicyForm}
           onSubmit={handleCreatePolicy}
-          onClose={() => setCreateModalOpen(false)}
+          onClose={() => {
+            setCreateModalOpen(false);
+            setCreateScopeLocked(scope !== "all");
+          }}
           submitting={submitting}
           error={formError}
-          scopeLocked={scope !== "all"}
+          scopeLocked={createScopeLocked}
         />
       )}
 

@@ -13,6 +13,8 @@ urlpatterns = [
     # Per-server tool controls
     path("servers/<uuid:pk>/tools/", views.MCPServerToolListView.as_view(), name="mcp-server-tools"),
     path("servers/<uuid:pk>/tools/<str:tool_name>/", views.MCPToolControlView.as_view(), name="mcp-tool-control"),
+    path("scan-controls/", views.MCPScanControlListCreateView.as_view(), name="mcp-scan-control-list"),
+    path("scan-controls/<uuid:pk>/", views.MCPScanControlDetailView.as_view(), name="mcp-scan-control-detail"),
     # OAuth 2.1 authorization (Phase C)
     path("servers/<uuid:pk>/oauth/authorize/", views.MCPServerOAuthStartView.as_view(), name="mcp-oauth-authorize"),
     path("oauth/callback/", views.MCPOAuthCallbackView.as_view(), name="mcp-oauth-callback"),

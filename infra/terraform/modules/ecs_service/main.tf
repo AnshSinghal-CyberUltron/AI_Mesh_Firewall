@@ -6,32 +6,102 @@
 # bounds, and capacity-provider strategy.
 ###############################################################################
 
-variable "name"             { type = string }
-variable "cluster_arn"      { type = string }
-variable "subnet_ids"       { type = list(string) }
-variable "security_group_id" { type = string }
-variable "image"            { type = string }
-variable "cpu"              { type = number, default = 4096 } # 4 vCPU
-variable "memory"           { type = number, default = 8192 } # 8 GiB
-variable "container_port"   { type = number, default = 8300 }
-variable "desired_count"    { type = number, default = 2 }
-variable "min_count"        { type = number, default = 2 }
-variable "max_count"        { type = number, default = 8 }
-variable "target_group_arn" { type = string, default = "" } # "" = no LB (workers)
-variable "command"          { type = list(string), default = [] }
-variable "environment"      { type = map(string), default = {} }
-variable "secret_arns"      { type = map(string), default = {} } # name -> secret arn
-variable "execution_role_arn" { type = string }
-variable "task_role_arn"      { type = string }
-variable "region"             { type = string }
-variable "log_group"          { type = string }
+variable "name" {
+
+  type = string
+
+}
+variable "cluster_arn" {
+  type = string
+}
+variable "subnet_ids" {
+  type = list(string)
+}
+variable "security_group_id" {
+  type = string
+}
+variable "image" {
+  type = string
+}
+variable "cpu" {
+  type = number
+
+  default = 4096
+} # 4 vCPU
+variable "memory" {
+  type = number
+  default = 8192
+} # 8 GiB
+variable "container_port" {
+  type = number
+  default = 8300
+}
+variable "desired_count" {
+  type = number
+  default = 2
+}
+variable "min_count" {
+  type = number
+  default = 2
+}
+variable "max_count" {
+  type = number
+  default = 8
+}
+variable "target_group_arn" {
+  type = string
+  default = ""
+} # "" = no LB (workers)
+variable "command" {
+  type = list(string)
+  default = []
+}
+variable "environment" {
+  type = map(string)
+  default = {
+}
+}
+variable "secret_arns" {
+  type = map(string)
+  default = {
+}
+}
+
+# name -> secret arn
+variable "execution_role_arn" {
+  type = string
+}
+variable "task_role_arn" {
+  type = string
+}
+variable "region" {
+  type = string
+}
+variable "log_group" {
+  type = string
+}
 variable "capacity_strategy" {
   type = list(object({ capacity_provider = string, base = number, weight = number }))
   default = []
 }
-variable "autoscale_cpu_target" { type = number, default = 55 }
-variable "health_path" { type = string, default = "/health" }
-variable "tags" { type = map(string), default = {} }
+variable "autoscale_cpu_target" {
+  type = number
+  default = 55
+}
+variable "health_path" {
+  type = string
+  default = "/health"
+}
+variable "requires_compatibilities" {
+  type = list(string)
+  description = "FARGATE for control/workers; EC2 for gateway on c7i ASG"
+  default     = ["FARGATE"]
+}
+variable "tags" {
+  type = map(string)
+  default = {
+}
+}
 
 locals {
   has_lb = var.target_group_arn != ""
@@ -39,15 +109,18 @@ locals {
 
 resource "aws_ecs_task_definition" "this" {
   family                   = var.name
-  requires_compatibilities = ["FARGATE"]
+  requires_compatibilities = var.requires_compatibilities
   network_mode             = "awsvpc"
   cpu                      = var.cpu
   memory                   = var.memory
   execution_role_arn       = var.execution_role_arn
   task_role_arn            = var.task_role_arn
-  runtime_platform {
-    cpu_architecture        = "X86_64" # Presidio/MCP native deps are amd64
-    operating_system_family = "LINUX"
+  dynamic "runtime_platform" {
+    for_each = contains(var.requires_compatibilities, "FARGATE") ? [1] : []
+    content {
+      cpu_architecture        = "X86_64"
+      operating_system_family = "LINUX"
+    }
   }
   container_definitions = jsonencode([{
     name      = var.name
@@ -94,8 +167,7 @@ resource "aws_ecs_service" "this" {
       weight            = capacity_provider_strategy.value.weight
     }
   }
-  # Fall back to plain FARGATE when no strategy supplied.
-  launch_type = length(var.capacity_strategy) == 0 ? "FARGATE" : null
+  launch_type = length(var.capacity_strategy) == 0 && contains(var.requires_compatibilities, "FARGATE") ? "FARGATE" : null
 
   network_configuration {
     subnets          = var.subnet_ids

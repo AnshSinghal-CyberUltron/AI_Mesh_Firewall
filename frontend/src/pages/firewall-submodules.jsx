@@ -5,9 +5,6 @@ import { Zap, GitBranch, Database, Eye, Shield, AlertTriangle, Filter } from "lu
 import { GatewayKeyPanel } from "../components/GatewayKeyPanel";
 import { KillSwitchPanel } from "../components/KillSwitchPanel";
 import { AttackSimulatorPanel } from "../components/AttackSimulatorPanel";
-import { PolicyManagementPanel } from "../components/PolicyManagementPanel";
-import { PolicyAnalyticsPanel } from "../components/PolicyAnalyticsPanel";
-import { VectorPolicyPanel } from "../components/VectorPolicyPanel";
 import { ModelConnectionPanel } from "../components/ModelConnectionPanel";
 import { ModelGovernancePanel } from "../components/ModelGovernancePanel";
 import { RoutingAuditPanel } from "../components/RoutingAuditPanel";
@@ -34,6 +31,7 @@ import { RAGSetupGuide } from "../components/rag/RAGSetupGuide";
 import { ModelStatePanel } from "../components/ModelStatePanel";
 import { FirewallModulePage } from "../components/FirewallModulePage";
 import { MCPConnectorPanel } from "../components/MCPConnectorPanel";
+import { Firewall12EnterprisePage } from "../components/Firewall12EnterprisePage";
 
 class FirewallModuleErrorBoundary extends Component {
   constructor(props) {
@@ -88,71 +86,7 @@ export function Firewall11Page({ onViewResults, onViewLogDetail, children }) {
 
 // 1.2 Policy Management
 export function Firewall12Page({ onViewResults, onViewLogDetail, children }) {
-  const flowNodes = [
-    { label: "Policies", format: (summary) => `${summary.total.toLocaleString()} reviewed`, color: "blue" },
-    { label: "Rules", format: (summary) => `${summary.allowed.toLocaleString()} active`, color: "teal" },
-    { label: "Blocks", format: (summary) => `${summary.blocked.toLocaleString()} enforced`, color: "orange" },
-    { label: "Audit", format: (summary) => `${summary.redacted.toLocaleString()} redacted`, color: "emerald" },
-  ];
-
-  return (
-    <FirewallModulePage
-      moduleId="1.2"
-      title="Policy Management"
-      description="A central policy workspace for RAG and vector retrieval protections. Manage content rules, namespace controls, and enforcement posture from one operator surface."
-      icon={Shield}
-      flowNodes={flowNodes}
-      onViewResults={onViewResults}
-      onViewLogDetail={onViewLogDetail}
-      controlPanels={[
-        <PolicyManagementPanel
-          key="global-policy-management"
-          title="Global Policies"
-          description="Organization-wide safeguards that apply across all gateway traffic and policy domains."
-          scope="global"
-          showCompileButton={true}
-          showFilters={false}
-          emptyStateMessage="No global policies yet. Create one to define baseline protections across the platform."
-        />,
-        <PolicyManagementPanel
-          key="pipeline-policy-management"
-          title="Pipeline Policies"
-          description="Policies focused on staged request flow, cross-stage escalation, and pipeline-specific intervention logic."
-          scope="pipeline"
-          showCompileButton={false}
-          showFilters={false}
-          emptyStateMessage="No pipeline policies yet. Create one to manage stage-aware enforcement behavior."
-        />,
-        <PolicyManagementPanel
-          key="rag-policy-management"
-          title="RAG Policies"
-          description="Policies for retrieval-augmented generation, document trust, hallucination control, and secure context handoff."
-          scope="rag"
-          showCompileButton={false}
-          showFilters={false}
-          emptyStateMessage="No RAG policies yet. Create one to manage retrieval and generation guardrails."
-        />,
-        <PolicyManagementPanel
-          key="mcp-policy-management"
-          title="MCP Policies"
-          description="Policies for MCP tool execution, agent communication, privilege control, and multi-agent orchestration security."
-          scope="mcp"
-          showCompileButton={false}
-          showFilters={false}
-          emptyStateMessage="No MCP policies yet. Create one to manage tool and agent protections."
-        />,
-        <VectorPolicyPanel
-          key="vector-policy"
-          title="Vector DB Policies"
-          description="Collection-level vector database policies with separate CRUD and compile flow for Vector DB enforcement."
-        />,
-      ]}
-      inspectionPanels={[
-        <PolicyAnalyticsPanel key="policy-analytics" />,
-        ...(children ? [children] : []),
-      ]}
-    />
-  );
+  return <Firewall12EnterprisePage onViewResults={onViewResults} onViewLogDetail={onViewLogDetail} children={children} />;
 }
 
 // 1.3 RAG & Vector DB Firewall

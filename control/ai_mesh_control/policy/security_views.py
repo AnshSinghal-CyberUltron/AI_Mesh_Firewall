@@ -18,6 +18,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.models import AGENT_TYPE_CHOICES, Agent, Endpoint
+from ai_mesh_shared.owasp_telemetry import is_owasp_enforced
+
 from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
 from policy.models import EnforcementEvent, Notification, Policy
 from policy.module_16 import (
@@ -1167,7 +1169,7 @@ class OwaspStatsView(APIView):
             for code in codes:
                 if code and code in OWASP_ALL_VECTORS:
                     by_code[code]["detected"] += 1
-                    if ev["action"] == ACTION_BLOCK:
+                    if is_owasp_enforced(ev.get("action") or ""):
                         by_code[code]["blocked"] += 1
 
         # Build list for each family with full vector names (OWASP LLM/MCP/Agentic Top 10)

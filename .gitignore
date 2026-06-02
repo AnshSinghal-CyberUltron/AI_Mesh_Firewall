@@ -1,6 +1,4 @@
-.env
-.env.*
-!.env.sample
+
 __pycache__/
 *.pyc
 .venv/
@@ -15,3 +13,16 @@ postgres_data/
 
 # Verification run artifacts (may contain bearer tokens, payloads, screenshots)
 runs/verification/
+
+# Terraform cache
+**/.terraform/*
+
+# State files
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+
+# Keep dependency lock file
+!.terraform.lock.hcl

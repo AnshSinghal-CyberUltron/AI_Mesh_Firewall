@@ -157,7 +157,7 @@ ZeroShield AI Mesh Firewall is deployed as a centralized security mesh that inte
 Establish the **AI Gateway** as a secure Policy Enforcement Point (PEP). This involves integrating identity-aware authentication and configuring Redis-based rate limiting to ensure sub-5ms validation latency for all incoming requests.
 
 ### 2. Security Engine Configuration
-Configure the **Pipeline-Aware Firewall** by integrating security scanners (such as Presidio and llm-guard). This stage focuses on defining regex patterns, keyword lists, and injection defense rules that scan prompts at the Ingress and Input stages.
+Configure the **Pipeline-Aware Firewall** by integrating security scanners (such as regex detectors and llm-guard). This stage focuses on defining regex patterns, keyword lists, and injection defense rules that scan prompts at the Ingress and Input stages.
 
 ### 3. Data Layer Isolation
 Implement **Namespace Isolation** for your Vector Databases (Chroma, Pinecone, or Milvus). This ensures that retrieval calls are intercepted and validated against the user's tenant permissions, preventing unauthorized context from being fed into the LLM.
