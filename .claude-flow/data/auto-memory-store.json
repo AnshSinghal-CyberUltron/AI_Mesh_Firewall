@@ -58,5 +58,29 @@
       "quality": 0.85
     },
     "createdAt": 1780328183420
+  },
+  {
+    "id": "task-pii-effectiveness-review",
+    "key": "pii-effectiveness-review",
+    "content": "Task completed: pii-effectiveness-review",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1780651481920
+  },
+  {
+    "id": "task-review-policy-analytics-labels",
+    "key": "review-policy-analytics-labels",
+    "content": "Task completed: review-policy-analytics-labels",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1780654389461
   }
 ]

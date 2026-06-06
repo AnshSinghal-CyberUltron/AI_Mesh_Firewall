@@ -1,0 +1,808 @@
+- generic [ref=e8]:
+  - complementary [ref=e9]:
+    - generic [ref=e10]:
+      - img [ref=e15]
+      - button "Expand sidebar" [ref=e18]:
+        - img [ref=e19]
+    - navigation [ref=e21]:
+      - button "AI Mesh Firewall" [ref=e24]:
+        - img [ref=e25]
+    - button [ref=e28]:
+      - img [ref=e31]
+  - generic [ref=e34]:
+    - banner [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic [ref=e39]:
+            - generic [ref=e40]: Module 1 Inputs
+            - generic [ref=e41]: DEV
+            - generic [ref=e42]: Connected
+          - generic [ref=e44]:
+            - img [ref=e45]
+            - textbox "Search models, policies, threats, or infrastructure..." [ref=e48]
+        - generic [ref=e49]:
+          - button "Scan Model" [ref=e50]:
+            - img [ref=e51]
+            - generic [ref=e52]: Scan Model
+          - button [ref=e54]:
+            - img [ref=e55]
+          - button [ref=e59]:
+            - img [ref=e60]
+          - button "Switch to dark mode" [ref=e64]:
+            - img [ref=e65]
+          - button "Ansh Singhal admin@zeroshield.io" [ref=e69]:
+            - generic [ref=e70]:
+              - paragraph [ref=e71]: Ansh Singhal
+              - paragraph [ref=e72]: admin@zeroshield.io
+            - img [ref=e74]
+    - main [ref=e77]:
+      - generic [ref=e79]:
+        - generic [ref=e81]:
+          - generic [ref=e82]:
+            - img [ref=e84]
+            - generic [ref=e87]:
+              - heading "Firewall Configuration & Policy Settings" [level=1] [ref=e88]
+              - paragraph [ref=e89]: Configure enforcement policies, thresholds, and security controls for AI Mesh Firewall
+              - generic [ref=e90]:
+                - generic [ref=e91]: Configuration Mode
+                - generic [ref=e92]: "Last saved: 06/06/2026, 18:35:43"
+          - generic [ref=e93]:
+            - generic [ref=e94]: Unsaved changes
+            - button "Reset" [disabled]
+            - button "Save Configuration" [disabled]
+        - generic [ref=e98]:
+          - complementary [ref=e99]:
+            - navigation "Configuration sections" [ref=e100]:
+              - generic [ref=e101]:
+                - paragraph [ref=e102]: Sections
+                - list [ref=e103]:
+                  - listitem [ref=e104]:
+                    - button "LLM Router & Model Provider" [ref=e106]
+                  - listitem [ref=e107]:
+                    - button "General Firewall Settings" [ref=e108]
+                  - listitem [ref=e109]:
+                    - button "Rate Limiting & Throttling" [ref=e110]
+                  - listitem [ref=e111]:
+                    - button "Content Filtering & Detection" [ref=e112]
+                  - listitem [ref=e113]:
+                    - button "Model Governance & Routing" [ref=e114]
+                  - listitem [ref=e115]:
+                    - button "Prompt Security & Injection Protection" [ref=e116]
+                  - listitem [ref=e117]:
+                    - button "Response Guardrails & Validation" [ref=e118]
+                  - listitem [ref=e119]:
+                    - button "RAG Security & Vector DB Protection" [ref=e120]
+                  - listitem [ref=e121]:
+                    - button "Threat Intelligence Integration" [ref=e122]
+                  - listitem [ref=e123]:
+                    - button "Audit Logging & Compliance" [ref=e124]
+                  - listitem [ref=e125]:
+                    - button "Security Alerting & Notifications" [ref=e126]
+                  - listitem [ref=e127]:
+                    - button "Configuration Impact & Audit Trail" [ref=e128]
+                  - listitem [ref=e129]:
+                    - button "LLM Model Connections" [ref=e130]
+                  - listitem [ref=e131]:
+                    - button "Vector Database Connection" [active] [ref=e132]
+                  - listitem [ref=e133]:
+                    - button "ZeroShield Guard Model Test" [ref=e134]
+          - generic [ref=e135]:
+            - generic [ref=e137]:
+              - generic [ref=e139]:
+                - img [ref=e141]
+                - generic [ref=e144]:
+                  - heading "LLM Router & Model Provider" [level=2] [ref=e145]
+                  - paragraph [ref=e146]: Select a provider and configure API credentials
+              - generic [ref=e148]:
+                - generic [ref=e149]: Organization API keys are stored encrypted on the server when you add or edit a model. Keys are never cached in this browser.
+                - generic [ref=e150]:
+                  - heading "LLM Router & Model Provider" [level=4] [ref=e151]
+                  - generic [ref=e152]:
+                    - generic [ref=e153]:
+                      - generic [ref=e154]: Cloud/Local Provider
+                      - paragraph [ref=e155]: Select provider to configure API credentials
+                      - combobox [ref=e156]:
+                        - option "Open AI" [selected]
+                        - option "Anthropic"
+                        - option "Meta Llama"
+                        - option "Mistral AI"
+                        - option "Hugging Face"
+                        - option "AWS Bedrock"
+                        - option "Ollama (Local)"
+                        - option "Custom / Other"
+                    - generic [ref=e157]:
+                      - generic [ref=e158]: Open AI API Key
+                      - paragraph [ref=e159]: This box appears dynamically based on the selected provider
+                      - textbox "Enter Open AI API key" [ref=e160]
+            - generic [ref=e162]:
+              - generic [ref=e164]:
+                - img [ref=e166]
+                - heading "General Firewall Settings" [level=2] [ref=e169]
+              - generic [ref=e171]:
+                - generic [ref=e172]:
+                  - generic [ref=e173]:
+                    - text: Firewall Enabled
+                    - paragraph [ref=e174]: Master switch for all firewall enforcement
+                  - switch "Firewall Enabled" [checked] [ref=e176] [cursor=pointer]
+                - generic [ref=e178]:
+                  - generic [ref=e179]:
+                    - text: Enforcement Mode
+                    - paragraph [ref=e180]: How the firewall handles policy violations
+                  - generic [ref=e182]:
+                    - combobox "Enforcement Mode" [ref=e183]:
+                      - option "Block - Reject violating requests" [selected]
+                      - option "Monitor - Log violations, allow traffic"
+                      - option "Audit - Log only, no alerts"
+                    - img
+                - generic [ref=e184]:
+                  - generic [ref=e185]:
+                    - text: Log Level
+                    - paragraph [ref=e186]: Detail level for security logs
+                  - generic [ref=e188]:
+                    - combobox "Log Level" [ref=e189]:
+                      - option "Minimal - Errors only"
+                      - option "Standard - Errors + warnings"
+                      - option "Detailed - Full request/response" [selected]
+                      - option "Verbose - Debug information"
+                    - img
+            - generic [ref=e191]:
+              - generic [ref=e193]:
+                - img [ref=e195]
+                - heading "Rate Limiting & Throttling" [level=2] [ref=e199]
+              - generic [ref=e201]:
+                - generic [ref=e202]:
+                  - generic [ref=e203]:
+                    - text: Rate Limiting Enabled
+                    - paragraph [ref=e204]: Protect against abuse and DDoS
+                  - switch "Rate Limiting Enabled" [checked] [ref=e206] [cursor=pointer]
+                - generic [ref=e208]:
+                  - generic [ref=e209]:
+                    - text: Requests Per Minute
+                    - paragraph [ref=e210]: Maximum requests allowed globally per minute
+                  - generic [ref=e212]:
+                    - spinbutton [ref=e213]: "1000"
+                    - generic [ref=e214]: req/min
+                    - generic [ref=e215]:
+                      - button [ref=e216]:
+                        - img [ref=e217]
+                      - button [ref=e219]:
+                        - img [ref=e220]
+                - generic [ref=e222]:
+                  - generic [ref=e223]:
+                    - text: Burst Limit
+                    - paragraph [ref=e224]: Maximum requests in a short burst
+                  - generic [ref=e226]:
+                    - spinbutton [ref=e227]: "150"
+                    - generic [ref=e228]: requests
+                    - generic [ref=e229]:
+                      - button [ref=e230]:
+                        - img [ref=e231]
+                      - button [ref=e233]:
+                        - img [ref=e234]
+            - generic [ref=e237]:
+              - generic [ref=e239]:
+                - img [ref=e241]
+                - heading "Content Filtering & Detection" [level=2] [ref=e244]
+              - generic [ref=e246]:
+                - generic [ref=e247]:
+                  - generic [ref=e248]:
+                    - text: Content Filtering Enabled
+                    - paragraph [ref=e249]: Scan and filter sensitive content
+                  - switch "Content Filtering Enabled" [checked] [ref=e251] [cursor=pointer]
+                - generic [ref=e253]:
+                  - generic [ref=e254]:
+                    - text: PII Detection
+                    - paragraph [ref=e255]: Detect and redact personally identifiable information
+                  - switch "PII Detection" [checked] [ref=e257] [cursor=pointer]
+                - generic [ref=e259]:
+                  - generic [ref=e260]:
+                    - text: Toxicity Threshold
+                    - paragraph [ref=e261]: Minimum score to flag toxic content (0-1)
+                  - generic [ref=e262]:
+                    - generic [ref=e263]:
+                      - generic [ref=e264]: Threshold
+                      - generic [ref=e265]: "0.70"
+                    - slider [ref=e269] [cursor=pointer]: "0.7"
+                    - generic [ref=e270]:
+                      - generic [ref=e271]: "0.00"
+                      - generic [ref=e272]: "0.50"
+                      - generic [ref=e273]: "1.00"
+                - generic [ref=e274]:
+                  - generic [ref=e275]:
+                    - generic [ref=e277]:
+                      - generic [ref=e278]: Blocked Keywords
+                      - generic [ref=e279]: 0 chars
+                    - paragraph [ref=e280]: Comma-separated list of keywords to block
+                  - textbox "password, secret, api_key, token" [ref=e281]
+            - generic [ref=e283]:
+              - generic [ref=e285]:
+                - img [ref=e287]
+                - heading "Model Governance & Routing" [level=2] [ref=e292]
+              - generic [ref=e294]:
+                - generic [ref=e295]:
+                  - generic [ref=e296]:
+                    - text: Model Isolation Enabled
+                    - paragraph [ref=e297]: Enforce strict model boundaries
+                  - switch "Model Isolation Enabled" [checked] [ref=e299] [cursor=pointer]
+                - generic [ref=e301]:
+                  - generic [ref=e302]:
+                    - generic [ref=e303]:
+                      - generic [ref=e304]: Allowed models
+                      - generic [ref=e305]:
+                        - button "Select all connected" [ref=e306]
+                        - button "Clear" [ref=e307]
+                    - paragraph [ref=e308]: Only models from Model Connection appear here. When isolation is on, requests must use an allowed model name.
+                    - list "Allowed models" [ref=e309]:
+                      - listitem [ref=e310]:
+                        - button "anthropic/claude-haiku-4.5 Custom / Other" [pressed] [ref=e311] [cursor=pointer]:
+                          - img [ref=e312]
+                          - generic [ref=e315]:
+                            - generic [ref=e316]: anthropic/claude-haiku-4.5
+                            - generic [ref=e317]: Custom / Other
+                      - listitem [ref=e318]:
+                        - button "live-triage-openai OpenAI · gpt-4o-mini" [pressed] [ref=e319] [cursor=pointer]:
+                          - img [ref=e320]
+                          - generic [ref=e323]:
+                            - generic [ref=e324]: live-triage-openai
+                            - generic [ref=e325]: OpenAI · gpt-4o-mini
+                      - listitem [ref=e326]:
+                        - button "openai/gpt-oss-120b Hugging Face" [pressed] [ref=e327] [cursor=pointer]:
+                          - img [ref=e328]
+                          - generic [ref=e331]:
+                            - generic [ref=e332]: openai/gpt-oss-120b
+                            - generic [ref=e333]: Hugging Face
+                  - generic [ref=e334]:
+                    - generic [ref=e335]: Default model
+                    - combobox "Default model" [ref=e336] [cursor=pointer]:
+                      - option "— Select default —"
+                      - option "anthropic/claude-haiku-4.5" [selected]
+                      - option "live-triage-openai → gpt-4o-mini"
+                      - option "openai/gpt-oss-120b"
+                    - paragraph [ref=e337]: Used when no model is specified, when routing is disabled, or as last-resort fallback.
+            - generic [ref=e339]:
+              - generic [ref=e341]:
+                - img [ref=e343]
+                - heading "Prompt Security & Injection Protection" [level=2] [ref=e347]
+              - generic [ref=e349]:
+                - generic [ref=e350]:
+                  - generic [ref=e351]:
+                    - text: Jailbreak Detection
+                    - paragraph [ref=e352]: Detect and block prompt injection attempts
+                  - switch "Jailbreak Detection" [checked] [ref=e354] [cursor=pointer]
+                - generic [ref=e356]:
+                  - generic [ref=e357]:
+                    - text: Semantic Analysis
+                    - paragraph [ref=e358]: Deep analysis of prompt intent (ZeroShield Guard Model)
+                  - switch "Semantic Analysis" [checked] [ref=e360] [cursor=pointer]
+                - generic [ref=e362]:
+                  - generic [ref=e363]:
+                    - text: Guard Model Execution Mode
+                    - paragraph [ref=e364]: Choose if the ZeroShield guard model runs before or after LLM forwarding
+                  - generic [ref=e366]:
+                    - combobox "Guard Model Execution Mode" [ref=e367]:
+                      - option "Sync Pre-LLM (recommended for strict blocking)" [selected]
+                      - option "Async Post-LLM (lower latency, post-response enforcement)"
+                    - img
+                - generic [ref=e368]:
+                  - generic [ref=e369]:
+                    - text: Guard Model Stream Hold
+                    - paragraph [ref=e370]: Allow a short pre-stream hold window in async mode for block semantics
+                  - switch "Guard Model Stream Hold" [ref=e372] [cursor=pointer]
+                - generic [ref=e374]:
+                  - generic [ref=e375]:
+                    - text: Guard Model Stream Hold Timeout
+                    - paragraph [ref=e376]: Max hold time before stream starts when hold mode is enabled
+                  - generic [ref=e378]:
+                    - spinbutton [ref=e379]: "1200"
+                    - generic [ref=e380]: ms
+                    - generic [ref=e381]:
+                      - button [ref=e382]:
+                        - img [ref=e383]
+                      - button [ref=e385]:
+                        - img [ref=e386]
+                - generic [ref=e388]:
+                  - generic [ref=e389]:
+                    - text: Prompt Injection Threshold
+                    - paragraph [ref=e390]: Sensitivity for injection detection (0-1)
+                  - generic [ref=e391]:
+                    - generic [ref=e392]:
+                      - generic [ref=e393]: Threshold
+                      - generic [ref=e394]: "0.80"
+                    - slider [ref=e398] [cursor=pointer]: "0.8"
+                    - generic [ref=e399]:
+                      - generic [ref=e400]: "0.00"
+                      - generic [ref=e401]: "0.50"
+                      - generic [ref=e402]: "1.00"
+            - generic [ref=e404]:
+              - generic [ref=e406]:
+                - img [ref=e408]
+                - heading "Response Guardrails & Validation" [level=2] [ref=e412]
+              - generic [ref=e414]:
+                - generic [ref=e415]:
+                  - generic [ref=e416]:
+                    - text: Response Filtering Enabled
+                    - paragraph [ref=e417]: Scan and filter model responses
+                  - switch "Response Filtering Enabled" [checked] [ref=e419] [cursor=pointer]
+                - generic [ref=e421]:
+                  - generic [ref=e422]:
+                    - text: Factuality Check
+                    - paragraph [ref=e423]: Verify response accuracy (hallucination detection)
+                  - switch "Factuality Check" [checked] [ref=e425] [cursor=pointer]
+                - generic [ref=e427]:
+                  - generic [ref=e428]:
+                    - text: Max Response Tokens
+                    - paragraph [ref=e429]: Maximum tokens in model response
+                  - generic [ref=e431]:
+                    - spinbutton [ref=e432]: "4096"
+                    - generic [ref=e433]: tokens
+                    - generic [ref=e434]:
+                      - button [ref=e435]:
+                        - img [ref=e436]
+                      - button [ref=e438]:
+                        - img [ref=e439]
+                - generic [ref=e442]:
+                  - generic [ref=e443]:
+                    - generic [ref=e444]:
+                      - img [ref=e446]
+                      - generic [ref=e448]:
+                        - heading "Output Guardrail Controls Info" [level=3] [ref=e449]:
+                          - text: Output Guardrail Controls
+                          - button "Info" [ref=e451]:
+                            - img [ref=e452]
+                        - paragraph [ref=e454]: Choose what each detector does to unsafe model output.
+                    - generic [ref=e455]:
+                      - generic [ref=e456]: Enabled
+                      - switch "Master output guardrail switch" [checked] [ref=e457] [cursor=pointer]
+                  - generic [ref=e459]:
+                    - generic [ref=e461]:
+                      - generic [ref=e462]:
+                        - img [ref=e464]
+                        - generic [ref=e473]:
+                          - generic [ref=e474]: PII / PD Leakage
+                          - paragraph [ref=e475]: SSNs, emails, phone numbers, addresses
+                      - generic [ref=e476]:
+                        - generic [ref=e477]:
+                          - generic [ref=e478]: Detect
+                          - switch "Enable PII / PD Leakage detection" [checked] [ref=e479] [cursor=pointer]
+                        - combobox "PII / PD Leakage action" [ref=e481] [cursor=pointer]:
+                          - option "Block"
+                          - option "Redact" [selected]
+                          - option "Rewrite"
+                          - option "Flag"
+                          - option "Allow"
+                        - button "Info" [ref=e483]:
+                          - img [ref=e484]
+                    - generic [ref=e487]:
+                      - generic [ref=e488]:
+                        - img [ref=e490]
+                        - generic [ref=e494]:
+                          - generic [ref=e495]: Credential Exposure
+                          - paragraph [ref=e496]: API keys, tokens, passwords, secrets
+                      - generic [ref=e497]:
+                        - generic [ref=e498]:
+                          - generic [ref=e499]: Detect
+                          - switch "Enable Credential Exposure detection" [checked] [ref=e500] [cursor=pointer]
+                        - combobox "Credential Exposure action" [ref=e502] [cursor=pointer]:
+                          - option "Block" [selected]
+                          - option "Redact"
+                          - option "Rewrite"
+                          - option "Flag"
+                          - option "Allow"
+                        - button "Info" [ref=e504]:
+                          - img [ref=e505]
+                    - generic [ref=e508]:
+                      - generic [ref=e509]:
+                        - img [ref=e511]
+                        - generic [ref=e513]:
+                          - generic [ref=e514]: IP Leakage
+                          - paragraph [ref=e515]: Proprietary data, trade secrets, internal URLs
+                      - generic [ref=e516]:
+                        - generic [ref=e517]:
+                          - generic [ref=e518]: Detect
+                          - switch "Enable IP Leakage detection" [checked] [ref=e519] [cursor=pointer]
+                        - combobox "IP Leakage action" [ref=e521] [cursor=pointer]:
+                          - option "Block"
+                          - option "Redact"
+                          - option "Rewrite"
+                          - option "Flag" [selected]
+                          - option "Allow"
+                        - button "Info" [ref=e523]:
+                          - img [ref=e524]
+                    - generic [ref=e527]:
+                      - generic [ref=e528]:
+                        - img [ref=e530]
+                        - generic [ref=e533]:
+                          - generic [ref=e534]: Policy Violations
+                          - paragraph [ref=e535]: Org policy-engine verdicts enforced on the output path
+                      - generic [ref=e536]:
+                        - generic [ref=e537]:
+                          - generic [ref=e538]: Detect
+                          - switch "Enable Policy Violations detection" [checked] [ref=e539] [cursor=pointer]
+                        - combobox "Policy Violations action" [ref=e541] [cursor=pointer]:
+                          - option "Block" [selected]
+                          - option "Redact"
+                          - option "Rewrite"
+                          - option "Flag"
+                          - option "Allow"
+                        - button "Info" [ref=e543]:
+                          - img [ref=e544]
+                    - generic [ref=e546]:
+                      - generic [ref=e547]:
+                        - generic [ref=e548]:
+                          - img [ref=e550]
+                          - generic [ref=e558]:
+                            - generic [ref=e559]: Hallucination Risk
+                            - paragraph [ref=e560]: Factuality / grounding check against retrieved context
+                        - generic [ref=e561]:
+                          - generic [ref=e562]:
+                            - generic [ref=e563]: Detect
+                            - switch "Enable Hallucination Risk detection" [checked] [ref=e564] [cursor=pointer]
+                          - combobox "Hallucination Risk action" [ref=e566] [cursor=pointer]:
+                            - option "Block"
+                            - option "Redact"
+                            - option "Rewrite" [selected]
+                            - option "Flag"
+                            - option "Allow"
+                          - button "Info" [ref=e568]:
+                            - img [ref=e569]
+                      - generic [ref=e571]:
+                        - generic [ref=e572]: Grounding threshold
+                        - slider "Hallucination grounding threshold" [ref=e573]: "0.2"
+                        - generic [ref=e574]: "0.20"
+                        - button "Info" [ref=e576]:
+                          - img [ref=e577]
+                  - generic [ref=e579]:
+                    - generic [ref=e580]:
+                      - img [ref=e582]
+                      - generic [ref=e585]:
+                        - generic [ref=e586]: Security Incident Logging
+                        - paragraph [ref=e587]: Record redact / rewrite / flag actions as security incidents. Hard blocks are always logged.
+                    - switch "Security incident logging" [checked] [ref=e588] [cursor=pointer]
+                  - generic [ref=e591]:
+                    - button "Reset" [disabled] [ref=e592]:
+                      - img [ref=e593]
+                      - text: Reset
+                    - button "Save guardrails" [disabled] [ref=e596]:
+                      - img [ref=e597]
+                      - text: Save guardrails
+            - generic [ref=e602]:
+              - generic [ref=e604]:
+                - img [ref=e606]
+                - heading "RAG Security & Vector DB Protection" [level=2] [ref=e611]
+              - generic [ref=e613]:
+                - generic [ref=e614]:
+                  - generic [ref=e615]:
+                    - text: RAG Enabled
+                    - paragraph [ref=e616]: Enable Retrieval-Augmented Generation
+                  - switch "RAG Enabled" [checked] [ref=e618] [cursor=pointer]
+                - generic [ref=e620]:
+                  - generic [ref=e621]:
+                    - text: Vector DB Isolation
+                    - paragraph [ref=e622]: Enforce tenant isolation in vector databases
+                  - switch "Vector DB Isolation" [checked] [ref=e624] [cursor=pointer]
+                - generic [ref=e626]:
+                  - generic [ref=e627]:
+                    - text: Max RAG Documents
+                    - paragraph [ref=e628]: Maximum documents to retrieve
+                  - generic [ref=e630]:
+                    - spinbutton [ref=e631]: "5"
+                    - generic [ref=e632]: documents
+                    - generic [ref=e633]:
+                      - button [ref=e634]:
+                        - img [ref=e635]
+                      - button [ref=e637]:
+                        - img [ref=e638]
+                - generic [ref=e640]:
+                  - generic [ref=e641]:
+                    - text: Relevance Threshold
+                    - paragraph [ref=e642]: Minimum similarity score for retrieval (0-1)
+                  - generic [ref=e643]:
+                    - generic [ref=e644]:
+                      - generic [ref=e645]: Threshold
+                      - generic [ref=e646]: "0.75"
+                    - slider [ref=e650] [cursor=pointer]: "0.75"
+                    - generic [ref=e651]:
+                      - generic [ref=e652]: "0.00"
+                      - generic [ref=e653]: "0.50"
+                      - generic [ref=e654]: "1.00"
+            - generic [ref=e656]:
+              - generic [ref=e658]:
+                - img [ref=e660]
+                - heading "Threat Intelligence Integration" [level=2] [ref=e667]
+              - generic [ref=e669]:
+                - generic [ref=e670]:
+                  - generic [ref=e671]:
+                    - text: Threat Intelligence Enabled
+                    - paragraph [ref=e672]: Integrate with threat intelligence feeds
+                  - switch "Threat Intelligence Enabled" [checked] [ref=e674] [cursor=pointer]
+                - generic [ref=e676]:
+                  - generic [ref=e677]:
+                    - text: Auto-Block Threats
+                    - paragraph [ref=e678]: Automatically block known threat actors
+                  - switch "Auto-Block Threats" [checked] [ref=e680] [cursor=pointer]
+                - generic [ref=e682]:
+                  - generic [ref=e683]:
+                    - text: Threat Score Threshold
+                    - paragraph [ref=e684]: Minimum score to trigger blocking (0-100)
+                  - generic [ref=e686]:
+                    - spinbutton [ref=e687]: "75"
+                    - generic [ref=e688]: score
+                    - generic [ref=e689]:
+                      - button [ref=e690]:
+                        - img [ref=e691]
+                      - button [ref=e693]:
+                        - img [ref=e694]
+            - generic [ref=e697]:
+              - generic [ref=e699]:
+                - img [ref=e701]
+                - heading "Audit Logging & Compliance" [level=2] [ref=e706]
+              - generic [ref=e708]:
+                - generic [ref=e709]:
+                  - generic [ref=e710]:
+                    - text: Audit Logging Enabled
+                    - paragraph [ref=e711]: Comprehensive audit trail for compliance
+                  - switch "Audit Logging Enabled" [checked] [ref=e713] [cursor=pointer]
+                - generic [ref=e715]:
+                  - generic [ref=e716]:
+                    - text: Retention Days
+                    - paragraph [ref=e717]: How long to retain audit logs
+                  - generic [ref=e719]:
+                    - spinbutton [ref=e720]: "90"
+                    - generic [ref=e721]: days
+                    - generic [ref=e722]:
+                      - button [ref=e723]:
+                        - img [ref=e724]
+                      - button [ref=e726]:
+                        - img [ref=e727]
+                - generic [ref=e729]:
+                  - generic [ref=e730]:
+                    - text: Compliance Frameworks
+                    - paragraph [ref=e731]: Active compliance frameworks
+                  - generic [ref=e732]:
+                    - button "SOC2" [pressed] [ref=e733]: SOC2
+                    - button "ISO27001" [pressed] [ref=e735]: ISO27001
+                    - button "HIPAA" [ref=e737]: HIPAA
+                    - button "GDPR" [ref=e739]: GDPR
+                    - button "PCI-DSS" [ref=e741]: PCI-DSS
+                    - button "NIST" [ref=e743]: NIST
+            - generic [ref=e746]:
+              - generic [ref=e748]:
+                - img [ref=e750]
+                - heading "Security Alerting & Notifications" [level=2] [ref=e756]
+              - generic [ref=e758]:
+                - generic [ref=e759]:
+                  - generic [ref=e760]:
+                    - text: Alerting Enabled
+                    - paragraph [ref=e761]: Send alerts for security events
+                  - switch "Alerting Enabled" [checked] [ref=e763] [cursor=pointer]
+                - generic [ref=e765]:
+                  - generic [ref=e766]:
+                    - text: Critical Alert Threshold
+                    - paragraph [ref=e767]: Risk score to trigger critical alerts (0-100)
+                  - generic [ref=e769]:
+                    - spinbutton [ref=e770]: "90"
+                    - generic [ref=e771]: score
+                    - generic [ref=e772]:
+                      - button [ref=e773]:
+                        - img [ref=e774]
+                      - button [ref=e776]:
+                        - img [ref=e777]
+                - generic [ref=e779]:
+                  - generic [ref=e780]:
+                    - text: Alert Recipients
+                    - paragraph [ref=e781]: Email addresses for security alerts
+                  - generic [ref=e783]:
+                    - generic [ref=e784]:
+                      - text: anshsinghal3107@gmail.com
+                      - button [ref=e785]:
+                        - img [ref=e786]
+                    - generic [ref=e789]:
+                      - text: ansh@zeroshield.ai
+                      - button [ref=e790]:
+                        - img [ref=e791]
+                    - textbox "Add email and press Enter" [ref=e794]
+            - generic [ref=e796]:
+              - generic [ref=e798]:
+                - img [ref=e800]
+                - generic [ref=e802]:
+                  - heading "Configuration Impact & Audit Trail" [level=2] [ref=e803]
+                  - paragraph [ref=e804]: Changes to this configuration affect real-time firewall enforcement, analytics dashboards, and compliance reporting
+              - generic [ref=e806]:
+                - generic [ref=e807]:
+                  - generic [ref=e808]:
+                    - img [ref=e810]
+                    - paragraph [ref=e812]: Enforcement Impact
+                  - paragraph [ref=e813]: Affects request blocking, rate limiting, and policy decisions
+                  - list [ref=e814]:
+                    - listitem [ref=e815]:
+                      - img [ref=e816]
+                      - generic [ref=e818]: Blocking mode active
+                    - listitem [ref=e819]:
+                      - img [ref=e820]
+                      - generic [ref=e822]: "Rate limit: 1000 req/min"
+                    - listitem [ref=e823]:
+                      - img [ref=e824]
+                      - generic [ref=e826]: Content filtering enabled
+                - generic [ref=e827]:
+                  - generic [ref=e828]:
+                    - img [ref=e830]
+                    - paragraph [ref=e832]: Dashboard Impact
+                  - paragraph [ref=e833]: Updates metrics, graphs, and real-time analytics
+                  - list [ref=e834]:
+                    - listitem [ref=e835]:
+                      - img [ref=e836]
+                      - generic [ref=e838]: Real-time threat detection charts
+                    - listitem [ref=e839]:
+                      - img [ref=e840]
+                      - generic [ref=e842]: Risk distribution graphs
+                    - listitem [ref=e843]:
+                      - img [ref=e844]
+                      - generic [ref=e846]: Activity feed and logs
+                - generic [ref=e847]:
+                  - generic [ref=e848]:
+                    - img [ref=e850]
+                    - paragraph [ref=e854]: Compliance Impact
+                  - paragraph [ref=e855]: Affects audit trails and regulatory reporting
+                  - list [ref=e856]:
+                    - listitem [ref=e857]:
+                      - img [ref=e858]
+                      - generic [ref=e860]: 2 frameworks active
+                    - listitem [ref=e861]:
+                      - img [ref=e862]
+                      - generic [ref=e864]: 90-day log retention
+                    - listitem [ref=e865]:
+                      - img [ref=e866]
+                      - generic [ref=e868]: Full audit trail
+            - generic [ref=e870]:
+              - generic [ref=e872]:
+                - img [ref=e874]
+                - generic [ref=e879]:
+                  - heading "LLM Model Connections" [level=2] [ref=e880]
+                  - paragraph [ref=e881]: Manage LLM provider configurations and model routing
+              - generic [ref=e883]:
+                - button "Add model" [ref=e885]:
+                  - img [ref=e886]
+                  - text: Add model
+                - generic [ref=e887]: Organization API keys are stored encrypted on the server when you add or edit a model. Keys are never cached in this browser.
+                - table [ref=e889]:
+                  - rowgroup [ref=e890]:
+                    - row "Provider Model Name Model ID Credential Region Sensitivity Priority Status Actions" [ref=e891]:
+                      - columnheader "Provider" [ref=e892]
+                      - columnheader "Model Name" [ref=e893]
+                      - columnheader "Model ID" [ref=e894]
+                      - columnheader "Credential" [ref=e895]
+                      - columnheader "Region" [ref=e896]
+                      - columnheader "Sensitivity" [ref=e897]
+                      - columnheader "Priority" [ref=e898]
+                      - columnheader "Status" [ref=e899]
+                      - columnheader "Actions" [ref=e900]
+                  - rowgroup [ref=e901]:
+                    - row "Custom / Other anthropic/claude-haiku-4.5 anthropic/claude-haiku-4.5 Encrypted key set (••••6c11) -- public 0 Active Edit model Delete model" [ref=e902]:
+                      - cell "Custom / Other" [ref=e903]
+                      - cell "anthropic/claude-haiku-4.5" [ref=e904]
+                      - cell "anthropic/claude-haiku-4.5" [ref=e905]
+                      - cell "Encrypted key set (••••6c11)" [ref=e906]
+                      - cell "--" [ref=e907]
+                      - cell "public" [ref=e908]:
+                        - generic [ref=e909]: public
+                      - cell "0" [ref=e910]
+                      - cell "Active" [ref=e911]:
+                        - generic [ref=e912]:
+                          - img [ref=e913]
+                          - text: Active
+                      - cell "Edit model Delete model" [ref=e916]:
+                        - generic [ref=e917]:
+                          - button "Edit model" [ref=e918]:
+                            - img [ref=e919]
+                          - button "Disable" [ref=e922]:
+                            - img [ref=e923]
+                          - button "Delete model" [ref=e927]:
+                            - img [ref=e928]
+                    - row "Hugging Face openai/gpt-oss-120b openai/gpt-oss-120b Encrypted key set (••••lrOp) -- public 0 Active Edit model Delete model" [ref=e931]:
+                      - cell "Hugging Face" [ref=e932]
+                      - cell "openai/gpt-oss-120b" [ref=e933]
+                      - cell "openai/gpt-oss-120b" [ref=e934]
+                      - cell "Encrypted key set (••••lrOp)" [ref=e935]
+                      - cell "--" [ref=e936]
+                      - cell "public" [ref=e937]:
+                        - generic [ref=e938]: public
+                      - cell "0" [ref=e939]
+                      - cell "Active" [ref=e940]:
+                        - generic [ref=e941]:
+                          - img [ref=e942]
+                          - text: Active
+                      - cell "Edit model Delete model" [ref=e945]:
+                        - generic [ref=e946]:
+                          - button "Edit model" [ref=e947]:
+                            - img [ref=e948]
+                          - button "Disable" [ref=e951]:
+                            - img [ref=e952]
+                          - button "Delete model" [ref=e956]:
+                            - img [ref=e957]
+                    - row "Open AI live-triage-openai gpt-4o-mini Encrypted key set (••••7890) -- public 0 Active Edit model Delete model" [ref=e960]:
+                      - cell "Open AI" [ref=e961]
+                      - cell "live-triage-openai" [ref=e962]
+                      - cell "gpt-4o-mini" [ref=e963]
+                      - cell "Encrypted key set (••••7890)" [ref=e964]
+                      - cell "--" [ref=e965]
+                      - cell "public" [ref=e966]:
+                        - generic [ref=e967]: public
+                      - cell "0" [ref=e968]
+                      - cell "Active" [ref=e969]:
+                        - generic [ref=e970]:
+                          - img [ref=e971]
+                          - text: Active
+                      - cell "Edit model Delete model" [ref=e974]:
+                        - generic [ref=e975]:
+                          - button "Edit model" [ref=e976]:
+                            - img [ref=e977]
+                          - button "Disable" [ref=e980]:
+                            - img [ref=e981]
+                          - button "Delete model" [ref=e985]:
+                            - img [ref=e986]
+            - generic [ref=e990]:
+              - generic [ref=e992]:
+                - img [ref=e994]
+                - generic [ref=e998]:
+                  - heading "Vector Database Connection" [level=2] [ref=e999]
+                  - paragraph [ref=e1000]: Configure vector store provider and test connectivity
+              - generic [ref=e1002]:
+                - generic [ref=e1003]:
+                  - generic [ref=e1004]:
+                    - img [ref=e1005]
+                    - generic [ref=e1008]:
+                      - paragraph [ref=e1009]: Gateway connectionautomatic · org-scoped simulator key
+                      - paragraph [ref=e1010]: http://localhost:8300
+                  - generic [ref=e1012]:
+                    - img [ref=e1013]
+                    - text: Key ready
+                - generic [ref=e1016]:
+                  - generic [ref=e1017]: Database Provider
+                  - generic [ref=e1018]:
+                    - button "Pinecone Managed serverless vector database — only API key needed" [ref=e1019]:
+                      - generic [ref=e1020]:
+                        - img [ref=e1021]
+                        - generic [ref=e1025]: Pinecone
+                      - paragraph [ref=e1026]: Managed serverless vector database — only API key needed
+                    - button "Milvus High-performance open-source vector database" [ref=e1027]:
+                      - generic [ref=e1028]:
+                        - img [ref=e1029]
+                        - generic [ref=e1033]: Milvus
+                      - paragraph [ref=e1034]: High-performance open-source vector database
+                - generic [ref=e1035]:
+                  - generic [ref=e1036]: Connection Settings
+                  - generic [ref=e1037]:
+                    - generic [ref=e1038]: Pinecone API Key *
+                    - textbox "pcsk_... or pc-..." [ref=e1039]
+                - button "Test Connection" [ref=e1041]:
+                  - img [ref=e1042]
+                  - text: Test Connection
+            - generic [ref=e1045]:
+              - generic [ref=e1047]:
+                - img [ref=e1049]
+                - generic [ref=e1052]:
+                  - heading "ZeroShield Guard Model Test" [level=2] [ref=e1053]
+                  - paragraph [ref=e1054]: Health check and scan test against the guard model
+              - generic [ref=e1056]:
+                - generic [ref=e1058]:
+                  - img [ref=e1059]
+                  - paragraph [ref=e1061]: This panel exercises the ZeroShield Guard Model directly. In the live gateway pipeline, the ZeroShield Pattern Engine runs first and may block before the guard model is invoked.
+                - generic [ref=e1062]:
+                  - img [ref=e1063]
+                  - generic [ref=e1065]:
+                    - paragraph [ref=e1066]: Gateway connectionautomatic · admin ops proxied via Control
+                    - paragraph [ref=e1067]: http://localhost:8300
+                - generic [ref=e1068]:
+                  - generic [ref=e1070]:
+                    - heading "Health Check" [level=4] [ref=e1071]
+                    - button "Check Health" [ref=e1072]:
+                      - img [ref=e1073]
+                      - text: Check Health
+                  - generic [ref=e1075]:
+                    - heading "Scan Test" [level=4] [ref=e1076]
+                    - generic [ref=e1077]:
+                      - generic [ref=e1078]: Test Prompt
+                      - textbox "Enter a prompt to test scanning..." [ref=e1079]: Analyze this text for security threats
+                    - button "Send Test" [ref=e1080]:
+                      - img [ref=e1081]
+                      - text: Send Test

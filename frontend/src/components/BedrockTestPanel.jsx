@@ -1,33 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Shield, CheckCircle, AlertTriangle, Loader2, Send, Zap,
   ChevronDown, ChevronRight, Info,
 } from "lucide-react";
 import { copyToClipboard } from "../lib/clipboard";
 import { useGatewayConfig } from "../hooks/useGatewayConfig";
+import { useAuth } from "../context/AuthContext";
 import {
   ZEROSHIELD_GUARD_MODEL_LABEL,
   ZEROSHIELD_TIER1_LABEL,
   ZEROSHIELD_TIER2_LABEL,
 } from "../constants/zeroshieldBrand";
 
-const GATEWAY_KEY_KEY = "zeroshield_gateway_api_key";
-
 /** @deprecated Import from ZeroShieldGuardModelTestPanel — alias kept for compatibility */
 export function BedrockTestPanel() {
   return <ZeroShieldGuardModelTestPanel />;
 }
 
-export function ZeroShieldGuardModelTestPanel() {
-  const { gatewayUrl: configGatewayUrl } = useGatewayConfig();
-  const [gatewayUrl, setGatewayUrl] = useState(configGatewayUrl);
-  const [apiKey, setApiKey] = useState(
-    () => localStorage.getItem(GATEWAY_KEY_KEY) || ""
-  );
-
-  useEffect(() => {
-    if (configGatewayUrl) setGatewayUrl(configGatewayUrl);
-  }, [configGatewayUrl]);
+export function ZeroShieldGuardModelTestPanel({ embedded = false }) {
+  // bedrock-test is admin-gated on the gateway, so it routes through the Control
+  // proxy (admin JWT). The gateway URL is shown for context only; no key entry.
+  const { gatewayUrl } = useGatewayConfig();
+  const { fetchWithAuth } = useAuth();
 
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthResult, setHealthResult] = useState(null);
@@ -40,47 +34,27 @@ export function ZeroShieldGuardModelTestPanel() {
   const [showRawJson, setShowRawJson] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const persistGatewaySettings = () => {
-    localStorage.setItem(GATEWAY_KEY_KEY, apiKey);
-  };
-
   const handleHealthCheck = async () => {
-    if (!apiKey.trim()) {
-      setHealthError("Gateway API key is required.");
-      return;
-    }
-
-    persistGatewaySettings();
     setHealthLoading(true);
     setHealthResult(null);
     setHealthError(null);
 
     try {
-      const url = `${gatewayUrl.replace(/\/+$/, "")}/v1/admin/bedrock-test`;
       const startTime = performance.now();
-
-      const res = await fetch(url, {
+      // Admin-gated; route via the Control proxy (admin JWT -> internal key).
+      const res = await fetchWithAuth("/api/admin/gateway/bedrock-test/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ check_health: true }),
       });
 
       const elapsed = Math.round(performance.now() - startTime);
-      let body = {};
-      try {
-        body = await res.json();
-      } catch {
-        body = { detail: await res.text() };
-      }
+      let envelope = {};
+      try { envelope = await res.json(); } catch { envelope = {}; }
+      const body = envelope?.data || envelope || {};
 
       if (res.status === 401 || res.status === 403) {
-        setHealthError(
-          "Authentication failed. Your Gateway API Key is invalid or expired. " +
-          "Please re-enter a valid key above."
-        );
+        setHealthError("Admin access is required to test the guard model.");
       } else if (res.ok) {
         const health = body.health || {};
         setHealthResult({
@@ -103,7 +77,7 @@ export function ZeroShieldGuardModelTestPanel() {
     } catch (err) {
       setHealthError(
         err.message === "Failed to fetch"
-          ? `Cannot reach gateway at ${gatewayUrl}. Ensure the gateway is running and CORS is enabled.`
+          ? "Cannot reach the control API. Ensure the backend is running."
           : err.message
       );
     } finally {
@@ -113,45 +87,27 @@ export function ZeroShieldGuardModelTestPanel() {
 
   const handleScanTest = async () => {
     if (!testPrompt.trim()) return;
-    if (!apiKey.trim()) {
-      setScanError("Gateway API key is required.");
-      return;
-    }
 
-    persistGatewaySettings();
     setScanLoading(true);
     setScanResult(null);
     setScanError(null);
     setShowRawJson(false);
 
     try {
-      const url = `${gatewayUrl.replace(/\/+$/, "")}/v1/admin/bedrock-test`;
       const startTime = performance.now();
-
-      const res = await fetch(url, {
+      const res = await fetchWithAuth("/api/admin/gateway/bedrock-test/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          prompt: testPrompt,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: testPrompt }),
       });
 
       const elapsed = Math.round(performance.now() - startTime);
-      let body = {};
-      try {
-        body = await res.json();
-      } catch {
-        body = { detail: await res.text() };
-      }
+      let envelope = {};
+      try { envelope = await res.json(); } catch { envelope = {}; }
+      const body = envelope?.data || envelope || {};
 
       if (res.status === 401 || res.status === 403) {
-        setScanError(
-          "Authentication failed. Your Gateway API Key is invalid or expired. " +
-          "Please re-enter a valid key above."
-        );
+        setScanError("Admin access is required to run the guard-model scan.");
       } else {
         const scanData = body.scan_result || {};
         const meta = scanData.meta || {};
@@ -167,7 +123,7 @@ export function ZeroShieldGuardModelTestPanel() {
     } catch (err) {
       setScanError(
         err.message === "Failed to fetch"
-          ? `Cannot reach gateway at ${gatewayUrl}. Ensure the gateway is running and CORS is enabled.`
+          ? "Cannot reach the control API. Ensure the backend is running."
           : err.message
       );
     } finally {
@@ -184,18 +140,22 @@ export function ZeroShieldGuardModelTestPanel() {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6">
-      <div className="mb-4">
-        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-          <Shield className="w-4 h-4 text-teal-600" />
-          {ZEROSHIELD_GUARD_MODEL_LABEL} Test
-        </h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          Test ZeroShield guard-model connectivity and input scan capability
-        </p>
+    <div className={embedded ? "space-y-4 p-5" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6"}>
+      <div className={embedded ? "mb-2" : "mb-4"}>
+        {!embedded && (
+          <>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-teal-600" />
+              {ZEROSHIELD_GUARD_MODEL_LABEL} Test
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Test ZeroShield guard-model connectivity and input scan capability
+            </p>
+          </>
+        )}
         <div className="mt-2 flex items-start gap-1.5 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg">
           <Info className="w-3.5 h-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
-          <p className="text-[10px] text-blue-700">
+          <p className="text-[10px] text-blue-700 dark:text-blue-200">
             This panel exercises the {ZEROSHIELD_TIER2_LABEL} directly.
             In the live gateway pipeline, the {ZEROSHIELD_TIER1_LABEL} runs first and may block
             before the guard model is invoked.
@@ -203,26 +163,14 @@ export function ZeroShieldGuardModelTestPanel() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div>
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Gateway URL</label>
-          <input
-            type="text"
-            value={gatewayUrl}
-            onChange={(e) => setGatewayUrl(e.target.value)}
-            placeholder="http://127.0.0.1:8300"
-            className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Gateway API Key *</label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Paste your gateway API key"
-            className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-          />
+      <div className="mb-6 flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-3 py-2.5">
+        <Shield className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
+            Gateway connection
+            <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">automatic · admin ops proxied via Control</span>
+          </p>
+          <p className="truncate text-[11px] font-mono text-slate-500 dark:text-slate-400">{gatewayUrl || "resolving…"}</p>
         </div>
       </div>
 

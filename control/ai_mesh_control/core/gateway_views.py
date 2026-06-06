@@ -2,24 +2,39 @@
 Gateway stats/bootstrap APIs for gateway analytics and simulator integration.
 """
 
+import logging
 import os
 
-import redis
-from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiExample, extend_schema, inline_serializer
 from rest_framework import serializers as drf_serializers
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.models import Agent
+from core.models import Agent, GatewayAPIKey
 from policy.models import EnforcementEvent
+
+logger = logging.getLogger(__name__)
 
 # Minutes after which gateway is considered not healthy
 GATEWAY_STALE_MINUTES = 5
-SIMULATOR_DEFAULT_KEY_REDIS = "simulator:default_gateway_key"
+
+
+def _simulator_defaults_enabled() -> bool:
+    return os.getenv("SIMULATOR_DEFAULTS_ENABLED", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _resolve_request_org(user):
+    profile = getattr(user, "profile", None)
+    return getattr(profile, "organization", None)
 
 
 def _meta(agent, key, default=None):
@@ -102,6 +117,7 @@ class GatewayStatsListView(APIView):
     )
     def get(self, request):
         from auth.utils import get_request_organization
+
         org = get_request_organization(request)
         gateways = Agent.objects.filter(agent_type="gateway").order_by("-updated_at")
         if org is not None:
@@ -129,7 +145,7 @@ class GatewayStatsListView(APIView):
             avg_ms = _meta(agent, "avg_latency_ms")
             avg_latency = f"{int(avg_ms)}ms" if avg_ms is not None else "\u2014"
             delta = now - agent.updated_at if agent.updated_at else None
-            status = "HEALTHY" if delta and delta.total_seconds() < GATEWAY_STALE_MINUTES * 60 else "WARNING"
+            status_label = "HEALTHY" if delta and delta.total_seconds() < GATEWAY_STALE_MINUTES * 60 else "WARNING"
             results.append(
                 {
                     "serverId": str(agent.id),
@@ -144,31 +160,108 @@ class GatewayStatsListView(APIView):
                     "avgLatency": avg_latency,
                     "activeConn": _meta(agent, "active_connections") or 0,
                     "topBlockedRules": _top_blocked_rules_for_agent(agent.id),
-                    "status": status,
+                    "status": status_label,
                 }
             )
         return Response(results)
 
 
 class SimulatorDefaultGatewayKeyView(APIView):
+    """
+    Per-organization simulator gateway key provisioning.
+
+    GET  — metadata only (prefix, has_gateway_key); never returns plaintext.
+    POST — lazy-create ``name=simulator`` key; plaintext returned once on creation.
+    """
+
     permission_classes = [IsAuthenticated]
 
+    def _resolve(self, request):
+        if not _simulator_defaults_enabled():
+            return None, None, Response(
+                {"detail": "Simulator defaults are disabled."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        org = _resolve_request_org(request.user)
+        if org is None:
+            return None, None, Response(
+                {"detail": "Organization membership required for simulator keys."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return org, request.user, None
+
     def get(self, request):
-        enabled = os.getenv(
-            "SIMULATOR_DEFAULTS_ENABLED",
-            "true" if getattr(settings, "DEBUG", False) else "false",
-        ).lower() in ("1", "true", "yes", "on")
-        if not enabled:
-            return Response({"detail": "Simulator defaults are disabled."}, status=404)
+        org, _user, err = self._resolve(request)
+        if err:
+            return err
 
-        redis_url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
-        try:
-            client = redis.Redis.from_url(redis_url, decode_responses=True, socket_timeout=5, socket_connect_timeout=3)
-            raw_key = client.get(SIMULATOR_DEFAULT_KEY_REDIS)
-        except redis.RedisError as exc:
-            return Response({"detail": f"Redis unavailable: {exc}"}, status=503)
+        project_id = f"simulator-{org.slug}"
+        key = GatewayAPIKey.objects.filter(
+            organization=org,
+            project_id=project_id,
+            is_active=True,
+        ).first()
+        if key is None:
+            key = GatewayAPIKey.objects.filter(
+                organization=org,
+                name="simulator",
+                is_active=True,
+            ).first()
 
-        if not raw_key:
-            return Response({"detail": "Simulator default gateway key is not seeded."}, status=404)
+        if key is None:
+            return Response({"has_gateway_key": False})
 
-        return Response({"key": raw_key, "storage_key": "zeroshield_gateway_key"})
+        storage_key = f"zeroshield_gateway_key:{org.id}"
+        return Response(
+            {
+                "has_gateway_key": True,
+                "prefix": key.prefix,
+                "name": key.name,
+                "project_id": key.project_id,
+                "org_id": org.id,
+                "org_slug": org.slug,
+                "storage_key": storage_key,
+            }
+        )
+
+    def post(self, request):
+        org, actor, err = self._resolve(request)
+        if err:
+            return err
+
+        from core.simulator_seed import ensure_simulator_dev_bootstrap
+
+        ensure_simulator_dev_bootstrap(org)
+
+        ensure = str(request.query_params.get("ensure", "")).lower() in ("1", "true", "yes", "on")
+
+        key_instance, raw_key = GatewayAPIKey.ensure_simulator_for_org(org, actor)
+        # ?ensure=1: the caller (a simulator panel) needs a USABLE key. If one
+        # already exists but its plaintext is unrecoverable (raw_key is None),
+        # rotate so the browser always receives a working credential.
+        if raw_key is None and ensure:
+            key_instance, raw_key = GatewayAPIKey.rotate_simulator_for_org(org, actor)
+            logger.info("Simulator gateway key rotated (ensure=1) org_id=%s", org.id)
+        storage_key = f"zeroshield_gateway_key:{org.id}"
+        data = {
+            "has_gateway_key": True,
+            "prefix": key_instance.prefix,
+            "name": key_instance.name,
+            "project_id": key_instance.project_id,
+            "org_id": org.id,
+            "org_slug": org.slug,
+            "storage_key": storage_key,
+            "created": raw_key is not None,
+        }
+        if raw_key:
+            data["key"] = raw_key
+            data["warning"] = "Store this key securely. It will not be shown again."
+            logger.info(
+                "Simulator gateway key provisioned org_id=%s prefix=%s",
+                org.id,
+                key_instance.prefix,
+            )
+        return Response(
+            data,
+            status=status.HTTP_201_CREATED if raw_key else status.HTTP_200_OK,
+        )

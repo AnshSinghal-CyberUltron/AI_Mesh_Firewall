@@ -11,18 +11,16 @@ import { RoutingAuditPanel } from "../components/RoutingAuditPanel";
 import { RoutingGovernancePanel } from "../components/RoutingGovernancePanel";
 import { OutputGovernancePanel } from "../components/OutputGovernancePanel";
 import { OutputGuardrailEngineCard } from "../components/OutputGuardrailEngineCard";
+import { OutputGuardrailCharts } from "../components/OutputGuardrailCharts";
 import { OutputGuardrailControls } from "../components/OutputGuardrailControls";
-import { RAGPipelinePanel } from "../components/RAGPipelinePanel";
-import { RAGPipelineSimulator } from "../components/RAGPipelineSimulator";
 import { RAGPipelineTelemetry } from "../components/RAGPipelineTelemetry";
 import { RAGFeatureTestPanel } from "../components/RAGFeatureTestPanel";
+import { RAGAttackTrustSimulator } from "../components/RAGAttackTrustSimulator";
 import { DatabaseConnectionPanel } from "../components/DatabaseConnectionPanel";
-import { VectorFirewallSimulator } from "../components/simulator/VectorFirewallSimulator";
 import { MCPGuardrailSimulator } from "../components/simulator/MCPGuardrailSimulator";
 import { ModelRoutingSimulator } from "../components/simulator/ModelRoutingSimulator";
 import { IsolationOpsSimulator } from "../components/simulator/IsolationOpsSimulator";
 import { OrgIsolationBanner } from "../components/OrgIsolationBanner";
-import { OutputGuardSimulator } from "../components/simulator/OutputGuardSimulator";
 import { RAGIngestionPanel } from "../components/simulator/RAGIngestionPanel";
 import { VectorProviderConfigPanel } from "../components/rag/VectorProviderConfigPanel";
 import { CollectionManagerPanel } from "../components/rag/CollectionManagerPanel";
@@ -102,24 +100,22 @@ export function Firewall13Page({ onViewResults, onViewLogDetail, children }) {
     <FirewallModulePage
       moduleId="1.3"
       title="RAG & Vector DB Firewall"
-      description="A unified retrieval-security workspace for database connectivity, pipeline enforcement, secure ingestion, and both RAG and vector attack simulations."
+      description="A unified retrieval-security workspace: provider setup and connection testing, collection management, secure ingestion, query/attack/trust simulation, and pipeline monitoring."
       icon={Database}
       flowNodes={flowNodes}
       onViewResults={onViewResults}
       onViewLogDetail={onViewLogDetail}
       controlPanels={[
         <RAGSetupGuide key="rag-setup-guide" />,
-        <DatabaseConnectionPanel key="db-connection" />,
         <VectorProviderConfigPanel key="vector-providers" />,
+        <DatabaseConnectionPanel key="db-connection" />,
         <CollectionManagerPanel key="collection-manager" />,
-        <RAGPipelinePanel key="rag-pipeline" />,
         <RAGIngestionPanel key="rag-ingestion" />,
       ]}
       simulatorPanels={[
         <SemanticSearchPanel key="semantic-search" />,
-        <RAGPipelineSimulator key="rag-simulator" />,
         <RAGFeatureTestPanel key="rag-feature-test" />,
-        <VectorFirewallSimulator key="vector-simulator" />,
+        <RAGAttackTrustSimulator key="rag-attack-trust" />,
       ]}
       inspectionPanels={[
         <RAGPipelineTelemetry key="rag-telemetry" />,
@@ -252,28 +248,21 @@ export function Firewall16Page({ onViewResults, onViewLogDetail, children }) {
 
 // 1.7 Generator-Level Output Guardrails
 export function Firewall17Page({ onViewResults, onViewLogDetail }) {
-  const flowNodes = [
-    { label: "User Input", format: (summary) => `${summary.total.toLocaleString()} prompts`, color: "blue" },
-    { label: "Model Output", format: (summary) => `${summary.total.toLocaleString()} responses`, color: "purple" },
-    { label: "Output Guard", format: (summary) => `${(summary.blocked + summary.redacted).toLocaleString()} caught`, color: "amber" },
-    { label: "Final Output", format: (summary) => `${summary.allowed.toLocaleString()} released`, color: "emerald" },
-  ];
-
   return (
     <FirewallModulePage
       moduleId="1.7"
       title="Generator-Level Output Guardrails"
       description="Real-time output governance: every model response is scanned for PII, credentials, hallucinations, and IP leakage before delivery. No black boxes."
       icon={Filter}
-      flowNodes={flowNodes}
       onViewResults={onViewResults}
       onViewLogDetail={onViewLogDetail}
+      showEvidenceSection={false}
       controlPanels={[
         <OutputGuardrailControls key="output-guardrail-controls" />,
         <OutputGuardrailEngineCard key="engine-card" />,
+        <OutputGuardrailCharts key="output-charts" />,
         <OutputGovernancePanel key="output-governance" />,
       ]}
-      simulatorPanels={[<OutputGuardSimulator key="output-guard-sim" />]}
     />
   );
 }

@@ -78,7 +78,10 @@ class RetrieverStage:
                 )
 
         # ── 3. Get vector client ──
-        client = self._clients.get(inp.vector_db_type)
+        # Prefer the request-scoped per-org client (resolved from the caller's
+        # VectorProviderConfig) over the static, env-built dict. This is how an
+        # organisation's own vector DB credentials drive retrieval.
+        client = inp.vector_client or self._clients.get(inp.vector_db_type)
         if client is None:
             return RetrieverStageOutput(
                 verdict=StageVerdict(

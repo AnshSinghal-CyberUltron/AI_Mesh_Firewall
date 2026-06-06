@@ -16,7 +16,7 @@ from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
-from ai_mesh_shared.redis_pool import connection_pool_kwargs
+from ai_mesh_shared.redis_pool import channels_redis_host_config, connection_pool_kwargs
 from celery.schedules import crontab
 from kombu import Queue
 from django.core.exceptions import ImproperlyConfigured
@@ -39,7 +39,33 @@ if not SECRET_KEY:
         'Generate one with: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"'
     )
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").strip().split(",")
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
+
+# Production hardening (behind nginx / Cloudflare). With DEBUG=True, Django emits
+# technical error pages that dump this entire settings table — never enable DEBUG
+# on a public-facing control plane.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "0"))
+    if SECURE_HSTS_SECONDS > 0:
+        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+        SECURE_HSTS_PRELOAD = os.environ.get("SECURE_HSTS_PRELOAD", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
 
 # Application definition
@@ -112,7 +138,12 @@ if _channel_layers_redis_url:
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [_channel_layers_redis_url]},
+            "CONFIG": {
+                "hosts": [channels_redis_host_config(_channel_layers_redis_url)],
+                "capacity": 1500,
+                "expiry": 60,
+                "group_expiry": 86400,
+            },
         },
     }
 else:

@@ -2,7 +2,7 @@ import {
   getRequestedModel as routingRequestedModel,
   getRoutedModel as routingRoutedModel,
   getRoutingContext,
-} from "../utils/routingEventFields";
+} from "../utils/routingEventFields.js";
 
 const MODULE_FILTERS = {
   "1.1": {},

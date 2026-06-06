@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
+import { TIME_RANGE_TO_HOURS } from "../hooks/useFirewallData";
+import { normalizeCategory } from "../constants/outputGuardColors";
 
 const DETECTION_CATEGORIES = [
   { id: "pii", label: "PII Detection", icon: Fingerprint, description: "SSNs, emails, phone numbers, addresses" },
@@ -43,7 +45,7 @@ function CategoryCard({ category, stats }) {
   );
 }
 
-export function OutputGuardrailEngineCard() {
+export function OutputGuardrailEngineCard({ timeRange = "24h" }) {
   const { fetchWithAuth } = useAuth();
   const [stats, setStats] = useState({});
   const [summary, setSummary] = useState({ total: 0, blocked: 0, redacted: 0, flagged: 0, allowed: 0 });
@@ -51,8 +53,11 @@ export function OutputGuardrailEngineCard() {
 
   const fetchStats = useCallback(async () => {
     try {
+      // Honor the operator-lens window (default 7d for §1.7) instead of a fixed
+      // 24h, so the engine card stays consistent with the page KPIs + Evidence.
+      const hours = TIME_RANGE_TO_HOURS[timeRange] || 24;
       const res = await fetchWithAuth(
-        "/api/security/threat-feed/?hours=24&limit=100&source=security_scan"
+        `/api/security/threat-feed/?hours=${hours}&limit=500&source=security_scan`
       );
       if (res.ok) {
         const data = await res.json();
@@ -65,8 +70,11 @@ export function OutputGuardrailEngineCard() {
         let blocked = 0, redacted = 0, flagged = 0, allowed = 0;
 
         for (const ev of outputEvents) {
-          const tt = (ev.metadata?.threat_category || ev.metadata?.threat_type || "").toLowerCase();
-          if (tt) categoryStats[tt] = (categoryStats[tt] || 0) + 1;
+          // Normalize the gateway threat vocabulary onto the six canonical
+          // categories (credential_exposure→credential, hallucination_risk→…)
+          // so the category cards reflect real counts instead of staying 0.
+          const cat = normalizeCategory(ev.metadata?.threat_category || ev.metadata?.threat_type);
+          categoryStats[cat] = (categoryStats[cat] || 0) + 1;
           if (ev.action === "block") blocked++;
           else if (ev.action === "redact") redacted++;
           else if (ev.action === "flag") flagged++;
@@ -79,7 +87,7 @@ export function OutputGuardrailEngineCard() {
     } finally {
       setLoading(false);
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, timeRange]);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
@@ -101,7 +109,7 @@ export function OutputGuardrailEngineCard() {
             </InfoTooltip>
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Detection categories, action distribution, and engine health (24h window)
+            Detection categories, action distribution, and engine health ({timeRange} window)
           </p>
         </div>
         <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${

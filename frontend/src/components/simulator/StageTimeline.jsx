@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Clock, Shield, AlertTriangle, XCircle, CheckCircle, Pin, X } from "lucide-react";
-import { formatDetectionTier, ZEROSHIELD_GUARD_MODEL_LABEL } from "../../constants/zeroshieldBrand";
+import { formatDetectionTier, formatZeroshieldScanSummary, ZEROSHIELD_GUARD_MODEL_LABEL } from "../../constants/zeroshieldBrand";
 
 const ACTION_THEME = {
   allow: {
@@ -248,16 +248,34 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             Scan ran ({stage.tier}) — request was not blocked; later stages executed normally.
           </div>
         )}
-        {stage.threat_type && (
+        {stage.name === "input_scan" && (() => {
+          const scan = formatZeroshieldScanSummary({
+            detection_tier: stage.tier,
+            threat_type: stage.threat_type,
+            confidence: stage.confidence,
+            risk_score: stage.risk_score,
+            scan_outcome: stage.scan_outcome,
+            action: stage.action,
+          });
+          return (
+            <>
+              <div>
+                <span className="text-slate-500 dark:text-slate-400">Threat:</span>{" "}
+                <span className={scan.clean ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600 dark:text-rose-300"}>
+                  {scan.threatLabel}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-slate-400">{scan.scoreLabel}:</span>{" "}
+                <span className="text-slate-700 dark:text-slate-200">{scan.scoreValue}</span>
+              </div>
+            </>
+          );
+        })()}
+        {stage.name !== "input_scan" && stage.threat_type && !["none", "clean"].includes(String(stage.threat_type).toLowerCase()) && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Threat:</span>{" "}
             <span className="text-rose-600 dark:text-rose-300">{stage.threat_type}</span>
-          </div>
-        )}
-        {stage.confidence !== undefined && (
-          <div>
-            <span className="text-slate-500 dark:text-slate-400">Confidence:</span>{" "}
-            <span className="text-slate-700 dark:text-slate-200">{(stage.confidence * 100).toFixed(0)}%</span>
           </div>
         )}
         <div>

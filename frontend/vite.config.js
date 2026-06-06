@@ -17,6 +17,7 @@ export default defineConfig({
       "/api": { target: process.env.VITE_CONTROL_PROXY || "http://127.0.0.1:8100", changeOrigin: true, ...noKeepAlive },
       "/v1": { target: process.env.VITE_GATEWAY_PROXY || "http://127.0.0.1:8300", changeOrigin: true, ...noKeepAlive },
       "/health": { target: process.env.VITE_GATEWAY_PROXY || "http://127.0.0.1:8300", changeOrigin: true, ...noKeepAlive },
+      "/gw-health": { target: process.env.VITE_GATEWAY_PROXY || "http://127.0.0.1:8300", rewrite: (p) => p.replace(/^\/gw-health/, "/health"), ...noKeepAlive },
       "/ws": { target: process.env.VITE_CONTROL_PROXY || "http://127.0.0.1:8100", changeOrigin: true, ws: true, ...noKeepAlive },
     },
   },

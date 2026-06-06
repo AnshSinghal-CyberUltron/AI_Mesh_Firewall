@@ -105,7 +105,7 @@ class ConflictError(Exception):
                 type=str,
                 required=False,
                 description="Filter by policy domain",
-                enum=["global", "pipeline", "rag", "mcp"],
+                enum=["pipeline", "rag", "mcp"],
             ),
             OpenApiParameter(
                 name="days",
@@ -428,7 +428,7 @@ class PolicyViewSet(ModelViewSet):
             v = s["violations"]
             b = s["blocked"]
             r = s["redacted"]
-            eff = round((b / v * 100), 1) if v else 0
+            eff = round(((b + r) / v * 100), 1) if v else 0
             result[pid] = {
                 "violations": v,
                 "blocked": b,

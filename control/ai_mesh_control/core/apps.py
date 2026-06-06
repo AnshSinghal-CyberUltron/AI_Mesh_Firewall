@@ -64,8 +64,8 @@ class CoreConfig(AppConfig):
                 _run_with_db_lock_retry(
                     lambda: __import__(
                         "core.simulator_seed", fromlist=["ensure_simulator_default_gateway_key"]
-                    ).ensure_simulator_default_gateway_key(),
-                    "Simulator default gateway key seed",
+                    ).ensure_simulator_dev_bootstrap(),
+                    "Simulator dev bootstrap",
                     attempts=8,
                     base_sleep_s=1.5,
                 )

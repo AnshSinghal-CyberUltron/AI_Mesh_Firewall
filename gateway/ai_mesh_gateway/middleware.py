@@ -252,6 +252,11 @@ class AuthMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # CORS preflight — CORSMiddleware handles OPTIONS; auth must not 401 without ACAO.
+        if scope.get("method") == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
         path = scope.get("path", "")
         if path in EXCLUDED_PATHS:
             await self.app(scope, receive, send)

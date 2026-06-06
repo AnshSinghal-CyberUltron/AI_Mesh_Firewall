@@ -1,5 +1,8 @@
 # Production overlay — EC2 + ECR images + zeroshield.ai subdomains.
-# Usage:
+# Sized for c8g.2xlarge (8 vCPU / 16 GiB): gateway-first CPU, cgroup memory sum ~14.4 GiB.
+# Build/push locally: infra/scripts/build-push-images.sh (or make ecr-push TAG=...)
+# EC2 only pulls — no application source on the instance.
+# Usage on EC2:
 #   export ECR_REGISTRY=123456789.dkr.ecr.ap-south-1.amazonaws.com IMAGE_TAG=v1.0.0
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
 #   bash scripts/deploy-ec2.sh
@@ -24,101 +27,140 @@ x-ecr-workers: &ecr_workers_image
   pull_policy: always
   build: !reset null
 
+x-ecr-nginx: &ecr_nginx_image
+  image: ${ECR_REGISTRY:?set ECR_REGISTRY}/ai-mesh-nginx:${IMAGE_TAG:-latest}
+  pull_policy: always
+  build: !reset null
+
 services:
   postgres:
     <<: *restart_unless_stopped
-    ports: !reset ["127.0.0.1:5432:5432"]
+    ports: !override ["127.0.0.1:5432:5432"]
     command:
       - postgres
       - -c
-      - shared_buffers=768MB
+      - shared_buffers=512MB
       - -c
-      - effective_cache_size=2048MB
+      - effective_cache_size=1536MB
       - -c
-      - max_connections=200
+      - max_connections=100
       - -c
-      - work_mem=8MB
+      - work_mem=4MB
     deploy:
       resources:
         limits:
-          memory: 3584M
+          memory: 2560M
 
   redis:
     <<: *restart_unless_stopped
-    ports: !reset ["127.0.0.1:6379:6379"]
-    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    ports: !override ["127.0.0.1:6379:6379"]
+    command: redis-server --appendonly yes --maxmemory 768mb --maxmemory-policy allkeys-lru --timeout 0 --tcp-keepalive 60
     deploy:
       resources:
         limits:
-          memory: 1280M
+          memory: 1024M
 
   rabbitmq:
     <<: *restart_unless_stopped
-    ports: !reset ["127.0.0.1:5772:5672", "127.0.0.1:15772:15672"]
+    ports: !override ["127.0.0.1:5772:5672", "127.0.0.1:15772:15672"]
     deploy:
       resources:
         limits:
-          memory: 768M
+          memory: 512M
 
   control:
     <<: [*restart_unless_stopped, *ecr_control_image]
-    ports: !reset ["127.0.0.1:8100:8000"]
+    ports: !override ["127.0.0.1:8100:8000"]
+    # ECR images built before ASGI switch may still use gunicorn; override until image is rebuilt.
+    command:
+      [
+        "daphne",
+        "-b",
+        "0.0.0.0",
+        "-p",
+        "8000",
+        "--proxy-headers",
+        "main_app.asgi:application",
+      ]
     environment:
-      DEBUG: ${DEBUG:-true}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-aimeshbackend.zeroshield.ai,aimeshfirewall.zeroshield.ai,localhost,127.0.0.1,control}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-aimeshbackend.zeroshield.ai,aimeshfirewall.zeroshield.ai,aimeshgateway.zeroshield.ai,localhost,127.0.0.1,control,gateway}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://aimeshfirewall.zeroshield.ai}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-https://aimeshgateway.zeroshield.ai}
       BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-https://aimeshbackend.zeroshield.ai}
+      SIMULATOR_DEFAULTS_ENABLED: ${SIMULATOR_DEFAULTS_ENABLED:-true}
+      CHANNEL_LAYERS_REDIS_URL: redis://redis:6379/1
+      ASGI_ALLOWED_ORIGINS: ${ASGI_ALLOWED_ORIGINS:-https://aimeshfirewall.zeroshield.ai,http://aimeshfirewall.zeroshield.ai,https://aimeshbackend.zeroshield.ai}
+      POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-30}
+      DJANGO_CACHE_MAX_CONNECTIONS: ${DJANGO_CACHE_MAX_CONNECTIONS:-50}
     deploy:
       resources:
         limits:
-          cpus: "2"
-          memory: 2048M
+          cpus: "1"
+          memory: 1536M
 
   gateway:
     <<: [*restart_unless_stopped, *ecr_gateway_image]
-    ports: !reset ["127.0.0.1:8300:8300"]
+    ports: !override ["127.0.0.1:8300:8300"]
     environment:
+      # 1 gunicorn worker per gateway vCPU (async uvicorn — not 2×CPU+1)
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-6}
-      GUNICORN_WORKER_CONNECTIONS: ${GUNICORN_WORKER_CONNECTIONS:-2000}
+      GUNICORN_WORKER_CONNECTIONS: ${GUNICORN_WORKER_CONNECTIONS:-1000}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
       GUNICORN_KEEPALIVE: ${GUNICORN_KEEPALIVE:-65}
-      GATEWAY_SCANNER_THREAD_POOL_SIZE: ${GATEWAY_SCANNER_THREAD_POOL_SIZE:-8}
-      GATEWAY_BEDROCK_THREAD_POOL_SIZE: ${GATEWAY_BEDROCK_THREAD_POOL_SIZE:-24}
-      GATEWAY_VAULT_POOL_MIN: ${GATEWAY_VAULT_POOL_MIN:-2}
-      GATEWAY_VAULT_POOL_MAX: ${GATEWAY_VAULT_POOL_MAX:-16}
+      # Thread pools are per forked worker (6 workers × pool size = cluster total)
+      GATEWAY_SCANNER_THREAD_POOL_SIZE: ${GATEWAY_SCANNER_THREAD_POOL_SIZE:-4}
+      GATEWAY_BEDROCK_THREAD_POOL_SIZE: ${GATEWAY_BEDROCK_THREAD_POOL_SIZE:-8}
+      GATEWAY_VAULT_POOL_MIN: ${GATEWAY_VAULT_POOL_MIN:-1}
+      GATEWAY_VAULT_POOL_MAX: ${GATEWAY_VAULT_POOL_MAX:-4}
       GATEWAY_LAST_USED_DEBOUNCE_SECONDS: ${GATEWAY_LAST_USED_DEBOUNCE_SECONDS:-60}
-      GATEWAY_REDIS_MAX_CONNECTIONS: ${GATEWAY_REDIS_MAX_CONNECTIONS:-300}
+      GATEWAY_REDIS_MAX_CONNECTIONS: ${GATEWAY_REDIS_MAX_CONNECTIONS:-100}
       GATEWAY_TIER2_CACHE_TTL_SECONDS: ${GATEWAY_TIER2_CACHE_TTL_SECONDS:-300}
-      GATEWAY_TIER2_CACHE_MAX: ${GATEWAY_TIER2_CACHE_MAX:-10000}
+      GATEWAY_TIER2_CACHE_MAX: ${GATEWAY_TIER2_CACHE_MAX:-3000}
       GATEWAY_TIER2_SAMPLE_RATE: ${GATEWAY_TIER2_SAMPLE_RATE:-1.0}
       ENABLE_TIER2: ${ENABLE_TIER2:-true}
       GATEWAY_RAG_ENABLED: ${GATEWAY_RAG_ENABLED:-true}
-      CHROMA_URL: ""
+      CHROMA_URL: ${CHROMA_URL:-}
       GATEWAY_TIER2_EXECUTION_MODE: ${GATEWAY_TIER2_EXECUTION_MODE:-sync_pre_llm}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://aimeshfirewall.zeroshield.ai}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-https://aimeshgateway.zeroshield.ai}
       GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-https://aimeshfirewall.zeroshield.ai,https://aimeshbackend.zeroshield.ai}
+      GATEWAY_LOG_LEVEL: ${GATEWAY_LOG_LEVEL:-INFO}
+      AI_MESH_CONTROL_URL: http://control:8000
+      AIGUARDX_BACKEND_URL: http://control:8000
+      GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
     deploy:
       resources:
         limits:
           cpus: "6"
-          memory: 9G
+          memory: 7168M
 
   workers:
     <<: [*restart_unless_stopped, *ecr_workers_image]
+    command:
+      [
+        "celery",
+        "-A",
+        "ai_mesh_workers.celery_app",
+        "worker",
+        "-Q",
+        "policy.compile,platform.batch,compute.heavy,scan.tier2,vector.index,mcp.audit",
+        "--loglevel=info",
+        "--concurrency=2",
+      ]
     deploy:
       resources:
         limits:
-          cpus: "1.5"
-          memory: 1536M
+          cpus: "1"
+          memory: 1280M
 
   workers-beat:
     <<: [*restart_unless_stopped, *ecr_workers_image]
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 384M
 
   mcp-stub:
     <<: *restart_unless_stopped
@@ -128,13 +170,8 @@ services:
     profiles: ["dev-frontend"]
 
   nginx:
-    <<: *restart_unless_stopped
-    image: nginx:1.27-alpine
-    pull_policy: always
-    ports: !reset ["80:80"]
-    volumes:
-      - ./frontend/dist:/usr/share/nginx/html:ro
-      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    <<: [*restart_unless_stopped, *ecr_nginx_image]
+    ports: ["80:80", "443:443"]
     depends_on:
       control: { condition: service_healthy }
       gateway: { condition: service_started }

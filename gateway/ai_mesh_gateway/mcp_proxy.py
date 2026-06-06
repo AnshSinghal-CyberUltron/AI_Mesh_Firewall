@@ -41,6 +41,37 @@ _GATEWAY_INTERNAL_API_KEY = os.environ.get(
     "GATEWAY_INTERNAL_API_KEY", os.environ.get("AGENT_API_KEY", "")
 )
 
+_CONTROL_LOG_SNIPPET = 240
+
+
+def _control_request_headers(org_slug: str = "", extra: dict | None = None) -> dict[str, str]:
+    """Headers for server-to-server calls to the Django control plane."""
+    headers: dict[str, str] = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Host": "control",
+        "X-Gateway-Auth": "true",
+    }
+    slug = (org_slug or "").strip()
+    if slug:
+        headers["X-Org-Slug"] = slug
+    if _GATEWAY_INTERNAL_API_KEY:
+        headers["X-Gateway-Internal-Key"] = _GATEWAY_INTERNAL_API_KEY
+    if extra:
+        headers.update(extra)
+    return headers
+
+
+def _control_error_snippet(resp: httpx.Response) -> str:
+    """Short, safe log fragment for a non-JSON control-plane response."""
+    ctype = (resp.headers.get("content-type") or "").lower()
+    if "text/html" in ctype or resp.text.lstrip().startswith("<"):
+        return f"HTTP {resp.status_code} HTML error page (control DEBUG may be on)"
+    text = (resp.text or "").strip().replace("\n", " ")
+    if not text:
+        return f"HTTP {resp.status_code} (empty body)"
+    return f"HTTP {resp.status_code}: {text[:_CONTROL_LOG_SNIPPET]}"
+
 
 def _valid_internal_key(presented: str) -> bool:
     """Constant-time validation of the server-to-server internal key.
@@ -100,6 +131,16 @@ async def _proxy(base_url: str, path: str, request: Request) -> JSONResponse:
             try:
                 data = resp.json()
             except Exception:
+                ctype = (resp.headers.get("content-type") or "").lower()
+                if "text/html" in ctype or (resp.text or "").lstrip().startswith("<"):
+                    LOG.warning("MCP proxy upstream returned HTML: %s", _control_error_snippet(resp))
+                    return JSONResponse(
+                        content={
+                            "error": "Upstream returned an HTML error page",
+                            "detail": _control_error_snippet(resp),
+                        },
+                        status_code=502,
+                    )
                 data = resp.text
             return JSONResponse(content=data, status_code=resp.status_code)
         except httpx.RequestError as exc:
@@ -121,13 +162,7 @@ async def _get_server_config(org_slug: str, server_slug: str) -> dict | None:
     if cache_key in _server_config_cache and now - _server_config_ttl.get(cache_key, 0) < _CONFIG_CACHE_TTL:
         return _server_config_cache[cache_key]
 
-    headers = {
-        "Content-Type": "application/json",
-        "X-Org-Slug": org_slug,
-        "X-Gateway-Auth": "true",
-    }
-    if _GATEWAY_INTERNAL_API_KEY:
-        headers["X-Gateway-Internal-Key"] = _GATEWAY_INTERNAL_API_KEY
+    headers = _control_request_headers(org_slug)
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -136,7 +171,10 @@ async def _get_server_config(org_slug: str, server_slug: str) -> dict | None:
                 headers=headers,
             )
             if resp.status_code != 200:
-                LOG.warning("Server config lookup failed: HTTP %s", resp.status_code)
+                LOG.warning(
+                    "Server config lookup failed: %s",
+                    _control_error_snippet(resp),
+                )
                 return None
             servers = resp.json()
             if not isinstance(servers, list):
@@ -213,14 +251,7 @@ async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
         if now - _enabled_tools_ttl.get(cache_key, 0) < _ENABLED_TOOLS_TTL:
             return _enabled_tools_cache[cache_key]
 
-    headers = {
-        "Content-Type": "application/json",
-        "X-Org-Slug": org_slug,
-        "X-Server-Slug": server_slug,
-        "X-Gateway-Auth": "true",
-    }
-    if _GATEWAY_INTERNAL_API_KEY:
-        headers["X-Gateway-Internal-Key"] = _GATEWAY_INTERNAL_API_KEY
+    headers = _control_request_headers(org_slug, {"X-Server-Slug": server_slug})
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             resp = await client.get(
@@ -230,8 +261,10 @@ async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
             )
             if resp.status_code != 200:
                 LOG.warning(
-                    "Enabled-tools lookup failed (org=%s server=%s): HTTP %s",
-                    org_slug, server_slug, resp.status_code,
+                    "Enabled-tools lookup failed (org=%s server=%s): %s",
+                    org_slug,
+                    server_slug,
+                    _control_error_snippet(resp),
                 )
                 _enabled_tools_cache[cache_key] = None
                 _enabled_tools_ttl[cache_key] = now
@@ -340,14 +373,10 @@ async def _record_gateway_event(
         )
         return
 
-    headers = {
-        "Content-Type": "application/json",
-        "X-Org-Slug": org_slug,
-        "X-Server-Slug": server_slug or "",
-        "X-Gateway-Auth": "true",
-    }
-    if _GATEWAY_INTERNAL_API_KEY:
-        headers["X-Gateway-Internal-Key"] = _GATEWAY_INTERNAL_API_KEY
+    headers = _control_request_headers(
+        org_slug,
+        {"X-Server-Slug": server_slug or ""},
+    )
     payload = {
         "server_slug": server_slug,
         "tool_name": tool_name,
@@ -928,15 +957,10 @@ def _validate_org_scope(request: Request, org_slug: str):
 
 def _backend_proxy_headers(request: Request, org_slug: str, server_slug: str = "") -> dict:
     """Headers for trusted gateway->backend MCP proxy requests."""
-    headers = {
-        "Content-Type": "application/json",
-        "X-Org-Slug": org_slug,
-        "X-Gateway-Auth": "true",
-    }
+    extra: dict[str, str] = {}
     if server_slug:
-        headers["X-Server-Slug"] = server_slug
-    if _GATEWAY_INTERNAL_API_KEY:
-        headers["X-Gateway-Internal-Key"] = _GATEWAY_INTERNAL_API_KEY
+        extra["X-Server-Slug"] = server_slug
+    headers = _control_request_headers(org_slug, extra)
 
     auth = _get_auth_context(request)
     if auth is not None:
@@ -969,20 +993,23 @@ async def _notify_control_needs_reauth(org_slug: str, server_slug: str, reason: 
     """
     if not server_slug or not _GATEWAY_INTERNAL_API_KEY:
         return
-    headers = {
-        "Content-Type": "application/json",
-        "X-Org-Slug": org_slug,
-        "X-Server-Slug": server_slug,
-        "X-Gateway-Auth": "true",
-        "X-Gateway-Internal-Key": _GATEWAY_INTERNAL_API_KEY,
-    }
+    headers = _control_request_headers(
+        org_slug,
+        {"X-Server-Slug": server_slug},
+    )
     try:
         async with httpx.AsyncClient(timeout=5) as client:
-            await client.post(
+            resp = await client.post(
                 f"{_BACKEND_URL}/api/mcp-connector/internal/needs-reauth/",
                 headers=headers,
                 json={"org_slug": org_slug, "server_slug": server_slug, "reason": reason},
             )
+            if resp.status_code >= 400:
+                LOG.warning(
+                    "needs-reauth backprop HTTP %s: %s",
+                    resp.status_code,
+                    _control_error_snippet(resp),
+                )
     except Exception as exc:
         LOG.warning("needs-reauth backprop failed (org=%s server=%s): %s",
                     org_slug, server_slug, exc)

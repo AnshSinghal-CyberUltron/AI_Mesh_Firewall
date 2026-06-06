@@ -1,9 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useGatewayConfig } from "./useGatewayConfig";
 import { useAuth } from "../context/AuthContext";
+import { resolveGatewayHealthUrl } from "../utils/environmentUrls";
 
 const HEALTH_POLL_INTERVAL = 15000;
-const GATEWAY_KEY_STORAGE = "zeroshield_gateway_key";
+const GATEWAY_KEY_STORAGE_LEGACY = "zeroshield_gateway_key";
+
+function gatewayKeyStorageKey(orgId) {
+  return orgId ? `zeroshield_gateway_key:${orgId}` : GATEWAY_KEY_STORAGE_LEGACY;
+}
+
+function readStoredGatewayKey(orgId) {
+  try {
+    const scoped = orgId ? localStorage.getItem(gatewayKeyStorageKey(orgId)) : "";
+    if (scoped) return scoped;
+    return localStorage.getItem(GATEWAY_KEY_STORAGE_LEGACY) || "";
+  } catch {
+    return "";
+  }
+}
 
 /**
  * Shared hook for all Module 1 live simulators.
@@ -12,11 +27,10 @@ const GATEWAY_KEY_STORAGE = "zeroshield_gateway_key";
  */
 export function useSimulatorEngine() {
   const { gatewayUrl } = useGatewayConfig();
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, user, loading: authLoading } = useAuth();
+  const orgId = user?.organization?.id;
 
-  const [gatewayKey, setGatewayKey] = useState(
-    () => localStorage.getItem(GATEWAY_KEY_STORAGE) || ""
-  );
+  const [gatewayKey, setGatewayKey] = useState(() => readStoredGatewayKey(orgId));
   const [connectionStatus, setConnectionStatus] = useState("disconnected"); // connected | degraded | disconnected
   const [backendHealth, setBackendHealth] = useState(null);
   const [gatewayHealth, setGatewayHealth] = useState(null);
@@ -25,13 +39,21 @@ export function useSimulatorEngine() {
   const [previousResult, setPreviousResult] = useState(null);
 
   const healthRef = useRef(null);
-  const defaultKeyFetchedRef = useRef(false);
+  const bootstrapAttemptedRef = useRef(null);
 
-  // Save gateway key to localStorage
-  const updateGatewayKey = useCallback((key) => {
+  // Save gateway key to org-scoped localStorage (prevents cross-tenant leakage).
+  const updateGatewayKey = useCallback((key, storageKey) => {
     setGatewayKey(key);
-    localStorage.setItem(GATEWAY_KEY_STORAGE, key);
-  }, []);
+    const target = storageKey || gatewayKeyStorageKey(orgId);
+    try {
+      localStorage.setItem(target, key);
+      if (target !== GATEWAY_KEY_STORAGE_LEGACY) {
+        localStorage.removeItem(GATEWAY_KEY_STORAGE_LEGACY);
+      }
+    } catch {
+      // localStorage may be unavailable in private mode.
+    }
+  }, [orgId]);
 
   // Authenticated fetch to gateway
   const gatewayFetch = useCallback(async (path, opts = {}) => {
@@ -99,7 +121,7 @@ export function useSimulatorEngine() {
     let beOk = false;
 
     try {
-      const res = await fetch(`${gatewayUrl}/health`, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(resolveGatewayHealthUrl(gatewayUrl), { signal: AbortSignal.timeout(5000) });
       const data = await res.json().catch(() => null);
       gwOk = res.ok;
       setGatewayHealth(data);
@@ -124,23 +146,38 @@ export function useSimulatorEngine() {
     return () => clearInterval(healthRef.current);
   }, [checkHealth]);
 
+  // Reload cached key when org context becomes available or changes.
   useEffect(() => {
-    if (gatewayKey || defaultKeyFetchedRef.current) return;
-    defaultKeyFetchedRef.current = true;
+    if (!orgId) return;
+    const cached = readStoredGatewayKey(orgId);
+    if (cached) {
+      setGatewayKey(cached);
+    }
+  }, [orgId]);
+
+  // Lazy-provision per-org simulator key (POST returns plaintext once at creation).
+  useEffect(() => {
+    if (authLoading || !orgId) return;
+    if (gatewayKey) return;
+    const attemptKey = String(orgId);
+    if (bootstrapAttemptedRef.current === attemptKey) return;
+    bootstrapAttemptedRef.current = attemptKey;
 
     (async () => {
       try {
-        const res = await fetchWithAuth("/api/gateways/simulator-default/");
+        const res = await fetchWithAuth("/api/gateways/simulator-default/", {
+          method: "POST",
+        });
         if (!res.ok) return;
         const data = await res.json();
         if (data?.key) {
-          updateGatewayKey(data.key);
+          updateGatewayKey(data.key, data.storage_key);
         }
       } catch {
         // Simulator bootstrap is best-effort; manual entry still works.
       }
     })();
-  }, [fetchWithAuth, gatewayKey, updateGatewayKey]);
+  }, [authLoading, fetchWithAuth, gatewayKey, orgId, updateGatewayKey]);
 
   // Execute a scenario against the gateway
   const executeScenario = useCallback(async (config) => {

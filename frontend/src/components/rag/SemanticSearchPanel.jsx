@@ -1,28 +1,22 @@
-import { useState } from "react";
-import { Search, Database, Play, Loader2, AlertTriangle, FileText, Shield, BarChart3, ToggleLeft, ToggleRight, RefreshCw, Upload } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Database, Play, Loader2, AlertTriangle, FileText, Shield, BarChart3, ToggleLeft, ToggleRight, RefreshCw, CheckCircle } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { useCollections } from "../../hooks/useCollections";
-
-const GATEWAY_URL_KEY = "zeroshield_gateway_url";
-const GATEWAY_KEY_KEY = "zeroshield_gateway_api_key";
-
-function gwUrl() {
-  const stored = localStorage.getItem(GATEWAY_URL_KEY);
-  if (stored) return stored.replace(/\/+$/, "");
-  const host = window.location.hostname || "127.0.0.1";
-  return `http://${host}:8300`;
-}
-function gwKey() { return localStorage.getItem(GATEWAY_KEY_KEY) || ""; }
-
-const PROVIDERS = [
-  { value: "chroma", label: "ChromaDB" },
-  { value: "pinecone", label: "Pinecone" },
-  { value: "milvus", label: "Milvus" },
-];
+import { useVectorProviders } from "../../hooks/useVectorProviders";
+import { useGatewayCredential } from "../../hooks/useGatewayCredential";
+import { gatewayFetch } from "../../lib/gatewayFetch";
+import { DEFAULT_VECTOR_PROVIDER, VECTOR_PROVIDERS } from "../../constants/vectorProviders";
 
 export function SemanticSearchPanel() {
-  const { collections, loading: collectionsLoading, refresh: refreshCollections } = useCollections();
-  const [provider, setProvider] = useState("chroma");
+  const { hasConfiguredProvider, primaryProvider } = useVectorProviders();
+  const { collections, loading: collectionsLoading, refresh: refreshCollections } = useCollections({
+    enabled: hasConfiguredProvider,
+  });
+  // Gateway URL + per-org simulator key are auto-resolved/provisioned (rag/query is
+  // a non-admin endpoint, so the simulator key authenticates it directly). No manual
+  // key entry — matches RAGFeatureTestPanel / RAGAttackTrustSimulator.
+  const { gatewayUrl, gatewayKey, reprovision, ready, provisioning } = useGatewayCredential();
+  const [provider, setProvider] = useState(DEFAULT_VECTOR_PROVIDER);
   const [collection, setCollection] = useState("");
   const [namespace, setNamespace] = useState("");
   const [query, setQuery] = useState("");
@@ -32,12 +26,18 @@ export function SemanticSearchPanel() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
+  useEffect(() => {
+    if (primaryProvider) setProvider(primaryProvider);
+  }, [primaryProvider]);
+
   const providerCollections = collections.filter((c) => c.provider === provider);
 
   const handleSearch = async () => {
     if (!query.trim() || !collection.trim()) { setError("Collection and query are required."); return; }
-    const key = gwKey();
-    if (!key) { setError("Set your Gateway API Key in the connection panel first."); return; }
+    if (!ready) {
+      setError(provisioning ? "Provisioning the simulator gateway key…" : "Simulator gateway key is not ready yet.");
+      return;
+    }
 
     setSearching(true);
     setResult(null);
@@ -54,11 +54,11 @@ export function SemanticSearchPanel() {
       if (rerank) payload.rerank = true;
 
       const startTime = performance.now();
-      const res = await fetch(`${gwUrl()}/v1/rag/query`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-        body: JSON.stringify(payload),
-      });
+      const res = await gatewayFetch(
+        `${gatewayUrl.replace(/\/+$/, "")}/v1/rag/query`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+        { key: gatewayKey, reprovision },
+      );
       const elapsed = Math.round(performance.now() - startTime);
       const body = await res.json().catch(() => null);
 
@@ -91,7 +91,13 @@ export function SemanticSearchPanel() {
             Query vector databases with policy enforcement, document scanning, and optional reranking
           </p>
         </div>
-        <InfoTooltip text="Queries go through the full RAG pipeline: auth → policy → injection scan → vector query → document scan → anomaly detection → filtered results." />
+        <div className="flex items-center gap-2">
+          <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${ready ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/10 text-amber-600 dark:text-amber-400"}`} title={gatewayUrl || "resolving gateway…"}>
+            {provisioning ? <RefreshCw className="h-3 w-3 animate-spin" /> : ready ? <CheckCircle className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+            {provisioning ? "Provisioning" : ready ? "Auto key" : "Not ready"}
+          </span>
+          <InfoTooltip text="Queries go through the full RAG pipeline: auth → policy → injection scan → vector query → document scan → anomaly detection → filtered results. Uses the auto-provisioned per-org simulator gateway key." />
+        </div>
       </div>
 
       {/* Query form */}
@@ -99,7 +105,7 @@ export function SemanticSearchPanel() {
         <div>
           <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Provider</label>
           <select value={provider} onChange={(e) => setProvider(e.target.value)} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-            {PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            {VECTOR_PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
         </div>
         <div>
@@ -155,7 +161,7 @@ export function SemanticSearchPanel() {
 
         <div className="flex-1" />
 
-        <button onClick={handleSearch} disabled={searching || !query.trim() || !collection.trim()} className="flex items-center gap-2 px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white text-sm font-medium rounded-lg transition-colors">
+        <button onClick={handleSearch} disabled={searching || !ready || !query.trim() || !collection.trim()} className="flex items-center gap-2 px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white text-sm font-medium rounded-lg transition-colors">
           {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
           {searching ? "Searching..." : "Search"}
         </button>

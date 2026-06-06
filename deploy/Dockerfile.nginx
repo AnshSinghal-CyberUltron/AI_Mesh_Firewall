@@ -1,0 +1,24 @@
+# Production nginx — static UI, vhost config, and origin TLS are baked into the image.
+# Build context: repo root (see infra/scripts/build-push-images.sh).
+FROM nginx:1.27-alpine
+
+RUN apk add --no-cache openssl \
+    && rm -f /etc/nginx/conf.d/default.conf
+
+COPY deploy/nginx.conf /etc/nginx/conf.d/01-http.conf
+COPY deploy/nginx-ssl.conf /etc/nginx/conf.d/02-ssl.conf
+
+# Frontend production bundle (built before docker build on laptop/CI).
+COPY frontend/dist/ /usr/share/nginx/html/
+
+# Self-signed origin cert for Cloudflare "Full" mode (same SANs as ec2-generate-origin-ssl.sh).
+RUN mkdir -p /etc/nginx/ssl \
+    && openssl req -x509 -nodes -days 825 \
+        -newkey rsa:2048 \
+        -keyout /etc/nginx/ssl/origin.key \
+        -out /etc/nginx/ssl/origin.crt \
+        -subj "/CN=zeroshield.ai/O=ZeroShield/C=IN" \
+        -addext "subjectAltName=DNS:aimeshfirewall.zeroshield.ai,DNS:aimeshbackend.zeroshield.ai,DNS:aimeshgateway.zeroshield.ai,DNS:zeroshield.ai" \
+    && chmod 600 /etc/nginx/ssl/origin.key
+
+EXPOSE 80 443

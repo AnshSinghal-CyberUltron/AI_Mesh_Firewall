@@ -14,7 +14,7 @@ import {
   normalizeChatPipelineResult,
   normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
-import { ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
+import { formatZeroshieldScanSummary, ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
 
 const ATTACK_SCENARIOS = [
   {
@@ -766,37 +766,37 @@ export function AttackSimulatorPanel() {
               </div>
             )}
 
-            {/* Legacy zeroshield display for backward compat */}
-            {result.zeroshield && (
+            {result.zeroshield && (() => {
+              const scan = formatZeroshieldScanSummary(result.zeroshield);
+              return (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">Detection Tier</div>
                   <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {result.zeroshield.detection_tier || "none"}
+                    {scan.tierLabel}
                   </div>
                 </div>
                 <div>
                   <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">Threat Type</div>
-                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {result.zeroshield.threat_type || "none"}
+                  <div className={`text-sm font-semibold ${scan.clean ? "text-emerald-700 dark:text-emerald-300" : "text-slate-800 dark:text-slate-200"}`}>
+                    {scan.threatLabel}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">Confidence</div>
+                  <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">{scan.scoreLabel}</div>
                   <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {result.zeroshield.confidence != null
-                      ? `${(result.zeroshield.confidence * 100).toFixed(0)}%`
-                      : "--"}
+                    {scan.scoreValue}
                   </div>
                 </div>
                 <div>
                   <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">Action</div>
                   <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {result.zeroshield.action || result.action}
+                    {scan.action || result.final_action?.toUpperCase() || "ALLOW"}
                   </div>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {result.zeroshield?.matched_patterns && result.zeroshield.matched_patterns.length > 0 && (
               <div className="mt-3 pt-3 border-t border-slate-200/50">
@@ -811,12 +811,12 @@ export function AttackSimulatorPanel() {
               </div>
             )}
 
-            {(result.zeroshield?.detail || result.zeroshield?.reason) && (
+            {result.zeroshield && formatZeroshieldScanSummary(result.zeroshield).detail && (
               <div className="mt-2">
                 <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">Detail</div>
-                <div className="text-xs text-slate-600 dark:text-slate-400">
-                  {result.zeroshield.detail || result.zeroshield.reason}
-                </div>
+                <pre className="whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-400 font-sans">
+                  {formatZeroshieldScanSummary(result.zeroshield).detail}
+                </pre>
               </div>
             )}
 

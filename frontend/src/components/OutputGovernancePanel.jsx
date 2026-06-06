@@ -6,6 +6,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
 import { OutputPipelineTimeline } from "./OutputPipelineTimeline";
+import { TIME_RANGE_TO_HOURS } from "../hooks/useFirewallData";
 
 const ACTION_STYLES = {
   block: { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300", icon: ShieldX, label: "Blocked" },
@@ -111,18 +112,24 @@ function EventRow({ event, isExpanded, onToggle }) {
   );
 }
 
-export function OutputGovernancePanel() {
+export function OutputGovernancePanel({ timeRange = "24h" }) {
   const { fetchWithAuth } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [actionFilter, setActionFilter] = useState("all");
   const POLL_INTERVAL = 10_000;
 
   const fetchEvents = useCallback(async () => {
     try {
+      // Lens-driven window (default 7d for §1.7) so the log matches the page
+      // KPIs + Evidence instead of a fixed 24h that ages out older events.
+      const hours = TIME_RANGE_TO_HOURS[timeRange] || 24;
+      // limit=500 (not 50): the feed is filtered to output events client-side, so
+      // a small page can be entirely crowded out by recent non-output traffic.
       const res = await fetchWithAuth(
-        "/api/security/threat-feed/?hours=24&limit=50&source=security_scan"
+        `/api/security/threat-feed/?hours=${hours}&limit=500&source=security_scan`
       );
       if (res.ok) {
         const data = await res.json();
@@ -135,7 +142,7 @@ export function OutputGovernancePanel() {
     } finally {
       setLoading(false);
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, timeRange]);
 
   useEffect(() => {
     fetchEvents();
@@ -150,6 +157,20 @@ export function OutputGovernancePanel() {
   const blocked = events.filter((e) => e.action === "block").length;
   const redacted = events.filter((e) => e.action === "redact").length;
   const flagged = events.filter((e) => e.action === "flag").length;
+
+  const FILTERS = [
+    { id: "all", label: "All", count: events.length },
+    { id: "block", label: "Block", count: blocked },
+    { id: "redact", label: "Redact", count: redacted },
+    { id: "flag", label: "Flag", count: flagged },
+    { id: "allow", label: "Allow", count: events.filter((e) => !["block", "redact", "flag"].includes(e.action)).length },
+  ];
+  const filtered =
+    actionFilter === "all"
+      ? events
+      : actionFilter === "allow"
+        ? events.filter((e) => !["block", "redact", "flag"].includes(e.action))
+        : events.filter((e) => e.action === actionFilter);
 
   return (
     <div className="ai-mesh-card ai-mesh-grid-bg rounded-3xl p-6">
@@ -181,6 +202,26 @@ export function OutputGovernancePanel() {
         </div>
       </div>
 
+      {/* Action filter chips — additive client-side filter, removes nothing */}
+      {!loading && events.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setActionFilter(f.id)}
+              className={`inline-flex cursor-pointer items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                actionFilter === f.id
+                  ? "bg-teal-100 text-teal-700 ring-1 ring-teal-300 dark:bg-teal-900/40 dark:text-teal-300 dark:ring-teal-700"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+              }`}
+            >
+              {f.label}
+              <span className="tabular-nums opacity-70">{f.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-5 h-5 text-teal-500 animate-spin" />
@@ -189,11 +230,16 @@ export function OutputGovernancePanel() {
       ) : events.length === 0 ? (
         <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
           <Eye className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
-          No output-guard events in the last 24 hours. Send a prompt through the gateway to generate evidence.
+          No output-guard events in the selected {timeRange} window. Send a prompt through the gateway to generate evidence.
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
+          <Eye className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
+          No {actionFilter} events in this window. Clear the filter to see all {events.length} events.
         </div>
       ) : (
         <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-          {events.map((ev) => (
+          {filtered.map((ev) => (
             <EventRow
               key={ev.id}
               event={ev}

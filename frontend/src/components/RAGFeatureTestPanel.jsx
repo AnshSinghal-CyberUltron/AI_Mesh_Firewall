@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { FlaskConical, Play, CheckCircle, XCircle, AlertTriangle, RefreshCw, Shield, FileText, Lock, Search, ArrowRight } from "lucide-react";
 import { InfoTooltip } from "./InfoTooltip";
-
-const GATEWAY_URL_KEY = "zeroshield_gateway_url";
-const GATEWAY_KEY_KEY = "zeroshield_gateway_api_key";
+import { useGatewayCredential } from "../hooks/useGatewayCredential";
+import { gatewayFetch } from "../lib/gatewayFetch";
 
 const FEATURE_TESTS = [
   {
@@ -95,14 +94,18 @@ export function RAGFeatureTestPanel() {
   const [expandedFeature, setExpandedFeature] = useState(null);
   const [testResults, setTestResults] = useState({});
   const [running, setRunning] = useState(null);
+  // Gateway URL + per-org simulator key are auto-resolved/provisioned. rag/query
+  // is a non-admin endpoint, so the simulator key authenticates it directly.
+  const { gatewayUrl, gatewayKey, reprovision, ready, provisioning } = useGatewayCredential();
 
   const runTest = async (featureId, testIdx, query, extraPayload = {}) => {
-    const gatewayUrl = localStorage.getItem(GATEWAY_URL_KEY);
-    const apiKey = localStorage.getItem(GATEWAY_KEY_KEY);
-    if (!gatewayUrl || !apiKey) {
+    if (!ready) {
       setTestResults((prev) => ({
         ...prev,
-        [`${featureId}-${testIdx}`]: { status: "error", detail: "Configure gateway URL and API key in the simulator above first." },
+        [`${featureId}-${testIdx}`]: {
+          status: "error",
+          detail: provisioning ? "Provisioning the simulator gateway key…" : "Simulator gateway key is not ready yet.",
+        },
       }));
       return;
     }
@@ -115,11 +118,11 @@ export function RAGFeatureTestPanel() {
       const startTime = performance.now();
 
       const payload = { collection: "docs", query, n_results: 5, ...extraPayload };
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify(payload),
-      });
+      const res = await gatewayFetch(
+        url,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+        { key: gatewayKey, reprovision },
+      );
 
       const elapsed = Math.round(performance.now() - startTime);
       let body = null;

@@ -7,6 +7,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
 import { useAuth } from "../context/AuthContext";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 
 const FAMILY_CONFIG = {
   llm: { label: "LLM (OWASP Top 10)", color: "#14b8a6", bg: "bg-teal-50 dark:bg-teal-900/20", border: "border-teal-200 dark:border-teal-800", text: "text-teal-700" },
@@ -69,7 +70,7 @@ function FamilySection({ familyKey, vectors, expanded, onToggle }) {
       {expanded && (
         <div className="p-4 space-y-4 bg-white dark:bg-slate-800">
           {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
+            <SafeResponsiveChart className="h-[200px]">
               <BarChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 10 }} />
@@ -78,7 +79,7 @@ function FamilySection({ familyKey, vectors, expanded, onToggle }) {
                 <Bar dataKey="blocked" stackId="a" fill="#ef4444" name="Blocked" />
                 <Bar dataKey="allowed" stackId="a" fill="#94a3b8" name="Allowed" radius={[4, 4, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </SafeResponsiveChart>
           ) : (
             <div className="text-center py-6 text-xs text-slate-400">No detections in this period</div>
           )}

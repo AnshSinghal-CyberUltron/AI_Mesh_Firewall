@@ -2,20 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { Key, Database, CheckCircle, AlertTriangle, Loader2, Save, Trash2, RefreshCw } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { useAuth } from "../../context/AuthContext";
+import { VECTOR_PROVIDER_CONFIG_FIELDS } from "../../constants/vectorProviders";
 
 const PROVIDERS = [
-  { value: "chroma", label: "ChromaDB", description: "Open-source embedding database", fields: [
-    { key: "connection_url", label: "ChromaDB URL", placeholder: "http://localhost:8000", required: true },
-    { key: "api_key", label: "Auth Token (optional)", placeholder: "", type: "password" },
-  ]},
-  { value: "pinecone", label: "Pinecone", description: "Managed serverless vector DB", fields: [
-    { key: "api_key", label: "API Key", placeholder: "pcsk_...", required: true, type: "password" },
-    { key: "environment", label: "Environment", placeholder: "us-east-1" },
-  ]},
-  { value: "milvus", label: "Milvus", description: "High-performance vector database", fields: [
-    { key: "connection_url", label: "Milvus URI", placeholder: "http://localhost:19530", required: true },
-    { key: "api_key", label: "Token (optional)", placeholder: "", type: "password" },
-  ]},
+  { value: "pinecone", label: "Pinecone", description: "Managed serverless vector DB", fields: VECTOR_PROVIDER_CONFIG_FIELDS.pinecone },
+  { value: "milvus", label: "Milvus", description: "High-performance vector database", fields: VECTOR_PROVIDER_CONFIG_FIELDS.milvus },
+  { value: "custom", label: "Custom", description: "BYOK endpoint (Milvus-compatible URI)", fields: VECTOR_PROVIDER_CONFIG_FIELDS.custom },
 ];
 
 // Use relative URLs so the Vite dev-server proxy forwards /api → backend correctly

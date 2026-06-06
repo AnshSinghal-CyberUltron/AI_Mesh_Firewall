@@ -46,6 +46,13 @@ except ImportError:
     )
     from bedrock_tier2_breaker import Tier2UnavailableStrict  # type: ignore[no-redef]
 from ai_mesh_shared.openai_request_normalizer import normalize_openai_chat_request
+from ai_mesh_gateway.rag_collections import (
+    coerce_org_id,
+    iter_vector_clients_for_org,
+    list_collections_for_clients,
+    no_provider_configured_payload,
+    resolve_vector_client_for_org,
+)
 
 _gateway_public_url = (os.environ.get("GATEWAY_PUBLIC_URL", "") or "").strip().rstrip("/")
 _backend_public_url = (os.environ.get("BACKEND_PUBLIC_URL", "") or "").strip().rstrip("/")
@@ -173,12 +180,35 @@ if not _cors_origins:
         "http://localhost:3000",
     ]
 
+# Always allow LOCAL-DEV origins (localhost, loopback, RFC-1918 LAN IPs on any
+# port) IN ADDITION to the configured production origins. The shared .env pins
+# GATEWAY_CORS_ORIGINS/FRONTEND_ORIGIN to prod hosts, so without this the local
+# stack rejects dev browsers (e.g. the LAN IP used to bypass port shadowing).
+# Safe: these hosts are only reachable on the local network, so an external
+# attacker cannot originate a request from them.
+_LOCAL_ORIGIN_REGEX = (
+    r"^https?://("
+    r"localhost|127\.0\.0\.1|\[::1\]|"
+    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+    r"192\.168\.\d{1,3}\.\d{1,3}|"
+    r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
+    r")(:\d+)?$"
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=_LOCAL_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["content-type", "authorization", "x-user-id", "x-endpoint-id", "x-agent-data"],
+    allow_headers=[
+        "accept",
+        "content-type",
+        "authorization",
+        "x-user-id",
+        "x-endpoint-id",
+        "x-agent-data",
+    ],
     expose_headers=["content-type", "content-length", "x-request-id"],
 )
 
@@ -475,6 +505,8 @@ def _redact_for_client_response(zeroshield_dict: dict | None) -> dict | None:
         "recommended_action",
         "guard_findings",
         "enforcement_source",
+        "scan_outcome",
+        "risk_score",
     }
     redacted = {k: v for k, v in zeroshield_dict.items() if k in safe_fields}
     
@@ -604,17 +636,26 @@ def _policy_check_cached(
         )
 
     from policy_engine import evaluate, apply_redaction
+    try:
+        from .policy_sync import filter_policies_by_domain
+    except ImportError:
+        from policy_sync import filter_policies_by_domain
 
+    compiled_policies = filter_policies_by_domain(
+        POLICY_SYNC.get_policies(org_slug), "pipeline"
+    )
     result = evaluate(
         prompt=prompt,
         response_text=response_text,
-        compiled_policies=POLICY_SYNC.get_policies(org_slug),
+        compiled_policies=compiled_policies,
     )
 
     response = {
         "action": result.action,
         "matched_policies": result.matched_policy_codes,
         "matched_rules": result.matched_rule_names,
+        "matched_policy_ids": result.matched_policy_ids,
+        "matched_rule_ids": result.matched_rule_ids,
         "matched_policy_names": result.matched_policy_names,
         "matched_policy_severities": result.matched_policy_severities,
         "matched_policy_categories": result.matched_policy_categories,
@@ -3229,6 +3270,8 @@ async def proxy_chat(
                                 "detail": check_resp.get("message") or "Policy block",
                                 "matched_policies": check_resp.get("matched_policies") or [],
                                 "matched_rules": check_resp.get("matched_rules") or [],
+                                "matched_policy_ids": check_resp.get("matched_policy_ids") or [],
+                                "matched_rule_ids": check_resp.get("matched_rule_ids") or [],
                             },
                             prompt_snippet=_prompt_snippet,
                             endpoint_id=endpoint_id,
@@ -3684,16 +3727,22 @@ async def proxy_chat(
                         response_headers["X-ZeroShield-Action"] = "redacted"
                     else:
                         zs_action, zs_reason, zs_threat, zs_conf, zs_patterns, zs_detail = _resolve_success_metadata_from_verdict(scan_verdict)
-                        resp["zeroshield"] = _build_zeroshield_metadata(
-                            action=zs_action,
-                            reason=zs_reason,
-                            detection_tier=scan_verdict.tier if scan_verdict else "none",
-                            threat_type=zs_threat,
-                            confidence=zs_conf,
-                            matched_patterns=zs_patterns,
-                            original_prompt=prompt,
-                            detail=zs_detail,
-                            processing_time_ms=elapsed_ms,
+                        from pipeline_trace import enrich_zeroshield_from_verdict
+
+                        resp["zeroshield"] = enrich_zeroshield_from_verdict(
+                            _build_zeroshield_metadata(
+                                action=zs_action,
+                                reason=zs_reason,
+                                detection_tier=scan_verdict.tier if scan_verdict else "none",
+                                threat_type=zs_threat,
+                                confidence=zs_conf,
+                                matched_patterns=zs_patterns,
+                                original_prompt=prompt,
+                                detail=zs_detail,
+                                processing_time_ms=elapsed_ms,
+                            ),
+                            scan_verdict=scan_verdict,
+                            final_action=zs_action,
                         )
                         if zs_action == "flag":
                             response_headers["X-ZeroShield-Action"] = "flag"
@@ -4665,18 +4714,24 @@ async def proxy_chat(
                 )
             else:
                 zs_action, zs_reason, zs_threat, zs_conf, zs_patterns, zs_detail = _resolve_success_metadata_from_verdict(scan_verdict)
-                llm_resp["zeroshield"] = _build_zeroshield_metadata(
-                    action=zs_action,
-                    reason=zs_reason,
-                    detection_tier=scan_verdict.tier if scan_verdict else "none",
-                    threat_type=zs_threat,
-                    confidence=zs_conf,
-                    matched_patterns=zs_patterns,
-                    original_prompt=prompt,
-                    detail=zs_detail,
-                    processing_time_ms=elapsed_ms,
-                    factuality_warning=hallucination_flagged,
-                    routing=route_metadata,
+                from pipeline_trace import enrich_zeroshield_from_verdict
+
+                llm_resp["zeroshield"] = enrich_zeroshield_from_verdict(
+                    _build_zeroshield_metadata(
+                        action=zs_action,
+                        reason=zs_reason,
+                        detection_tier=scan_verdict.tier if scan_verdict else "none",
+                        threat_type=zs_threat,
+                        confidence=zs_conf,
+                        matched_patterns=zs_patterns,
+                        original_prompt=prompt,
+                        detail=zs_detail,
+                        processing_time_ms=elapsed_ms,
+                        factuality_warning=hallucination_flagged,
+                        routing=route_metadata,
+                    ),
+                    scan_verdict=scan_verdict,
+                    final_action=zs_action,
                 )
                 if zs_action == "flag":
                     response_headers_final["X-ZeroShield-Action"] = "flag"
@@ -5202,18 +5257,28 @@ async def rag_query(request: Request):
         n_results = min(n_results, max_results)
 
         # ── Execute 4-stage RAG Firewall Pipeline ──
+        rag_policy = dict(policy)
+        rag_policy["_org_slug"] = getattr(auth_ctx, "org_slug", None) or ""
+        # Resolve the caller's per-org vector client (VectorProviderConfig →
+        # VECTOR_PROVIDER_SYNC) so retrieval uses the org's own Pinecone/Milvus
+        # credentials. Falls back to the gateway-level env client inside
+        # _resolve_vector_client when no org config exists.
+        effective_vector_db_type = policy.get("vector_db_type", vector_db_type)
+        org_id_for_client = getattr(auth_ctx, "organization_id", None) if auth_ctx else None
+        resolved_vector_client, _ = _resolve_vector_client(effective_vector_db_type, org_id=org_id_for_client)
         result = await RAG_PIPELINE.execute(
             query_text=query_text,
             collection_name=collection_name,
             project_id=str(project_id),
-            vector_db_type=policy.get("vector_db_type", vector_db_type),
+            vector_db_type=effective_vector_db_type,
             n_results=n_results,
             where_filter=where_filter,
             namespace=namespace,
-            policy=policy,
+            policy=rag_policy,
             key_hash=getattr(auth_ctx, "key_hash", ""),
             organization_id=getattr(auth_ctx, "organization_id", None) if auth_ctx else None,
             user_id=getattr(auth_ctx, "user_id", None) if auth_ctx else None,
+            vector_client_override=resolved_vector_client,
         )
 
         if result.action == "block":
@@ -5672,13 +5737,11 @@ async def rag_delete_documents(request: Request):
 )
 async def rag_list_collections(request: Request):
     """List all collections visible to the authenticated project."""
-    if not VECTOR_CLIENTS:
-        return JSONResponse(status_code=503, content={"error": "No vector clients configured."})
-
     auth_ctx = getattr(request.state, "auth_context", None)
     if auth_ctx is None:
         return JSONResponse(status_code=403, content={"error": "Authentication required."})
     project_id = str(auth_ctx.project_id)
+    org_id = getattr(auth_ctx, "organization_id", None)
 
     rl_block = await _enforce_org_tpm_rate_limit(
         auth_ctx,
@@ -5690,27 +5753,20 @@ async def rag_list_collections(request: Request):
     if rl_block is not None:
         return rl_block
 
-    namespaced_prefix = f"{project_id}__"
+    clients = iter_vector_clients_for_org(
+        org_id,
+        vector_clients=VECTOR_CLIENTS,
+        provider_sync=VECTOR_PROVIDER_SYNC,
+    )
+    if not clients:
+        return JSONResponse(content=no_provider_configured_payload(project_id))
 
-    result: dict[str, list[str]] = {}
-    for provider_name, client in VECTOR_CLIENTS.items():
-        try:
-            if hasattr(client, "list_collections"):
-                collections = await client.list_collections(project_id=project_id)
-                normalized: list[str] = []
-                for name in collections or []:
-                    if isinstance(name, str) and name.startswith(namespaced_prefix):
-                        normalized.append(name[len(namespaced_prefix):])
-                    else:
-                        normalized.append(name)
-                result[provider_name] = normalized
-            else:
-                result[provider_name] = []
-        except Exception as exc:
-            LOG.warning("Failed to list collections for %s: %s", provider_name, exc)
-            result[provider_name] = []
-
-    return JSONResponse(content={"project_id": project_id, "collections": result})
+    result = await list_collections_for_clients(project_id, clients)
+    return JSONResponse(content={
+        "project_id": project_id,
+        "collections": result,
+        "rag_available": True,
+    })
 
 
 @app.post(
@@ -5720,9 +5776,6 @@ async def rag_list_collections(request: Request):
 )
 async def rag_create_collection(request: Request):
     """Create a new namespaced collection in the specified vector DB."""
-    if not VECTOR_CLIENTS:
-        return JSONResponse(status_code=503, content={"error": "No vector clients configured."})
-
     try:
         body = await request.json()
     except Exception:
@@ -5759,9 +5812,22 @@ async def rag_create_collection(request: Request):
     if rl_block is not None:
         return rl_block
 
-    client, _ = _resolve_vector_client(vector_db_type, org_id=org_id)
+    client, _ = resolve_vector_client_for_org(
+        vector_db_type,
+        org_id,
+        vector_clients=VECTOR_CLIENTS,
+        provider_sync=VECTOR_PROVIDER_SYNC,
+        resolver=_resolve_vector_client,
+    )
     if client is None:
-        return JSONResponse(status_code=400, content={"error": f"Unknown provider: {vector_db_type}"})
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "no_provider_configured",
+                "code": "no_provider_configured",
+                "message": f"No vector provider configured for type: {vector_db_type}",
+            },
+        )
 
     try:
         if hasattr(client, "create_collection"):
@@ -5803,9 +5869,6 @@ async def rag_create_collection(request: Request):
 )
 async def rag_delete_collection(request: Request):
     """Delete a namespaced collection from the specified vector DB."""
-    if not VECTOR_CLIENTS:
-        return JSONResponse(status_code=503, content={"error": "No vector clients configured."})
-
     try:
         body = await request.json()
     except Exception:
@@ -5830,6 +5893,7 @@ async def rag_delete_collection(request: Request):
     if auth_ctx is None:
         return JSONResponse(status_code=403, content={"error": "Authentication required."})
     project_id = str(auth_ctx.project_id)
+    org_id = getattr(auth_ctx, "organization_id", None)
 
     rl_block = await _enforce_org_tpm_rate_limit(
         auth_ctx,
@@ -5850,11 +5914,22 @@ async def rag_delete_collection(request: Request):
             content={"error": "forbidden", "message": "Delete not permitted by policy.", "code": "rag_operation_denied"},
         )
 
-    client = VECTOR_CLIENTS.get(vector_db_type)
+    client, _ = resolve_vector_client_for_org(
+        vector_db_type,
+        org_id,
+        vector_clients=VECTOR_CLIENTS,
+        provider_sync=VECTOR_PROVIDER_SYNC,
+        resolver=_resolve_vector_client,
+    )
     if client is None:
-        client, _ = _resolve_vector_client(vector_db_type, org_id=getattr(auth_ctx, "organization_id", None))
-    if client is None:
-        return JSONResponse(status_code=400, content={"error": f"Unknown provider: {vector_db_type}"})
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "no_provider_configured",
+                "code": "no_provider_configured",
+                "message": f"No vector provider configured for type: {vector_db_type}",
+            },
+        )
 
     try:
         if hasattr(client, "delete_collection"):
@@ -6167,29 +6242,33 @@ def _strip_namespace(name: str, prefix: str) -> str:
     summary="List vector DB collections for a given project (admin)",
     tags=["Admin"],
 )
-async def admin_rag_list_collections(request: Request, project_id: str = ""):
+async def admin_rag_list_collections(
+    request: Request,
+    project_id: str = "",
+    organization_id: str = "",
+):
     admin_block = _require_admin_role(request)
     if admin_block is not None:
         return admin_block
-    if not VECTOR_CLIENTS:
-        return JSONResponse(status_code=503, content={"error": "No vector clients configured."})
     project_id = (project_id or "").strip()
     if not project_id:
         return JSONResponse(status_code=400, content={"error": "Missing 'project_id' query parameter."})
 
-    prefix = f"{project_id}__"
-    result: dict[str, list[str]] = {}
-    for provider_name, client in VECTOR_CLIENTS.items():
-        try:
-            if hasattr(client, "list_collections"):
-                cols = await client.list_collections(project_id=project_id)
-                result[provider_name] = [_strip_namespace(n, prefix) for n in (cols or [])]
-            else:
-                result[provider_name] = []
-        except Exception as exc:
-            LOG.warning("admin_rag_list_collections: %s failed: %s", provider_name, exc)
-            result[provider_name] = []
-    return JSONResponse(content={"project_id": project_id, "collections": result})
+    org_id = coerce_org_id(organization_id)
+    clients = iter_vector_clients_for_org(
+        org_id,
+        vector_clients=VECTOR_CLIENTS,
+        provider_sync=VECTOR_PROVIDER_SYNC,
+    )
+    if not clients:
+        return JSONResponse(content=no_provider_configured_payload(project_id))
+
+    result = await list_collections_for_clients(project_id, clients)
+    return JSONResponse(content={
+        "project_id": project_id,
+        "collections": result,
+        "rag_available": True,
+    })
 
 
 @app.post(
@@ -6201,13 +6280,12 @@ async def admin_rag_create_collection(request: Request):
     admin_block = _require_admin_role(request)
     if admin_block is not None:
         return admin_block
-    if not VECTOR_CLIENTS:
-        return JSONResponse(status_code=503, content={"error": "No vector clients configured."})
     try:
         body = await request.json()
     except Exception:
         return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
     project_id = (body.get("project_id") or "").strip()
+    organization_id = body.get("organization_id")
     collection_name = (body.get("collection") or "").strip()
     vector_db_type = (body.get("vector_db_type") or "pinecone").strip()
     if not project_id:
@@ -6221,9 +6299,23 @@ async def admin_rag_create_collection(request: Request):
             "code": "rag_namespace_violation",
         })
 
-    client, _ = _resolve_vector_client(vector_db_type, org_id=None)
+    org_id = coerce_org_id(organization_id)
+    client, _ = resolve_vector_client_for_org(
+        vector_db_type,
+        org_id,
+        vector_clients=VECTOR_CLIENTS,
+        provider_sync=VECTOR_PROVIDER_SYNC,
+        resolver=_resolve_vector_client,
+    )
     if client is None:
-        return JSONResponse(status_code=400, content={"error": f"Unknown provider: {vector_db_type}"})
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "no_provider_configured",
+                "code": "no_provider_configured",
+                "message": f"No vector provider configured for type: {vector_db_type}",
+            },
+        )
     try:
         if hasattr(client, "create_collection"):
             namespaced = await client.create_collection(collection_name=collection_name, project_id=project_id)
@@ -6248,13 +6340,12 @@ async def admin_rag_delete_collection(request: Request):
     admin_block = _require_admin_role(request)
     if admin_block is not None:
         return admin_block
-    if not VECTOR_CLIENTS:
-        return JSONResponse(status_code=503, content={"error": "No vector clients configured."})
     try:
         body = await request.json()
     except Exception:
         return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
     project_id = (body.get("project_id") or "").strip()
+    organization_id = body.get("organization_id")
     collection_name = (body.get("collection") or "").strip()
     vector_db_type = (body.get("vector_db_type") or "pinecone").strip()
     if not project_id:
@@ -6268,11 +6359,23 @@ async def admin_rag_delete_collection(request: Request):
             "code": "rag_namespace_violation",
         })
 
-    client = VECTOR_CLIENTS.get(vector_db_type)
+    org_id = coerce_org_id(organization_id)
+    client, _ = resolve_vector_client_for_org(
+        vector_db_type,
+        org_id,
+        vector_clients=VECTOR_CLIENTS,
+        provider_sync=VECTOR_PROVIDER_SYNC,
+        resolver=_resolve_vector_client,
+    )
     if client is None:
-        client, _ = _resolve_vector_client(vector_db_type, org_id=None)
-    if client is None:
-        return JSONResponse(status_code=400, content={"error": f"Unknown provider: {vector_db_type}"})
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "no_provider_configured",
+                "code": "no_provider_configured",
+                "message": f"No vector provider configured for type: {vector_db_type}",
+            },
+        )
     try:
         if hasattr(client, "delete_collection"):
             ok = await client.delete_collection(collection_name=collection_name, project_id=project_id)
@@ -6920,6 +7023,11 @@ def _configure_logging() -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(fmt)
     logging.basicConfig(level=level, handlers=[handler], force=True)
+
+    # Avoid dumping full HTTP response bodies (e.g. Django DEBUG HTML pages) when
+    # GATEWAY_LOG_LEVEL=DEBUG.
+    for noisy in ("httpcore", "httpx", "hpack"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
     # Apply health-endpoint suppression to the uvicorn access logger so that
     # readiness-probe requests (/health, /api/health, etc.) don't pollute the log

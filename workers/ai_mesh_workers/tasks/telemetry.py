@@ -138,8 +138,18 @@ def _build_enforcement_metadata(event: dict) -> dict:
         "output_tokens": (event.get("tokens_used") or {}).get("completion_tokens", 0),
         "total_tokens": (event.get("tokens_used") or {}).get("total_tokens", 0),
         "organization_id": event.get("organization_id"),
-        # Policy violations: derived from matched policies in extra metadata
+        # Policy linkage: promote gateway match fields for analytics + FK resolution
         "policy_violations": (event.get("metadata") or {}).get("matched_policies") or [],
+        "matched_policies": (event.get("metadata") or {}).get("matched_policies") or [],
+        "matched_policy_codes": (event.get("metadata") or {}).get("matched_policy_codes")
+        or (event.get("metadata") or {}).get("matched_policies")
+        or [],
+        "matched_rules": (event.get("metadata") or {}).get("matched_rules") or [],
+        "matched_rule_names": (event.get("metadata") or {}).get("matched_rule_names")
+        or (event.get("metadata") or {}).get("matched_rules")
+        or [],
+        "matched_policy_ids": (event.get("metadata") or {}).get("matched_policy_ids") or [],
+        "matched_rule_ids": (event.get("metadata") or {}).get("matched_rule_ids") or [],
         # Derived security analysis flags for LogDetailPage
         "pii_detected": threat_type in ("pii", "secret", "data_leakage", "credential"),
         "prompt_injection_detected": threat_type in ("prompt_injection", "injection"),
@@ -449,15 +459,6 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
                     )
                     continue
 
-            enforcement_event = EnforcementEvent(
-                policy=None,
-                rule=None,
-                action=event.get("action", "allow"),
-                user_id=event.get("user_id"),
-                endpoint_id=event.get("endpoint_id"),
-                agent=None,
-                metadata=_build_enforcement_metadata(event),
-            )
             # Set organization from telemetry event (injected by gateway)
             org_id = event.get("organization_id") or (event.get("metadata") or {}).get("organization_id")
             try:
@@ -472,7 +473,26 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
                 )
                 continue
 
-            enforcement_event.organization_id = org_id
+            built_metadata = _build_enforcement_metadata(event)
+            action = event.get("action", "allow")
+            from policy.telemetry_resolution import resolve_policy_rule_from_event
+
+            policy, rule = resolve_policy_rule_from_event(
+                action=action,
+                organization_id=org_id,
+                raw_metadata=event.get("metadata"),
+                built_metadata=built_metadata,
+            )
+            enforcement_event = EnforcementEvent(
+                policy=policy,
+                rule=rule,
+                action=action,
+                user_id=event.get("user_id"),
+                endpoint_id=event.get("endpoint_id"),
+                agent=None,
+                metadata=built_metadata,
+                organization_id=org_id,
+            )
             events_to_create.append(enforcement_event)
             processed += 1
 

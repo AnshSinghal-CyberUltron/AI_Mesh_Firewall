@@ -47,9 +47,9 @@ compile() {
 create_policy_with_rule() {
   local code="$1" name="$2" regex="$3" action="$4" replacement="${5:-}"
   local policy_json policy_id
-  policy_json=$(curl -sf -X POST "$BASE/api/policies/?policy_domain=global" \
+  policy_json=$(curl -sf -X POST "$BASE/api/policies/?policy_domain=pipeline" \
     -H "$AUTH" -H 'Content-Type: application/json' \
-    -d "{\"name\":\"$name\",\"code\":\"$code\",\"category\":\"E2E\",\"severity\":\"HIGH\",\"enabled\":true,\"priority\":998,\"policy_domain\":\"global\"}")
+    -d "{\"name\":\"$name\",\"code\":\"$code\",\"category\":\"E2E\",\"severity\":\"HIGH\",\"enabled\":true,\"priority\":998,\"policy_domain\":\"pipeline\"}")
   policy_id=$(echo "$policy_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
   created_policy_ids+=("$policy_id")
   local rule_body
@@ -124,7 +124,7 @@ log "=== Live policy enforcement E2E | org=$ORG_SLUG model=$MODEL ==="
 log "Gateway key prefix=${KEY:0:8}..."
 
 # Remove stale E2E policies from prior runs (prevents cross-test block rule collisions)
-curl -sf "$BASE/api/policies/?policy_domain=global" -H "$AUTH" | python3 -c "
+curl -sf "$BASE/api/policies/?policy_domain=pipeline" -H "$AUTH" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 rows = data.get('results', data if isinstance(data, list) else [])
@@ -203,7 +203,7 @@ created_policy_ids=()
 PID=$(create_policy_with_rule "E2E_TGL_$STAMP" "E2E Toggle" "$BLOCK_TOKEN" "block")
 compile
 T1=$(gateway_chat "toggle_on" "Token $BLOCK_TOKEN")
-VER=$(curl -sf "$BASE/api/policies/$PID/?policy_domain=global" -H "$AUTH" | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])")
+VER=$(curl -sf "$BASE/api/policies/$PID/?policy_domain=pipeline" -H "$AUTH" | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])")
 curl -sf -X PATCH "$BASE/api/policies/$PID/" -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"enabled\": false, \"version\": $VER}" >/dev/null
 compile

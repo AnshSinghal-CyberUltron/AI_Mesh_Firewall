@@ -14,6 +14,9 @@ postgres_data/
 # Verification run artifacts (may contain bearer tokens, payloads, screenshots)
 runs/verification/
 
+# EC2 static UI (synced from frontend/dist — not committed)
+deploy/static/
+
 # Terraform cache
 **/.terraform/*
 

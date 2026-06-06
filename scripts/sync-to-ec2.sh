@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Copy deploy artifacts to EC2 and optionally run deploy-ec2.sh remotely.
+# Sync deploy config to EC2 (no application source — images come from ECR only).
 # Usage:
 #   ./scripts/sync-to-ec2.sh                    # sync only
-#   ./scripts/sync-to-ec2.sh --deploy           # sync + remote deploy
+#   ./scripts/sync-to-ec2.sh --deploy           # sync + remote deploy (pull + compose up)
 #   SSH_HOST=AIMeshFirewall REMOTE_DIR=~/AI_Mesh_Firewall ./scripts/sync-to-ec2.sh
 set -euo pipefail
 
@@ -16,6 +16,7 @@ for arg in "$@"; do
     --deploy) DEPLOY_AFTER=true ;;
     -h|--help)
       echo "Usage: $0 [--deploy]"
+      echo "Syncs compose, .env, and deploy scripts — application images (incl. nginx UI) come from ECR only."
       exit 0
       ;;
     *) echo "Unknown arg: $arg" >&2; exit 1 ;;
@@ -34,43 +35,41 @@ if [[ -z "${ECR_REGISTRY:-}" || -z "${IMAGE_TAG:-}" ]]; then
 fi
 
 echo "==> Prepare remote directory on ${SSH_HOST}:${REMOTE_DIR}"
-ssh "${SSH_HOST}" "mkdir -p '${REMOTE_DIR}/deploy' '${REMOTE_DIR}/scripts' '${REMOTE_DIR}/frontend'"
+ssh "${SSH_HOST}" "mkdir -p '${REMOTE_DIR}/scripts'"
 
-RSYNC_SSH=(rsync -az --delete -e ssh)
+echo "==> Remove stale app source from old deploys (if any)"
+ssh "${SSH_HOST}" "if command -v sudo >/dev/null 2>&1; then \
+  sudo rm -rf '${REMOTE_DIR}/frontend' '${REMOTE_DIR}/control' '${REMOTE_DIR}/gateway' '${REMOTE_DIR}/workers'; \
+else \
+  rm -rf '${REMOTE_DIR}/frontend' '${REMOTE_DIR}/control' '${REMOTE_DIR}/gateway' '${REMOTE_DIR}/workers'; \
+fi" || true
 
-echo "==> Sync compose + deploy config"
+RSYNC_SSH=(rsync -az -e ssh)
+
+echo "==> Sync compose files"
 "${RSYNC_SSH[@]}" \
   "${ROOT}/docker-compose.yml" \
   "${ROOT}/docker-compose.prod.yml" \
   "${SSH_HOST}:${REMOTE_DIR}/"
 
-"${RSYNC_SSH[@]}" \
-  "${ROOT}/deploy/" \
-  "${SSH_HOST}:${REMOTE_DIR}/deploy/"
-
+echo "==> Sync deploy scripts"
 "${RSYNC_SSH[@]}" \
   "${ROOT}/scripts/deploy-ec2.sh" \
+  "${ROOT}/scripts/ec2-generate-origin-ssl.sh" \
   "${SSH_HOST}:${REMOTE_DIR}/scripts/"
 
-echo "==> Sync .env (strips static AWS keys — EC2 uses instance role)"
+echo "==> Sync .env (strips static AWS keys — EC2 uses instance role for ECR pull)"
 ENV_SYNC="$(mktemp)"
 grep -vE '^(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)=' "${ROOT}/.env" > "${ENV_SYNC}"
 grep -q '^USE_EC2_INSTANCE_ROLE=' "${ENV_SYNC}" || echo 'USE_EC2_INSTANCE_ROLE=true' >> "${ENV_SYNC}"
 "${RSYNC_SSH[@]}" "${ENV_SYNC}" "${SSH_HOST}:${REMOTE_DIR}/.env"
 rm -f "${ENV_SYNC}"
 
-echo "==> Sync frontend sources (npm build runs on EC2)"
-"${RSYNC_SSH[@]}" \
-  --exclude node_modules \
-  --exclude dist \
-  "${ROOT}/frontend/" \
-  "${SSH_HOST}:${REMOTE_DIR}/frontend/"
+ssh "${SSH_HOST}" "chmod +x '${REMOTE_DIR}/scripts/deploy-ec2.sh' '${REMOTE_DIR}/scripts/ec2-generate-origin-ssl.sh'"
 
-ssh "${SSH_HOST}" "chmod +x '${REMOTE_DIR}/scripts/deploy-ec2.sh'"
-
-echo "Synced to ${SSH_HOST}:${REMOTE_DIR}"
+echo "Synced deploy config to ${SSH_HOST}:${REMOTE_DIR} (images: ${ECR_REGISTRY} tag ${IMAGE_TAG})"
 
 if [[ "${DEPLOY_AFTER}" == true ]]; then
-  echo "==> Remote deploy"
+  echo "==> Remote deploy (ECR pull + compose up)"
   ssh -t "${SSH_HOST}" "cd '${REMOTE_DIR}' && bash scripts/deploy-ec2.sh"
 fi

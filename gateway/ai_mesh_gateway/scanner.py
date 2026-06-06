@@ -1078,9 +1078,9 @@ class InputScanner:
 
         return _bedrock_verdict(
             action="allow",
-            threat_type="none",
-            confidence=score,
-            detail="Tier-2 passed",
+            threat_type="clean",
+            confidence=round(max(0.0, 1.0 - score), 4),
+            detail="ZeroShield Guard Model (Tier-2) completed — no threats detected.",
             tier="tier_2",
             reason_code=reason_code or "tier2_pass",
         )

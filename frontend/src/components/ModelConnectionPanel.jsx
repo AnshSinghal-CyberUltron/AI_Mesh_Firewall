@@ -193,6 +193,7 @@ export function ModelConnectionPanel({
   showProviderForm = true,
   showConnectionsTable = true,
   showGatewayCatalog = false,
+  embedded = false,
   onModelsChanged,
   onConnectionsMutated,
 }) {
@@ -509,7 +510,8 @@ export function ModelConnectionPanel({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6">
+    <div className={embedded ? "space-y-4 p-5" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6"}>
+      {!embedded && (
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -535,6 +537,20 @@ export function ModelConnectionPanel({
           </button>
         )}
       </div>
+      )}
+      {embedded && showConnectionsTable && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="flex items-center gap-1.5 min-h-[44px] px-3 py-2 text-xs font-medium rounded-lg transition-colors"
+            style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
+          >
+            <Plus className="w-3.5 h-3.5" aria-hidden />
+            Add model
+          </button>
+        </div>
+      )}
 
       <div className="mb-4 rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/80 dark:bg-teal-900/20 px-4 py-3 text-xs text-teal-900 dark:text-teal-100">
         <span className="font-medium">Organization API keys</span> are stored encrypted on the server when you add or edit a model. Keys are never cached in this browser.

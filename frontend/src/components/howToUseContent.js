@@ -194,14 +194,14 @@ print(response.content)`,
   /** ─────────────────────────────────────────────────────── 1.2 ── */
   "1.2": {
     title: "Manage All Policy Families",
-    audience: "For operators governing global, pipeline, RAG, PCM/MCP, and vector enforcement policies",
+    audience: "For operators governing pipeline, RAG, PCM/MCP, and vector enforcement policies",
     intro:
-      "Use this page as the unified policy console for the entire AI firewall. Manage global safeguards, pipeline rules, RAG protections, PCM or MCP controls, and vector database access policies from one workspace.",
+      "Use this page as the unified policy console for the entire AI firewall. Manage pipeline rules, RAG protections, PCM or MCP controls, and vector database access policies from one workspace.",
     steps: [
       {
         id: "step-policy",
         label: "Work section by section",
-        text: 'Use the dedicated sections for Global, Pipeline, RAG, PCM / MCP, and Other policies so each policy family stays organized and reviewable on one page.',
+        text: 'Use the dedicated sections for Pipeline, RAG, PCM / MCP, Vector, and Analytics so each policy family stays organized and reviewable on one page.',
       },
       {
         id: "step-vector",
@@ -278,7 +278,7 @@ curl -X POST https://aisecshieldgateway.zeroshield.ai/api/vector-policies/ \
     notes: [
       {
         icon: "shield",
-        text: "Keep global, RAG, and vector policies aligned: blocking risky prompts without namespace isolation or pipeline controls still leaves room for data leakage.",
+        text: "Keep pipeline, RAG, and vector policies aligned: blocking risky prompts without namespace isolation or domain-specific controls still leaves room for data leakage.",
       },
       {
         icon: "info",
@@ -369,7 +369,7 @@ curl -X POST http://localhost:8300/v1/rag/collections \\
   -H "Content-Type: application/json" \\
   -d '{
     "collection_name": "customer-kb",
-    "vector_db_type": "chroma"
+    "vector_db_type": "pinecone"
   }'`,
       },
       {
@@ -423,7 +423,7 @@ curl -X POST http://localhost:8300/v1/rag/query \\
     "collection": "customer-kb",
     "n_results": 5,
     "rerank": true,
-    "vector_db_type": "chroma",
+    "vector_db_type": "pinecone",
     "namespace": "tenant-a"
   }'`,
       },

@@ -836,10 +836,12 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
         ? zs.matched_patterns
         : (inputStage?.matched_patterns || summary?.guard_findings),
       detection_tier: zs.detection_tier || inputStage?.tier,
+      risk_score: zs.risk_score ?? inputStage?.risk_score ?? summary?.risk_score,
+      scan_outcome: zs.scan_outcome || inputStage?.scan_outcome || summary?.scan_outcome,
+      reason_code: zs.reason_code || inputStage?.reason_code || guardSource?.reason_code,
       guard_reason: zs.guard_reason || guardSource?.guard_reason,
       guard_action: zs.guard_action || guardSource?.guard_action,
       guard_model: zs.guard_model || guardSource?.guard_model,
-      reason_code: zs.reason_code || guardSource?.reason_code,
       recommended_action: zs.recommended_action || guardSource?.recommended_action,
       guard_findings: zs.guard_findings?.length ? zs.guard_findings : guardSource?.guard_findings,
       enforcement_source: zs.enforcement_source || guardSource?.enforcement_source,

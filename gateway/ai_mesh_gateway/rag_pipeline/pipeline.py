@@ -97,6 +97,7 @@ class RAGFirewallPipeline:
         key_hash: str = "",
         organization_id: int | None = None,
         user_id: int | str | None = None,
+        vector_client_override: Any = None,
     ) -> PipelineResult:
         effective_policy = policy or {}
         ctx = PipelineContext(
@@ -105,8 +106,9 @@ class RAGFirewallPipeline:
             query_text=query_text,
         )
 
-        # Hot-update compiled policies from sync cache
-        compiled_policies = self._get_compiled_policies()
+        # Hot-update compiled policies from sync cache (org-scoped)
+        org_slug = (effective_policy or {}).get("_org_slug") or ""
+        compiled_policies = self._get_compiled_policies(org_slug)
         if compiled_policies:
             self._ranker.update_policies(compiled_policies)
 
@@ -166,6 +168,7 @@ class RAGFirewallPipeline:
             policy=effective_policy,
             escalation_level=ctx.escalation_level,
             key_hash=key_hash,
+            vector_client=vector_client_override,
         ))
         ctx.add_stage(StageRecord(
             stage_name="retriever",
@@ -266,16 +269,19 @@ class RAGFirewallPipeline:
             model_downgrade=model_downgrade or gen_out.model_downgrade,
         )
 
-    def _get_compiled_policies(self) -> list[dict]:
-        """Retrieve compiled policies from the sync cache."""
+    def _get_compiled_policies(self, org_slug: str = "") -> list[dict]:
+        """Retrieve compiled policy entries from the sync cache for an org."""
         if self._policy_sync is None:
             return []
+        slug = (org_slug or "").strip() or "default"
         try:
-            bundle = self._policy_sync.get_compiled_policies()
-            if bundle and isinstance(bundle, dict):
-                return bundle.get("policies", [])
-            if isinstance(bundle, list):
-                return bundle
+            try:
+                from ..policy_sync import filter_policies_by_domain
+            except ImportError:
+                from policy_sync import filter_policies_by_domain
+            return filter_policies_by_domain(
+                self._policy_sync.get_policies(slug) or [], "rag"
+            )
         except Exception:
             LOG.debug("Failed to retrieve compiled policies from sync", exc_info=True)
         return []

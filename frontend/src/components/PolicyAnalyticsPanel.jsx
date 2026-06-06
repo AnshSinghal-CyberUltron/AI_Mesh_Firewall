@@ -8,6 +8,7 @@ import {
   ResponsiveContainer, Legend,
 } from "recharts";
 import { useAuth } from "../context/AuthContext";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 
 const DAYS_OPTIONS = [
   { value: 7, label: "7d" },
@@ -95,7 +96,7 @@ export function PolicyAnalyticsPanel() {
       const results = await Promise.allSettled([
         fetchWithAuth(`/api/policies/analytics/?days=${days}`),
         fetchWithAuth(`/api/policies/top-violators/?days=${days}&limit=10`),
-        fetchWithAuth("/api/policy/top-rules/?limit=10"),
+        fetchWithAuth(`/api/policy/top-rules/?days=${days}&limit=10`),
       ]);
 
       const errors = [];
@@ -218,8 +219,9 @@ export function PolicyAnalyticsPanel() {
             />
             <MetricCard
               icon={TrendingUp}
-              label="Avg Effectiveness"
+              label="Enforcement Rate"
               value={analytics ? `${analytics.avg_effectiveness || 0}%` : "--"}
+              subtext={analytics ? `${analytics.total_blocked || 0} blocked · ${analytics.total_redacted || 0} redacted` : "Blocked + redacted"}
               color="text-teal-600"
             />
             <MetricCard
@@ -238,13 +240,13 @@ export function PolicyAnalyticsPanel() {
             >
               <div className="flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-teal-600" />
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Effectiveness Trend</span>
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Enforcement Trend</span>
               </div>
               {expandedSections.effectiveness ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
             </button>
             {expandedSections.effectiveness && analytics?.effectiveness_trend && (
               <div className="p-4">
-                <ResponsiveContainer width="100%" height={200}>
+                <SafeResponsiveChart className="h-[200px]">
                   <AreaChart data={analytics.effectiveness_trend} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
                     <defs>
                       <linearGradient id="gradEff" x1="0" y1="0" x2="0" y2="1">
@@ -256,9 +258,9 @@ export function PolicyAnalyticsPanel() {
                     <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 10 }} />
                     <YAxis domain={[0, 100]} stroke="#94a3b8" tick={{ fontSize: 10 }} unit="%" />
                     <Tooltip contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0", borderRadius: "8px" }} formatter={(v) => `${v}%`} />
-                    <Area type="monotone" dataKey="effectiveness" stroke="#14b8a6" strokeWidth={2} fill="url(#gradEff)" name="Effectiveness" />
+                    <Area type="monotone" dataKey="effectiveness" stroke="#14b8a6" strokeWidth={2} fill="url(#gradEff)" name="Enforcement rate" />
                   </AreaChart>
-                </ResponsiveContainer>
+                </SafeResponsiveChart>
               </div>
             )}
           </div>
@@ -291,7 +293,7 @@ export function PolicyAnalyticsPanel() {
             </button>
             {expandedSections.violations && violationData.length > 0 && (
               <div className="p-4">
-                <ResponsiveContainer width="100%" height={220}>
+                <SafeResponsiveChart className="h-[220px]">
                   <BarChart data={violationData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey={violationXKey} stroke="#94a3b8" tick={{ fontSize: 9 }} angle={granularity === "hour" ? 0 : -30} textAnchor={granularity === "hour" ? "middle" : "end"} height={granularity === "hour" ? 30 : 50} />
@@ -302,7 +304,7 @@ export function PolicyAnalyticsPanel() {
                       <Bar key={key} dataKey={key} stackId="a" fill={color} name={VIOLATION_LABELS[key] || key} />
                     ))}
                   </BarChart>
-                </ResponsiveContainer>
+                </SafeResponsiveChart>
               </div>
             )}
           </div>
@@ -327,16 +329,23 @@ export function PolicyAnalyticsPanel() {
                       <th className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-300 uppercase">Category</th>
                       <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 uppercase">Policies</th>
                       <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 uppercase">Violations</th>
-                      <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 uppercase">Effectiveness</th>
+                      <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 uppercase">Enforcement</th>
                       <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 uppercase">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {analytics.category_performance.map((cat, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                        <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200 capitalize">{cat.category}</td>
+                    {analytics.category_performance.map((cat) => (
+                      <tr key={cat.categoryKey || cat.category} className="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                        <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200">{cat.category}</td>
                         <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{cat.policies}</td>
-                        <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-300">{cat.totalViolations}</td>
+                        <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-300">
+                          <div>{cat.totalViolations}</div>
+                          {(cat.blocked > 0 || cat.redacted > 0) && (
+                            <div className="text-[10px] text-slate-400">
+                              {cat.blocked || 0} blocked · {cat.redacted || 0} redacted
+                            </div>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
@@ -446,12 +455,13 @@ export function PolicyAnalyticsPanel() {
                       <th className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-300 uppercase">Policy</th>
                       <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 uppercase">Triggered</th>
                       <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 uppercase">Blocked</th>
-                      <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 uppercase">Effectiveness</th>
+                      <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 uppercase">Redacted</th>
+                      <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 uppercase">Enforcement</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {topRules.map((r, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    {topRules.map((r) => (
+                      <tr key={r.ruleId || r.ruleName} className="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                         <td className="px-3 py-2">
                           <div className="font-medium text-slate-800 dark:text-slate-200">{r.ruleName}</div>
                           <div className="text-[10px] text-slate-400 font-mono">{r.ruleId}</div>
@@ -461,6 +471,7 @@ export function PolicyAnalyticsPanel() {
                         </td>
                         <td className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-300">{r.triggered}</td>
                         <td className="px-3 py-2 text-right font-semibold text-red-600">{r.blocked}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-amber-600">{r.redacted || 0}</td>
                         <td className="px-3 py-2 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-12 h-1.5 bg-slate-200 rounded-full overflow-hidden">

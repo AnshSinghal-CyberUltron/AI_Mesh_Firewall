@@ -47,9 +47,20 @@ def _is_browser_reachable(url: str) -> bool:
 
 
 def _resolve_public_gateway_url(request: Request) -> str:
+    """URL the browser should call for /v1/* (same-origin UI host when nginx proxies /v1)."""
+    frontend_origin = (os.environ.get("FRONTEND_ORIGIN") or "").strip().rstrip("/")
+    if frontend_origin and _is_browser_reachable(frontend_origin):
+        try:
+            req_host = (request.get_host() or "").split(":")[0].lower()
+            fo_host = urlparse(frontend_origin).hostname or ""
+            if fo_host and req_host and fo_host == req_host:
+                return frontend_origin
+        except Exception:
+            pass
+
     for candidate in (
+        frontend_origin,
         getattr(settings, "GATEWAY_PUBLIC_URL", None) or "",
-        os.environ.get("FRONTEND_ORIGIN", "").strip(),
         "http://127.0.0.1:8180",
         "http://127.0.0.1:8300",
     ):

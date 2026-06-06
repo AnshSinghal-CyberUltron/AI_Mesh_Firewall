@@ -913,13 +913,10 @@ class MCPToolCallView(APIView):
             "agent_id": agent_id,
             "roles": actor_roles,
         }
-        # Get policies: org-specific + system-wide (org=None), in the MCP
-        # domain PLUS the universal 'global' baseline. Global policies apply
-        # everywhere; severity (ACTION_ORDER) resolves any overlap with MCP
-        # rules and redaction hints are unioned, so the two never conflict.
+        # Get policies: org-specific + system-wide (org=None), MCP domain only.
         policy_qs = PolicyModel.objects.filter(
             enabled=True,
-            policy_domain__in=["mcp", "global"],
+            policy_domain="mcp",
         ).filter(
             Q(organization=org) | Q(organization__isnull=True)
         ).prefetch_related("rules")

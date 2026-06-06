@@ -32,7 +32,7 @@ class EvaluationResult:
 
 # Action severity for "first match wins" by severity: block > redact > monitor > allow
 ACTION_ORDER = {"block": 5, "redact": 4, "rewrite": 3, "model_downgrade": 2, "monitor": 1, "allow": 0}
-VALID_POLICY_DOMAINS = {"global", "pipeline", "rag", "mcp"}
+VALID_POLICY_DOMAINS = {"pipeline", "rag", "mcp"}
 
 
 def validate_policy_domain(domain: str | None) -> str:
@@ -224,9 +224,8 @@ def evaluate(
     Context should contain at least one of: prompt, response (strings).
     Optional: user_id, endpoint_id, request_metadata.
 
-    ``domain`` — if set, only policies matching this domain *plus* global
-    policies are evaluated.  Valid values: ``"global"``, ``"pipeline"``,
-    ``"rag"``, ``"mcp"``.
+    ``domain`` — if set, only policies matching this domain are evaluated.
+    Valid values: ``"pipeline"``, ``"rag"``, ``"mcp"``.
 
     ``tool_name`` — if set, rules with a non-empty target_tool are only
     evaluated when target_tool matches.  Rules with empty target_tool
@@ -240,13 +239,7 @@ def evaluate(
 
     if domain is not None:
         normalized_domain = validate_policy_domain(domain)
-        if normalized_domain == "global":
-            policies_qs = policies_qs.filter(policy_domain="global")
-        else:
-            # A specific domain always inherits the universal 'global'
-            # baseline; severity (ACTION_ORDER) resolves any overlap and
-            # redaction hints are unioned, so global + domain never conflict.
-            policies_qs = policies_qs.filter(policy_domain__in=[normalized_domain, "global"])
+        policies_qs = policies_qs.filter(policy_domain=normalized_domain)
 
     result = EvaluationResult(action="allow")
     best_action_rank = -1

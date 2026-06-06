@@ -77,20 +77,119 @@ export function isBrowserReachableUrl(value) {
 }
 
 /**
+ * Same-origin /v1 proxy is the default on the production firewall vhost
+ * (nginx proxies /v1 → gateway). Set VITE_GATEWAY_SAME_ORIGIN=true to opt in
+ * on other hosts. External API clients (curl/SDKs) use aimeshgateway.* directly.
+ */
+export function preferSameOriginGateway() {
+  if (isProductionFirewallHost()) return true;
+  return import.meta.env?.VITE_GATEWAY_SAME_ORIGIN === "true";
+}
+
+/** True when the UI is served from the production firewall vhost (not the gateway vhost). */
+export function isProductionFirewallHost() {
+  return getBrowserHost().toLowerCase() === "aimeshfirewall.zeroshield.ai";
+}
+
+/**
+ * True when the UI is served from a LOCAL/dev host rather than a deployed
+ * zeroshield.ai host. Used to force the local gateway port and IGNORE any prod
+ * VITE_GATEWAY_BASE_URL baked into the shared .env (which points at the deployed
+ * gateway). Covers localhost, loopback, *.local, and RFC-1918 private IPs — the
+ * LAN IP (e.g. 192.168.x) is used to bypass Cursor's localhost port shadowing.
+ */
+export function isLocalBrowserHost() {
+  const host = getBrowserHost().toLowerCase();
+  if (!host) return false;
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]") return true;
+  if (host.endsWith(".local") || host.endsWith(".internal")) return true;
+  if (/^10\./.test(host)) return true;
+  if (/^192\.168\./.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+  return false;
+}
+
+/**
  * Gateway base URL for browser-side fetch().
- * Prefer same-origin so Vite proxies /v1 → gateway (no CORS).
+ * Prefer same-origin so nginx/Vite proxies /v1 → gateway (no CORS).
  */
 export function resolveBrowserGatewayBaseUrl() {
+  const origin = trimTrailingSlash(getBrowserOrigin());
+  const dedicated = getDedicatedGatewayFallbackUrl();
+
+  // Production firewall UI: same-origin /v1 via nginx (no CORS). Dedicated host is fallback only.
+  if (isProductionFirewallHost() && origin && isBrowserReachableUrl(origin)) {
+    return origin;
+  }
+
+  // Same-origin /v1 proxy when opted in (VITE_GATEWAY_SAME_ORIGIN or prod firewall host).
+  if (preferSameOriginGateway() && origin && isBrowserReachableUrl(origin)) {
+    return origin;
+  }
+
+  // 2. LOCAL/dev — always the local gateway port. Ignore any prod
+  //    VITE_GATEWAY_BASE_URL from the shared .env (it points at the deployed
+  //    gateway, which is unreachable/incorrect from a dev browser).
+  if (isLocalBrowserHost()) {
+    const protocol = getBrowserProtocol();
+    const host = getBrowserHost();
+    const port = toInt(import.meta.env?.VITE_GATEWAY_PORT, 8300);
+    const local = trimTrailingSlash(buildBaseUrl({ protocol, host, port }));
+    if (isBrowserReachableUrl(local)) return local;
+  }
+
+  // 3. PRODUCTION — dedicated gateway host (VITE_GATEWAY_BASE_URL = aimeshgateway.zeroshield.ai).
   const explicit = trimTrailingSlash(import.meta.env?.VITE_GATEWAY_BASE_URL || "");
   if (explicit && isBrowserReachableUrl(explicit)) return explicit;
 
-  const origin = trimTrailingSlash(getBrowserOrigin());
   if (origin && isBrowserReachableUrl(origin)) return origin;
 
   const stored = getStoredGatewayUrl();
   if (stored && isBrowserReachableUrl(stored)) return stored;
 
   return resolveGatewayBaseUrl();
+}
+
+/**
+ * Dedicated gateway host baked at build time (cross-origin fallback when same-origin /v1 proxy is broken).
+ */
+export function getDedicatedGatewayFallbackUrl() {
+  const explicit = trimTrailingSlash(import.meta.env?.VITE_GATEWAY_BASE_URL || "");
+  if (explicit && isBrowserReachableUrl(explicit)) return explicit;
+  const host = getBrowserHost().toLowerCase();
+  if (host === "aimeshfirewall.zeroshield.ai") {
+    return "https://aimeshgateway.zeroshield.ai";
+  }
+  return "";
+}
+
+/**
+ * True when same-origin /gw-health is proxied to the gateway (not the SPA static handler).
+ */
+export async function probeSameOriginGatewayProxy(origin, fetchFn = fetch) {
+  const base = trimTrailingSlash(origin);
+  if (!base || !isBrowserReachableUrl(base)) return false;
+  try {
+    const res = await fetchFn(`${base}/gw-health`, {
+      method: "GET",
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return false;
+    const data = await res.json().catch(() => null);
+    return data?.status === "ok";
+  } catch {
+    return false;
+  }
+}
+
+/** Health probe path: /gw-health on UI host (proxied), /health on dedicated gateway host. */
+export function resolveGatewayHealthUrl(gatewayBase) {
+  const base = trimTrailingSlash(gatewayBase || resolveBrowserGatewayBaseUrl());
+  const origin = trimTrailingSlash(getBrowserOrigin());
+  if (base && origin && base === origin) {
+    return `${origin}/gw-health`;
+  }
+  return `${base}/health`;
 }
 
 export function resolveBrowserBackendBaseUrl() {

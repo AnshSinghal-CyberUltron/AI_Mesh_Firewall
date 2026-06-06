@@ -21,6 +21,41 @@ export const ZEROSHIELD_ADJUDICATOR_LABEL = "ZeroShield Policy Adjudicator";
 /** Log viewer service filter label (maps to gateway log service name internally) */
 export const ZEROSHIELD_ML_LOG_SERVICE = "Guard Model";
 
+function isCleanThreatType(threatType) {
+  const t = String(threatType || "").trim().toLowerCase();
+  return !t || t === "none" || t === "clean";
+}
+
+function isTier2Scan(zs = {}) {
+  const tier = String(zs.detection_tier || "").toLowerCase();
+  return tier === "tier_2" || tier === "tier2" || tier === "input_scan";
+}
+
+/** Operator-facing summary for zeroshield / input_scan metadata. */
+export function formatZeroshieldScanSummary(zs = {}) {
+  const action = String(zs.action || "allow").toLowerCase();
+  const tierLabel = formatDetectionTier(zs.detection_tier) || "—";
+  const clean = zs.scan_outcome === "clean" || (action === "allow" && isCleanThreatType(zs.threat_type));
+  const threatLabel = clean
+    ? "No threat detected"
+    : String(zs.threat_type || "—").replace(/_/g, " ");
+  const risk = zs.risk_score ?? (clean && isTier2Scan(zs) ? 1 - (zs.confidence ?? 0) : null);
+  const scoreLabel = clean && isTier2Scan(zs) ? "Risk score" : "Confidence";
+  const scoreValue = clean && isTier2Scan(zs)
+    ? (risk != null ? `${Math.round(Number(risk) * 100)}%` : "0%")
+    : (zs.confidence != null ? `${(Number(zs.confidence) * 100).toFixed(0)}%` : "—");
+  const detail = zs.guard_reason || zs.detail || zs.reason || "";
+  return {
+    tierLabel,
+    threatLabel,
+    scoreLabel,
+    scoreValue,
+    action: action.toUpperCase(),
+    detail,
+    clean,
+  };
+}
+
 /** Map gateway detection_tier codes to client-facing labels (never show Bedrock). */
 export function formatDetectionTier(tier) {
   if (tier == null || tier === "") return tier;

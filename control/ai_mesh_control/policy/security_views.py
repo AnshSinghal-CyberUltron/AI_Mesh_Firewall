@@ -22,6 +22,16 @@ from ai_mesh_shared.owasp_telemetry import is_owasp_enforced
 
 from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
 from policy.models import EnforcementEvent, Notification, Policy
+from policy.firewall_module_classifier import (
+    CRITICAL_THRESHOLD,
+    MODULE_IDS,
+    MODULE_PRESSURE_METRIC,
+    bucket_pressure,
+    empty_bucket,
+    increment_bucket,
+    module_enforcement_q,
+    specialty_modules_for_event,
+)
 from policy.module_16 import (
     audit_log_to_threat_feed_item,
     is_module_16_enforcement,
@@ -948,8 +958,6 @@ class ModuleKpisView(APIView):
 
     _HOURS_MAP = {"1h": 1, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
 
-    _CRITICAL_THRESHOLD = 80
-
     def get(self, request):
         period = request.query_params.get("period", "24h").lower()
         hours = self._HOURS_MAP.get(period, 24)
@@ -960,69 +968,34 @@ class ModuleKpisView(APIView):
 
         modules = {
             mid: {"total": 0, "blocked": 0, "redacted": 0, "critical": 0}
-            for mid in ("1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7")
+            for mid in MODULE_IDS
         }
 
         for ev in events:
             action = ev["action"]
             meta = ev.get("metadata") or {}
             source = meta.get("source", "")
-            owasp = (meta.get("owasp_code") or "").strip().upper()
-            threat_type = (meta.get("threat_type") or "").lower()
-            event_type = (meta.get("event_type") or "").lower()
             risk_score = meta.get("security_risk_score", 0) or 0
             is_blocked = action == ACTION_BLOCK
             is_redacted = action == ACTION_REDACT
-            is_critical = risk_score >= self._CRITICAL_THRESHOLD
+            is_critical = risk_score >= CRITICAL_THRESHOLD
 
-            modules["1.1"]["total"] += 1
-            if is_blocked:
-                modules["1.1"]["blocked"] += 1
-            if is_redacted:
-                modules["1.1"]["redacted"] += 1
-            if is_critical:
-                modules["1.1"]["critical"] += 1
+            increment_bucket(
+                modules["1.1"],
+                is_blocked=is_blocked,
+                is_redacted=is_redacted,
+                is_critical=is_critical,
+            )
 
-            # 1.2: Policy (aligned with frontend MODULE_FILTERS)
-            if (
-                event_type == "rag_pipeline"
-                or threat_type in ("data_leakage", "pii", "rag_poisoning")
-                or (owasp and (owasp.startswith("LLM06") or owasp.startswith("LLM08")))
-            ):
-                self._increment(modules["1.2"], is_blocked, is_redacted, is_critical)
-
-            # 1.3: RAG poisoning (aligned with frontend)
-            if threat_type == "rag_poisoning" or (owasp and owasp.startswith("LLM08")):
-                self._increment(modules["1.3"], is_blocked, is_redacted, is_critical)
-
-            if source == "mcp_scan" or (owasp and owasp.startswith("MCP")):
-                self._increment(modules["1.4"], is_blocked, is_redacted, is_critical)
-
-            if (
-                source == "routing"
-                or event_type == "model_routed"
-                or source == "agentic_scan"
-                or (owasp and owasp.startswith("AGENTIC"))
-            ):
-                self._increment(modules["1.5"], is_blocked, is_redacted, is_critical)
-
-            if is_module_16_enforcement(meta):
-                self._increment(modules["1.6"], is_blocked, is_redacted, is_critical)
-
-            if event_type in ("output_guard", "output_scan"):
-                self._increment(modules["1.7"], is_blocked, is_redacted, is_critical)
+            for mid in specialty_modules_for_event(meta, source=source):
+                increment_bucket(
+                    modules[mid],
+                    is_blocked=is_blocked,
+                    is_redacted=is_redacted,
+                    is_critical=is_critical,
+                )
 
         return Response({"period": period, "modules": modules})
-
-    @staticmethod
-    def _increment(bucket: dict, is_blocked: bool, is_redacted: bool, is_critical: bool) -> None:
-        bucket["total"] += 1
-        if is_blocked:
-            bucket["blocked"] += 1
-        if is_redacted:
-            bucket["redacted"] += 1
-        if is_critical:
-            bucket["critical"] += 1
 
 
 class ModuleTrendsView(APIView):
@@ -1042,8 +1015,6 @@ class ModuleTrendsView(APIView):
         "30d": (24 * 30, 24 * 60),
     }
 
-    _CRITICAL_THRESHOLD = 80
-
     def get(self, request):
         period = request.query_params.get("period", "24h").lower()
         total_hours, bucket_minutes = self._PERIOD_MAP.get(period, (24, 60))
@@ -1053,22 +1024,20 @@ class ModuleTrendsView(APIView):
         now = now.replace(minute=aligned_minute)
         since = now - timedelta(hours=total_hours)
 
-        # Build bucket scaffold for each module
         bucket_keys = []
         cursor = since
         while cursor <= now:
             bucket_keys.append(cursor.isoformat())
             cursor += timedelta(minutes=bucket_minutes)
 
-        module_ids = ("1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7")
         module_buckets = {
-            mid: {bk: 0 for bk in bucket_keys} for mid in module_ids
+            mid: {bk: empty_bucket() for bk in bucket_keys} for mid in MODULE_IDS
         }
 
         base_events = EnforcementEvent.objects.filter(created_at__gte=since)
         events = list(
             _enforcement_events_for_request(request, base_events).values(
-                "created_at", "metadata"
+                "created_at", "action", "metadata"
             )
         )
 
@@ -1089,56 +1058,47 @@ class ModuleTrendsView(APIView):
 
             meta = ev.get("metadata") or {}
             source = meta.get("source", "")
-            owasp = (meta.get("owasp_code") or "").strip().upper()
-            threat_type = (meta.get("threat_type") or "").lower()
-            event_type = (meta.get("event_type") or "").lower()
             risk_score = meta.get("security_risk_score", 0) or 0
+            is_blocked = ev["action"] == ACTION_BLOCK
+            is_redacted = ev["action"] == ACTION_REDACT
+            is_critical = risk_score >= CRITICAL_THRESHOLD
 
-            # 1.1: All events
-            module_buckets["1.1"][bucket_key] += 1
+            increment_bucket(
+                module_buckets["1.1"][bucket_key],
+                is_blocked=is_blocked,
+                is_redacted=is_redacted,
+                is_critical=is_critical,
+            )
 
-            # 1.2: Policy (aligned with frontend MODULE_FILTERS)
-            if (
-                event_type == "rag_pipeline"
-                or threat_type in ("data_leakage", "pii", "rag_poisoning")
-                or (owasp and (owasp.startswith("LLM06") or owasp.startswith("LLM08")))
-            ):
-                module_buckets["1.2"][bucket_key] += 1
+            for mid in specialty_modules_for_event(meta, source=source):
+                increment_bucket(
+                    module_buckets[mid][bucket_key],
+                    is_blocked=is_blocked,
+                    is_redacted=is_redacted,
+                    is_critical=is_critical,
+                )
 
-            # 1.3: RAG poisoning
-            if threat_type == "rag_poisoning" or (owasp and owasp.startswith("LLM08")):
-                module_buckets["1.3"][bucket_key] += 1
+        response = {
+            "period": period,
+            "pressure_metric": MODULE_PRESSURE_METRIC,
+        }
+        for mid in MODULE_IDS:
+            response[mid] = []
+            for bk in bucket_keys:
+                bucket = module_buckets[mid][bk]
+                pressure = bucket_pressure(bucket, mid)
+                point = {
+                    "time": bk,
+                    "total": bucket["total"],
+                    "blocked": bucket["blocked"],
+                    "redacted": bucket["redacted"],
+                    "critical": bucket["critical"],
+                    "pressure": pressure,
+                    "value": pressure,
+                }
+                response[mid].append(point)
 
-            # 1.4: Context/MCP
-            if source == "mcp_scan" or (owasp and owasp.startswith("MCP")):
-                module_buckets["1.4"][bucket_key] += 1
-
-            # 1.5: Multi-Model governance (routing + agentic)
-            if (
-                source == "routing"
-                or event_type == "model_routed"
-                or source == "agentic_scan"
-                or (owasp and owasp.startswith("AGENTIC"))
-            ):
-                module_buckets["1.5"][bucket_key] += 1
-
-            # 1.6: Isolation / kill-switch (semantic, not risk>=80 only)
-            if is_module_16_enforcement(meta):
-                module_buckets["1.6"][bucket_key] += 1
-
-            # 1.7: Output guards
-            if event_type in ("output_guard", "output_scan"):
-                module_buckets["1.7"][bucket_key] += 1
-
-        # Build response: per-module arrays of {time, value}
-        result = {}
-        for mid in module_ids:
-            result[mid] = [
-                {"time": bk, "value": module_buckets[mid][bk]}
-                for bk in bucket_keys
-            ]
-
-        return Response(result)
+        return Response(response)
 
 
 class OwaspStatsView(APIView):
@@ -1333,20 +1293,6 @@ class OwaspEventsView(APIView):
         return Response({"code": code, "results": results, "count": len(results)})
 
 
-_MODULE_SOURCE_FILTERS: dict[str, dict] = {
-    "1.1": {},
-    "1.2": {"event_types": ["rag_pipeline"], "threat_types": ["data_leakage", "pii", "rag_poisoning"], "owasp_prefixes": ["LLM06", "LLM08"]},
-    "1.3": {"threat_types": ["rag_poisoning"], "owasp_prefixes": ["LLM08"]},
-    "1.4": {"sources": ["mcp_scan"], "owasp_prefixes": ["MCP"]},
-    "1.5": {
-        "sources": ["routing", "agentic_scan"],
-        "event_types": ["model_routed"],
-        "owasp_prefixes": ["AGENTIC"],
-    },
-    "1.6": {"module_16": True},
-    "1.7": {"event_types": ["output_guard", "output_scan"]},
-}
-
 _PIE_COLORS = [
     "#14b8a6",
     "#8b5cf6",
@@ -1395,35 +1341,9 @@ class ModuleChartsView(APIView):
         return Response({"module_id": module_id, "period": period, "charts": charts})
 
     def _apply_module_filter(self, qs, module_id: str):
-        filters = _MODULE_SOURCE_FILTERS.get(module_id, {})
-        if not filters:
+        if module_id == "1.1":
             return qs
-
-        from django.db.models import Q
-
-        q = Q()
-
-        if "sources" in filters:
-            for src in filters["sources"]:
-                q |= Q(metadata__source=src)
-        if "owasp_prefixes" in filters:
-            for prefix in filters["owasp_prefixes"]:
-                q |= Q(metadata__owasp_code__startswith=prefix)
-        if "threat_types" in filters:
-            for tt in filters["threat_types"]:
-                q |= Q(metadata__threat_type=tt)
-        if "event_types" in filters:
-            for et in filters["event_types"]:
-                q |= Q(metadata__event_type=et)
-        if filters.get("module_16"):
-            q = module_16_enforcement_q()
-
-        if "critical_only" in filters:
-            q &= Q(metadata__security_risk_score__gte=80)
-
-        if q != Q():
-            qs = qs.filter(q)
-        return qs
+        return qs.filter(module_enforcement_q(module_id))
 
     def _build_event_timeline(self, events: list, since, hours: int) -> dict:
         if hours <= 6:

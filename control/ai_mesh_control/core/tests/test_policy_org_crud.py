@@ -27,14 +27,14 @@ class PolicyOrgCrudTests(TestCase):
             organization=self.org_a,
             name="Org A Policy",
             code="ORG_A_TEST",
-            policy_domain="global",
+            policy_domain="pipeline",
             enabled=True,
         )
         self.policy_b = Policy.objects.create(
             organization=self.org_b,
             name="Org B Policy",
             code="ORG_B_TEST",
-            policy_domain="global",
+            policy_domain="pipeline",
             enabled=True,
         )
         self.system_policy = Policy.objects.create(
@@ -123,7 +123,7 @@ class PolicyOrgCrudTests(TestCase):
                 "name": "No Org",
                 "code": "NO_ORG",
                 "severity": "LOW",
-                "policy_domain": "global",
+                "policy_domain": "pipeline",
                 "enabled": True,
             },
             format="json",
@@ -135,7 +135,7 @@ class PolicyOrgCrudTests(TestCase):
         self.policy_a.save(update_fields=["enabled"])
         client = APIClient()
         client.force_authenticate(user=self.user_a)
-        resp = client.get("/api/policies/?policy_domain=global&enabled=false")
+        resp = client.get("/api/policies/?policy_domain=pipeline&enabled=false")
         self.assertEqual(resp.status_code, 200)
         results = resp.json().get("results", resp.json())
         ids = {row["id"] for row in results}

@@ -426,7 +426,7 @@ class PolicyCheckView(APIView):
             return Response({"detail": "Organization scope is required."}, status=status.HTTP_403_FORBIDDEN)
 
         try:
-            policy_domain = validate_policy_domain(body.get("policy_domain") or metadata.get("policy_domain") or "global")
+            policy_domain = validate_policy_domain(body.get("policy_domain") or metadata.get("policy_domain") or "pipeline")
         except Exception as exc:
             detail = getattr(exc, "detail", exc)
             return Response(detail, status=status.HTTP_400_BAD_REQUEST)
@@ -901,7 +901,7 @@ class PolicyTestView(APIView):
             return Response({"detail": "Organization scope is required."}, status=status.HTTP_403_FORBIDDEN)
 
         try:
-            policy_domain = validate_policy_domain(body.get("policy_domain") or metadata.get("policy_domain") or "global")
+            policy_domain = validate_policy_domain(body.get("policy_domain") or metadata.get("policy_domain") or "pipeline")
         except Exception as exc:
             detail = getattr(exc, "detail", exc)
             return Response(detail, status=status.HTTP_400_BAD_REQUEST)

@@ -1,0 +1,551 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e7]:
+        - img [ref=e10]
+        - generic [ref=e13]:
+          - heading "ZeroShield" [level=1] [ref=e14]
+          - paragraph [ref=e15]: AI Security Platform
+      - button "Collapse sidebar" [ref=e16]:
+        - img [ref=e17]
+    - navigation [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21]: Product
+        - button "AI Mesh Firewall" [ref=e23]:
+          - img [ref=e24]
+          - generic [ref=e26]: AI Mesh Firewall
+          - img [ref=e27]
+    - generic [ref=e32]:
+      - heading "System Status" [level=3] [ref=e33]
+      - paragraph [ref=e34]: All systems operational
+      - generic [ref=e37]: Protected
+    - button "Ansh Singhal admin@zeroshield.io" [ref=e39]:
+      - generic [ref=e40]:
+        - img [ref=e42]
+        - generic [ref=e45]:
+          - paragraph [ref=e46]: Ansh Singhal
+          - paragraph [ref=e47]: admin@zeroshield.io
+        - img [ref=e48]
+  - generic [ref=e50]:
+    - banner [ref=e51]:
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - generic [ref=e55]:
+            - generic [ref=e56]: Control Console
+            - generic [ref=e57]: PROD
+            - generic [ref=e58]: Connected
+          - generic [ref=e60]:
+            - img [ref=e61]
+            - textbox "Search models, policies, threats, or infrastructure..." [ref=e64]
+        - generic [ref=e65]:
+          - button "Scan Model" [ref=e66]:
+            - img [ref=e67]
+            - generic [ref=e68]: Scan Model
+          - button [ref=e70]:
+            - img [ref=e71]
+          - button [ref=e75]:
+            - img [ref=e76]
+          - button "Switch to dark mode" [ref=e80]:
+            - img [ref=e81]
+          - button "Ansh Singhal admin@zeroshield.io" [ref=e85]:
+            - generic [ref=e86]:
+              - paragraph [ref=e87]: Ansh Singhal
+              - paragraph [ref=e88]: admin@zeroshield.io
+            - img [ref=e90]
+    - main [ref=e93]:
+      - generic [ref=e95]:
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - generic [ref=e99]:
+              - text: Module 1 live control plane
+              - button "Refresh data" [ref=e101]:
+                - img [ref=e102]
+            - generic [ref=e107]:
+              - img [ref=e109]
+              - generic [ref=e111]:
+                - heading "AI Mesh Firewall" [level=1] [ref=e112]
+                - paragraph [ref=e113]: A cleaner operator experience for tracing ingress, retrieval, routing, context, isolation, and output defenses without losing the live telemetry underneath.
+            - generic [ref=e114]:
+              - button "Open Gateway Controls" [ref=e115]:
+                - text: Open Gateway Controls
+                - img [ref=e116]
+              - button "Configure Policies" [ref=e118]:
+                - text: Configure Policies
+                - img [ref=e119]
+            - generic [ref=e122]:
+              - generic [ref=e123]:
+                - generic [ref=e124]:
+                  - img [ref=e126]
+                  - img [ref=e128]
+                - generic [ref=e130]: "--"
+                - generic [ref=e131]: Total events
+                - generic [ref=e132]: 24 hour intake across the mesh
+              - generic [ref=e133]:
+                - generic [ref=e134]:
+                  - img [ref=e136]
+                  - img [ref=e138]
+                - generic [ref=e140]: "--"
+                - generic [ref=e141]: Block rate
+                - generic [ref=e142]: Requests denied before model execution
+              - generic [ref=e143]:
+                - generic [ref=e144]:
+                  - img [ref=e146]
+                  - img [ref=e149]
+                - generic [ref=e151]: "--"
+                - generic [ref=e152]: Redaction rate
+                - generic [ref=e153]: Requests sanitized instead of blocked
+              - generic [ref=e154]:
+                - generic [ref=e155]:
+                  - img [ref=e157]
+                  - img [ref=e159]
+                - generic [ref=e161]: "--"
+                - generic [ref=e162]: Critical events
+                - generic [ref=e163]: High urgency incidents requiring operator review
+          - generic [ref=e164]:
+            - generic [ref=e165]:
+              - generic [ref=e166]:
+                - generic [ref=e167]:
+                  - generic [ref=e168]: Security posture
+                  - heading "Operational guardrails at a glance" [level=3] [ref=e169]
+                - img [ref=e170]
+              - generic [ref=e173]:
+                - generic [ref=e174]:
+                  - generic [ref=e175]: Protected submodules
+                  - generic [ref=e176]: "-- / 7"
+                  - generic [ref=e177]: Awaiting data
+                - generic [ref=e178]:
+                  - generic [ref=e179]: Allow vs enforce mix
+                  - generic [ref=e180]: "--"
+                  - generic [ref=e181]: Allowed requests versus intervention events
+                - generic [ref=e182]:
+                  - generic [ref=e183]: Response posture
+                  - generic [ref=e184]: "--"
+                  - generic [ref=e185]: Average decision latency across live traffic
+            - generic [ref=e186]:
+              - button "Fast path Run ingress tests Jump directly into the gateway simulator, issue test prompts, and validate end-to-end enforcement behavior. Launch 1.1 controls" [ref=e187]:
+                - generic [ref=e189]:
+                  - generic [ref=e190]:
+                    - img [ref=e192]
+                    - img [ref=e194]
+                  - generic [ref=e196]: Fast path
+                  - generic [ref=e197]: Run ingress tests
+                  - paragraph [ref=e198]: Jump directly into the gateway simulator, issue test prompts, and validate end-to-end enforcement behavior.
+                  - generic [ref=e199]: Launch 1.1 controls
+              - button "Operator action Review output guardrails Inspect generated-content controls, review incidents, and verify final-response safety layers. Open 1.7 review lane" [ref=e200]:
+                - generic [ref=e202]:
+                  - generic [ref=e203]:
+                    - img [ref=e205]
+                    - img [ref=e207]
+                  - generic [ref=e209]: Operator action
+                  - generic [ref=e210]: Review output guardrails
+                  - paragraph [ref=e211]: Inspect generated-content controls, review incidents, and verify final-response safety layers.
+                  - generic [ref=e212]: Open 1.7 review lane
+        - generic [ref=e213]:
+          - generic [ref=e214]:
+            - generic [ref=e215]:
+              - generic [ref=e216]: Live focus
+              - heading "Current operator priorities" [level=3] [ref=e217]
+            - img [ref=e218]
+          - generic [ref=e220]:
+            - generic [ref=e222]:
+              - generic [ref=e223]:
+                - generic [ref=e224]: Watch ingress pressure
+                - generic [ref=e225]: Authentication, rate limiting, and request identity still define the dominant control surface.
+              - generic [ref=e226]: "--"
+            - generic [ref=e228]:
+              - generic [ref=e229]:
+                - generic [ref=e230]: Keep redaction visible
+                - generic [ref=e231]: Sanitized flows are operationally different from blocked flows; they need a separate operator lane.
+              - generic [ref=e232]: "--"
+            - generic [ref=e234]:
+              - generic [ref=e235]:
+                - generic [ref=e236]: Escalate criticals early
+                - generic [ref=e237]: Model isolation and output guardrails become the priority once critical events rise.
+              - generic [ref=e238]: "--"
+        - generic [ref=e239]:
+          - generic [ref=e241]:
+            - generic [ref=e242]: Telemetry
+            - heading "Traffic and enforcement overview" [level=2] [ref=e243]
+            - paragraph [ref=e244]: "The top-level charts stay focused on operator decisions: volume, intervention mix, and where the firewall is absorbing pressure right now."
+          - generic [ref=e245]:
+            - generic [ref=e246]:
+              - generic [ref=e247]:
+                - generic [ref=e248]:
+                  - img [ref=e250]
+                  - img [ref=e252]
+                - generic [ref=e254]: "--"
+                - generic [ref=e255]: Total Events
+                - generic [ref=e256]: Awaiting feed
+              - generic [ref=e257]:
+                - generic [ref=e258]:
+                  - img [ref=e260]
+                  - img [ref=e262]
+                - generic [ref=e264]: "--"
+                - generic [ref=e265]: Blocked
+                - generic [ref=e266]: Hard enforcement decisions
+              - generic [ref=e267]:
+                - generic [ref=e268]:
+                  - img [ref=e270]
+                  - img [ref=e272]
+                - generic [ref=e274]: "--"
+                - generic [ref=e275]: Redacted
+                - generic [ref=e276]: Awaiting feed
+              - generic [ref=e277]:
+                - generic [ref=e278]:
+                  - img [ref=e280]
+                  - img [ref=e283]
+                - generic [ref=e285]: "--"
+                - generic [ref=e286]: Critical
+                - generic [ref=e287]: Events requiring immediate escalation
+            - generic [ref=e288]:
+              - generic [ref=e290]:
+                - generic [ref=e291]:
+                  - generic [ref=e292]: Live Telemetry
+                  - heading "Global request pressure over the last 24 hours" [level=3] [ref=e293]
+                - generic [ref=e294]:
+                  - generic [ref=e295]: Total
+                  - generic [ref=e297]: Prompt injection
+              - generic [ref=e300]:
+                - generic [ref=e301]: Distribution
+                - heading "Enforcement posture" [level=3] [ref=e302]
+                - paragraph [ref=e303]: Breakdown of how the firewall responds to every request — allow, block, or sanitise.
+                - generic [ref=e306]:
+                  - generic [ref=e308]:
+                    - generic [ref=e309]: Allowed
+                    - generic [ref=e311]:
+                      - text: "0"
+                      - generic [ref=e312]: (0%)
+                  - generic [ref=e316]:
+                    - generic [ref=e317]: Blocked
+                    - generic [ref=e319]:
+                      - text: "0"
+                      - generic [ref=e320]: (0%)
+                  - generic [ref=e324]:
+                    - generic [ref=e325]: Redacted
+                    - generic [ref=e327]:
+                      - text: "0"
+                      - generic [ref=e328]: (0%)
+        - generic [ref=e331]:
+          - generic [ref=e332]:
+            - generic [ref=e333]:
+              - generic [ref=e334]: Submodules
+              - heading "AI Mesh Firewall command grid" [level=2] [ref=e335]
+              - paragraph [ref=e336]: Each submodule card exposes the operating surface, pressure signal, and quickest next action without forcing a context switch into raw tables first.
+            - generic [ref=e337]: 7 active modules
+          - generic [ref=e338]:
+            - button "1.1 AI Gateway & Traffic Ingress Authenticate, throttle, and inspect every model request at the front door of the mesh. Events -- Blocked -- 0% pressure Pressure Curve 24h" [ref=e339]:
+              - generic [ref=e341]:
+                - generic [ref=e342]:
+                  - generic [ref=e343]:
+                    - img [ref=e345]
+                    - generic [ref=e347]:
+                      - generic [ref=e349]: "1.1"
+                      - heading "AI Gateway & Traffic Ingress" [level=3] [ref=e351]
+                      - paragraph [ref=e352]: Authenticate, throttle, and inspect every model request at the front door of the mesh.
+                  - img [ref=e353]
+                - generic [ref=e355]:
+                  - generic [ref=e356]:
+                    - generic [ref=e357]: Events
+                    - generic [ref=e358]: "--"
+                  - generic [ref=e359]:
+                    - generic [ref=e360]: Blocked
+                    - generic [ref=e361]: "--"
+                    - generic [ref=e362]: 0% pressure
+                - generic [ref=e364]:
+                  - generic [ref=e365]: Pressure Curve
+                  - generic [ref=e366]: 24h
+            - button "1.2 Policy Management Manage content rules and vector isolation policies from one page instead of splitting enforcement across retrieval tabs. Events -- Blocked -- Content + namespace policy actions Pressure Curve 24h" [ref=e368]:
+              - generic [ref=e370]:
+                - generic [ref=e371]:
+                  - generic [ref=e372]:
+                    - img [ref=e374]
+                    - generic [ref=e378]:
+                      - generic [ref=e380]: "1.2"
+                      - heading "Policy Management" [level=3] [ref=e382]
+                      - paragraph [ref=e383]: Manage content rules and vector isolation policies from one page instead of splitting enforcement across retrieval tabs.
+                  - img [ref=e384]
+                - generic [ref=e386]:
+                  - generic [ref=e387]:
+                    - generic [ref=e388]: Events
+                    - generic [ref=e389]: "--"
+                  - generic [ref=e390]:
+                    - generic [ref=e391]: Blocked
+                    - generic [ref=e392]: "--"
+                    - generic [ref=e393]: Content + namespace policy actions
+                - generic [ref=e395]:
+                  - generic [ref=e396]: Pressure Curve
+                  - generic [ref=e397]: 24h
+            - button "1.3 RAG & Vector DB Firewall Run the full retrieval workflow from secure ingestion through vector-query simulation on one combined operations page. Events -- Blocked -- RAG + vector enforcement Pressure Curve 24h" [ref=e399]:
+              - generic [ref=e401]:
+                - generic [ref=e402]:
+                  - generic [ref=e403]:
+                    - img [ref=e405]
+                    - generic [ref=e409]:
+                      - generic [ref=e411]: "1.3"
+                      - heading "RAG & Vector DB Firewall" [level=3] [ref=e413]
+                      - paragraph [ref=e414]: Run the full retrieval workflow from secure ingestion through vector-query simulation on one combined operations page.
+                  - img [ref=e415]
+                - generic [ref=e417]:
+                  - generic [ref=e418]:
+                    - generic [ref=e419]: Events
+                    - generic [ref=e420]: "--"
+                  - generic [ref=e421]:
+                    - generic [ref=e422]: Blocked
+                    - generic [ref=e423]: "--"
+                    - generic [ref=e424]: RAG + vector enforcement
+                - generic [ref=e426]:
+                  - generic [ref=e427]: Pressure Curve
+                  - generic [ref=e428]: 24h
+            - button "1.4 Context Assembly & MCP Guard context packaging, device metadata, tool inputs, and MCP assembly before execution. Events -- Redacted -- Sensitive context removed Pressure Curve 24h" [ref=e430]:
+              - generic [ref=e432]:
+                - generic [ref=e433]:
+                  - generic [ref=e434]:
+                    - img [ref=e436]
+                    - generic [ref=e439]:
+                      - generic [ref=e441]: "1.4"
+                      - heading "Context Assembly & MCP" [level=3] [ref=e443]
+                      - paragraph [ref=e444]: Guard context packaging, device metadata, tool inputs, and MCP assembly before execution.
+                  - img [ref=e445]
+                - generic [ref=e447]:
+                  - generic [ref=e448]:
+                    - generic [ref=e449]: Events
+                    - generic [ref=e450]: "--"
+                  - generic [ref=e451]:
+                    - generic [ref=e452]: Redacted
+                    - generic [ref=e453]: "--"
+                    - generic [ref=e454]: Sensitive context removed
+                - generic [ref=e456]:
+                  - generic [ref=e457]: Pressure Curve
+                  - generic [ref=e458]: 24h
+            - button "1.5 Multi-Model Governance Route traffic across models with policy-aware controls for cost, risk, and failure domains. Events -- Blocked -- Governance and failover Pressure Curve 24h" [ref=e460]:
+              - generic [ref=e462]:
+                - generic [ref=e463]:
+                  - generic [ref=e464]:
+                    - img [ref=e466]
+                    - generic [ref=e468]:
+                      - generic [ref=e470]: "1.5"
+                      - heading "Multi-Model Governance" [level=3] [ref=e472]
+                      - paragraph [ref=e473]: Route traffic across models with policy-aware controls for cost, risk, and failure domains.
+                  - img [ref=e474]
+                - generic [ref=e476]:
+                  - generic [ref=e477]:
+                    - generic [ref=e478]: Events
+                    - generic [ref=e479]: "--"
+                  - generic [ref=e480]:
+                    - generic [ref=e481]: Blocked
+                    - generic [ref=e482]: "--"
+                    - generic [ref=e483]: Governance and failover
+                - generic [ref=e485]:
+                  - generic [ref=e486]: Pressure Curve
+                  - generic [ref=e487]: 24h
+            - button "1.6 Model Isolation & Kill-Switch Escalate quickly when a model or route drifts out of bounds and provide operators with hard stop controls. Events -- Critical -- Critical + containment Pressure Curve 24h" [ref=e489]:
+              - generic [ref=e491]:
+                - generic [ref=e492]:
+                  - generic [ref=e493]:
+                    - img [ref=e495]
+                    - generic [ref=e497]:
+                      - generic [ref=e499]: "1.6"
+                      - heading "Model Isolation & Kill-Switch" [level=3] [ref=e501]
+                      - paragraph [ref=e502]: Escalate quickly when a model or route drifts out of bounds and provide operators with hard stop controls.
+                  - img [ref=e503]
+                - generic [ref=e505]:
+                  - generic [ref=e506]:
+                    - generic [ref=e507]: Events
+                    - generic [ref=e508]: "--"
+                  - generic [ref=e509]:
+                    - generic [ref=e510]: Critical
+                    - generic [ref=e511]: "--"
+                    - generic [ref=e512]: Critical + containment
+                - generic [ref=e514]:
+                  - generic [ref=e515]: Pressure Curve
+                  - generic [ref=e516]: 24h
+            - button "1.7 Output Guardrails Inspect model output for policy violations, risky disclosures, and harmful content before delivery. Scanned -- Blocked -- Post-generation review Pressure Curve 24h" [ref=e518]:
+              - generic [ref=e520]:
+                - generic [ref=e521]:
+                  - generic [ref=e522]:
+                    - img [ref=e524]
+                    - generic [ref=e526]:
+                      - generic [ref=e528]: "1.7"
+                      - heading "Output Guardrails" [level=3] [ref=e530]
+                      - paragraph [ref=e531]: Inspect model output for policy violations, risky disclosures, and harmful content before delivery.
+                  - img [ref=e532]
+                - generic [ref=e534]:
+                  - generic [ref=e535]:
+                    - generic [ref=e536]: Scanned
+                    - generic [ref=e537]: "--"
+                  - generic [ref=e538]:
+                    - generic [ref=e539]: Blocked
+                    - generic [ref=e540]: "--"
+                    - generic [ref=e541]: Post-generation review
+                - generic [ref=e543]:
+                  - generic [ref=e544]: Pressure Curve
+                  - generic [ref=e545]: 24h
+            - button "Configuration Firewall inputs and controls Centralize policies, simulator inputs, and baseline configuration for the firewall control plane. Open configuration" [ref=e547]:
+              - generic [ref=e549]:
+                - generic [ref=e550]:
+                  - img [ref=e552]
+                  - generic [ref=e555]: Configuration
+                  - heading "Firewall inputs and controls" [level=3] [ref=e556]
+                  - paragraph [ref=e557]: Centralize policies, simulator inputs, and baseline configuration for the firewall control plane.
+                - generic [ref=e558]:
+                  - text: Open configuration
+                  - img [ref=e559]
+        - generic [ref=e561]:
+          - generic [ref=e563]:
+            - generic [ref=e564]: Security intelligence
+            - heading "Attack vector analysis" [level=2] [ref=e565]
+            - paragraph [ref=e566]: Track which threat categories are driving enforcement pressure across the mesh and how the mix shifts over the selected time window.
+          - generic [ref=e567]:
+            - generic [ref=e568]:
+              - generic [ref=e569]:
+                - generic [ref=e570]:
+                  - generic [ref=e571]: Attack intelligence
+                  - heading "Threat vector activity over time" [level=3] [ref=e572]
+                - generic [ref=e573]:
+                  - generic [ref=e574]: Prompt Injection
+                  - generic [ref=e576]: Data Leakage
+                  - generic [ref=e578]: Jailbreak
+                  - generic [ref=e580]: Goal Hijacking
+                  - generic [ref=e582]: Tool Overreach
+              - generic [ref=e584]: No attack events recorded in this period
+            - generic [ref=e585]:
+              - generic [ref=e587]:
+                - generic [ref=e588]: Threat mix
+                - heading "Attack vector distribution" [level=3] [ref=e589]
+              - generic [ref=e590]:
+                - generic [ref=e592]: No data yet
+                - generic [ref=e593]:
+                  - generic [ref=e595]:
+                    - generic [ref=e596]: Prompt Injection
+                    - generic [ref=e598]:
+                      - text: "0"
+                      - generic [ref=e599]: (0%)
+                  - generic [ref=e602]:
+                    - generic [ref=e603]: Data Leakage
+                    - generic [ref=e605]:
+                      - text: "0"
+                      - generic [ref=e606]: (0%)
+                  - generic [ref=e609]:
+                    - generic [ref=e610]: Jailbreak
+                    - generic [ref=e612]:
+                      - text: "0"
+                      - generic [ref=e613]: (0%)
+                  - generic [ref=e616]:
+                    - generic [ref=e617]: Goal Hijacking
+                    - generic [ref=e619]:
+                      - text: "0"
+                      - generic [ref=e620]: (0%)
+                  - generic [ref=e623]:
+                    - generic [ref=e624]: Tool Overreach
+                    - generic [ref=e626]:
+                      - text: "0"
+                      - generic [ref=e627]: (0%)
+        - generic [ref=e629]:
+          - generic [ref=e631]:
+            - generic [ref=e632]: Cross-module pressure
+            - heading "Traffic and block-rate comparisons" [level=2] [ref=e633]
+            - paragraph [ref=e634]: Side-by-side view of event volume and intervention rate for every firewall lane — quickly spot which modules are under the heaviest load.
+          - generic [ref=e635]:
+            - generic [ref=e637]:
+              - generic [ref=e638]:
+                - generic [ref=e639]: Cross-module
+                - heading "Traffic and interventions by module" [level=3] [ref=e640]
+              - generic [ref=e641]:
+                - generic [ref=e642]: Total events
+                - generic [ref=e644]: Interventions
+            - generic [ref=e647]:
+              - generic [ref=e649]:
+                - generic [ref=e650]: Enforcement posture
+                - heading "Block rate by module" [level=3] [ref=e651]
+              - generic [ref=e652]:
+                - generic [ref=e654]:
+                  - generic [ref=e655]:
+                    - generic [ref=e656]: "1.1"
+                    - text: Gateway & Ingress
+                  - generic [ref=e657]: 0%
+                - generic [ref=e661]:
+                  - generic [ref=e662]:
+                    - generic [ref=e663]: "1.2"
+                    - text: Policy Mgmt
+                  - generic [ref=e664]: 0%
+                - generic [ref=e668]:
+                  - generic [ref=e669]:
+                    - generic [ref=e670]: "1.3"
+                    - text: RAG & Vector DB
+                  - generic [ref=e671]: 0%
+                - generic [ref=e675]:
+                  - generic [ref=e676]:
+                    - generic [ref=e677]: "1.4"
+                    - text: Context & MCP
+                  - generic [ref=e678]: 0%
+                - generic [ref=e682]:
+                  - generic [ref=e683]:
+                    - generic [ref=e684]: "1.5"
+                    - text: Multi-Model Gov.
+                  - generic [ref=e685]: 0%
+                - generic [ref=e689]:
+                  - generic [ref=e690]:
+                    - generic [ref=e691]: "1.6"
+                    - text: Isolation & Kill-Sw
+                  - generic [ref=e692]: 0%
+                - generic [ref=e696]:
+                  - generic [ref=e697]:
+                    - generic [ref=e698]: "1.7"
+                    - text: Output Guardrails
+                  - generic [ref=e699]: 0%
+              - generic [ref=e702]:
+                - generic [ref=e703]: Low (<20%)
+                - generic [ref=e705]: Moderate (20–50%)
+                - generic [ref=e707]: High (≥50%)
+        - generic [ref=e709]:
+          - generic [ref=e711]:
+            - generic [ref=e712]: Threat intelligence
+            - heading "Coverage and policy depth" [level=2] [ref=e713]
+            - paragraph [ref=e714]: The existing OWASP and policy analytics panels remain intact, now framed as supporting evidence under the redesigned command surface.
+          - generic [ref=e715]:
+            - generic [ref=e716]:
+              - generic [ref=e717]:
+                - heading "OWASP Threat Coverage" [level=3] [ref=e718]
+                - paragraph [ref=e719]: Detection and blocking rates across OWASP LLM, MCP, and Agentic AI threat vectors
+              - generic [ref=e720]:
+                - combobox [ref=e721]:
+                  - option "24h"
+                  - option "3d"
+                  - option "7d" [selected]
+                  - option "14d"
+                  - option "30d"
+                - button "Refresh" [disabled] [ref=e722]:
+                  - img [ref=e723]
+            - generic [ref=e725]:
+              - generic [ref=e726]:
+                - generic [ref=e727]: "--"
+                - generic [ref=e728]: Total Detected
+              - generic [ref=e729]:
+                - generic [ref=e730]: "--"
+                - generic [ref=e731]: Total Blocked
+              - generic [ref=e732]:
+                - generic [ref=e733]: "--"
+                - generic [ref=e734]: Coverage Rate
+              - generic [ref=e735]:
+                - generic [ref=e736]: "--"
+                - generic [ref=e737]: Unique Events
+            - generic [ref=e738]:
+              - img [ref=e739]
+              - generic [ref=e741]: Loading OWASP statistics...
+          - generic [ref=e742]:
+            - generic [ref=e743]:
+              - generic [ref=e744]:
+                - heading "Policy Analytics" [level=3] [ref=e745]
+                - paragraph [ref=e746]: Enforcement effectiveness, violation trends, top violators, and triggered rules
+              - generic [ref=e747]:
+                - combobox [ref=e748]:
+                  - option "7d"
+                  - option "14d" [selected]
+                  - option "30d"
+                  - option "60d"
+                  - option "90d"
+                - button "Refresh" [disabled] [ref=e749]:
+                  - img [ref=e750]
+            - generic [ref=e752]:
+              - img [ref=e753]
+              - generic [ref=e755]: Loading analytics...

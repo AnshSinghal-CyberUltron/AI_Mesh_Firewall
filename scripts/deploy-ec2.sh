@@ -67,6 +67,8 @@ export ALLOWED_HOSTS="${ALLOWED_HOSTS:-${BACKEND_HOST},${FRONTEND_HOST},${GATEWA
 
 VITE_FRONTEND_BASE_URL="${VITE_FRONTEND_BASE_URL:-$FRONTEND_ORIGIN}"
 VITE_BACKEND_BASE_URL="${VITE_BACKEND_BASE_URL:-$BACKEND_PUBLIC_URL}"
+# Dedicated gateway host for browser fetch + UI display (CORS allow-list includes firewall origin).
+VITE_GATEWAY_SAME_ORIGIN="${VITE_GATEWAY_SAME_ORIGIN:-false}"
 VITE_GATEWAY_BASE_URL="${VITE_GATEWAY_BASE_URL:-$GATEWAY_PUBLIC_URL}"
 
 REGION="${AWS_REGION:-ap-south-1}"
@@ -110,19 +112,8 @@ EOF
   sudo sysctl -p /etc/sysctl.d/99-ai-mesh.conf 2>/dev/null || true
 fi
 
-echo "==> Build frontend for subdomains"
-mkdir -p frontend/dist
-docker run --rm \
-  -e VITE_FRONTEND_BASE_URL="${VITE_FRONTEND_BASE_URL}" \
-  -e VITE_BACKEND_BASE_URL="${VITE_BACKEND_BASE_URL}" \
-  -e VITE_GATEWAY_BASE_URL="${VITE_GATEWAY_BASE_URL}" \
-  -v "$ROOT/frontend:/app" \
-  -w /app \
-  node:22-alpine \
-  sh -c "npm ci && npm run build"
-
 echo "==> Pull application images from ECR"
-"${COMPOSE[@]}" pull gateway control workers workers-beat
+"${COMPOSE[@]}" pull gateway control workers workers-beat nginx
 
 echo "==> Start infrastructure"
 "${COMPOSE[@]}" up -d --no-build postgres redis rabbitmq
@@ -145,6 +136,13 @@ if [[ "${SKIP_ADMIN:-}" != "1" ]]; then
     ${ZEROSHIELD_ADMIN_PASSWORD:+--password "$ZEROSHIELD_ADMIN_PASSWORD"} || true
 fi
 
+if [[ "${SKIP_PII_SEED:-}" != "1" ]] && [[ -n "${SEED_PII_POLICY_ORG_SLUG:-}" ]]; then
+  echo "==> PII policy package (org slug=${SEED_PII_POLICY_ORG_SLUG})"
+  "${COMPOSE[@]}" exec -T control python manage.py seed_pii_policy_package \
+    --org-slug "${SEED_PII_POLICY_ORG_SLUG}" \
+    ${RESET_PII_SEED:+--reset} || true
+fi
+
 echo "==> Gateway, workers, nginx (restart: unless-stopped)"
 "${COMPOSE[@]}" --profile workers up -d --no-build gateway workers workers-beat nginx
 
@@ -153,19 +151,45 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 
+echo "==> Reload nginx (static + config baked into ai-mesh-nginx image)"
+"${COMPOSE[@]}" up -d --force-recreate nginx
+"${COMPOSE[@]}" exec -T nginx nginx -t
+sleep 2
+
 FH="${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}"
 BH="${BACKEND_HOST:-aimeshbackend.zeroshield.ai}"
 GH="${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}"
 
-curl -sf -H "Host: ${FH}" "http://127.0.0.1/" -o /dev/null || die "nginx UI vhost failed"
+_check_v1_proxy() {
+  local scheme="$1"
+  local port="$2"
+  shift 2
+  local curl_args=("$@")
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' "${curl_args[@]}" \
+    -X POST "${scheme}://127.0.0.1:${port}/v1/chat/completions" \
+    -H "Host: ${FH}" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"auto","messages":[{"role":"user","content":"ping"}]}' || echo "000")"
+  [[ "${code}" != "405" && "${code}" != "000" ]] || die "nginx ${scheme} /v1/ still serves SPA (POST returned ${code})"
+}
+
+curl -sf -H "Host: ${FH}" "http://127.0.0.1/" -o /dev/null || die "nginx UI vhost failed (is port 80 published?)"
+curl -sf -H "Host: ${FH}" "http://127.0.0.1/gw-health" || die "nginx UI → gateway health proxy failed"
+_check_v1_proxy http 80
 curl -sf -H "Host: ${BH}" "http://127.0.0.1/api/health/" || die "nginx backend vhost failed"
 curl -sf -H "Host: ${GH}" "http://127.0.0.1/health" || die "nginx gateway vhost failed"
+
+if curl -sfk -o /dev/null "https://127.0.0.1/gw-health" 2>/dev/null; then
+  curl -sfk -H "Host: ${FH}" "https://127.0.0.1/gw-health" || die "nginx HTTPS UI → gateway health proxy failed"
+  _check_v1_proxy https 443 -k
+fi
 
 cat <<EOF
 
 Stack is up (ECR ${IMAGE_TAG}).
 
-  UI       : https://${FH}  (nginx :80)
+  UI       : https://${FH}  (nginx :443)
   Control  : https://${BH}/api/
   Gateway  : https://${GH}/v1/
 

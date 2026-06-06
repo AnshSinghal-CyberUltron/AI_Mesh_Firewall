@@ -18,7 +18,8 @@
       "Resource": [
         "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-gateway",
         "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-control",
-        "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-workers"
+        "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-workers",
+        "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-nginx"
       ]
     },
     {

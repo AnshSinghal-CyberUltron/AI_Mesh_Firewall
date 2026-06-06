@@ -45,6 +45,9 @@ function clearStoredTokens() {
     // Active storage key used by useSimulatorEngine; must be cleared on logout
     // to prevent cross-user credential leakage on shared browsers.
     localStorage.removeItem('zeroshield_gateway_key');
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('zeroshield_gateway_key:'))
+      .forEach((key) => localStorage.removeItem(key));
   } catch {}
 }
 

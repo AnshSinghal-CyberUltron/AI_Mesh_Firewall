@@ -14,7 +14,6 @@ class Policy(models.Model):
         ("LOW", "Low"),
     ]
     DOMAIN_CHOICES = [
-        ("global", "Global"),
         ("pipeline", "Pipeline"),
         ("rag", "RAG"),
         ("mcp", "MCP"),
@@ -24,9 +23,9 @@ class Policy(models.Model):
     policy_domain = models.CharField(
         max_length=16,
         choices=DOMAIN_CHOICES,
-        default="global",
+        default="pipeline",
         db_index=True,
-        help_text="Enforcement domain: global (all requests), pipeline, rag, or mcp",
+        help_text="Enforcement domain: pipeline, rag, or mcp",
     )
     organization = models.ForeignKey(
         "auth_api.Organization",

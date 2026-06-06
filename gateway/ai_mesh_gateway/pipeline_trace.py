@@ -20,7 +20,7 @@ REASON_CODE_LABELS: dict[str, str] = {
     "score_threshold_block": "Risk score exceeded the automatic block threshold.",
     "score_threshold_flag": "Risk score exceeded the advisory flag threshold.",
     "findings_with_allow": "Threat signals were detected, but policy escalated to flag instead of block.",
-    "tier2_pass": "Guard Model scan completed — no enforcement action required.",
+    "tier2_pass": "Guard Model (Tier-2) scan completed — content assessed as clean; no enforcement action required.",
     "bedrock_degraded": "Guard Model was degraded; request flagged for manual review.",
     "parse_failure_conservative": "Guard Model response could not be parsed; conservative enforcement applied.",
     "client_error": "Guard Model client error — conservative handling applied.",
@@ -60,6 +60,51 @@ def _reason_code_label(code: str) -> str:
     if not key:
         return ""
     return REASON_CODE_LABELS.get(key, key.replace("_", " ").capitalize() + ".")
+
+
+def enrich_zeroshield_from_verdict(
+    zeroshield: dict,
+    *,
+    scan_verdict=None,
+    final_action: str = "allow",
+) -> dict:
+    """Merge operator-facing Guard Model fields into client zeroshield metadata."""
+    if not isinstance(zeroshield, dict):
+        return zeroshield
+
+    tier = str(zeroshield.get("detection_tier") or "")
+    stage_action = str(zeroshield.get("action") or "allow")
+    guard = build_guard_fields(
+        verdict=scan_verdict,
+        stage_action=stage_action,
+        final_action=final_action,
+        tier=tier,
+        zs=zeroshield,
+        output=False,
+    )
+    enriched = {**zeroshield, **guard}
+
+    risk = 0.0
+    if scan_verdict is not None:
+        meta = getattr(scan_verdict, "scan_meta", None) or {}
+        if isinstance(meta, dict) and meta.get("llm_guard_score") is not None:
+            risk = float(meta.get("llm_guard_score") or 0)
+        else:
+            risk = float(getattr(scan_verdict, "confidence", 0) or 0)
+    enriched["risk_score"] = round(risk, 4)
+
+    action = str(enriched.get("action") or "allow").lower()
+    threat = str(enriched.get("threat_type") or "none").lower()
+    reason_code = str(enriched.get("reason_code") or "").lower()
+    if action == "allow" and (threat in ("none", "clean", "") or reason_code == "tier2_pass"):
+        enriched["scan_outcome"] = "clean"
+        if threat == "none":
+            enriched["threat_type"] = "clean"
+        enriched["confidence"] = round(max(0.0, 1.0 - risk), 4)
+        if guard.get("guard_reason"):
+            enriched["detail"] = guard["guard_reason"]
+            enriched["reason"] = guard["guard_reason"].split("\n")[0]
+    return enriched
 
 
 def build_guard_fields(
@@ -335,6 +380,8 @@ def build_pipeline_trace(
             ),
             "threat_type": threat_type,
             "confidence": confidence,
+            "risk_score": zs.get("risk_score"),
+            "scan_outcome": zs.get("scan_outcome"),
             "tier": tier,
             "matched_patterns": matched_patterns,
             "prompt_submitted": prompt_preview,

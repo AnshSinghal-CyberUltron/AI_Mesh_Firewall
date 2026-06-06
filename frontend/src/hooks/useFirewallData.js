@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRealtimeNotifications } from "./useRealtimeNotifications";
 
-const TIME_RANGE_TO_HOURS = {
+export const TIME_RANGE_TO_HOURS = {
   "1h": 1,
   "6h": 6,
   "24h": 24,

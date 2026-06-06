@@ -4,6 +4,7 @@ import {
   CheckCircle2, XCircle, AlertCircle, HelpCircle, Loader2, Activity,
 } from "lucide-react";
 import { useGatewayConfig } from "../hooks/useGatewayConfig";
+import { resolveGatewayHealthUrl } from "../utils/environmentUrls";
 
 const CHECK_INTERVAL = 30_000; // 30 seconds
 
@@ -145,8 +146,7 @@ export function ServiceStatusPanel() {
           };
         }),
 
-      // Gateway health (direct, port 8300 — /health is auth-excluded)
-      fetch(`${gatewayUrl}/health`, { signal: AbortSignal.timeout(5000) })
+      fetch(resolveGatewayHealthUrl(gatewayUrl), { signal: AbortSignal.timeout(5000) })
         .then(async (res) => {
           gatewayLatency = Date.now() - t0;
           if (res.ok) {

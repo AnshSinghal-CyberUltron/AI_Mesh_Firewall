@@ -39,6 +39,28 @@ PUBSUB_CHANNEL = "policy_updates"
 RECONNECT_DELAY_SECONDS = 5
 
 
+def _normalize_policy_domain(domain: str | None) -> str:
+    """Normalize policy_domain; legacy ``global`` rows map to ``pipeline``."""
+    normalized = str(domain or "pipeline").strip().lower()
+    if normalized == "global":
+        return "pipeline"
+    return normalized
+
+
+def filter_policies_by_domain(
+    policies: list[dict[str, Any]], domain: str
+) -> list[dict[str, Any]]:
+    """Return compiled policy entries whose policy_domain matches *domain*."""
+    target = _normalize_policy_domain(domain)
+    filtered: list[dict[str, Any]] = []
+    for entry in policies:
+        policy = entry.get("policy", {})
+        p_domain = _normalize_policy_domain(policy.get("policy_domain"))
+        if p_domain == target:
+            filtered.append(entry)
+    return filtered
+
+
 class PolicySync:
     """
     Async Redis Pub/Sub subscriber that keeps per-org in-memory copies
@@ -79,17 +101,14 @@ class PolicySync:
         """
         all_policies = self.get_policies(org_slug)
         result = []
+        normalized_domain = _normalize_policy_domain(domain)
         for entry in all_policies:
             policy = entry.get("policy", {})
-            p_domain = policy.get("policy_domain", "global")
+            p_domain = _normalize_policy_domain(policy.get("policy_domain"))
             p_server = policy.get("mcp_server_slug")
-            # Include: server-specific policies + org-wide MCP policies
-            if p_domain == domain:
+            if p_domain == normalized_domain:
                 if p_server is None or p_server == server_slug:
                     result.append(entry)
-            elif p_domain == "global":
-                # Global policies also apply
-                result.append(entry)
         return result
 
     @property

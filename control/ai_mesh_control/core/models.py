@@ -426,6 +426,72 @@ class GatewayAPIKey(models.Model):
             instance.save(update_fields=["organization"])
         return instance, raw_key
 
+    @classmethod
+    def ensure_simulator_for_org(cls, organization, owner) -> tuple["GatewayAPIKey", str | None]:
+        """Return the org's simulator gateway key, creating one if needed.
+
+        Uses a stable ``project_id`` of ``simulator-{slug}`` so Module 1 simulators
+        can auto-provision without manual key entry. Plaintext is only returned when
+        a new key is created (same contract as ``ensure_default_for_org``).
+        """
+        project_id = f"simulator-{organization.slug}"
+        existing = cls.objects.filter(
+            organization=organization,
+            project_id=project_id,
+            is_active=True,
+        ).first()
+        if existing is None:
+            existing = cls.objects.filter(
+                organization=organization,
+                name="simulator",
+                is_active=True,
+            ).first()
+        if existing:
+            return existing, None
+
+        instance, raw_key = cls.generate_key(
+            name="simulator",
+            owner=owner,
+            project_id=project_id,
+            allowed_models=[],
+        )
+        if not instance.organization_id:
+            instance.organization = organization
+            instance.save(update_fields=["organization"])
+        return instance, raw_key
+
+    @classmethod
+    def rotate_simulator_for_org(cls, organization, owner) -> tuple["GatewayAPIKey", str]:
+        """Deactivate the org's existing simulator key(s) and issue a fresh one.
+
+        Plaintext keys are hash-only (never recoverable), so when a browser needs a
+        usable simulator credential but the existing key's plaintext is gone (e.g.
+        cleared localStorage, new device), rotation is the only way to hand back a
+        working key. Always returns plaintext. Deactivation uses save() so the
+        post_save signal propagates is_active=False to Redis (the gateway then
+        rejects the stale key); generate_key syncs the new key the same way.
+        """
+        project_id = f"simulator-{organization.slug}"
+        stale = list(
+            cls.objects.filter(organization=organization, is_active=True).filter(
+                models.Q(project_id=project_id) | models.Q(name="simulator")
+            )
+        )
+        for key in stale:
+            key.is_active = False
+            key.save(update_fields=["is_active"])
+
+        instance, raw_key = cls.generate_key(
+            name="simulator",
+            owner=owner,
+            project_id=project_id,
+            allowed_models=[],
+        )
+        if not instance.organization_id:
+            instance.organization = organization
+            instance.save(update_fields=["organization"])
+        return instance, raw_key
+
     def save(self, *args, **kwargs):
         if not self.organization_id and self.owner_id:
             try:

@@ -7,7 +7,7 @@ const STEPS = [
     icon: Database,
     title: "Configure Provider",
     panel: "Vector Provider Config",
-    description: "Set up ChromaDB, Pinecone, or Milvus connection credentials.",
+    description: "Set up Pinecone, Milvus, or a custom BYOK vector database connection.",
     tab: "control",
   },
   {
@@ -30,8 +30,8 @@ const STEPS = [
     id: 4,
     icon: Search,
     title: "Query & Test",
-    panel: "Semantic Search / Simulators",
-    description: "Run queries against your data through the security pipeline.",
+    panel: "Free Query / Attack & Trust Simulator",
+    description: "Run free-form queries, feature tests, and attack/trust scenarios through the security pipeline.",
     tab: "simulator",
   },
 ];

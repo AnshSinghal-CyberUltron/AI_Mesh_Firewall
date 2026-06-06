@@ -1,0 +1,100 @@
+{
+  "baseUrl": "http://127.0.0.1:8180",
+  "checks": [
+    {
+      "name": "module-kpis loaded",
+      "ok": true
+    },
+    {
+      "name": "module-trends loaded",
+      "ok": true
+    },
+    {
+      "name": "card 1.1 total matches API (18)",
+      "ok": true
+    },
+    {
+      "name": "card 1.1 pressure chart renders",
+      "ok": true
+    },
+    {
+      "name": "card 1.1 trend pressure sum matches KPI blocked",
+      "ok": true,
+      "pressureSum": 7,
+      "kpiPressure": 7
+    },
+    {
+      "name": "card 1.2 total matches API (11)",
+      "ok": true
+    },
+    {
+      "name": "card 1.2 pressure chart renders",
+      "ok": true
+    },
+    {
+      "name": "card 1.2 trend pressure sum matches KPI blocked",
+      "ok": true,
+      "pressureSum": 0,
+      "kpiPressure": 0
+    },
+    {
+      "name": "card 1.3 total matches API (18)",
+      "ok": true
+    },
+    {
+      "name": "card 1.3 pressure chart renders",
+      "ok": true
+    },
+    {
+      "name": "card 1.3 trend pressure sum matches KPI blocked",
+      "ok": true,
+      "pressureSum": 7,
+      "kpiPressure": 7
+    },
+    {
+      "name": "card 1.4 pressure chart renders",
+      "ok": true
+    },
+    {
+      "name": "card 1.4 trend pressure sum matches KPI redacted",
+      "ok": true,
+      "pressureSum": 0,
+      "kpiPressure": 0
+    },
+    {
+      "name": "card 1.5 pressure chart renders",
+      "ok": true
+    },
+    {
+      "name": "card 1.5 trend pressure sum matches KPI blocked",
+      "ok": true,
+      "pressureSum": 0,
+      "kpiPressure": 0
+    },
+    {
+      "name": "card 1.6 pressure chart renders",
+      "ok": true
+    },
+    {
+      "name": "card 1.6 trend pressure sum matches KPI critical",
+      "ok": true,
+      "pressureSum": 0,
+      "kpiPressure": 0
+    },
+    {
+      "name": "card 1.7 pressure chart renders",
+      "ok": true
+    },
+    {
+      "name": "card 1.7 trend pressure sum matches KPI blocked",
+      "ok": true,
+      "pressureSum": 0,
+      "kpiPressure": 0
+    },
+    {
+      "name": "click-through to firewall-1-3",
+      "ok": true
+    }
+  ],
+  "failed": 0
+}

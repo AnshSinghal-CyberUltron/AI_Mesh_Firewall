@@ -294,6 +294,15 @@ class PineconeClient:
         self._pc = None
         LOG.info("PineconeClient initialized (embedding_model=%s)", embedding_model)
 
+    # Pinecone-hosted embedding models served via the Inference API. When the
+    # configured embedding_model is one of these, queries/passages are embedded
+    # by Pinecone itself using the same API key — no OpenAI/Bedrock key needed.
+    PINECONE_INFERENCE_MODELS = {
+        "multilingual-e5-large",
+        "llama-text-embed-v2",
+        "pinecone-sparse-english-v0",
+    }
+
     def _get_client(self):
         """Lazy-init the Pinecone client."""
         if self._pc is None:
@@ -306,6 +315,34 @@ class PineconeClient:
                 LOG.exception("Failed to initialize Pinecone client")
                 raise
         return self._pc
+
+    def _embed(self, texts: list[str], input_type: str) -> list[list[float]]:
+        """Embed ``texts`` for the configured model.
+
+        Pinecone-hosted models go through the Pinecone Inference API (the
+        provider API key grants access — no external embedding credential), with
+        ``input_type`` 'query' or 'passage' for asymmetric models like e5.
+        Any other model falls back to LiteLLM (OpenAI/Bedrock/etc.).
+        """
+        model = self._embedding_model
+        if model in self.PINECONE_INFERENCE_MODELS or model.startswith("pinecone-"):
+            pc = self._get_client()
+            resp = pc.inference.embed(
+                model=model,
+                inputs=list(texts),
+                parameters={"input_type": input_type, "truncate": "END"},
+            )
+            out: list[list[float]] = []
+            for d in resp.data:
+                vals = getattr(d, "values", None)
+                if vals is None and hasattr(d, "get"):
+                    vals = d.get("values")
+                out.append(list(vals))
+            return out
+        # Fallback: LiteLLM-routed providers (OpenAI text-embedding-3-small, etc.)
+        import litellm
+        resp = litellm.embedding(model=model, input=list(texts))
+        return [resp.data[i]["embedding"] for i in range(len(texts))]
 
     def _query_sync(
         self,
@@ -336,14 +373,10 @@ class PineconeClient:
 
         try:
             from pinecone import QueryResponse
-            # Generate actual embedding from query text using LiteLLM
-            import litellm
+            # Embed the query (Pinecone Inference for Pinecone-hosted models,
+            # else LiteLLM). 'query' input_type for asymmetric models like e5.
             try:
-                embed_response = litellm.embedding(
-                    model=self._embedding_model,
-                    input=[query_text],
-                )
-                query_vector = embed_response.data[0]["embedding"]
+                query_vector = self._embed([query_text], input_type="query")[0]
             except Exception:
                 LOG.warning(
                     "Failed to generate query embedding via '%s'; "
@@ -426,14 +459,12 @@ class PineconeClient:
             LOG.warning("Pinecone index '%s' not accessible for upsert", collection_name)
             raise
 
-        import litellm
-        embed_response = litellm.embedding(
-            model=self._embedding_model,
-            input=documents,
-        )
+        # 'passage' input_type for documents (asymmetric models like e5 embed
+        # queries and passages differently).
+        embeddings = self._embed(documents, input_type="passage")
         vectors = []
         for i, doc_id in enumerate(ids):
-            emb = embed_response.data[i]["embedding"]
+            emb = embeddings[i]
             meta = dict(metadatas[i]) if metadatas and i < len(metadatas) else {}
             meta["content"] = documents[i]
             vectors.append({"id": doc_id, "values": emb, "metadata": meta})
