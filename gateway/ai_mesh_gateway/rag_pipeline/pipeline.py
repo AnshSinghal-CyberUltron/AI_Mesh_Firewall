@@ -139,7 +139,7 @@ class RAGFirewallPipeline:
                 "original_query": q_out.original_query,
             },
         ))
-        self._emit_stage_telemetry(ctx, "query", q_out.verdict, project_id, key_hash, collection_name, q_out.latency_ms, organization_id=organization_id, user_id=user_id)
+        self._emit_stage_telemetry(ctx, "query", q_out.verdict, project_id, key_hash, collection_name, q_out.latency_ms, organization_id=organization_id, user_id=user_id, namespace=namespace)
         if q_out.verdict.action == "block":
             ctx.final_action = "block"
             return self._build_result(ctx, 0, blocked=True)
@@ -183,7 +183,7 @@ class RAGFirewallPipeline:
             },
             approved_doc_ids=[m.doc_id for m in r_out.document_manifest],
         ))
-        self._emit_stage_telemetry(ctx, "retriever", r_out.verdict, project_id, key_hash, collection_name, r_out.retrieval_latency_ms, organization_id=organization_id, user_id=user_id)
+        self._emit_stage_telemetry(ctx, "retriever", r_out.verdict, project_id, key_hash, collection_name, r_out.retrieval_latency_ms, organization_id=organization_id, user_id=user_id, namespace=namespace)
         if r_out.verdict.action == "block":
             ctx.final_action = "block"
             return self._build_result(ctx, r_out.total_retrieved, blocked=True)
@@ -211,7 +211,7 @@ class RAGFirewallPipeline:
             },
             approved_doc_ids=[m.doc_id for m in rank_out.approved_manifest],
         ))
-        self._emit_stage_telemetry(ctx, "ranker", rank_out.verdict, project_id, key_hash, collection_name, (t2_end - t2) * 1000, organization_id=organization_id, user_id=user_id)
+        self._emit_stage_telemetry(ctx, "ranker", rank_out.verdict, project_id, key_hash, collection_name, (t2_end - t2) * 1000, organization_id=organization_id, user_id=user_id, namespace=namespace)
         if rank_out.verdict.action == "block":
             ctx.final_action = "block"
             return self._build_result(ctx, r_out.total_retrieved, blocked=True)
@@ -242,7 +242,7 @@ class RAGFirewallPipeline:
             },
             approved_doc_ids=[m.doc_id for m in gen_out.verified_manifest],
         ))
-        self._emit_stage_telemetry(ctx, "generator", gen_out.verdict, project_id, key_hash, collection_name, (t3_end - t3) * 1000, organization_id=organization_id, user_id=user_id)
+        self._emit_stage_telemetry(ctx, "generator", gen_out.verdict, project_id, key_hash, collection_name, (t3_end - t3) * 1000, organization_id=organization_id, user_id=user_id, namespace=namespace)
 
         if gen_out.verdict.action == "block":
             ctx.final_action = "block"
@@ -297,6 +297,7 @@ class RAGFirewallPipeline:
         latency_ms: float,
         organization_id: int | None = None,
         user_id: int | str | None = None,
+        namespace: str = "",
     ) -> None:
         if self._telemetry is None:
             return
@@ -319,6 +320,7 @@ class RAGFirewallPipeline:
             metadata={
                 "request_id": ctx.request_id,
                 "collection": collection_name,
+                "namespace": namespace,
                 "escalation_level": ctx.escalation_level,
                 "detail": verdict.detail,
                 "module": "1.3",

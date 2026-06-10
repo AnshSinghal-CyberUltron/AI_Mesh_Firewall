@@ -233,15 +233,16 @@ class SimulatorDefaultGatewayKeyView(APIView):
 
         ensure_simulator_dev_bootstrap(org)
 
-        ensure = str(request.query_params.get("ensure", "")).lower() in ("1", "true", "yes", "on")
-
+        # Idempotent provisioning: ALWAYS return the org's single existing active
+        # simulator key (ensure_simulator_for_org mints one only when none is
+        # active, and collapses any duplicates to one). The plaintext `key` is
+        # returned ONLY when a key is newly created — we never revoke-and-recreate
+        # just to hand back plaintext. That rotate-on-ensure behavior churned the
+        # org through dozens of keys and broke the one-key-per-org invariant.
+        # `?ensure=1` is accepted for backwards-compat but no longer rotates;
+        # explicit rotation is a separate, user-triggered action.
+        _ = request.query_params.get("ensure")  # back-compat; no longer triggers rotation
         key_instance, raw_key = GatewayAPIKey.ensure_simulator_for_org(org, actor)
-        # ?ensure=1: the caller (a simulator panel) needs a USABLE key. If one
-        # already exists but its plaintext is unrecoverable (raw_key is None),
-        # rotate so the browser always receives a working credential.
-        if raw_key is None and ensure:
-            key_instance, raw_key = GatewayAPIKey.rotate_simulator_for_org(org, actor)
-            logger.info("Simulator gateway key rotated (ensure=1) org_id=%s", org.id)
         storage_key = f"zeroshield_gateway_key:{org.id}"
         data = {
             "has_gateway_key": True,
@@ -251,17 +252,145 @@ class SimulatorDefaultGatewayKeyView(APIView):
             "org_id": org.id,
             "org_slug": org.slug,
             "storage_key": storage_key,
-            "created": raw_key is not None,
+            "created": bool(raw_key),
         }
         if raw_key:
+            # Recoverable per-org simulator key — returned to every simulator in
+            # the org so they all share ONE key (no re-mint, no churn).
             data["key"] = raw_key
-            data["warning"] = "Store this key securely. It will not be shown again."
             logger.info(
-                "Simulator gateway key provisioned org_id=%s prefix=%s",
+                "Simulator gateway key returned org_id=%s prefix=%s",
                 org.id,
                 key_instance.prefix,
             )
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class IsolationPlaygroundGatewayKeyView(APIView):
+    """
+    Per-organization isolation playground gateway key (Module 1.6).
+
+    GET  — metadata (prefix, risk_score); never returns plaintext.
+    POST — lazy-create playground key; plaintext on first creation or recovery.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _resolve(self, request):
+        if not _simulator_defaults_enabled():
+            return None, None, Response(
+                {"detail": "Simulator defaults are disabled."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        org = _resolve_request_org(request.user)
+        if org is None:
+            return None, None, Response(
+                {"detail": "Organization membership required for playground keys."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return org, request.user, None
+
+    def get(self, request):
+        org, _user, err = self._resolve(request)
+        if err:
+            return err
+
+        project_id = f"isolation-playground-{org.slug}"
+        key = GatewayAPIKey.objects.filter(
+            organization=org,
+            project_id=project_id,
+            is_active=True,
+        ).first()
+        if key is None:
+            key = GatewayAPIKey.objects.filter(
+                organization=org,
+                name="isolation-playground",
+                is_active=True,
+            ).first()
+
+        if key is None:
+            return Response({"has_gateway_key": False})
+
+        storage_key = f"zeroshield_isolation_playground_key:{org.id}"
         return Response(
-            data,
-            status=status.HTTP_201_CREATED if raw_key else status.HTTP_200_OK,
+            {
+                "has_gateway_key": True,
+                "prefix": key.prefix,
+                "name": key.name,
+                "project_id": key.project_id,
+                "org_id": org.id,
+                "org_slug": org.slug,
+                "risk_score": key.risk_score,
+                "storage_key": storage_key,
+            }
+        )
+
+    def post(self, request):
+        org, actor, err = self._resolve(request)
+        if err:
+            return err
+
+        from core.simulator_seed import ensure_simulator_dev_bootstrap
+
+        ensure_simulator_dev_bootstrap(org)
+
+        key_instance, raw_key = GatewayAPIKey.ensure_isolation_playground_for_org(org, actor)
+        storage_key = f"zeroshield_isolation_playground_key:{org.id}"
+        data = {
+            "has_gateway_key": True,
+            "prefix": key_instance.prefix,
+            "name": key_instance.name,
+            "project_id": key_instance.project_id,
+            "org_id": org.id,
+            "org_slug": org.slug,
+            "risk_score": key_instance.risk_score,
+            "storage_key": storage_key,
+            "created": bool(raw_key),
+        }
+        if raw_key:
+            data["key"] = raw_key
+            logger.info(
+                "Isolation playground key returned org_id=%s prefix=%s",
+                org.id,
+                key_instance.prefix,
+            )
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class IsolationPlaygroundRotateView(APIView):
+    """Rotate the org isolation playground key and reset risk_score to 0."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not _simulator_defaults_enabled():
+            return Response(
+                {"detail": "Simulator defaults are disabled."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        org = _resolve_request_org(request.user)
+        if org is None:
+            return Response(
+                {"detail": "Organization membership required for playground keys."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        key_instance, raw_key = GatewayAPIKey.rotate_isolation_playground_for_org(
+            org, request.user
+        )
+        storage_key = f"zeroshield_isolation_playground_key:{org.id}"
+        return Response(
+            {
+                "has_gateway_key": True,
+                "prefix": key_instance.prefix,
+                "name": key_instance.name,
+                "project_id": key_instance.project_id,
+                "org_id": org.id,
+                "org_slug": org.slug,
+                "risk_score": key_instance.risk_score,
+                "storage_key": storage_key,
+                "key": raw_key,
+                "rotated": True,
+            },
+            status=status.HTTP_200_OK,
         )

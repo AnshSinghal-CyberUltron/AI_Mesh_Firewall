@@ -102,7 +102,8 @@ services:
 
   gateway:
     <<: [*restart_unless_stopped, *ecr_gateway_image]
-    ports: !override ["127.0.0.1:8300:8300"]
+    # Bind 8300 on host for Prometheus scrape (auth: METRICS_SCRAPER_KEY on /metrics)
+    ports: !override ["0.0.0.0:8300:8300"]
     environment:
       # 1 gunicorn worker per gateway vCPU (async uvicorn — not 2×CPU+1)
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-6}
@@ -130,6 +131,8 @@ services:
       AI_MESH_CONTROL_URL: http://control:8000
       AIGUARDX_BACKEND_URL: http://control:8000
       GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
+      METRICS_SCRAPER_KEY: ${METRICS_SCRAPER_KEY:-}
+      METRICS_ALLOW_OPEN: ${METRICS_ALLOW_OPEN:-false}
     deploy:
       resources:
         limits:

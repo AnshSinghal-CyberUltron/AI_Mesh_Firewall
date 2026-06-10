@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
+import { filterUserManagedModels } from "../constants/zeroshieldBrand";
 
 const STATUS_COLORS = {
   active: { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-600 dark:text-emerald-400", icon: CheckCircle },
@@ -60,7 +61,7 @@ export function ModelStatePanel() {
       const dbData = await res.json();
       const dbModels = Array.isArray(dbData) ? dbData : dbData.results || dbData.models || [];
 
-      setModels(dbModels);
+      setModels(filterUserManagedModels(dbModels));
     } catch {
       setLoadError("Network error loading model states.");
     }
@@ -77,7 +78,7 @@ export function ModelStatePanel() {
         return;
       }
       const data = await res.json();
-      setModels(data.models || []);
+      setModels(filterUserManagedModels(data.models || []));
     } catch {
       setLoadError("Network error during sync.");
     } finally {

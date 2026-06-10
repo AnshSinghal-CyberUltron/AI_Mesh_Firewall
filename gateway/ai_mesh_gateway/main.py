@@ -548,6 +548,26 @@ def _check_version():
         LOG.info("Gateway update available: %s. Download: %s", rec_ver, download_url)
 
 
+def _latin1_safe_headers(headers):
+    """HTTP header values must be latin-1 encodable. Reroute reasons contain a
+    '→' arrow (e.g. "Kill-switch reroute: gpt-5.2 → Haiku"), and starlette raises
+    UnicodeEncodeError building the response → 500. Transliterate the arrows and
+    drop any other non-latin-1 char so a response can never 500 on header
+    encoding. The response BODY keeps the original unicode (used by the UI)."""
+    if not headers:
+        return headers
+    safe = {}
+    for k, v in headers.items():
+        s = str(v)
+        try:
+            s.encode("latin-1")
+        except UnicodeEncodeError:
+            s = s.replace("→", "->").replace("←", "<-")
+            s = s.encode("latin-1", "replace").decode("latin-1")
+        safe[k] = s
+    return safe
+
+
 def _register():
     global AGENT_ID
     cfg = CONFIG
@@ -566,6 +586,27 @@ def _register():
         return True
     LOG.error("Registration failed: %s %s", code, body)
     return False
+
+
+async def _background_register_loop() -> None:
+    """Keep trying to register until it succeeds, then start telemetry.
+
+    A worker that loses the startup registration race (or hits a transient
+    backend error) must NOT give up for its lifetime — otherwise it is stuck on
+    the degraded sync path (no model routing) forever. Retry with capped backoff.
+    """
+    global AGENT_ID
+    backoff = 5
+    while not AGENT_ID:
+        await asyncio.sleep(backoff)
+        try:
+            if await asyncio.to_thread(_register):
+                LOG.info("Background re-registration succeeded: agent_id=%s", AGENT_ID)
+                asyncio.create_task(_telemetry_loop())
+                return
+        except Exception as exc:  # never let the loop die
+            LOG.warning("Background re-registration attempt failed: %s", exc)
+        backoff = min(backoff * 2, 60)
 
 
 def _policy_check(
@@ -714,6 +755,141 @@ def _extract_response_from_completion(completion):
     c = choices[0]
     msg = c.get("message") or c.get("delta") or {}
     return msg.get("content") or ""
+
+
+async def _apply_output_guard_nonstream(
+    resp,
+    *,
+    org_config: dict,
+    org_slug: str,
+    body: dict,
+    user_id,
+    project_id,
+    key_prefix: str,
+    prompt: str,
+    start: float,
+    prompt_snippet: str = "",
+    endpoint_id=None,
+):
+    """Run the output guard on a non-streaming completion for code paths that
+    return BEFORE the main inline output-guard block — notably the
+    ``sync_pre_llm`` tier-2 path, which otherwise ships the model's response
+    without any output scanning (so §1.7 never fires). Mirrors the
+    credential→block / PII→redact / IP→flag enforcement and emits the same
+    ``output_guard`` telemetry. Returns a JSONResponse to return early (block),
+    otherwise None (``resp`` mutated in place for redact/rewrite).
+    """
+    if OUTPUT_GUARD is None or not isinstance(resp, dict):
+        return None
+    response_text = _extract_response_from_completion(resp)
+    if not response_text:
+        return None
+    if not CONFIG.get("output_guard_enabled", True):
+        return None
+    if not org_config.get("output_scan_enabled", CONFIG.get("output_scan_enabled", True)):
+        return None
+    try:
+        verdict = await OUTPUT_GUARD.inspect(
+            response_text,
+            context_chunks=[],
+            org_config=(CONFIG_SYNC.get_config(org_slug) if (CONFIG_SYNC is not None and org_slug) else None),
+            org_slug=org_slug or "",
+        )
+    except Exception:  # noqa: BLE001 - output guard must never crash the response
+        LOG.exception("Output guard inspect failed (sync_pre_llm path); failing open")
+        return None
+    if verdict is None or verdict.action == "allow":
+        return None
+
+    raw_output = response_text[:500]
+    incident_logging = bool(org_config.get("output_incident_logging_enabled", True))
+    common = dict(
+        model=body.get("model", ""),
+        user_id=user_id,
+        project_id=str(project_id or ""),
+        key_prefix=key_prefix,
+        threat_type=verdict.threat_type,
+        compliance_tags=getattr(verdict, "compliance_tags", []),
+        pipeline_stage="generator",
+        prompt_snippet=prompt_snippet,
+        endpoint_id=endpoint_id,
+    )
+
+    def _meta(sanitized):
+        return {
+            "detail": verdict.detail,
+            "response_snippet": raw_output,
+            "raw_output": raw_output,
+            "sanitized_output": sanitized,
+            "guardrail_reasoning": verdict.detail,
+            "matched_patterns": getattr(verdict, "matched_patterns", []),
+            **_telemetry_owasp_metadata(verdict.threat_type),
+        }
+
+    if verdict.action == "block":
+        METRICS["blocked"] = METRICS.get("blocked", 0) + 1
+        _emit_telemetry(
+            status_code=403,
+            event_type="output_guard",
+            action="block",
+            risk_score=getattr(verdict, "confidence", 0.9),
+            latency_ms=(time.perf_counter() - start) * 1000,
+            metadata=_meta("[BLOCKED]"),
+            **common,
+        )
+        return _build_block_response(
+            403,
+            "output_blocked",
+            _build_zeroshield_metadata(
+                action="block",
+                reason=f"Output guard detected {verdict.threat_type} in LLM response.",
+                detection_tier="output_guard",
+                threat_type=verdict.threat_type,
+                confidence=getattr(verdict, "confidence", 0.9),
+                matched_patterns=getattr(verdict, "matched_patterns", []),
+                compliance_tags=getattr(verdict, "compliance_tags", []),
+                original_prompt=prompt,
+                detail=verdict.detail,
+                processing_time_ms=(time.perf_counter() - start) * 1000,
+                security_incident=True,
+            ),
+            prompt=prompt,
+            requested_model=body.get("model", ""),
+            output_scan_verdict=verdict,
+        )
+
+    if verdict.action in ("redact", "rewrite"):
+        if verdict.action == "redact":
+            sanitized = INPUT_SCANNER.redact_pii(response_text) if INPUT_SCANNER is not None else "[REDACTED]"
+        else:
+            sanitized = _rewrite_output_response_text(verdict.threat_type, verdict.detail)
+        _set_completion_response_text(resp, sanitized)
+        if incident_logging:
+            _emit_telemetry(
+                status_code=200,
+                event_type="output_guard",
+                action=verdict.action,
+                risk_score=getattr(verdict, "confidence", 0.7),
+                latency_ms=(time.perf_counter() - start) * 1000,
+                metadata=_meta(sanitized[:500] if sanitized else ""),
+                **common,
+            )
+        return None
+
+    if verdict.action == "flag":
+        if incident_logging:
+            _emit_telemetry(
+                status_code=200,
+                event_type="output_guard",
+                action="flag",
+                risk_score=getattr(verdict, "confidence", 0.6),
+                latency_ms=(time.perf_counter() - start) * 1000,
+                metadata=_meta(raw_output),
+                **common,
+            )
+        return None
+
+    return None
 
 
 import hashlib as _hashlib
@@ -926,6 +1102,47 @@ def _build_routing_metadata(
         "token_budget_tpm": token_budget_tpm,
         "latency_budget_ms": latency_budget_ms,
         "weights": weights,
+    }
+
+
+def _build_isolation_reroute_metadata(audit: dict, routing_prefs: dict) -> dict:
+    """Route metadata envelope when kill-switch / model-state reroute skips adjudicator."""
+    original = str(audit.get("original_model") or "")
+    selected = str(audit.get("selected_model") or "")
+    trigger = str(audit.get("trigger_source") or "kill_switch")
+    reason = str(audit.get("reason") or "").strip()
+    decision_source = "kill_switch" if trigger == "kill_switch" else "model_state"
+    if trigger == "kill_switch":
+        routing_reason = f"Kill-switch reroute: {original} → {selected}."
+        if reason:
+            routing_reason = f"{routing_reason} {reason}"
+    else:
+        routing_reason = f"Model-state reroute: {original} → {selected}."
+        if reason:
+            routing_reason = f"{routing_reason} {reason}"
+    return {
+        "original_model": original,
+        "selected_model": selected,
+        "routed_model": selected,
+        "rerouted": bool(original and selected and original != selected),
+        "reroute_reason": reason,
+        "routing_reason": routing_reason.strip(),
+        "decision_source": decision_source,
+        "trigger_source": trigger,
+        "isolation_action": audit.get("action") or "reroute",
+        "routing_enabled": bool(routing_prefs.get("routing_enabled")),
+        "routing_override": routing_prefs.get("routing_override"),
+        "org_routing_enabled": bool(routing_prefs.get("org_routing_enabled")),
+        "policy_summary": f"Isolation reroute via {decision_source.replace('_', ' ')}",
+        "compliance_requirements": routing_prefs.get("required_compliance"),
+        "data_sensitivity": routing_prefs.get("data_sensitivity"),
+        "request_risk_score": routing_prefs.get("request_risk_score"),
+        "estimated_tokens": routing_prefs.get("estimated_tokens"),
+        "token_budget_tpm": routing_prefs.get("token_budget_tpm"),
+        "latency_budget_ms": routing_prefs.get("latency_budget_ms"),
+        "weights": routing_prefs.get("weights"),
+        "fallback_reason_code": audit.get("fallback_reason_code"),
+        "isolation_scope": audit.get("isolation_scope"),
     }
 
 
@@ -2147,11 +2364,18 @@ async def startup():
         if attempt < max_register_attempts:
             LOG.warning("Registration failed (attempt %s/%s), retrying in %ss ...", attempt, max_register_attempts, register_delay_sec)
             await asyncio.sleep(register_delay_sec)
-    else:
-        LOG.warning("Gateway could not register after %s attempts; policy check will be skipped until backend is available.", max_register_attempts)
 
     if AGENT_ID:
         asyncio.create_task(_telemetry_loop())
+    else:
+        # Do NOT give up: keep retrying in the background so a worker that lost the
+        # startup race recovers and uses the fully-featured main path (routing,
+        # deep-scan, backend audit) instead of being pinned to the sync path.
+        LOG.warning(
+            "Gateway not registered after %s startup attempts; starting background "
+            "re-registration loop (will keep retrying).", max_register_attempts,
+        )
+        asyncio.create_task(_background_register_loop())
 
 
 @app.on_event("shutdown")
@@ -2322,6 +2546,8 @@ async def proxy_chat(
     METRICS["total_requests"] += 1
     METRICS["active_connections"] += 1
     start = time.perf_counter()
+    org_slug = ""
+    chat_outcome = "success"
     stage_metrics = {
         "auth_ms": 0.0,
         "policy_ms": 0.0,
@@ -2432,6 +2658,7 @@ async def proxy_chat(
 
         routing_identities = _routing_identity_set(inference_models)
         isolation_reroute_locked = False
+        isolation_reroute_audit = None
 
         # Set org context for telemetry enrichment
         _REQUEST_ORG_ID.set(auth_ctx.organization_id if auth_ctx else None)
@@ -2550,7 +2777,17 @@ async def proxy_chat(
                     )
 
         # ── Threat intelligence check (risk_score from auth context) ──
-        if not firewall_disabled and org_config.get("threat_intel_enabled", True):
+        from ai_mesh_gateway.playground_auth import should_skip_threat_intel
+
+        _skip_threat_intel = should_skip_threat_intel(auth_ctx)
+        if _skip_threat_intel:
+            LOG.debug("threat_intel skipped for live-test gateway key")
+
+        if (
+            not firewall_disabled
+            and not _skip_threat_intel
+            and org_config.get("threat_intel_enabled", True)
+        ):
             ctx_risk_score = getattr(auth_ctx, "risk_score", None) if auth_ctx else None
             if ctx_risk_score is not None:
                 threat_threshold = org_config.get("threat_score_threshold", 75) / 100.0
@@ -2649,6 +2886,7 @@ async def proxy_chat(
                         body["model"] = compliant_model
                         requested_model = compliant_model
                         isolation_reroute_locked = True
+                        isolation_reroute_audit = ks_audit
                         ks_audit["kill_switch_action"] = "reroute"
                         _emit_telemetry(
                             event_type="kill_switch",
@@ -2775,6 +3013,7 @@ async def proxy_chat(
                         body["model"] = compliant_model
                         requested_model = compliant_model
                         isolation_reroute_locked = True
+                        isolation_reroute_audit = ms_audit
                         ms_audit["risk_score"] = ms_verdict.risk_score
                         ms_audit["threshold"] = ms_verdict.threshold
                         _emit_telemetry(
@@ -3070,6 +3309,16 @@ async def proxy_chat(
         # ── Input scanning (always runs, even without backend) ──
         effective_prompt = prompt
         redacted_prompt = None
+        # Text after deterministic POLICY redaction but BEFORE Tier-2 — i.e. what
+        # the input scanner receives. "" when policy did not redact. Used so the
+        # operator trace attributes redaction to the policy stage (not Tier-2) and
+        # so the redact zeroshield reports policy rules instead of a now-clean
+        # Tier-2 verdict.
+        policy_redacted_prompt = ""
+        # Input policy-engine result (matched rules / redaction). Defaulted so the
+        # redact-attribution branches can always read matched rule names even when
+        # the policy check was skipped (gated) for this request.
+        check_resp = {}
         scan_verdict = None
         hallucination_flagged = False
         output_enforcement = None
@@ -3199,7 +3448,14 @@ async def proxy_chat(
         #                                 still runs on the prompt.
         #   - action=="allow"/"monitor" → fall through to scanning unchanged.
         # ──────────────────────────────────────────────────────────────────
-        if AGENT_ID and CONFIG["backend_url"]:
+        # Policy enforcement must depend on POLICY AVAILABILITY, not on whether
+        # this gateway worker happened to register an AGENT_ID. The local policy
+        # cache (POLICY_SYNC) enforces compiled rules without the control plane;
+        # only the HTTP fallback path needs AGENT_ID + backend_url. Gating the
+        # whole pipeline on AGENT_ID meant a failed/racy per-worker registration
+        # silently disabled ALL policy-rule enforcement.
+        _policy_cache_ready = POLICY_SYNC is not None and POLICY_SYNC.is_loaded
+        if _policy_cache_ready or (AGENT_ID and CONFIG.get("backend_url")):
             # Optional: backend security scan first (high-certainty threats)
             if CONFIG.get("call_security_scan"):
                 code, scan_resp = await asyncio.to_thread(_security_scan, prompt, "")
@@ -3217,6 +3473,7 @@ async def proxy_chat(
                         ))
 
             # Policy check (deterministic, includes backend pattern policies)
+            _policy_start = time.perf_counter()
             code, check_resp = await asyncio.to_thread(
                 _policy_check_cached,
                 effective_prompt,
@@ -3229,6 +3486,7 @@ async def proxy_chat(
                 requested_model,
                 org_slug,
             )
+            stage_metrics["policy_ms"] = round((time.perf_counter() - _policy_start) * 1000, 2)
             if code != 200:
                 METRICS["blocked"] += 1
                 return JSONResponse(
@@ -3252,9 +3510,15 @@ async def proxy_chat(
             if action == "block":
                 if enforcement_mode == "block":
                     METRICS["blocked"] += 1
-                    elapsed_ms = (time.perf_counter() - start) * 1000
+                    chat_outcome = "blocked"
+                    try:
+                        from .metrics import record_policy_block as _prom_policy_block
+                    except ImportError:
+                        from metrics import record_policy_block as _prom_policy_block  # type: ignore[no-redef]
                     categories = check_resp.get("matched_policy_categories") or []
                     threat_type = _category_to_threat_type(categories[0]) if categories else "policy_violation"
+                    _prom_policy_block(org_slug, threat_type)
+                    elapsed_ms = (time.perf_counter() - start) * 1000
                     if not check_resp.get("event_id"):
                         _emit_telemetry(
                             status_code=403,
@@ -3287,7 +3551,7 @@ async def proxy_chat(
                             "matched_policies": check_resp.get("matched_policies") or [],
                         },
                     )
-                    return _build_block_response(403, "content_blocked", _build_zeroshield_metadata(
+                    _policy_block_zs = _build_zeroshield_metadata(
                         action="block",
                         reason=check_resp.get("message") or "Request blocked by policy engine.",
                         detail=check_resp.get("message") or "Request blocked by policy engine.",
@@ -3296,7 +3560,16 @@ async def proxy_chat(
                         matched_patterns=check_resp.get("matched_rules") or check_resp.get("matched_policies") or [],
                         original_prompt=prompt,
                         processing_time_ms=elapsed_ms,
-                    ))
+                    )
+                    # Dedicated fields carrying the REAL matched policy/rule names
+                    # (distinct from scanner matched_patterns, which are prompt substrings).
+                    _policy_block_zs["matched_policy_names"] = (
+                        check_resp.get("matched_policy_names")
+                        or check_resp.get("matched_policies")
+                        or []
+                    )
+                    _policy_block_zs["matched_rule_names"] = check_resp.get("matched_rules") or []
+                    return _build_block_response(403, "content_blocked", _policy_block_zs)
                 else:
                     LOG.warning(
                         "MONITOR: policy would block request (message=%s, user=%s)",
@@ -3306,6 +3579,7 @@ async def proxy_chat(
             if action == "redact" and check_resp.get("redacted_prompt"):
                 effective_prompt = check_resp["redacted_prompt"]
                 redacted_prompt = effective_prompt
+                policy_redacted_prompt = effective_prompt
 
             # ── Rewrite action: strip harmful pattern, log original ──
             if action == "rewrite":
@@ -3712,16 +3986,51 @@ async def proxy_chat(
                 response_headers: dict[str, str] = {}
                 if isinstance(resp, dict):
                     if redacted_prompt is not None:
+                        # Attribute redaction to the stage that performed it: policy
+                        # (deterministic, masks all matched rules) runs first; Tier-2
+                        # scans the already-redacted text. Report policy when it did
+                        # the masking and Tier-2 added nothing (else "redact" with an
+                        # empty/now-clean Tier-2 verdict).
+                        _policy_rules = check_resp.get("matched_rules") or []
+                        _policy_did = bool(policy_redacted_prompt) and policy_redacted_prompt != prompt
+                        _tier2_did = bool(scan_verdict) and redacted_prompt != (policy_redacted_prompt or prompt)
+                        _sv_patterns = list(scan_verdict.matched_patterns) if (scan_verdict and _tier2_did) else []
+                        if _policy_did and not _tier2_did:
+                            _red_tier, _red_threat = "policy", (
+                                scan_verdict.threat_type
+                                if scan_verdict and scan_verdict.threat_type not in ("none", "", None)
+                                else "pii"
+                            )
+                            _red_patterns = _policy_rules
+                            _red_reason = (
+                                "Sensitive data redacted by org policy ("
+                                + ", ".join(_policy_rules[:5])
+                                + ") before forwarding to the LLM."
+                                if _policy_rules
+                                else "Sensitive data redacted by org policy before forwarding to the LLM."
+                            )
+                            _red_detail = _red_reason
+                            _red_conf = scan_verdict.confidence if scan_verdict else 0.99
+                        else:
+                            _red_tier = scan_verdict.tier if scan_verdict else "tier_1"
+                            _red_threat = scan_verdict.threat_type if scan_verdict else "pii"
+                            _red_patterns = _sv_patterns
+                            _red_reason = (
+                                f"PII detected in prompt ({', '.join(_sv_patterns)}). "
+                                "Redacted before forwarding to LLM."
+                            )
+                            _red_detail = scan_verdict.detail if scan_verdict else ""
+                            _red_conf = scan_verdict.confidence if scan_verdict else 0.85
                         resp["zeroshield"] = _build_zeroshield_metadata(
                             action="redact",
-                            reason=f"PII detected in prompt ({', '.join(scan_verdict.matched_patterns if scan_verdict else [])}). Redacted before forwarding to LLM.",
-                            detection_tier=scan_verdict.tier if scan_verdict else "tier_1",
-                            threat_type=scan_verdict.threat_type if scan_verdict else "pii",
-                            confidence=scan_verdict.confidence if scan_verdict else 0.85,
-                            matched_patterns=scan_verdict.matched_patterns if scan_verdict else [],
+                            reason=_red_reason,
+                            detection_tier=_red_tier,
+                            threat_type=_red_threat,
+                            confidence=_red_conf,
+                            matched_patterns=_red_patterns,
                             original_prompt=prompt,
                             redacted_prompt=redacted_prompt,
-                            detail=scan_verdict.detail if scan_verdict else "",
+                            detail=_red_detail,
                             processing_time_ms=elapsed_ms,
                         )
                         response_headers["X-ZeroShield-Action"] = "redacted"
@@ -3746,10 +4055,59 @@ async def proxy_chat(
                         )
                         if zs_action == "flag":
                             response_headers["X-ZeroShield-Action"] = "flag"
+                    # Carry the REAL matched policy/rule names from the deterministic
+                    # policy engine onto the zeroshield metadata so the pipeline trace
+                    # policy stage shows policy names (not scanner prompt substrings).
+                    if isinstance(resp.get("zeroshield"), dict):
+                        resp["zeroshield"]["matched_policy_names"] = (
+                            check_resp.get("matched_policy_names")
+                            or check_resp.get("matched_policies")
+                            or []
+                        )
+                        resp["zeroshield"]["matched_rule_names"] = check_resp.get("matched_rules") or []
+                # Operator pipeline trace (Module 1.1 simulator) — built BEFORE
+                # zeroshield client-redaction. model_input shows the REDACTED
+                # prompt actually forwarded to the LLM (so the operator sees what
+                # the model received, not the raw input). Without this, the
+                # frontend fabricates a trace with a wrong policy stage.
+                if isinstance(resp, dict):
+                    from pipeline_trace import build_pipeline_trace
+                    _zs_full = resp.get("zeroshield") if isinstance(resp.get("zeroshield"), dict) else {}
+                    resp["pipeline_trace"] = build_pipeline_trace(
+                        prompt=prompt,
+                        forwarded_prompt=(redacted_prompt or prompt),
+                        policy_redacted_prompt=policy_redacted_prompt,
+                        stage_metrics=stage_metrics,
+                        final_action=_zs_full.get("action") or "allow",
+                        http_status=200,
+                        scan_verdict=scan_verdict,
+                        zeroshield=_zs_full,
+                        response_text=_extract_response_from_completion(resp),
+                        requested_model=body.get("model", ""),
+                    )
                 # ── SECURITY FIX: Redact sensitive fields from zeroshield metadata before returning to client ──
                 if isinstance(resp.get("zeroshield"), dict):
                     resp["zeroshield"] = _redact_for_client_response(resp["zeroshield"]) or {}
-                return JSONResponse(content=resp, headers=response_headers)
+                # ── §1.7 Output guard ── this sync_pre_llm path returns before the
+                # main inline output-guard block, so run output scanning here too
+                # (credential→block / PII→redact / IP→flag). Without this, the
+                # tier-2 sync path ships model responses with zero output scanning.
+                _og_block = await _apply_output_guard_nonstream(
+                    resp,
+                    org_config=org_config,
+                    org_slug=org_slug,
+                    body=body,
+                    user_id=user_id,
+                    project_id=project_id,
+                    key_prefix=auth_ctx.prefix if auth_ctx else "",
+                    prompt=prompt,
+                    start=start,
+                    prompt_snippet=_prompt_snippet,
+                    endpoint_id=endpoint_id,
+                )
+                if _og_block is not None:
+                    return _og_block
+                return JSONResponse(content=resp, headers=_latin1_safe_headers(response_headers))
             return JSONResponse(
                 status_code=code if code else 502,
                 content=resp if isinstance(resp, dict) else {"error": resp},
@@ -3827,7 +4185,12 @@ async def proxy_chat(
                         prompt_snippet=_prompt_snippet,
                         endpoint_id=endpoint_id,
                     )
-        else:
+        elif isolation_reroute_audit is not None:
+            route_metadata = _build_isolation_reroute_metadata(
+                isolation_reroute_audit,
+                routing_prefs,
+            )
+        elif route_metadata is None:
             route_metadata = {
                 "original_model": body.get("model") or "auto",
                 "selected_model": body.get("model") or "auto",
@@ -4036,6 +4399,7 @@ async def proxy_chat(
                         },
                     )
             METRICS["allowed"] += 1
+            chat_outcome = "stream"
             return _launch_chat_stream_response(
                 request=request,
                 body=body,
@@ -4444,7 +4808,7 @@ async def proxy_chat(
             except Exception:
                 LOG.exception("Backend deep scan failed, continuing with local scan results")
 
-        if response_text and AGENT_ID and org_config.get("output_policy_enabled", True):
+        if response_text and (_policy_cache_ready or AGENT_ID) and org_config.get("output_policy_enabled", True):
             _, resp_check = await asyncio.to_thread(
                 _policy_check_cached,
                 effective_prompt,
@@ -4695,23 +5059,58 @@ async def proxy_chat(
                 if output_enforcement.get("review_required"):
                     response_headers_final["X-ZeroShield-Review-Required"] = "true"
             elif redacted_prompt is not None:
+                # Attribute the redaction to the stage that actually performed it.
+                # Policy redaction runs FIRST (deterministic, masks all matched
+                # rule patterns); Tier-2 then scans the already-redacted text. If
+                # policy did the masking and Tier-2 added nothing, report policy
+                # (rules + detection_tier=policy) instead of a now-clean Tier-2
+                # verdict (which would yield "redact" with empty matched_patterns).
+                _policy_rules = check_resp.get("matched_rules") or []
+                _policy_did = bool(policy_redacted_prompt) and policy_redacted_prompt != prompt
+                _tier2_did = bool(scan_verdict) and redacted_prompt != (policy_redacted_prompt or prompt)
+                _sv_patterns = list(scan_verdict.matched_patterns) if (scan_verdict and _tier2_did) else []
+                if _policy_did and not _tier2_did:
+                    _red_tier = "policy"
+                    _red_threat = (
+                        scan_verdict.threat_type
+                        if scan_verdict and scan_verdict.threat_type not in ("none", "", None)
+                        else "pii"
+                    )
+                    _red_patterns = _policy_rules
+                    _red_reason = (
+                        "Sensitive data redacted by org policy ("
+                        + ", ".join(_policy_rules[:5])
+                        + ") before forwarding to the LLM."
+                        if _policy_rules
+                        else "Sensitive data redacted by org policy before forwarding to the LLM."
+                    )
+                    _red_detail = _red_reason
+                    _red_conf = scan_verdict.confidence if scan_verdict else 0.99
+                else:
+                    _red_tier = scan_verdict.tier if scan_verdict else "tier_1"
+                    _red_threat = scan_verdict.threat_type if scan_verdict else "pii"
+                    _red_patterns = _sv_patterns
+                    _red_reason = (
+                        f"PII detected in prompt ({', '.join(_sv_patterns)}). "
+                        "Redacted before forwarding to LLM."
+                    )
+                    _red_detail = scan_verdict.detail if scan_verdict else ""
+                    _red_conf = scan_verdict.confidence if scan_verdict else 0.85
                 llm_resp["zeroshield"] = _build_zeroshield_metadata(
                     action="redact",
-                    reason=f"PII detected in prompt ({', '.join(scan_verdict.matched_patterns if scan_verdict else [])}). Redacted before forwarding to LLM.",
-                    detection_tier=scan_verdict.tier if scan_verdict else "tier_1",
-                    threat_type=scan_verdict.threat_type if scan_verdict else "pii",
-                    confidence=scan_verdict.confidence if scan_verdict else 0.85,
-                    matched_patterns=scan_verdict.matched_patterns if scan_verdict else [],
+                    reason=_red_reason,
+                    detection_tier=_red_tier,
+                    threat_type=_red_threat,
+                    confidence=_red_conf,
+                    matched_patterns=_red_patterns,
                     original_prompt=prompt,
                     redacted_prompt=redacted_prompt,
-                    detail=scan_verdict.detail if scan_verdict else "",
+                    detail=_red_detail,
                     processing_time_ms=elapsed_ms,
                     routing=route_metadata,
                 )
                 response_headers_final["X-ZeroShield-Action"] = "redact"
-                response_headers_final["X-ZeroShield-Redacted-Types"] = ",".join(
-                    scan_verdict.matched_patterns if scan_verdict else []
-                )
+                response_headers_final["X-ZeroShield-Redacted-Types"] = ",".join(_red_patterns)
             else:
                 zs_action, zs_reason, zs_threat, zs_conf, zs_patterns, zs_detail = _resolve_success_metadata_from_verdict(scan_verdict)
                 from pipeline_trace import enrich_zeroshield_from_verdict
@@ -4739,6 +5138,16 @@ async def proxy_chat(
                 response_headers_final["X-ZeroShield-Factuality-Warning"] = "true"
                 if isinstance(llm_resp.get("zeroshield"), dict):
                     llm_resp["zeroshield"]["factuality_warning"] = True
+            # Carry the REAL matched policy/rule names from the deterministic policy
+            # engine onto the allow/monitor zeroshield metadata so the pipeline trace
+            # policy stage shows policy names (not scanner prompt substrings).
+            if isinstance(llm_resp.get("zeroshield"), dict):
+                llm_resp["zeroshield"]["matched_policy_names"] = (
+                    check_resp.get("matched_policy_names")
+                    or check_resp.get("matched_policies")
+                    or []
+                )
+                llm_resp["zeroshield"]["matched_rule_names"] = check_resp.get("matched_rules") or []
             if isinstance(llm_resp.get("zeroshield"), dict) and isinstance(route_metadata, dict):
                 llm_resp["zeroshield"]["routing_enabled"] = route_metadata.get("routing_enabled", True)
                 llm_resp["zeroshield"]["routing_override"] = route_metadata.get("routing_override")
@@ -4775,6 +5184,23 @@ async def proxy_chat(
                     llm_resp["zeroshield"]["routing_reason"] = route_selection.reason
                     llm_resp["zeroshield"]["decision_source"] = route_selection.decision_source
                     llm_resp["zeroshield"]["policy_summary"] = route_selection.policy_summary
+            elif isinstance(route_metadata, dict) and route_metadata.get("rerouted"):
+                _iso_original = route_metadata.get("original_model") or "auto"
+                _iso_selected = route_metadata.get("selected_model") or body.get("model") or "auto"
+                response_headers_final["X-ZeroShield-Original-Model"] = _iso_original
+                response_headers_final["X-ZeroShield-Routed-Model"] = _iso_selected
+                response_headers_final["X-ZeroShield-Routing-Source"] = route_metadata.get("decision_source") or ""
+                response_headers_final["X-ZeroShield-Rerouted"] = "true"
+                _iso_reason = str(route_metadata.get("routing_reason") or "")
+                if _iso_reason:
+                    response_headers_final["X-ZeroShield-Routing-Reason"] = _iso_reason[:180]
+                if isinstance(llm_resp.get("zeroshield"), dict):
+                    llm_resp["zeroshield"]["selected_model"] = _iso_selected
+                    llm_resp["zeroshield"]["original_model"] = _iso_original
+                    llm_resp["zeroshield"]["rerouted"] = True
+                    llm_resp["zeroshield"]["routing_reason"] = route_metadata.get("routing_reason")
+                    llm_resp["zeroshield"]["decision_source"] = route_metadata.get("decision_source")
+                    llm_resp["zeroshield"]["policy_summary"] = route_metadata.get("policy_summary")
         
         # Operator pipeline trace (Module 1.1 simulator) — built before zeroshield redaction.
         if isinstance(llm_resp, dict):
@@ -4784,6 +5210,8 @@ async def proxy_chat(
             _final = _zs_full.get("action") or "allow"
             llm_resp["pipeline_trace"] = build_pipeline_trace(
                 prompt=prompt,
+                forwarded_prompt=(redacted_prompt or prompt),
+                policy_redacted_prompt=policy_redacted_prompt,
                 stage_metrics=stage_metrics,
                 final_action=_final,
                 blocked_stage="",
@@ -4792,7 +5220,10 @@ async def proxy_chat(
                 route_metadata=route_metadata,
                 zeroshield=_zs_full,
                 response_text=response_text or "",
-                requested_model=body.get("model", ""),
+                requested_model=(
+                    (route_metadata or {}).get("original_model")
+                    or body.get("model", "")
+                ),
                 output_scan_verdict=output_verdict,
             )
 
@@ -4801,10 +5232,11 @@ async def proxy_chat(
         if isinstance(llm_resp.get("zeroshield"), dict):
             llm_resp["zeroshield"] = _redact_for_client_response(llm_resp["zeroshield"]) or {}
 
-        return JSONResponse(content=llm_resp, headers=response_headers_final)
+        return JSONResponse(content=llm_resp, headers=_latin1_safe_headers(response_headers_final))
 
     except Exception as exc:
         LOG.exception("Unhandled error in proxy_chat")
+        chat_outcome = "error"
         return JSONResponse(
             status_code=500,
             content={
@@ -4817,6 +5249,19 @@ async def proxy_chat(
     finally:
         METRICS["active_connections"] -= 1
         METRICS["sum_latency_ms"] += (time.perf_counter() - start) * 1000
+        try:
+            from .metrics import record_chat_completion as _prom_chat_completion
+        except ImportError:
+            from metrics import record_chat_completion as _prom_chat_completion  # type: ignore[no-redef]
+        try:
+            _prom_chat_completion(
+                org_slug,
+                chat_outcome,
+                time.perf_counter() - start,
+                stage_metrics,
+            )
+        except Exception:
+            pass
 
 
 @app.post(
@@ -4962,7 +5407,7 @@ async def proxy_embeddings(request: Request):
             },
         )
 
-        return JSONResponse(status_code=status, content=result, headers=response_headers)
+        return JSONResponse(status_code=status, content=result, headers=_latin1_safe_headers(response_headers))
     finally:
         METRICS["sum_latency_ms"] += (time.perf_counter() - start) * 1000
 
@@ -5374,7 +5819,7 @@ async def rag_query(request: Request):
         if result.pipeline_context:
             headers["X-ZeroShield-Pipeline-Request-ID"] = result.pipeline_context.request_id
 
-        return JSONResponse(content=response_content, headers=headers)
+        return JSONResponse(content=response_content, headers=_latin1_safe_headers(headers))
 
     finally:
         METRICS["active_connections"] -= 1
@@ -6898,7 +7343,22 @@ async def health():
     tags=["Health"],
     include_in_schema=False,
 )
-async def prometheus_metrics():
+async def prometheus_metrics(request: Request):
+    try:
+        from .metrics_auth import verify_metrics_scraper
+    except ImportError:
+        from metrics_auth import verify_metrics_scraper  # type: ignore[no-redef]
+    if not verify_metrics_scraper(dict(request.headers)):
+        from starlette.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "unauthorized",
+                "message": "Valid X-Metrics-Scraper-Key or Authorization: Bearer required.",
+                "code": "metrics_auth_required",
+            },
+        )
     try:
         from .metrics import render_latest
     except ImportError:

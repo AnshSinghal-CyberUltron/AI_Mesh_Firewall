@@ -22,14 +22,15 @@ function readStoredGatewayKey(orgId) {
 }
 
 // Module-level de-dupe: if several panels mount at once with an empty cache,
-// they share ONE provision request instead of each POSTing (which, with
-// ?ensure=1 rotation, would churn keys and race localStorage).
+// they share ONE provision request instead of each POSTing. The endpoint is
+// idempotent (no ?ensure=1): it returns the org's EXISTING active key and only
+// includes a plaintext `key` when one was newly created — it never rotates.
 const _inflightProvision = new Map(); // orgId -> Promise<string|null>
 
 function provisionOrgKey(orgId, fetchWithAuth) {
   if (_inflightProvision.has(orgId)) return _inflightProvision.get(orgId);
   const promise = (async () => {
-    const res = await fetchWithAuth("/api/gateways/simulator-default/?ensure=1", {
+    const res = await fetchWithAuth("/api/gateways/simulator-default/", {
       method: "POST",
     });
     if (!res.ok) throw new Error(`provision failed (${res.status})`);
@@ -83,8 +84,8 @@ export function useGatewayCredential() {
   }, [orgId]);
 
   // Lazily provision the per-org simulator key. The backend returns plaintext
-  // once on creation; we then cache it org-scoped. ?ensure=1 asks the backend to
-  // (re)issue a usable key even if one already exists but isn't cached here.
+  // once on creation; we then cache it org-scoped. The endpoint is idempotent —
+  // it returns the org's existing active key and never rotates.
   useEffect(() => {
     if (authLoading || !orgId || gatewayKey) return;
     const attemptKey = String(orgId);
@@ -102,26 +103,20 @@ export function useGatewayCredential() {
       .finally(() => setProvisioning(false));
   }, [authLoading, fetchWithAuth, gatewayKey, orgId]);
 
-  // Force a fresh provision after the cached key was disabled server-side (e.g.
-  // another session rotated it). Clears the org cache + the in-flight de-dupe so
-  // a new ensure=1 POST runs, and returns the fresh key. Used by gatewayFetch's
-  // bounded self-heal — NOT a retry loop (the caller retries at most once).
+  // Re-FETCH the org's current key after the cached one looked disabled/invalid
+  // (e.g. a stale value in this browser). The endpoint is idempotent and never
+  // rotates, so this just re-reads the org's active key and retries once. We do
+  // NOT clear the cache or re-mint — that would churn keys and race other tabs.
+  // Used by gatewayFetch's bounded self-heal (the caller retries at most once).
   const reprovision = useCallback(async () => {
     if (!orgId) return null;
-    try {
-      localStorage.removeItem(gatewayKeyStorageKey(orgId));
-      localStorage.removeItem(LEGACY_KEY);
-    } catch {
-      // localStorage unavailable; proceed with the network re-provision.
-    }
-    attemptedRef.current = null;
     try {
       const key = await provisionOrgKey(orgId, fetchWithAuth);
       if (key) {
         setGatewayKey(key);
         setError(null);
       }
-      return key || null;
+      return key || readStoredGatewayKey(orgId) || null;
     } catch {
       return null;
     }

@@ -22,7 +22,11 @@ from core.model_state_bootstrap import (
     ensure_model_states_for_org,
     merge_model_states_with_configs,
 )
-from core.models import KillSwitchAuditLog, ModelState
+from core.models import (
+    KillSwitchAuditLog,
+    ModelState,
+    is_platform_managed_llm_model_name,
+)
 from core.serializers import (
     KillSwitchAuditLogSerializer,
     ModelIsolateSerializer,
@@ -93,6 +97,12 @@ class ModelStatusDetailView(APIView):
         if not org:
             return Response({"error": "No organization"}, status=status.HTTP_404_NOT_FOUND)
 
+        if is_platform_managed_llm_model_name(model_name):
+            return Response(
+                {"error": "ZeroShield guard models are platform-managed and cannot be isolated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         state, created = ModelState.objects.get_or_create(
             organization=org, model_name=model_name,
         )
@@ -125,6 +135,12 @@ class ModelIsolateView(APIView):
         serializer = ModelIsolateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+
+        if is_platform_managed_llm_model_name(data["model_name"]):
+            return Response(
+                {"error": "ZeroShield guard models are platform-managed and cannot be isolated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         state, _ = ModelState.objects.get_or_create(
             organization=org, model_name=data["model_name"],

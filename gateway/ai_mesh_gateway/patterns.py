@@ -36,9 +36,13 @@ PII_PATTERNS: Dict[str, str] = {
 }
 
 SECRET_PATTERNS: Dict[str, str] = {
-    "password_assignment": r'password["\s:=]+\S+',
-    "secret_assignment": r'secret["\s:=]+\S+',
-    "token_assignment": r'token["\s:=]+[a-zA-Z0-9_\-\.]+',
+    # Require an actual assignment operator (':' or '=') between the keyword and
+    # the value — NOT bare whitespace. Otherwise benign prose like "password
+    # manager", "password-protected", "secret garden" or "token economy" is
+    # falsely flagged/redacted as a leaked credential.
+    "password_assignment": r'password["\s]*[:=][\s"\']*\S+',
+    "secret_assignment": r'secret["\s]*[:=][\s"\']*\S+',
+    "token_assignment": r'token["\s]*[:=][\s"\']*[a-zA-Z0-9_\-\.]+',
 }
 
 PHI_PATTERNS: Dict[str, str] = {

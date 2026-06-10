@@ -41,6 +41,13 @@ _ensure_compose() {
 
 _ensure_compose
 
+if [[ ! -f .env ]]; then
+  [[ -f .env.ec2.sample ]] && cp .env.ec2.sample .env && die "Created .env — set ECR_REGISTRY, IMAGE_TAG, secrets, then re-run"
+  die "missing .env"
+fi
+
+set -a && source .env && set +a
+
 if docker compose version >/dev/null 2>&1; then
   COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
 elif command -v docker-compose >/dev/null 2>&1; then
@@ -49,12 +56,14 @@ else
   die "Docker Compose not available after install"
 fi
 
-if [[ ! -f .env ]]; then
-  [[ -f .env.ec2.sample ]] && cp .env.ec2.sample .env && die "Created .env — set ECR_REGISTRY, IMAGE_TAG, secrets, then re-run"
-  die "missing .env"
+# Optional CloudWatch app log shipping (requires log groups + IAM from terraform ec2-demo)
+if [[ "${EC2_OBSERVABILITY:-0}" == "1" ]] && [[ -f docker-compose.observability.yml ]]; then
+  COMPOSE+=(-f docker-compose.observability.yml)
+  echo "==> Observability overlay enabled (awslogs → CloudWatch)"
 fi
 
-set -a && source .env && set +a
+bash scripts/bootstrap-ec2-observability.sh || true
+bash scripts/publish-stack-ready-metric.sh 0 || true
 
 [[ -n "${ECR_REGISTRY:-}" ]] || die "set ECR_REGISTRY in .env"
 [[ -n "${IMAGE_TAG:-}" ]] || die "set IMAGE_TAG in .env"
@@ -201,3 +210,5 @@ Redeploy after new images:
   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 EOF
+
+bash scripts/publish-stack-ready-metric.sh 1 || true

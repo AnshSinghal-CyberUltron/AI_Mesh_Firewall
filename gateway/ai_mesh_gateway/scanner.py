@@ -962,7 +962,14 @@ class InputScanner:
                         bedrock_owasp.append(rid)
                 ev = finding.get("evidence", "")
                 if ev:
-                    bedrock_evidence.append(ev)
+                    # The guard model's free-text evidence may carry RAW PII
+                    # (it only masks inconsistently). Run it through the
+                    # deterministic redactor so every reported pattern is masked,
+                    # and de-dup so overlapping findings don't repeat (these
+                    # strings are surfaced to the client in matched_patterns).
+                    ev_masked = redact_all(str(ev))
+                    if ev_masked not in bedrock_evidence:
+                        bedrock_evidence.append(ev_masked)
                 conf = self._normalize_score(finding.get("confidence", 0.0))
                 if conf > max_confidence:
                     max_confidence = conf
@@ -977,7 +984,7 @@ class InputScanner:
                     {
                         "category": finding.get("category") or "",
                         "confidence": self._normalize_score(finding.get("confidence", 0.0)),
-                        "evidence": finding.get("evidence") or "",
+                        "evidence": redact_all(str(finding.get("evidence") or "")),
                         "rule_id": finding.get("rule_id") or finding.get("owasp_code") or "",
                     }
                 )
@@ -1084,6 +1091,148 @@ class InputScanner:
             tier="tier_2",
             reason_code=reason_code or "tier2_pass",
         )
+
+    async def scan_output_with_tier2(
+        self,
+        text: str,
+        *,
+        org_tier2_override: bool | None = None,
+        org_slug: str = "",
+    ) -> ScanVerdict:
+        """Output counterpart of scan_prompt_with_tier2: run the STATIC output
+        scan (tier-1) FIRST, then the ZeroShield guard model (tier-2, Bedrock)
+        on the model OUTPUT. The SAME guard model + breaker/cache/sampling infra
+        as the input path is reused.
+
+        ALWAYS fail-open: a guard-model outage (breaker open, Bedrock error,
+        parse failure) must never block or hold an already-generated completion
+        — it degrades to the static tier-1 verdict. ``org_tier2_override`` is the
+        same tri-state per-org switch as input (pass ``org_config.get("tier2_enabled")``
+        so ``None`` is preserved).
+        """
+        tier1 = await self.scan_output(text)
+        if org_tier2_override is False:
+            return tier1
+        if org_tier2_override is None and not self.tier2_enabled:
+            return tier1
+        if self._bedrock_scanner is None or not text:
+            return tier1
+
+        scanner_model_id = getattr(self._bedrock_scanner, "model", "") or ""
+        # Fail-open breaker for output (strict=False -> never raise; OPEN -> tier1).
+        if not BREAKER.allow(org_slug=org_slug, model_id=scanner_model_id, strict=False):
+            return tier1
+
+        cache_key = None
+        bedrock_normalized = None
+        if self._tier2_cache_ttl > 0:
+            cache_key = hashlib.sha256(("out\x00" + text).encode("utf-8", "ignore")).hexdigest()
+            entry = self._tier2_cache.get(cache_key)
+            if entry is not None:
+                ts, value = entry
+                if (time.monotonic() - ts) <= self._tier2_cache_ttl:
+                    bedrock_normalized = value
+                else:
+                    self._tier2_cache.pop(cache_key, None)
+
+        if (
+            bedrock_normalized is None
+            and self._tier2_sample_rate < 1.0
+            and tier1.action == "allow"
+            and random.random() > self._tier2_sample_rate
+        ):
+            return tier1
+
+        if bedrock_normalized is None:
+            loop = asyncio.get_event_loop()
+            try:
+                bedrock_normalized = await loop.run_in_executor(
+                    self._bedrock_executor, self._bedrock_scan_sync, text, None,
+                )
+            except Exception:
+                BREAKER.record_result(org_slug, scanner_model_id, failure=True)
+                return tier1  # fail-open
+            if cache_key is not None:
+                _cm = bedrock_normalized.get("meta", {})
+                if not _cm.get("error") and not _cm.get("parse_failed"):
+                    self._store_tier2_cache(cache_key, bedrock_normalized)
+
+        meta = bedrock_normalized.get("meta", {})
+        recommended = self._normalize_bedrock_action(meta.get("recommended_action"))
+        llm_guard = bedrock_normalized.get("llm_guard", {})
+        score = self._normalize_score(llm_guard.get("score", 0.0))
+        _failed = bool(meta.get("error") or meta.get("parse_failed") or not llm_guard)
+        BREAKER.record_result(org_slug, scanner_model_id, failure=_failed)
+        if _failed:
+            return tier1  # degraded output scan -> fail-open to static verdict
+
+        raw_findings = meta.get("raw_findings") or []
+        cats: list[str] = []
+        evidence: list[str] = []
+        owasp: list[str] = []
+        max_conf = 0.0
+        for f in raw_findings:
+            if not isinstance(f, dict):
+                continue
+            if f.get("category"):
+                cats.append(f["category"])
+            if f.get("evidence"):
+                evidence.append(f["evidence"])
+            rid = str(f.get("rule_id") or f.get("owasp_code") or "").strip().upper()
+            if rid and rid[:3] in ("LLM", "MCP", "AGE") and len(rid) >= 5 and rid not in owasp:
+                owasp.append(rid)
+            c = self._normalize_score(f.get("confidence", 0.0))
+            if c > max_conf:
+                max_conf = c
+        reason_code = str(meta.get("decision_reason", "")).strip().lower()
+
+        def _verdict(action: str, threat: str, conf: float, detail: str, rc: str) -> ScanVerdict:
+            v = ScanVerdict(
+                action=action, threat_type=threat, confidence=conf, detail=detail,
+                matched_patterns=evidence[:5], tier="tier_2",
+                reason_code=rc, owasp_codes=owasp,
+            )
+            v.scan_meta = {
+                "scanner": "zeroshield_guard_model",
+                "recommended_action": recommended,
+                "decision_reason": str(meta.get("decision_reason") or ""),
+                "llm_guard_score": score,
+                "findings": [
+                    {
+                        "category": ff.get("category") or "",
+                        "confidence": self._normalize_score(ff.get("confidence", 0.0)),
+                        "evidence": ff.get("evidence") or "",
+                        "rule_id": ff.get("rule_id") or ff.get("owasp_code") or "",
+                    }
+                    for ff in raw_findings if isinstance(ff, dict)
+                ][:8],
+            }
+            return v
+
+        if recommended == "block":
+            return _verdict("block", cats[0] if cats else "guard_model", max_conf or 1.0,
+                            f"ZeroShield guard model flagged output: {', '.join(evidence[:2]) or 'recommended block'}",
+                            reason_code or "model_recommended_block")
+        if recommended in ("redact", "monitor"):
+            return _verdict("flag", cats[0] if cats else "guard_model", max_conf or float(score),
+                            f"ZeroShield guard model output advisory: {', '.join(evidence[:2]) or recommended}",
+                            reason_code or f"model_recommended_{recommended}")
+        if score >= 0.70:
+            return _verdict("block", cats[0] if cats else "guard_model", score,
+                            "ZeroShield guard model: high output risk score", reason_code or "score_threshold_block")
+        if score >= 0.40:
+            return _verdict("flag", cats[0] if cats else "guard_model", score,
+                            "ZeroShield guard model: moderate output risk score", reason_code or "score_threshold_flag")
+        if cats:
+            return _verdict("flag", cats[0], max_conf or 0.5,
+                            "ZeroShield guard model found output findings; escalated to flag",
+                            reason_code or "findings_with_allow")
+        # Clean tier-2: preserve any static tier-1 flag, else allow.
+        if tier1.action != "allow":
+            return tier1
+        return _verdict("allow", "clean", round(max(0.0, 1.0 - score), 4),
+                        "ZeroShield Guard Model (Tier-2) output scan — no threats detected.",
+                        reason_code or "tier2_pass")
 
     def _bedrock_scan_sync(self, analyzed_text: str, original_text: str | None = None) -> dict[str, Any]:
         """Synchronous helper to call the Bedrock scanner from a thread.

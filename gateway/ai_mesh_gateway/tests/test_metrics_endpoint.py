@@ -79,3 +79,26 @@ def test_anonymous_default_when_org_missing(metrics_module):
 def test_invalid_latency_does_not_raise(metrics_module):
     # Should silently drop bad latency observations instead of 500-ing the request.
     metrics_module.record_request("acme", "allowed", "not-a-float")  # type: ignore[arg-type]
+
+
+def test_pipeline_stage_and_chat_completion_metrics(metrics_module):
+    metrics_module.record_chat_completion(
+        "acme",
+        "success",
+        1.25,
+        {
+            "auth_ms": 2.0,
+            "policy_ms": 15.0,
+            "tier1_ms": 40.0,
+            "upstream_ms": 800.0,
+            "telemetry_enqueue_ms": 3.0,
+        },
+    )
+    body, _ = metrics_module.render_latest()
+    text = body.decode("utf-8")
+    assert "amf_gateway_chat_completions_total" in text
+    assert "amf_gateway_chat_request_duration_seconds" in text
+    assert "amf_gateway_pipeline_stage_seconds" in text
+    assert 'stage="policy"' in text
+    assert 'stage="upstream"' in text
+    assert 'outcome="success"' in text

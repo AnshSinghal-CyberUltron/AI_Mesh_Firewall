@@ -1112,7 +1112,7 @@ class LLMRouter:
         bedrock_policy = str(parsed.get("policy_summary") or "").strip()
         if not bedrock_reason:
             bedrock_reason = (
-                f"Bedrock GPT OSS 120B adjudicator selected '{resolved_name}' "
+                f"ZeroShield Policy Adjudicator selected '{resolved_name}' "
                 f"(score={selected['score']:.4f}) from {len(scored)} candidates. "
                 f"Risk={request_risk_score:.2f}, latency_budget_ms={latency_budget_ms}, "
                 f"estimated_tokens={estimated_tokens}, token_budget_tpm={token_budget_tpm or 'n/a'}. "

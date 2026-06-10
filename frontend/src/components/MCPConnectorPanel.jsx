@@ -458,8 +458,14 @@ function MCPConnectorPanelInner() {
     if (tab === "tools") loadTools();
     if (tab === "execute") loadTools();
     if (tab === "protection") { loadServers(); }
-    if (tab === "observability") { loadEvents(); loadEventSummary(); }
-  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadEventSummary, loadOrgGatewayKey]);
+    if (tab === "observability") { loadEvents(); }
+  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadOrgGatewayKey]);
+
+  /* The header-strip decision StatCards (Allowed / Blocked / Redact·Monitor)
+     are ALWAYS visible regardless of the active tab, so the decision summary
+     must load on mount (and whenever the obs time-lens changes) — not only on
+     the observability tab. Without this it reads 0/0/0 on the default tab. */
+  useEffect(() => { loadEventSummary(); }, [loadEventSummary]);
 
   /* ────────── actions ────────── */
 

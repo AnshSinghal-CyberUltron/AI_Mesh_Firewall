@@ -135,7 +135,7 @@ def module_enforcement_q(module_id: str) -> Q:
 
 
 def empty_bucket() -> dict:
-    return {"total": 0, "blocked": 0, "redacted": 0, "critical": 0}
+    return {"total": 0, "blocked": 0, "redacted": 0, "flagged": 0, "critical": 0}
 
 
 def increment_bucket(
@@ -144,12 +144,15 @@ def increment_bucket(
     is_blocked: bool,
     is_redacted: bool,
     is_critical: bool,
+    is_flagged: bool = False,
 ) -> None:
     bucket["total"] += 1
     if is_blocked:
         bucket["blocked"] += 1
     if is_redacted:
         bucket["redacted"] += 1
+    if is_flagged:
+        bucket["flagged"] = bucket.get("flagged", 0) + 1
     if is_critical:
         bucket["critical"] += 1
 

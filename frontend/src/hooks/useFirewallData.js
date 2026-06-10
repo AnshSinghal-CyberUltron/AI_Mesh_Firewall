@@ -48,7 +48,7 @@ export function useFirewallData(moduleId, timeRange = "24h") {
     }
 
     const hours = TIME_RANGE_TO_HOURS[timeRange] || 24;
-    const period = timeRange === "6h" ? "24h" : timeRange;
+    const period = timeRange;
     const source = MODULE_SOURCE_MAP[moduleId] || null;
 
     try {

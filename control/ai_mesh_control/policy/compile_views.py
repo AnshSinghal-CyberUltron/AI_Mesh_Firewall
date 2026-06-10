@@ -95,6 +95,7 @@ class PolicyCompileView(APIView):
                 "status": "compiled",
                 "version": bundle.get("version"),
                 "policy_count": bundle.get("policy_count", 0),
+                "rule_count": bundle.get("rule_count", 0),
                 "compiled_at": bundle.get("compiled_at"),
             }
         )
@@ -120,6 +121,7 @@ class PolicyCompileStatusView(APIView):
                     "redis_available": drf_serializers.BooleanField(),
                     "version": drf_serializers.IntegerField(allow_null=True),
                     "policy_count": drf_serializers.IntegerField(allow_null=True),
+                    "rule_count": drf_serializers.IntegerField(allow_null=True),
                     "compiled_at": drf_serializers.FloatField(allow_null=True),
                     "policies": drf_serializers.ListField(
                         child=drf_serializers.DictField(),
@@ -186,6 +188,7 @@ class PolicyCompileStatusView(APIView):
                 "redis_available": True,
                 "version": int(version) if version else bundle.get("version"),
                 "policy_count": bundle.get("policy_count"),
+                "rule_count": bundle.get("rule_count") or sum(s.get("rule_count", 0) for s in policy_summaries),
                 "compiled_at": bundle.get("compiled_at"),
                 "policies": policy_summaries,
             }

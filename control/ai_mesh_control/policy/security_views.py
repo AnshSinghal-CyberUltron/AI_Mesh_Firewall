@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 from core.models import AGENT_TYPE_CHOICES, Agent, Endpoint
 from ai_mesh_shared.owasp_telemetry import is_owasp_enforced
 
-from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
+from policy.constants import ACTION_BLOCK, ACTION_FLAG, ACTION_MONITOR, ACTION_REDACT
 from policy.models import EnforcementEvent, Notification, Policy
 from policy.firewall_module_classifier import (
     CRITICAL_THRESHOLD,
@@ -673,6 +673,7 @@ class AttackVectorTrendsView(APIView):
     # period → (total_hours, bucket_minutes)
     _PERIOD_MAP = {
         "1h": (1, 5),
+        "6h": (6, 30),
         "24h": (24, 60),
         "7d": (24 * 7, 240),
         "30d": (24 * 30, 24 * 60),
@@ -845,7 +846,7 @@ class SocKpisView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    _HOURS_MAP = {"1h": 1, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
+    _HOURS_MAP = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
 
     def get(self, request):
         period = request.query_params.get("period", "24h").lower()
@@ -956,7 +957,7 @@ class ModuleKpisView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    _HOURS_MAP = {"1h": 1, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
+    _HOURS_MAP = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
 
     def get(self, request):
         period = request.query_params.get("period", "24h").lower()
@@ -967,7 +968,7 @@ class ModuleKpisView(APIView):
         events = list(_enforcement_events_for_request(request, base_events).values("action", "metadata"))
 
         modules = {
-            mid: {"total": 0, "blocked": 0, "redacted": 0, "critical": 0}
+            mid: {"total": 0, "blocked": 0, "redacted": 0, "flagged": 0, "critical": 0}
             for mid in MODULE_IDS
         }
 
@@ -978,12 +979,14 @@ class ModuleKpisView(APIView):
             risk_score = meta.get("security_risk_score", 0) or 0
             is_blocked = action == ACTION_BLOCK
             is_redacted = action == ACTION_REDACT
+            is_flagged = action == ACTION_FLAG
             is_critical = risk_score >= CRITICAL_THRESHOLD
 
             increment_bucket(
                 modules["1.1"],
                 is_blocked=is_blocked,
                 is_redacted=is_redacted,
+                is_flagged=is_flagged,
                 is_critical=is_critical,
             )
 
@@ -992,6 +995,7 @@ class ModuleKpisView(APIView):
                     modules[mid],
                     is_blocked=is_blocked,
                     is_redacted=is_redacted,
+                    is_flagged=is_flagged,
                     is_critical=is_critical,
                 )
 
@@ -1010,6 +1014,7 @@ class ModuleTrendsView(APIView):
 
     _PERIOD_MAP = {
         "1h": (1, 5),
+        "6h": (6, 30),
         "24h": (24, 60),
         "7d": (24 * 7, 240),
         "30d": (24 * 30, 24 * 60),
@@ -1061,12 +1066,14 @@ class ModuleTrendsView(APIView):
             risk_score = meta.get("security_risk_score", 0) or 0
             is_blocked = ev["action"] == ACTION_BLOCK
             is_redacted = ev["action"] == ACTION_REDACT
+            is_flagged = ev["action"] == ACTION_FLAG
             is_critical = risk_score >= CRITICAL_THRESHOLD
 
             increment_bucket(
                 module_buckets["1.1"][bucket_key],
                 is_blocked=is_blocked,
                 is_redacted=is_redacted,
+                is_flagged=is_flagged,
                 is_critical=is_critical,
             )
 
@@ -1075,6 +1082,7 @@ class ModuleTrendsView(APIView):
                     module_buckets[mid][bucket_key],
                     is_blocked=is_blocked,
                     is_redacted=is_redacted,
+                    is_flagged=is_flagged,
                     is_critical=is_critical,
                 )
 
@@ -1092,6 +1100,7 @@ class ModuleTrendsView(APIView):
                     "total": bucket["total"],
                     "blocked": bucket["blocked"],
                     "redacted": bucket["redacted"],
+                    "flagged": bucket.get("flagged", 0),
                     "critical": bucket["critical"],
                     "pressure": pressure,
                     "value": pressure,

@@ -153,13 +153,20 @@ def evaluate(
             if rank > best_action_rank:
                 best_action_rank = rank
                 result.action = action
-                if action == "redact" and rule.get("redaction_config"):
-                    result.redaction_hints.append({
-                        "rule_id": rule.get("id"),
-                        "rule_name": rule.get("name"),
-                        "config": rule.get("redaction_config"),
-                        "condition": rule.get("condition") or {},
-                    })
+            # Collect a redaction hint for EVERY matching redact rule — NOT only
+            # the one that happens to raise the top action rank. The append used
+            # to live inside the `rank > best_action_rank` block, so when several
+            # redact rules matched (all rank 4) only the FIRST produced a hint and
+            # apply_redaction masked just that one pattern; the remaining PII (SSN/
+            # email/phone) leaked through to Tier-2 and the LLM. Deterministic
+            # policy redaction must cover all matched patterns.
+            if action == "redact" and rule.get("redaction_config"):
+                result.redaction_hints.append({
+                    "rule_id": rule.get("id"),
+                    "rule_name": rule.get("name"),
+                    "config": rule.get("redaction_config"),
+                    "condition": rule.get("condition") or {},
+                })
 
     if result.action == "block" and result.matched_rule_ids:
         blocker_policy = result.matched_policy_names[-1] if result.matched_policy_names else "Unknown"

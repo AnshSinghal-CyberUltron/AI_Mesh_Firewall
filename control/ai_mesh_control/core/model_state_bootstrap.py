@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from core.models import LLMModelConfig, ModelState
+from core.models import (
+    LLMModelConfig,
+    ModelState,
+    is_platform_managed_llm_model_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +22,11 @@ def ensure_model_states_for_org(organization) -> tuple[int, int]:
     if organization is None:
         return 0, 0
 
-    configs = LLMModelConfig.objects.filter(
-        organization=organization,
-        is_active=True,
+    configs = LLMModelConfig.queryset_user_managed(
+        LLMModelConfig.objects.filter(
+            organization=organization,
+            is_active=True,
+        )
     ).only("model_name")
 
     created = 0
@@ -53,9 +59,11 @@ def merge_model_states_with_configs(organization, states_qs):
     """
     from core.serializers import ModelStateSerializer
 
-    configs = LLMModelConfig.objects.filter(
-        organization=organization,
-        is_active=True,
+    configs = LLMModelConfig.queryset_user_managed(
+        LLMModelConfig.objects.filter(
+            organization=organization,
+            is_active=True,
+        )
     ).only("model_name", "model_id")
     config_by_name = {c.model_name: c.model_id for c in configs}
 
@@ -63,6 +71,8 @@ def merge_model_states_with_configs(organization, states_qs):
     seen = set()
 
     for state in states_qs:
+        if is_platform_managed_llm_model_name(state.model_name):
+            continue
         data = ModelStateSerializer(state).data
         data["organization_slug"] = organization.slug
         data["gateway_model_hint"] = config_by_name.get(state.model_name, state.model_name)

@@ -41,6 +41,14 @@ import { PolicyAnalyticsPanel } from "../components/PolicyAnalyticsPanel";
 import { SafeResponsiveChart } from "../components/SafeResponsiveChart";
 import { formatTrendBucketLabel } from "../utils/chartLabels";
 
+const PERIOD_INTAKE_HINTS = {
+  "1h": "Last hour intake across the mesh",
+  "6h": "Last 6 hours intake across the mesh",
+  "24h": "24 hour intake across the mesh",
+  "7d": "7 day intake across the mesh",
+  "30d": "30 day intake across the mesh",
+};
+
 function useCompactViewport(maxWidth = 900) {
   const [compact, setCompact] = useState(() => window.innerWidth <= maxWidth);
 
@@ -953,8 +961,10 @@ export function AIMeshFirewallOverview({ onTabChange }) {
     { id: "1.7", name: "Output Guardrails", total: modules["1.7"]?.total ?? 0, blockRate: moduleInterventionRate("1.7", modules["1.7"]) },
   ];
 
+  const intakeHint = PERIOD_INTAKE_HINTS[period] || PERIOD_INTAKE_HINTS["24h"];
+
   const heroMetrics = [
-    { icon: Activity, label: "Total events", value: socKpis ? total.toLocaleString() : "--", hint: "24 hour intake across the mesh", tone: "teal" },
+    { icon: Activity, label: "Total events", value: socKpis ? total.toLocaleString() : "--", hint: intakeHint, tone: "teal" },
     { icon: AlertTriangle, label: "Block rate", value: socKpis ? `${blockRate}%` : "--", hint: "Requests denied before model execution", tone: "red" },
     { icon: ShieldCheck, label: "Redaction rate", value: socKpis ? `${redactRate}%` : "--", hint: "Requests sanitized instead of blocked", tone: "amber" },
     { icon: ShieldAlert, label: "Critical events", value: socKpis ? String(critical) : "--", hint: "High urgency incidents requiring operator review", tone: "blue" },

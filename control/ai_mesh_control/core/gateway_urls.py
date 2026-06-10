@@ -9,7 +9,12 @@ from core.gateway_instance_views import (
     GatewayInstanceTelemetryView,
     GatewayPublicUrlView,
 )
-from core.gateway_views import GatewayStatsListView, SimulatorDefaultGatewayKeyView
+from core.gateway_views import (
+    GatewayStatsListView,
+    IsolationPlaygroundGatewayKeyView,
+    IsolationPlaygroundRotateView,
+    SimulatorDefaultGatewayKeyView,
+)
 
 router = DefaultRouter()
 router.register(r"keys", GatewayAPIKeyViewSet, basename="gateway-apikey")
@@ -20,5 +25,15 @@ urlpatterns = [
     path("instances/telemetry/", GatewayInstanceTelemetryView.as_view(), name="gateway-instance-telemetry"),
     path("stats/", GatewayStatsListView.as_view(), name="gateway-stats-list"),
     path("simulator-default/", SimulatorDefaultGatewayKeyView.as_view(), name="gateway-simulator-default-key"),
+    path(
+        "isolation-playground/",
+        IsolationPlaygroundGatewayKeyView.as_view(),
+        name="gateway-isolation-playground-key",
+    ),
+    path(
+        "isolation-playground/rotate/",
+        IsolationPlaygroundRotateView.as_view(),
+        name="gateway-isolation-playground-rotate",
+    ),
     path("", include(router.urls)),
 ]

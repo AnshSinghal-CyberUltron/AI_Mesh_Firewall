@@ -47,16 +47,35 @@ fi" || true
 RSYNC_SSH=(rsync -az -e ssh)
 
 echo "==> Sync compose files"
-"${RSYNC_SSH[@]}" \
-  "${ROOT}/docker-compose.yml" \
-  "${ROOT}/docker-compose.prod.yml" \
-  "${SSH_HOST}:${REMOTE_DIR}/"
+COMPOSE_FILES=(
+  "${ROOT}/docker-compose.yml"
+  "${ROOT}/docker-compose.prod.yml"
+)
+[[ -f "${ROOT}/docker-compose.observability.yml" ]] && COMPOSE_FILES+=("${ROOT}/docker-compose.observability.yml")
+"${RSYNC_SSH[@]}" "${COMPOSE_FILES[@]}" "${SSH_HOST}:${REMOTE_DIR}/"
 
-echo "==> Sync deploy scripts"
-"${RSYNC_SSH[@]}" \
-  "${ROOT}/scripts/deploy-ec2.sh" \
-  "${ROOT}/scripts/ec2-generate-origin-ssl.sh" \
-  "${SSH_HOST}:${REMOTE_DIR}/scripts/"
+echo "==> Sync deploy / observability scripts and agent config"
+ssh "${SSH_HOST}" "mkdir -p '${REMOTE_DIR}/scripts' '${REMOTE_DIR}/deploy/observability'"
+OBS_SCRIPTS=(
+  deploy-ec2.sh
+  ec2-generate-origin-ssl.sh
+  bootstrap-ec2-observability.sh
+  publish-stack-ready-metric.sh
+  demo-ec2-lifecycle.sh
+  reload-cloudwatch-agent.sh
+)
+for s in "${OBS_SCRIPTS[@]}"; do
+  [[ -f "${ROOT}/scripts/${s}" ]] || continue
+  "${RSYNC_SSH[@]}" "${ROOT}/scripts/${s}" "${SSH_HOST}:${REMOTE_DIR}/scripts/"
+done
+if [[ -f "${ROOT}/deploy/observability/cloudwatch-agent-config.json" ]]; then
+  "${RSYNC_SSH[@]}" \
+    "${ROOT}/deploy/observability/cloudwatch-agent-config.json" \
+    "${ROOT}/deploy/observability/alarm-email-example.html" \
+    "${ROOT}/deploy/observability/alarm-runbooks.json" \
+    "${ROOT}/deploy/observability/prometheus-scrape.example.yml" \
+    "${SSH_HOST}:${REMOTE_DIR}/deploy/observability/"
+fi
 
 echo "==> Sync .env (strips static AWS keys — EC2 uses instance role for ECR pull)"
 ENV_SYNC="$(mktemp)"
@@ -65,7 +84,7 @@ grep -q '^USE_EC2_INSTANCE_ROLE=' "${ENV_SYNC}" || echo 'USE_EC2_INSTANCE_ROLE=t
 "${RSYNC_SSH[@]}" "${ENV_SYNC}" "${SSH_HOST}:${REMOTE_DIR}/.env"
 rm -f "${ENV_SYNC}"
 
-ssh "${SSH_HOST}" "chmod +x '${REMOTE_DIR}/scripts/deploy-ec2.sh' '${REMOTE_DIR}/scripts/ec2-generate-origin-ssl.sh'"
+ssh "${SSH_HOST}" "chmod +x '${REMOTE_DIR}/scripts/'*.sh 2>/dev/null || true"
 
 echo "Synced deploy config to ${SSH_HOST}:${REMOTE_DIR} (images: ${ECR_REGISTRY} tag ${IMAGE_TAG})"
 

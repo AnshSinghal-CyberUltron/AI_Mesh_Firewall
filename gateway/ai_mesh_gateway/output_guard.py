@@ -211,6 +211,33 @@ class OutputGuard:
             if leakage_verdict.action != "allow":
                 verdicts.append(leakage_verdict)
 
+        # ── Tier-2: ZeroShield guard model (ML) on the OUTPUT ───────────────
+        # Mirrors INPUT scanning: the static detectors above are tier-1; the
+        # ZeroShield guard model then scans the model output (same guard model +
+        # breaker/cache as input). Gated by output_tier2_enabled (default on)
+        # AND the org tri-state tier2_enabled. FAIL-OPEN: a guard-model outage
+        # must never block an already-generated response — scan_output_with_tier2
+        # degrades to the static verdict and any error here is swallowed.
+        if _enabled("output_tier2_enabled", True) and self._scanner is not None:
+            try:
+                t2 = await self._scanner.scan_output_with_tier2(
+                    text,
+                    org_tier2_override=cfg.get("tier2_enabled"),
+                    org_slug=org_slug,
+                )
+                if t2 is not None and t2.action in ("block", "redact", "flag"):
+                    t2_patterns = list(getattr(t2, "matched_patterns", []) or [])
+                    verdicts.append(OutputVerdict(
+                        action=t2.action,
+                        threat_type=t2.threat_type or "guard_model",
+                        confidence=float(getattr(t2, "confidence", 0.0) or 0.0),
+                        detail=t2.detail or "ZeroShield guard model (tier-2) flagged output",
+                        matched_patterns=t2_patterns,
+                        compliance_tags=get_compliance_tags(t2_patterns),
+                    ))
+            except Exception:  # noqa: BLE001 - output tier-2 must never break delivery
+                LOG.debug("Output tier-2 guard-model scan failed; failing open", exc_info=True)
+
         if not verdicts:
             return OutputVerdict()
 

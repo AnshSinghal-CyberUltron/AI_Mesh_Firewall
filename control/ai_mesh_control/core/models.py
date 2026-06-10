@@ -44,6 +44,24 @@ DEFAULT_PERMISSIONS = {
 }
 
 
+def _playground_permissions() -> dict:
+    """Permissions for Module 1.6 isolation playground keys (skip threat-intel gate)."""
+    perms = DEFAULT_PERMISSIONS.copy()
+    perms["playground"] = True
+    return perms
+
+
+def is_isolation_playground_project_id(project_id: str | None) -> bool:
+    """True when project_id belongs to Module 1.6 isolation playground keys."""
+    return (project_id or "").startswith("isolation-playground-")
+
+
+def is_live_test_gateway_project_id(project_id: str | None) -> bool:
+    """True for org simulator / isolation-playground keys (exempt from key risk telemetry)."""
+    pid = project_id or ""
+    return pid.startswith("isolation-playground-") or pid.startswith("simulator-")
+
+
 def _default_permissions() -> dict:
     """Callable default for GatewayAPIKey.permissions (Django requires mutable defaults to be callables)."""
     return DEFAULT_PERMISSIONS.copy()
@@ -340,6 +358,11 @@ class GatewayAPIKey(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Fernet-encrypted plaintext, set ONLY for platform-managed shared keys
+    # (the per-org "simulator" key) so they can be recovered and applied to
+    # every simulator in the org without re-minting. User/prod keys stay
+    # hash-only (this field stays empty for them).
+    encrypted_secret = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["-created_at"]
@@ -426,6 +449,25 @@ class GatewayAPIKey(models.Model):
             instance.save(update_fields=["organization"])
         return instance, raw_key
 
+    def store_secret(self, raw_key: str) -> None:
+        """Persist the Fernet-encrypted plaintext so this key can be recovered.
+        Used ONLY for platform-managed shared keys (the org simulator key)."""
+        if not raw_key:
+            return
+        cipher = _build_llm_model_key_cipher()
+        self.encrypted_secret = cipher.encrypt(raw_key.encode("utf-8")).decode("utf-8")
+        self.save(update_fields=["encrypted_secret"])
+
+    def recover_secret(self) -> str | None:
+        """Decrypt the stored plaintext, or None if absent/undecryptable."""
+        if not self.encrypted_secret:
+            return None
+        cipher = _build_llm_model_key_cipher()
+        try:
+            return cipher.decrypt(self.encrypted_secret.encode("utf-8")).decode("utf-8")
+        except Exception:
+            return None
+
     @classmethod
     def ensure_simulator_for_org(cls, organization, owner) -> tuple["GatewayAPIKey", str | None]:
         """Return the org's simulator gateway key, creating one if needed.
@@ -435,19 +477,44 @@ class GatewayAPIKey(models.Model):
         a new key is created (same contract as ``ensure_default_for_org``).
         """
         project_id = f"simulator-{organization.slug}"
-        existing = cls.objects.filter(
-            organization=organization,
-            project_id=project_id,
-            is_active=True,
-        ).first()
-        if existing is None:
-            existing = cls.objects.filter(
-                organization=organization,
-                name="simulator",
-                is_active=True,
-            ).first()
-        if existing:
-            return existing, None
+        # Self-healing single-key invariant: collect ALL active simulator keys
+        # for the org (canonical project_id OR legacy name="simulator"), keep
+        # exactly ONE — the most-recently-used canonical key (so the key that
+        # browsers/scripts are actively using survives) — and deactivate the
+        # rest. Historically the ensure/rotate path churned the org through
+        # dozens of keys and left multiple active; this collapses them to one
+        # WITHOUT minting anything.
+        active = list(
+            cls.objects.filter(organization=organization, is_active=True)
+            .filter(
+                models.Q(project_id=project_id)
+                | models.Q(name="simulator")
+                | models.Q(name__startswith="simulator-")
+                | models.Q(project_id__startswith="simulator-")
+            )
+        )
+        if active:
+            def _recency(k):
+                return k.last_used_at or k.created_at
+            canonical = max(
+                (k for k in active if k.project_id == project_id),
+                default=None, key=_recency,
+            ) or max(active, key=_recency)
+            recovered = canonical.recover_secret()
+            if recovered is not None:
+                # Recoverable: reuse the SAME key for every simulator in the org
+                # (no re-mint, no churn); just collapse any duplicates.
+                for k in active:
+                    if k.pk != canonical.pk:
+                        k.is_active = False
+                        k.save(update_fields=["is_active"])
+                return canonical, recovered
+            # Legacy key(s) minted before recoverable storage existed: deactivate
+            # ALL and mint ONE fresh recoverable key (a one-time migration per org;
+            # afterwards every provision returns the same recoverable key).
+            for k in active:
+                k.is_active = False
+                k.save(update_fields=["is_active"])
 
         instance, raw_key = cls.generate_key(
             name="simulator",
@@ -458,6 +525,7 @@ class GatewayAPIKey(models.Model):
         if not instance.organization_id:
             instance.organization = organization
             instance.save(update_fields=["organization"])
+        instance.store_secret(raw_key)  # persist encrypted so it stays recoverable
         return instance, raw_key
 
     @classmethod
@@ -490,6 +558,90 @@ class GatewayAPIKey(models.Model):
         if not instance.organization_id:
             instance.organization = organization
             instance.save(update_fields=["organization"])
+        return instance, raw_key
+
+    @classmethod
+    def ensure_isolation_playground_for_org(
+        cls, organization, owner
+    ) -> tuple["GatewayAPIKey", str | None]:
+        """Return the org's isolation playground key, creating one if needed.
+
+        Uses ``project_id=isolation-playground-{slug}`` so Module 1.6 live tests
+        do not share risk_score with the attack simulator key.
+        """
+        project_id = f"isolation-playground-{organization.slug}"
+        active = list(
+            cls.objects.filter(organization=organization, is_active=True).filter(
+                models.Q(project_id=project_id) | models.Q(name="isolation-playground")
+            )
+        )
+        if active:
+            def _recency(k):
+                return k.last_used_at or k.created_at
+
+            canonical = max(
+                (k for k in active if k.project_id == project_id),
+                default=None,
+                key=_recency,
+            ) or max(active, key=_recency)
+            recovered = canonical.recover_secret()
+            if recovered is not None:
+                updates = []
+                if not canonical.permissions.get("playground"):
+                    canonical.permissions = {**canonical.permissions, "playground": True}
+                    updates.append("permissions")
+                for k in active:
+                    if k.pk != canonical.pk:
+                        k.is_active = False
+                        k.save(update_fields=["is_active"])
+                if updates:
+                    canonical.save(update_fields=updates)
+                return canonical, recovered
+            for k in active:
+                k.is_active = False
+                k.save(update_fields=["is_active"])
+
+        instance, raw_key = cls.generate_key(
+            name="isolation-playground",
+            owner=owner,
+            project_id=project_id,
+            permissions=_playground_permissions(),
+            allowed_models=[],
+            risk_score=0.0,
+        )
+        if not instance.organization_id:
+            instance.organization = organization
+            instance.save(update_fields=["organization"])
+        instance.store_secret(raw_key)
+        return instance, raw_key
+
+    @classmethod
+    def rotate_isolation_playground_for_org(
+        cls, organization, owner
+    ) -> tuple["GatewayAPIKey", str]:
+        """Deactivate existing isolation playground keys and mint a fresh one."""
+        project_id = f"isolation-playground-{organization.slug}"
+        stale = list(
+            cls.objects.filter(organization=organization, is_active=True).filter(
+                models.Q(project_id=project_id) | models.Q(name="isolation-playground")
+            )
+        )
+        for key in stale:
+            key.is_active = False
+            key.save(update_fields=["is_active"])
+
+        instance, raw_key = cls.generate_key(
+            name="isolation-playground",
+            owner=owner,
+            project_id=project_id,
+            permissions=_playground_permissions(),
+            allowed_models=[],
+            risk_score=0.0,
+        )
+        if not instance.organization_id:
+            instance.organization = organization
+            instance.save(update_fields=["organization"])
+        instance.store_secret(raw_key)
         return instance, raw_key
 
     def save(self, *args, **kwargs):

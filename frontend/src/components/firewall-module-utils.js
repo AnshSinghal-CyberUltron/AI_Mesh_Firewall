@@ -117,8 +117,8 @@ const MODULE_PAGE_CONFIG = {
     },
     columns: [
       { label: "Time", value: (event) => formatTimestamp(event.timestamp) },
-      { label: "Collection", value: (event) => getMetadata(event).collection || getMetadata(event).vector_collection || "--" },
-      { label: "Namespace", value: (event) => getMetadata(event).namespace || getMetadata(event).vector_namespace || "--" },
+      { label: "Collection", value: (event) => getMetadata(event).collection || getMetadata(event).vector_collection || getExtra(event).collection || "--" },
+      { label: "Namespace", value: (event) => getMetadata(event).namespace || getMetadata(event).vector_namespace || getExtra(event).namespace || "--" },
       { label: "Action", kind: "action", value: (event) => event.action || "allow" },
       { label: "Threat", value: (event) => formatThreat(event) },
       { label: "Risk", kind: "severity", value: (event) => getRiskScore(event) || "--" },
@@ -326,24 +326,59 @@ function buildLogDetailPayload(event) {
   };
 }
 
+function deriveSocKpiSummary(socKpis) {
+  if (!socKpis) return null;
+  const total = Number(socKpis.total_threats) || 0;
+  const blocked = Number(socKpis.blocked) || 0;
+  const redacted = Number(socKpis.redacted) || 0;
+  return {
+    total,
+    blocked,
+    redacted,
+    allowed: Math.max(0, total - blocked - redacted),
+  };
+}
+
 function buildSummaryCards(moduleId, summary, events, extras) {
+  const socDerived = moduleId === "1.1" ? deriveSocKpiSummary(extras.socKpis) : null;
+  const numeric = socDerived || summary;
   const base = {
-    total: fmtCount(summary.total),
-    blocked: fmtCount(summary.blocked),
-    redacted: fmtCount(summary.redacted),
+    total: fmtCount(numeric.total),
+    blocked: fmtCount(numeric.blocked),
+    redacted: fmtCount(numeric.redacted),
+    flagged: fmtCount(summary.flagged),
     critical: fmtCount(summary.critical),
-    allowed: fmtCount(summary.allowed),
+    allowed: fmtCount(numeric.allowed),
     monitor: fmtCount(summary.monitor),
   };
 
   switch (moduleId) {
     case "1.1": {
       const identities = uniqueCount(events.map((event) => getMetadata(event).project_id || getMetadata(event).organization_id || getMetadata(event).tenant_id));
+      const periodLabel = extras.socKpis?.period ? ` (${extras.socKpis.period})` : "";
       return [
-        { label: "Requests inspected", value: base.total, detail: "All ingress events in the selected lens" },
-        { label: "Allowed through gateway", value: base.allowed, detail: "Events that completed without a hard intervention" },
-        { label: "Rate-limited or blocked", value: base.blocked, detail: "Gateway events stopped before downstream completion" },
-        { label: "Identities observed", value: fmtCount(identities), detail: "Distinct tenant or project contexts in recent ingress events" },
+        {
+          label: "Requests inspected",
+          value: base.total,
+          detail: `All ingress events in the selected lens${periodLabel} — same source as overview Total events`,
+        },
+        {
+          label: "Allowed through gateway",
+          value: base.allowed,
+          detail: socDerived
+            ? `Completed without block or redact (${base.redacted} redacted in period)`
+            : "Events that completed without a hard intervention",
+        },
+        {
+          label: "Rate-limited or blocked",
+          value: base.blocked,
+          detail: "Gateway events stopped before downstream completion",
+        },
+        {
+          label: "Identities observed",
+          value: fmtCount(identities),
+          detail: "Distinct tenants in recent evidence sample (table may show up to 500 rows)",
+        },
       ];
     }
     case "1.2": {
@@ -357,8 +392,8 @@ function buildSummaryCards(moduleId, summary, events, extras) {
       ];
     }
     case "1.3": {
-      const collections = uniqueCount(events.map((event) => getMetadata(event).collection || getMetadata(event).vector_collection));
-      const namespaces = uniqueCount(events.map((event) => getMetadata(event).namespace || getMetadata(event).vector_namespace));
+      const collections = uniqueCount(events.map((event) => getMetadata(event).collection || getMetadata(event).vector_collection || getExtra(event).collection));
+      const namespaces = uniqueCount(events.map((event) => getMetadata(event).namespace || getMetadata(event).vector_namespace || getExtra(event).namespace));
       return [
         { label: "Vector queries", value: base.total, detail: "Vector-specific events matched to this page" },
         { label: "Isolation blocks", value: base.blocked, detail: "Queries rejected before cross-tenant or risky retrieval completed" },
@@ -406,13 +441,13 @@ function buildSummaryCards(moduleId, summary, events, extras) {
       ];
     }
     case "1.7": {
-      const reviewCandidates = events.filter((event) => String(event.action || "").toLowerCase() === "monitor" || getMetadata(event).review_required).length;
-      const triggers = uniqueCount(events.map((event) => getMetadata(event).owasp_code || getMetadata(event).threat_type || event.category));
+      const reviewCandidates = events.filter((event) => ["flag", "monitor"].includes(String(event.action || "").toLowerCase()) || getMetadata(event).review_required).length;
       return [
         { label: "Outputs scanned", value: base.total, detail: "Post-generation events matched to output guardrails" },
         { label: "Outputs blocked", value: base.blocked, detail: "Responses stopped before leaving the gateway" },
         { label: "Outputs redacted", value: base.redacted, detail: "Responses sanitized instead of blocked" },
-        { label: "Review triggers", value: fmtCount(reviewCandidates || triggers), detail: "Review or trigger categories surfaced in recent output evidence" },
+        { label: "Outputs flagged", value: base.flagged, detail: "IP-leakage / hallucination flagged for review, not blocked" },
+        { label: "Review triggers", value: fmtCount(reviewCandidates), detail: "Flagged or monitored outputs requiring human review" },
       ];
     }
     default:
@@ -452,7 +487,7 @@ function buildSpotlightCards(moduleId, summary, events, extras) {
       ];
     }
     case "1.3": {
-      const collections = countBy(events.map((event) => getMetadata(event).collection || getMetadata(event).vector_collection || "unknown"));
+      const collections = countBy(events.map((event) => getMetadata(event).collection || getMetadata(event).vector_collection || getExtra(event).collection || "unknown"));
       return [
         { label: "Busiest collection", value: titleCase(topKey(collections) || "unknown"), detail: "Collection with the most recent vector traffic" },
         { label: "Average risk", value: fmtPercent(avgRisk), detail: "Risk score across vector-specific events" },
@@ -502,13 +537,15 @@ function summarizeEvents(events) {
   const total = events.length;
   const blocked = actions.block || 0;
   const redacted = actions.redact || 0;
+  const flagged = actions.flag || 0;
   const monitor = actions.monitor || 0;
-  const allowed = Math.max(0, total - blocked - redacted - monitor);
+  const allowed = Math.max(0, total - blocked - redacted - flagged - monitor);
 
   return {
     total,
     blocked,
     redacted,
+    flagged,
     critical,
     monitor,
     allowed,
@@ -544,6 +581,13 @@ function getEventOperator(event) {
 
 function getMetadata(event) {
   return event?.metadata || {};
+}
+
+// The control plane nests the gateway's raw telemetry metadata under
+// `metadata.extra` (see control core/tasks.py). Vector collection/namespace
+// and similar gateway-emitted fields live there, not at the top level.
+function getExtra(event) {
+  return getMetadata(event).extra || {};
 }
 
 function getSource(event) {

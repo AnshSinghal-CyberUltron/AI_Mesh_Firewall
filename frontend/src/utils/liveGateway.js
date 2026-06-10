@@ -2,7 +2,13 @@
  * Helpers for Module 1 UI panels that exercise the live gateway (no /v1/simulator/*).
  */
 
-import { formatDetectionTier, formatModelDisplayName } from "../constants/zeroshieldBrand";
+import {
+  formatDecisionSource,
+  formatDetectionTier,
+  formatModelDisplayName,
+  formatRoutingReason,
+  isRoutingReroute,
+} from "../constants/zeroshieldBrand";
 
 export function chatCompletionBody({
   prompt,
@@ -495,16 +501,48 @@ function enrichStages(stages, data, zs, context) {
     }
     if (stage.name === "model_routing") {
       const routing = zs.routing || {};
-      enriched.requested_model = enriched.requested_model || routing.original_model || routing.requested_model || context.requestedModel || "";
-      enriched.selected_model = enriched.selected_model || routing.selected_model || routing.routed_model || zs.selected_model || "";
-      enriched.routing_reason = enriched.routing_reason || routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "";
-      enriched.decision_source = enriched.decision_source || routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "";
-      enriched.policy_summary = enriched.policy_summary || routing.policy_summary || zs.policy_summary || context.routingHeaders?.policy_summary || "";
-      enriched.decision_factors = enriched.decision_factors || routing.decision_factors || zs.decision_factors || [];
+      enriched.requested_model = enriched.requested_model
+        || routing.original_model
+        || routing.requested_model
+        || context.requestedModel
+        || "";
+      enriched.selected_model = enriched.selected_model
+        || routing.selected_model
+        || routing.routed_model
+        || zs.selected_model
+        || "";
+      const rawReason = enriched.routing_reason
+        || routing.routing_reason
+        || zs.routing_reason
+        || context.routingHeaders?.routing_reason
+        || "";
+      const rawSource = enriched.decision_source
+        || routing.decision_source
+        || zs.decision_source
+        || context.routingHeaders?.decision_source
+        || "";
+      enriched.decision_source = rawSource;
+      enriched.decision_source_label = enriched.decision_source_label
+        || formatDecisionSource(rawSource);
+      enriched.routing_reason = formatRoutingReason(rawReason, { decisionSource: rawSource });
+      enriched.policy_summary = enriched.policy_summary
+        || routing.policy_summary
+        || zs.policy_summary
+        || context.routingHeaders?.policy_summary
+        || "";
+      enriched.decision_factors = enriched.decision_factors
+        || routing.decision_factors
+        || zs.decision_factors
+        || [];
       enriched.weights = enriched.weights || routing.weights || zs.weights || {};
       if (!enriched.detail && enriched.routing_reason) {
         enriched.detail = enriched.routing_reason;
       }
+    }
+    if (stage.name === "kill_switch" && enriched.action === "reroute" && enriched.routing_reason) {
+      enriched.detail = formatRoutingReason(enriched.routing_reason, {
+        decisionSource: enriched.decision_source,
+      });
     }
     return enriched;
   });
@@ -586,21 +624,26 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
   {
     const at = stageAt("policy");
     const policyBlocked = blockedStage === "policy";
-    const matched = zs.matched_patterns || data?.matched_policies || [];
+    const matchedPolicies = data?.matched_policies || zs.matched_policies || [];
+    const matchedRules = data?.matched_rules || zs.matched_rules || [];
+    const policyActed = Boolean(matchedPolicies?.length || matchedRules?.length);
     stages.push({
       name: "policy",
       action: policyBlocked
         ? "block"
         : at === "after"
           ? "skip"
-          : (finalAction === "redact" || finalAction === "flag" ? finalAction : "allow"),
+          : (policyActed && (finalAction === "redact" || finalAction === "flag") ? finalAction : "allow"),
       latency_ms: latencyForStage("policy", stageMetrics, zs, context),
       detail: policyBlocked
         ? formatPolicyBlockDetail(data, zs)
         : at === "after"
           ? skipDetail("policy", blockedStage)
-          : "Policy Management: no organization rules configured — stage allowed",
-      matched_policies: matched,
+          : (matchedRules?.length
+            ? `Policy engine matched ${matchedRules.length} rule(s)`
+            : "Policy engine evaluated request against compiled rules; no matching policy rule"),
+      matched_policies: matchedPolicies,
+      matched_rules: matchedRules,
       threat_type: policyBlocked ? (data?.category || zs.threat_type || "policy") : "",
     });
   }
@@ -653,15 +696,22 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
   {
     const at = stageAt("kill_switch");
     const ksBlocked = blockedStage === "kill_switch";
+    const ksRerouted = Boolean(
+      routing.rerouted && String(routing.trigger_source || routing.decision_source || "").toLowerCase() === "kill_switch",
+    );
     stages.push({
       name: "kill_switch",
-      action: ksBlocked ? "block" : at === "after" ? "skip" : "allow",
+      action: ksBlocked ? "block" : ksRerouted ? "reroute" : at === "after" ? "skip" : "allow",
       latency_ms: latencyForStage("kill_switch", stageMetrics, zs, context),
       detail: ksBlocked
         ? (data?.message || "Model kill-switch is active")
-        : at === "after"
-          ? skipDetail("kill_switch", blockedStage)
-          : "No active kill-switch for this model",
+        : ksRerouted
+          ? formatRoutingReason(routing.routing_reason || routing.reason || "", {
+            decisionSource: routing.decision_source,
+          })
+          : at === "after"
+            ? skipDetail("kill_switch", blockedStage)
+            : "No active kill-switch for this model",
     });
   }
 
@@ -673,6 +723,12 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     const hasRouting = Boolean(
       routing.selected_model || routing.routed_model || zs.selected_model || zs.routing_reason,
     );
+    const reqModel = routing.original_model || routing.requested_model || context.requestedModel || data?.model || "";
+    const selModel = routing.selected_model || routing.routed_model || zs.selected_model || "";
+    const rawRoutingReason = routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "";
+    const rawDecisionSource = routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "";
+    const formattedReason = formatRoutingReason(rawRoutingReason, { decisionSource: rawDecisionSource });
+    const rerouted = isRoutingReroute(reqModel, selModel, routing);
     stages.push({
       name: "model_routing",
       action: needsModel
@@ -681,25 +737,28 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
           ? "block"
           : at === "after"
             ? "skip"
-            : hasRouting || !isBlocked
-              ? "allow"
-              : "skip",
+            : rerouted
+              ? "reroute"
+              : hasRouting || !isBlocked
+                ? "allow"
+                : "skip",
       detail: needsModel
         ? (data?.message || "Connect your organization's inference model (Module 1.5 → Model Connection). ZeroShield guard models are for scanning only.")
         : routingBlocked
           ? (data?.message || "Model not allowed or not configured")
           : at === "after"
             ? skipDetail("model_routing", blockedStage)
-            : (zs.routing_reason || routing.routing_reason
+            : (formattedReason
               || (hasRouting
-                ? `Routed to ${formatModelDisplayName(zs.selected_model || routing.selected_model || requestedModel)}`
+                ? `Routed to ${formatModelDisplayName(selModel || requestedModel)}`
                 : "Model routing evaluated")),
       model: requestedModel,
-      requested_model: routing.original_model || data?.model || routing.requested_model || "",
-      selected_model: routing.selected_model || zs.selected_model || "",
+      requested_model: reqModel,
+      selected_model: selModel,
       routed_model: routing.routed_model || routing.selected_model || "",
-      routing_reason: routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "",
-      decision_source: routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "",
+      routing_reason: formattedReason,
+      decision_source: rawDecisionSource,
+      decision_source_label: formatDecisionSource(rawDecisionSource),
       policy_summary: routing.policy_summary || zs.policy_summary || context.routingHeaders?.policy_summary || "",
       decision_factors: routing.decision_factors || zs.decision_factors || [],
       weights: routing.weights || zs.weights || {},
@@ -710,6 +769,8 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
   // 7 — Model input
   {
     const at = stageAt("model_input");
+    const forwardedPrompt = zs.redacted_prompt || data?.redacted_prompt || promptPreview;
+    const forwardedPreview = truncateText(forwardedPrompt);
     stages.push({
       name: "model_input",
       action: isBlocked && at !== "past" ? "skip" : at === "blocked" ? "block" : "allow",
@@ -717,8 +778,8 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       detail: isBlocked
         ? "Prompt was not sent to the model (blocked upstream)"
         : "Sanitized prompt delivered to LLM after firewall processing",
-      content: isBlocked ? "[BLOCKED — prompt was not sent to the model]" : promptPreview,
-      prompt_submitted: promptPreview,
+      content: isBlocked ? "[BLOCKED — prompt was not sent to the model]" : forwardedPreview,
+      prompt_submitted: isBlocked ? promptPreview : forwardedPreview,
     });
   }
 
@@ -853,16 +914,22 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     const finalAction = inferFinalAction(data, httpStatus, zs);
     const blockedStage = inferTerminalBlockedStage(data, httpStatus, zs, finalAction);
     const stages = enrichStages(data.pipeline_trace.stages, data, zs, mergedContext);
+    const totalLatency = data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs;
+    const guardSummary = data.pipeline_trace.guard_summary || null;
+    // Hoist stages/guard_summary/total_latency to the top level (the single
+    // source the simulator reads) and DROP the raw pipeline_trace so the result
+    // doesn't carry a full duplicate of the stage array + guard summary.
+    const { pipeline_trace: _omitTrace, ...rest } = data;
     return {
-      ...data,
+      ...rest,
       final_action: finalAction,
       blocked_by: blockedStage || "",
       detection_checkpoint: inferDetectionCheckpoint(data, zs),
       zeroshield: zs,
-      guard_summary: data.pipeline_trace.guard_summary || null,
+      guard_summary: guardSummary,
       request_id: data.request_id || zs.request_id,
       stages,
-      total_latency_ms: data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs,
+      total_latency_ms: totalLatency,
       estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
       pipeline_live: true,
     };
@@ -912,8 +979,11 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
       }
       : null);
 
+  const totalLatency = context.totalLatencyMs ?? payload.pipeline_trace?.total_latency_ms;
+  // Drop the raw pipeline_trace — its stages/guard_summary are hoisted below.
+  const { pipeline_trace: _omitTrace, ...payloadRest } = payload;
   return {
-    ...payload,
+    ...payloadRest,
     final_action: finalAction,
     blocked_by: blockedStage || "",
     detection_checkpoint: inferDetectionCheckpoint(payload, zs),
@@ -921,7 +991,7 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     zeroshield: zs,
     guard_summary: guardSummary,
     request_id: payload.request_id || zs.request_id,
-    total_latency_ms: context.totalLatencyMs ?? payload.pipeline_trace?.total_latency_ms,
+    total_latency_ms: totalLatency,
     estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
     pipeline_live: true,
   };

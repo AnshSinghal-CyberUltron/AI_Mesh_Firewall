@@ -53,3 +53,9 @@ ecr-push:
 
 attach-ec2-iam:
 	bash scripts/attach-ec2-iam-policy.sh
+
+observability-apply:
+	cd infra/terraform/envs/ec2-demo && terraform init && terraform apply -var-file=ec2-demo.tfvars
+
+verify-observability:
+	bash scripts/verify-observability-local.sh

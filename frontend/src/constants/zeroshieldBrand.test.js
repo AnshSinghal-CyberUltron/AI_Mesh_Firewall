@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { formatZeroshieldScanSummary } from "./zeroshieldBrand.js";
+import {
+  formatRoutingReason,
+  formatZeroshieldScanSummary,
+  ZEROSHIELD_ADJUDICATOR_LABEL,
+} from "./zeroshieldBrand.js";
 
 test("formatZeroshieldScanSummary maps tier-2 clean pass to operator labels", () => {
   const summary = formatZeroshieldScanSummary({
@@ -31,4 +35,13 @@ test("formatZeroshieldScanSummary keeps confidence label for flagged threats", (
   assert.equal(summary.scoreLabel, "Confidence");
   assert.equal(summary.scoreValue, "72%");
   assert.equal(summary.clean, false);
+});
+
+test("formatRoutingReason replaces Bedrock adjudicator branding", () => {
+  const formatted = formatRoutingReason(
+    "Bedrock GPT OSS 120B adjudicator selected 'Haiku'",
+    { decisionSource: "policy_adjudicator" },
+  );
+  assert.match(formatted, /ZeroShield Policy Adjudicator/);
+  assert.doesNotMatch(formatted, /Bedrock/);
 });

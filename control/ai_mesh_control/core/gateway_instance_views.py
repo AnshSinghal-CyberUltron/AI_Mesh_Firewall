@@ -119,16 +119,33 @@ class GatewayInstanceRegisterView(APIView):
         endpoint = None
         identifier = (data.get("endpoint_identifier") or "").strip()
         if identifier:
-            endpoint, created = Endpoint.objects.get_or_create(
-                identifier=identifier,
-                defaults={
-                    "name": identifier,
-                    "status": "online",
-                    "last_seen_at": timezone.now(),
-                    "organization_id": org_id,
-                },
+            # Endpoint.identifier is NOT unique, and concurrent gateway-worker
+            # registrations (all 6 uvicorn workers POST the same hostname at
+            # startup) previously created DUPLICATE Endpoint rows. After that,
+            # get_or_create(identifier=...) runs an internal .get() that finds >1
+            # row and raises MultipleObjectsReturned → HTTP 500 → the racing
+            # workers never register and fall back to the degraded sync path (no
+            # model routing). Use a duplicate-tolerant lookup (collapse to the
+            # oldest row) and create only when none exists, tolerating creation
+            # races — so registration is idempotent and never 500s.
+            endpoint = (
+                Endpoint.objects.filter(identifier=identifier).order_by("id").first()
             )
-            if not created:
+            if endpoint is None:
+                try:
+                    endpoint = Endpoint.objects.create(
+                        identifier=identifier,
+                        name=identifier,
+                        status="online",
+                        last_seen_at=timezone.now(),
+                        organization_id=org_id,
+                    )
+                except Exception:
+                    # Lost a concurrent creation race — re-read the winner's row.
+                    endpoint = (
+                        Endpoint.objects.filter(identifier=identifier).order_by("id").first()
+                    )
+            if endpoint is not None:
                 endpoint.status = "online"
                 endpoint.last_seen_at = timezone.now()
                 if org_id and endpoint.organization_id is None:

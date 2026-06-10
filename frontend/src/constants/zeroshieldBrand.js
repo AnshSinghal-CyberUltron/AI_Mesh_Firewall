@@ -18,6 +18,48 @@ export const ZEROSHIELD_TIER2_LABEL = "ZeroShield Guard Model";
 /** Routing adjudicator display name */
 export const ZEROSHIELD_ADJUDICATOR_LABEL = "ZeroShield Policy Adjudicator";
 
+const ROUTING_REASON_REPLACEMENTS = [
+  ["Bedrock GPT OSS 120B adjudicator", ZEROSHIELD_ADJUDICATOR_LABEL],
+  ["Bedrock GPT OSS 120B", ZEROSHIELD_ADJUDICATOR_LABEL],
+  ["bedrock adjudicator", ZEROSHIELD_ADJUDICATOR_LABEL],
+];
+
+const DECISION_SOURCE_LABELS = {
+  kill_switch: "Kill switch",
+  model_state: "Model state isolation",
+  policy_adjudicator: ZEROSHIELD_ADJUDICATOR_LABEL,
+  routing_disabled: "Routing disabled",
+  no_routing_models: "No routing models",
+};
+
+/** Sanitize routing reason text for operator-facing UI (never show Bedrock). */
+export function formatRoutingReason(reason, { decisionSource } = {}) {
+  let text = String(reason || "").trim();
+  if (!text) return text;
+  for (const [oldText, newText] of ROUTING_REASON_REPLACEMENTS) {
+    text = text.split(oldText).join(newText);
+  }
+  if (decisionSource === "kill_switch" && !text.toLowerCase().includes("kill-switch")) {
+    return text;
+  }
+  return text;
+}
+
+/** Human-readable label for routing decision_source codes. */
+export function formatDecisionSource(source) {
+  const key = String(source || "").trim().toLowerCase();
+  if (!key) return "";
+  return DECISION_SOURCE_LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** True when requested and selected models differ (non-auto). */
+export function isRoutingReroute(requested, selected, routing = {}) {
+  if (routing.rerouted) return true;
+  const req = String(requested || "").trim();
+  const sel = String(selected || "").trim();
+  return Boolean(req && sel && req.toLowerCase() !== "auto" && req !== sel);
+}
+
 /** Log viewer service filter label (maps to gateway log service name internally) */
 export const ZEROSHIELD_ML_LOG_SERVICE = "Guard Model";
 

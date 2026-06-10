@@ -1,0 +1,10 @@
+# Copy to ec2-demo.tfvars and fill in values. Apply once from laptop:
+#   cd infra/terraform/envs/ec2-demo && terraform init && terraform apply -var-file=ec2-demo.tfvars
+
+name                        = "ai-mesh-firewall"
+region                      = "ap-south-1"
+alarm_email                 = "ops@zeroshield.ai"
+instance_id                 = "i-REPLACE_ME"
+existing_instance_role_name = "ai-mesh-InstanceRole"
+log_retention_days          = 14
+grace_seconds               = 900

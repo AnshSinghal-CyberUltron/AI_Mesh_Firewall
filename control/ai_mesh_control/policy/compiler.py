@@ -104,6 +104,7 @@ class PolicyCompiler:
         bundle: dict[str, Any] = {
             "compiled_at": time.time(),
             "policy_count": len(compiled_policies),
+            "rule_count": sum(len(p.get("rules", [])) for p in compiled_policies),
             "policies": compiled_policies,
         }
 

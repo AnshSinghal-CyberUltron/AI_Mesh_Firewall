@@ -1,0 +1,19 @@
+# Example Prometheus scrape config for AI Mesh Firewall gateway.
+# Set METRICS_SCRAPER_KEY on gateway and use the same value below.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: ai-mesh-gateway
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: ["35.154.124.71:8300"]  # i-07a9d65b103ac1a87
+        labels:
+          env: demo
+          service: gateway
+    authorization:
+      type: Bearer
+      credentials: "REPLACE_WITH_METRICS_SCRAPER_KEY"

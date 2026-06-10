@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { filterEventsForModule } from "./firewall-module-utils.js";
+import { buildModulePageData, filterEventsForModule } from "./firewall-module-utils.js";
 
 /** Shared fixture catalog — keep aligned with policy/tests/test_module_kpis_trends_parity.py */
 const FIXTURE_CATALOG = [
@@ -89,4 +89,28 @@ test("aggregate 1.3 count includes RAG event types", () => {
   const feed = feedFromCatalog();
   const total = countForModule("1.3", feed);
   assert.ok(total >= 3, `expected >= 3 events in 1.3, got ${total}`);
+});
+
+test("module 1.1 summary cards use soc-kpis totals not capped threat-feed length", () => {
+  const feed = Array.from({ length: 500 }, (_, index) => ({
+    id: `ev-${index}`,
+    action: index % 2 === 0 ? "allow" : "block",
+    metadata: { organization_id: index % 2 === 0 ? "org-a" : "org-b" },
+    timestamp: new Date().toISOString(),
+  }));
+  const socKpis = {
+    period: "24h",
+    total_threats: 1516,
+    blocked: 408,
+    redacted: 45,
+    block_rate: 26.9,
+  };
+
+  const page = buildModulePageData("1.1", feed, { socKpis });
+  const byLabel = Object.fromEntries(page.summaryCards.map((card) => [card.label, card.value]));
+
+  assert.equal(byLabel["Requests inspected"], "1,516");
+  assert.equal(byLabel["Allowed through gateway"], "1,063");
+  assert.equal(byLabel["Rate-limited or blocked"], "408");
+  assert.equal(byLabel["Identities observed"], "2");
 });

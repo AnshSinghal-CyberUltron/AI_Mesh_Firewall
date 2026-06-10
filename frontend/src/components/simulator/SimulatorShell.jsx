@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Wifi, WifiOff, Activity, RefreshCw, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
+import { deriveResultAction } from "./simulatorResultUtils";
 
 const STATUS_STYLES = {
   connected: { color: "text-emerald-400", bg: "bg-emerald-500/10", label: "Connected" },
@@ -165,7 +166,7 @@ export function SimulatorShell({
       {result && (
         <div className="px-5 py-4">
           <div className="flex items-center gap-2 mb-2">
-            <ResultBadge action={result.final_action || result.action || (result.success === false ? "error" : "allow")} />
+            <ResultBadge action={deriveResultAction(result)} />
             {result.total_latency_ms !== undefined && (
               <span className="text-[10px] text-slate-500 dark:text-slate-400">{result.total_latency_ms}ms</span>
             )}

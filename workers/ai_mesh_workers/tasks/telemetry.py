@@ -758,6 +758,11 @@ def update_risk_scores_from_telemetry() -> dict:
                 logger.debug("No active GatewayAPIKey found for prefix=%s", prefix)
                 continue
 
+            from core.models import is_live_test_gateway_project_id
+
+            if is_live_test_gateway_project_id(api_key.project_id):
+                continue
+
             old_score = api_key.risk_score
 
             GatewayAPIKey.objects.filter(pk=api_key.pk).update(
