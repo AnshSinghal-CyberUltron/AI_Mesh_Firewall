@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "ws.apps.WsConfig",
     "security_engines.apps.SecurityEnginesConfig",
     "mcp_connector.apps.McpConnectorConfig",
+    "module2.apps.Module2Config",
     # "console.apps.ConsoleConfig",
 ]
 
@@ -358,6 +359,10 @@ TELEMETRY_DRAIN_INTERVAL_SEC = float(os.environ.get("TELEMETRY_DRAIN_INTERVAL_SE
 TELEMETRY_GATEWAY_JOB_DRAIN_INTERVAL_SEC = float(os.environ.get("TELEMETRY_GATEWAY_JOB_DRAIN_INTERVAL_SEC", "1.0"))
 TELEMETRY_DRAIN_MODE = os.environ.get("TELEMETRY_DRAIN_MODE", "beat").strip().lower()
 
+MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC = float(os.environ.get("MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC", "300"))
+MODULE2_TELEMETRY_REPAIR_BATCH_SIZE = int(os.environ.get("MODULE2_TELEMETRY_REPAIR_BATCH_SIZE", "250"))
+MODULE2_TELEMETRY_REPAIR_LOOKBACK_HOURS = int(os.environ.get("MODULE2_TELEMETRY_REPAIR_LOOKBACK_HOURS", "720"))
+
 CELERY_BEAT_SCHEDULE = {
     "process-telemetry-batch": {
         "task": "core.tasks.process_telemetry_batch",
@@ -380,6 +385,18 @@ CELERY_BEAT_SCHEDULE = {
     "generate-compliance-report": {
         "task": "core.tasks.generate_compliance_report",
         "schedule": crontab(hour=2, minute=0),
+    },
+    "module2-evaluate-alerts": {
+        "task": "module2.tasks.evaluate_all_org_alerts",
+        "schedule": 60.0,
+    },
+    "module2-anomaly-detection": {
+        "task": "module2.tasks.run_all_anomaly_detection",
+        "schedule": 300.0,
+    },
+    "module2-repair-telemetry": {
+        "task": "module2.tasks.repair_telemetry_metadata",
+        "schedule": MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC,
     },
 }
 

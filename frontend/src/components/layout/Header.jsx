@@ -154,6 +154,11 @@ const TAB_TITLES = {
   "firewall-1-6": "Model Isolation & Kill-Switch",
   "firewall-1-7": "Output Guardrails",
   "firewall-config": "Module 1 Inputs",
+  "m2-dashboard": "M2.1 Gateway Intelligence",
+  "m2-ueba-api-keys": "M2.2 API Key Behavior (UEBA)",
+  "m2-models-exposure": "M2.3 Model Health & Exposure",
+  "m2-threat-intel": "M2.4 Threat Intelligence",
+  "m2-incidents": "M2.5 Incidents",
 };
 
 export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSearchSubmit, onTabChange, onMobileMenuToggle }) {
@@ -171,13 +176,18 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
   const bellRef = useRef(null);
   const userDropdownRef = useRef(null);
 
-  const fetchNotifications = useCallback(async () => {
+  const notificationsFetchedAtRef = useRef(0);
+
+  const fetchNotifications = useCallback(async (force = false) => {
     if (!isAdmin || !user) return;
+    const now = Date.now();
+    if (!force && now - notificationsFetchedAtRef.current < 60_000) return;
     try {
       const res = await fetchWithAuth("/api/notifications/?limit=30");
       if (res.ok) {
         const data = await res.json();
         setNotifications(Array.isArray(data) ? data : []);
+        notificationsFetchedAtRef.current = now;
       }
     } catch {
       // non-critical
@@ -185,10 +195,7 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
   }, [fetchWithAuth, isAdmin, user]);
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      fetchNotifications();
-    }, 0);
-    return () => clearTimeout(id);
+    fetchNotifications();
   }, [fetchNotifications]);
 
   // Close notification dropdown when clicking outside
@@ -217,8 +224,8 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
 
   useRealtimeNotifications({
     enabled: isAdmin,
-    onEscalationEvent: fetchNotifications,
-    onResolutionEvent: fetchNotifications,
+    onEscalationEvent: () => fetchNotifications(true),
+    onResolutionEvent: () => fetchNotifications(true),
   });
 
   const handleMarkRead = useCallback(async (id) => {
@@ -257,7 +264,9 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
 
   const searchValue = onSearchQueryChange !== undefined ? searchQuery : localQuery;
   const setSearchValue = onSearchQueryChange || setLocalQuery;
-  const pageTitle = TAB_TITLES[activeTab] || "Control Console";
+  const pageTitle =
+    TAB_TITLES[activeTab]
+    || (activeTab?.startsWith("m2-") ? "Gateway Behaviour Intelligence" : "Control Console");
   const environment = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "DEV" : "PROD";
 
   const isDark = resolvedTheme === "dark";

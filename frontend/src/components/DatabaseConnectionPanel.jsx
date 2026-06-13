@@ -3,10 +3,12 @@ import {
   Database, CheckCircle, AlertTriangle, Loader2, Zap, RefreshCw, List, Play, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { InfoTooltip } from "./InfoTooltip";
-import { resolveGatewayBaseUrl } from "../utils/environmentUrls";
-
-const GATEWAY_URL_KEY = "zeroshield_gateway_url";
-const GATEWAY_KEY_KEY = "zeroshield_gateway_api_key";
+import {
+  getGatewayApiKey,
+  getGatewayUrl,
+  setGatewayApiKey,
+  setGatewayUrl as persistGatewayUrl,
+} from "../utils/gatewayStorage";
 
 const DB_PROVIDERS = [
   {
@@ -70,12 +72,16 @@ function ConnectionStatusBadge({ status }) {
 }
 
 export function DatabaseConnectionPanel() {
-  const [gatewayUrl, setGatewayUrl] = useState(() => {
-    const stored = localStorage.getItem(GATEWAY_URL_KEY);
-    if (stored) return stored;
-    return resolveGatewayBaseUrl() || "http://127.0.0.1:8300";
-  });
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(GATEWAY_KEY_KEY) || "");
+  const [gatewayUrl, setGatewayUrlState] = useState(() => getGatewayUrl());
+  const [apiKey, setApiKeyState] = useState(() => getGatewayApiKey());
+  const setGatewayUrl = (url) => {
+    setGatewayUrlState(url);
+    persistGatewayUrl(url);
+  };
+  const setApiKey = (key) => {
+    setApiKeyState(key);
+    setGatewayApiKey(key);
+  };
   const [selectedProvider, setSelectedProvider] = useState("chromadb");
   const [fieldValues, setFieldValues] = useState({});
   const [simFieldValues, setSimFieldValues] = useState({});
@@ -111,8 +117,8 @@ export function DatabaseConnectionPanel() {
       return;
     }
 
-    localStorage.setItem(GATEWAY_URL_KEY, gatewayUrl);
-    localStorage.setItem(GATEWAY_KEY_KEY, apiKey);
+    persistGatewayUrl(gatewayUrl);
+    setGatewayApiKey(apiKey);
 
     setTesting(true);
     setResult(null);
@@ -170,8 +176,8 @@ export function DatabaseConnectionPanel() {
     const query = simFieldValues.query;
     if (!collection || !query) { setError("Collection/Index name and query are required for simulation."); return; }
 
-    localStorage.setItem(GATEWAY_URL_KEY, gatewayUrl);
-    localStorage.setItem(GATEWAY_KEY_KEY, apiKey);
+    persistGatewayUrl(gatewayUrl);
+    setGatewayApiKey(apiKey);
 
     setSimulating(true);
     setSimResult(null);

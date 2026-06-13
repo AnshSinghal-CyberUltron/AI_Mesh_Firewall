@@ -347,6 +347,7 @@ class InputScanner:
         thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,
         config: dict | None = None,
         embedding_vault: Any = None,
+        config_sync: Any = None,
     ) -> None:
         self._executor = ThreadPoolExecutor(
             max_workers=thread_pool_size,
@@ -363,6 +364,7 @@ class InputScanner:
         )
         self._config = config or {}
         self._embedding_vault = embedding_vault
+        self._config_sync = config_sync
         # Tier-2 (Bedrock) feature flag can be enabled via env var ENABLE_TIER2
         self.tier2_enabled = os.getenv("ENABLE_TIER2", "true").lower() in ("1", "true", "yes")
         self._bedrock_scanner: BedrockScanner | None = BedrockScanner() if self.tier2_enabled else None
@@ -389,6 +391,7 @@ class InputScanner:
         text: str,
         is_rag: bool = False,
         toxicity_threshold: float | None = None,
+        org_slug: str = "",
     ) -> ScanVerdict:
         """Asynchronously scan the prompt for threats and return a structured verdict.
 
@@ -405,6 +408,7 @@ class InputScanner:
             text,
             is_rag,
             toxicity_threshold,
+            org_slug,
         )
     async def scan_output(self, text: str) -> ScanVerdict:
         """Asynchronously scan the LLM output for PII/Secrets and return a structured verdict."""
@@ -416,11 +420,44 @@ class InputScanner:
             text,
         )
 
+    def _check_threat_intel(self, text: str, org_slug: str) -> ScanVerdict | None:
+        """Tier-0: Module 2 threat intelligence pattern match."""
+        if not self._config_sync or not org_slug:
+            return None
+        entries = self._config_sync.get_threat_intel(org_slug)
+        for entry in entries:
+            indicator = entry.get("indicator") or ""
+            if not indicator:
+                continue
+            try:
+                if re.search(indicator, text, re.IGNORECASE):
+                    action = "block" if entry.get("auto_block") else "monitor"
+                    return ScanVerdict(
+                        action=action,
+                        threat_type=entry.get("threat_type") or "threat_intel",
+                        confidence=float(entry.get("confidence") or 0.9),
+                        detail=f"Threat intel match: {entry.get('threat_type', 'unknown')}",
+                        matched_patterns=[indicator[:80]],
+                        tier="tier_0",
+                    )
+            except re.error:
+                if indicator.lower() in text.lower():
+                    action = "block" if entry.get("auto_block") else "monitor"
+                    return ScanVerdict(
+                        action=action,
+                        threat_type=entry.get("threat_type") or "threat_intel",
+                        confidence=float(entry.get("confidence") or 0.9),
+                        detail=f"Threat intel substring match: {entry.get('threat_type', 'unknown')}",
+                        tier="tier_0",
+                    )
+        return None
+
     def _scan_prompt_sync(
         self,
         text: str,
         is_rag: bool,
         toxicity_threshold: float | None = None,
+        org_slug: str = "",
     ) -> ScanVerdict:
         """Synchronous prompt scanning logic, run in a thread to avoid blocking."""
         if not text:
@@ -447,7 +484,11 @@ class InputScanner:
                 detail="Excessive repetition detected (potential DoS)",
                 tier="tier_1",
             )
-        
+
+        intel_verdict = self._check_threat_intel(text, org_slug)
+        if intel_verdict and intel_verdict.action == "block":
+            return intel_verdict
+
         for category, patterns in ATTACK_PATTERNS.items():
             matched = []
             for pattern_str in patterns:

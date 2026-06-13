@@ -196,7 +196,10 @@ def _build_enforcement_metadata(event: dict) -> dict:
         result["module"] = "1.5"
         result["module_id"] = "1.5"
 
-    return result
+    from module2.telemetry_health import normalize_enforcement_metadata
+
+    normalized, _ = normalize_enforcement_metadata(result)
+    return normalized
 
 
 def _build_notification_payload(ev) -> dict:
@@ -618,6 +621,7 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
 
     events_to_create: list[EnforcementEvent] = []
     processed = 0
+    key_org_by_prefix = None
 
     # DATA-01 FIX: Atomic dequeue using Lua script to prevent event loss
     ATOMIC_DEQUEUE_LUA = """
@@ -671,21 +675,15 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
                     )
                     continue
 
-            enforcement_event = EnforcementEvent(
-                policy=None,
-                rule=None,
-                action=event.get("action", "allow"),
-                user_id=event.get("user_id"),
-                endpoint_id=event.get("endpoint_id"),
-                agent=None,
-                metadata=_build_enforcement_metadata(event),
-            )
-            # Set organization from telemetry event (injected by gateway)
-            org_id = event.get("organization_id") or (event.get("metadata") or {}).get("organization_id")
-            try:
-                org_id = int(org_id) if org_id is not None else None
-            except (TypeError, ValueError):
-                org_id = None
+            metadata = _build_enforcement_metadata(event)
+            if key_org_by_prefix is None:
+                from module2.telemetry_health import build_key_org_map
+
+                key_org_by_prefix = build_key_org_map()
+
+            from module2.telemetry_health import resolve_organization_id
+
+            org_id = resolve_organization_id(event, metadata, key_org_by_prefix)
 
             if not org_id or org_id <= 0:
                 logger.warning(
@@ -694,7 +692,17 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
                 )
                 continue
 
-            enforcement_event.organization_id = org_id
+            metadata["organization_id"] = org_id
+            enforcement_event = EnforcementEvent(
+                policy=None,
+                rule=None,
+                action=event.get("action", "allow"),
+                user_id=event.get("user_id"),
+                endpoint_id=event.get("endpoint_id"),
+                agent=None,
+                metadata=metadata,
+                organization_id=org_id,
+            )
             events_to_create.append(enforcement_event)
             processed += 1
 
@@ -719,6 +727,13 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
             # SecurityIncidents for blocked events so the frontend
             # ReviewQueuePanel and SecurityIncidentPanel have data.
             _auto_create_review_items_and_incidents(events_to_create)
+
+        try:
+            from module2.telemetry_health import maybe_repair_stale_telemetry
+
+            maybe_repair_stale_telemetry()
+        except Exception:
+            logger.warning("Background Module 2 telemetry repair failed", exc_info=True)
 
     except redis.RedisError:
         logger.exception("drain_telemetry_from_redis: Redis error during drain")

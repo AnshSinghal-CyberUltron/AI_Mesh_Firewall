@@ -91,6 +91,12 @@ class CoreConfig(AppConfig):
 
             # Let migrations / other startup work settle before periodic writes begin.
             time.sleep(20.0)
+            try:
+                from module2.telemetry_health import maybe_repair_stale_telemetry
+
+                maybe_repair_stale_telemetry(force=True)
+            except Exception:
+                logger.warning("Startup Module 2 telemetry repair failed", exc_info=True)
             batch_size = int(getattr(settings, "TELEMETRY_DRAIN_BATCH_SIZE", 250))
             interval_seconds = float(getattr(settings, "TELEMETRY_DRAIN_INTERVAL_SEC", 1.0))
             while True:

@@ -46,7 +46,37 @@ def _is_browser_reachable(url: str) -> bool:
         return False
 
 
+def _local_frontend_origin(request: Request) -> str:
+    origin = (request.headers.get("Origin") or "").strip()
+    if origin and _is_browser_reachable(origin):
+        return origin.rstrip("/")
+    referer = (request.headers.get("Referer") or "").strip()
+    if referer:
+        try:
+            parsed = urlparse(referer)
+            if parsed.scheme and parsed.netloc:
+                candidate = f"{parsed.scheme}://{parsed.netloc}"
+                if _is_browser_reachable(candidate):
+                    return candidate.rstrip("/")
+        except Exception:
+            pass
+    return ""
+
+
 def _resolve_public_gateway_url(request: Request) -> str:
+    # Local dev: simulators must hit the Vite same-origin proxy so browser API keys
+    # match the control plane Redis — not a remote GATEWAY_PUBLIC_URL from .env.
+    if getattr(settings, "DEBUG", False):
+        for candidate in (
+            _local_frontend_origin(request),
+            "http://127.0.0.1:8180",
+            "http://localhost:8180",
+            "http://127.0.0.1:8300",
+            os.environ.get("FRONTEND_ORIGIN", "").strip(),
+        ):
+            if candidate and _is_browser_reachable(candidate):
+                return candidate.rstrip("/")
+
     for candidate in (
         getattr(settings, "GATEWAY_PUBLIC_URL", None) or "",
         os.environ.get("FRONTEND_ORIGIN", "").strip(),

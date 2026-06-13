@@ -1366,6 +1366,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
             decision = "allow"
             reason = ""
             _scan_meta_out: dict = {}
+            _outbound_hit = False
             if isinstance(payload, dict) and payload.get("error"):
                 decision = "error"
                 reason = str(payload["error"].get("message", ""))[:255]
@@ -1385,6 +1386,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                     )
                 )
                 if _out_tags_new or _out_find_new:
+                    _outbound_hit = True
                     for t in _out_tags_new:
                         if t not in _out_tags:
                             _out_tags.append(t)
@@ -1432,6 +1434,9 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                     "enforced_at": "gateway_adapter",
                     "scan_action": _scan_action,
                     "scan_pipeline": "two_tier",
+                    # Direction the violation (if any) occurred in; clean calls
+                    # attribute to the inbound argument scan.
+                    "scan_direction": "outbound" if _outbound_hit else "inbound",
                     "scan_trace": (
                         list(_scan_meta_in.get("scan_trace") or [])
                         + (list(_scan_meta_out.get("scan_trace") or []) if isinstance(payload, dict) else [])
@@ -1528,6 +1533,20 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         "scan_action": _scan_action,
                         "scan_pipeline": "two_tier",
                         "monitored": _monitored,
+                        # Direction the violation (if any) occurred in: outbound
+                        # when the response scan blocked/found/redacted content
+                        # (or the backend reported output redaction), otherwise
+                        # attributed to the inbound argument scan.
+                        "scan_direction": (
+                            "outbound"
+                            if (
+                                _out_blocked2
+                                or _out_find_new2
+                                or _scanned_content is not result_content
+                                or bool(data.get("redacted"))
+                            )
+                            else "inbound"
+                        ),
                         "scan_trace": _merged_trace_base + list(_scan_meta_out2.get("scan_trace") or []),
                     }
                     if _out_blocked2:
@@ -1562,7 +1581,14 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         )
                     # The orchestrator already applied any per-tier redaction and
                     # returns the mutated content; swap it in whenever it changed.
-                    _was_redacted = _in_redacted or (_scanned_content is not result_content)
+                    # The backend signals its own output redaction via the
+                    # 'redacted' response flag (its scan sees the raw tool
+                    # output; the gateway only ever sees post-redaction text).
+                    _was_redacted = (
+                        _in_redacted
+                        or bool(data.get("redacted"))
+                        or (_scanned_content is not result_content)
+                    )
                     if _scanned_content is not result_content:
                         result_content = _scanned_content
                     # Decision precedence: block (handled above) > redact > monitor > allow.

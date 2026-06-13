@@ -1797,6 +1797,7 @@ async def startup():
             thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
             config=CONFIG,
             embedding_vault=_embedding_vault,
+            config_sync=CONFIG_SYNC,
         )
 
     # Shared async Redis client for kill-switch + telemetry
@@ -3383,6 +3384,7 @@ async def proxy_chat(
                     verdict = await INPUT_SCANNER.scan_prompt(
                         effective_prompt, is_rag=is_rag_request,
                         toxicity_threshold=org_toxicity_threshold,
+                        org_slug=org_slug,
                     )
                     stage_metrics["tier1_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
                     await enqueue_job(
@@ -3432,6 +3434,28 @@ async def proxy_chat(
                 if enforcement_mode == "block":
                     METRICS["blocked"] += 1
                     elapsed_ms = (time.perf_counter() - start) * 1000
+                    _emit_telemetry(
+                        status_code=403,
+                        event_type="input_blocked",
+                        model=body.get("model", ""),
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        action="block",
+                        risk_score=getattr(verdict, "confidence", None) or 0.85,
+                        threat_type=getattr(verdict, "threat_type", None) or "tier2_degraded",
+                        compliance_tags=org_config.get("compliance_frameworks", []),
+                        pipeline_stage="query",
+                        intent=_request_intent,
+                        latency_ms=elapsed_ms,
+                        metadata={
+                            "detail": verdict.detail,
+                            "reason_code": getattr(verdict, "reason_code", ""),
+                            "matched_patterns": getattr(verdict, "matched_patterns", None) or [],
+                        },
+                        prompt_snippet=_prompt_snippet,
+                        endpoint_id=endpoint_id,
+                    )
                     _audit_fire_and_forget(
                         org_slug=org_slug or "",
                         decision="block",
@@ -6518,7 +6542,8 @@ async def _policy_check_tier1_scan_block(
     if INPUT_SCANNER is None or not org_config.get("input_scan_enabled", True) or not prompt:
         return None
     try:
-        verdict = await INPUT_SCANNER.scan_prompt(prompt)
+        org_slug = getattr(auth_ctx, "org_slug", "") if auth_ctx else ""
+        verdict = await INPUT_SCANNER.scan_prompt(prompt, org_slug=org_slug)
     except Exception as exc:
         LOG.warning("Tier-1 scan failed on /v1/policy/check: %s", exc)
         return None

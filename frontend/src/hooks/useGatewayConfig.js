@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import {
   getGatewayStorageKey,
   isBrowserReachableUrl,
+  isLocalDevBrowser,
   resolveBrowserBackendBaseUrl,
   resolveBrowserGatewayBaseUrl,
 } from "../utils/environmentUrls";
+import { migrateGatewayStorage } from "../utils/gatewayStorage";
 
 const GATEWAY_URL_KEY = getGatewayStorageKey();
 
@@ -23,10 +25,12 @@ export function useGatewayConfig() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    migrateGatewayStorage();
     const stored = localStorage.getItem(GATEWAY_URL_KEY);
     if (stored && !isBrowserReachableUrl(stored)) {
       localStorage.removeItem(GATEWAY_URL_KEY);
     }
+    setGatewayUrl(resolveBrowserGatewayBaseUrl());
   }, []);
 
   useEffect(() => {
@@ -37,7 +41,7 @@ export function useGatewayConfig() {
         if (cancelled) return;
         const fallbackGw = resolveBrowserGatewayBaseUrl();
         const fallbackBe = resolveBrowserBackendBaseUrl();
-        const gw =
+        let gw =
           data?.gateway_url && isBrowserReachableUrl(data.gateway_url)
             ? data.gateway_url
             : fallbackGw;
@@ -45,6 +49,12 @@ export function useGatewayConfig() {
           data?.backend_url && isBrowserReachableUrl(data.backend_url)
             ? data.backend_url
             : fallbackBe;
+        if (isLocalDevBrowser()) {
+          const localGw = resolveBrowserGatewayBaseUrl();
+          if (gw && localGw && gw !== localGw) {
+            gw = localGw;
+          }
+        }
         setGatewayUrl(gw);
         setBackendUrl(be);
         if (isBrowserReachableUrl(gw)) {

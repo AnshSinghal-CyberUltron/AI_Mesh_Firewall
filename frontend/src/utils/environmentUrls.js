@@ -47,6 +47,22 @@ function getBrowserProtocol() {
   return window.location.protocol || "http:";
 }
 
+const LOCAL_DEV_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
+
+/** True when the UI is served from a local dev host (Vite / docker frontend). */
+export function isLocalDevBrowser() {
+  const host = getBrowserHost().toLowerCase();
+  return LOCAL_DEV_HOSTS.has(host);
+}
+
+function hostsDiffer(a, b) {
+  try {
+    return new URL(a).hostname.toLowerCase() !== new URL(b).hostname.toLowerCase();
+  } catch {
+    return true;
+  }
+}
+
 function buildBaseUrl({ protocol, host, port }) {
   if (!host) return "";
   if (!hasValue(port)) return `${protocol}//${host}`;
@@ -78,16 +94,28 @@ export function isBrowserReachableUrl(value) {
 
 /**
  * Gateway base URL for browser-side fetch().
- * Prefer same-origin so Vite proxies /v1 → gateway (no CORS).
+ * On localhost prefer same-origin so Vite proxies /v1 → local gateway (no CORS,
+ * and API keys from the local control plane match local Redis).
  */
 export function resolveBrowserGatewayBaseUrl() {
+  const origin = trimTrailingSlash(getBrowserOrigin());
   const explicit = trimTrailingSlash(import.meta.env?.VITE_GATEWAY_BASE_URL || "");
+  const stored = getStoredGatewayUrl();
+
+  if (isLocalDevBrowser() && origin && isBrowserReachableUrl(origin)) {
+    if (explicit && isBrowserReachableUrl(explicit) && hostsDiffer(explicit, origin)) {
+      return origin;
+    }
+    if (stored && isBrowserReachableUrl(stored) && hostsDiffer(stored, origin)) {
+      return origin;
+    }
+    return origin;
+  }
+
   if (explicit && isBrowserReachableUrl(explicit)) return explicit;
 
-  const origin = trimTrailingSlash(getBrowserOrigin());
   if (origin && isBrowserReachableUrl(origin)) return origin;
 
-  const stored = getStoredGatewayUrl();
   if (stored && isBrowserReachableUrl(stored)) return stored;
 
   return resolveGatewayBaseUrl();

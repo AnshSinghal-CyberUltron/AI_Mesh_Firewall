@@ -28,7 +28,7 @@ import redis
 from ai_mesh_shared.redis_pool import connection_pool_kwargs
 from django.conf import settings
 from django.db import transaction
-from django.db.models.signals import post_delete, post_save
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
 from core.models import FirewallConfig, GatewayAPIKey, KillSwitch, LLMModelConfig, ModelState
@@ -65,6 +65,23 @@ def _get_redis_client() -> redis.Redis:
 def _build_redis_key(key_hash: str) -> str:
     """Construct the Redis key for a given API key hash."""
     return f"{REDIS_KEY_PREFIX}{key_hash}"
+
+
+@receiver(pre_save, sender=GatewayAPIKey)
+def ensure_gateway_apikey_organization(
+    sender: type,
+    instance: GatewayAPIKey,
+    **kwargs: Any,
+) -> None:
+    """Assign tenant org from key owner when missing (prevents Module 2 org mismatch)."""
+    if instance.organization_id or not instance.owner_id:
+        return
+    try:
+        org_id = instance.owner.profile.organization_id
+    except Exception:
+        return
+    if org_id:
+        instance.organization_id = org_id
 
 
 @receiver(post_save, sender=GatewayAPIKey)

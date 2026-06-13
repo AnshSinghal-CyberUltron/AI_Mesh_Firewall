@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useGatewayConfig } from "./useGatewayConfig";
 import { useAuth } from "../context/AuthContext";
+import { isLocalDevBrowser } from "../utils/environmentUrls";
+import {
+  getGatewayApiKey,
+  migrateGatewayStorage,
+  setGatewayApiKey,
+} from "../utils/gatewayStorage";
 
 const HEALTH_POLL_INTERVAL = 15000;
-const GATEWAY_KEY_STORAGE = "zeroshield_gateway_key";
 
 /**
  * Shared hook for all Module 1 live simulators.
@@ -14,10 +19,12 @@ export function useSimulatorEngine() {
   const { gatewayUrl } = useGatewayConfig();
   const { fetchWithAuth } = useAuth();
 
-  const [gatewayKey, setGatewayKey] = useState(
-    () => localStorage.getItem(GATEWAY_KEY_STORAGE) || ""
-  );
+  const [gatewayKey, setGatewayKey] = useState(() => {
+    migrateGatewayStorage();
+    return getGatewayApiKey();
+  });
   const [connectionStatus, setConnectionStatus] = useState("disconnected"); // connected | degraded | disconnected
+  const [authStatus, setAuthStatus] = useState("unknown"); // ok | invalid | missing | unknown
   const [backendHealth, setBackendHealth] = useState(null);
   const [gatewayHealth, setGatewayHealth] = useState(null);
   const [executing, setExecuting] = useState(false);
@@ -27,10 +34,10 @@ export function useSimulatorEngine() {
   const healthRef = useRef(null);
   const defaultKeyFetchedRef = useRef(false);
 
-  // Save gateway key to localStorage
+  // Save gateway key to localStorage (both legacy + primary keys)
   const updateGatewayKey = useCallback((key) => {
     setGatewayKey(key);
-    localStorage.setItem(GATEWAY_KEY_STORAGE, key);
+    setGatewayApiKey(key);
   }, []);
 
   // Authenticated fetch to gateway
@@ -93,10 +100,11 @@ export function useSimulatorEngine() {
     }
   }, [fetchWithAuth]);
 
-  // Health check polling
+  // Health check polling (includes API key validation — /health alone is not enough)
   const checkHealth = useCallback(async () => {
     let gwOk = false;
     let beOk = false;
+    let keyOk = false;
 
     try {
       const res = await fetch(`${gatewayUrl}/health`, { signal: AbortSignal.timeout(5000) });
@@ -115,8 +123,31 @@ export function useSimulatorEngine() {
       setBackendHealth(null);
     }
 
-    setConnectionStatus(gwOk && beOk ? "connected" : gwOk || beOk ? "degraded" : "disconnected");
-  }, [gatewayUrl]);
+    if (gatewayKey?.trim()) {
+      try {
+        const res = await fetch(`${gatewayUrl}/v1/models`, {
+          headers: { Authorization: `Bearer ${gatewayKey.trim()}` },
+          signal: AbortSignal.timeout(5000),
+        });
+        keyOk = res.status !== 401;
+        setAuthStatus(res.status === 401 ? "invalid" : "ok");
+      } catch {
+        setAuthStatus("unknown");
+      }
+    } else {
+      setAuthStatus("missing");
+    }
+
+    if (gwOk && beOk && gatewayKey?.trim() && keyOk) {
+      setConnectionStatus("connected");
+    } else if (gwOk && beOk) {
+      setConnectionStatus(keyOk ? "connected" : "degraded");
+    } else if (gwOk || beOk) {
+      setConnectionStatus("degraded");
+    } else {
+      setConnectionStatus("disconnected");
+    }
+  }, [gatewayUrl, gatewayKey]);
 
   useEffect(() => {
     checkHealth();
@@ -126,6 +157,7 @@ export function useSimulatorEngine() {
 
   useEffect(() => {
     if (gatewayKey || defaultKeyFetchedRef.current) return;
+    if (!isLocalDevBrowser()) return;
     defaultKeyFetchedRef.current = true;
 
     (async () => {
@@ -187,6 +219,7 @@ export function useSimulatorEngine() {
     gatewayKey,
     setGatewayKey: updateGatewayKey,
     connectionStatus,
+    authStatus,
     backendHealth,
     gatewayHealth,
     gatewayFetch,

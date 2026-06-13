@@ -325,6 +325,13 @@ class GatewayAPIKeyViewSet(ModelViewSet):
             max_context_tokens=validated.get("max_context_tokens", 0),
         )
 
+        from auth.utils import get_request_organization
+
+        org = get_request_organization(request)
+        if org and not instance.organization_id:
+            instance.organization = org
+            instance.save(update_fields=["organization"])
+
         logger.info(
             "GatewayAPIKey created: prefix=%s user_id=%s project=%s",
             instance.prefix,

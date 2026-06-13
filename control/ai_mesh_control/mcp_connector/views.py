@@ -1348,7 +1348,25 @@ class MCPToolCallView(APIView):
             "mcp_connector.tool.called org_id=%s user_id=%s agent=%s tool=%s success=true latency_ms=%s decision=%s redacted_fields=%s",
             org.id, actor_user_id, agent_id, tool_name, latency_ms, _final_decision, redacted_field_names,
         )
-        return Response({"result": result, "request_id": request_id, "decision": _final_decision})
+        # Surface output redaction to the gateway: its outbound scan only ever
+        # sees the post-redaction response, so without this flag the canonical
+        # gateway audit event would mis-record redacted calls as clean allows.
+        _output_redaction_applied = bool(
+            not _output_monitor
+            and (
+                (eval_out is not None and eval_out.redaction_hints)
+                or redacted_field_names
+            )
+        )
+        return Response(
+            {
+                "result": result,
+                "request_id": request_id,
+                "decision": _final_decision,
+                "redacted": _output_redaction_applied,
+                "redacted_fields": redacted_field_names,
+            }
+        )
 
 
 # ── Helper: Record structured MCP event ──────────────────────────────
@@ -1510,8 +1528,18 @@ def _record_event(
                     except Exception:
                         _policy_obj = None
 
+                # threat_type drives the auto-created SecurityIncident title
+                # for blocked calls (see _GATEWAY_THREAT_TO_INCIDENT_TITLE).
+                if "pii" in _reason:
+                    _threat_type = "data_leakage"
+                elif "tool_disabled" in _reason:
+                    _threat_type = "tool_overreach"
+                else:
+                    _threat_type = "policy_violation"
+
                 _ef_metadata = {
                     "source": "mcp_scan",
+                    "threat_type": _threat_type if decision == "block" else "",
                     "threat_category": _threat_category,
                     "owasp_code": _owasp,
                     "owasp_codes": [_owasp] if _owasp else [],
@@ -1539,6 +1567,14 @@ def _record_event(
                     "pipeline_stage": "mcp_tool_call",
                     "intent": f"mcp:{tool_name}",
                     "event_type": "mcp_tool_call",
+                    # Module 2 MCP Risk page direction split: inbound = argument
+                    # scans, outbound = tool-response scans. Gateway scan meta
+                    # carries this as scan_direction.
+                    "mcp_direction": str(
+                        ev_metadata.get("mcp_direction")
+                        or ev_metadata.get("scan_direction")
+                        or "inbound"
+                    ),
                     "compliance_tags": ["OWASP-MCP", _owasp],
                     "rate_limit_status": "n/a",
                     "auth_status": "authenticated" if actor_user_id else "anonymous",
@@ -1558,7 +1594,7 @@ def _record_event(
                 for _k, _v in (metadata or {}).items():
                     _ef_metadata.setdefault(_k, _v)
 
-                _EnforcementEvent.objects.create(
+                _ef_event = _EnforcementEvent.objects.create(
                     organization=org,
                     policy=_policy_obj,
                     rule=_rule_obj,
@@ -1566,6 +1602,18 @@ def _record_event(
                     user_id=actor_user_id,
                     metadata=_ef_metadata,
                 )
+                # Blocked MCP calls must surface in the SOC incident queue just
+                # like blocked gateway traffic does via the telemetry drain.
+                if _action == "block":
+                    try:
+                        from core.tasks import _auto_create_review_items_and_incidents
+
+                        _auto_create_review_items_and_incidents([_ef_event])
+                    except Exception as _inc_exc:
+                        logger.warning(
+                            "Failed to create SecurityIncident for blocked MCP event: %s",
+                            _inc_exc,
+                        )
             except Exception as _ef_exc:
                 logger.warning(
                     "Failed to mirror MCP event to EnforcementEvent: %s",

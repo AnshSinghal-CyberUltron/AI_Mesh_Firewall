@@ -25,6 +25,8 @@ REDIS_KEY_PREFIX = "firewall:config:"
 LLM_MODEL_CONFIGS_REDIS_KEY = "llm:model_configs"
 LLM_MODEL_CONFIGS_PREFIX = "llm:model_configs:"
 PUBSUB_CHANNEL = "config_updates"
+THREAT_INTEL_KEY_PREFIX = "firewall:threat_intel:"
+THREAT_INTEL_CHANNEL = "threat_intel_updates"
 RECONNECT_DELAY_SECONDS = 5
 
 LOG_LEVEL_MAP: dict[str, int] = {
@@ -50,7 +52,9 @@ class ConfigSync:
         self._config_by_org: dict[str, dict[str, Any]] = {}
         self._model_routing_by_org: dict[str, list[dict]] = {}
         self._fallback_chains_by_org: dict[str, dict[str, Any]] = {}
+        self._threat_intel_by_org: dict[str, list[dict[str, Any]]] = {}
         self._subscriber_task: Optional[asyncio.Task] = None
+        self._threat_intel_task: Optional[asyncio.Task] = None
         self._running: bool = False
 
     def get_config(self, org_slug: str = "") -> dict[str, Any]:
@@ -73,6 +77,12 @@ class ConfigSync:
             return self._fallback_chains_by_org[org_slug]
         return self._fallback_chains_by_org.get("default", {})
 
+    def get_threat_intel(self, org_slug: str = "") -> list[dict[str, Any]]:
+        """Return threat intelligence entries for an org (from Module 2 sync)."""
+        if org_slug and org_slug in self._threat_intel_by_org:
+            return self._threat_intel_by_org[org_slug]
+        return self._threat_intel_by_org.get("default", [])
+
     @property
     def is_loaded(self) -> bool:
         return self._config.get("_config_sync_loaded", False)
@@ -84,7 +94,9 @@ class ConfigSync:
         """
         self._running = True
         await self._load_initial()
+        await self._load_threat_intel_initial()
         self._subscriber_task = asyncio.create_task(self._subscriber_loop())
+        self._threat_intel_task = asyncio.create_task(self._threat_intel_subscriber_loop())
         LOG.info(
             "ConfigSync started (loaded=%s, firewall_enabled=%s, enforcement_mode=%s)",
             self.is_loaded,
@@ -95,12 +107,13 @@ class ConfigSync:
     async def stop(self) -> None:
         """Stop the background subscriber gracefully."""
         self._running = False
-        if self._subscriber_task is not None:
-            self._subscriber_task.cancel()
-            try:
-                await self._subscriber_task
-            except asyncio.CancelledError:
-                pass
+        for task in (self._subscriber_task, self._threat_intel_task):
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
         LOG.info("ConfigSync stopped")
 
     async def reload_models_now(self, org_slug: str = "") -> None:
@@ -176,6 +189,92 @@ class ConfigSync:
                 "Failed to load firewall config from Redis. Will retry when Pub/Sub connects.",
                 exc_info=True,
             )
+
+    async def _load_threat_intel_initial(self) -> None:
+        """Load threat intel entries from Redis on startup."""
+        try:
+            client = aioredis.Redis.from_url(
+                self._redis_url,
+                decode_responses=True,
+                socket_timeout=3.0,
+                socket_connect_timeout=2.0,
+            )
+            async for key in client.scan_iter(match=f"{THREAT_INTEL_KEY_PREFIX}*"):
+                raw = await client.get(key)
+                if raw:
+                    slug = key.replace(THREAT_INTEL_KEY_PREFIX, "")
+                    self._threat_intel_by_org[slug] = json.loads(raw)
+            await client.aclose()
+        except Exception:
+            LOG.warning("Failed to load threat intel from Redis", exc_info=True)
+
+    async def _reload_threat_intel(self, client: aioredis.Redis, org_slug: str = "") -> None:
+        """Fetch latest threat intel for an org from Redis."""
+        try:
+            if org_slug:
+                key = f"{THREAT_INTEL_KEY_PREFIX}{org_slug}"
+                raw = await client.get(key)
+                if raw is not None:
+                    self._threat_intel_by_org[org_slug] = json.loads(raw)
+                    LOG.info("Threat intel hot-reloaded for '%s'", org_slug)
+            else:
+                async for key in client.scan_iter(match=f"{THREAT_INTEL_KEY_PREFIX}*"):
+                    raw = await client.get(key)
+                    if raw:
+                        slug = key.replace(THREAT_INTEL_KEY_PREFIX, "")
+                        self._threat_intel_by_org[slug] = json.loads(raw)
+        except Exception:
+            LOG.exception("Failed to reload threat intel from Redis")
+
+    async def _threat_intel_subscriber_loop(self) -> None:
+        """Subscribe to threat_intel_updates Pub/Sub channel."""
+        while self._running:
+            client = None
+            pubsub = None
+            try:
+                client = aioredis.Redis.from_url(
+                    self._redis_url,
+                    decode_responses=True,
+                    socket_timeout=None,
+                    socket_connect_timeout=3.0,
+                )
+                pubsub = client.pubsub()
+                await pubsub.subscribe(THREAT_INTEL_CHANNEL)
+                LOG.info("ConfigSync subscribed to '%s'", THREAT_INTEL_CHANNEL)
+
+                async for message in pubsub.listen():
+                    if not self._running:
+                        break
+                    if message["type"] != "message":
+                        continue
+                    msg_data = message.get("data", "")
+                    try:
+                        parsed = json.loads(msg_data) if isinstance(msg_data, str) else {}
+                    except (json.JSONDecodeError, TypeError):
+                        parsed = {}
+                    org_slug = parsed.get("org_slug", "")
+                    await self._reload_threat_intel(client, org_slug=org_slug)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                LOG.warning(
+                    "Threat intel subscriber disconnected, reconnecting in %ds",
+                    RECONNECT_DELAY_SECONDS,
+                    exc_info=True,
+                )
+                await asyncio.sleep(RECONNECT_DELAY_SECONDS)
+            finally:
+                if pubsub is not None:
+                    try:
+                        await pubsub.unsubscribe(THREAT_INTEL_CHANNEL)
+                        await pubsub.aclose()
+                    except Exception:
+                        pass
+                if client is not None:
+                    try:
+                        await client.aclose()
+                    except Exception:
+                        pass
 
     def _apply(self, data: dict[str, Any]) -> None:
         """

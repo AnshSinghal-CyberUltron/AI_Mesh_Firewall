@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { isLocalDevBrowser } from "../utils/environmentUrls";
 import { Crosshair, Play, Copy, ChevronDown, ChevronRight, CheckCircle, XCircle, AlertTriangle, RefreshCw, Zap, Shield, FileText, Upload, Database } from "lucide-react";
 import { copyToClipboard } from "../lib/clipboard";
 import { InfoTooltip } from "./InfoTooltip";
 import { useCollections } from "../hooks/useCollections";
 
-const GATEWAY_URL_KEY = "zeroshield_gateway_url";
-const GATEWAY_KEY_KEY = "zeroshield_gateway_api_key";
+import {
+  getGatewayApiKey,
+  getGatewayUrl,
+  setGatewayApiKey,
+  setGatewayUrl as persistGatewayUrl,
+} from "../utils/gatewayStorage";
 
 const SCENARIO_CATEGORIES = [
   { id: "all", label: "All" },
@@ -182,14 +188,19 @@ function CustomPayloadEditor({ value, onChange }) {
 }
 
 export function RAGPipelineSimulator() {
+  const { fetchWithAuth } = useAuth();
   const { collections, loading: collectionsLoading, refresh: refreshCollections } = useCollections();
-  const [gatewayUrl, setGatewayUrl] = useState(() => {
-    const stored = localStorage.getItem(GATEWAY_URL_KEY);
-    if (stored) return stored;
-    const host = window.location.hostname || "127.0.0.1";
-    return `http://${host}:8300`;
-  });
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(GATEWAY_KEY_KEY) || "");
+  const keyBootstrappedRef = useRef(false);
+  const [gatewayUrl, setGatewayUrlState] = useState(() => getGatewayUrl());
+  const [apiKey, setApiKeyState] = useState(() => getGatewayApiKey());
+  const setGatewayUrl = (url) => {
+    setGatewayUrlState(url);
+    persistGatewayUrl(url);
+  };
+  const setApiKey = (key) => {
+    setApiKeyState(key);
+    setGatewayApiKey(key);
+  };
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sending, setSending] = useState(false);
@@ -205,6 +216,21 @@ export function RAGPipelineSimulator() {
   const filteredScenarios = categoryFilter === "all"
     ? RAG_ATTACK_SCENARIOS
     : RAG_ATTACK_SCENARIOS.filter((s) => s.category === categoryFilter);
+
+  useEffect(() => {
+    if (apiKey || keyBootstrappedRef.current || !isLocalDevBrowser()) return;
+    keyBootstrappedRef.current = true;
+    (async () => {
+      try {
+        const res = await fetchWithAuth("/api/gateways/simulator-default/");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.key) setApiKey(data.key);
+      } catch {
+        // Manual key entry still works.
+      }
+    })();
+  }, [apiKey, fetchWithAuth]);
 
   const handleSend = async () => {
     if (!useCustomPayload && !selectedScenario) return;
@@ -235,8 +261,8 @@ export function RAGPipelineSimulator() {
       payload.collection = collectionOverride.trim();
     }
 
-    localStorage.setItem(GATEWAY_URL_KEY, gatewayUrl);
-    localStorage.setItem(GATEWAY_KEY_KEY, apiKey);
+    persistGatewayUrl(gatewayUrl);
+    setGatewayApiKey(apiKey);
 
     setSending(true);
     setResult(null);

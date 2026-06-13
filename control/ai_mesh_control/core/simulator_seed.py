@@ -88,6 +88,35 @@ def ensure_firewall_excludes_guard_model(org) -> None:
             config.save(update_fields=["allowed_models"])
 
 
+def _resolve_bootstrap_org():
+    """Pick the tenant org used for simulator defaults and dev bootstrap."""
+    from django.contrib.auth import get_user_model
+
+    from auth.models import Organization
+
+    slug = os.getenv("SIMULATOR_ORG_SLUG", "").strip()
+    if slug:
+        org = Organization.objects.filter(slug=slug, is_active=True).first()
+        if org:
+            return org
+
+    org = Organization.objects.filter(slug="zeroshield", is_active=True).first()
+    if org:
+        return org
+
+    User = get_user_model()
+    for email in ("admin@zeroshield.io",):
+        user = User.objects.filter(email=email).first()
+        if user:
+            try:
+                if user.profile.organization_id:
+                    return user.profile.organization
+            except Exception:
+                pass
+
+    return Organization.objects.filter(is_active=True).order_by("id").first()
+
+
 def ensure_simulator_default_gateway_key() -> bool:
     """
     Seed ``simulator:default_gateway_key`` when missing (DEBUG + enabled).
@@ -108,15 +137,15 @@ def ensure_simulator_default_gateway_key() -> bool:
     redis_url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
 
     try:
-        from auth.models import Organization
         from core.models import GatewayAPIKey
 
-        org = None
+        org = _resolve_bootstrap_org()
         sim_key = GatewayAPIKey.objects.filter(name="simulator-default").first()
         if sim_key and sim_key.organization_id:
             org = sim_key.organization
-        if org is None:
-            org = Organization.objects.first()
+        elif org and sim_key and sim_key.organization_id != org.id:
+            sim_key.organization = org
+            sim_key.save(update_fields=["organization"])
         ensure_default_llm_model(org)
         ensure_firewall_excludes_guard_model(org)
         ensure_simulator_firewall_keywords_cleared(org)
@@ -136,16 +165,13 @@ def ensure_simulator_default_gateway_key() -> bool:
     try:
         from django.contrib.auth import get_user_model
 
-        from auth.models import Organization
         from core.models import GatewayAPIKey
 
         User = get_user_model()
-        org = None
+        org = _resolve_bootstrap_org()
         existing = GatewayAPIKey.objects.filter(name="simulator-default").first()
         if existing and existing.organization_id:
             org = existing.organization
-        if org is None:
-            org = Organization.objects.first()
         user = (
             User.objects.filter(email="admin@zeroshield.io").first()
             or User.objects.first()
