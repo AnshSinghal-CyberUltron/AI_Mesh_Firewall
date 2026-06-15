@@ -753,6 +753,28 @@ async def upsert_vector_documents(
                 },
             )
 
+        # I7: aggregate-char cap (parity with /v1/rag/ingest + /v1/embeddings) so a
+        # batch under the doc-count limit can't still exhaust the worker with a few
+        # huge documents. R12: count text + id + metadata (not just text) — a small
+        # `text` with a multi-MB `metadata`/`id` blob otherwise slipped the cap and
+        # still amplified memory/payload downstream.
+        _max_chars = int(os.getenv("VECTOR_UPSERT_MAX_CHARS", "2000000"))
+
+        def _doc_char_weight(d):
+            if not isinstance(d, dict):
+                return 0
+            w = len(str(d.get("text", ""))) + len(str(d.get("id", "")))
+            _m = d.get("metadata")
+            if _m is not None:
+                w += len(str(_m))
+            return w
+
+        if sum(_doc_char_weight(d) for d in documents) > _max_chars:
+            return JSONResponse(
+                status_code=413,
+                content={"error": "payload_too_large", "code": "vector_input_too_large", "max_chars": _max_chars},
+            )
+
         # Each document must be an OBJECT. A list element that is a string/int/
         # null would raise AttributeError on the ``.get()`` calls below (-> 500);
         # reject malformed elements with a clean 400 instead. (Checked after the
@@ -936,6 +958,19 @@ async def delete_vector_documents(
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"error": "document_ids required"},
+            )
+        # R12 (#10): bound the delete batch — an unbounded document_ids list is a
+        # memory/amplification vector symmetric to the upsert cap (I7).
+        if not isinstance(doc_ids, list):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "bad_request", "code": "invalid_document_ids", "message": "document_ids must be a list"},
+            )
+        _max_delete = int(os.getenv("VECTOR_DELETE_MAX_IDS", "10000"))
+        if len(doc_ids) > _max_delete:
+            return JSONResponse(
+                status_code=413,
+                content={"error": "payload_too_large", "code": "too_many_document_ids", "max_ids": _max_delete},
             )
 
         provider_config = await _resolve_vector_provider_for_org(org_id)

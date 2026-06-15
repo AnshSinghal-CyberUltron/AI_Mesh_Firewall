@@ -477,41 +477,107 @@ class SecureStreamingResponse:
         choices = chunk_data.get("choices") or []
         if not choices:
             return ""
-        delta = choices[0].get("delta") or {}
 
-        # FIX-C: content may be a list of content-part dicts; coerce to text.
-        content = delta.get("content")
-        if isinstance(content, list):
-            content = "".join(
-                p.get("text") or "" for p in content if isinstance(p, dict)
-            )
-        elif not isinstance(content, str):
-            content = ""
+        parts: list[str] = []
+        # R12 (#14 stream parity): scan EVERY choice's delta, not just choices[0],
+        # so a secret in a parallel (n>1) choice still trips the guard and the
+        # buffered chunk is dropped on a bad verdict.
+        for ch in choices:
+            if not isinstance(ch, dict):
+                continue
+            delta = ch.get("delta") or {}
+            if not isinstance(delta, dict):
+                continue
 
-        parts: list[str] = [content]
+            # FIX-C: content may be a list of content-part dicts; coerce to text.
+            content = delta.get("content")
+            if isinstance(content, list):
+                content = "".join(
+                    p.get("text") or "" for p in content if isinstance(p, dict)
+                )
+            elif not isinstance(content, str):
+                content = ""
+            parts.append(content)
 
-        # FIX-A: reasoning_content streams raw to the client too — scan it.
-        reasoning = delta.get("reasoning_content")
-        if isinstance(reasoning, str):
-            parts.append(reasoning)
+            # FIX-A: reasoning_content streams raw to the client too — scan it.
+            reasoning = delta.get("reasoning_content")
+            if isinstance(reasoning, str):
+                parts.append(reasoning)
 
-        # FIX-B: tool-call function name + arguments stream raw — scan them.
-        tool_calls = delta.get("tool_calls")
-        if isinstance(tool_calls, list):
-            for call in tool_calls:
-                if not isinstance(call, dict):
-                    continue
-                fn = call.get("function")
-                if not isinstance(fn, dict):
-                    continue
-                name = fn.get("name")
-                if isinstance(name, str):
-                    parts.append(name)
-                arguments = fn.get("arguments")
-                if isinstance(arguments, str):
-                    parts.append(arguments)
+            # FIX-B: tool-call function name + arguments stream raw — scan them.
+            tool_calls = delta.get("tool_calls")
+            if isinstance(tool_calls, list):
+                for call in tool_calls:
+                    if not isinstance(call, dict):
+                        continue
+                    fn = call.get("function")
+                    if not isinstance(fn, dict):
+                        continue
+                    name = fn.get("name")
+                    if isinstance(name, str):
+                        parts.append(name)
+                    arguments = fn.get("arguments")
+                    if isinstance(arguments, str):
+                        parts.append(arguments)
+
+            # R12 (#13): legacy `function_call` delta channel (pre-tool_calls API
+            # shape) streams raw too — scan name + arguments (non-stream I5 parity).
+            fc = delta.get("function_call")
+            if isinstance(fc, dict):
+                for _k in ("name", "arguments"):
+                    _v = fc.get(_k)
+                    if isinstance(_v, str):
+                        parts.append(_v)
+
+            # R12 (#15): refusal channel streams raw — scan it.
+            refusal = delta.get("refusal")
+            if isinstance(refusal, str):
+                parts.append(refusal)
+
+            # R13 (#16 stream parity): audio-output transcript streams raw too.
+            _au = delta.get("audio")
+            if isinstance(_au, dict):
+                _t = _au.get("transcript")
+                if isinstance(_t, str):
+                    parts.append(_t)
 
         return "".join(parts)
+
+    @staticmethod
+    def _blank_streaming_secondary_channels(delta: dict) -> None:
+        """R13: blank EVERY secondary text channel that _extract_content_delta
+        scans, so a redact/block rebuild never streams an un-redacted secret in a
+        non-content channel. Mirrors the non-stream _neutralize_secondary_output_
+        channels: reasoning_content, tool_calls fn name/args, legacy function_call,
+        refusal, audio.transcript. Only string fields are rewritten so the SSE
+        frame stays well-formed."""
+        if not isinstance(delta, dict):
+            return
+        if isinstance(delta.get("reasoning_content"), str):
+            delta["reasoning_content"] = ""
+        for call in (delta.get("tool_calls") or []):
+            if isinstance(call, dict) and isinstance(call.get("function"), dict):
+                fn = call["function"]
+                if isinstance(fn.get("arguments"), str):
+                    fn["arguments"] = ""
+                if isinstance(fn.get("name"), str):
+                    fn["name"] = ""
+        fc = delta.get("function_call")
+        if isinstance(fc, dict):
+            for _k in ("name", "arguments"):
+                if isinstance(fc.get(_k), str):
+                    fc[_k] = ""
+        if isinstance(delta.get("refusal"), str):
+            delta["refusal"] = ""
+        # R14: blank audio.transcript AND audio.data — the base64 audio bytes
+        # carry the spoken content, so redacting only the transcript still ships
+        # the secret as audio.
+        _au = delta.get("audio")
+        if isinstance(_au, dict):
+            if isinstance(_au.get("transcript"), str):
+                _au["transcript"] = ""
+            if isinstance(_au.get("data"), str):
+                _au["data"] = ""
 
     def _rebuild_sse_content(self, original_sse: str, new_content: str) -> str:
         line = original_sse.strip()
@@ -523,29 +589,23 @@ class SecureStreamingResponse:
         except (json.JSONDecodeError, TypeError):
             return original_sse
         choices = chunk_data.get("choices") or []
-        if choices and "delta" in choices[0]:
-            delta = choices[0]["delta"]
-            delta["content"] = new_content
-            # FIX-A/FIX-B: the secondary text-bearing channels were scanned as
-            # part of full_text; on a redact/block rebuild they must NOT stream
-            # raw. They cannot carry the (single) redacted/blanked content, so
-            # sanitize them in place: blank reasoning_content and tool-call
-            # argument/name strings. Preserve structure (only string fields are
-            # rewritten) so the SSE frame stays well-formed for the client.
-            if isinstance(delta.get("reasoning_content"), str):
-                delta["reasoning_content"] = ""
-            tool_calls = delta.get("tool_calls")
-            if isinstance(tool_calls, list):
-                for call in tool_calls:
-                    if not isinstance(call, dict):
-                        continue
-                    fn = call.get("function")
-                    if not isinstance(fn, dict):
-                        continue
-                    if isinstance(fn.get("arguments"), str):
-                        fn["arguments"] = ""
-                    if isinstance(fn.get("name"), str):
-                        fn["name"] = ""
+        # R13: the secondary text-bearing channels were scanned as part of
+        # full_text; on a redact/block rebuild they must NOT stream raw. They can't
+        # carry the (single) redacted content, so blank them in place across EVERY
+        # choice (not just choices[0]) — reasoning_content, tool_calls, legacy
+        # function_call, refusal, audio.transcript — preserving SSE structure. The
+        # first choice carries the redacted content; other choices are blanked
+        # (the redaction is a single concatenated stream).
+        first_done = False
+        for ch in choices:
+            if not isinstance(ch, dict) or "delta" not in ch:
+                continue
+            delta = ch["delta"]
+            if not isinstance(delta, dict):
+                continue
+            delta["content"] = new_content if not first_done else ""
+            first_done = True
+            self._blank_streaming_secondary_channels(delta)
         return f"data: {json.dumps(chunk_data)}\n\n"
 
     @staticmethod

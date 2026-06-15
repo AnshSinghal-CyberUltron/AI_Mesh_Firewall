@@ -56,8 +56,13 @@ def _host_is_allowlisted(host: str, port: int | None, allowlist: set[str]) -> bo
     return False
 
 
-def _ip_is_blocked(ip_str: str) -> tuple[bool, str]:
-    """Return (blocked, reason) for a single resolved IP string."""
+def _ip_is_blocked(ip_str: str, *, block_private: bool = True) -> tuple[bool, str]:
+    """Return (blocked, reason) for a single resolved IP string.
+
+    ``block_private=False`` permits RFC1918 private addresses (for features that
+    legitimately reach internal infra, e.g. a self-hosted / docker vector DB)
+    while STILL blocking cloud-metadata, loopback, link-local, reserved,
+    multicast and unspecified — i.e. the genuinely dangerous SSRF targets."""
     if ip_str in _METADATA_IPS:
         return True, f"cloud metadata endpoint ({ip_str})"
     try:
@@ -66,11 +71,12 @@ def _ip_is_blocked(ip_str: str) -> tuple[bool, str]:
         # Unparseable address — fail closed.
         return True, f"unparseable resolved address ({ip_str})"
 
-    # Explicit link-local / metadata range guard (covers 169.254.0.0/16).
+    # Explicit link-local / metadata range guard (covers 169.254.0.0/16) —
+    # ALWAYS blocked, even when private addresses are otherwise permitted.
     if ip.version == 4 and ip in _LINK_LOCAL_V4:
         return True, f"link-local range 169.254.0.0/16 ({ip_str})"
 
-    if ip.is_private:
+    if block_private and ip.is_private:
         return True, f"private address ({ip_str})"
     if ip.is_loopback:
         return True, f"loopback address ({ip_str})"
@@ -86,12 +92,28 @@ def _ip_is_blocked(ip_str: str) -> tuple[bool, str]:
     # Unwrap IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) and re-check.
     mapped = getattr(ip, "ipv4_mapped", None)
     if mapped is not None:
-        return _ip_is_blocked(str(mapped))
+        return _ip_is_blocked(str(mapped), block_private=block_private)
 
     return False, ""
 
 
-def is_safe_outbound_url(url: str, allowed_schemes: tuple[str, ...] = ("http", "https")) -> tuple[bool, str]:
+def is_safe_vector_provider_url(url: str) -> tuple[bool, str]:
+    """SSRF guard for ORG-SUPPLIED vector-provider ``connection_url`` (Chroma /
+    Milvus / custom). A tenant admin controls this value, and the gateway connects
+    to it server-side — so an internal target (cloud metadata, the gateway's own
+    loopback admin ports, link-local) is an SSRF/credential-theft vector. But
+    legitimate self-hosted vector DBs live on private RFC1918 / docker networks,
+    so this permits private addresses while still blocking the dangerous ranges.
+    Metadata IPs (169.254.169.254) are blocked unconditionally."""
+    return is_safe_outbound_url(url, block_private=False)
+
+
+def is_safe_outbound_url(
+    url: str,
+    allowed_schemes: tuple[str, ...] = ("http", "https"),
+    *,
+    block_private: bool = True,
+) -> tuple[bool, str]:
     """Validate that ``url`` is safe to fetch/connect to (anti-SSRF).
 
     Returns ``(ok, reason)``. ``ok`` is True only when:
@@ -136,7 +158,7 @@ def is_safe_outbound_url(url: str, allowed_schemes: tuple[str, ...] = ("http", "
         is_literal_ip = False
 
     if is_literal_ip:
-        blocked, reason = _ip_is_blocked(literal_host)
+        blocked, reason = _ip_is_blocked(literal_host, block_private=block_private)
         if blocked:
             return False, f"blocked host: {reason}"
         return True, "ok"
@@ -155,7 +177,7 @@ def is_safe_outbound_url(url: str, allowed_schemes: tuple[str, ...] = ("http", "
     for info in infos:
         sockaddr = info[4]
         ip_str = sockaddr[0]
-        blocked, reason = _ip_is_blocked(ip_str)
+        blocked, reason = _ip_is_blocked(ip_str, block_private=block_private)
         if blocked:
             return False, f"host '{host}' resolves to blocked address — {reason}"
 

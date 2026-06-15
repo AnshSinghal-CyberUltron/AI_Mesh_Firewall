@@ -31,6 +31,22 @@ def client_from_provider_config(cfg: dict[str, Any]) -> tuple[Any | None, str]:
     if not provider_type or not cfg.get("is_active"):
         return None, ""
 
+    # R12 (#7): SSRF guard on the org-supplied connection_url. A tenant admin
+    # controls this value and the gateway dials it server-side — an internal
+    # target (cloud metadata, gateway loopback, link-local) would be SSRF. Permits
+    # private RFC1918 (legit self-hosted / docker vector DBs) but blocks the
+    # dangerous ranges. No connection_url providers (pinecone) are unaffected.
+    _conn_url = cfg.get("connection_url")
+    if _conn_url and provider_type in ("chroma", "milvus", "custom"):
+        try:
+            from _url_guard import is_safe_vector_provider_url as _safe_vp
+        except ImportError:
+            from ._url_guard import is_safe_vector_provider_url as _safe_vp
+        _ok, _why = _safe_vp(str(_conn_url))
+        if not _ok:
+            LOG.warning("Rejected org vector provider connection_url (SSRF guard): %s", _why)
+            return None, ""
+
     try:
         if provider_type == "pinecone" and cfg.get("api_key"):
             return PineconeClient(

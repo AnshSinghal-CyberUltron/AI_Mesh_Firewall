@@ -318,6 +318,10 @@ async def _discover_oauth_metadata(server_url: str) -> dict:
         LOG.info("Resource-metadata URL: %s", resource_metadata_url)
 
         # 3. Fetch resource metadata
+        # H4 (residual): resource_metadata_url is derived from the attacker WWW-
+        # Authenticate header — validate before the GET (the entry-point guard +
+        # follow_redirects=False do not cover a URL supplied directly here).
+        _assert_safe_url(resource_metadata_url)
         try:
             rm = await client.get(resource_metadata_url)
             rm.raise_for_status()
@@ -331,6 +335,9 @@ async def _discover_oauth_metadata(server_url: str) -> dict:
             raise RuntimeError("No authorization_servers in resource metadata")
         as_base = auth_servers[0].rstrip("/")
 
+        # H4 (residual): as_base is from the attacker-controlled resource metadata
+        # document — validate before the GET.
+        _assert_safe_url(as_base)
         try:
             asm = await client.get(
                 f"{as_base}/.well-known/oauth-authorization-server"
