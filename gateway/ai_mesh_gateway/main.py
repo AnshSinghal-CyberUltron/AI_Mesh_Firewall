@@ -7528,6 +7528,73 @@ async def list_response_input_items(response_id: str, request: Request):
                                                   "last_id": data[-1]["id"] if data else None})
 
 
+# ── ZeroShield management/observability surfaces (bearer-key auth, org-scoped) ──
+# Reachable with the SAME gateway key as inference, so SDK-only operators get
+# real-time observability + usage without a separate console. Historical
+# analytics / audit / tenant CRUD live in the control plane (dashboard).
+@app.get("/v1/observability", summary="Real-time firewall observability (org-scoped)")
+async def zs_observability(request: Request):
+    auth_ctx = getattr(request.state, "auth_context", None)
+    if auth_ctx is None:
+        return JSONResponse(status_code=401, content=_build_oai_error(401, "Authentication required.", error_type="authentication_error"))
+    org_slug = getattr(auth_ctx, "org_slug", "") or "default"
+    org_config = CONFIG_SYNC.get_config(org_slug) if CONFIG_SYNC else dict(CONFIG)
+    policy_info: dict = {}
+    if POLICY_SYNC is not None:
+        bundle = (getattr(POLICY_SYNC, "_org_caches", {}) or {}).get(org_slug) or {}
+        policy_info = {"policy_count": bundle.get("policy_count", 0), "version": bundle.get("version")}
+    models: list = []
+    if REDIS_CLIENT is not None:
+        try:
+            async for key in REDIS_CLIENT.scan_iter(match=f"model_state:{org_slug}:*", count=200):
+                kname = (key.decode() if isinstance(key, (bytes, bytearray)) else str(key)).split(":", 2)[-1]
+                raw = await REDIS_CLIENT.get(key)
+                st = json.loads(raw) if raw else {}
+                models.append({"model": kname, "status": st.get("status", "active"),
+                               "risk_score": st.get("risk_score")})
+        except Exception:
+            pass
+    payload = {
+        "object": "zeroshield.observability",
+        "organization": org_slug,
+        "firewall_enabled": bool(org_config.get("firewall_enabled", True)),
+        "enforcement_mode": org_config.get("enforcement_mode", CONFIG.get("enforcement_mode", "block")),
+        "policy": policy_info,
+        "models": models,
+        "circuit_breaker_loaded": CIRCUIT_BREAKER is not None,
+    }
+    return JSONResponse(status_code=200, content=payload, headers={"x-request-id": _gen_oai_id("response")})
+
+
+@app.get("/v1/usage", summary="Current token-usage view for the calling key (org-scoped)")
+async def zs_usage(request: Request):
+    auth_ctx = getattr(request.state, "auth_context", None)
+    if auth_ctx is None:
+        return JSONResponse(status_code=401, content=_build_oai_error(401, "Authentication required.", error_type="authentication_error"))
+    key_hash = getattr(auth_ctx, "key_hash", "") or ""
+    limit = int(getattr(auth_ctx, "rate_limit_tpm", 0) or 0)
+    used = 0
+    if REDIS_CLIENT is not None and key_hash:
+        try:
+            bucket = int(time.time()) // 60
+            raw = await REDIS_CLIENT.get(f"ratelimit:tpm:{key_hash}:{bucket}")
+            used = int(raw) if raw else 0
+        except Exception:
+            used = 0
+    payload = {
+        "object": "zeroshield.usage",
+        "organization": getattr(auth_ctx, "org_slug", ""),
+        "window": "current_minute",
+        "tpm_used": used,
+        "tpm_limit": limit or None,
+        "tpm_remaining": (max(0, limit - used) if limit else None),
+        "allowed_models": getattr(auth_ctx, "allowed_models", []),
+        "note": "Per-request token usage is on each response's `usage` object; "
+                "historical usage/cost analytics are in the ZeroShield dashboard.",
+    }
+    return JSONResponse(status_code=200, content=payload, headers={"x-request-id": _gen_oai_id("response")})
+
+
 @app.post(
     "/v1/embeddings",
     summary="Create embeddings (OpenAI-compatible proxy)",
