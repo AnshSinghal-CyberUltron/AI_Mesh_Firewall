@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:acceptance:create-policy": "node --test src/utils/policyCreateBehavior.test.js",
-    "test:module2": "node --test src/pages/module2/pageData.test.js src/api/module2.test.js"
+    "test:module2": "node --test src/pages/module2/pageData.test.js src/api/module2.test.js src/api/killSwitch.test.js"
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.1.8",

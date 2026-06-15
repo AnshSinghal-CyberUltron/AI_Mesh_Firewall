@@ -36,6 +36,149 @@ export function formatAttackVectors(vectors = []) {
   }));
 }
 
+const RAG_STAGE_LABELS = {
+  query: "Query",
+  retriever: "Retriever",
+  ranker: "Ranker",
+  generator: "Generator",
+};
+
+export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
+  const stages = ragPipelineKpis?.stages || {};
+  const stageList = Object.values(stages);
+  const totalEvents = stageList.reduce((sum, st) => sum + (st?.total || 0), 0);
+  const totalBlocked = stageList.reduce((sum, st) => sum + (st?.blocked || 0), 0);
+  const collections = vectorExposure?.collections || [];
+  const hotCollections = collections.filter((c) => (c.block_rate_pct ?? 0) >= 50).length;
+  const passRate = totalEvents
+    ? Math.round(((totalEvents - totalBlocked) / totalEvents) * 100)
+    : 100;
+
+  return [
+    {
+      key: "pipeline-events",
+      label: "Pipeline Events",
+      value: totalEvents,
+      helpText: "Total RAG requests scanned across Query → Retriever → Ranker → Generator stages.",
+    },
+    {
+      key: "blocked-at-gate",
+      label: "Blocked at Gate",
+      value: totalBlocked,
+      color: totalBlocked > 0 ? "text-red-600" : undefined,
+      helpText: "Requests stopped by policy at any pipeline stage before completion.",
+    },
+    {
+      key: "collections",
+      label: "Collections",
+      value: collections.length,
+      helpText: "Distinct vector DB collections/namespaces touched during retrieval in this window.",
+    },
+    {
+      key: "hot-collections",
+      label: "High-Risk Collections",
+      value: hotCollections,
+      color: hotCollections > 0 ? "text-amber-600" : undefined,
+      helpText: "Collections with block rate ≥ 50% — may indicate poisoned chunks or ACL issues.",
+    },
+    {
+      key: "pass-rate",
+      label: "Pass-Through Rate",
+      value: `${passRate}%`,
+      color: passRate >= 80 ? "text-emerald-600" : passRate >= 50 ? "text-amber-600" : "text-red-600",
+      helpText: "Share of pipeline stage checks that were not hard-blocked.",
+    },
+  ];
+}
+
+export function formatRagStageChartData(stages = {}) {
+  return ["query", "retriever", "ranker", "generator"].map((key) => {
+    const st = stages[key] || {};
+    const total = st.total || 0;
+    const blocked = st.blocked || 0;
+    const flagged = st.flagged || 0;
+    const allowed = st.allowed || Math.max(0, total - blocked - flagged - (st.rewritten || 0));
+    return {
+      stage: RAG_STAGE_LABELS[key] || key,
+      stageKey: key,
+      total,
+      blocked,
+      flagged,
+      allowed,
+      block_rate: total ? Math.round((blocked / total) * 100) : 0,
+      avg_latency_ms: st.avg_latency_ms || 0,
+    };
+  });
+}
+
+export function formatRagDocumentFunnel(funnel = {}) {
+  const retrieved = funnel.retrieved ?? 0;
+  const postRanker = funnel.post_ranker ?? 0;
+  const postGenerator = funnel.post_generator ?? 0;
+  return [
+    { step: "Retrieved", value: retrieved, pct: 100 },
+    {
+      step: "Survived Ranker",
+      value: postRanker,
+      pct: retrieved ? Math.round((postRanker / retrieved) * 100) : 0,
+    },
+    {
+      step: "Survived Generator",
+      value: postGenerator,
+      pct: retrieved ? Math.round((postGenerator / retrieved) * 100) : 0,
+    },
+  ];
+}
+
+export function formatRagCollectionChartData(collections = []) {
+  return collections.slice(0, 8).map((row) => ({
+    name: row.collection,
+    blockRate: row.block_rate_pct ?? 0,
+    total: row.total ?? 0,
+    blocked: row.blocked ?? 0,
+  }));
+}
+
+export function formatRagEscalationChartData(escalation = {}) {
+  return [
+    { level: "Normal", count: escalation.normal ?? 0, fill: "#10b981" },
+    { level: "Elevated", count: escalation.elevated ?? 0, fill: "#f59e0b" },
+    { level: "Strict", count: escalation.strict ?? 0, fill: "#ef4444" },
+  ];
+}
+
+export function buildContainmentKpiItems({
+  disabledKeys = 0,
+  activeKillSwitches = 0,
+  clickable = false,
+  onDisabledClick,
+  onKillSwitchClick,
+  activePanel = null,
+}) {
+  return [
+    {
+      key: "disabled-keys",
+      label: "Disabled Keys",
+      value: disabledKeys,
+      color: disabledKeys > 0 ? "text-orange-600" : undefined,
+      helpText: "API credentials disabled at the gateway — all requests with these keys fail authentication.",
+      clickable,
+      onClick: onDisabledClick,
+      active: activePanel === "disabled",
+    },
+    {
+      key: "active-kill-switches",
+      label: "Active Kill Switches",
+      value: activeKillSwitches,
+      color: activeKillSwitches > 0 ? "text-red-600" : undefined,
+      helpText: "Credential- or model-scoped kill switches currently blocking traffic at the gateway.",
+      clickable,
+      onClick: onKillSwitchClick,
+      active: activePanel === "kill-switch",
+    },
+  ];
+}
+
 export function buildExposureKpis(summary = {}) {
   return [
     { key: "active-models", label: "Active Models", value: summary.active_models ?? 0, helpText: "Distinct LLM targets observed in enforcement telemetry for this period." },

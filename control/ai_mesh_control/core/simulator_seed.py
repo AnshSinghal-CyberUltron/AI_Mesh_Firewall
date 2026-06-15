@@ -9,6 +9,55 @@ logger = logging.getLogger(__name__)
 
 SIMULATOR_DEFAULT_KEY_REDIS = "simulator:default_gateway_key"
 ZEROSHIELD_GUARD_MODEL_NAME = "zeroshield-guard-120b"
+BEDROCK_CHAT_MODEL_NAME = "bedrock-gpt-oss"
+
+
+def ensure_bedrock_chat_model(org) -> None:
+    """Provision a Bedrock-backed chat model using gateway AWS env credentials (dev bootstrap)."""
+    if org is None:
+        return
+    from core.models import LLMModelConfig
+
+    region = os.getenv("BEDROCK_REGION", "ap-south-1").strip() or "ap-south-1"
+    model_id = os.getenv("SIMULATOR_BEDROCK_CHAT_MODEL_ID", "bedrock/openai.gpt-oss-120b-1:0").strip()
+    if not model_id:
+        model_id = "bedrock/openai.gpt-oss-120b-1:0"
+
+    LLMModelConfig.objects.update_or_create(
+        organization=org,
+        model_name=BEDROCK_CHAT_MODEL_NAME,
+        defaults={
+            "provider": "aws_bedrock",
+            "model_id": model_id,
+            "region": region,
+            "is_active": True,
+            "routing_priority": 95,
+            "data_sensitivity_level": "internal",
+            "compliance_tags": ["SOC2"],
+        },
+    )
+
+
+def ensure_simulator_firewall_default_model(org) -> None:
+    """Prefer Bedrock chat model as firewall default when simulator defaults are enabled."""
+    if org is None:
+        return
+    enabled = os.getenv("SIMULATOR_DEFAULTS_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+    if not enabled:
+        return
+    from core.models import FirewallConfig
+
+    config, _ = FirewallConfig.objects.get_or_create(organization=org)
+    preferred = BEDROCK_CHAT_MODEL_NAME
+    current = str(config.default_model or "").strip()
+    legacy_openai_defaults = {"", "gpt-4o", "gpt-4o-mini", "gpt-5.2"}
+    if current.lower() in legacy_openai_defaults:
+        config.default_model = preferred
+    allowed = [m.strip() for m in str(config.allowed_models or "").split(",") if m.strip()]
+    if preferred not in allowed:
+        allowed.insert(0, preferred)
+        config.allowed_models = ", ".join(allowed)
+    config.save()
 
 
 def ensure_default_llm_model(org) -> None:
@@ -147,6 +196,8 @@ def ensure_simulator_default_gateway_key() -> bool:
             sim_key.organization = org
             sim_key.save(update_fields=["organization"])
         ensure_default_llm_model(org)
+        ensure_bedrock_chat_model(org)
+        ensure_simulator_firewall_default_model(org)
         ensure_firewall_excludes_guard_model(org)
         ensure_simulator_firewall_keywords_cleared(org)
     except Exception:

@@ -3,6 +3,10 @@
 const GET_CACHE = new Map();
 const CACHE_TTL_MS = 30_000;
 
+export function clearModule2Cache() {
+  GET_CACHE.clear();
+}
+
 function buildCacheKey(path, params = {}) {
   const qs = new URLSearchParams(params).toString();
   return `/api/module2${path}${qs ? `?${qs}` : ""}`;
@@ -41,10 +45,10 @@ export function createModule2Api(fetchWithAuth) {
   };
 
   return {
-    getDashboard: (period = "24h") => get("/dashboard/", { period }),
-    getUebaSummary: (period = "24h") => get("/ueba/api-keys/summary/", { period }),
-    getUebaTimeline: (period = "24h") => get("/ueba/api-keys/timeline/", { period }),
-    getUebaRegistry: () => get("/ueba/api-keys/registry/"),
+    getDashboard: (period = "24h", opts = {}) => get("/dashboard/", { period }, opts),
+    getUebaSummary: (period = "24h", opts = {}) => get("/ueba/api-keys/summary/", { period }, opts),
+    getUebaTimeline: (period = "24h", opts = {}) => get("/ueba/api-keys/timeline/", { period }, opts),
+    getUebaRegistry: (period = "24h", opts = {}) => get("/ueba/api-keys/registry/", { period }, opts),
     getUebaBehavior: (keyId, period = "7d") => get(`/ueba/api-keys/${keyId}/behavior/`, { period }),
     getModelExposure: (period = "30d") => get("/models/exposure/", { period }),
     getRagHealth: (period = "24h") => get("/rag/health/", { period }),

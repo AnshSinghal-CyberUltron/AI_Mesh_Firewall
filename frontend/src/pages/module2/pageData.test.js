@@ -1,8 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildContainmentKpiItems,
   buildExposureKpis,
+  buildRagKpis,
   buildTelemetryKpis,
+  formatRagDocumentFunnel,
+  formatRagStageChartData,
   exposureBandClass,
   formatAttackVectors,
   formatExposureChartData,
@@ -92,11 +96,66 @@ test("sourceBadgeClass covers all four enforcement lanes", () => {
   assert.ok(sourceBadgeClass("unknown-lane").includes("slate"));
 });
 
+test("buildRagKpis aggregates stage and collection metrics", () => {
+  const kpis = buildRagKpis(
+    {
+      stages: {
+        query: { total: 10, blocked: 5 },
+        retriever: { total: 8, blocked: 4 },
+        ranker: { total: 0, blocked: 0 },
+        generator: { total: 0, blocked: 0 },
+      },
+    },
+    { collections: [{ block_rate_pct: 60 }, { block_rate_pct: 10 }] },
+  );
+  assert.equal(kpis[0].value, 18);
+  assert.equal(kpis[1].value, 9);
+  assert.equal(kpis[3].value, 1);
+});
+
+test("formatRagStageChartData computes allowed and block rate", () => {
+  const rows = formatRagStageChartData({
+    query: { total: 4, blocked: 4, flagged: 0, allowed: 0 },
+    retriever: { total: 2, blocked: 1, flagged: 0, allowed: 1 },
+  });
+  assert.equal(rows[0].block_rate, 100);
+  assert.equal(rows[1].allowed, 1);
+});
+
+test("formatRagDocumentFunnel shows survival percentages", () => {
+  const steps = formatRagDocumentFunnel({ retrieved: 10, post_ranker: 6, post_generator: 3 });
+  assert.equal(steps[1].pct, 60);
+  assert.equal(steps[2].value, 3);
+});
+
+test("buildContainmentKpiItems marks clickable cards only when requested", () => {
+  const readOnly = buildContainmentKpiItems({ disabledKeys: 2, activeKillSwitches: 1, clickable: false });
+  assert.equal(readOnly[0].clickable, false);
+  assert.equal(readOnly[1].value, 1);
+
+  let panel = null;
+  const interactive = buildContainmentKpiItems({
+    disabledKeys: 1,
+    activeKillSwitches: 3,
+    clickable: true,
+    activePanel: panel,
+    onDisabledClick: () => { panel = "disabled"; },
+    onKillSwitchClick: () => { panel = "kill-switch"; },
+  });
+  assert.equal(interactive[0].clickable, true);
+  assert.equal(typeof interactive[0].onClick, "function");
+  interactive[0].onClick();
+  assert.equal(panel, "disabled");
+});
+
 test("KPI builders attach analyst helpText to every card", () => {
   for (const kpi of buildExposureKpis(EXPOSURE_FIXTURE.summary)) {
     assert.ok(kpi.helpText && kpi.helpText.length > 10, `missing helpText: ${kpi.key}`);
   }
   for (const kpi of buildTelemetryKpis(TELEMETRY_FIXTURE.summary)) {
+    assert.ok(kpi.helpText && kpi.helpText.length > 10, `missing helpText: ${kpi.key}`);
+  }
+  for (const kpi of buildContainmentKpiItems({ disabledKeys: 0, activeKillSwitches: 0 })) {
     assert.ok(kpi.helpText && kpi.helpText.length > 10, `missing helpText: ${kpi.key}`);
   }
 });

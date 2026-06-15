@@ -102,6 +102,13 @@ export function useSimulatorGatewayModels() {
       setSelectedModel(stored);
       return;
     }
+    if (stored && !eligibleNames.includes(stored)) {
+      try {
+        localStorage.removeItem(SIMULATOR_MODEL_STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
     if (firewallDefault && eligibleNames.includes(firewallDefault)) {
       setSelectedModel(firewallDefault);
       return;

@@ -14,7 +14,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from auth.utils import get_request_organization
 from core.admin_views import IsAdminOrSuperuser
-from core.models import GatewayAPIKey, LLMModelConfig
+from core.models import GatewayAPIKey, KillSwitch, LLMModelConfig
 from module2.analytics import (
     build_lane_summary,
     build_mcp_activity_payload,
@@ -59,6 +59,7 @@ def _collect_key_metrics(keys_qs, events_qs):
             "redacted": 0,
             "endpoint_ids": set(),
             "models": set(),
+            "model_counts": defaultdict(int),
             "threat_types": defaultdict(int),
             "hourly": defaultdict(int),
         }
@@ -81,12 +82,144 @@ def _collect_key_metrics(keys_qs, events_qs):
         if ev.get("endpoint_id"):
             m["endpoint_ids"].add(ev["endpoint_id"])
         if meta.get("model"):
-            m["models"].add(str(meta["model"]))
+            model_name = str(meta["model"])
+            m["models"].add(model_name)
+            m["model_counts"][model_name] += 1
         threat = str(meta.get("threat_type") or "unknown")
         m["threat_types"][threat] += 1
         m["hourly"][hour_bucket] += 1
 
     return key_by_prefix, metrics
+
+
+def _build_key_containment_payload(org, keys_qs=None):
+    """Counts and detail rows for disabled API keys and active kill switches."""
+    if keys_qs is None:
+        keys_qs = GatewayAPIKey.objects.select_related("owner").all()
+        if org:
+            keys_qs = keys_qs.filter(organization=org)
+
+    disabled_qs = keys_qs.filter(is_active=False).order_by("-updated_at")
+    ks_qs = KillSwitch.objects.filter(is_active=True).order_by("-activated_at", "-updated_at")
+    if org:
+        ks_qs = ks_qs.filter(organization=org)
+
+    disabled_keys_detail = [
+        {
+            "key_id": str(k.id),
+            "prefix": k.prefix,
+            "name": k.name,
+            "project_id": k.project_id,
+            "owner_email": getattr(k.owner, "email", ""),
+            "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+            "updated_at": k.updated_at.isoformat() if k.updated_at else None,
+        }
+        for k in disabled_qs[:50]
+    ]
+    active_kill_switches_detail = [
+        {
+            "id": ks.id,
+            "model_name": ks.model_name,
+            "api_key_prefix": ks.api_key_prefix or "",
+            "action": ks.action,
+            "reason": ks.reason,
+            "activated_at": ks.activated_at.isoformat() if ks.activated_at else None,
+        }
+        for ks in ks_qs[:50]
+    ]
+
+    return {
+        "disabled_keys": disabled_qs.count(),
+        "active_kill_switches": ks_qs.count(),
+        "disabled_keys_detail": disabled_keys_detail,
+        "active_kill_switches_detail": active_kill_switches_detail,
+    }
+
+
+def _empty_key_metric():
+    return {
+        "total": 0,
+        "blocked": 0,
+        "redacted": 0,
+        "endpoint_ids": set(),
+        "models": set(),
+        "model_counts": defaultdict(int),
+        "threat_types": defaultdict(int),
+        "hourly": defaultdict(int),
+    }
+
+
+def _kill_switches_by_prefix(org):
+    ks_qs = KillSwitch.objects.filter(is_active=True).order_by("-activated_at")
+    if org:
+        ks_qs = ks_qs.filter(organization=org)
+    grouped = defaultdict(list)
+    for ks in ks_qs:
+        prefix = str(ks.api_key_prefix or "").strip()
+        if prefix:
+            grouped[prefix].append(
+                {
+                    "id": ks.id,
+                    "model_name": ks.model_name,
+                    "action": ks.action,
+                    "is_active": ks.is_active,
+                    "reason": ks.reason,
+                    "activated_at": ks.activated_at.isoformat() if ks.activated_at else None,
+                }
+            )
+    return grouped
+
+
+def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix):
+    """Merge gateway key registry rows with UEBA behavior metrics and kill-switch scope."""
+    results = []
+    for k in keys_qs[:200]:
+        prefix = k.prefix
+        metric = metrics.get(prefix) or _empty_key_metric()
+        risk = _risk_payload(prefix, k, metric)
+        active_ks = kill_by_prefix.get(prefix, [])
+        top_threats = sorted(metric["threat_types"].items(), key=lambda x: -x[1])[:3]
+        top_models = sorted(metric["model_counts"].items(), key=lambda x: -x[1])[:3]
+
+        results.append(
+            {
+                "key_id": str(k.id),
+                "prefix": prefix,
+                "name": k.name,
+                "project_id": k.project_id,
+                "owner_email": getattr(k.owner, "email", ""),
+                "is_active": k.is_active,
+                "rate_limit_tpm": k.rate_limit_tokens_per_minute,
+                "risk_score_baseline": round(float(k.risk_score or 0), 3),
+                "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+                "expires_at": k.expires_at.isoformat() if k.expires_at else None,
+                "risk_band": risk["risk_band"],
+                "risk_score": risk["risk_score"],
+                "velocity_spike": risk["velocity_spike"],
+                "anomaly_flags": risk["anomaly_flags"],
+                "request_count": risk["request_count"],
+                "blocked_count": risk["blocked_count"],
+                "redacted_count": risk["redacted_count"],
+                "block_rate_pct": risk["block_rate_pct"],
+                "redact_rate_pct": risk["redact_rate_pct"],
+                "unique_models": risk["unique_models"],
+                "top_threat_type": risk["top_threat_type"],
+                "top_threat_types": top_threats,
+                "top_models": top_models,
+                "active_kill_switches": active_ks,
+                "active_kill_switch_count": len(active_ks),
+            }
+        )
+
+    results.sort(
+        key=lambda r: (
+            -int(r["is_active"]),
+            -r["risk_score"],
+            -r["request_count"],
+            r["prefix"],
+        )
+    )
+    return results
 
 
 def _risk_payload(prefix: str, key_obj, metric: dict):
@@ -157,6 +290,8 @@ class UebaApiKeySummaryView(APIView):
         rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
         rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
 
+        containment = _build_key_containment_payload(org, keys_qs)
+
         return Response(
             {
                 "period": period,
@@ -165,7 +300,10 @@ class UebaApiKeySummaryView(APIView):
                     "active_keys": keys_qs.filter(is_active=True).count(),
                     "keys_with_activity": len(rows),
                     "high_risk_keys": sum(1 for r in rows if r["risk_band"] == "high"),
+                    "disabled_keys": containment["disabled_keys"],
+                    "active_kill_switches": containment["active_kill_switches"],
                 },
+                "containment": containment,
                 "top_risky_keys": rows[:10],
             }
         )
@@ -175,6 +313,8 @@ class UebaApiKeyRegistryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        period = request.query_params.get("period", "24h")
+        since = timezone.now() - timedelta(hours=_hours_from_period(period))
         org = _org_or_403(request)
         qs = GatewayAPIKey.objects.select_related("owner").order_by("-created_at")
         if org:
@@ -182,23 +322,20 @@ class UebaApiKeyRegistryView(APIView):
         elif not request.user.is_superuser:
             qs = qs.none()
 
-        results = []
-        for k in qs[:200]:
-            results.append(
-                {
-                    "key_id": str(k.id),
-                    "prefix": k.prefix,
-                    "name": k.name,
-                    "project_id": k.project_id,
-                    "owner_email": getattr(k.owner, "email", ""),
-                    "is_active": k.is_active,
-                    "rate_limit_tpm": k.rate_limit_tokens_per_minute,
-                    "risk_score_baseline": round(float(k.risk_score or 0), 3),
-                    "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
-                    "expires_at": k.expires_at.isoformat() if k.expires_at else None,
-                }
-            )
-        return Response({"count": qs.count(), "results": results})
+        events = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        key_by_prefix, metrics = _collect_key_metrics(qs, events)
+        kill_by_prefix = _kill_switches_by_prefix(org)
+        results = _build_fleet_registry_payload(qs, key_by_prefix, metrics, kill_by_prefix)
+
+        return Response(
+            {
+                "period": period,
+                "count": qs.count(),
+                "results": results,
+            }
+        )
 
 
 class UebaApiKeyTimelineView(APIView):
@@ -423,6 +560,8 @@ class UnifiedDashboardView(APIView):
             }
             for i in open_incidents.select_related("enforcement_event").order_by("-created_at")[:10]
         ]
+        containment = _build_key_containment_payload(org, keys_qs)
+
         return Response(
             {
                 "period": period,
@@ -433,7 +572,10 @@ class UnifiedDashboardView(APIView):
                     "open_incidents": open_incidents.count(),
                     "risky_keys": sum(1 for r in risky_rows if r["risk_band"] == "high"),
                     "block_rate": round((blocked / total) * 100, 1) if total else 0.0,
+                    "disabled_keys": containment["disabled_keys"],
+                    "active_kill_switches": containment["active_kill_switches"],
                 },
+                "containment": containment,
                 "threat_trend": trend,
                 "top_risky_keys": risky_rows[:8],
                 "key_risk_distribution": dict(Counter([r["risk_band"] for r in risky_rows])),

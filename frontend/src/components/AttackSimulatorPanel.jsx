@@ -192,6 +192,12 @@ export function AttackSimulatorPanel() {
       setError("Connect at least one model with an API key under Model Connection.");
       return;
     }
+    if (gatewayModels.allowlistBlocksSimulator) {
+      setError(
+        `Model "${gatewayModels.selectedModel}" is not in the firewall Allowed Models list. Update Firewall Configuration, then retry.`,
+      );
+      return;
+    }
 
     setSending(true);
     setResult(null);

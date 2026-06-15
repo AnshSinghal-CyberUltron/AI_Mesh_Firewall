@@ -203,7 +203,7 @@ def execute_playbook(self, run_id):
     from module2.models import PlaybookRun
 
     try:
-        run = PlaybookRun.objects.select_related("playbook").get(pk=run_id)
+        run = PlaybookRun.objects.select_related("playbook__organization").get(pk=run_id)
     except PlaybookRun.DoesNotExist:
         return
 
@@ -220,6 +220,39 @@ def execute_playbook(self, run_id):
                     req.add_header("Content-Type", "application/json")
                     urllib.request.urlopen(req, timeout=10)
                 results.append({"action": action, "status": "ok"})
+            elif action == "kill_switch":
+                from core.kill_switch_audit import write_kill_switch_audit
+                from core.models import KillSwitch
+
+                org = run.playbook.organization
+                model_name = str(params.get("model_name") or "").strip()
+                if not model_name:
+                    results.append({"action": action, "status": "failed", "error": "model_name required"})
+                    continue
+                api_key_prefix = str(params.get("api_key_prefix") or "").strip()
+                ks_action = str(params.get("ks_action") or params.get("action_type") or "disable").strip()
+                reason = str(params.get("reason") or f"Playbook {run.playbook.name}").strip()
+                ks, _created = KillSwitch.objects.update_or_create(
+                    organization=org,
+                    model_name=model_name,
+                    api_key_prefix=api_key_prefix,
+                    defaults={
+                        "action": ks_action,
+                        "fallback_model": str(params.get("fallback_model") or "").strip(),
+                        "reason": reason,
+                        "is_active": True,
+                    },
+                )
+                if not ks.is_active:
+                    ks.is_active = True
+                    ks.save(update_fields=["is_active"])
+                write_kill_switch_audit(
+                    instance=ks,
+                    event="kill_switch_activated",
+                    triggered_by="playbook",
+                    trigger_source=f"playbook_run:{run.id}",
+                )
+                results.append({"action": action, "status": "ok", "kill_switch_id": ks.id})
             elif action == "create_incident":
                 results.append({"action": action, "status": "skipped", "detail": "incident already created"})
             else:
@@ -231,6 +264,73 @@ def execute_playbook(self, run_id):
     run.status = "success" if all(r.get("status") == "ok" for r in results) else "failed"
     run.finished_at = timezone.now()
     run.save(update_fields=["result", "status", "finished_at"])
+
+
+@shared_task(queue="default")
+def evaluate_ueba_auto_kill_switches():
+    """
+    Optional beat entry: activate credential kill switches for UEBA high-risk keys.
+
+    Disabled by default (MODULE2_UEBA_AUTO_KILL_ENABLED=false). When enabled, uses the
+    same behavioral scoring as M2.2 and scopes kill switches to each key's top model.
+    """
+    from django.conf import settings
+
+    if not getattr(settings, "MODULE2_UEBA_AUTO_KILL_ENABLED", False):
+        return {"skipped": True, "reason": "auto_kill_disabled"}
+
+    from auth.models import Organization
+    from core.kill_switch_audit import write_kill_switch_audit
+    from core.models import GatewayAPIKey, KillSwitch
+    from policy.models import EnforcementEvent
+
+    from module2.views import _collect_key_metrics, _risk_payload
+
+    lookback_hours = int(getattr(settings, "MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS", 24))
+    since = timezone.now() - timedelta(hours=lookback_hours)
+    stats = {"examined": 0, "activated": 0, "skipped": 0}
+
+    for org in Organization.objects.filter(is_active=True):
+        keys_qs = GatewayAPIKey.objects.filter(organization=org, is_active=True)
+        events = EnforcementEvent.objects.filter(organization=org, created_at__gte=since)
+        _key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
+        for prefix, metric in metrics.items():
+            stats["examined"] += 1
+            key_obj = _key_by_prefix.get(prefix)
+            if not key_obj:
+                stats["skipped"] += 1
+                continue
+            payload = _risk_payload(prefix, key_obj, metric)
+            if payload.get("risk_band") != "high":
+                stats["skipped"] += 1
+                continue
+            model_name = ""
+            if metric.get("models"):
+                model_name = sorted(metric["models"])[0]
+            if not model_name:
+                stats["skipped"] += 1
+                continue
+            reason = f"UEBA auto-response: score {payload.get('risk_score')} block {payload.get('block_rate_pct')}%"
+            ks, created = KillSwitch.objects.update_or_create(
+                organization=org,
+                model_name=model_name,
+                api_key_prefix=prefix,
+                defaults={"action": "disable", "reason": reason, "is_active": True},
+            )
+            if created or not ks.is_active:
+                ks.is_active = True
+                ks.save(update_fields=["is_active"])
+                write_kill_switch_audit(
+                    instance=ks,
+                    event="kill_switch_activated",
+                    triggered_by="ueba_auto_response",
+                    trigger_source="module2.tasks.evaluate_ueba_auto_kill_switches",
+                )
+                stats["activated"] += 1
+            else:
+                stats["skipped"] += 1
+
+    return stats
 
 
 @shared_task(queue="compute.heavy")

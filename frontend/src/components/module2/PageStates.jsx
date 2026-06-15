@@ -18,6 +18,16 @@ export function Module2PageSkeleton({ rows = 4 }) {
   );
 }
 
+export function Module2EmptyState({ title, message, hint }) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center dark:border-slate-600 dark:bg-slate-900/40">
+      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{title || "No data yet"}</p>
+      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{message}</p>
+      {hint && <p className="mt-3 text-xs text-teal-700 dark:text-teal-400">{hint}</p>}
+    </div>
+  );
+}
+
 export function Module2ErrorState({ message, onRetry }) {
   return (
     <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-10 text-center dark:border-red-900 dark:bg-red-950/40">

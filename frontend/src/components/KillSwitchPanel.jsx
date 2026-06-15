@@ -12,6 +12,7 @@ import {
   buildKillSwitchFallbackOptions,
   buildKillSwitchTargetOptions,
 } from "../utils/killSwitchModelOptions";
+import { notifyContainmentChanged } from "../utils/containmentEvents";
 
 export function KillSwitchPanel() {
   const { fetchWithAuth, user } = useAuth();
@@ -201,6 +202,7 @@ export function KillSwitchPanel() {
       }
       setModalOpen(false);
       await fetchKillSwitches();
+      notifyContainmentChanged("kill-switch-create");
     } finally {
       setSubmitting(false);
     }
@@ -211,6 +213,7 @@ export function KillSwitchPanel() {
     try {
       await fetchWithAuth(`/api/kill-switches/${id}/activate/`, { method: "POST" });
       await fetchKillSwitches();
+      notifyContainmentChanged("kill-switch-activate");
     } finally {
       setActionLoading(null);
     }
@@ -221,6 +224,7 @@ export function KillSwitchPanel() {
     try {
       await fetchWithAuth(`/api/kill-switches/${id}/deactivate/`, { method: "POST" });
       await fetchKillSwitches();
+      notifyContainmentChanged("kill-switch-deactivate");
     } finally {
       setActionLoading(null);
     }
@@ -232,6 +236,7 @@ export function KillSwitchPanel() {
     try {
       await fetchWithAuth(`/api/kill-switches/${id}/`, { method: "DELETE" });
       await fetchKillSwitches();
+      notifyContainmentChanged("kill-switch-delete");
     } finally {
       setActionLoading(null);
     }

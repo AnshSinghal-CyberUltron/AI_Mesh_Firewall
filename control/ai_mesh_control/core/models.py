@@ -1295,7 +1295,14 @@ class LLMModelConfig(models.Model):
 
     @property
     def api_key_set(self) -> bool:
-        return bool(self.encrypted_api_key)
+        if self.encrypted_api_key:
+            return True
+        if self.api_key_env_var:
+            return True
+        # Bedrock/internal models use gateway container AWS credentials (IAM/env).
+        if str(self.provider or "").lower() in {"aws_bedrock", "internal"}:
+            return True
+        return False
 
     @property
     def is_platform_managed(self) -> bool:
@@ -1346,6 +1353,8 @@ class LLMModelConfig(models.Model):
             params["api_key"] = f"os.environ/{self.api_key_env_var}"
         if self.api_base:
             params["api_base"] = self.api_base
+        if self.region and str(self.provider or "").lower() == "aws_bedrock":
+            params["aws_region_name"] = self.region
         params = normalize_litellm_params(params, provider=self.provider)
         return {
             "model_name": self.model_name,

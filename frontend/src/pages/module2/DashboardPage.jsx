@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid,
   ResponsiveContainer, Tooltip, XAxis, YAxis, PieChart, Pie, Cell,
 } from "recharts";
 import { Loader2, RefreshCw, MessageSquare, BookOpen, Database, Wrench } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
-import { createModule2Api } from "../../api/module2";
+import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { ChartCard } from "../../components/module2/ChartCard";
@@ -14,6 +15,7 @@ import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import { InfoTooltip } from "../../components/module2/InfoTooltip";
+import { buildContainmentKpiItems } from "./pageData";
 import { ANALYST_BRIEF_TITLE, PAGE_BRIEFS } from "./pageCopy";
 
 const LANE_META = {
@@ -91,23 +93,41 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState([]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
+      clearModule2Cache();
       const res = await api.getDashboard(period);
       setData(res);
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, [period]);
+  }, [api, period]);
 
   useEffect(() => { load(); }, [load]);
+
+  const refreshContainment = useCallback(async () => {
+    clearModule2Cache();
+    try {
+      const res = await api.getDashboard(period, { useCache: false });
+      setData((prev) => (
+        prev
+          ? { ...prev, kpis: res.kpis, containment: res.containment }
+          : res
+      ));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [api, period]);
+
+  useContainmentPolling(refreshContainment, { enabled: !!data });
 
   useRealtimeNotifications({
     onEnforcementEvent: (payload) => {
       setFeed((prev) => [payload, ...prev].slice(0, 20));
+      refreshContainment();
     },
   });
 
@@ -123,12 +143,18 @@ export function DashboardPage() {
   }
 
   const kpis = data?.kpis || {};
+  const containment = data?.containment || {};
   const kpiItems = [
     { key: "total-events", label: "Total Events", value: kpis.total_events ?? 0, helpText: "All gateway enforcement events in the selected time window." },
     { key: "blocked", label: "Blocked", value: kpis.blocked ?? 0, color: "text-red-600", helpText: "Requests hard-stopped by policy (deny / kill-switch)." },
     { key: "redacted", label: "Redacted", value: kpis.redacted ?? 0, color: "text-amber-600", helpText: "Requests allowed after PII or sensitive fields were masked." },
     { key: "open-incidents", label: "Open Incidents", value: kpis.open_incidents ?? 0, color: "text-orange-600", helpText: "Cases still open, investigating, or escalated in the incident queue." },
     { key: "risky-keys", label: "Risky Keys", value: kpis.risky_keys ?? 0, color: "text-red-600", helpText: "API keys currently in the high UEBA risk band." },
+    ...buildContainmentKpiItems({
+      disabledKeys: kpis.disabled_keys ?? containment.disabled_keys ?? 0,
+      activeKillSwitches: kpis.active_kill_switches ?? containment.active_kill_switches ?? 0,
+      clickable: false,
+    }),
     { key: "block-rate", label: "Block Rate", value: `${kpis.block_rate ?? 0}%`, helpText: "Hard-block rate across all events—useful for spotting enforcement spikes." },
   ];
 
