@@ -300,7 +300,7 @@ export function LogViewerPanel() {
                   <span className="text-slate-400 whitespace-nowrap flex-shrink-0">
                     {formatTimestamp(log.timestamp)}
                   </span>
-                  <span className={`${levelStyle.bg} text-white px-1.5 py-0 rounded text-[9px] font-bold flex-shrink-0 leading-4`}>
+                  <span className={`${levelStyle.bg} text-white px-1.5 py-0 rounded text-[10px] font-bold flex-shrink-0 leading-4`}>
                     {log.level}
                   </span>
                   <span className="text-teal-400 flex-shrink-0">[{log.service}]</span>

@@ -97,7 +97,7 @@ export function CollectionManagerPanel() {
   );
 
   const setupMessage = !hasConfiguredProvider
-    ? "Configure an organisation vector provider (Pinecone, Milvus, or Custom) in Vector Provider Config before managing collections."
+    ? "Configure an organisation vector provider (Pinecone, Milvus, Chroma, or Custom) in Vector Provider Config before managing collections."
     : ragAvailable === false || reason === "no_provider_configured"
       ? "Vector provider credentials are saved but the gateway has no active external vector client yet. Re-save provider config or check gateway connectivity."
       : null;
@@ -115,7 +115,7 @@ export function CollectionManagerPanel() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={refresh} disabled={loading || !hasConfiguredProvider} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="Refresh">
+          <button onClick={refresh} disabled={loading || !hasConfiguredProvider} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Refresh" title="Refresh">
             <RefreshCw className={`w-4 h-4 text-slate-400 ${loading ? "animate-spin" : ""}`} />
           </button>
           <InfoTooltip text="Collections are namespaced by project ID for tenant isolation. Configure your vector provider first, then create indexes here." />
@@ -153,6 +153,7 @@ export function CollectionManagerPanel() {
               value={selectedProvider}
               onChange={(e) => setSelectedProvider(e.target.value)}
               disabled={!hasConfiguredProvider}
+              aria-label="Vector database provider"
               className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
             >
               {VECTOR_PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -167,6 +168,7 @@ export function CollectionManagerPanel() {
                 placeholder="my_documents"
                 disabled={!hasConfiguredProvider}
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                aria-label="Collection name"
                 className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 flex-1 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
               />
               <button

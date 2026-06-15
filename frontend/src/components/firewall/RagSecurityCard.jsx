@@ -32,6 +32,28 @@ export function RagSecurityCard({ config, onPatch, index }) {
           }
         />
         <FieldRow
+          label="Document Redaction"
+          hint="Redact PII with vector-safe typed placeholders ([EMAIL], [SSN]) before embedding ingested documents."
+          control={
+            <ConfigSwitch
+              checked={config.ragRedactionEnabled}
+              onCheckedChange={(v) => onPatch("ragRedactionEnabled", v)}
+              label="Document Redaction"
+            />
+          }
+        />
+        <FieldRow
+          label="Tier-2 Scanning"
+          hint="Run the ML guard model on RAG ingestion + queries, in addition to static Tier-1."
+          control={
+            <ConfigSwitch
+              checked={config.ragTier2Enabled}
+              onCheckedChange={(v) => onPatch("ragTier2Enabled", v)}
+              label="Tier-2 Scanning"
+            />
+          }
+        />
+        <FieldRow
           label="Max RAG Documents"
           hint="Maximum documents to retrieve"
           control={

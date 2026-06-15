@@ -377,7 +377,7 @@ export function MCPScannerPanel() {
           <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="ml-auto">
+            <button onClick={() => setError(null)} aria-label="Dismiss error" title="Dismiss" className="ml-auto">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -441,6 +441,7 @@ export function MCPScannerPanel() {
                     <button
                       onClick={(e) => { e.stopPropagation(); rescanServer(server.server_id); }}
                       className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-400"
+                      aria-label="Rescan server"
                       title="Rescan server"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -448,6 +449,7 @@ export function MCPScannerPanel() {
                     <button
                       onClick={(e) => { e.stopPropagation(); unregisterServer(server.server_id); }}
                       className="p-1 rounded hover:bg-red-100 dark:bg-red-800/30 dark:hover:bg-red-900/30 text-red-400 hover:text-red-600"
+                      aria-label="Unregister server"
                       title="Unregister server"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -575,6 +577,7 @@ export function MCPScannerPanel() {
                                   <button
                                     onClick={() => loadToolDetail(server.server_id, tool.name)}
                                     className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 text-indigo-500"
+                                    aria-label="View tool details"
                                     title="View tool details"
                                   >
                                     <Eye className="w-4 h-4" />
@@ -745,6 +748,8 @@ export function MCPScannerPanel() {
               </div>
               <button
                 onClick={() => setSelectedTool(null)}
+                aria-label="Close tool details"
+                title="Close"
                 className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600"
               >
                 <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
@@ -853,6 +858,8 @@ export function MCPScannerPanel() {
               <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100 dark:text-white">Register MCP Server</h4>
               <button
                 onClick={() => setRegisterModalOpen(false)}
+                aria-label="Close register server dialog"
+                title="Close"
                 className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600"
               >
                 <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
@@ -876,6 +883,7 @@ export function MCPScannerPanel() {
                 <select
                   value={registerForm.transport}
                   onChange={(e) => setRegisterForm({ ...registerForm, transport: e.target.value })}
+                  aria-label="Transport"
                   className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                 >
                   <option value="http">HTTP — local or network MCP server</option>

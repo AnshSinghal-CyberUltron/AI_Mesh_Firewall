@@ -42,6 +42,10 @@ def get_connected_models(organization: Organization | None) -> list[dict[str, An
                 "provider_display": row.get_provider_display(),
                 "is_active": row.is_active,
                 "api_key_set": row.api_key_set,
+                # Expose the env-var key reference so the governance allowlist UI
+                # recognizes BYOK-via-env models as connected (api_key_set is
+                # encrypted-key-only). Without this they render "API key missing".
+                "api_key_env_var": row.api_key_env_var or "",
             }
         )
     return out

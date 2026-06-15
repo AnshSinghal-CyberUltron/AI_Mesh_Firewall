@@ -39,7 +39,7 @@ export function InfoHint({ content, className }) {
         tabIndex={0}
         aria-label="More information"
         className={cn(
-          "inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-[9px] font-bold text-slate-500 dark:text-slate-300 cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500",
+          "inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-300 cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500",
           className
         )}
       >

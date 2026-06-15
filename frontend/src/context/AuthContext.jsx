@@ -248,14 +248,39 @@ export function AuthProvider({ children }) {
       return fetch(url, { ...options, headers });
     };
 
+    // Idempotent methods are safe to retry on a transient NETWORK failure
+    // (fetch rejects — e.g. the control plane closing the connection without
+    // a response, observed intermittently on PUT /api/firewall/config/ under
+    // daphne worker churn (H8)). Retry with short backoff so a transient reset
+    // doesn't surface as a user-facing "network error". POST is NEVER retried
+    // (non-idempotent → risks duplicate writes). HTTP error statuses are not
+    // retried here — only an outright connection failure.
+    const method = (options.method || 'GET').toUpperCase();
+    const idempotent = ['GET', 'HEAD', 'PUT', 'DELETE'].includes(method);
+    const doFetchResilient = async (accessToken) => {
+      const maxAttempts = idempotent ? 3 : 1;
+      let lastErr;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          return await doFetch(accessToken);
+        } catch (err) {
+          lastErr = err;
+          if (attempt < maxAttempts) {
+            await new Promise((r) => setTimeout(r, 250 * attempt));
+          }
+        }
+      }
+      throw lastErr;
+    };
+
     // Use valid token (refresh if expired) so the first request is less likely to 401
     let access = await getValidAccessToken();
-    let res = await doFetch(access);
+    let res = await doFetchResilient(access);
 
     if (res.status === 401) {
       const newAccess = await refreshAccess();
       if (newAccess) {
-        res = await doFetch(newAccess);
+        res = await doFetchResilient(newAccess);
         return res;
       }
       clearStoredTokens();

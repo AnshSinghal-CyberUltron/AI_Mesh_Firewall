@@ -28,7 +28,7 @@ function RiskGauge({ score, threshold }) {
         title={`Threshold: ${threshold}`}
       />
       <div
-        className="absolute -top-4 text-[9px] font-bold text-red-600 dark:text-red-400"
+        className="absolute -top-4 text-[10px] font-bold text-red-600 dark:text-red-400"
         style={{ left: `${threshPct}%`, transform: "translateX(-50%)" }}
       >
         T:{threshold}
@@ -291,7 +291,7 @@ export function ModelStatePanel() {
         </div>
       ) : (
         <div className="space-y-3">
-          {models
+          {[...models]
             .sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0))
             .map((m) => {
               const sc = STATUS_COLORS[m.status] || STATUS_COLORS.active;
@@ -317,6 +317,14 @@ export function ModelStatePanel() {
                         <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase ${sc.text} border ${sc.border}`}>
                           {m.status}
                         </span>
+                        {m.kill_switch_active && (
+                          <span
+                            className="px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase text-red-600 dark:text-red-400 border border-red-500/30 bg-red-500/10"
+                            title={m.kill_switch_reason || "A kill-switch is active for this model (managed in Kill-Switch Management)."}
+                          >
+                            kill-switch
+                          </span>
+                        )}
                         {m.status === "isolated" && m.isolated_until && (
                           <span className="text-[10px] text-slate-500 dark:text-slate-400">
                             until {new Date(m.isolated_until).toLocaleTimeString()}
@@ -331,13 +339,20 @@ export function ModelStatePanel() {
                           <div className={`text-lg font-bold ${(m.risk_score || 0) >= (m.threshold || 80) ? "text-red-600 dark:text-red-400" : "text-slate-800 dark:text-slate-200"}`}>
                             {(m.risk_score || 0).toFixed(1)}
                           </div>
-                          <div className="text-[9px] text-slate-400 uppercase tracking-wider">Risk Score</div>
+                          <div className="text-[10px] text-slate-400 uppercase tracking-wider">Risk Score</div>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {actionLoading === m.model_name ? (
                         <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
+                      ) : m.source === "kill_switch" ? (
+                        <span
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20"
+                          title="This model is held by a kill-switch. Manage it in Kill-Switch Management."
+                        >
+                          <ShieldOff className="w-3 h-3" /> Kill-switch
+                        </span>
                       ) : m.status === "isolated" ? (
                         <button
                           onClick={() => handleRecover(m.model_name)}
@@ -359,6 +374,8 @@ export function ModelStatePanel() {
                         onClick={() => setExpandedModel(isExpanded ? null : m.model_name)}
                         className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 transition-colors"
                         title="Model settings"
+                        aria-label={`${isExpanded ? "Collapse" : "Expand"} model settings for ${m.model_name}`}
+                        aria-expanded={isExpanded}
                       >
                         {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                       </button>
@@ -382,6 +399,7 @@ export function ModelStatePanel() {
                               value={m.threshold || 80}
                               onChange={(e) => handleThresholdChange(m.model_name, parseFloat(e.target.value))}
                               className="flex-1 h-1.5 accent-teal-500"
+                              aria-label={`Risk threshold for ${m.model_name}`}
                             />
                             <span className="text-xs font-mono font-semibold text-slate-700 dark:text-slate-300 w-8 text-right">{m.threshold || 80}</span>
                           </div>
@@ -394,6 +412,7 @@ export function ModelStatePanel() {
                             value={m.action || "block"}
                             onChange={(e) => handleActionChange(m.model_name, e.target.value)}
                             className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-200"
+                            aria-label={`Isolation action for ${m.model_name}`}
                           >
                             <option value="block">Block (503)</option>
                             <option value="reroute">Reroute to Fallback</option>

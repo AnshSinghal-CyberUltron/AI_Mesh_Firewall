@@ -20,10 +20,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import time
 import traceback
 import uuid
+from datetime import datetime, timezone
 from collections import deque
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional
@@ -50,7 +52,11 @@ class _JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         entry: Dict[str, Any] = {
-            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S.") + f"{int(record.msecs):03d}Z",
+            # L1: render via datetime (microsecond precision, ISO-8601 +00:00) to
+            # match the gateway-main and control loggers. logging.Formatter.formatTime
+            # uses time.strftime which has no %f, so the prior approach concatenated
+            # only milliseconds and used a 'Z' suffix — inconsistent for parsers.
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+00:00"),
             "level": record.levelname,
             "logger": record.name,
             "msg": record.getMessage(),
@@ -189,13 +195,55 @@ bedrock_log = _setup_bedrock_logger()
 
 # ── Convenience helpers ──────────────────────────────────────────────────────
 
+# B-1: the bedrock logger exclusively records the platform GUARD model's traffic,
+# so every concrete model id / AWS region / backend it sees is internal topology
+# the "ZeroShield Model only" isolation policy (M8) is meant to keep out of logs.
+# Scrub them to an opaque alias at the single choke point so ALL emitters
+# (request/response/error/scan/health) are covered. A reader learns only that the
+# ZeroShield guard ran — not that it is Anthropic Claude Haiku on Bedrock/ap-south-1.
+_GUARD_MODEL_ALIAS = "zeroshield-guard"
+_MODEL_ID_RE = re.compile(
+    r"\b(?:global\.|us\.|eu\.|apac\.)?(?:anthropic|amazon|meta|cohere|mistral|ai21|deepseek|stability)"
+    r"\.[\w.:\-]+",
+    re.IGNORECASE,
+)
+_AWS_REGION_RE = re.compile(r"\b(?:us|eu|ap|sa|ca|me|af|apac)-[a-z]+-\d\b", re.IGNORECASE)
+
+
+def _scrub_topology(value: Any) -> Any:
+    """Recursively alias concrete guard-model ids + AWS regions in logged values."""
+    if isinstance(value, str):
+        v = _MODEL_ID_RE.sub(_GUARD_MODEL_ALIAS, value)
+        v = _AWS_REGION_RE.sub("[region]", v)
+        return v
+    if isinstance(value, dict):
+        out = {}
+        for k, val in value.items():
+            # Drop the dedicated region/backend fields entirely from structured data.
+            if k in ("region", "backend"):
+                continue
+            if k == "model":
+                out[k] = _GUARD_MODEL_ALIAS
+                continue
+            out[k] = _scrub_topology(val)
+        return out
+    if isinstance(value, list):
+        return [_scrub_topology(v) for v in value]
+    return value
+
+
 def _log_with_data(level: int, msg: str, data: Optional[Dict] = None, **kwargs: Any) -> None:
-    """Log a message with optional structured data attached."""
+    """Log a message with optional structured data attached.
+
+    B-1: scrubs internal guard-model identity + AWS region/backend from both the
+    message string and the structured data before emission (topology isolation).
+    """
+    msg = _scrub_topology(msg)
     record = bedrock_log.makeRecord(
         bedrock_log.name, level, "(bedrock)", 0, msg, (), None,
     )
     if data:
-        record.bedrock_data = data  # type: ignore[attr-defined]
+        record.bedrock_data = _scrub_topology(data)  # type: ignore[attr-defined]
     bedrock_log.handle(record)
 
 
@@ -205,6 +253,25 @@ def _normalize_text(value: str) -> str:
 
 def _preview_text(value: str, max_chars: int = LOG_PREVIEW_CHARS) -> str:
     normalized = _normalize_text(value)
+    # Scrub PII/secrets BEFORE truncation/logging. These previews are the content
+    # the guard model scans (the model OUTPUT for output-guard) and the guard
+    # model's response evidence — both can carry verbatim PII (names/SSN/phone/
+    # email/credentials). Logging them raw defeated the output-redaction guarantee
+    # by persisting PII to the gateway logs (-> CloudWatch). redact_all is a no-op
+    # on benign text, so the debug utility of the preview is preserved.
+    _redact = None
+    try:
+        from patterns import redact_all as _redact
+    except ImportError:  # pragma: no cover - package-relative import
+        try:
+            from .patterns import redact_all as _redact
+        except Exception:
+            _redact = None
+    if _redact is not None:
+        try:
+            normalized = _normalize_text(_redact(normalized))
+        except Exception:
+            pass
     if len(normalized) <= max_chars:
         return normalized
     return normalized[:max_chars] + "..."
@@ -227,6 +294,9 @@ def log_bedrock_request(
     max_tokens: int = 512,
     deployment_path: Optional[str] = None,
     prompt_preview: Optional[str] = None,
+    call_site: Optional[str] = None,
+    api_method: str = "invoke_model",
+    backend: str = "bedrock",
 ) -> None:
     """Log an outgoing Bedrock invoke_model request."""
     data = {
@@ -239,7 +309,11 @@ def log_bedrock_request(
         "truncated_len": truncated_len,
         "has_context": has_context,
         "max_tokens": max_tokens,
+        "api_method": api_method,
+        "backend": backend,
     }
+    if call_site:
+        data["call_site"] = call_site
     if deployment_path:
         data["deployment_path"] = deployment_path
     if prompt_preview is not None and LOG_PROMPT_PREVIEW:
@@ -276,6 +350,9 @@ def log_bedrock_response(
     response_keys: Optional[List[str]] = None,
     http_status: Optional[int] = None,
     output_preview: Optional[str] = None,
+    call_site: Optional[str] = None,
+    api_method: str = "invoke_model",
+    backend: str = "bedrock",
 ) -> None:
     """Log a Bedrock invoke_model response."""
     data = {
@@ -287,15 +364,22 @@ def log_bedrock_response(
         "tokens_in": tokens_in,
         "tokens_out": tokens_out,
         "success": success,
+        "api_method": api_method,
+        "backend": backend,
     }
+    if call_site:
+        data["call_site"] = call_site
     if response_keys:
         data["response_keys"] = response_keys
     if http_status:
         data["http_status"] = http_status
-    if output_preview is not None and LOG_OUTPUT_PREVIEW:
-        data["output_preview"] = _preview_text(output_preview)
     level = logging.INFO if success else logging.ERROR
     status = "OK" if success else "FAILED"
+    # C-2: do NOT attach the guard model's output_preview to the INFO response
+    # record. The preview is the guard model's verdict prose which echoes scanned
+    # identifiers; _preview_text masks SSN/CC/email/phone but person NAMES have no
+    # deterministic mask and were leaking verbatim into INFO logs. The preview is
+    # emitted ONLY on the separate DEBUG line below, off the default INFO stream.
     _log_with_data(
         level,
         f"BEDROCK RESPONSE | reqid={request_id} status={status} elapsed={elapsed_s:.3f}s "
@@ -304,7 +388,7 @@ def log_bedrock_response(
     )
     if output_preview is not None and LOG_OUTPUT_PREVIEW:
         _log_with_data(
-            logging.INFO,
+            logging.DEBUG,
             f"BEDROCK OUTPUT   | reqid={request_id} text={_preview_text(output_preview)}",
             {
                 "event": "bedrock_output",
@@ -468,6 +552,8 @@ def log_metrics(
     tokens_out: int,
     elapsed_s: float,
     success: bool = True,
+    call_site: Optional[str] = None,
+    backend: str = "bedrock",
 ) -> None:
     """Log Bedrock call metrics (replaces metrics.record_bedrock_call)."""
     data = {
@@ -478,7 +564,10 @@ def log_metrics(
         "tokens_out": tokens_out,
         "elapsed_s": round(elapsed_s, 3),
         "success": success,
+        "backend": backend,
     }
+    if call_site:
+        data["call_site"] = call_site
     _log_with_data(
         logging.INFO,
         f"BEDROCK METRICS     | method={method} model={model} "

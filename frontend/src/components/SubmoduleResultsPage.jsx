@@ -14,6 +14,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { useFirewallData } from "../hooks/useFirewallData";
 import { useTheme } from "../context/ThemeContext";
 
@@ -198,7 +199,7 @@ export function SubModuleResultsPage({
           <div className="lg:col-span-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6">
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">High-Density Time-Series Analysis (7 Days)</h3>
             {timeSeriesData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={350}>
+              <SafeResponsiveChart className="h-[350px] w-full">
                 <AreaChart data={timeSeriesData}>
                   <defs>
                     <linearGradient id="colorPrimary2" x1="0" y1="0" x2="0" y2="1">
@@ -244,7 +245,7 @@ export function SubModuleResultsPage({
                     activeDot={{ r: 4, fill: chartTheme.areaSecondary, stroke: isDark ? "#0f172a" : "#ffffff", strokeWidth: 2 }}
                   />
                 </AreaChart>
-              </ResponsiveContainer>
+              </SafeResponsiveChart>
             ) : (
               <div className="h-[350px] flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
                 {loading ? "Loading timeline..." : "No timeline data available"}
@@ -254,7 +255,7 @@ export function SubModuleResultsPage({
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6">
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">Action Distribution</h3>
             {actionDistributionData && actionDistributionData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={350}>
+              <SafeResponsiveChart className="h-[350px] w-full">
                 <BarChart data={actionDistributionData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} strokeOpacity={0.25} />
                   <XAxis type="number" stroke={chartTheme.axis} tick={{ fontSize: 11, fill: chartTheme.axis }} />
@@ -275,7 +276,7 @@ export function SubModuleResultsPage({
                     activeBar={{ fill: chartTheme.barFill, opacity: 0.92, stroke: isDark ? "#1e293b" : "#cbd5e1", strokeWidth: 1 }}
                   />
                 </BarChart>
-              </ResponsiveContainer>
+              </SafeResponsiveChart>
             ) : (
               <div className="h-[350px] flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
                 {loading ? "Loading distribution..." : "No action data available"}

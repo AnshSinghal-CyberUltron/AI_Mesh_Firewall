@@ -74,13 +74,20 @@ services:
     # ECR images built before ASGI switch may still use gunicorn; override until image is rebuilt.
     command:
       [
-        "daphne",
-        "-b",
-        "0.0.0.0",
-        "-p",
-        "8000",
-        "--proxy-headers",
+        "gunicorn",
         "main_app.asgi:application",
+        "-k",
+        "uvicorn.workers.UvicornWorker",
+        "--workers",
+        "5",
+        "--bind",
+        "0.0.0.0:8000",
+        "--timeout",
+        "120",
+        "--graceful-timeout",
+        "30",
+        "--forwarded-allow-ips",
+        "*",
       ]
     environment:
       DEBUG: ${DEBUG:-false}
@@ -97,8 +104,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1"
-          memory: 1536M
+          cpus: "4"
+          memory: 2560M
 
   gateway:
     <<: [*restart_unless_stopped, *ecr_gateway_image]
@@ -175,6 +182,9 @@ services:
   nginx:
     <<: [*restart_unless_stopped, *ecr_nginx_image]
     ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/01-http.conf:ro
+      - ./deploy/nginx-ssl.conf:/etc/nginx/conf.d/02-ssl.conf:ro
     depends_on:
       control: { condition: service_healthy }
       gateway: { condition: service_started }

@@ -27,12 +27,174 @@ LLM_MODEL_CONFIGS_PREFIX = "llm:model_configs:"
 PUBSUB_CHANNEL = "config_updates"
 RECONNECT_DELAY_SECONDS = 5
 
+# Sentinel distinguishing "org_slug not supplied" (startup global model load)
+# from an explicit empty org_slug ("" — per-request path with no resolved org).
+# See ConfigSync.reload_models_now (#5: unknown-model fallback fan-out).
+_UNSET = object()
+
 LOG_LEVEL_MAP: dict[str, int] = {
     "minimal": logging.ERROR,
     "standard": logging.WARNING,
     "detailed": logging.INFO,
     "verbose": logging.DEBUG,
 }
+
+# ── M-19: defensive schema validation for Redis-sourced config payloads ──
+#
+# Org-config payloads come from the control plane via Redis. A buggy or
+# malicious writer must not be able to poison the gateway's CONFIG dict
+# (e.g. ``"firewall_enabled": "false"`` — a truthy string — silently
+# flipping enforcement semantics). Validation is fail-open: a malformed
+# payload is warned about and SKIPPED, keeping the last-good config.
+#
+# Known keys mirror control-plane ``FirewallConfig.build_gateway_payload()``
+# plus the gateway-local keys from ``config.load_config()``. Unknown keys
+# pass through unchanged (forward compatibility with newer control planes).
+_BOOL_KEYS = (
+    "firewall_enabled", "rate_limit_enabled", "input_scan_enabled",
+    "scan_block_on_pii", "scan_block_on_injection", "deep_scan_enabled",
+    "tier2_fail_closed_enabled", "tier2_input_fail_closed", "tier2_stream_hold_enabled",
+    "tier2_enabled", "mcp_tier2_enabled", "tier2_strict",
+    "model_isolation_enabled", "routing_enabled", "output_scan_enabled",
+    "hallucination_flag_enabled", "output_pii_enabled",
+    "output_credential_enabled", "output_ip_leakage_enabled",
+    "output_policy_enabled", "output_incident_logging_enabled",
+    "rag_enabled", "vector_db_isolation",
+    "rag_redaction_enabled", "rag_tier2_enabled", "threat_intel_enabled",
+    "auto_block_threats", "telemetry_enabled", "alerting_enabled",
+)
+_NUM_KEYS = (  # bools are explicitly excluded in _value_type_ok
+    "requests_per_minute", "burst_limit", "toxicity_threshold",
+    "prompt_injection_threshold", "tier2_stream_hold_timeout_ms",
+    "routing_risk_weight", "routing_cost_weight", "routing_latency_weight",
+    "routing_priority_weight", "hallucination_grounding_threshold",
+    "max_response_tokens", "rag_default_max_results",
+    "rag_relevance_threshold", "threat_score_threshold", "retention_days",
+    "critical_alert_threshold",
+)
+_STR_KEYS = (
+    "enforcement_mode", "log_level", "tier2_execution_mode",
+    "litellm_default_model", "default_data_sensitivity",
+    "hallucination_grounding_mode", "hallucination_grounding_model",
+    "output_pii_action", "output_credential_action",
+    "output_ip_leakage_action", "output_policy_action",
+    "output_hallucination_action", "alert_recipients",
+)
+_LIST_KEYS = ("blocked_keywords", "allowed_models", "compliance_frameworks")
+
+CONFIG_KEY_TYPES: dict[str, tuple[type, ...]] = {
+    **{k: (bool,) for k in _BOOL_KEYS},
+    **{k: (int, float) for k in _NUM_KEYS},
+    **{k: (str,) for k in _STR_KEYS},
+    **{k: (list,) for k in _LIST_KEYS},
+}
+
+# Keys where ``null`` is a meaningful tri-state value ("no per-org opinion").
+_NULLABLE_KEYS: frozenset[str] = frozenset({"tier2_enabled", "mcp_tier2_enabled"})
+
+
+def _value_type_ok(key: str, value: Any) -> bool:
+    """Return True if *value* has an acceptable type for *key*."""
+    expected = CONFIG_KEY_TYPES.get(key)
+    if expected is None:
+        return True  # unknown key — pass through (forward compatible)
+    if value is None:
+        return key in _NULLABLE_KEYS
+    if isinstance(value, bool):
+        # bool is a subclass of int — only accept it where bool is expected.
+        return bool in expected
+    return isinstance(value, expected)
+
+
+def validate_config_payload(data: Any, source: str = "") -> Optional[dict[str, Any]]:
+    """
+    Validate a Redis-sourced org-config payload.
+
+    Returns a sanitized copy, or ``None`` when the payload is not a dict
+    (the caller must then keep its last-good config). Individual keys with
+    unexpected types are dropped with a warning while the rest of the
+    payload still applies.
+    """
+    if not isinstance(data, dict):
+        LOG.warning(
+            "Ignoring malformed config payload from %s: expected JSON object, got %s",
+            source or "redis",
+            type(data).__name__,
+        )
+        return None
+
+    sanitized: dict[str, Any] = {}
+    for key, value in data.items():
+        if not isinstance(key, str):
+            LOG.warning(
+                "Dropping non-string config key %r from %s", key, source or "redis"
+            )
+            continue
+        if not _value_type_ok(key, value):
+            LOG.warning(
+                "Dropping config key '%s' from %s: expected %s, got %s (%r)",
+                key,
+                source or "redis",
+                "/".join(t.__name__ for t in CONFIG_KEY_TYPES.get(key, ())),
+                type(value).__name__,
+                value,
+            )
+            continue
+        sanitized[key] = value
+    return sanitized
+
+
+def validate_model_config_payload(data: Any, source: str = "") -> Optional[dict[str, Any]]:
+    """
+    Validate an ``llm:model_configs:*`` payload from Redis.
+
+    Accepts either a bare list of model dicts (legacy) or a dict with
+    optional ``models`` / ``routing`` (lists) and ``fallback_chains``
+    (dict). Returns a normalized dict containing only the keys that were
+    present AND well-typed, or ``None`` when the payload shape is
+    unusable. Malformed sub-sections are dropped with a warning so a
+    partially-bad payload cannot wipe last-good routing state.
+    """
+    def _only_dicts(items: list, list_key: str) -> list:
+        kept = [item for item in items if isinstance(item, dict)]
+        if len(kept) != len(items):
+            LOG.warning(
+                "Dropped %d non-object entries from '%s' in model config %s",
+                len(items) - len(kept), list_key, source or "redis",
+            )
+        return kept
+
+    if isinstance(data, list):
+        return {"models": _only_dicts(data, "models")}
+    if not isinstance(data, dict):
+        LOG.warning(
+            "Ignoring malformed model config payload from %s: expected object or list, got %s",
+            source or "redis",
+            type(data).__name__,
+        )
+        return None
+
+    normalized: dict[str, Any] = {}
+    for list_key in ("models", "routing"):
+        if list_key in data:
+            value = data[list_key]
+            if isinstance(value, list):
+                normalized[list_key] = _only_dicts(value, list_key)
+            else:
+                LOG.warning(
+                    "Dropping model config key '%s' from %s: expected list, got %s",
+                    list_key, source or "redis", type(value).__name__,
+                )
+    if "fallback_chains" in data:
+        value = data["fallback_chains"]
+        if isinstance(value, dict):
+            normalized["fallback_chains"] = value
+        else:
+            LOG.warning(
+                "Dropping model config key 'fallback_chains' from %s: expected dict, got %s",
+                source or "redis", type(value).__name__,
+            )
+    return normalized
 
 
 class ConfigSync:
@@ -103,13 +265,45 @@ class ConfigSync:
                 pass
         LOG.info("ConfigSync stopped")
 
-    async def reload_models_now(self, org_slug: str = "") -> None:
+    async def reload_models_now(self, org_slug: Any = _UNSET) -> None:
         """
         Force an immediate LLM model reload from Redis.
 
         Useful at gateway startup so model routes are available before
         the first Pub/Sub model_reload notification is received.
+
+        Org-scoping (#5 — unknown-model fallback fan-out):
+            * Called with NO argument (startup, ``reload_models_now()``) the
+              ``org_slug`` sentinel triggers the legitimate global load that
+              scans ``llm:model_configs:*`` and primes the router with every
+              org's models — this only happens once, at boot.
+            * Called from the per-request path with an explicit ``org_slug``
+              that is EMPTY (``""`` — auth produced no resolved org) we must
+              NOT fall through to that cross-org scan-and-merge. Merging every
+              org's configs into the live router rebuilds an all-orgs fallback
+              graph; an unknown/garbage model would then fan out across it.
+              An empty per-request org is treated as "nothing to reload" so
+              the request continues against the already-loaded routes and the
+              unknown-model rejection happens downstream (see note below).
+
+        NOTE: the actual unknown/unregistered-model rejection does NOT live
+        here. ``reload_models_now`` only populates routing/fallback state from
+        Redis; it never resolves the request's requested model. The early
+        4xx "model not available" rejection belongs in the request path
+        (``ai_mesh_gateway.main.proxy_chat`` after the
+        ``_filter_inference_eligible_models`` lookup) and/or
+        ``llm_router.LLMRouter._resolve_runtime_model`` /
+        ``acompletion`` — those are the only places that see the requested
+        model and the org's eligible routes. This method's contribution to
+        the fix is the org-scoping above, which removes the cross-org
+        fallback-graph amplifier for an unknown model on the request path.
         """
+        # Per-request path passed an explicit but empty org → do not scan and
+        # merge every org's model configs (the fan-out amplifier). The global
+        # scan is reserved for the no-argument startup load.
+        if org_slug is not _UNSET and not org_slug:
+            return
+        effective_org = "" if org_slug is _UNSET else org_slug
         client = None
         try:
             client = aioredis.Redis.from_url(
@@ -118,7 +312,7 @@ class ConfigSync:
                 socket_timeout=3.0,
                 socket_connect_timeout=2.0,
             )
-            await self._reload_llm_models(client, org_slug=org_slug)
+            await self._reload_llm_models(client, org_slug=effective_org)
         finally:
             if client is not None:
                 try:
@@ -141,9 +335,13 @@ class ConfigSync:
 
             raw = await client.get(REDIS_KEY)
             if raw is not None:
-                data = json.loads(raw)
-                self._apply(data)
-                LOG.info("Loaded firewall config from Redis (%d keys)", len(data))
+                # M-19: per-entry parse + schema validation. A malformed
+                # payload is warned about and skipped (fail-open on the
+                # env-var defaults / last-good config).
+                data = self._parse_and_validate(raw, REDIS_KEY)
+                if data is not None:
+                    self._apply(data)
+                    LOG.info("Loaded firewall config from Redis (%d keys)", len(data))
 
             keys = []
             async for key in client.scan_iter(match=f"{REDIS_KEY_PREFIX}*"):
@@ -151,7 +349,9 @@ class ConfigSync:
             for key in keys:
                 raw_val = await client.get(key)
                 if raw_val:
-                    data = json.loads(raw_val)
+                    data = self._parse_and_validate(raw_val, key)
+                    if data is None:
+                        continue  # warn+skip; other org keys still load
                     slug = key.replace(REDIS_KEY_PREFIX, "")
                     self._apply(data)
                     self._config_by_org[slug] = {**self._config, **data}
@@ -163,12 +363,19 @@ class ConfigSync:
             for key in model_keys:
                 raw_val = await client.get(key)
                 if raw_val:
-                    data = json.loads(raw_val)
+                    try:
+                        data = json.loads(raw_val)
+                    except (json.JSONDecodeError, TypeError):
+                        LOG.warning("Invalid JSON in model config key '%s'; skipping", key)
+                        continue
+                    normalized = validate_model_config_payload(data, source=key)
+                    if normalized is None:
+                        continue
                     slug = key.replace(LLM_MODEL_CONFIGS_PREFIX, "")
-                    if isinstance(data, dict) and "routing" in data:
-                        self._model_routing_by_org[slug] = data["routing"]
-                        if "fallback_chains" in data:
-                            self._fallback_chains_by_org[slug] = data["fallback_chains"]
+                    if "routing" in normalized:
+                        self._model_routing_by_org[slug] = normalized["routing"]
+                        if "fallback_chains" in normalized:
+                            self._fallback_chains_by_org[slug] = normalized["fallback_chains"]
 
             await client.aclose()
         except Exception:
@@ -176,6 +383,23 @@ class ConfigSync:
                 "Failed to load firewall config from Redis. Will retry when Pub/Sub connects.",
                 exc_info=True,
             )
+
+    def _parse_and_validate(self, raw: str, source: str) -> Optional[dict[str, Any]]:
+        """
+        Parse a raw Redis value and run schema validation (M-19).
+
+        Returns the sanitized payload dict, or ``None`` when the entry is
+        malformed (invalid JSON or non-object payload). Callers treat
+        ``None`` as warn+skip and keep the last-good config (fail-open).
+        """
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            LOG.warning(
+                "Invalid JSON in config key '%s'; keeping last-good config", source
+            )
+            return None
+        return validate_config_payload(data, source=source)
 
     def _apply(self, data: dict[str, Any]) -> None:
         """
@@ -292,7 +516,16 @@ class ConfigSync:
                 LOG.warning("%s key missing during refresh; keeping current config", key)
                 return
 
-            data = json.loads(raw)
+            # M-19: validate before applying — a malformed payload must not
+            # clobber the last-good config (fail-open).
+            data = self._parse_and_validate(raw, key)
+            if data is None:
+                LOG.warning(
+                    "Malformed config payload at '%s' during refresh; "
+                    "keeping current config",
+                    key,
+                )
+                return
             # Always apply to global CONFIG so components like InputScanner
             # (which hold a reference to the global dict) see the latest values.
             self._apply(data)
@@ -329,17 +562,27 @@ class ConfigSync:
                 raw = await client.get(key)
                 if not raw:
                     continue
-                data = json.loads(raw)
+                # M-19: per-key parse + validation — one malformed payload
+                # must not abort the reload of the remaining org keys, and
+                # must not clobber last-good routing/fallback state.
+                try:
+                    data = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    LOG.warning("Invalid JSON in model config key '%s'; skipping", key)
+                    continue
+                normalized = validate_model_config_payload(data, source=key)
+                if normalized is None:
+                    continue
                 slug = key.replace(LLM_MODEL_CONFIGS_PREFIX, "").replace(LLM_MODEL_CONFIGS_REDIS_KEY, "default")
                 if isinstance(data, dict):
-                    model_list = data.get("models", [])
-                    routing_list = data.get("routing", [])
-                    self._model_routing_by_org[slug] = routing_list
-                    if "fallback_chains" in data:
-                        self._fallback_chains_by_org[slug] = data["fallback_chains"]
-                    all_models.extend(model_list)
-                elif isinstance(data, list):
-                    all_models.extend(data)
+                    if "routing" in data and "routing" not in normalized:
+                        # Malformed routing section — keep last-good routing.
+                        pass
+                    else:
+                        self._model_routing_by_org[slug] = normalized.get("routing", [])
+                    if "fallback_chains" in normalized:
+                        self._fallback_chains_by_org[slug] = normalized["fallback_chains"]
+                all_models.extend(normalized.get("models", []))
 
             if not all_models:
                 LOG.info("Empty model list from Redis; skipping reload")

@@ -97,7 +97,7 @@ function EventRow({ event, isExpanded, onToggle }) {
         {matchedPatterns.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-0.5">
             {matchedPatterns.map((p, i) => (
-              <span key={i} className="px-1.5 py-0.5 rounded text-[9px] bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">{p}</span>
+              <span key={i} className="px-1.5 py-0.5 rounded text-[10px] bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">{p}</span>
             ))}
           </div>
         )}
@@ -195,6 +195,7 @@ export function OutputGovernancePanel({ timeRange = "24h" }) {
           <button
             onClick={() => { setAutoRefresh((p) => !p); if (!autoRefresh) fetchEvents(); }}
             className={`p-1.5 rounded-lg transition-colors ${autoRefresh ? "bg-teal-100 dark:bg-teal-900/30 text-teal-600" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}
+            aria-label={autoRefresh ? "Turn off output event auto-refresh" : "Turn on output event auto-refresh"}
             title={autoRefresh ? "Auto-refresh ON (10s)" : "Auto-refresh OFF"}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${autoRefresh ? "animate-spin" : ""}`} style={autoRefresh ? { animationDuration: "3s" } : {}} />

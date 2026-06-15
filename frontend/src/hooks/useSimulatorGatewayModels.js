@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
-import { filterUserManagedModels } from "../constants/zeroshieldBrand";
+import { filterUserManagedModels, modelHasUsableKey } from "../constants/zeroshieldBrand";
 import { mergeModelsIntoFirewallAllowlist, parseAllowedModels } from "../utils/firewallAllowlist";
 
 export const SIMULATOR_MODEL_STORAGE_KEY = "zeroshield_simulator_model";
@@ -13,7 +13,7 @@ function parseModelList(data) {
 /** Gateway-connected org models eligible for live simulators (active + API key set). */
 export function filterSimulatorEligibleModels(models) {
   return filterUserManagedModels(models).filter(
-    (m) => m.is_active !== false && m.api_key_set,
+    (m) => m.is_active !== false && modelHasUsableKey(m),
   );
 }
 

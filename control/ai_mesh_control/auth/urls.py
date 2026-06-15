@@ -1,6 +1,5 @@
 from django.urls import path
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
 from . import views
 from .views import UserManagementDetailView, UserManagementListCreateView, ChangePasswordView
@@ -11,22 +10,25 @@ DecoratedTokenRefreshView = extend_schema_view(
         summary="Refresh JWT access token",
         description=(
             "Submit a valid refresh token to receive a new access token.\n\n"
-            "The refresh token itself is not rotated unless `ROTATE_REFRESH_TOKENS` "
-            "is enabled in the backend settings."
+            "Refresh tokens rotate on each use and the previous one is blacklisted; "
+            "rotation is concurrency-safe (only the first of N simultaneous refreshes "
+            "of the same token succeeds, the rest return 401)."
         ),
     )
-)(TokenRefreshView)
+)(views.AtomicTokenRefreshView)
 
 DecoratedTokenVerifyView = extend_schema_view(
     post=extend_schema(
         tags=["Auth"],
         summary="Verify JWT token validity",
         description=(
-            "Submit a token to verify that it is valid and has not expired.\n\n"
-            "Returns 200 if valid, 401 if the token is invalid or expired."
+            "Submit an ACCESS token to verify it is valid, unexpired, not from a "
+            "terminated session, and not issued before the user's last password "
+            "change.\n\nReturns 200 if valid, 401 otherwise. Refresh tokens are "
+            "rejected (use them only at /token/refresh/)."
         ),
     )
-)(TokenVerifyView)
+)(views.HardenedTokenVerifyView)
 
 urlpatterns = [
     path("token/", views.CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
@@ -37,6 +39,7 @@ urlpatterns = [
     path("logout/", views.LogoutView.as_view(), name="logout"),
     path("change-password/", ChangePasswordView.as_view(), name="change_password"),
     path("sessions/terminate/", views.SessionTerminateView.as_view(), name="session_terminate"),
+    path("sessions/reinstate/", views.SessionReinstateView.as_view(), name="session_reinstate"),
     path("users/", UserManagementListCreateView.as_view(), name="user_management_list"),
     path("users/<int:pk>/", UserManagementDetailView.as_view(), name="user_management_detail"),
 ]

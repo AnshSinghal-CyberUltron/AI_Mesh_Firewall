@@ -422,13 +422,27 @@ class AuthMiddleware:
             client: aioredis.Redis,
             redis_key: str,
     ) -> None:
-        """Fire-and-forget: stamp last_used_at into the existing Redis payload."""
+        """Fire-and-forget: stamp last_used_at ATOMICALLY into the existing payload.
+
+        F3: the previous blind GET -> modify -> SET(keepttl) raced control-plane
+        key revocation. A SET landing AFTER a DELETE re-created the auth key
+        (keepttl on an absent key => permanent live credential the resync
+        reconciler never reaps, since it has no DB row); a SET after an
+        is_active=False update reverted the revocation from a stale payload. The
+        Lua script reads the CURRENT value (returns 0 if the key is gone, so it
+        cannot resurrect a deleted key) and rewrites only last_used_at on the
+        live payload (so it cannot overwrite a freshly-revoked is_active).
+        """
+        _LUA = (
+            "local v = redis.call('GET', KEYS[1]) "
+            "if not v then return 0 end "
+            "local ok, t = pcall(cjson.decode, v) "
+            "if not ok then return 0 end "
+            "t['last_used_at'] = ARGV[1] "
+            "redis.call('SET', KEYS[1], cjson.encode(t), 'KEEPTTL') "
+            "return 1"
+        )
         try:
-            raw = await client.get(redis_key)
-            if not raw:
-                return
-            payload = json.loads(raw)
-            payload["last_used_at"] = datetime.now(timezone.utc).isoformat()
-            await client.set(redis_key, json.dumps(payload), keepttl=True)
+            await client.eval(_LUA, 1, redis_key, datetime.now(timezone.utc).isoformat())
         except Exception as exc:
             logger.debug("Failed to update last_used_at: %s", exc)

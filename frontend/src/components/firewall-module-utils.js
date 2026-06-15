@@ -412,12 +412,20 @@ function buildSummaryCards(moduleId, summary, events, extras) {
       ];
     }
     case "1.5": {
-      const requestedModels = uniqueCount(events.map((event) => getRequestedModel(event)));
-      const routedModels = uniqueCount(events.map((event) => getRoutedModel(event)));
+      const requestedModels = uniqueCount(
+        events.map((event) => getRequestedModel(event)).filter(isPlausibleModelName),
+      );
+      const routedModels = uniqueCount(
+        events.map((event) => getRoutedModel(event)).filter(isPlausibleModelName),
+      );
       const failovers = events.filter((event) => {
         const requested = getRequestedModel(event);
         const routed = getRoutedModel(event);
-        return requested && routed && requested !== routed;
+        return (
+          isPlausibleModelName(requested) &&
+          isPlausibleModelName(routed) &&
+          requested !== routed
+        );
       }).length;
       return [
         { label: "Routing decisions", value: base.total, detail: "Model-governance events in the current time lens" },
@@ -503,7 +511,9 @@ function buildSpotlightCards(moduleId, summary, events, extras) {
       ];
     }
     case "1.5": {
-      const routed = countBy(events.map((event) => getRoutedModel(event) || "unknown"));
+      const routed = countBy(
+        events.map((event) => getRoutedModel(event)).filter(isPlausibleModelName),
+      );
       return [
         { label: "Primary routed model", value: titleCase(topKey(routed) || "unknown"), detail: "Most common execution target in recent routing evidence" },
         { label: "Average risk", value: fmtPercent(avgRisk), detail: "Mean risk score across model-governance decisions" },
@@ -651,6 +661,23 @@ function normalizeList(value) {
 
 function uniqueCount(values) {
   return new Set(values.filter(Boolean)).size;
+}
+
+// Obvious break-test / nonexistent-model sentinels that pollute routing demand.
+const GARBAGE_MODEL_RE =
+  /(does[_\- ]?not[_\- ]?exist|no[_\- ]?such[_\- ]?model|nonexistent|totally[_\- ]?unknown|definitely[_\- ]?not|leaktest|invalid model)/i;
+
+// Keep only structurally-plausible model names in governance KPIs so distinct
+// counts reflect real routing demand, not adversarial noise (multi-KB blobs,
+// zero-width chars, "(invalid model name)" sentinels, DOES_NOT_EXIST_* probes).
+// Real model ids use word chars plus . / : - _ space @ + — anything else is junk.
+function isPlausibleModelName(name) {
+  if (!name) return false;
+  const s = String(name).trim();
+  if (!s || s.length > 100) return false;
+  if (!/^[\w.\/:@+\- ]+$/.test(s)) return false;
+  if (GARBAGE_MODEL_RE.test(s)) return false;
+  return true;
 }
 
 function countBy(values) {

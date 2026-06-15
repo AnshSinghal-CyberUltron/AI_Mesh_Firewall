@@ -15,7 +15,7 @@ FROM python:3.12-slim-bookworm AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PATH="/app/control/.venv/bin:$PATH" \
-    PYTHONPATH=/app/shared:/app/control/ai_mesh_control:/app/workers \
+    PYTHONPATH=/app/shared:/app/control/ai_mesh_control:/app/workers:/app/vendored_vector \
     DJANGO_SETTINGS_MODULE=main_app.settings
 
 WORKDIR /app
@@ -23,6 +23,12 @@ COPY shared /app/shared
 COPY control/manage.py /app/control/manage.py
 COPY workers /app/workers
 COPY control/ai_mesh_control /app/control/ai_mesh_control
+# Vendored from the gateway data plane so the async core.tasks.vector_ingest_task
+# can reuse the EXACT BYOK embed + upsert + fail-closed logic. vector_client.py
+# imports byok_embedder top-level + pinecone/litellm/pymilvus lazily (all now in
+# control/pyproject.toml). Keep in sync with gateway/ai_mesh_gateway/*; the proper
+# long-term home is a shared lib.
+COPY gateway/ai_mesh_gateway/vector_client.py gateway/ai_mesh_gateway/byok_embedder.py /app/vendored_vector/
 COPY --from=builder /app/control/.venv /app/control/.venv
 
 WORKDIR /app/control

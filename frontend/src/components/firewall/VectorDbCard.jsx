@@ -22,7 +22,7 @@ export function ZeroShieldTestCard({ index }) {
   return (
     <SectionCard
       id="zeroshield-test"
-      title="ZeroShield Guard Model Test"
+      title="ZeroShield Model Test"
       description="Health check and scan test against the guard model"
       icon={ShieldCheck}
       index={index}

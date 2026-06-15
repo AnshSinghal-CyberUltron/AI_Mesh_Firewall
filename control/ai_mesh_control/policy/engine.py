@@ -4,7 +4,9 @@ Returns an EvaluationResult with action (allow/block/redact/monitor) and matched
 """
 
 import json
+import logging
 import re
+import threading
 import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
@@ -15,6 +17,54 @@ from rest_framework.exceptions import ValidationError
 from policy.constants import DEFAULT_REDACTION_PLACEHOLDER
 from policy.mcp_presets import preset_regex, preset_replacement, preset_validator
 from policy.models import Policy, Rule
+
+logger = logging.getLogger(__name__)
+
+# M-23: bound the cost of compiling an attacker-supplied regex. Patterns far
+# longer than any legitimate rule are a ReDoS smell; we skip + warn rather
+# than feed them to re.compile on the hot path.
+_MAX_REGEX_LEN = 1000
+
+# FINDING-3 (ReDoS): even with the write-time heuristic, defend the hot path
+# with a wall-clock budget. Python's backtracking engine has no step/time
+# limit, so a catastrophic pattern that slips past validation (e.g. a legacy /
+# system-seeded rule, or a shape the heuristic doesn't cover) would otherwise
+# pin the single sync executor thread for minutes. We run each regex match in a
+# daemon worker thread and join with a deadline: if it overruns, the request
+# thread returns "no match" and is freed (the doomed worker thread continues in
+# the background but no longer holds up the API). Conservative + dependency-free.
+_REGEX_MATCH_TIMEOUT_S = 1.0
+# Belt-and-suspenders: also cap the input length fed to the engine. Backtracking
+# blow-up scales with input size, so a hard cap bounds worst-case cost even when
+# the thread-join races.
+_MAX_MATCH_INPUT_LEN = 100_000
+
+
+def _run_with_timeout(fn, timeout):
+    """Run ``fn()`` in a daemon thread, returning its result or None on timeout.
+
+    Frees the caller after ``timeout`` seconds even if ``fn`` (a backtracking
+    regex) is still running — the worker is a daemon, so it can't block process
+    exit. ``None`` is returned both on timeout and on any exception raised by
+    ``fn`` (callers treat that as "no match", fail-open like the pre-existing
+    re.error handling).
+    """
+    box: dict[str, Any] = {}
+
+    def _target():
+        try:
+            box["result"] = fn()
+        except Exception:  # noqa: BLE001 — mirror existing fail-open behaviour
+            box["error"] = True
+
+    worker = threading.Thread(target=_target, daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if worker.is_alive():
+        return None
+    if box.get("error"):
+        return None
+    return box.get("result")
 
 
 @dataclass
@@ -44,6 +94,55 @@ def validate_policy_domain(domain: str | None) -> str:
     if normalized not in VALID_POLICY_DOMAINS:
         raise ValidationError({"policy_domain": f"Unsupported policy domain '{domain}'."})
     return normalized
+
+
+def _policy_applies_to_actor(policy: Policy, context: dict[str, Any]) -> bool:
+    """M-04: scope a policy by the request's actor (user / agent / role).
+
+    Each allowlist on the policy is independent and additive:
+      * empty list  -> wildcard (this dimension does not constrain anyone);
+      * non-empty    -> strict allowlist for that dimension.
+
+    The request's actor is read from ``context`` (all optional):
+      * ``user_id``  matches ``allowed_user_ids``  (ints, str-coerced fallback);
+      * ``agent_id`` matches ``allowed_agent_ids`` (string / API-key prefix);
+      * ``roles``    (iterable) must overlap ``allowed_roles``.
+
+    Each dimension constrains ONLY on a positive mismatch: the policy is
+    skipped when the actor's identity for that dimension is KNOWN and not in
+    the allowlist. An unknown dimension (missing key, None, empty value) leaves
+    the policy applied — fail-closed, since user/role identity is supplied by
+    the caller and skip-on-missing would allow bypass by omission. A context
+    with no actor keys therefore behaves exactly as before M-04 (policy
+    applies). Missing allowlist attributes (older model rows) also mean
+    "applies".
+    """
+    allowed_user_ids = getattr(policy, "allowed_user_ids", None) or []
+    allowed_agent_ids = getattr(policy, "allowed_agent_ids", None) or []
+    allowed_roles = getattr(policy, "allowed_roles", None) or []
+
+    if allowed_user_ids:
+        user_id = context.get("user_id")
+        if user_id is not None and (
+            user_id not in allowed_user_ids
+            and str(user_id) not in {str(u) for u in allowed_user_ids}
+        ):
+            return False
+
+    if allowed_agent_ids:
+        agent_id = context.get("agent_id")
+        if agent_id and str(agent_id) not in {str(a) for a in allowed_agent_ids}:
+            return False
+
+    if allowed_roles:
+        raw_roles = context.get("roles") or context.get("actor_roles") or []
+        if isinstance(raw_roles, str):
+            raw_roles = [raw_roles]
+        actor_roles = {str(r) for r in raw_roles if r}
+        if actor_roles and not actor_roles.intersection({str(r) for r in allowed_roles}):
+            return False
+
+    return True
 
 
 def _normalize_key(key: Any) -> str:
@@ -185,20 +284,66 @@ def _evaluate_rule(rule: Rule, context: dict[str, Any]) -> bool:
 
     if matcher["regex"]:
         validator = preset_validator(matcher["preset"]) if matcher["preset"] else None
+        # M-23: previously a bad/oversized regex was swallowed silently — the
+        # rule just never matched, masking a misconfiguration. Now we log a
+        # warning so operators can see a rule's pattern failed to compile, and
+        # we skip pathologically long patterns (cheap ReDoS guard) before
+        # handing them to re.compile.
+        pattern = matcher["regex"]
+        if isinstance(pattern, str) and len(pattern) > _MAX_REGEX_LEN:
+            logger.warning(
+                "Rule id=%s regex skipped: pattern length %d exceeds limit %d (possible ReDoS)",
+                getattr(rule, "id", "?"), len(pattern), _MAX_REGEX_LEN,
+            )
+            return False
         try:
-            compiled = re.compile(matcher["regex"], re.IGNORECASE)
-        except re.error:
+            compiled = re.compile(pattern, re.IGNORECASE)
+        except re.error as exc:
+            logger.warning(
+                "Rule id=%s has an invalid regex and will never match: %s",
+                getattr(rule, "id", "?"), exc,
+            )
             return False
         for text in texts:
+            # FINDING-3: cap input length and run the match under a wall-clock
+            # deadline so a catastrophic-backtracking pattern can't pin this
+            # thread. On timeout we treat the rule as non-matching and free the
+            # caller (the runaway worker thread is a daemon).
+            if len(text) > _MAX_MATCH_INPUT_LEN:
+                text = text[:_MAX_MATCH_INPUT_LEN]
             if validator is None:
-                if compiled.search(text):
+                matched = _run_with_timeout(
+                    lambda _c=compiled, _t=text: _c.search(_t) is not None,
+                    _REGEX_MATCH_TIMEOUT_S,
+                )
+                if matched is None:
+                    logger.warning(
+                        "Rule id=%s regex match exceeded %.1fs budget and was "
+                        "abandoned (possible ReDoS)",
+                        getattr(rule, "id", "?"), _REGEX_MATCH_TIMEOUT_S,
+                    )
+                    continue
+                if matched:
                     return True
             else:
                 # Validator-gated preset (e.g. Luhn): a regex hit only counts
                 # if at least one candidate match also passes the validator.
-                for m in compiled.finditer(text):
-                    if validator(m.group(0)):
-                        return True
+                def _scan(_c=compiled, _t=text, _v=validator):
+                    for m in _c.finditer(_t):
+                        if _v(m.group(0)):
+                            return True
+                    return False
+
+                matched = _run_with_timeout(_scan, _REGEX_MATCH_TIMEOUT_S)
+                if matched is None:
+                    logger.warning(
+                        "Rule id=%s validator-gated regex match exceeded %.1fs "
+                        "budget and was abandoned (possible ReDoS)",
+                        getattr(rule, "id", "?"), _REGEX_MATCH_TIMEOUT_S,
+                    )
+                    continue
+                if matched:
+                    return True
         return False
 
     if matcher["keywords"]:
@@ -243,8 +388,18 @@ def evaluate(
 
     result = EvaluationResult(action="allow")
     best_action_rank = -1
+    # M-21: track which policy ids we've already recorded so analytics /
+    # top-violators aren't skewed by counting the same policy once per matched
+    # rule. matched_policy_ids stays 1 entry per policy; matched_rule_ids is
+    # still per-rule.
+    seen_policy_ids: set[int] = set()
 
     for policy in policies_qs:
+        # M-04: actor-scoping — skip an entire policy whose allowlists exclude
+        # this request's actor (user/agent/role). No allowlist == applies to all.
+        if not _policy_applies_to_actor(policy, context):
+            continue
+
         rules = [r for r in policy.rules.all() if r.enabled]
         rules.sort(key=lambda r: (-r.priority, r.id))
 
@@ -257,9 +412,13 @@ def evaluate(
             if not _evaluate_rule(rule, context):
                 continue
 
-            result.matched_policy_ids.append(policy.id)
+            # M-21: append the policy id at most once even if several of its
+            # rules match.
+            if policy.id not in seen_policy_ids:
+                seen_policy_ids.add(policy.id)
+                result.matched_policy_ids.append(policy.id)
+                result.matched_policy_codes.append(policy.code)
             result.matched_rule_ids.append(rule.id)
-            result.matched_policy_codes.append(policy.code)
             result.matched_rule_names.append(rule.name)
 
             rank = ACTION_ORDER.get(rule.action, 0)

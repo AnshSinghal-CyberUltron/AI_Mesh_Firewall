@@ -98,6 +98,7 @@ class RAGFirewallPipeline:
         organization_id: int | None = None,
         user_id: int | str | None = None,
         vector_client_override: Any = None,
+        actor: dict[str, Any] | None = None,
     ) -> PipelineResult:
         effective_policy = policy or {}
         ctx = PipelineContext(
@@ -188,6 +189,44 @@ class RAGFirewallPipeline:
             ctx.final_action = "block"
             return self._build_result(ctx, r_out.total_retrieved, blocked=True)
 
+        # ──────── Guardrails-only simplified query pipeline ────────
+        # When both downstream stages are disabled (the default), the gateway's
+        # job is done after retrieval-scanning: return the retriever-approved
+        # documents directly. The client owns reranking/generation and calls the
+        # generator model through the normal chat pipeline (where Tier-1/Tier-2 +
+        # output guard apply). This removes the reranker/generator overhead.
+        rag_ranker_on = bool(self._config.get("rag_ranker_enabled", False))
+        rag_generator_on = bool(self._config.get("rag_generator_enabled", False))
+        # Force the ranker to run when the active policy declares document-content
+        # controls, even if the global ranker flag is off. RankerStage is the SOLE
+        # consumer of block_sensitive_documents / anomaly_distance_threshold /
+        # require_context_scan / sensitive_fields; skipping it would return docs
+        # with SSN/secret content (or sensitive metadata) verbatim. The
+        # guardrails-only fast path only applies when none of these are requested.
+        if not rag_ranker_on and self._policy_requires_ranker(effective_policy):
+            rag_ranker_on = True
+        if not rag_ranker_on and not rag_generator_on:
+            ctx.final_action = r_out.verdict.action
+            audit = ctx.to_audit_dict()
+            return PipelineResult(
+                action=r_out.verdict.action,
+                documents=r_out.documents,
+                total_retrieved=r_out.total_retrieved,
+                filtered_count=0,
+                scan_verdict={
+                    "action": r_out.verdict.action,
+                    "flagged_documents": [],
+                    "anomalous_documents": [],
+                    "detail": r_out.verdict.detail,
+                },
+                context_binding_id="",
+                pipeline_context=ctx,
+                context_chunks=[],
+                pipeline_audit=audit,
+                canary_word="",
+                model_downgrade=model_downgrade,
+            )
+
         # ──────── Stage 3: Ranker ────────
         t2 = time.perf_counter()
         rank_out = await self._ranker.execute(RankerStageInput(
@@ -195,6 +234,7 @@ class RAGFirewallPipeline:
             query_text=effective_query,
             policy=effective_policy,
             escalation_level=ctx.escalation_level,
+            actor=actor,
         ))
         t2_end = time.perf_counter()
         ctx.add_stage(StageRecord(
@@ -215,6 +255,31 @@ class RAGFirewallPipeline:
         if rank_out.verdict.action == "block":
             ctx.final_action = "block"
             return self._build_result(ctx, r_out.total_retrieved, blocked=True)
+
+        # Generator stage disabled (default): return the ranker-approved
+        # documents directly. Canary tokens / context-binding / leakage
+        # registration are RAG-application plumbing the client owns.
+        if not rag_generator_on:
+            ctx.final_action = rank_out.verdict.action
+            audit = ctx.to_audit_dict()
+            return PipelineResult(
+                action=rank_out.verdict.action,
+                documents=rank_out.ranked_documents,
+                total_retrieved=r_out.total_retrieved,
+                filtered_count=r_out.total_retrieved - len(rank_out.ranked_documents),
+                scan_verdict={
+                    "action": rank_out.verdict.action,
+                    "flagged_documents": rank_out.flagged_indices,
+                    "anomalous_documents": rank_out.anomalous_indices,
+                    "detail": rank_out.verdict.detail,
+                },
+                context_binding_id="",
+                pipeline_context=ctx,
+                context_chunks=[],
+                pipeline_audit=audit,
+                canary_word="",
+                model_downgrade=model_downgrade,
+            )
 
         # ──────── Stage 4: Generator ────────
         t3 = time.perf_counter()
@@ -268,6 +333,32 @@ class RAGFirewallPipeline:
             canary_word=gen_out.canary_word,
             model_downgrade=model_downgrade or gen_out.model_downgrade,
         )
+
+    @staticmethod
+    def _policy_requires_ranker(policy: dict[str, Any]) -> bool:
+        """True when the policy declares document-content controls the ranker enforces.
+
+        These advertised guardrails (sensitive-document blocking, anomaly
+        distance thresholds, required context scanning, per-field redaction)
+        only run inside RankerStage. If a policy asks for any of them we must
+        run the ranker for the request, even when the global ranker flag is off.
+        """
+        if not policy:
+            return False
+        if policy.get("block_sensitive_documents"):
+            return True
+        if policy.get("require_context_scan"):
+            return True
+        threshold = policy.get("anomaly_distance_threshold")
+        if threshold is not None:
+            try:
+                if float(threshold) > 0:
+                    return True
+            except (TypeError, ValueError):
+                pass
+        if policy.get("sensitive_fields"):
+            return True
+        return False
 
     def _get_compiled_policies(self, org_slug: str = "") -> list[dict]:
         """Retrieve compiled policy entries from the sync cache for an org."""

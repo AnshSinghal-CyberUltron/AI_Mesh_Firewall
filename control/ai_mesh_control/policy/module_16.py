@@ -108,9 +108,21 @@ def audit_log_to_threat_feed_item(log, *, organization_name: str | None = None) 
     if action not in ("block", "redact", "monitor", "allow", "reroute"):
         action = "block" if "block" in (log.event or "").lower() or "isolat" in (log.event or "").lower() else "monitor"
 
+    # Canonicalize the raw model id so a platform/guard/bedrock identifier
+    # (e.g. global.anthropic claude-haiku, gpt-oss/120b) is never echoed
+    # verbatim to a tenant — only the user-facing "ZeroShield Model" must
+    # surface. Lazy-import to avoid the security_views <-> module_16 import
+    # cycle; fall back to the raw value only if the helper cannot be loaded.
+    try:
+        from policy.security_views import _canonicalize_model_name
+
+        safe_model = _canonicalize_model_name(log.model_name)
+    except Exception:
+        safe_model = log.model_name
+
     meta = {
         "event_type": log.event,
-        "model": log.model_name,
+        "model": safe_model,
         "threat_type": "kill_switch",
         "threat_category": log.event,
         "source": "policy",

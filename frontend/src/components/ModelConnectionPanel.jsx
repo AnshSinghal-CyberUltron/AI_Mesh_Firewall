@@ -11,6 +11,9 @@ import {
   ZEROSHIELD_GUARD_MODEL,
   ZEROSHIELD_GUARD_MODEL_LABEL,
   filterUserManagedModels,
+  isPlatformManagedModel,
+  isReservedModelLabel,
+  sanitizeModelLabel,
 } from "../constants/zeroshieldBrand";
 import { mergeModelsIntoFirewallAllowlist } from "../utils/firewallAllowlist";
 
@@ -105,7 +108,6 @@ const MODEL_ID_MAP = {
   "gpt-j-6b": "huggingface/EleutherAI/gpt-j-6b",
   "vicuna-13b": "huggingface/lmsys/vicuna-13b-v1.5",
   "flan-t5-large": "huggingface/google/flan-t5-large",
-  [ZEROSHIELD_GUARD_MODEL]: "bedrock/openai.gpt-oss-120b-1:0",
   "bedrock-llama-3": "bedrock/meta.llama3-1-70b-instruct-v1:0",
   "local-llama": "ollama/llama3",
   "local-mistral": "ollama/mistral",
@@ -187,6 +189,25 @@ function formatApiError(errData, fallbackMessage) {
     .filter(Boolean);
 
   return fieldErrors.length ? fieldErrors.join(" | ") : fallbackMessage;
+}
+
+/**
+ * Drop platform-managed / internal entries from the gateway /v1/models catalog
+ * and sanitize any reserved upstream id (bedrock/haiku/120b/gpt-oss/...) to the
+ * client-facing "ZeroShield Model" label so a raw platform id can never render.
+ */
+function sanitizeGatewayModels(rawModels) {
+  return (rawModels || [])
+    .filter((m) => {
+      if (isPlatformManagedModel({ model_name: m.id, provider: m.owned_by })) return false;
+      // Belt-and-suspenders: also drop any entry whose id/model_id is reserved.
+      return !isReservedModelLabel(m.id) && !isReservedModelLabel(m.model_id);
+    })
+    .map((m) => ({
+      ...m,
+      id: sanitizeModelLabel(m.id),
+      model_id: m.model_id ? sanitizeModelLabel(m.model_id) : m.model_id,
+    }));
 }
 
 export function ModelConnectionPanel({
@@ -275,7 +296,7 @@ export function ModelConnectionPanel({
       const res = await fetch(`${gatewayUrl.replace(/\/+$/, "")}/v1/models`, { headers });
       if (res.ok) {
         const data = await res.json();
-        setGatewayModels(data.data || []);
+        setGatewayModels(sanitizeGatewayModels(data.data || []));
       } else {
         setGatewayModels([]);
       }
@@ -323,6 +344,7 @@ export function ModelConnectionPanel({
 
   const openCreateModal = () => {
     setFormData(INITIAL_FORM);
+    setProviderApiKeys({});
     setEditingModel(null);
     setRoutingExpanded(false);
     setError(null);
@@ -346,6 +368,9 @@ export function ModelConnectionPanel({
       routing_priority: model.routing_priority ?? "",
       rate_limit_rpm: model.rate_limit_rpm ?? "",
     });
+    // Never pre-fill the API key field on edit: an empty field means "keep the
+    // existing encrypted key" (the serializer only re-encrypts a non-blank key).
+    setProviderApiKeys({});
     setEditingModel(model);
     setRoutingExpanded(true);
     setError(null);
@@ -460,6 +485,7 @@ export function ModelConnectionPanel({
             /* allowlist sync is best-effort; model row is already saved */
           }
         }
+        setProviderApiKeys({});
         setModalOpen(false);
         setEditingModel(null);
         await fetchModels();
@@ -480,11 +506,17 @@ export function ModelConnectionPanel({
 
   const handleToggleActive = async (model) => {
     setActionLoading(model.id);
+    setError(null);
     try {
-      await fetchWithAuth(`/api/firewall/models/${model.id}/`, {
+      const res = await fetchWithAuth(`/api/firewall/models/${model.id}/`, {
         method: "PATCH",
         body: JSON.stringify({ is_active: !model.is_active }),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setError(formatApiError(errData, "Failed to update model status."));
+        return;
+      }
       await fetchModels();
       onConnectionsMutated?.();
     } finally {
@@ -495,8 +527,14 @@ export function ModelConnectionPanel({
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this model configuration? This action cannot be undone.")) return;
     setActionLoading(id);
+    setError(null);
     try {
-      await fetchWithAuth(`/api/firewall/models/${id}/`, { method: "DELETE" });
+      const res = await fetchWithAuth(`/api/firewall/models/${id}/`, { method: "DELETE" });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setError(formatApiError(errData, "Failed to delete model configuration."));
+        return;
+      }
       await fetchModels();
       onConnectionsMutated?.();
     } finally {
@@ -553,7 +591,7 @@ export function ModelConnectionPanel({
       )}
 
       <div className="mb-4 rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/80 dark:bg-teal-900/20 px-4 py-3 text-xs text-teal-900 dark:text-teal-100">
-        <span className="font-medium">Organization API keys</span> are stored encrypted on the server when you add or edit a model. Keys are never cached in this browser.
+        <span className="font-medium">Organization API keys</span> you paste here are encrypted at rest on the server and are never cached in this browser. A model can also be connected by an environment-variable reference managed on the gateway — in that case the key is not stored in ZeroShield at all.
       </div>
 
       {showProviderForm && (
@@ -642,7 +680,9 @@ export function ModelConnectionPanel({
                   <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">
                     {m.api_key_set
                       ? `Encrypted key set${m.api_key_last4 ? ` (••••${m.api_key_last4})` : ""}`
-                      : (m.provider === "ollama" ? "Local (no key)" : "Not configured")}
+                      : m.api_key_env_var
+                        ? `Env-var key (${m.api_key_env_var})`
+                        : (m.provider === "ollama" ? "Local (no key)" : "Not configured")}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">{m.region || "--"}</td>
                   <td className="px-3 py-2.5">
@@ -864,7 +904,7 @@ export function ModelConnectionPanel({
                   className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 />
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                  When you click Add/Save Model, this key is sent to backend and encrypted at rest per organization.
+                  When you click Add/Save Model, a key entered here is sent to the backend and encrypted at rest per organization. A provider key is required to add a model here (local Ollama models are the exception). Models connected via an environment-variable reference on the gateway — where the key is never stored in ZeroShield — are provisioned by your platform operator and appear in the connections table with an &ldquo;Env-var key&rdquo; credential.
                 </p>
               </div>
 
@@ -910,10 +950,13 @@ export function ModelConnectionPanel({
               )}
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Model ID</label>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Model ID{selectedProvider && selectedProvider.models.length === 0 ? " *" : ""}
+                </label>
                 <input
                   type="text"
                   value={formData.model_id}
+                  required={!!selectedProvider && selectedProvider.models.length === 0}
                   onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
                   placeholder="e.g. openai/gpt-4o"
                   className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"

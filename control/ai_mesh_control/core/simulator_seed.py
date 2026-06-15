@@ -7,7 +7,10 @@ import os
 
 logger = logging.getLogger(__name__)
 
-ZEROSHIELD_GUARD_MODEL_NAME = "zeroshield-guard-120b"
+# User-facing platform model name: "ZeroShield Model" only — never expose the
+# upstream size/provider (no "120b"/"gpt-oss"/Bedrock). The backing Bedrock model
+# is Haiku (platform model for all internal ML).
+ZEROSHIELD_GUARD_MODEL_NAME = os.getenv("ZEROSHIELD_GUARD_MODEL_NAME", "zeroshield-model").strip().lower() or "zeroshield-model"
 SIMULATOR_ORG_SLUG = os.getenv("SIMULATOR_ORG_SLUG", "zeroshield").strip().lower()
 
 
@@ -28,9 +31,11 @@ def ensure_default_llm_model(org) -> None:
         return
     from core.models import LLMModelConfig
 
-    model_id = os.getenv("ZEROSHIELD_GUARD_MODEL_ID", "bedrock/openai.gpt-oss-120b-1:0").strip()
+    # Platform model = Bedrock Haiku (internal ML, not org inference).
+    _haiku = "bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0"
+    model_id = os.getenv("ZEROSHIELD_GUARD_MODEL_ID", _haiku).strip()
     if not model_id:
-        model_id = "bedrock/openai.gpt-oss-120b-1:0"
+        model_id = _haiku
 
     LLMModelConfig.objects.update_or_create(
         organization=org,

@@ -23,6 +23,11 @@ from jobs import enqueue_job
 
 from mcp_scan_orchestrator import scan_mcp_payload
 
+try:  # package vs top-level import (mirrors mcp_oauth_proxy import style)
+    from ._url_guard import is_safe_outbound_url
+except ImportError:  # pragma: no cover - flat-module deployment
+    from _url_guard import is_safe_outbound_url
+
 LOG = logging.getLogger("gateway.mcp_proxy")
 
 router = APIRouter(prefix="/v1/mcp", tags=["MCP Proxy"])
@@ -104,10 +109,65 @@ _CONFIG_CACHE_TTL = 120  # seconds
 # Keyed by f"{org_slug}/{server_slug}". Value is a dict:
 #   {"known": set[str], "enabled": set[str], "disabled": set[str]}
 # Entries expire after _ENABLED_TOOLS_TTL seconds. On backend lookup
-# failure, value is None -> fail-open (allow all) for the TTL window.
+# failure, value is None -> fail-open (allow all), but only for the SHORT
+# _ENABLED_TOOLS_NEG_TTL window (M-15): a transient control-plane blip must
+# not fail-open for the full TTL.
 _enabled_tools_cache: dict[str, dict | None] = {}
 _enabled_tools_ttl: dict[str, float] = {}
+# Scan-config version observed (from Redis) when the entry was fetched.
+_enabled_tools_ver: dict[str, str] = {}
 _ENABLED_TOOLS_TTL = float(os.environ.get("MCP_ENABLED_TOOLS_TTL", "30"))
+_ENABLED_TOOLS_NEG_TTL = float(os.environ.get("MCP_ENABLED_TOOLS_NEG_TTL", "2"))
+
+# ── Cross-process cache invalidation via Redis version keys (M-15) ──
+# Control bumps (INCR) these keys whenever tool enable/disable or scan
+# config changes (mcp_connector/signals.py):
+#   mcp:scan_ver:{org_slug}                 — org-scoped scan-control changes
+#   mcp:scan_ver:{org_slug}:{server_slug}   — server/tool-level changes
+# The gateway folds both into a composite version and treats a cached
+# enabled-tools entry as stale the moment the version changes. This is one
+# cheap Redis MGET per MCP call; absent keys read as version 0. When Redis
+# is unreachable the check degrades to pure-TTL behaviour (status quo ante)
+# instead of forcing an HTTP refetch per call.
+_SCAN_VER_KEY_PREFIX = "mcp:scan_ver"
+
+_scan_ver_redis = None  # lazy singleton; tests inject a fakeredis client here
+
+
+def _get_scan_ver_redis():
+    """Lazy shared async Redis client for scan-version reads."""
+    global _scan_ver_redis
+    if _scan_ver_redis is None:
+        import redis.asyncio as aioredis
+
+        _scan_ver_redis = aioredis.from_url(
+            os.environ.get("GATEWAY_REDIS_URL", "redis://localhost:6379/0"),
+            decode_responses=True,
+            socket_timeout=1.0,
+            socket_connect_timeout=1.0,
+        )
+    return _scan_ver_redis
+
+
+async def _current_scan_version(org_slug: str, server_slug: str) -> str | None:
+    """Composite "org_ver:server_ver" from Redis, or None when unavailable.
+
+    None means "cannot determine" — the caller degrades to pure-TTL cache
+    validity instead of refetching over HTTP on every call.
+    """
+    try:
+        client = _get_scan_ver_redis()
+        org_ver, srv_ver = await client.mget(
+            f"{_SCAN_VER_KEY_PREFIX}:{org_slug}",
+            f"{_SCAN_VER_KEY_PREFIX}:{org_slug}:{server_slug}",
+        )
+        return f"{org_ver or 0}:{srv_ver or 0}"
+    except Exception as exc:
+        LOG.debug(
+            "Scan-version read failed (org=%s server=%s): %s — degrading to TTL-only cache",
+            org_slug, server_slug, exc,
+        )
+        return None
 
 
 async def _proxy(base_url: str, path: str, request: Request) -> JSONResponse:
@@ -247,9 +307,28 @@ async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
     # current key is correct; this comment marks the invariant for future work.
     cache_key = f"{org_slug}/{server_slug}"
     now = time.time()
+    fetch_ver: str | None = None
+    have_ver = False
     if cache_key in _enabled_tools_cache:
-        if now - _enabled_tools_ttl.get(cache_key, 0) < _ENABLED_TOOLS_TTL:
-            return _enabled_tools_cache[cache_key]
+        cached = _enabled_tools_cache[cache_key]
+        age = now - _enabled_tools_ttl.get(cache_key, 0)
+        if cached is None:
+            # Negative cache: a failed backend lookup fails-open, but only
+            # for the short _ENABLED_TOOLS_NEG_TTL window — never the full TTL.
+            if age < _ENABLED_TOOLS_NEG_TTL:
+                return None
+        elif age < _ENABLED_TOOLS_TTL:
+            fetch_ver = await _current_scan_version(org_slug, server_slug)
+            have_ver = True
+            if fetch_ver is None or fetch_ver == _enabled_tools_ver.get(cache_key):
+                # Version unchanged (or Redis unavailable -> TTL-only fallback).
+                return cached
+            # Control bumped the scan version -> entry is stale; refetch now.
+
+    if not have_ver:
+        # Read the version BEFORE the HTTP fetch: if control bumps mid-fetch,
+        # the stored version predates the bump and the next call refetches.
+        fetch_ver = await _current_scan_version(org_slug, server_slug)
 
     headers = _control_request_headers(org_slug, {"X-Server-Slug": server_slug})
     try:
@@ -268,6 +347,7 @@ async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
                 )
                 _enabled_tools_cache[cache_key] = None
                 _enabled_tools_ttl[cache_key] = now
+                _enabled_tools_ver.pop(cache_key, None)
                 return None
             data = resp.json() or {}
             result = {
@@ -299,12 +379,20 @@ async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
             }
             _enabled_tools_cache[cache_key] = result
             _enabled_tools_ttl[cache_key] = now
+            if fetch_ver is not None:
+                _enabled_tools_ver[cache_key] = fetch_ver
+            else:
+                # Version unknown at fetch time (Redis was unavailable): drop
+                # any stored version so the next versioned check refetches
+                # once instead of trusting a stale association.
+                _enabled_tools_ver.pop(cache_key, None)
             return result
     except Exception as exc:
         LOG.warning("Enabled-tools lookup error (org=%s server=%s): %s",
                     org_slug, server_slug, exc)
         _enabled_tools_cache[cache_key] = None
         _enabled_tools_ttl[cache_key] = now
+        _enabled_tools_ver.pop(cache_key, None)
         return None
 
 
@@ -457,6 +545,7 @@ async def _mcp_security_scan(
     enabled_info: dict | None,
     org_slug: str = "",
     server_slug: str = "",
+    actor: dict | None = None,
 ) -> tuple[object, bool, list[str], list[dict], dict]:
     """Scan MCP payload via two-tier orchestrator. Returns (payload, blocked, tags, findings, metadata)."""
     action = _effective_scan_action(tool_name, enabled_info)
@@ -480,6 +569,7 @@ async def _mcp_security_scan(
         org_slug=org_slug,
         server_slug=server_slug,
         tool_name=tool_name,
+        actor=actor,
     )
     meta = {
         "scan_trace": result.scan_trace,
@@ -699,6 +789,19 @@ async def internal_discover_tools(request: Request):
             status_code=400,
         )
 
+    # SSRF guard (finding mcp#1): the upstream URL is operator-supplied. Reject
+    # internal / loopback / link-local / cloud-metadata targets before fetching.
+    _ok, _reason = is_safe_outbound_url(upstream_url)
+    if not _ok:
+        LOG.warning(
+            "Blocked discover-tools to unsafe upstream URL (org=%s server=%s): %s",
+            org_slug, server_slug, _reason,
+        )
+        return JSONResponse(
+            content={"error": f"Upstream URL rejected by SSRF guard: {_reason}"},
+            status_code=400,
+        )
+
     # Build auth headers from the request body (backend passes auth info)
     upstream_auth_headers = {}
     req_auth_type = body.get("auth_type", "none")
@@ -838,6 +941,19 @@ async def internal_tools_call(request: Request):
     if not upstream_url:
         return JSONResponse(
             content={"error": "No upstream URL configured for server"},
+            status_code=400,
+        )
+
+    # SSRF guard (finding mcp#1): the upstream URL is operator-supplied. Reject
+    # internal / loopback / link-local / cloud-metadata targets before fetching.
+    _ok, _reason = is_safe_outbound_url(upstream_url)
+    if not _ok:
+        LOG.warning(
+            "Blocked tools-call to unsafe upstream URL (org=%s server=%s): %s",
+            org_slug, server_slug, _reason,
+        )
+        return JSONResponse(
+            content={"error": f"Upstream URL rejected by SSRF guard: {_reason}"},
             status_code=400,
         )
 
@@ -1138,6 +1254,17 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
     if err:
         return err
 
+    # M-04: actor identity ({user_id, agent_id, roles}) for actor-scoped MCP
+    # policies, derived from the authenticated API key's context.
+    _mcp_auth = _get_auth_context(request)
+    mcp_actor = None
+    if _mcp_auth is not None:
+        mcp_actor = {
+            "user_id": getattr(_mcp_auth, "user_id", None),
+            "agent_id": getattr(_mcp_auth, "prefix", None) or "",
+            "roles": list(getattr(_mcp_auth, "roles", None) or []),
+        }
+
     try:
         body = await request.json()
     except Exception:
@@ -1319,6 +1446,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
             enabled_info=enabled_info,
             org_slug=org_slug,
             server_slug=server_slug,
+            actor=mcp_actor,
         )
         if _in_tags or _in_findings:
             _inbound_tags = list(_in_tags)
@@ -1409,6 +1537,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         enabled_info=enabled_info,
                         org_slug=org_slug,
                         server_slug=server_slug,
+                        actor=mcp_actor,
                     )
                 )
                 if _out_tags_new or _out_find_new:
@@ -1538,6 +1667,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                             enabled_info=enabled_info,
                             org_slug=org_slug,
                             server_slug=server_slug,
+                            actor=mcp_actor,
                         )
                     )
                     for t in _out_tags_new2:

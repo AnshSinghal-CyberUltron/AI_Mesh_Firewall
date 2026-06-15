@@ -1,6 +1,8 @@
 import logging
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiExample, extend_schema, inline_serializer
@@ -9,9 +11,20 @@ from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings as jwt_api_settings
+from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+    TokenVerifyView,
+)
+
+from django.db import connection, transaction
 
 from .models import TerminatedSession, UserProfile
+from .throttling import LoginEmailThrottle, LoginIPThrottle
 from .serializers import (
     OFFERING_ROLES,
     CustomTokenObtainPairSerializer,
@@ -28,11 +41,38 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+def _blacklist_user_refresh_tokens(user) -> int:
+    """Blacklist every outstanding refresh token for a user.
+
+    Used on password change (and could be reused for admin reset) so a
+    phished/stolen refresh token cannot keep minting access tokens after the
+    victim remediates. Relies on the rest_framework_simplejwt.token_blacklist
+    app (installed); each refresh token is recorded as an OutstandingToken when
+    issued/rotated.
+    """
+    try:
+        from rest_framework_simplejwt.token_blacklist.models import (
+            BlacklistedToken,
+            OutstandingToken,
+        )
+    except Exception:  # noqa: BLE001 - blacklist app not installed
+        return 0
+    count = 0
+    for ot in OutstandingToken.objects.filter(user_id=getattr(user, "pk", None)):
+        _, created = BlacklistedToken.objects.get_or_create(token=ot)
+        if created:
+            count += 1
+    return count
+
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     """POST /api/auth/token/ — login with email + password."""
 
     permission_classes = [AllowAny]
     serializer_class = CustomTokenObtainPairSerializer
+    # Brute-force / credential-stuffing protection: cap attempts per IP and per
+    # target email (HTTP 429 on exceed). See auth/throttling.py.
+    throttle_classes = [LoginIPThrottle, LoginEmailThrottle]
 
     @extend_schema(
         tags=["Auth"],
@@ -43,8 +83,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             "own account credentials, then click Send.\n\n"
             "The access token should be sent in subsequent requests as "
             "`Authorization: Bearer <access_token>`.\n\n"
-            "Access tokens expire after the configured lifetime (default: 5 minutes). "
-            "Use the refresh token at `/api/auth/token/refresh/` to obtain a new access token.\n\n"
+            "Access tokens expire after the configured lifetime (default: 60 minutes). "
+            "Use the refresh token at `/api/auth/token/refresh/` to obtain a new access token. "
+            "Refresh tokens rotate on each use and the previous one is blacklisted.\n\n"
             "**No account?** Ask your administrator, or create one via CLI:\n"
             "```\n"
             "docker compose exec backend python manage.py createsuperuser\n"
@@ -91,7 +132,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                     "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                     "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                     "token_type": "bearer",
-                    "expires_in": 300.0,
+                    "expires_in": 3600.0,
                 },
                 response_only=True,
                 status_codes=["200"],
@@ -99,13 +140,19 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         ],
     )
     def post(self, request: Request, *args, **kwargs):
+        # request.data may be a non-dict (malformed JSON array/string/number);
+        # extract the email defensively so the failed-login log can never raise
+        # on the error path (that produced an UNAUTHENTICATED 500).
+        email_for_log = (
+            request.data.get("email", "") if isinstance(request.data, dict) else ""
+        )
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
         except Exception:
             logger.warning(
                 "Login failed for email=%s from ip=%s",
-                request.data.get("email", ""),
+                email_for_log,
                 request.META.get("REMOTE_ADDR", ""),
             )
             return Response({"detail": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
@@ -135,6 +182,107 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                 "expires_in": api_settings.ACCESS_TOKEN_LIFETIME.total_seconds(),
             }
         )
+
+
+class AtomicTokenRefreshSerializer(TokenRefreshSerializer):
+    """Refresh-token rotation that is safe under concurrency.
+
+    With ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION, stock SimpleJWT does
+    a read-then-blacklist with no lock: two concurrent refreshes of the SAME
+    token both pass the blacklist check before either blacklists it, so BOTH
+    mint new (usable) token chains — one stolen token becomes N live sessions.
+
+    Fix: take a per-jti Postgres transaction advisory lock before validating, so
+    concurrent refreshes of the same token serialize. The first rotates and
+    blacklists; the rest, once they acquire the lock, see the now-committed
+    blacklist entry and are rejected (TokenError -> 401).
+    """
+
+    def validate(self, attrs):
+        raw = attrs.get("refresh") or ""
+        jti = ""
+        token_user_id = None
+        try:
+            payload = RefreshToken(raw, verify=False).payload
+            jti = str(payload.get(jwt_api_settings.JTI_CLAIM, "") or "")
+            token_user_id = payload.get(jwt_api_settings.USER_ID_CLAIM)
+        except Exception:  # noqa: BLE001 - malformed token; let super() reject it
+            jti = ""
+            token_user_id = None
+        # Apply the SAME disabled/terminated gate as login BEFORE minting a new
+        # access token. Otherwise a terminated (or deactivated) user keeps issuing
+        # fresh access tokens via /token/refresh until the 7-day refresh expires,
+        # even though every API call from that access token is rejected. Reject
+        # outright so termination is effective on the refresh path too.
+        if token_user_id is not None:
+            target = User.objects.filter(pk=token_user_id).first()
+            if target is not None and (
+                not target.is_active
+                or TerminatedSession.objects.filter(user=target, cleared_at__isnull=True).exists()
+            ):
+                raise InvalidToken("User session has been terminated.")
+        with transaction.atomic():
+            if jti and connection.vendor == "postgresql":
+                with connection.cursor() as cur:
+                    # xact-scoped advisory lock keyed on the refresh jti; released
+                    # at commit so the next concurrent refresh sees the blacklist.
+                    cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [jti])
+            return super().validate(attrs)
+
+
+class AtomicTokenRefreshView(TokenRefreshView):
+    """TokenRefreshView using the concurrency-safe rotation serializer."""
+
+    serializer_class = AtomicTokenRefreshSerializer
+
+
+class HardenedTokenVerifyView(TokenVerifyView):
+    """POST /api/auth/token/verify/ — verify an ACCESS token only (auth #8).
+
+    The stock TokenVerifyView only checks signature+expiry, so it would return
+    200 for a REFRESH token (which must never be presented as a bearer access
+    token) and ignores session termination / password rotation. This view:
+      * rejects non-access tokens (``token_type != 'access'``),
+      * rejects a token whose user has an active (uncleared) session termination,
+      * rejects an access token minted before the user's last password change,
+    mirroring the live authentication gate so /verify can never bless a token the
+    authenticator would reject.
+    """
+
+    def post(self, request: Request, *args, **kwargs):
+        from .authentication import token_predates_password_change
+
+        raw = request.data.get("token") if isinstance(request.data, dict) else None
+        if not raw:
+            return Response({"detail": "token is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            token = UntypedToken(raw)  # validates signature + expiry
+        except TokenError:
+            return Response(
+                {"detail": "Token is invalid or expired."}, status=status.HTTP_401_UNAUTHORIZED
+            )
+        payload = token.payload
+        if payload.get("token_type") != "access":
+            return Response(
+                {"detail": "Only access tokens can be verified."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        uid = payload.get(jwt_api_settings.USER_ID_CLAIM)
+        if uid is not None:
+            target = User.objects.filter(pk=uid).select_related("profile").first()
+            if target is None or not target.is_active:
+                return Response({"detail": "User is inactive."}, status=status.HTTP_401_UNAUTHORIZED)
+            if TerminatedSession.objects.filter(user=target, cleared_at__isnull=True).exists():
+                return Response(
+                    {"detail": "User session has been terminated."},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+            if token_predates_password_change(target, token):
+                return Response(
+                    {"detail": "Token was issued before the last password change."},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+        return Response({}, status=status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -193,7 +341,7 @@ class MeProfileUpdateView(generics.GenericAPIView):
 
 
 class LogoutView(generics.GenericAPIView):
-    """POST /api/auth/logout/ — optional server-side logout (client clears tokens)."""
+    """POST /api/auth/logout/ — server-side logout: blacklist the refresh token."""
 
     permission_classes = [IsAuthenticated]
 
@@ -201,13 +349,53 @@ class LogoutView(generics.GenericAPIView):
         tags=["Auth"],
         summary="Logout",
         description=(
-            "Server-side logout. The client should also discard its tokens.\n\nReturns 204 No Content on success."
+            "Server-side logout. Pass the current `refresh` token in the body to revoke it "
+            "(it is added to the blacklist and can no longer be used to mint access tokens). "
+            "The client should also discard its access token.\n\nReturns 204 No Content on success."
         ),
-        request=None,
+        request=inline_serializer(
+            name="LogoutRequest",
+            fields={
+                "refresh": serializers.CharField(required=False, help_text="Refresh token to revoke"),
+            },
+        ),
         responses={204: None},
     )
     def post(self, request: Request):
-        # Optional: pass refresh to blacklist if rest_framework_simplejwt.token_blacklist is used
+        if not isinstance(request.data, dict):
+            # A non-object JSON body (list/string/number) would crash
+            # `request.data.get(...)` with AttributeError -> authenticated 500.
+            return Response(
+                {"detail": "Request body must be a JSON object."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Revoke the refresh token so it (and tokens rotated from it) cannot be reused.
+        refresh_token = request.data.get("refresh")
+        if refresh_token:
+            from rest_framework_simplejwt.exceptions import TokenError
+            from rest_framework_simplejwt.tokens import RefreshToken
+
+            try:
+                token = RefreshToken(refresh_token)
+                # Ownership check: only blacklist a refresh token that belongs to
+                # the authenticated caller. Without this, anyone could pass a
+                # victim's refresh token here and revoke their session (the token's
+                # user is not otherwise tied to request.user). Treat a mismatch as
+                # an idempotent no-op so logout never leaks token validity.
+                token_user_id = token.payload.get(jwt_api_settings.USER_ID_CLAIM)
+                if str(token_user_id) != str(request.user.pk):
+                    logger.warning(
+                        "Logout: refusing to blacklist refresh token owned by a different user "
+                        "(caller user_id=%s)",
+                        request.user.pk,
+                    )
+                else:
+                    token.blacklist()
+            except TokenError:
+                # Already expired/blacklisted/invalid — logout is still idempotently successful.
+                pass
+            except Exception:  # noqa: BLE001 - never fail logout on a revoke hiccup
+                logger.warning("Logout: failed to blacklist refresh token for user_id=%s", request.user.pk)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -240,6 +428,13 @@ class ChangePasswordView(APIView):
         },
     )
     def post(self, request: Request):
+        if not isinstance(request.data, dict):
+            # A non-object JSON body would crash `request.data.get(...)` with
+            # AttributeError -> authenticated 500.
+            return Response(
+                {"detail": "Request body must be a JSON object."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         old_password = request.data.get("old_password")
         new_password = request.data.get("new_password")
         confirm_password = request.data.get("confirm_password")
@@ -259,9 +454,32 @@ class ChangePasswordView(APIView):
         if new_password != confirm_password:
             return Response({"detail": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Enforce the configured AUTH_PASSWORD_VALIDATORS (common/numeric/similarity/
+        # length). A hand-rolled length check alone accepted weak passwords like
+        # "password" or "12345678"; run Django's validators before persisting.
+        try:
+            validate_password(new_password, user=request.user)
+        except DjangoValidationError as exc:
+            return Response({"detail": " ".join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
         request.user.set_password(new_password)
         request.user.save(update_fields=["password"])
-        logger.info("Password changed for user_id=%s", request.user.pk)
+        # Stamp password_changed_at so any already-minted ACCESS token (iat earlier
+        # than now) is rejected at authentication time — otherwise a stolen access
+        # token survives a password change for its full 60-min TTL. Refresh tokens
+        # are revoked below; this closes the access-token gap.
+        changed_at = timezone.now()
+        try:
+            profile, _ = UserProfile.objects.get_or_create(user=request.user)
+            profile.password_changed_at = changed_at
+            profile.save(update_fields=["password_changed_at", "updated_at"])
+        except Exception:  # noqa: BLE001 - never fail the password change on stamp hiccup
+            logger.warning("Failed to stamp password_changed_at for user_id=%s", request.user.pk)
+        # Invalidate all of this user's existing refresh tokens so a phished /
+        # stolen token cannot survive the password change (the primary remediation
+        # for account compromise). Blacklists every outstanding refresh token.
+        revoked = _blacklist_user_refresh_tokens(request.user)
+        logger.info("Password changed for user_id=%s (revoked %s outstanding token(s))", request.user.pk, revoked)
         return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
 
 
@@ -337,6 +555,82 @@ class SessionTerminateView(APIView):
             terminated_by=request.user,
         )
         return Response({"detail": "Session terminated.", "user_id": user_id}, status=status.HTTP_200_OK)
+
+
+class SessionReinstateView(APIView):
+    """POST /api/auth/sessions/reinstate/ — lift a user's session termination (admin/staff only)."""
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(
+        tags=["Auth"],
+        summary="Reinstate user session (admin only)",
+        description=(
+            "Clears any active (uncleared) session termination for a user so they can "
+            "authenticate again. Requires admin/staff privileges.\n\n"
+            "The termination audit rows are retained (marked cleared) rather than deleted."
+        ),
+        request=inline_serializer(
+            name="SessionReinstateRequest",
+            fields={
+                "user_id": serializers.IntegerField(help_text="ID of the user whose session to reinstate"),
+            },
+        ),
+        responses={
+            200: inline_serializer(
+                name="SessionReinstateResponse",
+                fields={
+                    "detail": serializers.CharField(),
+                    "user_id": serializers.IntegerField(),
+                    "cleared": serializers.IntegerField(),
+                },
+            ),
+            400: inline_serializer(
+                name="SessionReinstateBadRequest",
+                fields={"user_id": serializers.CharField()},
+            ),
+            404: inline_serializer(
+                name="SessionReinstateNotFound",
+                fields={"detail": serializers.CharField()},
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Reinstate session",
+                value={"user_id": 5},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Success",
+                value={"detail": "Session reinstated.", "user_id": 5, "cleared": 1},
+                response_only=True,
+                status_codes=["200"],
+            ),
+        ],
+    )
+    def post(self, request: Request):
+        user_id = request.data.get("user_id")
+        if user_id is None:
+            return Response({"user_id": "Required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(pk=user_id).select_related("profile").first()
+        if not user:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        req_org = get_request_organization(request)
+        target_org_id = getattr(getattr(user, "profile", None), "organization_id", None)
+        if req_org is not None and target_org_id != req_org.id and not request.user.is_superuser:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        cleared = TerminatedSession.objects.filter(user=user, cleared_at__isnull=True).update(
+            cleared_at=timezone.now(),
+            cleared_by=request.user,
+        )
+        logger.info("Session reinstated for user_id=%s by %s (cleared %s)", user_id, request.user.email, cleared)
+        return Response(
+            {"detail": "Session reinstated.", "user_id": user_id, "cleared": cleared},
+            status=status.HTTP_200_OK,
+        )
 
 
 # ---------------------------------------------------------------------------

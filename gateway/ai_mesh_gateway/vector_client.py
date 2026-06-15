@@ -283,16 +283,86 @@ class PineconeClient:
         environment: str = "",
         embedding_model: str = "text-embedding-3-small",
         thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,
+        embedding_api_key: str = "",
+        reranker_model: str = "",
     ) -> None:
         self._api_key = api_key
         self._environment = environment
         self._embedding_model = embedding_model
+        # BYOK key for an EXTERNAL (litellm) embedding model — e.g. an
+        # OpenRouter / OpenAI-compatible key from the org's VectorProviderConfig.
+        # Empty -> embed_texts uses gateway-environment credentials (legacy).
+        self._embedding_api_key = embedding_api_key or ""
+        # Per-org Pinecone-hosted reranker (e.g. 'bge-reranker-v2-m3'). Empty
+        # -> no reranking (the retriever skips rerank()).
+        self._reranker_model = reranker_model or ""
         self._executor = ThreadPoolExecutor(
             max_workers=thread_pool_size,
             thread_name_prefix="pinecone",
         )
         self._pc = None
-        LOG.info("PineconeClient initialized (embedding_model=%s)", embedding_model)
+        LOG.info(
+            "PineconeClient initialized (embedding_model=%s, reranker_model=%s)",
+            embedding_model, reranker_model or "(none)",
+        )
+
+    async def rerank(
+        self,
+        query_text: str,
+        documents: list[dict[str, Any]],
+        top_n: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Rerank retrieved documents via Pinecone's hosted rerank Inference API.
+
+        Reorders ``documents`` by semantic relevance to ``query_text`` using the
+        org's configured ``reranker_model``. No-op (returns input unchanged) when
+        no reranker is configured or on any provider error (fail-open on rerank —
+        the un-reranked order is still valid retrieval).
+        """
+        if not self._reranker_model or not documents:
+            return documents
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self._executor, self._rerank_sync, query_text, documents, top_n
+        )
+
+    def _rerank_sync(
+        self,
+        query_text: str,
+        documents: list[dict[str, Any]],
+        top_n: int | None,
+    ) -> list[dict[str, Any]]:
+        try:
+            pc = self._get_client()
+            texts = [str(d.get("content", "") or "") for d in documents]
+            resp = pc.inference.rerank(
+                model=self._reranker_model,
+                query=query_text,
+                documents=texts,
+                top_n=top_n or len(documents),
+                return_documents=False,
+            )
+            reordered: list[dict[str, Any]] = []
+            for row in resp.data:
+                idx = getattr(row, "index", None)
+                if idx is None and hasattr(row, "get"):
+                    idx = row.get("index")
+                if idx is None or not (0 <= int(idx) < len(documents)):
+                    continue
+                doc = dict(documents[int(idx)])
+                score = getattr(row, "score", None)
+                if score is None and hasattr(row, "get"):
+                    score = row.get("score")
+                if score is not None:
+                    doc["rerank_score"] = float(score)
+                reordered.append(doc)
+            return reordered or documents
+        except Exception:
+            LOG.warning(
+                "Pinecone rerank failed (model=%s); keeping retrieval order (fail-open)",
+                self._reranker_model, exc_info=True,
+            )
+            return documents
 
     # Pinecone-hosted embedding models served via the Inference API. When the
     # configured embedding_model is one of these, queries/passages are embedded
@@ -324,25 +394,25 @@ class PineconeClient:
         ``input_type`` 'query' or 'passage' for asymmetric models like e5.
         Any other model falls back to LiteLLM (OpenAI/Bedrock/etc.).
         """
+        from byok_embedder import embed_texts
+
         model = self._embedding_model
-        if model in self.PINECONE_INFERENCE_MODELS or model.startswith("pinecone-"):
-            pc = self._get_client()
-            resp = pc.inference.embed(
-                model=model,
-                inputs=list(texts),
-                parameters={"input_type": input_type, "truncate": "END"},
-            )
-            out: list[list[float]] = []
-            for d in resp.data:
-                vals = getattr(d, "values", None)
-                if vals is None and hasattr(d, "get"):
-                    vals = d.get("values")
-                out.append(list(vals))
-            return out
-        # Fallback: LiteLLM-routed providers (OpenAI text-embedding-3-small, etc.)
-        import litellm
-        resp = litellm.embedding(model=model, input=list(texts))
-        return [resp.data[i]["embedding"] for i in range(len(texts))]
+        is_pinecone_hosted = (
+            model in self.PINECONE_INFERENCE_MODELS or model.startswith("pinecone-")
+        )
+        # Pinecone-hosted models are BYOK via the org's Pinecone key (used by the
+        # pinecone_client). External models route through litellm using the org's
+        # per-model BYOK ``embedding_api_key`` (e.g. OpenRouter) when configured,
+        # falling back to gateway-environment credentials when empty. embed_texts
+        # is FAIL-CLOSED: it raises on any zero/empty/wrong-shaped vector instead
+        # of letting a meaningless embedding silently poison retrieval.
+        return embed_texts(
+            list(texts),
+            embedding_model=model,
+            input_type=input_type,
+            pinecone_client=self._get_client() if is_pinecone_hosted else None,
+            provider_api_key=None if is_pinecone_hosted else (self._embedding_api_key or None),
+        )
 
     def _query_sync(
         self,
@@ -371,26 +441,16 @@ class PineconeClient:
         if where:
             query_params["filter"] = where
 
+        # Fail-CLOSED embedding: if the query cannot be embedded we must NOT
+        # fall back to a zero vector — that returns arbitrary nearest neighbours
+        # as if they were real matches (silently-wrong RAG). Embed OUTSIDE the
+        # result-swallowing try so the error propagates to the caller as an
+        # explicit failure instead of garbage (or silently-empty) results.
+        # 'query' input_type for asymmetric models like e5.
+        query_vector = self._embed([query_text], input_type="query")[0]
+
         try:
             from pinecone import QueryResponse
-            # Embed the query (Pinecone Inference for Pinecone-hosted models,
-            # else LiteLLM). 'query' input_type for asymmetric models like e5.
-            try:
-                query_vector = self._embed([query_text], input_type="query")[0]
-            except Exception:
-                LOG.warning(
-                    "Failed to generate query embedding via '%s'; "
-                    "falling back to zero vector",
-                    self._embedding_model,
-                )
-                # Determine dimension from index stats
-                try:
-                    stats = index.describe_index_stats()
-                    dim = stats.get("dimension", 1536)
-                except Exception:
-                    dim = 1536
-                query_vector = [0.0] * dim
-
             response: QueryResponse = index.query(
                 vector=query_vector,
                 **query_params,
@@ -402,11 +462,24 @@ class PineconeClient:
         documents: list[dict[str, Any]] = []
         for match in response.get("matches", []):
             metadata = match.get("metadata", {})
+            # NOTE: `metadata.pop("content", metadata.pop("text", ""))` would
+            # evaluate the inner pop unconditionally (Python evaluates all args
+            # before the call), deleting the 'text' field from the returned
+            # metadata even when 'content' is present. Pop sequentially instead.
+            _content = metadata.pop("content", None)
+            if _content is None:
+                _content = metadata.pop("text", "")
+            _raw_score = match.get("score", 0.0)
             documents.append({
                 "id": match.get("id", ""),
-                "content": metadata.pop("content", metadata.pop("text", "")),
+                "content": _content,
                 "metadata": metadata,
-                "distance": 1.0 - match.get("score", 0.0),
+                "distance": 1.0 - _raw_score,
+                # Cosine similarity (higher = more relevant). Emitted so the
+                # retriever's relevance-threshold filter has the key it reads
+                # (it defaulted to 1.0 — a silent no-op — when only `distance`
+                # was present, so degenerate matches were never filtered). (H6)
+                "score": _raw_score,
             })
 
         return documents
@@ -603,33 +676,22 @@ class MilvusClient:
             if conditions:
                 expr = " and ".join(conditions)
 
+        # FAIL-CLOSED: the Milvus client does not embed the query text (no
+        # embedding model is wired here), so a real vector search is not
+        # possible. Searching with a placeholder zero vector returns arbitrary
+        # nearest-neighbours as if they were real matches — silently-wrong RAG.
+        # RAISE (instead of a quiet empty-200) so the retriever surfaces a
+        # retrieval_error/block, consistent with the Pinecone fail-closed path
+        # and the byok_embedder contract.
         try:
-            placeholder_vector = [[0.0] * 128]
-            results = collection.search(
-                data=placeholder_vector,
-                anns_field="embedding",
-                param=search_params,
-                limit=n_results,
-                expr=expr,
-                output_fields=["content", "metadata"],
-                partition_names=[project_id] if project_id else None,
-            )
-        except Exception:
-            LOG.exception("Milvus search failed for collection '%s'", namespaced)
-            return []
-
-        documents: list[dict[str, Any]] = []
-        for hits in results:
-            for hit in hits:
-                entity = hit.entity
-                documents.append({
-                    "id": str(hit.id),
-                    "content": entity.get("content", ""),
-                    "metadata": entity.get("metadata", {}),
-                    "distance": hit.distance,
-                })
-
-        return documents
+            from byok_embedder import EmbeddingConfigError
+        except ImportError:  # pragma: no cover - top-level import path
+            from .byok_embedder import EmbeddingConfigError  # type: ignore[no-redef]
+        raise EmbeddingConfigError(
+            f"Milvus query embedding is not implemented for collection "
+            f"'{namespaced}'; refusing to search with a placeholder vector "
+            f"(fail-closed). Configure a provider with an embedding model."
+        )
 
     async def query(
         self,

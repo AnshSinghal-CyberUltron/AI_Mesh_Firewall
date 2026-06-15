@@ -7,7 +7,7 @@ const STEPS = [
     icon: Database,
     title: "Configure Provider",
     panel: "Vector Provider Config",
-    description: "Set up Pinecone, Milvus, or a custom BYOK vector database connection.",
+    description: "Set up your BYOK vector database (Pinecone, Milvus, Chroma, or Custom), embedding key, and optional reranker.",
     tab: "control",
   },
   {
@@ -97,6 +97,8 @@ export function RAGSetupGuide() {
                         ? "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-500 text-emerald-600 dark:text-emerald-400"
                         : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-indigo-400"
                     }`}
+                    aria-label={done ? `Mark step "${step.title}" as not done` : `Mark step "${step.title}" as done`}
+                    aria-pressed={done}
                     title={done ? "Mark undone" : "Mark as done"}
                   >
                     {done ? <CheckCircle className="w-5 h-5" /> : <Icon className="w-4 h-4" />}
@@ -108,7 +110,7 @@ export function RAGSetupGuide() {
                     <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
                       {step.description}
                     </p>
-                    <span className="inline-block mt-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                    <span className="inline-block mt-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                       {step.tab} tab → {step.panel}
                     </span>
                   </div>

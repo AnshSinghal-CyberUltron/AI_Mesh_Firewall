@@ -1,4 +1,4 @@
-import { filterUserManagedModels } from "../constants/zeroshieldBrand";
+import { filterUserManagedModels, modelHasUsableKey } from "../constants/zeroshieldBrand";
 
 /** Org-wide kill-switch scope — matches control KillSwitch.SCOPE_GLOBAL */
 export const KILL_SWITCH_GLOBAL_SCOPE = "__global__";
@@ -75,7 +75,7 @@ export function wouldModelBeBlockedAsFallback(killSwitches, candidateModel, form
 export function filterConnectedModels(models) {
   const list = Array.isArray(models) ? models : models?.results ?? [];
   return filterUserManagedModels(list).filter(
-    (m) => m && m.model_name && m.is_active !== false && m.api_key_set,
+    (m) => m && m.model_name && m.is_active !== false && modelHasUsableKey(m),
   );
 }
 

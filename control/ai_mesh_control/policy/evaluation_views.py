@@ -6,7 +6,7 @@ Runs policy engine first (explicit rules), then security engine (ML/threat detec
 import logging
 import re
 from dataclasses import asdict
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
@@ -34,6 +34,27 @@ from policy.threat_categories import get_all_threats_from_scan_result
 from ws.notify import send_enforcement_notification
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_event_organization_id(request):
+    """
+    Authoritative organization for any EnforcementEvent created by this request.
+
+    Cross-tenant hardening: never trust a client-supplied body organization_id for
+    the persisted event org. For a per-org agent/gateway key
+    (request.agent_organization_id is not None) the event org is FORCED to the
+    authenticated key's org. For the trusted global AGENT_API_KEY path
+    (agent_organization_id is None) we bind to the org resolved by
+    get_request_organization(request), not a raw body value.
+
+    Returns an int organization_id or None (None only for the global-key/dev path
+    when no org resolves).
+    """
+    agent_org_id = getattr(request, "agent_organization_id", None)
+    if agent_org_id is not None:
+        return agent_org_id
+    org = get_request_organization(request)
+    return org.id if org is not None else None
 
 
 def _pii_to_redaction_hints(pii: dict) -> list[dict]:
@@ -380,19 +401,38 @@ class PolicyCheckView(APIView):
         ],
     )
     def post(self, request: Request):
+        # [concurrency #9] Mint a per-request id and define a shape-stable base
+        # payload so allow / policy-block / security-block responses all carry the
+        # same keys (request_id + risk-score quartet, null when no scan ran).
+        request_id = uuid4().hex
+
+        def _base_payload(**extra):
+            base = {
+                "request_id": request_id,
+                "security_risk_score": None,
+                "tier1_risk_score": None,
+                "tier2_risk_score": None,
+                "risk_score_breakdown": None,
+            }
+            base.update(extra)
+            return base
+
+        body = request.data
+        if not isinstance(body, dict):
+            return Response(
+                _base_payload(detail="Request body must be a JSON object."),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         rate_limit_response = check_rate_limit(request)
         if rate_limit_response is not None:
             return rate_limit_response
-        body = request.data or {}
         prompt = body.get("prompt") or ""
         response_text = body.get("response") or ""
         user_id = body.get("user_id")
         endpoint_id = body.get("endpoint_id")
         metadata = body.get("metadata") or {}
-        organization_id = (
-            body.get("organization_id")
-            or metadata.get("organization_id")
-        )
+        if not isinstance(metadata, dict):
+            metadata = {}
 
         agent = None
         agent_id_raw = body.get("agent_id")
@@ -421,15 +461,35 @@ class PolicyCheckView(APIView):
             "request_metadata": metadata,
         }
 
+        # M-04: actor identity forwarded by the gateway ({user_id, agent_id
+        # (API-key prefix), roles}) for actor-scoped policies. Distinct from
+        # top-level "agent_id" (the gateway's registered agent UUID).
+        actor = body.get("actor") if isinstance(body.get("actor"), dict) else {}
+        if actor:
+            if context.get("user_id") is None and actor.get("user_id") is not None:
+                context["user_id"] = actor.get("user_id")
+            if actor.get("agent_id"):
+                context["agent_id"] = actor.get("agent_id")
+            if actor.get("roles"):
+                context["roles"] = actor.get("roles")
+
         org = get_request_organization(request)
         if org is None:
-            return Response({"detail": "Organization scope is required."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                _base_payload(detail="Organization scope is required."),
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        # Cross-tenant hardening: every EnforcementEvent persisted by this request is
+        # bound to the authenticated key's resolved org (same org used to scope policy
+        # eval below), NOT any client-supplied body organization_id. This keeps the
+        # event org consistent with the policy FK (policies_qs is filtered by `org`).
+        event_org_id = org.id
 
         try:
             policy_domain = validate_policy_domain(body.get("policy_domain") or metadata.get("policy_domain") or "pipeline")
         except Exception as exc:
             detail = getattr(exc, "detail", exc)
-            return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+            return Response(_base_payload(detail=detail), status=status.HTTP_400_BAD_REQUEST)
 
         policies_qs = Policy.objects.filter(organization=org, enabled=True).order_by("-priority").prefetch_related("rules")
         result = evaluate(context, policies_qs=policies_qs, domain=policy_domain)
@@ -472,7 +532,7 @@ class PolicyCheckView(APIView):
                     user_id=user_id,
                     endpoint_id=endpoint_id,
                     agent=agent,
-                    organization_id=organization_id,
+                    organization_id=event_org_id,
                     metadata=ev_metadata,
                 )
                 event_id = ev.id
@@ -489,13 +549,13 @@ class PolicyCheckView(APIView):
 
         # Policy decided block/redact/monitor: return immediately (no security scan)
         if result.action in (ACTION_BLOCK, ACTION_REDACT, ACTION_MONITOR):
-            payload = {
-                "action": result.action,
-                "matched_policies": result.matched_policy_codes,
-                "matched_rules": result.matched_rule_names,
-                "message": result.message or "",
-                "policy_engine_matched": len(result.matched_policy_codes) > 0,
-            }
+            payload = _base_payload(
+                action=result.action,
+                matched_policies=result.matched_policy_codes,
+                matched_rules=result.matched_rule_names,
+                message=result.message or "",
+                policy_engine_matched=len(result.matched_policy_codes) > 0,
+            )
             if event_id is not None:
                 payload["event_id"] = event_id
             # For redact: ensure we send span-level hints or anonymized text so the proxy redacts only PII, not the whole prompt.
@@ -586,7 +646,7 @@ class PolicyCheckView(APIView):
                         user_id=user_id,
                         endpoint_id=endpoint_id,
                         agent=agent,
-                        organization_id=organization_id,
+                        organization_id=event_org_id,
                         metadata=ev_meta,
                     )
                     try:
@@ -602,18 +662,18 @@ class PolicyCheckView(APIView):
 
                 if recommended in ("block_immediately", "block_and_alert"):
                     return Response(
-                        {
-                            "action": ACTION_BLOCK,
-                            "matched_policies": [],
-                            "matched_rules": [],
-                            "message": "Request blocked by security scan (threat detected).",
-                            "security_risk_score": scan_result.overall_risk_score,
-                            "security_recommended_action": recommended,
-                            "policy_engine_matched": False,
-                            "tier1_risk_score": getattr(scan_result, "tier1_risk_score", None),
-                            "tier2_risk_score": getattr(scan_result, "tier2_risk_score", None),
-                            "risk_score_breakdown": getattr(scan_result, "risk_score_breakdown", None),
-                        },
+                        _base_payload(
+                            action=ACTION_BLOCK,
+                            matched_policies=[],
+                            matched_rules=[],
+                            message="Request blocked by security scan (threat detected).",
+                            security_risk_score=scan_result.overall_risk_score,
+                            security_recommended_action=recommended,
+                            policy_engine_matched=False,
+                            tier1_risk_score=getattr(scan_result, "tier1_risk_score", None),
+                            tier2_risk_score=getattr(scan_result, "tier2_risk_score", None),
+                            risk_score_breakdown=getattr(scan_result, "risk_score_breakdown", None),
+                        ),
                         status=status.HTTP_200_OK,
                     )
 
@@ -662,6 +722,7 @@ class PolicyCheckView(APIView):
                         user_id=user_id,
                         endpoint_id=endpoint_id,
                         agent=agent,
+                        organization_id=event_org_id,
                         metadata=ev_meta,
                     )
                     event_id = ev.id
@@ -677,22 +738,22 @@ class PolicyCheckView(APIView):
                     logger.warning("Failed to create EnforcementEvent for redact: %s", e)
 
                 return Response(
-                    {
-                        "action": ACTION_REDACT,
-                        "matched_policies": [],
-                        "matched_rules": [],
-                        "message": "Content redacted by security scan (PII detected).",
-                        "security_risk_score": scan_result.overall_risk_score,
-                        "security_recommended_action": recommended,
-                        "policy_engine_matched": False,
-                        "redacted_prompt": redacted_prompt,
-                        "redacted_response": redacted_response,
-                        "redaction_hints": redaction_hints,
-                        "event_id": event_id,
-                        "tier1_risk_score": getattr(scan_result, "tier1_risk_score", None),
-                        "tier2_risk_score": getattr(scan_result, "tier2_risk_score", None),
-                        "risk_score_breakdown": getattr(scan_result, "risk_score_breakdown", None),
-                    },
+                    _base_payload(
+                        action=ACTION_REDACT,
+                        matched_policies=[],
+                        matched_rules=[],
+                        message="Content redacted by security scan (PII detected).",
+                        security_risk_score=scan_result.overall_risk_score,
+                        security_recommended_action=recommended,
+                        policy_engine_matched=False,
+                        redacted_prompt=redacted_prompt,
+                        redacted_response=redacted_response,
+                        redaction_hints=redaction_hints,
+                        event_id=event_id,
+                        tier1_risk_score=getattr(scan_result, "tier1_risk_score", None),
+                        tier2_risk_score=getattr(scan_result, "tier2_risk_score", None),
+                        risk_score_breakdown=getattr(scan_result, "risk_score_breakdown", None),
+                    ),
                     status=status.HTTP_200_OK,
                 )
 
@@ -734,7 +795,7 @@ class PolicyCheckView(APIView):
                         user_id=user_id,
                         endpoint_id=endpoint_id,
                         agent=agent,
-                        organization_id=organization_id,
+                        organization_id=event_org_id,
                         metadata=ev_meta,
                     )
                     event_id = ev.id
@@ -753,13 +814,13 @@ class PolicyCheckView(APIView):
             logger.warning("Security scan failed, continuing: %s", e)
 
         # Policy allowed and security did not block: return allow (with optional security metadata)
-        payload = {
-            "action": result.action,
-            "matched_policies": result.matched_policy_codes,
-            "matched_rules": result.matched_rule_names,
-            "message": result.message or "",
-            "policy_engine_matched": len(result.matched_policy_codes) > 0,
-        }
+        payload = _base_payload(
+            action=result.action,
+            matched_policies=result.matched_policy_codes,
+            matched_rules=result.matched_rule_names,
+            message=result.message or "",
+            policy_engine_matched=len(result.matched_policy_codes) > 0,
+        )
         if event_id is not None:
             payload["event_id"] = event_id
         if payload.get("action") == ACTION_REDACT and not redacted_prompt:
@@ -895,6 +956,16 @@ class PolicyTestView(APIView):
             "endpoint_id": body.get("endpoint_id"),
             "request_metadata": metadata,
         }
+
+        # M-04: actor identity for actor-scoped policies (see PolicyCheckView).
+        actor = body.get("actor") if isinstance(body.get("actor"), dict) else {}
+        if actor:
+            if context.get("user_id") is None and actor.get("user_id") is not None:
+                context["user_id"] = actor.get("user_id")
+            if actor.get("agent_id"):
+                context["agent_id"] = actor.get("agent_id")
+            if actor.get("roles"):
+                context["roles"] = actor.get("roles")
 
         org = get_request_organization(request)
         if org is None:
@@ -1151,7 +1222,12 @@ class EnforcementEventBatchView(APIView):
     permission_classes = [AgentAPIKeyPermission]
 
     def post(self, request: Request):
-        body = request.data or {}
+        body = request.data
+        if not isinstance(body, dict):
+            return Response(
+                {"detail": "Request body must be a JSON object."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         events_data = body.get("events")
         if not isinstance(events_data, list) or not events_data:
             return Response(
@@ -1159,13 +1235,21 @@ class EnforcementEventBatchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Cross-tenant hardening: bind every reported event to the authenticated
+        # key's resolved org, never a client-supplied body organization_id.
+        event_org_id = _resolve_event_organization_id(request)
+
         created_count = 0
         for ev_data in events_data:
             try:
+                if not isinstance(ev_data, dict):
+                    continue
                 action = ev_data.get("action") or "block"
                 agent_id_raw = ev_data.get("agent_id")
                 endpoint_id = ev_data.get("endpoint_id")
                 metadata = ev_data.get("metadata") or {}
+                if not isinstance(metadata, dict):
+                    metadata = {}
 
                 # Build prompt_lineage from agent's prompt_snippet if not already present
                 if not metadata.get("prompt_lineage") and metadata.get("prompt_snippet"):
@@ -1196,10 +1280,7 @@ class EnforcementEventBatchView(APIView):
                     "user_id": ev_data.get("user_id"),
                     "endpoint_id": endpoint_id,
                     "agent": agent,
-                    "organization_id": (
-                        ev_data.get("organization_id")
-                        or metadata.get("organization_id")
-                    ),
+                    "organization_id": event_org_id,
                     "metadata": metadata,
                 }
                 if created_at:

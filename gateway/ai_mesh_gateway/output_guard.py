@@ -27,6 +27,8 @@ try:
         detect_hallucination_markers,
         detect_ip_leakage,
         get_compliance_tags,
+        is_safety_refusal_output,
+        redact_all,
     )
 except ImportError:
     from patterns import (
@@ -34,6 +36,8 @@ except ImportError:
         detect_hallucination_markers,
         detect_ip_leakage,
         get_compliance_tags,
+        is_safety_refusal_output,
+        redact_all,
     )
 
 LOG = logging.getLogger("gateway.output_guard")
@@ -44,6 +48,13 @@ ACTION_PRIORITY = {"allow": 0, "flag": 1, "rewrite": 2, "redact": 3, "block": 4}
 # set falls back to the detector's default action.
 _VALID_OUTPUT_ACTIONS = frozenset({"block", "redact", "rewrite", "flag", "allow"})
 
+# C-1: output-threat categories that are SURGICALLY REDACTED-and-served (200),
+# never whole-response blocked. The tier-2 guard model emits pci (card numbers)
+# and phi (health info) as categories distinct from pii — all are redactable, so
+# a benign answer incidentally containing a card/MRN must be masked-in-place, not
+# 403'd. (jailbreak/injection/hallucination/ip_leakage stay blockable.)
+_REDACTABLE_OUTPUT_CATEGORIES = frozenset({"pii", "pci", "phi", "secret", "credential"})
+
 _STOPWORDS = frozenset({
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
     "have", "has", "had", "do", "does", "did", "will", "would", "could",
@@ -52,11 +63,54 @@ _STOPWORDS = frozenset({
     "but", "not", "no", "if", "so", "as",
 })
 
+# Strong self-contradiction only — bare "however/but" in refusals caused false
+# positives. Pattern 3 previously matched bare negation/correction words
+# ("not true|incorrect|wrong|mistaken|inaccurate") ANYWHERE, which fired on
+# benign corrective prose that debunks an *external* misconception
+# ("That is not true. The Earth is a sphere."). It now requires the negation to
+# reference the SPEAKER'S OWN earlier assertion (self-reference anchor) so only
+# genuine self-contradiction within the same output is scored.
 _CONTRADICTION_PATTERNS = [
-    re.compile(r"\b(?:however|but|on the other hand|conversely|contrary to)\b", re.IGNORECASE),
-    re.compile(r"\b(?:actually|in fact|to be precise|to correct)\b", re.IGNORECASE),
-    re.compile(r"\b(?:not true|incorrect|wrong|mistaken|inaccurate)\b", re.IGNORECASE),
+    re.compile(r"\bcontrary to (?:what I|my)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:actually|in fact),?\s+(?:that|this)\s+(?:is|was)\s+(?:not|incorrect|wrong)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:I (?:said|stated|claimed|mentioned|told you)|"
+        r"(?:earlier|previously|above|before) I|my (?:previous|earlier|prior) (?:statement|answer|claim|response))\b"
+        r"(?:[^.!?]{0,80})\b(?:not true|incorrect|wrong|mistaken|inaccurate|was wrong|is false)\b",
+        re.IGNORECASE,
+    ),
 ]
+
+# Default threshold when no RAG context (pattern noise is higher without grounding).
+_NO_CONTEXT_HALLUCINATION_THRESHOLD = 0.45
+_RAG_GROUNDED_HALLUCINATION_THRESHOLD = 0.2
+
+
+def _mask_value_for_detail(value: str, max_len: int = 24) -> str:
+    """Mask a raw matched PII/secret value for the client-facing ``detail`` string.
+
+    ``OutputVerdict.detail`` reaches the END CLIENT via zeroshield response
+    metadata on redact/block paths, so it must never carry a raw matched value
+    (otherwise a just-redacted SSN/email leaks back through metadata).
+
+    ``matched_values`` deliberately keeps the RAW value for the operator
+    console (control-plane telemetry); only this human-readable string is
+    masked. Prefer :func:`redact_all` for consistency with the tier-2
+    evidence path (M-01); if the bare value does not re-match its pattern out
+    of context (context-dependent patterns), fall back to a deterministic
+    partial mask so a raw value can never slip through.
+    """
+    raw = str(value)
+    if not raw:
+        return raw
+    masked = redact_all(raw)
+    if masked == raw:
+        # Pattern did not re-match the bare value — deterministic partial mask.
+        masked = raw[:2] + "*" * max(len(raw) - 2, 3)
+    return f"{masked[:max_len]}{'…' if len(masked) > max_len else ''}"
 
 
 @dataclass
@@ -68,7 +122,13 @@ class OutputVerdict:
     confidence: float = 0.0
     detail: str = ""
     matched_patterns: list[str] = field(default_factory=list)
+    matched_values: dict[str, str] = field(default_factory=dict)
     compliance_tags: list[str] = field(default_factory=list)
+    # M11: True when the tier-2 OUTPUT guard model could not scan (outage /
+    # breaker-open / parse failure) and the response was passed UNSCANNED
+    # (fail-open). Surfaced to telemetry + the client zeroshield metadata so a
+    # guard outage is VISIBLE, not silent.
+    scan_degraded: bool = False
 
 
 @dataclass
@@ -174,10 +234,10 @@ class OutputGuard:
                     verdicts.append(pii_verdict)
 
         if _enabled("output_credential_enabled", True):
-            cred_action = _action(
-                "output_credential_action",
-                "block" if self._config.get("output_block_on_credential", True) else "redact",
-            )
+            # 1.7 policy "redact the response": output secrets/credentials are
+            # surgically REDACTED + delivered (200), not whole-response blocked.
+            # (output_credential_action may still override per-org.)
+            cred_action = _action("output_credential_action", "redact")
             if cred_action != "allow":
                 cred_verdict = self._check_credential_exposure(text, cred_action)
                 if cred_verdict.action != "allow":
@@ -188,6 +248,16 @@ class OutputGuard:
                 "output_ip_leakage_action",
                 "block" if self._config.get("output_block_on_ip_leakage", False) else "flag",
             )
+            # R2: ip_leakage is a heuristic, false-positive-prone signal (a single
+            # private/example IP in an educational answer is benign). It must
+            # never DESTROY the whole response on the heuristic alone: downgrade a
+            # whole-response "rewrite" to "flag" (observe), and only allow a hard
+            # "block" when the org EXPLICITLY opted in via output_block_on_ip_leakage.
+            # (PII/secret/credential detectors keep their stronger actions.)
+            if ip_action == "rewrite":
+                ip_action = "flag"
+            elif ip_action == "block" and not self._config.get("output_block_on_ip_leakage", False):
+                ip_action = "flag"
             if ip_action != "allow":
                 ip_verdict = self._check_ip_leakage(text, ip_action)
                 if ip_verdict.action != "allow":
@@ -218,6 +288,14 @@ class OutputGuard:
         # AND the org tri-state tier2_enabled. FAIL-OPEN: a guard-model outage
         # must never block an already-generated response — scan_output_with_tier2
         # degrades to the static verdict and any error here is swallowed.
+        output_scan_degraded = False
+        # R2: track whether the tier-2 guard model actually ran and rated the
+        # OUTPUT clean (allow). When it did, its verdict is authoritative over the
+        # false-positive-prone deterministic ip_leakage heuristic — a benign
+        # example IP that the smart guard model cleared must not be destroyed by
+        # the static detector. (Only ip_leakage is gated this way; PII/secret/
+        # credential static detectors stay fail-safe and are NOT suppressed.)
+        guard_rated_clean = False
         if _enabled("output_tier2_enabled", True) and self._scanner is not None:
             try:
                 t2 = await self._scanner.scan_output_with_tier2(
@@ -225,35 +303,98 @@ class OutputGuard:
                     org_tier2_override=cfg.get("tier2_enabled"),
                     org_slug=org_slug,
                 )
+                # M11: a degraded tier-2 OUTPUT scan (breaker open / parse fail)
+                # comes back as a 'scanner_degraded' verdict — the output was NOT
+                # confidently scanned. Mark degraded so it's visible downstream.
+                if t2 is not None and str(getattr(t2, "threat_type", "")) == "scanner_degraded":
+                    output_scan_degraded = True
+                # R2: a completed, non-degraded scan that returned a non-blocking
+                # verdict = the guard model rated this output clean.
+                if (
+                    t2 is not None
+                    and not output_scan_degraded
+                    and t2.action not in ("block", "redact", "flag")
+                ):
+                    guard_rated_clean = True
                 if t2 is not None and t2.action in ("block", "redact", "flag"):
                     t2_patterns = list(getattr(t2, "matched_patterns", []) or [])
+                    # Defense-in-depth (M-01): the guard-model ScanVerdict can carry
+                    # raw evidence/findings (matched fragments of the model output) in
+                    # its matched_patterns and detail strings. Those flow straight into
+                    # the client-facing OutputVerdict, so scrub any PII/secret/credential
+                    # value out of them here as a belt-and-suspenders to the scanner.py
+                    # source fix. redact_all is a no-op on plain pattern-key strings.
+                    t2_compliance_tags = get_compliance_tags(t2_patterns)
+                    t2_patterns = [redact_all(str(p)) for p in t2_patterns]
+                    t2_detail = redact_all(
+                        t2.detail or "ZeroShield guard model (tier-2) flagged output"
+                    )
                     verdicts.append(OutputVerdict(
                         action=t2.action,
                         threat_type=t2.threat_type or "guard_model",
                         confidence=float(getattr(t2, "confidence", 0.0) or 0.0),
-                        detail=t2.detail or "ZeroShield guard model (tier-2) flagged output",
+                        detail=t2_detail,
                         matched_patterns=t2_patterns,
-                        compliance_tags=get_compliance_tags(t2_patterns),
+                        compliance_tags=t2_compliance_tags,
                     ))
             except Exception:  # noqa: BLE001 - output tier-2 must never break delivery
-                LOG.debug("Output tier-2 guard-model scan failed; failing open", exc_info=True)
+                # M11: fail-open (never block an already-generated response on a
+                # guard outage) but make it VISIBLE — WARN (was silent debug) +
+                # mark the verdict degraded so telemetry + client metadata record
+                # that the output was passed UNSCANNED.
+                output_scan_degraded = True
+                LOG.warning(
+                    "Output tier-2 guard-model scan FAILED — output passed UNSCANNED (fail-open / degraded)",
+                    exc_info=True,
+                )
+
+        # R2: the guard model cleared this output, so drop the false-positive-prone
+        # deterministic ip_leakage verdict (e.g. a textbook 192.168.0.1). The
+        # guard model is the authoritative arbiter for the infra-leakage heuristic;
+        # other categories (PII/secret/credential/hallucination) are unaffected.
+        if guard_rated_clean and verdicts:
+            verdicts = [v for v in verdicts if str(getattr(v, "threat_type", "")) != "ip_leakage"]
 
         if not verdicts:
-            return OutputVerdict()
+            return OutputVerdict(scan_degraded=output_scan_degraded)
 
-        return self._select_highest_severity(verdicts)
+        selected = self._select_highest_severity(verdicts)
+        selected.scan_degraded = selected.scan_degraded or output_scan_degraded
+        # 1.7 policy: PII / secrets / credentials are SURGICALLY REDACTED and the
+        # response delivered (200) — never whole-response blocked. If any detector
+        # (static or tier-2 guard model) escalated a redactable category to "block",
+        # downgrade to "redact" so the offending tokens are masked in place. Non-
+        # redactable threats (jailbreak/injection/hallucination/etc.) still block.
+        # C-1: the tier-2 guard model emits pci (card numbers) and phi (health
+        # info) as DISTINCT categories from pii — they are equally redactable, so
+        # they must be in the downgrade set too, or a benign answer that happens
+        # to contain a card/MRN gets whole-response HARD-BLOCKED (403) instead of
+        # surgically masked-and-served (200), contradicting the §1.7 contract.
+        if selected.action == "block" and str(selected.threat_type or "") in _REDACTABLE_OUTPUT_CATEGORIES:
+            selected.action = "redact"
+        return selected
 
     async def _check_pii_secrets(self, text: str, action: str = "redact") -> OutputVerdict:
         """Delegate PII/secret detection to the existing scanner."""
         verdict = await self._scanner.scan_output(text)
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
             pattern_keys = verdict.matched_patterns
+            matched_values = dict(getattr(verdict, "matched_values", None) or {})
+            value_detail = ""
+            if matched_values:
+                # detail is client-facing: embed MASKED values only.
+                # matched_values keeps the raw values for operator telemetry.
+                value_detail = " — " + ", ".join(
+                    f"{k}={_mask_value_for_detail(v)}"
+                    for k, v in matched_values.items()
+                )
             return OutputVerdict(
                 action=action,
                 threat_type=verdict.threat_type,
                 confidence=verdict.confidence,
-                detail=f"PII/secret detected in output: {', '.join(pattern_keys)}",
+                detail=f"PII/secret detected in output: {', '.join(pattern_keys)}{value_detail}",
                 matched_patterns=pattern_keys,
+                matched_values=matched_values,
                 compliance_tags=get_compliance_tags(pattern_keys),
             )
         return OutputVerdict()
@@ -307,9 +448,19 @@ class OutputGuard:
             org_slug=org_slug,
         )
 
-        # Per-tenant threshold from migration 0022 overrides the default.
         cfg = org_config or self._config
-        threshold = float(cfg.get("hallucination_grounding_threshold", 0.2))
+        has_context = bool(context_chunks)
+        if has_context:
+            threshold = float(
+                cfg.get("hallucination_grounding_threshold", _RAG_GROUNDED_HALLUCINATION_THRESHOLD)
+            )
+        else:
+            threshold = float(
+                cfg.get(
+                    "hallucination_no_context_threshold",
+                    cfg.get("hallucination_grounding_threshold", _NO_CONTEXT_HALLUCINATION_THRESHOLD),
+                )
+            )
 
         if score.risk_score < threshold:
             return OutputVerdict()
@@ -362,8 +513,25 @@ class OutputGuard:
         if not output_text:
             return HallucinationScore()
 
+        if is_safety_refusal_output(output_text):
+            return HallucinationScore(
+                risk_score=0.0,
+                pattern_score=0.0,
+                grounding_score=1.0,
+                contradiction_score=0.0,
+                matched_markers=[],
+                detail="hallucination_risk=0.000 (safety_refusal_excluded)",
+            )
+
         found = detect_hallucination_markers(output_text)
-        pattern_count = len(found)
+        # Epistemic-hedging markers ("I'm not sure", "I think", "I cannot verify")
+        # signal CALIBRATED uncertainty, not fabrication. Counting them with the
+        # same positive sign as fabrication-shape markers inverts the score —
+        # penalizing cautious-correct answers while flat confident lies (no
+        # markers) score 0. Exclude hedges from the risk weight; still report
+        # them in matched_markers for telemetry transparency.
+        _HEDGE_MARKERS = {"uncertainty_hedge", "confidence_disclaimer"}
+        pattern_count = sum(1 for _k in found if _k not in _HEDGE_MARKERS)
         pattern_score = min(pattern_count * 0.15, 1.0)
 
         cfg = org_config or self._config
@@ -378,7 +546,9 @@ class OutputGuard:
                 org_slug=org_slug,
             )
 
-        contradiction_score = self._detect_contradictions(output_text)
+        contradiction_score = (
+            self._detect_contradictions(output_text) if context_chunks else 0.0
+        )
 
         if context_chunks:
             risk = (
@@ -387,7 +557,7 @@ class OutputGuard:
                 + contradiction_score * 0.25
             )
         else:
-            risk = pattern_score * 0.60 + contradiction_score * 0.40
+            risk = pattern_score * 0.80
 
         return HallucinationScore(
             risk_score=round(min(risk, 1.0), 3),
@@ -493,3 +663,253 @@ class OutputGuard:
     def _select_highest_severity(verdicts: list[OutputVerdict]) -> OutputVerdict:
         """Select the verdict with the highest-priority action."""
         return max(verdicts, key=lambda v: ACTION_PRIORITY.get(v.action, 0))
+
+
+def _static_rewrite_text(threat_type: str, detail: str | None = None) -> str:
+    """Deterministic canned replacement text — the safe fallback when a genuine
+    content-preserving rewrite is unavailable (no client / inference failed)."""
+    safe_templates = {
+        "hallucination": (
+            "I cannot verify that claim from the available evidence. "
+            "Please confirm it with authoritative sources or request grounded citations."
+        ),
+        "pii": "Sensitive personal information was removed from the generated response.",
+        "secret": "Sensitive credentials or secrets were removed from the generated response.",
+        "credential": "Sensitive credentials or secrets were removed from the generated response.",
+        "ip_leakage": "Sensitive infrastructure details were removed from the generated response.",
+        "policy_violation": "The original model output was rewritten to comply with response safety policy.",
+    }
+    base_message = safe_templates.get(threat_type or "", safe_templates["policy_violation"])
+    if detail and threat_type == "hallucination":
+        return f"{base_message} Review detail: {detail}"
+    return base_message
+
+
+# Per-threat instruction injected into the sanitization system prompt so the
+# rewrite removes only the offending content while preserving the rest of the
+# answer's meaning.
+_REWRITE_THREAT_GUIDANCE = {
+    "pii": (
+        "Remove or redact every piece of personal data (names, emails, phone "
+        "numbers, SSNs, addresses, account numbers). Replace each with a neutral "
+        "placeholder like [redacted]. Keep all other information intact."
+    ),
+    "secret": (
+        "Remove every credential, password, API key, token, or secret value. "
+        "Replace each with [redacted]. Preserve the surrounding explanation."
+    ),
+    "credential": (
+        "Remove every credential, password, API key, token, or secret value. "
+        "Replace each with [redacted]. Preserve the surrounding explanation."
+    ),
+    "ip_leakage": (
+        "Remove internal IP addresses, private hostnames, and sensitive "
+        "infrastructure file paths. Generalize them (e.g. 'an internal server'). "
+        "Keep the rest of the answer intact."
+    ),
+    "hallucination": (
+        "Remove unverifiable or fabricated claims and citations. Keep only "
+        "statements supported by the surrounding context, and add a brief note "
+        "that unverified details were omitted."
+    ),
+    "policy_violation": (
+        "Rewrite the response so it complies with safety policy while preserving "
+        "as much of the original useful meaning as possible."
+    ),
+}
+
+_REWRITE_SYSTEM_PROMPT = (
+    "You are an output-sanitization assistant for an AI security gateway. You are "
+    "given a model response that violated a safety policy. Rewrite it so the "
+    "specific sensitive or unsafe content is removed or neutralized, while "
+    "PRESERVING the meaning, tone, and usefulness of everything else. Do not add "
+    "commentary, apologies, or meta explanations beyond what is requested. Output "
+    "ONLY the rewritten response text."
+)
+
+_MAX_REWRITE_INPUT_CHARS = 8000
+
+
+def _content_preserving_rewrite(
+    threat_type: str,
+    original_text: str,
+    *,
+    bedrock_client,
+    model_id: str | None = None,
+    context_chunks: list[str] | None = None,
+) -> str | None:
+    """Re-infer a sanitized version of ``original_text`` via the guard model.
+
+    Returns the rewritten text on success, or ``None`` if inference is
+    unavailable / failed (callers fall back to the static template). The result
+    is always passed through ``redact_all`` as a final deterministic safety net
+    so a residual PII/secret value can never slip through the rewrite.
+    """
+    if not original_text or bedrock_client is None:
+        return None
+
+    guidance = _REWRITE_THREAT_GUIDANCE.get(
+        threat_type or "", _REWRITE_THREAT_GUIDANCE["policy_violation"]
+    )
+    snippet = original_text[:_MAX_REWRITE_INPUT_CHARS]
+    user_parts = [f"Violation type: {threat_type or 'policy_violation'}", f"Instruction: {guidance}"]
+    if context_chunks:
+        joined = " ".join(str(c) for c in context_chunks)[:2000]
+        if joined.strip():
+            user_parts.append(f"Grounding context (use only this for factual claims):\n{joined}")
+    user_parts.append(f"Original response to rewrite:\n{snippet}")
+    user_text = "\n\n".join(user_parts)
+
+    try:
+        result = bedrock_client.converse(
+            model=model_id or "",
+            system_text=_REWRITE_SYSTEM_PROMPT,
+            user_text=user_text,
+            max_tokens=1024,
+            temperature=0.0,
+            call_site="output_rewrite",
+        )
+    except Exception:  # noqa: BLE001 — rewrite must never raise into the response path
+        LOG.exception("OutputGuard: content-preserving rewrite inference failed")
+        return None
+
+    rewritten = _extract_converse_text(result)
+    if not rewritten or not rewritten.strip():
+        return None
+    # Final deterministic safety net: never let a residual secret/PII survive.
+    return redact_all(rewritten.strip())
+
+
+def _extract_converse_text(result) -> str:
+    """Pull the assistant text out of a BedrockClient.converse() result dict."""
+    try:
+        choices = (result or {}).get("raw", {}).get("choices") or []
+        if not choices:
+            return ""
+        message = choices[0].get("message") or {}
+        content = message.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            # OpenAI-style content blocks.
+            parts = [
+                blk.get("text", "")
+                for blk in content
+                if isinstance(blk, dict)
+            ]
+            return "".join(parts)
+        return str(content or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def rewrite_output_response_text(
+    threat_type: str,
+    detail: str | None = None,
+    *,
+    original_text: str | None = None,
+    bedrock_client=None,
+    model_id: str | None = None,
+    context_chunks: list[str] | None = None,
+) -> str:
+    """Produce the replacement text for an output-guard rewrite action.
+
+    Backward-compatible: called with only ``(threat_type, detail)`` it returns
+    the deterministic canned text (unchanged legacy behavior). When
+    ``original_text`` and a ``bedrock_client`` are supplied, it performs a
+    genuine content-preserving LLM re-inference that redacts/neutralizes the
+    offending content while preserving the rest of the response, falling back to
+    the canned text if inference is unavailable or fails.
+    """
+    if original_text and bedrock_client is not None:
+        rewritten = _content_preserving_rewrite(
+            threat_type,
+            original_text,
+            bedrock_client=bedrock_client,
+            model_id=model_id,
+            context_chunks=context_chunks,
+        )
+        if rewritten:
+            return rewritten
+    return _static_rewrite_text(threat_type, detail)
+
+
+async def rewrite_output_response_text_async(
+    threat_type: str,
+    detail: str | None = None,
+    *,
+    original_text: str | None = None,
+    bedrock_client=None,
+    model_id: str | None = None,
+    context_chunks: list[str] | None = None,
+) -> str:
+    """Async wrapper around :func:`rewrite_output_response_text`.
+
+    Offloads the blocking boto3 ``converse`` call to a thread so it can be
+    awaited from the async gateway request path without blocking the event
+    loop. Intended call site: ``main.py`` output-guard rewrite handling.
+    """
+    if not (original_text and bedrock_client is not None):
+        return _static_rewrite_text(threat_type, detail)
+
+    import asyncio
+    import functools
+
+    loop = asyncio.get_event_loop()
+    func = functools.partial(
+        rewrite_output_response_text,
+        threat_type,
+        detail,
+        original_text=original_text,
+        bedrock_client=bedrock_client,
+        model_id=model_id,
+        context_chunks=context_chunks,
+    )
+    return await loop.run_in_executor(None, func)
+
+
+def sanitize_output_for_verdict(
+    response_text: str,
+    verdict: OutputVerdict,
+    *,
+    redact_pii_fn=None,
+) -> str:
+    """Apply the correct sanitization for an output-guard verdict action."""
+    threat = str(verdict.threat_type or "")
+    action = str(verdict.action or "allow")
+    # 1.7: PII / secret / credential (+ pci / phi — C-1) are ALWAYS surgically
+    # redacted (deterministic token-level masking via redact_pii_fn), never
+    # routed through the non-deterministic "rewrite" path — regardless of action.
+    if threat in _REDACTABLE_OUTPUT_CATEGORIES:
+        if redact_pii_fn is not None:
+            return redact_pii_fn(response_text)
+        return "[REDACTED]"
+    if action == "rewrite":
+        return rewrite_output_response_text(threat, verdict.detail or None)
+    if action != "redact":
+        return response_text
+    if threat == "hallucination":
+        return rewrite_output_response_text(threat, verdict.detail or None)
+    if redact_pii_fn is not None:
+        return redact_pii_fn(response_text)
+    return "[REDACTED]"
+
+
+def output_guard_telemetry_meta(
+    verdict: OutputVerdict,
+    *,
+    raw_output: str,
+    sanitized_output: str,
+) -> dict:
+    """Shared telemetry fields for output-guard incidents."""
+    return {
+        "detail": verdict.detail,
+        "response_snippet": raw_output,
+        "raw_output": raw_output,
+        "sanitized_output": sanitized_output,
+        "guardrail_reasoning": verdict.detail,
+        "matched_patterns": list(verdict.matched_patterns or []),
+        "matched_values": dict(verdict.matched_values or {}),
+        "output_snippet_truncated": True,
+        "full_output_scanned": True,
+    }

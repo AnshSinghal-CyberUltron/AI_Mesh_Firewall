@@ -19,6 +19,7 @@ from policy.encrypted_fields import EncryptedCharField
 VECTOR_PROVIDER_CHOICES = [
     ("pinecone", "Pinecone"),
     ("milvus", "Milvus"),
+    ("chroma", "Chroma"),
     ("custom", "Custom"),
 ]
 
@@ -78,6 +79,28 @@ class VectorProviderConfig(models.Model):
         default="text-embedding-3-small",
         help_text="Default embedding model for this provider.",
     )
+    embedding_api_key = EncryptedCharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text=(
+            "BYOK key for the EXTERNAL embedding provider (e.g. OpenRouter / "
+            "OpenAI-compatible), used when embedding_model routes through litellm "
+            "rather than the vector DB's own inference. Encrypted at rest via "
+            "Fernet; only materialised in-process when building the Redis bundle. "
+            "Falls back to gateway-environment credentials when empty."
+        ),
+    )
+    reranker_model = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text=(
+            "Per-org reranker model (e.g. Pinecone-hosted 'bge-reranker-v2-m3'). "
+            "When set, retrieved documents are reranked by the provider's hosted "
+            "rerank API before guardrail scoring. Empty disables reranking."
+        ),
+    )
     is_active = models.BooleanField(
         default=True,
         db_index=True,
@@ -118,6 +141,8 @@ class VectorProviderConfig(models.Model):
             "api_key": self.api_key,
             "environment": self.environment,
             "embedding_model": self.embedding_model,
+            "embedding_api_key": self.embedding_api_key,
+            "reranker_model": self.reranker_model,
             "is_active": self.is_active,
             "metadata": self.metadata,
         }

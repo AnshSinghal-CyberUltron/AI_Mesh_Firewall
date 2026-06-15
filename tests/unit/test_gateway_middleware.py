@@ -10,12 +10,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "gateway"))
-
-from gateway.middleware import AuthContext, AuthMiddleware, validate_api_key, EXCLUDED_PATH_PREFIXES
+# The gateway package is importable as ``ai_mesh_gateway`` via the root
+# pyproject.toml pythonpath (["shared", "gateway", "control", "workers"]).
+from ai_mesh_gateway.middleware import (
+    AuthContext,
+    AuthMiddleware,
+    validate_api_key,
+    EXCLUDED_PATH_PREFIXES,
+)
 
 
 VALID_PAYLOAD = {

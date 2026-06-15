@@ -186,6 +186,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
             setIsCollapsed(!isCollapsed);
           }}
           className="absolute -right-3 top-1/2 -translate-y-1/2 hidden h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 lg:flex"
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {isCollapsed ? (

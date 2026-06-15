@@ -351,7 +351,7 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
             <h3 className="text-slate-900 dark:text-slate-100 font-semibold text-base">RAG Pipeline Monitor &amp; Telemetry</h3>
             <p className="text-slate-500 dark:text-slate-400 text-xs">Interactive stage flow + stage-level analytics</p>
           </div>
-          <InfoTooltip text="Unified view of the 4-stage RAG firewall pipeline (Query → Retriever → Ranker → Generator). The interactive Pipeline Flow tab shows per-stage enforcement with click-to-expand cards, the document filtering funnel, and escalation levels. The Analytics tab adds the stage health heatmap, action distribution, escalation breakdown, health scores, and latency analytics." />
+          <InfoTooltip text="Telemetry for the guardrails-only RAG path. By default the gateway runs Query + Retriever scanning (ranking and generation stay in your own pipeline); ranker/generator stages only appear here if you explicitly enable them. The interactive Pipeline Flow tab shows per-stage enforcement with click-to-expand cards, the document filtering funnel, and escalation levels. The Analytics tab adds the stage health heatmap, action distribution, escalation breakdown, health scores, and latency analytics." />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Mode toggle pills */}
@@ -383,7 +383,7 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
               {r}
             </button>
           ))}
-          <button onClick={fetchKpis} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all">
+          <button onClick={fetchKpis} aria-label="Refresh" title="Refresh" className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all">
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
         </div>

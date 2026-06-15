@@ -34,6 +34,7 @@ import { Table, THead, TBody, TR, TH, TD } from "./ui/Table";
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from "./ui/Dialog";
 import { useToast } from "./ui/Toast";
 import { ACTION, actionInfo } from "../lib/mcpColors";
+import { ZEROSHIELD_TIER2_LABEL } from "../constants/zeroshieldBrand";
 import { cn } from "../lib/utils";
 
 const SCOPE_RANK = { tool: 3, server: 2, org: 1 };
@@ -328,7 +329,7 @@ function EffectivePreview({ effective, scopeLabel }) {
 
         <div className="space-y-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">
-            Tier-2 (Bedrock)
+            Tier-2 ({ZEROSHIELD_TIER2_LABEL})
           </p>
           <PreviewRow label="Input" ctrl={effective.tier2_input} />
           <PreviewRow label="Output" ctrl={effective.tier2_output} />
@@ -550,7 +551,7 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [] }) {
       <PanelHeader
         icon={ShieldCheck}
         title="MCP scan controls"
-        description="Configure the Tier-1 static gate and conditional Tier-2 Bedrock scans per scope. Precedence: tool > server > org; higher priority wins within a scope."
+        description={`Configure the Tier-1 static gate and conditional Tier-2 ${ZEROSHIELD_TIER2_LABEL} scans per scope. Precedence: tool > server > org; higher priority wins within a scope.`}
         actions={
           <>
             <Button
@@ -590,10 +591,10 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [] }) {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Tier-2 (Bedrock) for this org
+                  Tier-2 ({ZEROSHIELD_TIER2_LABEL}) for this org
                 </h3>
                 <Badge variant={tier2BadgeVariant}>{tier2StateLabel}</Badge>
-                <InfoHint content="Tier-2 runs the Bedrock semantic scan only after the Tier-1 static gate passes. Inherit defers to the org global Tier-2 default; Enabled/Disabled force it for MCP tool calls." />
+                <InfoHint content={`Tier-2 runs the ${ZEROSHIELD_TIER2_LABEL} semantic scan only after the Tier-1 static gate passes. Inherit defers to the org global Tier-2 default; Enabled/Disabled force it for MCP tool calls.`} />
               </div>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {tier2Active} Tier-2 {tier2Active === 1 ? "row" : "rows"} active across all scopes.
@@ -706,7 +707,7 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [] }) {
                 tier="tier2"
                 accent="tier2"
                 icon={Sparkles}
-                title="Tier-2 — Bedrock semantic"
+                title={`Tier-2 — ${ZEROSHIELD_TIER2_LABEL} semantic`}
                 subtitle="Runs only after Tier-1 passes, when Tier-2 is enabled for the org/scope."
                 rows={tier2Rows}
                 onEdit={openEdit}
@@ -751,7 +752,7 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [] }) {
                 onChange={(e) => setForm({ ...form, tier: e.target.value })}
               >
                 <option value="tier1">Tier 1 (static gate)</option>
-                <option value="tier2">Tier 2 (Bedrock)</option>
+                <option value="tier2">Tier 2 ({ZEROSHIELD_TIER2_LABEL})</option>
               </Select>
             </label>
             <div className="flex flex-col gap-1.5 text-sm">

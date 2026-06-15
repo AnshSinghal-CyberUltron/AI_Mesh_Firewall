@@ -25,7 +25,7 @@ def coerce_org_id(value: Any) -> int | str | None:
 
 def client_from_provider_config(cfg: dict[str, Any]) -> tuple[Any | None, str]:
     """Build a vector client from a VectorProviderSync config dict."""
-    from vector_client import MilvusClient, PineconeClient
+    from vector_client import ChromaDBClient, MilvusClient, PineconeClient
 
     provider_type = (cfg.get("provider_type") or "").strip()
     if not provider_type or not cfg.get("is_active"):
@@ -37,7 +37,17 @@ def client_from_provider_config(cfg: dict[str, Any]) -> tuple[Any | None, str]:
                 api_key=cfg["api_key"],
                 environment=cfg.get("environment", ""),
                 embedding_model=cfg.get("embedding_model", "text-embedding-3-small"),
+                embedding_api_key=cfg.get("embedding_api_key", ""),
+                reranker_model=cfg.get("reranker_model", ""),
             ), "pinecone"
+        # Chroma is now a per-org BYOK provider (the client connects their own
+        # Chroma server via connection_url) — NOT a gateway built-in. api_key, if
+        # set, is sent as the Chroma auth bearer token.
+        if provider_type == "chroma" and cfg.get("connection_url"):
+            return ChromaDBClient(
+                url=cfg["connection_url"],
+                auth_token=cfg.get("api_key", ""),
+            ), "chroma"
         if provider_type in ("milvus", "custom") and cfg.get("connection_url"):
             return MilvusClient(
                 uri=cfg["connection_url"],

@@ -39,8 +39,16 @@ def _normalize_content_parts(content):
 def _normalize_messages(messages):
     if not messages:
         return messages
+    # Be tolerant of malformed shapes: let the downstream clean per-field
+    # validators reject them (so the client gets a stable, sanitized 400)
+    # instead of a raw CPython TypeError from dict()/iteration here.
+    if not isinstance(messages, list):
+        return messages
     out = []
     for m in messages:
+        if not isinstance(m, dict):
+            out.append(m)
+            continue
         msg = dict(m)
         if "content" in msg:
             msg["content"] = _normalize_content_parts(msg["content"])

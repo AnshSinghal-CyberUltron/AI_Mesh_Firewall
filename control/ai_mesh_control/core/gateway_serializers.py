@@ -9,6 +9,58 @@ from core.models import DEFAULT_PERMISSIONS, DEFAULT_RATE_LIMIT_TPM, GatewayAPIK
 
 logger = logging.getLogger(__name__)
 
+# Privileged permission flags that grant elevated gateway capabilities
+# (``admin`` → gateway is_admin(); ``playground`` → bypasses the threat-intel
+# gate). A non-privileged caller must NEVER be able to self-grant these by
+# embedding them in the free-form ``permissions`` JSON payload.
+RESERVED_PRIVILEGED_PERMISSION_FLAGS = ("admin", "playground")
+
+
+def _strip_privileged_permission_flags(value, request):
+    """Drop reserved privileged flags from a permissions payload unless the
+    requesting user is a platform operator.
+
+    Validates the field shape (must be a JSON object) and fail-closes: any
+    missing request/user, or any error resolving operator status, is treated
+    as a non-privileged caller and the flags are silently popped. Returns the
+    sanitized dict (never mutates the caller's input in place).
+    """
+    if value is None:
+        return value
+    if not isinstance(value, dict):
+        raise serializers.ValidationError("permissions must be a JSON object.")
+
+    sanitized = dict(value)
+    present = [f for f in RESERVED_PRIVILEGED_PERMISSION_FLAGS if f in sanitized]
+    if not present:
+        return sanitized
+
+    # Reuse the existing platform-operator gate. Import locally to avoid any
+    # import-time coupling between core and auth.
+    is_operator = False
+    try:
+        from auth.models import is_platform_operator
+
+        user = getattr(getattr(request, "user", None), "pk", None) is not None and request.user
+        is_operator = bool(user) and is_platform_operator(request.user)
+    except Exception:
+        # Fail closed: treat as non-privileged.
+        is_operator = False
+
+    if is_operator:
+        return sanitized
+
+    # Non-privileged caller: silently drop the reserved flags so the key can
+    # never self-grant admin / playground.
+    for flag in present:
+        sanitized.pop(flag, None)
+    logger.warning(
+        "Stripped reserved permission flags %s from gateway key request by user_id=%s (not a platform operator).",
+        present,
+        getattr(getattr(request, "user", None), "pk", None),
+    )
+    return sanitized
+
 
 class GatewayAPIKeyCreateSerializer(serializers.Serializer):
     """Request body for POST /api/gateways/keys/ — generate a new Gateway API Key."""
@@ -76,6 +128,12 @@ class GatewayAPIKeyCreateSerializer(serializers.Serializer):
         if value is not None and value <= timezone.now():
             raise serializers.ValidationError("Expiry timestamp must be in the future.")
         return value
+
+    def validate_permissions(self, value):
+        # Strip reserved privileged flags (admin/playground) unless the caller
+        # is a platform operator. Prevents privilege escalation via self-minted
+        # keys. Fail closed when no request context is available.
+        return _strip_privileged_permission_flags(value, self.context.get("request"))
 
 
 class GatewayAPIKeySerializer(serializers.ModelSerializer):
@@ -154,3 +212,9 @@ class GatewayAPIKeyUpdateSerializer(serializers.ModelSerializer):
         if value is not None and value <= timezone.now():
             raise serializers.ValidationError("Expiry timestamp must be in the future.")
         return value
+
+    def validate_permissions(self, value):
+        # Strip reserved privileged flags (admin/playground) unless the caller
+        # is a platform operator. Prevents privilege escalation via PATCH on an
+        # existing key. Fail closed when no request context is available.
+        return _strip_privileged_permission_flags(value, self.context.get("request"))

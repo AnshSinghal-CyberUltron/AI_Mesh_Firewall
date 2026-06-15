@@ -46,6 +46,7 @@ function HelpModal({ open, onClose }) {
           </div>
           <button
             onClick={onClose}
+            aria-label="Close help"
             className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300 dark:text-slate-400 dark:hover:text-slate-200"
           >
             <X className="w-5 h-5" />
@@ -97,7 +98,7 @@ function NotificationDropdown({ notifications, onMarkRead, onMarkAllRead, onClos
               Mark all read
             </button>
           )}
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 dark:hover:bg-slate-700 text-slate-400">
+          <button onClick={onClose} aria-label="Close notifications" className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 dark:hover:bg-slate-700 text-slate-400">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -127,6 +128,7 @@ function NotificationDropdown({ notifications, onMarkRead, onMarkAllRead, onClos
                 {!n.read && (
                   <button
                     onClick={() => onMarkRead(n.id)}
+                    aria-label="Mark notification as read"
                     className="flex-shrink-0 text-xs text-slate-400 hover:text-teal-600 dark:hover:text-teal-400"
                     title="Mark as read"
                   >
@@ -274,6 +276,7 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
                 size="icon"
                 className="text-slate-600 hover:text-slate-900 lg:hidden dark:text-slate-400 dark:hover:text-slate-100"
                 onClick={onMobileMenuToggle}
+                aria-label="Open navigation"
                 title="Open navigation"
               >
                 <Menu className="h-5 w-5" />
@@ -326,6 +329,8 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Help"
+              title="Help"
               className="relative text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
               onClick={() => setShowHelpModal(true)}
             >
@@ -337,6 +342,8 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
+                title="Notifications"
                 className="relative text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
                 onClick={() => {
                   if (isAdmin) setShowNotifications((v) => !v);
@@ -367,6 +374,7 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
               size="icon"
               className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
               onClick={toggleTheme}
+              aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               <ThemeIcon className="w-5 h-5 transition-transform duration-300" />

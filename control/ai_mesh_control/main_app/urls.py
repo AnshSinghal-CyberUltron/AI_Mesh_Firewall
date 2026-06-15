@@ -18,6 +18,11 @@ urlpatterns = [
     path("api/auth/", include("auth.urls")),
     path("api/health/", health_view),
     path("api/health/services/", services_health_view),
+    # L7: /api/policies/ (plural) = policy MANAGEMENT (CRUD + analytics, e.g.
+    # TopViolatorsView). /api/policy/ (singular) = runtime EVALUATION (e.g.
+    # TopRulesView). The split is intentional (management vs evaluation), not a
+    # typo; kept distinct so frontend/gateway clients on the current paths don't
+    # break. Do not consolidate without auditing all callers.
     path("api/policies/", include("policy.urls")),
     path("api/vector-policies/", include("policy.vector_urls")),
     path("api/vector-providers/", include("policy.vector_provider_urls")),

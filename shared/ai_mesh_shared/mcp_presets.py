@@ -49,7 +49,7 @@ _PRESETS: dict[str, dict[str, Any]] = {
     "phone": {
         "label": "Phone number",
         "description": "International / US phone numbers (10+ digits with separators).",
-        "regex": r"\b(?:\+?\d{1,3}[\s.\-]?)?(?:\(?\d{3}\)?[\s.\-]?)\d{3}[\s.\-]?\d{4}\b",
+        "regex": r"(?<!\d)(?:\+?\d{1,3}[\s.\-]+)?(?:\(\d{3}\)|\d{3})[\s.\-]+\d{3}[\s.\-]+\d{4}\b",
         "replacement": "[REDACTED_PHONE]",
     },
     "ip_address": {

@@ -1,13 +1,27 @@
 """
 Operator-facing pipeline stage trace for Module 1.1 Attack Simulator / dashboard.
-Built server-side with full routing and prompt context (not subject to zeroshield redaction).
+Built server-side with full routing and prompt context. Prompt/response text
+fields are deterministically PII-redacted before they are written into the trace
+so raw PII is never persisted or echoed back to the client (see `_truncate`).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-GUARD_MODEL_LABEL = "ZeroShield Guard Model"
+# Deterministic PII/secret redactor. Applied to every prompt/response text field
+# written into the trace so raw PII never leaks into the operator UI / SSE / API
+# (redact_all is a no-op on benign text, so the preview utility is preserved).
+# Resolved once at import time via the same dual-import idiom used elsewhere.
+try:  # pragma: no cover - import shim (script vs package execution)
+    from patterns import redact_all as _redact_all  # type: ignore
+except ImportError:  # pragma: no cover
+    try:
+        from .patterns import redact_all as _redact_all  # type: ignore
+    except Exception:  # pragma: no cover
+        _redact_all = None  # type: ignore
+
+GUARD_MODEL_LABEL = "ZeroShield Model"
 PATTERN_ENGINE_LABEL = "ZeroShield Pattern Engine"
 OUTPUT_GUARD_LABEL = "ZeroShield Output Guard"
 ZEROSHIELD_ADJUDICATOR_LABEL = "ZeroShield Policy Adjudicator"
@@ -64,18 +78,18 @@ def _routing_stage_action(
     return "allow"
 
 REASON_CODE_LABELS: dict[str, str] = {
-    "model_recommended_block": "The Guard Model classified this content as unsafe and recommended blocking the request.",
-    "model_recommended_redact": "The Guard Model recommended redacting sensitive or policy-violating segments before forwarding.",
-    "model_recommended_monitor": "The Guard Model flagged this content for monitoring — review recommended but not blocked.",
-    "model_recommendation": "Guard Model issued a structured recommendation; org policy may apply a different enforcement action.",
-    "model_refusal": "The Guard Model could not complete analysis and applied a conservative block.",
+    "model_recommended_block": "The ZeroShield Model classified this content as unsafe and recommended blocking the request.",
+    "model_recommended_redact": "The ZeroShield Model recommended redacting sensitive or policy-violating segments before forwarding.",
+    "model_recommended_monitor": "The ZeroShield Model flagged this content for monitoring — review recommended but not blocked.",
+    "model_recommendation": "ZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.",
+    "model_refusal": "The ZeroShield Model could not complete analysis and applied a conservative block.",
     "score_threshold_block": "Risk score exceeded the automatic block threshold.",
     "score_threshold_flag": "Risk score exceeded the advisory flag threshold.",
     "findings_with_allow": "Threat signals were detected, but policy escalated to flag instead of block.",
-    "tier2_pass": "Guard Model (Tier-2) scan completed — content assessed as clean; no enforcement action required.",
-    "bedrock_degraded": "Guard Model was degraded; request flagged for manual review.",
-    "parse_failure_conservative": "Guard Model response could not be parsed; conservative enforcement applied.",
-    "client_error": "Guard Model client error — conservative handling applied.",
+    "tier2_pass": "ZeroShield Model (Tier-2) scan completed — content assessed as clean; no enforcement action required.",
+    "bedrock_degraded": "ZeroShield Model was degraded; request flagged for manual review.",
+    "parse_failure_conservative": "ZeroShield Model response could not be parsed; conservative enforcement applied.",
+    "client_error": "ZeroShield Model client error — conservative handling applied.",
 }
 
 
@@ -91,6 +105,13 @@ def _round_ms(value: Any, default: float = 0.0) -> float:
 
 def _truncate(text: str, limit: int = 1200) -> str:
     raw = (text or "").strip()
+    # Redact PII/secrets BEFORE truncating so raw PII is never persisted/echoed in
+    # the trace (R17). No-op on benign text; fail-open if the redactor is missing.
+    if raw and _redact_all is not None:
+        try:
+            raw = _redact_all(raw)
+        except Exception:
+            pass
     if len(raw) <= limit:
         return raw
     return raw[:limit] + "…"
@@ -167,19 +188,31 @@ def build_guard_fields(
     tier: str = "",
     zs: dict | None = None,
     output: bool = False,
+    final_attributed: bool = True,
 ) -> dict[str, Any]:
-    """Operator-facing Guard Model explanation for pipeline stages."""
+    """Operator-facing Guard Model explanation for pipeline stages.
+
+    ``final_attributed`` says whether the request-level ``final_action`` (and the
+    request-level ``zs`` threat/pattern data) belongs to THIS guard. It is False
+    for the output guard when the enforcement actually happened at input/policy
+    (e.g. an INPUT PII redaction): in that case the output guard must report only
+    its OWN verdict (``verdict``), never the input-side redaction — otherwise a
+    clean model response gets mislabelled as an output-side PII redact (H1).
+    """
     zs = zs if isinstance(zs, dict) else {}
     sv = verdict
-    reason_code = str(getattr(sv, "reason_code", None) or zs.get("reason_code") or "").strip()
+    # When the final action is NOT attributed to this guard, the request-level
+    # ``zs`` carries the OTHER stage's enforcement data — do not let it leak in.
+    zs_src = zs if final_attributed else {}
+    reason_code = str(getattr(sv, "reason_code", None) or zs_src.get("reason_code") or "").strip()
     scan_meta = getattr(sv, "scan_meta", None) if sv is not None else None
     if not isinstance(scan_meta, dict):
-        scan_meta = zs.get("scan_meta") if isinstance(zs.get("scan_meta"), dict) else {}
+        scan_meta = zs_src.get("scan_meta") if isinstance(zs_src.get("scan_meta"), dict) else {}
 
-    threat_type = str(getattr(sv, "threat_type", None) or zs.get("threat_type") or "").strip()
+    threat_type = str(getattr(sv, "threat_type", None) or zs_src.get("threat_type") or "").strip()
     confidence = getattr(sv, "confidence", None)
     if confidence is None:
-        confidence = zs.get("confidence", 0)
+        confidence = zs_src.get("confidence", 0)
     try:
         confidence_f = float(confidence or 0)
     except (TypeError, ValueError):
@@ -187,21 +220,31 @@ def build_guard_fields(
 
     detail = (
         getattr(sv, "detail", None)
-        or zs.get("detail")
-        or zs.get("reason")
+        or zs_src.get("detail")
+        or zs_src.get("reason")
         or ""
     )
     matched_patterns = list(
-        getattr(sv, "matched_patterns", None) or zs.get("matched_patterns") or []
+        getattr(sv, "matched_patterns", None) or zs_src.get("matched_patterns") or []
     )
     recommended = str(
         scan_meta.get("recommended_action")
-        or zs.get("recommended_action")
+        or zs_src.get("recommended_action")
         or ""
     ).strip().lower()
 
     enforcement_action = stage_action
-    if final_action in ("block", "redact", "rewrite", "flag") and stage_action == "allow":
+    if final_attributed and final_action in ("block", "redact", "rewrite", "flag"):
+        # R4: the ENFORCED, request-level outcome for the stage this guard is
+        # attributed to IS final_action. Previously only a stage_action of
+        # "allow" was corrected, so a stage still carrying the guard model's
+        # *recommendation* (e.g. "block") survived even when the request was
+        # actually redacted-and-served (final_action="redact") — a misleading
+        # audit trail (operator sees "block" for a served response). Always
+        # reflect the enforced outcome; preserve the stage's own recommendation
+        # in recommended_action so it isn't lost.
+        if stage_action not in ("allow", "", final_action) and not recommended:
+            recommended = stage_action
         enforcement_action = final_action
 
     scanner_label = _scanner_label(
@@ -240,14 +283,14 @@ def build_guard_fields(
 
     policy_note = ""
     if enforcement_action == "allow" and recommended in ("block", "redact"):
-        policy_note = "Org policy allowed the request despite the Guard Model recommendation."
+        policy_note = "Org policy allowed the request despite the ZeroShield Model recommendation."
     elif enforcement_action == "redact" and recommended == "block":
         policy_note = (
             "Org PII policy redacted sensitive fields and continued the request "
             "instead of a hard block (model recommendation shown for audit only)."
         )
     elif enforcement_action in ("block", "redact", "rewrite") and recommended == "allow":
-        policy_note = "Policy enforcement overrode the Guard Model allow recommendation."
+        policy_note = "Policy enforcement overrode the ZeroShield Model allow recommendation."
 
     guard_reason = "\n".join(lines)
     if policy_note:
@@ -336,6 +379,17 @@ def build_pipeline_trace(
 
     is_blocked = final_action == "block"
     is_skip_after = bool(blocked_stage) and is_blocked
+
+    # The model stages (model_input / model_output) only fail to run when the
+    # request was blocked at a stage UPSTREAM of the model. An OUTPUT-guard block
+    # (or redact/flag) happens AFTER the model has already run + produced the
+    # response, so those stages must still read "run"/"allow" — never "skip" —
+    # otherwise the §1.7 audit trail is self-contradictory (output blocked while
+    # the model that generated the blocked content is marked skipped).
+    _UPSTREAM_OF_MODEL = {
+        "auth", "rate_limit", "policy", "input_scan", "kill_switch", "model_routing",
+    }
+    _model_skipped = bool(is_blocked and blocked_stage in _UPSTREAM_OF_MODEL)
 
     scan_action = getattr(sv, "action", None) or _zs_scan.get("action") or "allow"
     if scan_action not in ("allow", "flag", "block", "redact", "rewrite"):
@@ -432,6 +486,12 @@ def build_pipeline_trace(
     decision_factors = routing.get("decision_factors") or zs.get("decision_factors") or []
     weights = routing.get("weights") or zs.get("weights") or {}
 
+    # Where did the request-level enforcement (block/redact/...) actually happen?
+    # The output guard forces detection_tier="output_guard" on its zs copy below,
+    # so capture the ORIGINAL tier first. Input/policy enforcement belongs to the
+    # input guard; only detection_tier=="output_guard" belongs to the output guard.
+    _orig_detection_tier = str(zs.get("detection_tier") or "")
+    _enforced_at_output = _orig_detection_tier == "output_guard"
     input_guard = build_guard_fields(
         verdict=sv,
         stage_action=scan_action,
@@ -439,13 +499,14 @@ def build_pipeline_trace(
         tier=tier,
         zs=_zs_scan,
         output=False,
+        final_attributed=not _enforced_at_output,
     )
     output_guard_zs = {
         **zs,
         "detection_tier": zs.get("detection_tier") or "output_guard",
     }
     output_stage_action = _action("output_guardrail")
-    if final_action in ("redact", "rewrite", "flag") and zs.get("detection_tier") == "output_guard":
+    if final_action in ("redact", "rewrite", "flag") and _enforced_at_output:
         output_stage_action = final_action
     output_guard = build_guard_fields(
         verdict=output_scan_verdict,
@@ -454,6 +515,7 @@ def build_pipeline_trace(
         tier="output_guard",
         zs=output_guard_zs,
         output=True,
+        final_attributed=_enforced_at_output,
     )
 
     ks_trigger = str(routing.get("trigger_source") or "").lower()
@@ -579,22 +641,22 @@ def build_pipeline_trace(
         },
         {
             "name": "model_input",
-            "action": "skip" if is_blocked else "allow",
+            "action": "skip" if _model_skipped else "allow",
             "latency_ms": _latency("model_input"),
             "detail": (
-                "Prompt was not sent to the model (blocked upstream)" if is_blocked
+                "Prompt was not sent to the model (blocked upstream)" if _model_skipped
                 else ("Sanitized (redacted) prompt delivered to the LLM"
                       if forwarded_prompt and forwarded_prompt != prompt
                       else "Prompt delivered to LLM")
             ),
-            "content": "" if is_blocked else forwarded_preview,
+            "content": "" if _model_skipped else forwarded_preview,
             "prompt_submitted": forwarded_preview,
         },
         {
             "name": "model_output",
-            "action": _action("model_output", "skip" if is_blocked else "allow"),
+            "action": _action("model_output", "skip" if _model_skipped else "allow"),
             "latency_ms": _latency("model_output"),
-            "detail": "LLM inference complete" if response_text else ("Inference skipped or blocked upstream" if is_blocked else "No completion body"),
+            "detail": "LLM inference complete" if response_text else ("Inference skipped or blocked upstream" if _model_skipped else "No completion body"),
             "content": _truncate(response_text, 2000) if response_text else "",
         },
         {

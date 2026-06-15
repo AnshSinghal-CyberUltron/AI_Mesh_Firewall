@@ -147,7 +147,11 @@ class CircuitBreakerResetProxyView(APIView):
 # the caller's ``project_id`` from their organization (slug fallback to
 # pk) so the simulator UI never needs an operator-pasted Bearer key.
 
-from auth.utils import get_request_organization  # noqa: E402
+from auth.utils import (  # noqa: E402
+    _request_data_get,
+    _request_query_get,
+    get_request_organization,
+)
 
 
 def _resolve_project_id(request: Request) -> str | None:
@@ -163,17 +167,19 @@ def _resolve_project_id(request: Request) -> str | None:
 def _resolve_org_context(request: Request) -> tuple[str | None, int | None]:
     """Return (project_id, organization_id) for the caller's organization."""
     explicit = (
-        (request.data.get("project_id") if hasattr(request, "data") else None)
-        or request.query_params.get("project_id")
-        if hasattr(request, "query_params")
-        else None
+        _request_data_get(request, "project_id")
+        or _request_query_get(request, "project_id")
     )
-    if explicit and getattr(request.user, "is_superuser", False):
+    from auth.models import is_platform_operator
+
+    # Cross-tenant targeting via body/query organization_id is reserved for
+    # PLATFORM OPERATORS only (is_staff AND profile.is_platform_operator). A
+    # plain superuser must NOT be able to act-as-org by mass-assigning
+    # organization_id — they fall through to their own authenticated org.
+    if explicit and is_platform_operator(request.user):
         explicit_org = (
-            (request.data.get("organization_id") if hasattr(request, "data") else None)
-            or request.query_params.get("organization_id")
-            if hasattr(request, "query_params")
-            else None
+            _request_data_get(request, "organization_id")
+            or _request_query_get(request, "organization_id")
         )
         org_id = int(explicit_org) if explicit_org and str(explicit_org).isdigit() else None
         return str(explicit).strip() or None, org_id
@@ -219,7 +225,7 @@ class GatewayRagCollectionsProxyView(APIView):
                 "no_organization",
                 400,
             )
-        payload = dict(request.data or {})
+        payload = dict(request.data) if isinstance(request.data, dict) else {}
         payload["project_id"] = project_id  # server-stamped, browser cannot override for non-superusers
         if organization_id is not None:
             payload["organization_id"] = organization_id
@@ -233,7 +239,7 @@ class GatewayRagCollectionsProxyView(APIView):
                 "no_organization",
                 400,
             )
-        payload = dict(request.data or {})
+        payload = dict(request.data) if isinstance(request.data, dict) else {}
         payload["project_id"] = project_id
         if organization_id is not None:
             payload["organization_id"] = organization_id

@@ -10,10 +10,10 @@ test("DEFAULT_VECTOR_PROVIDER is pinecone (BYOK default)", () => {
   assert.equal(DEFAULT_VECTOR_PROVIDER, "pinecone");
 });
 
-test("VECTOR_PROVIDERS excludes chroma and matches backend choices", () => {
+test("VECTOR_PROVIDERS includes chroma (now BYOK) and matches backend choices", () => {
   const values = VECTOR_PROVIDERS.map((p) => p.value);
-  assert.deepEqual(values, ["pinecone", "milvus", "custom"]);
-  assert.ok(!values.includes("chroma"));
+  assert.deepEqual(values, ["pinecone", "milvus", "chroma", "custom"]);
+  assert.ok(values.includes("chroma"));
 });
 
 test("VECTOR_PROVIDER_CONFIG_FIELDS has entries for each provider", () => {

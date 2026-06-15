@@ -228,6 +228,7 @@ async def _scan_text_tier1(
     org_slug: str,
     server_slug: str,
     tool_name: str,
+    actor: dict[str, Any] | None = None,
 ) -> tuple[str, list[McpFinding], bool]:
     """Run Tier-1 policy + preset evaluation on a single text fragment."""
     if not text:
@@ -248,7 +249,9 @@ async def _scan_text_tier1(
             LOG.warning("MCP policy bundle lookup failed: %s", exc)
 
     if policies:
-        eval_result = evaluate_mcp_policies(policies, context, tool_name=tool_name or None)
+        eval_result = evaluate_mcp_policies(
+            policies, context, tool_name=tool_name or None, actor=actor
+        )
         if eval_result.matched_rule_ids:
             findings.extend(
                 _findings_from_policy_eval(eval_result, scan_direction=scan_direction, text=text)
@@ -367,8 +370,13 @@ async def scan_mcp_payload(
     org_slug: str = "",
     server_slug: str = "",
     tool_name: str = "",
+    actor: dict[str, Any] | None = None,
 ) -> tuple[Any, McpScanResult]:
-    """Run Tier-1 then conditional Tier-2 on ``payload`` for input or output."""
+    """Run Tier-1 then conditional Tier-2 on ``payload`` for input or output.
+
+    ``actor`` (M-04): optional {user_id, agent_id, roles} identity used to
+    scope actor-allowlisted MCP policies during Tier-1 evaluation.
+    """
     result = McpScanResult()
     tier1_ctrl = _effective_control(effective_controls, "tier1", scan_direction)
     tier2_ctrl = _effective_control(effective_controls, "tier2", scan_direction)
@@ -410,6 +418,7 @@ async def scan_mcp_payload(
             org_slug=org_slug,
             server_slug=server_slug,
             tool_name=tool_name,
+            actor=actor,
         )
         result.findings.extend(findings)
         if findings:

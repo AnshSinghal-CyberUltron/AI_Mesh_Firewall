@@ -13,6 +13,7 @@ class VectorProviderConfigReadSerializer(serializers.ModelSerializer):
     """Read serializer — masks the api_key field for security."""
 
     api_key_set = serializers.SerializerMethodField()
+    embedding_api_key_set = serializers.SerializerMethodField()
 
     class Meta:
         model = VectorProviderConfig
@@ -24,6 +25,8 @@ class VectorProviderConfigReadSerializer(serializers.ModelSerializer):
             "api_key_set",
             "environment",
             "embedding_model",
+            "embedding_api_key_set",
+            "reranker_model",
             "is_active",
             "metadata",
             "created_at",
@@ -35,6 +38,10 @@ class VectorProviderConfigReadSerializer(serializers.ModelSerializer):
         """Return True if an API key is configured (never expose the key itself)."""
         return bool(obj.api_key)
 
+    def get_embedding_api_key_set(self, obj) -> bool:
+        """True if a BYOK embedding key is configured (never expose the key)."""
+        return bool(obj.embedding_api_key)
+
 
 class VectorProviderConfigWriteSerializer(serializers.ModelSerializer):
     """Write serializer for create and update operations."""
@@ -44,6 +51,12 @@ class VectorProviderConfigWriteSerializer(serializers.ModelSerializer):
         allow_blank=True,
         write_only=True,
         help_text="Provider API key. Write-only — never returned in responses.",
+    )
+    embedding_api_key = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        help_text="BYOK embedding-provider key (OpenRouter/OpenAI-compatible). Write-only.",
     )
 
     class Meta:
@@ -55,12 +68,14 @@ class VectorProviderConfigWriteSerializer(serializers.ModelSerializer):
             "api_key",
             "environment",
             "embedding_model",
+            "embedding_api_key",
+            "reranker_model",
             "is_active",
             "metadata",
         ]
 
     def validate_provider_type(self, value):
-        valid = ("pinecone", "milvus", "custom")
+        valid = ("pinecone", "milvus", "chroma", "custom")
         if value not in valid:
             raise serializers.ValidationError(f"Invalid provider_type. Must be one of: {valid}")
         return value

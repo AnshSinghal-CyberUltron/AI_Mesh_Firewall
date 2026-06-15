@@ -67,12 +67,33 @@ bash scripts/publish-stack-ready-metric.sh 0 || true
 
 [[ -n "${ECR_REGISTRY:-}" ]] || die "set ECR_REGISTRY in .env"
 [[ -n "${IMAGE_TAG:-}" ]] || die "set IMAGE_TAG in .env"
+# control signs compiled policy bundles with POLICY_SIGNING_KEY and the gateway
+# verifies them (docker-compose.yml passes it to control/gateway/workers).
+[[ -n "${POLICY_SIGNING_KEY:-}" ]] || die "set POLICY_SIGNING_KEY in .env (required by control + gateway for policy bundle signing)"
 
 export FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-https://${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}}"
 export BACKEND_PUBLIC_URL="${BACKEND_PUBLIC_URL:-https://${BACKEND_HOST:-aimeshbackend.zeroshield.ai}}"
 export GATEWAY_PUBLIC_URL="${GATEWAY_PUBLIC_URL:-https://${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}}"
 export GATEWAY_CORS_ORIGINS="${GATEWAY_CORS_ORIGINS:-${FRONTEND_ORIGIN},${BACKEND_PUBLIC_URL}}"
 export ALLOWED_HOSTS="${ALLOWED_HOSTS:-${BACKEND_HOST},${FRONTEND_HOST},${GATEWAY_HOST},localhost,127.0.0.1,control}"
+
+# Production guard: Django ALLOWED_HOSTS must be a concrete host list — never
+# empty and never the '*' wildcard (Host-header spoofing / cache poisoning).
+_validate_allowed_hosts() {
+  local hosts="${ALLOWED_HOSTS//[[:space:]]/}"
+  if [[ -z "${hosts}" ]]; then
+    die "ALLOWED_HOSTS is empty — set a comma-separated host list in .env (e.g. ALLOWED_HOSTS=aimeshbackend.zeroshield.ai,aimeshfirewall.zeroshield.ai,aimeshgateway.zeroshield.ai)"
+  fi
+  local -a entries
+  IFS=',' read -r -a entries <<< "${hosts}"
+  local entry
+  for entry in "${entries[@]}"; do
+    if [[ "${entry}" == "*" ]]; then
+      die "ALLOWED_HOSTS contains '*' — wildcard Host headers are not allowed in production deploys; list explicit hosts in .env"
+    fi
+  done
+}
+_validate_allowed_hosts
 
 VITE_FRONTEND_BASE_URL="${VITE_FRONTEND_BASE_URL:-$FRONTEND_ORIGIN}"
 VITE_BACKEND_BASE_URL="${VITE_BACKEND_BASE_URL:-$BACKEND_PUBLIC_URL}"
@@ -95,9 +116,19 @@ if [[ "${USE_EC2_INSTANCE_ROLE:-true}" == "true" ]] && _has_instance_role; then
   echo "==> EC2 instance IAM role detected — using it for ECR (not static .env keys)"
   unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
   if grep -qE '^(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY)=' .env 2>/dev/null; then
-    cp -f .env ".env.bak.$(date +%s)"
-    sed -i.tmp -E '/^(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)=/d' .env
-    rm -f .env.tmp
+    # Strip static AWS keys into a temp FIRST so the backup never retains live
+    # credentials, then install the sanitized copy as both backup and .env.
+    ENV_STRIPPED="$(mktemp .env.stripped.XXXXXX)"
+    sed -E '/^(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)=/d' .env > "${ENV_STRIPPED}"
+    ENV_BACKUP=".env.bak.$(date +%s)"
+    cp -f "${ENV_STRIPPED}" "${ENV_BACKUP}"
+    chmod 600 "${ENV_BACKUP}"
+    mv -f "${ENV_STRIPPED}" .env
+    chmod 600 .env
+    # Prune old backups: always keep the newest 3, delete the rest once older than 7 days.
+    ls -1t .env.bak.* 2>/dev/null | tail -n +4 | while IFS= read -r _old_bak; do
+      find "${_old_bak}" -maxdepth 0 -type f -mtime +7 -exec rm -f {} \; 2>/dev/null
+    done || true
     set -a && source .env && set +a
   fi
 elif [[ -n "${AWS_ACCESS_KEY_ID:-}" ]]; then

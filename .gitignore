@@ -29,3 +29,13 @@ crash.log
 
 # Keep dependency lock file
 !.terraform.lock.hcl
+
+# Personal scratch file at repo root — must never be committed (file stays local)
+/temp.py.env
+
+# Local env with secrets (never commit)
+.env
+.env.bak
+.playwright-mcp/
+/tmp/
+.skill-workspace/

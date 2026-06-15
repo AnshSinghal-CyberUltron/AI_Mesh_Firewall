@@ -558,19 +558,32 @@ class PolicyViewSet(ModelViewSet):
             ):
                 raise PermissionDenied("Only platform admins can disable system policies.")
         client_version = serializer.validated_data.pop("version", None)
-        if client_version is not None and policy.version != client_version:
+        from django.db import IntegrityError, transaction
+
+        try:
+            with transaction.atomic():
+                # Lock the policy row so concurrent PATCHes serialize: the loser
+                # waits, then reads the already-incremented version and creates a
+                # fresh PolicyVersion — no duplicate-version IntegrityError (500),
+                # no silent lost update.
+                locked = Policy.objects.select_for_update().get(pk=policy.pk)
+                policy.version = locked.version
+                if client_version is not None and policy.version != client_version:
+                    raise ConflictError(policy, client_version)
+                snapshot = self._build_policy_snapshot(policy)
+                PolicyVersion.objects.create(
+                    policy=policy,
+                    version=policy.version,
+                    snapshot=snapshot,
+                    comment="",
+                    created_by=self.request.user if self.request.user.is_authenticated else None,
+                )
+                policy.version += 1
+                serializer.validated_data["version"] = policy.version
+                serializer.save()
+        except IntegrityError:
+            # Belt-and-suspenders: a racing duplicate version → 409 Conflict, never 500.
             raise ConflictError(policy, client_version)
-        snapshot = self._build_policy_snapshot(policy)
-        PolicyVersion.objects.create(
-            policy=policy,
-            version=policy.version,
-            snapshot=snapshot,
-            comment="",
-            created_by=self.request.user if self.request.user.is_authenticated else None,
-        )
-        policy.version += 1
-        serializer.validated_data["version"] = policy.version
-        serializer.save()
 
     def update(self, request, *args, **kwargs):
         try:

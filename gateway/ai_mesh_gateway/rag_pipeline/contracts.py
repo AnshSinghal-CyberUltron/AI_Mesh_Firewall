@@ -102,6 +102,8 @@ class RankerStageInput:
     query_text: str
     policy: dict[str, Any]
     escalation_level: int
+    # M-04: request actor ({user_id, agent_id, roles}) for actor-scoped policies.
+    actor: dict[str, Any] | None = None
 
 
 @dataclass

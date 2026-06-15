@@ -14,7 +14,37 @@ import {
   normalizeChatPipelineResult,
   normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
-import { formatZeroshieldScanSummary, ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
+import { formatZeroshieldScanSummary, formatRoutingReason, ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
+
+// Upstream provider/model literals that must never reach the operator UI.
+// The gateway tier-2 'detail'/'guard_reason' strings can embed the raw Bedrock
+// model id (R1). Run the shared routing-reason sanitizer first (handles known
+// phrases), then neutralize any remaining bare provider/size tokens.
+const PROVIDER_LITERAL_PATTERNS = [
+  /\bglobal\.anthropic\.claude-haiku[\w.:-]*/gi,
+  /\bbedrock\/openai\.gpt-oss-120b[\w.:-]*/gi,
+  /\bopenai\.gpt-oss-120b[\w.:-]*/gi,
+  /\bclaude-haiku[\w.-]*/gi,
+  /\bgpt[\s_-]*oss[\s_-]*120b\b/gi,
+  /\bgpt[\s_-]*oss\b/gi,
+  /\bbedrock\b/gi,
+  /\banthropic\b/gi,
+  /\b120b\b/gi,
+];
+
+/** Strip/neutralize upstream provider/model literals from operator-facing text. */
+function sanitizeGuardText(text) {
+  let out = formatRoutingReason(text);
+  if (!out) return out;
+  for (const pattern of PROVIDER_LITERAL_PATTERNS) {
+    out = out.replace(pattern, ZEROSHIELD_GUARD_MODEL_LABEL);
+  }
+  // Collapse any double-substitution / whitespace left behind.
+  return out
+    .replace(new RegExp(`(?:${ZEROSHIELD_GUARD_MODEL_LABEL}[\\s]*){2,}`, "g"), `${ZEROSHIELD_GUARD_MODEL_LABEL} `)
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
 
 const ATTACK_SCENARIOS = [
   {
@@ -229,23 +259,83 @@ export function AttackSimulatorPanel() {
           "model_not_configured",
         ].includes(res.data?.code || res.data?.blocked_by)
       ) {
-        setConnectModelOpen(true);
-        setError(null);
-        const normalized = normalizeChatPipelineResult(res.data, res.status, {
-          prompt: activePrompt,
-          maxTokens: 32,
-          requestedModel: gatewayModels.selectedModel,
-          responseHeaders: res.headers,
-          totalLatencyMs: elapsed,
-        });
-        setResult({
-          ...normalized,
-          httpStatus: res.status,
-          elapsed,
-          total_latency_ms: normalized.total_latency_ms ?? elapsed,
-          action: "needs_model",
-          final_action: "needs_model",
-        });
+        // Provider-less org: the inference gate fired before (or alongside) the
+        // input scan, so the connect-model dialog would otherwise hide the
+        // firewall's actual verdict. Re-issue the same prompt as a scan-only
+        // request (max_tokens=0, no inference) so the input scan still runs and
+        // a BLOCKED/REDACTED verdict is surfaced rather than only "Connect a
+        // model". Bug #27.
+        const scanStart = performance.now();
+        let scanRes = null;
+        try {
+          scanRes = await gatewayFetch("/v1/chat/completions", {
+            method: "POST",
+            body: JSON.stringify(
+              chatCompletionBody({
+                prompt: activePrompt,
+                model: gatewayModels.selectedModel,
+                runInference: false,
+              }),
+            ),
+          });
+        } catch {
+          scanRes = null;
+        }
+        const scanElapsed = Math.round(performance.now() - scanStart);
+        const scanProviderGated =
+          scanRes?.status === 422
+          && [
+            "no_provider_configured",
+            "guard_model_not_for_inference",
+            "bedrock_model_not_configured",
+            "model_not_configured",
+          ].includes(scanRes.data?.code || scanRes.data?.blocked_by);
+
+        if (scanRes && !scanProviderGated) {
+          // The scan-only request reached the input scan: render its verdict.
+          const normalized = normalizeChatPipelineResult(scanRes.data, scanRes.status, {
+            prompt: activePrompt,
+            maxTokens: 0,
+            requestedModel: gatewayModels.selectedModel,
+            responseHeaders: scanRes.headers,
+            totalLatencyMs: scanElapsed,
+          });
+          const scanAction =
+            normalized.final_action
+            || (scanRes.status === 403 ? "block" : scanRes.status >= 400 ? "error" : "allow");
+          // Only the connect-model prompt remains relevant when the scan let the
+          // request through; a hard block/redact is a real firewall result.
+          if (scanAction === "allow") {
+            setConnectModelOpen(true);
+          }
+          setError(null);
+          setResult({
+            ...normalized,
+            httpStatus: scanRes.status,
+            elapsed: scanElapsed,
+            total_latency_ms: normalized.total_latency_ms ?? scanElapsed,
+            action: scanAction === "allow" ? "needs_model" : scanAction,
+            final_action: scanAction === "allow" ? "needs_model" : scanAction,
+          });
+        } else {
+          setConnectModelOpen(true);
+          setError(null);
+          const normalized = normalizeChatPipelineResult(res.data, res.status, {
+            prompt: activePrompt,
+            maxTokens: 32,
+            requestedModel: gatewayModels.selectedModel,
+            responseHeaders: res.headers,
+            totalLatencyMs: elapsed,
+          });
+          setResult({
+            ...normalized,
+            httpStatus: res.status,
+            elapsed,
+            total_latency_ms: normalized.total_latency_ms ?? elapsed,
+            action: "needs_model",
+            final_action: "needs_model",
+          });
+        }
       } else if (
         res.status === 502
         && (
@@ -423,7 +513,9 @@ export function AttackSimulatorPanel() {
       allowed: normalized.filter((r) => r.action === "allow").length,
     });
     setBurstRunning(false);
-  }, [activePrompt, burstConcurrency, burstCount, burstEstimatedTokens, burstProfile, gatewayFetch, gatewayKey]);
+    // gatewayModels added so the burst captures the CURRENTLY-selected model,
+    // not a stale closure value (M-32). State setters are stable; no loop.
+  }, [activePrompt, burstConcurrency, burstCount, burstEstimatedTokens, burstProfile, gatewayFetch, gatewayKey, gatewayModels]);
 
   const handleReset = () => {
     setResult(null);
@@ -483,6 +575,7 @@ export function AttackSimulatorPanel() {
           <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Gateway URL</label>
           <input
             type="text"
+            aria-label="Gateway URL"
             value={gatewayUrl}
             readOnly
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-900 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
@@ -492,6 +585,7 @@ export function AttackSimulatorPanel() {
           <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Gateway API Key *</label>
           <input
             type="password"
+            aria-label="Gateway API key"
             value={gatewayKey}
             onChange={(e) => setGatewayKey(e.target.value)}
             placeholder="Paste your gateway API key"
@@ -563,6 +657,7 @@ export function AttackSimulatorPanel() {
           value={promptText}
           onChange={(e) => setPromptText(e.target.value)}
           rows={3}
+          aria-label="Test prompt"
           placeholder="Type a custom prompt to test, or select a scenario above to pre-fill..."
           className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-transparent focus:ring-2 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         />
@@ -614,6 +709,7 @@ export function AttackSimulatorPanel() {
         <div>
           <label className="mb-1 block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Burst profile</label>
           <select
+            aria-label="Burst test scenario"
             value={burstProfile}
             onChange={(e) => {
               const next = e.target.value;
@@ -636,6 +732,7 @@ export function AttackSimulatorPanel() {
             type="number"
             min="1"
             max="100"
+            aria-label="Burst request count"
             value={burstCount}
             onChange={(e) => setBurstCount(e.target.value)}
             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
@@ -647,6 +744,7 @@ export function AttackSimulatorPanel() {
             type="number"
             min="1"
             max="25"
+            aria-label="Burst concurrency"
             value={burstConcurrency}
             onChange={(e) => setBurstConcurrency(e.target.value)}
             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
@@ -658,6 +756,7 @@ export function AttackSimulatorPanel() {
             type="number"
             min="1"
             step="1"
+            aria-label="Estimated tokens per request"
             disabled={burstProfile !== "rate-limit-probe"}
             value={burstEstimatedTokens}
             onChange={(e) => setBurstEstimatedTokens(e.target.value)}
@@ -725,10 +824,10 @@ export function AttackSimulatorPanel() {
             {(result.guard_summary?.guard_reason || result.zeroshield?.guard_reason) && (
               <div className="mb-3 rounded-xl border border-violet-200 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-950/40">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300 mb-1">
-                  {result.guard_summary?.guard_model || result.zeroshield?.guard_model || "ZeroShield Guard Model"}
+                  {sanitizeGuardText(result.guard_summary?.guard_model || result.zeroshield?.guard_model) || "ZeroShield Guard Model"}
                 </div>
                 <pre className="whitespace-pre-wrap text-xs leading-relaxed text-slate-800 dark:text-slate-100 font-sans">
-                  {result.guard_summary?.guard_reason || result.zeroshield?.guard_reason}
+                  {sanitizeGuardText(result.guard_summary?.guard_reason || result.zeroshield?.guard_reason)}
                 </pre>
                 {(result.guard_summary?.reason_code || result.zeroshield?.reason_code) && (
                   <p className="mt-2 text-[10px] text-violet-600 dark:text-violet-400">
@@ -768,6 +867,24 @@ export function AttackSimulatorPanel() {
 
             {result.zeroshield && (() => {
               const scan = formatZeroshieldScanSummary(result.zeroshield);
+              // A policy-stage block returns no threat metadata (the skip-after-block
+              // invariant clears the post-policy scan stage), so the scan summary
+              // defaults to ALLOW / "No threat detected" / 0%. Honor the actual
+              // verdict so a BLOCKED request can never render as allowed/clean.
+              const blocked = result.final_action === "block" || result.httpStatus === 403;
+              const humanize = (s) =>
+                String(s || "").replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+              const actionLabel = blocked
+                ? (result.final_action?.toUpperCase() || "BLOCK")
+                : (scan.action || result.final_action?.toUpperCase() || "ALLOW");
+              const isClean = blocked ? false : scan.clean;
+              const threatLabel =
+                blocked && scan.clean
+                  ? (result.blocked_by
+                      ? `Blocked (${humanize(result.blocked_by)})`
+                      : humanize(result.category) || "Policy violation")
+                  : scan.threatLabel;
+              const scoreValue = blocked && scan.scoreValue === "0%" ? "—" : scan.scoreValue;
               return (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
@@ -778,20 +895,20 @@ export function AttackSimulatorPanel() {
                 </div>
                 <div>
                   <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">Threat Type</div>
-                  <div className={`text-sm font-semibold ${scan.clean ? "text-emerald-700 dark:text-emerald-300" : "text-slate-800 dark:text-slate-200"}`}>
-                    {scan.threatLabel}
+                  <div className={`text-sm font-semibold ${isClean ? "text-emerald-700 dark:text-emerald-300" : blocked ? "text-red-600 dark:text-red-400" : "text-slate-800 dark:text-slate-200"}`}>
+                    {threatLabel}
                   </div>
                 </div>
                 <div>
                   <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">{scan.scoreLabel}</div>
                   <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {scan.scoreValue}
+                    {scoreValue}
                   </div>
                 </div>
                 <div>
                   <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">Action</div>
-                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {scan.action || result.final_action?.toUpperCase() || "ALLOW"}
+                  <div className={`text-sm font-semibold ${blocked ? "text-red-600 dark:text-red-400" : "text-slate-800 dark:text-slate-200"}`}>
+                    {actionLabel}
                   </div>
                 </div>
               </div>
@@ -815,7 +932,7 @@ export function AttackSimulatorPanel() {
               <div className="mt-2">
                 <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">Detail</div>
                 <pre className="whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-400 font-sans">
-                  {formatZeroshieldScanSummary(result.zeroshield).detail}
+                  {sanitizeGuardText(formatZeroshieldScanSummary(result.zeroshield).detail)}
                 </pre>
               </div>
             )}
@@ -979,7 +1096,7 @@ export function AttackSimulatorPanel() {
                   </span>
                   <span className="text-slate-400">{r.latency}ms</span>
                   {r.rate_limited && <span className="text-amber-500 text-[10px]">RATE LIMITED</span>}
-                  {r.request_id && <span className="text-slate-500 font-mono text-[9px] ml-auto">{r.request_id}</span>}
+                  {r.request_id && <span className="text-slate-500 font-mono text-[10px] ml-auto">{r.request_id}</span>}
                 </div>
               ))}
             </div>

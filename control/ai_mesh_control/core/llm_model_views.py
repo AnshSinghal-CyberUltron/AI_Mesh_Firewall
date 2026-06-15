@@ -3,6 +3,7 @@
 import json
 import logging
 
+from django.db import IntegrityError
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -99,10 +100,25 @@ class LLMModelConfigListView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
+        # R14: a non-dict JSON body (bare list/string) reaches the serializer and
+        # _api_key_change_flags(), both of which assume a mapping → unhandled 500.
+        if not isinstance(request.data, dict):
+            return Response(
+                {"detail": "Request body must be a JSON object."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = LLMModelConfigSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         org = self._get_org(request)
-        instance = serializer.save(organization=org)
+        try:
+            instance = serializer.save(organization=org)
+        except IntegrityError:
+            # (organization, model_name) is unique — a duplicate add must be a
+            # clean 400, not a 500 (surfaced via the Multi-Model Governance UI).
+            return Response(
+                {"detail": "A model with this name is already connected for your organization."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         key_changed, key_cleared = _api_key_change_flags(request.data)
         _audit_model_credential(
             request,
@@ -162,6 +178,13 @@ class LLMModelConfigDetailView(APIView):
         obj = self._get_object(request, pk)
         if obj is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        # R14: reject a non-dict JSON body before it reaches the serializer and
+        # _api_key_change_flags() / list(request.data.keys()), which assume a dict.
+        if not isinstance(request.data, dict):
+            return Response(
+                {"detail": "Request body must be a JSON object."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = LLMModelConfigSerializer(obj, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()

@@ -169,6 +169,7 @@ export function PolicyAnalyticsPanel() {
         </div>
         <div className="flex items-center gap-2">
           <select
+            aria-label="Analytics time range"
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
             className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 px-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-teal-500"
@@ -278,6 +279,7 @@ export function PolicyAnalyticsPanel() {
               <div className="flex items-center gap-2">
                 {expandedSections.violations && (
                   <select
+                    aria-label="Violation breakdown granularity"
                     value={granularity}
                     onChange={(e) => { e.stopPropagation(); setGranularity(e.target.value); }}
                     onClick={(e) => e.stopPropagation()}

@@ -37,9 +37,17 @@ class SimulatorGatewayKeyTests(TestCase):
 
         first, raw1 = GatewayAPIKey.ensure_simulator_for_org(self.org_a, self.user_a)
         second, raw2 = GatewayAPIKey.ensure_simulator_for_org(self.org_a, self.user_a)
+        # Recoverable storage: the SAME plaintext comes back on every ensure —
+        # one stable per-org key, no rotate-on-ensure churn.
         self.assertIsNotNone(raw1)
-        self.assertIsNone(raw2)
+        self.assertEqual(raw1, raw2)
         self.assertEqual(first.id, second.id)
+        self.assertEqual(
+            GatewayAPIKey.objects.filter(
+                organization=self.org_a, project_id="simulator-org-a", is_active=True
+            ).count(),
+            1,
+        )
 
     @override_settings(DEBUG=True)
     def test_simulator_post_provisions_org_key(self):
@@ -50,17 +58,18 @@ class SimulatorGatewayKeyTests(TestCase):
             client = APIClient()
             client.force_authenticate(user=self.user_a)
             resp = client.post("/api/gateways/simulator-default/")
-            self.assertEqual(resp.status_code, 201)
+            self.assertEqual(resp.status_code, 200)
             data = resp.json()
-            self.assertTrue(data.get("created"))
             self.assertIn("key", data)
             self.assertEqual(data.get("name"), "simulator")
             self.assertEqual(data.get("org_id"), self.org_a.id)
 
+            # Recoverable key: repeat provisioning hands back the SAME plaintext
+            # (stable per-org key) instead of rotating or withholding it.
             resp2 = client.post("/api/gateways/simulator-default/")
             self.assertEqual(resp2.status_code, 200)
-            self.assertFalse(resp2.json().get("created"))
-            self.assertNotIn("key", resp2.json())
+            self.assertEqual(resp2.json().get("key"), data["key"])
+            self.assertEqual(resp2.json().get("prefix"), data["prefix"])
 
     @override_settings(DEBUG=True)
     def test_simulator_get_metadata_without_plaintext(self):

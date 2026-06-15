@@ -3,17 +3,18 @@
  * Do not surface upstream provider names (e.g. Bedrock) in UI copy.
  */
 
-/** Default routed / simulator model id exposed to clients */
-export const ZEROSHIELD_GUARD_MODEL = "zeroshield-guard-120b";
+/** Default routed / simulator model id exposed to clients. Never surface the
+ *  upstream size/provider (no "120b", "gpt-oss", "guard", or Bedrock). */
+export const ZEROSHIELD_GUARD_MODEL = "zeroshield-model";
 
-/** Human-readable product name for the ML guard model */
-export const ZEROSHIELD_GUARD_MODEL_LABEL = "ZeroShield Guard Model";
+/** Human-readable product name for the platform ML model */
+export const ZEROSHIELD_GUARD_MODEL_LABEL = "ZeroShield Model";
 
 /** Tier-1 deterministic pattern engine */
 export const ZEROSHIELD_TIER1_LABEL = "ZeroShield Pattern Engine";
 
-/** Tier-2 semantic / ML guard (ZeroShield-hosted) */
-export const ZEROSHIELD_TIER2_LABEL = "ZeroShield Guard Model";
+/** Tier-2 semantic / ML model (ZeroShield-hosted platform model) */
+export const ZEROSHIELD_TIER2_LABEL = "ZeroShield Model";
 
 /** Routing adjudicator display name */
 export const ZEROSHIELD_ADJUDICATOR_LABEL = "ZeroShield Policy Adjudicator";
@@ -22,6 +23,16 @@ const ROUTING_REASON_REPLACEMENTS = [
   ["Bedrock GPT OSS 120B adjudicator", ZEROSHIELD_ADJUDICATOR_LABEL],
   ["Bedrock GPT OSS 120B", ZEROSHIELD_ADJUDICATOR_LABEL],
   ["bedrock adjudicator", ZEROSHIELD_ADJUDICATOR_LABEL],
+  // Never surface the upstream platform model id/size/provider in operator copy.
+  // Match the platform model id by SHAPE (regex) so the exact deployable id is
+  // never embedded verbatim in the shipped bundle; only generic family tokens
+  // remain, which the gateway already scrubs server-side as the authoritative layer.
+  [/(?:bedrock\/)?global\.anthropic\.claude-haiku[\w.:-]*/gi, ZEROSHIELD_GUARD_MODEL_LABEL],
+  ["claude-haiku-4-5", ZEROSHIELD_GUARD_MODEL_LABEL],
+  [/(?:bedrock\/)?(?:openai\.)?gpt[\s_-]*oss[\s_-]*120b[\w.:-]*/gi, ZEROSHIELD_GUARD_MODEL_LABEL],
+  ["zeroshield-guard-120b", ZEROSHIELD_GUARD_MODEL_LABEL],
+  ["gpt-oss-120b", ZEROSHIELD_GUARD_MODEL_LABEL],
+  ["120b", ""],
 ];
 
 const DECISION_SOURCE_LABELS = {
@@ -36,8 +47,10 @@ const DECISION_SOURCE_LABELS = {
 export function formatRoutingReason(reason, { decisionSource } = {}) {
   let text = String(reason || "").trim();
   if (!text) return text;
-  for (const [oldText, newText] of ROUTING_REASON_REPLACEMENTS) {
-    text = text.split(oldText).join(newText);
+  for (const [pattern, newText] of ROUTING_REASON_REPLACEMENTS) {
+    text = pattern instanceof RegExp
+      ? text.replace(pattern, newText)
+      : text.split(pattern).join(newText);
   }
   if (decisionSource === "kill_switch" && !text.toLowerCase().includes("kill-switch")) {
     return text;
@@ -60,8 +73,9 @@ export function isRoutingReroute(requested, selected, routing = {}) {
   return Boolean(req && sel && req.toLowerCase() !== "auto" && req !== sel);
 }
 
-/** Log viewer service filter label (maps to gateway log service name internally) */
-export const ZEROSHIELD_ML_LOG_SERVICE = "Guard Model";
+/** Log viewer service filter label (maps to gateway log service name internally).
+ *  Must use the public product name — never the "Guard Model" branding. */
+export const ZEROSHIELD_ML_LOG_SERVICE = ZEROSHIELD_GUARD_MODEL_LABEL;
 
 function isCleanThreatType(threatType) {
   const t = String(threatType || "").trim().toLowerCase();
@@ -128,12 +142,65 @@ export function filterUserManagedModels(models) {
   return (models || []).filter((m) => !isPlatformManagedModel(m));
 }
 
-/** Map model id from API responses for display */
+/**
+ * True when a model is CONNECTED with a usable key for inference / simulators /
+ * governance — either a stored encrypted key (`api_key_set`) OR a gateway
+ * env-var key reference (`api_key_env_var`, BYOK-via-env). The backend
+ * `api_key_set` flag is encrypted-key-only by design (it drives the credential
+ * display), so callers deciding "is this model connected?" must also honor the
+ * env-var reference, otherwise BYOK-via-env models are wrongly shown as
+ * "API key missing" / "No inference model connected".
+ */
+export function modelHasUsableKey(m) {
+  return Boolean(m && (m.api_key_set || m.api_key_env_var));
+}
+
+/** Substrings of any reserved platform/guard/BYOK upstream id or codename. A
+ *  match anywhere in the value means it must never reach a user-facing surface
+ *  and is collapsed to the single product label "ZeroShield Model". */
+const RESERVED_MODEL_SUBSTRINGS = [
+  "bedrock",
+  "gpt-oss",
+  "120b",
+  "claude-haiku",
+  "haiku",
+  "anthropic",
+  "zeroshield-guard",
+  ZEROSHIELD_GUARD_MODEL, // "zeroshield-model" — already the public id, normalize to the label
+];
+
+/** Label fragments that are guard-model branding leaks ("...Guard Model",
+ *  "ZeroShield Guard") and must render as the product label instead. */
+const RESERVED_LABEL_FRAGMENTS = [
+  "guard model",
+  "zeroshield guard",
+];
+
+/** True when a model id/name/label is a reserved platform/guard/BYOK value
+ *  that must never surface verbatim (raw upstream id OR guard-model branding). */
+export function isReservedModelLabel(value) {
+  if (!value) return false;
+  const v = String(value).toLowerCase();
+  if (RESERVED_MODEL_SUBSTRINGS.some((s) => v.includes(s))) return true;
+  if (RESERVED_LABEL_FRAGMENTS.some((s) => v.includes(s))) return true;
+  return false;
+}
+
+/**
+ * Sanitize any model id, name, or label for display. Maps ANY reserved
+ * platform/guard/BYOK upstream id (bedrock, gpt-oss, 120b, claude-haiku, haiku,
+ * anthropic, zeroshield-guard, zeroshield-model) OR any guard-model branding
+ * label ("Guard Model", "ZeroShield Guard Model", "ZeroShield Guard") to the
+ * single client-facing product name "ZeroShield Model". Non-reserved org/BYOK
+ * model names pass through unchanged.
+ */
+export function sanitizeModelLabel(value) {
+  if (!value) return value;
+  return isReservedModelLabel(value) ? ZEROSHIELD_GUARD_MODEL_LABEL : value;
+}
+
+/** Map model id from API responses for display. Alias of sanitizeModelLabel
+ *  kept for existing call sites (liveGateway). */
 export function formatModelDisplayName(modelId) {
-  if (!modelId) return modelId;
-  const m = String(modelId).toLowerCase();
-  if (m.includes("bedrock") || m.includes("gpt-oss") || m === ZEROSHIELD_GUARD_MODEL) {
-    return ZEROSHIELD_GUARD_MODEL_LABEL;
-  }
-  return modelId;
+  return sanitizeModelLabel(modelId);
 }
