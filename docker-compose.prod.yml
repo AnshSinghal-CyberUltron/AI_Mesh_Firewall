@@ -182,9 +182,11 @@ services:
   nginx:
     <<: [*restart_unless_stopped, *ecr_nginx_image]
     ports: ["80:80", "443:443"]
-    volumes:
-      - ./deploy/nginx.conf:/etc/nginx/conf.d/01-http.conf:ro
-      - ./deploy/nginx-ssl.conf:/etc/nginx/conf.d/02-ssl.conf:ro
+    # nginx config (deploy/nginx.conf + nginx-ssl.conf) is BAKED into the image
+    # via deploy/Dockerfile.nginx and rebuilt on every deploy. No bind-mount:
+    # a mounted box-file would SHADOW the baked config with a stale copy
+    # (sync-to-ec2.sh does not ship deploy/*.conf), silently dropping config
+    # changes. The image is the single source of truth.
     depends_on:
       control: { condition: service_healthy }
       gateway: { condition: service_started }
