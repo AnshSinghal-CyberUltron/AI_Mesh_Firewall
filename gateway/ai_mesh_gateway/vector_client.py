@@ -586,18 +586,36 @@ class PineconeClient:
             self._executor, self._delete_sync, collection_name, ids, project_id,
         )
 
-    def _list_indexes_sync(self) -> list[str]:
+    def _list_indexes_sync(self, project_id: str = "") -> list[str]:
         pc = self._get_client()
         indexes = pc.list_indexes()
         if hasattr(indexes, "indexes") and indexes.indexes:
-            return [idx.name if hasattr(idx, "name") else str(idx) for idx in indexes.indexes]
-        if hasattr(indexes, "__iter__"):
-            return [idx.name if hasattr(idx, "name") else str(idx) for idx in indexes]
-        return []
+            raw = [idx.name if hasattr(idx, "name") else str(idx) for idx in indexes.indexes]
+        elif hasattr(indexes, "__iter__"):
+            raw = [idx.name if hasattr(idx, "name") else str(idx) for idx in indexes]
+        else:
+            return []
+        # Tenant isolation is namespace-based (namespace = f"{project_id}__{name}").
+        # Returning ALL account index names leaks the infra/other-tenant collection
+        # set. When a project scope is supplied, keep only indexes where THIS
+        # project actually has a namespace; fail-closed (skip on stats error).
+        if not project_id:
+            return raw
+        prefix = f"{project_id}__"
+        scoped: list[str] = []
+        for name in raw:
+            try:
+                stats = pc.Index(name).describe_index_stats()
+                ns = stats.get("namespaces") if isinstance(stats, dict) else getattr(stats, "namespaces", None)
+                if ns and any(str(k).startswith(prefix) for k in ns):
+                    scoped.append(name)
+            except Exception:
+                continue
+        return scoped
 
     async def list_collections(self, project_id: str = "") -> list[str]:
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self._executor, self._list_indexes_sync)
+        return await loop.run_in_executor(self._executor, self._list_indexes_sync, project_id)
 
 
 class MilvusClient:

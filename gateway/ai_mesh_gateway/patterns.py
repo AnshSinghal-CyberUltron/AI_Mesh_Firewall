@@ -82,6 +82,11 @@ PII_PATTERNS: Dict[str, str] = {
     "phone_dotted": r"\b\d{3}\.\d{3}\.\d{4}\b",
     "api_key_openai": r"\bsk-[a-zA-Z0-9]{32,}\b",
     "aws_access_key": r"\bAKIA[0-9A-Z]{16}\b",
+    # AWS SECRET access key — the high-value credential. It has no fixed prefix
+    # (40 chars of [A-Za-z0-9/+]), so match it in context of its variable name to
+    # avoid false positives on arbitrary base64/hash blobs. Without this the
+    # output guard masked only the AKIA id and egressed the secret in cleartext.
+    "aws_secret_access_key": r"(?i)\baws[_-]?secret[_-]?access[_-]?key\b\s*[:=]\s*[\"']?[A-Za-z0-9/+=]{16,}",
     "github_token": r"\bghp_[a-zA-Z0-9]{36}\b",
     "private_key_header": r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----",
 }
@@ -244,6 +249,7 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "phone_dotted": ["PII", "GDPR"],
     "api_key_openai": ["SECRET"],
     "aws_access_key": ["SECRET"],
+    "aws_secret_access_key": ["SECRET"],
     "github_token": ["SECRET"],
     "private_key_header": ["SECRET"],
     "password_assignment": ["SECRET"],
@@ -416,6 +422,14 @@ def _mask_aws_key(m: re.Match) -> str:
     return f"AKIA****{s[-4:]}"
 
 
+def _mask_aws_secret(m: re.Match) -> str:
+    """AWS_SECRET_ACCESS_KEY=wJal...KEY → AWS_SECRET_ACCESS_KEY=*** (keep the
+    variable name + separator, mask the secret value)."""
+    raw = m.group(0)
+    sep = re.search(r"[:=]\s*[\"']?", raw)
+    return (raw[: sep.end()] + "***") if sep else "***"
+
+
 def _mask_github_token(m: re.Match) -> str:
     """ghp_abc...xyz → ghp_****xyz"""
     s = m.group(0)
@@ -442,6 +456,7 @@ _PII_MASKERS = {
     "phone_dotted": _mask_phone,
     "api_key_openai": _mask_api_key,
     "aws_access_key": _mask_aws_key,
+    "aws_secret_access_key": _mask_aws_secret,
     "github_token": _mask_github_token,
     "private_key_header": lambda m: "[PRIVATE_KEY]",
 }

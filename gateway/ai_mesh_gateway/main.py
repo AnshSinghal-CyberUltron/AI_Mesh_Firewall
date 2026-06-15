@@ -891,7 +891,11 @@ def _org_ns_project_id(auth_ctx) -> str:
     oid = getattr(auth_ctx, "organization_id", None)
     pid = getattr(auth_ctx, "project_id", None)
     base = str(pid) if pid else "default"
-    return f"org{oid}-{base}" if oid is not None else base
+    # R12 (#18): never emit a BARE namespace for a null org — a bare "default"
+    # could be shared across distinct null-org callers. Prefix it so it can never
+    # collide with a real org's "org{N}-" namespace. (Org-only inference is
+    # enforced upstream, so a null org should not reach here — defensive.)
+    return f"org{oid}-{base}" if oid is not None else f"orgNone-{base}"
 
 
 def _extract_prompt_from_messages(messages):
@@ -966,19 +970,41 @@ def _extract_scannable_output_text(completion) -> str:
     choices = completion.get("choices") or []
     if not choices:
         return ""
-    msg = choices[0].get("message") or choices[0].get("delta") or {}
     parts: list[str] = []
-    for _v in (msg.get("content"), msg.get("reasoning_content")):
-        if isinstance(_v, str) and _v:
-            parts.append(_v)
-    for tc in (msg.get("tool_calls") or []):
-        if not isinstance(tc, dict):
+    # R12 (#14): fold EVERY choice, not just choices[0]. With n>1 the model
+    # returns multiple completions; scanning only the first let PII/secrets in
+    # choices[1..] ship unscanned (output-guard bypass).
+    for ch in choices:
+        if not isinstance(ch, dict):
             continue
-        fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
-        for _k in ("name", "arguments"):
-            _v = fn.get(_k)
+        msg = ch.get("message") or ch.get("delta") or {}
+        if not isinstance(msg, dict):
+            continue
+        # R12 (#15): include `refusal` (model-authored text channel).
+        for _v in (msg.get("content"), msg.get("reasoning_content"), msg.get("refusal")):
             if isinstance(_v, str) and _v:
                 parts.append(_v)
+        # R12 (#16): audio-output transcript channel.
+        _au = msg.get("audio")
+        if isinstance(_au, dict):
+            _t = _au.get("transcript")
+            if isinstance(_t, str) and _t:
+                parts.append(_t)
+        for tc in (msg.get("tool_calls") or []):
+            if not isinstance(tc, dict):
+                continue
+            fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+            for _k in ("name", "arguments"):
+                _v = fn.get(_k)
+                if isinstance(_v, str) and _v:
+                    parts.append(_v)
+        # I5: legacy `function_call` channel (pre-tool_calls API shape) — fold it too.
+        _fc = msg.get("function_call")
+        if isinstance(_fc, dict):
+            for _k in ("name", "arguments"):
+                _v = _fc.get(_k)
+                if isinstance(_v, str) and _v:
+                    parts.append(_v)
     return "\n".join(parts)
 
 
@@ -998,6 +1024,19 @@ def _neutralize_secondary_output_channels(msg: dict) -> None:
                 for _k in ("name", "arguments"):
                     if isinstance(tc["function"].get(_k), str) and tc["function"].get(_k):
                         tc["function"][_k] = ""
+        # I5: blank the legacy function_call channel on enforcement too.
+        _fc = msg.get("function_call")
+        if isinstance(_fc, dict):
+            for _k in ("name", "arguments"):
+                if isinstance(_fc.get(_k), str) and _fc.get(_k):
+                    _fc[_k] = ""
+        # R12 (#15): blank the `refusal` text channel on enforcement.
+        if isinstance(msg.get("refusal"), str) and msg.get("refusal"):
+            msg["refusal"] = ""
+        # R12 (#16): blank an audio-output transcript on enforcement.
+        _au = msg.get("audio")
+        if isinstance(_au, dict) and isinstance(_au.get("transcript"), str) and _au.get("transcript"):
+            _au["transcript"] = ""
     except Exception:  # noqa: BLE001 - neutralization must never crash the response
         pass
 
@@ -1309,6 +1348,44 @@ def _coerce_string_list(*values) -> list[str]:
 
 
 _SAFE_MODEL_NAME_RE = re.compile(r"[A-Za-z0-9._:/+-]+")
+
+
+_LONE_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
+
+
+def _strip_lone_surrogates(value):
+    """Replace lone UTF-8 surrogate code points (e.g. ``\\ud800`` arriving via a
+    JSON escape) with U+FFFD. A lone surrogate is not encodable to UTF-8, so left
+    in place it raises ``UnicodeEncodeError`` deep in litellm/openai serialization
+    (a 502 + multi-second hang) and poisons the telemetry JSON column (Postgres
+    rejects it, dropping the security EnforcementEvent). Sanitizing at the gateway
+    boundary keeps every downstream consumer on valid Unicode."""
+    if isinstance(value, str):
+        return _LONE_SURROGATE_RE.sub("�", value) if _LONE_SURROGATE_RE.search(value) else value
+    if isinstance(value, list):
+        return [_strip_lone_surrogates(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _strip_lone_surrogates(v) for k, v in value.items()}
+    return value
+
+
+def _collect_nested_strings(obj, _depth: int = 0) -> list:
+    """Collect every non-empty string anywhere in a nested dict/list tree (depth
+    capped to bound work). Used to fold ALL agent_data values into the scanner so
+    a string buried in a nested dict/list can't bypass Tier-1/Tier-2."""
+    out: list = []
+    if _depth > 6:
+        return out
+    if isinstance(obj, str):
+        if obj:
+            out.append(obj)
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            out.extend(_collect_nested_strings(v, _depth + 1))
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            out.extend(_collect_nested_strings(v, _depth + 1))
+    return out
 
 
 def _safe_model_echo(model: str | None) -> str:
@@ -2359,19 +2436,23 @@ def _set_completion_response_text(completion: dict, text: str) -> None:
     choices = completion.get("choices") or []
     if not choices:
         return
-    first_choice = choices[0]
-    if not isinstance(first_choice, dict):
-        return
-    if isinstance(first_choice.get("message"), dict):
-        first_choice["message"]["content"] = text
-        first_choice["message"]["role"] = first_choice["message"].get("role") or "assistant"
-        _neutralize_secondary_output_channels(first_choice["message"])
-        return
-    if isinstance(first_choice.get("delta"), dict):
-        first_choice["delta"]["content"] = text
-        _neutralize_secondary_output_channels(first_choice["delta"])
-        return
-    first_choice["message"] = {"role": "assistant", "content": text}
+    # R12 (#14): enforcement (redact/rewrite/block) must sanitize EVERY choice.
+    # Previously only choices[0] was overwritten + neutralized, so with n>1 the
+    # offending content survived in choices[1..] (output-guard bypass). The whole
+    # response violated policy, so every choice gets the sanitized text + has its
+    # secondary text channels blanked.
+    for ch in choices:
+        if not isinstance(ch, dict):
+            continue
+        if isinstance(ch.get("message"), dict):
+            ch["message"]["content"] = text
+            ch["message"]["role"] = ch["message"].get("role") or "assistant"
+            _neutralize_secondary_output_channels(ch["message"])
+        elif isinstance(ch.get("delta"), dict):
+            ch["delta"]["content"] = text
+            _neutralize_secondary_output_channels(ch["delta"])
+        else:
+            ch["message"] = {"role": "assistant", "content": text}
 
 
 def _rewrite_output_response_text(threat_type: str, detail: str | None = None) -> str:
@@ -3547,6 +3628,11 @@ async def proxy_chat(
         except Exception:
             return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
 
+        # Sanitize lone UTF-8 surrogates anywhere in the parsed body BEFORE any
+        # scanning, forwarding, or telemetry: a `\ud800` (valid JSON escape, not
+        # UTF-8 encodable) otherwise reaches litellm serialization (502 + hang)
+        # and poisons the EnforcementEvent JSON column (dropping the event).
+        raw_body = _strip_lone_surrogates(raw_body)
         try:
             body = normalize_openai_chat_request(raw_body, strip_unknown_top_level=True)
         except (ValueError, TypeError) as exc:
@@ -5140,9 +5226,11 @@ async def proxy_chat(
             scan_text = effective_prompt
             if isinstance(agent_data, dict) and agent_data:
                 try:
-                    _agent_str_values = {
-                        k: v for k, v in agent_data.items() if isinstance(v, str) and v
-                    }
+                    # Collect EVERY string anywhere in the agent_data tree, not
+                    # just top-level values: a nested dict/list value previously
+                    # slipped past this fold, so a string buried one level deep
+                    # (e.g. {"ctx": {"note": "<injection>"}}) bypassed Tier-1/2.
+                    _agent_str_values = _collect_nested_strings(agent_data)
                     if _agent_str_values:
                         scan_text = (effective_prompt or "") + "\n" + json.dumps(_agent_str_values)
                 except (TypeError, ValueError):
@@ -7387,6 +7475,36 @@ async def proxy_embeddings(request: Request):
         if _burst_resp is not None:
             return _burst_resp
 
+        # I3: embeddings were dispatched with NO kill-switch / model-state gate
+        # (unlike proxy_chat) — an operator-disabled embedding model still served.
+        # Embeddings have no chat fallback, so a kill-switch 'reroute' is
+        # meaningless: any is_killed / isolated / suspended -> 503 (fail-closed).
+        if org_config.get("kill_switch_enabled", True):
+            if REDIS_CLIENT is None:
+                METRICS["blocked"] += 1
+                return JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "kill_switch_active", "message": "Kill-switch enforcement unavailable."})
+            try:
+                from kill_switch import check_kill_switch as _ck_emb
+            except ImportError:
+                from .kill_switch import check_kill_switch as _ck_emb
+            _emb_ks = await _ck_emb(REDIS_CLIENT, requested_model, org_slug=org_slug, key_prefix=auth_ctx.prefix if auth_ctx else "")
+            if getattr(_emb_ks, "is_killed", False):
+                METRICS["blocked"] += 1
+                return JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "kill_switch_active", "message": "This model is currently disabled by an operator kill-switch."})
+        if REDIS_CLIENT is not None:
+            try:
+                from model_state import check_model_state as _cms_emb
+            except ImportError:
+                from .model_state import check_model_state as _cms_emb
+            _emb_ms = await _cms_emb(REDIS_CLIENT, requested_model, org_slug=org_slug or "default")
+            if getattr(_emb_ms, "status", "") in ("isolated", "suspended"):
+                METRICS["blocked"] += 1
+                return JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "model_unavailable", "message": "This model is currently isolated by an operator."})
+
+        # H7: carry the org so aembedding org-qualifies the embedding routing key
+        # ({org}::{model}) and uses THIS org's BYOK key — never a same-named peer.
+        body["_zs_org_slug"] = org_slug
+
         status, result = await LLM_ROUTER.aembedding(body)
 
         # Never reflect raw LiteLLM exception text (fallback topology + OpenRouter
@@ -7444,36 +7562,51 @@ def _resolve_vector_client(vector_db_type: str, org_id: int | str | None = None)
     if org_id and VECTOR_PROVIDER_SYNC is not None:
         cfg = VECTOR_PROVIDER_SYNC.get_provider_config(org_id, vector_db_type)
         if cfg and cfg.get("is_active"):
-            from vector_client import PineconeClient, MilvusClient, ChromaDBClient
-            try:
-                if vector_db_type == "pinecone" and cfg.get("api_key"):
-                    return PineconeClient(
-                        api_key=cfg["api_key"],
-                        environment=cfg.get("environment", ""),
-                        embedding_model=cfg.get("embedding_model", "text-embedding-3-small"),
-                        embedding_api_key=cfg.get("embedding_api_key", ""),
-                        reranker_model=cfg.get("reranker_model", ""),
-                    ), "pinecone"
-                elif vector_db_type == "chroma" and cfg.get("connection_url"):
-                    # BYOK Chroma: the org connects their own Chroma server.
-                    return ChromaDBClient(
-                        url=cfg["connection_url"],
-                        auth_token=cfg.get("api_key", ""),
-                    ), "chroma"
-                elif vector_db_type == "milvus" and cfg.get("connection_url"):
-                    return MilvusClient(
-                        uri=cfg["connection_url"],
-                        token=cfg.get("api_key", ""),
-                    ), "milvus"
-                elif vector_db_type == "custom" and cfg.get("connection_url"):
-                    # Custom provider support is currently backed by Milvus-compatible
-                    # URI/token contracts until dedicated adapters are introduced.
-                    return MilvusClient(
-                        uri=cfg["connection_url"],
-                        token=cfg.get("api_key", ""),
-                    ), "custom"
-            except Exception:
-                LOG.warning("Failed to create org-level %s client for org=%s, falling back to default", vector_db_type, org_id)
+            # R12 (#8): SSRF guard on the org-supplied connection_url (mirrors
+            # rag_collections.client_from_provider_config). Blocks metadata/loopback/
+            # link-local; permits private RFC1918 (legit self-hosted vector DBs).
+            # Pinecone (no connection_url) is unaffected.
+            _conn_url = cfg.get("connection_url")
+            _vp_ok = True
+            if _conn_url and vector_db_type in ("chroma", "milvus", "custom"):
+                try:
+                    from _url_guard import is_safe_vector_provider_url as _safe_vp
+                except ImportError:
+                    from ._url_guard import is_safe_vector_provider_url as _safe_vp
+                _vp_ok, _why = _safe_vp(str(_conn_url))
+                if not _vp_ok:
+                    LOG.warning("Rejected org vector provider connection_url for org=%s (SSRF guard): %s", org_id, _why)
+            if _vp_ok:
+                from vector_client import PineconeClient, MilvusClient, ChromaDBClient
+                try:
+                    if vector_db_type == "pinecone" and cfg.get("api_key"):
+                        return PineconeClient(
+                            api_key=cfg["api_key"],
+                            environment=cfg.get("environment", ""),
+                            embedding_model=cfg.get("embedding_model", "text-embedding-3-small"),
+                            embedding_api_key=cfg.get("embedding_api_key", ""),
+                            reranker_model=cfg.get("reranker_model", ""),
+                        ), "pinecone"
+                    elif vector_db_type == "chroma" and cfg.get("connection_url"):
+                        # BYOK Chroma: the org connects their own Chroma server.
+                        return ChromaDBClient(
+                            url=cfg["connection_url"],
+                            auth_token=cfg.get("api_key", ""),
+                        ), "chroma"
+                    elif vector_db_type == "milvus" and cfg.get("connection_url"):
+                        return MilvusClient(
+                            uri=cfg["connection_url"],
+                            token=cfg.get("api_key", ""),
+                        ), "milvus"
+                    elif vector_db_type == "custom" and cfg.get("connection_url"):
+                        # Custom provider support is currently backed by Milvus-compatible
+                        # URI/token contracts until dedicated adapters are introduced.
+                        return MilvusClient(
+                            uri=cfg["connection_url"],
+                            token=cfg.get("api_key", ""),
+                        ), "custom"
+                except Exception:
+                    LOG.warning("Failed to create org-level %s client for org=%s, falling back to default", vector_db_type, org_id)
 
     # Fall back to gateway-level default
     client = VECTOR_CLIENTS.get(vector_db_type)
@@ -7555,6 +7688,52 @@ def _is_valid_collection_name(name: str) -> bool:
     if ".." in name:
         return False
     return bool(re.fullmatch(r"[A-Za-z0-9._-]+", name))
+
+
+async def _rag_embedding_killswitch_block(org_slug, org_id, key_prefix, vector_db_type, policy_embedding_model):
+    """R12 (#2/#4/#6): apply the SAME kill-switch + model-state gate to the RAG
+    embedding model that proxy_embeddings applies. RAG embeds via
+    byok_embedder → litellm.embedding directly (NOT LLM_ROUTER.aembedding), so the
+    I3-Med gate on /v1/embeddings did NOT cover it — an operator-disabled embedding
+    model was still usable through /v1/rag/query and /v1/rag/ingest. Resolves the
+    effective embedding model (collection-pinned policy model, else the org's
+    VectorProviderConfig model) and returns a JSONResponse(503) when it is
+    killed/isolated/suspended (or Redis-down with kill-switch on); else None.
+    No-op when no model name can be resolved (nothing to gate on)."""
+    model_name = (policy_embedding_model or "").strip()
+    if not model_name and org_id is not None and VECTOR_PROVIDER_SYNC is not None:
+        try:
+            _cfg = VECTOR_PROVIDER_SYNC.get_provider_config(org_id, vector_db_type)
+            if _cfg:
+                model_name = str(_cfg.get("embedding_model") or "").strip()
+        except Exception:  # noqa: BLE001 - resolution best-effort; absence => no gate
+            model_name = ""
+    if not model_name:
+        return None
+    org_config = CONFIG_SYNC.get_config(org_slug) if CONFIG_SYNC else CONFIG
+    _ks_block = JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "kill_switch_active", "message": "This embedding model is currently disabled by an operator kill-switch."})
+    if org_config.get("kill_switch_enabled", True):
+        if REDIS_CLIENT is None:
+            METRICS["blocked"] += 1
+            return JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "kill_switch_active", "message": "Kill-switch enforcement unavailable."})
+        try:
+            from kill_switch import check_kill_switch as _ck_rag
+        except ImportError:
+            from .kill_switch import check_kill_switch as _ck_rag
+        _ks = await _ck_rag(REDIS_CLIENT, model_name, org_slug=org_slug, key_prefix=key_prefix or "")
+        if getattr(_ks, "is_killed", False):
+            METRICS["blocked"] += 1
+            return _ks_block
+    if REDIS_CLIENT is not None:
+        try:
+            from model_state import check_model_state as _cms_rag
+        except ImportError:
+            from .model_state import check_model_state as _cms_rag
+        _ms = await _cms_rag(REDIS_CLIENT, model_name, org_slug=org_slug or "default")
+        if getattr(_ms, "status", "") in ("isolated", "suspended"):
+            METRICS["blocked"] += 1
+            return JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "model_unavailable", "message": "This embedding model is currently isolated by an operator."})
+    return None
 
 
 @app.post(
@@ -7953,6 +8132,17 @@ async def rag_query(request: Request):
         effective_vector_db_type = policy.get("vector_db_type", vector_db_type)
         org_id_for_client = getattr(auth_ctx, "organization_id", None) if auth_ctx else None
 
+        # R12 (#2/#6): gate the RAG embedding model on operator kill-switch +
+        # model-state (parity with /v1/embeddings). RAG embeds via byok_embedder
+        # (not LLM_ROUTER.aembedding) so the I3-Med gate did not cover this path.
+        _rag_ks_block = await _rag_embedding_killswitch_block(
+            rag_policy["_org_slug"], org_id_for_client,
+            (getattr(auth_ctx, "prefix", "") if auth_ctx else ""),
+            effective_vector_db_type, policy_embedding_model,
+        )
+        if _rag_ks_block is not None:
+            return _rag_ks_block
+
         # FIX rag#9b: an unknown/unconfigured vector_db_type is a CONFIGURATION
         # error, not a security threat. Validate it here BEFORE running the
         # pipeline — otherwise the retriever surfaces it as action="block"
@@ -8271,6 +8461,19 @@ async def rag_ingest(request: Request):
         if _rl_resp is not None:
             return _rl_resp
 
+        # R12 (#3): per-org burst (req/s) + RPM ceiling — rag_ingest was missing the
+        # dampener that rag_query + /v1/embeddings already apply, so a client could
+        # hammer ingest to evade the per-org rate ceiling (DoS / amplification).
+        _burst_resp = await _enforce_org_burst_rpm(
+            auth_ctx,
+            event_type="rag_ingest_blocked",
+            model="",
+            user_id=getattr(auth_ctx, "user_id", None),
+            project_id=project_id,
+        )
+        if _burst_resp is not None:
+            return _burst_resp
+
         # ── Policy enforcement ──
         policy = VECTOR_POLICY_SYNC.get_policy(project_id, collection_name, organization_id=getattr(auth_ctx, "organization_id", None))
         if policy is None:
@@ -8357,6 +8560,18 @@ async def rag_ingest(request: Request):
         ) or {}
         rag_redaction_enabled = bool(org_config.get("rag_redaction_enabled", False))
         rag_tier2_enabled = bool(org_config.get("rag_tier2_enabled", False))
+
+        # R12 (#2/#6): gate the RAG ingest embedding model on operator kill-switch
+        # + model-state (parity with /v1/embeddings + rag_query). The embed+upsert
+        # below uses byok_embedder, bypassing the I3-Med /v1/embeddings gate.
+        _ingest_ks_block = await _rag_embedding_killswitch_block(
+            org_slug, org_id,
+            (getattr(auth_ctx, "prefix", "") if auth_ctx else ""),
+            policy.get("vector_db_type", vector_db_type),
+            policy.get("embedding_model", ""),
+        )
+        if _ingest_ks_block is not None:
+            return _ingest_ks_block
 
         # ── Content scanning: Tier-1 (ContextGuard) + optional Tier-2 (ML guard) ──
         # Per document. Tier-2 fails OPEN on Bedrock-breaker degradation
@@ -9055,6 +9270,22 @@ async def admin_db_test(request: Request):
     api_key = _ak if isinstance(_ak, str) else ""
     _env = body.get("environment", "")
     environment = _env if isinstance(_env, str) else ""
+
+    # I4: SSRF guard — connection_url is caller-controlled and is connected to
+    # below (Milvus/Chroma/custom). Validate against the SSRF allowlist so a tenant
+    # can't probe internal hosts/metadata/redis via the db-test. Operators needing
+    # an internal vector DB add it to MCP_ALLOW_INTERNAL_HOSTS.
+    if connection_url:
+        try:
+            from _url_guard import is_safe_outbound_url as _safe_db_url
+        except ImportError:
+            from ._url_guard import is_safe_outbound_url as _safe_db_url
+        _ok, _reason = _safe_db_url(connection_url)
+        if not _ok:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "bad_request", "code": "connection_url_rejected", "message": f"connection_url rejected: {_reason}"},
+            )
 
     import time as _time
     start = _time.perf_counter()
