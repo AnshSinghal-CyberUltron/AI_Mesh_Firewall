@@ -127,12 +127,14 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
         org_id = None
         if user.is_superuser:
+            # M-08 FIX: a superuser must explicitly select a tenant (?organization_id=...)
+            # or have a profile org. Do NOT silently default to org 1 — that would
+            # implicitly associate the session with a real, unintended tenant and leak
+            # its notifications. When neither is present, org_id stays None and the
+            # shared `if org_id is None:` guard below rejects the connection (4403).
             org_id = _get_org_id_from_scope(self.scope)
             if org_id is None:
-                # Superuser without explicit org: default to their profile org or org 1
                 org_id = await sync_to_async(_get_org_from_profile, thread_sensitive=True)(user)
-                if org_id is None:
-                    org_id = 1
         else:
             org_id = await sync_to_async(_get_org_from_profile, thread_sensitive=True)(user)
 

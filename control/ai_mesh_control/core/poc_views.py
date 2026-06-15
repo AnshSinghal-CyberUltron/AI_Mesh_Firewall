@@ -58,6 +58,11 @@ def poc_questionnaire_submit(request):
         data = json.loads(request.body)
     except (json.JSONDecodeError, UnicodeDecodeError):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
+    # L2: a valid JSON ARRAY/string/number parses fine but isn't a dict, so the
+    # later data.get(...) raised AttributeError -> unhandled 500. Reject at the
+    # boundary with 400 (mirrors the auth/views.py isinstance guard).
+    if not isinstance(data, dict):
+        return JsonResponse({"error": "Request body must be a JSON object."}, status=400)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     uid = uuid.uuid4().hex[:10]

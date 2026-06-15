@@ -25,17 +25,28 @@ function readStoredGatewayKey(orgId) {
 // they share ONE provision request instead of each POSTing. The endpoint is
 // idempotent (no ?ensure=1): it returns the org's EXISTING active key and only
 // includes a plaintext `key` when one was newly created — it never rotates.
-const _inflightProvision = new Map(); // orgId -> Promise<string|null>
+// Entries carry a TTL so a never-settling promise (hung fetch, dropped
+// network) cannot block retries for that org forever.
+const _inflightProvision = new Map(); // orgId -> { promise, startedAt }
+const INFLIGHT_PROVISION_TTL_MS = 30_000;
 
 function provisionOrgKey(orgId, fetchWithAuth) {
-  if (_inflightProvision.has(orgId)) return _inflightProvision.get(orgId);
+  const existing = _inflightProvision.get(orgId);
+  if (existing && Date.now() - existing.startedAt < INFLIGHT_PROVISION_TTL_MS) {
+    return existing.promise;
+  }
   const promise = (async () => {
     const res = await fetchWithAuth("/api/gateways/simulator-default/", {
       method: "POST",
     });
     if (!res.ok) throw new Error(`provision failed (${res.status})`);
     const data = await res.json();
-    if (!data?.key) return data?.has_gateway_key ? null : null;
+    if (!data?.key) {
+      // No plaintext key in the response (regardless of has_gateway_key):
+      // the backend only returns plaintext on creation / recoverable fetch,
+      // so there is nothing to cache — callers surface the refresh hint.
+      return null;
+    }
     try {
       localStorage.setItem(data.storage_key || gatewayKeyStorageKey(orgId), data.key);
       localStorage.removeItem(LEGACY_KEY);
@@ -44,10 +55,19 @@ function provisionOrgKey(orgId, fetchWithAuth) {
     }
     return data.key;
   })();
-  _inflightProvision.set(orgId, promise);
+  const entry = { promise, startedAt: Date.now() };
+  _inflightProvision.set(orgId, entry);
   // Drop the cache entry once settled so a future (post-cache-clear) provision
   // can run; concurrent callers during this window still share the one promise.
-  promise.finally(() => _inflightProvision.delete(orgId)).catch(() => {});
+  // Only delete if OUR entry is still cached — a TTL-expired retry may have
+  // replaced it, and the stale promise must not evict the fresh one.
+  promise
+    .finally(() => {
+      if (_inflightProvision.get(orgId) === entry) {
+        _inflightProvision.delete(orgId);
+      }
+    })
+    .catch(() => {});
   return promise;
 }
 

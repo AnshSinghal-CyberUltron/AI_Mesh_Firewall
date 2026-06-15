@@ -31,6 +31,8 @@ from urllib.parse import urlencode, urlparse
 
 import httpx
 
+from ._url_guard import is_safe_outbound_url
+
 logger = logging.getLogger(__name__)
 
 _HTTP_TIMEOUT = 20.0
@@ -93,6 +95,13 @@ def parse_www_authenticate(header: str) -> dict:
 # ── Discovery ────────────────────────────────────────────────────────
 
 def _get_json(client: httpx.Client, url: str) -> dict | None:
+    # SSRF guard (finding mcp#1): metadata URLs can derive from a
+    # server-controlled WWW-Authenticate hint (resource_metadata). Reject
+    # internal / loopback / link-local / cloud-metadata targets before GET.
+    ok, reason = is_safe_outbound_url(url)
+    if not ok:
+        logger.warning("Blocked OAuth metadata GET to unsafe URL %s: %s", url, reason)
+        return None
     try:
         r = client.get(url, headers={"Accept": "application/json", "User-Agent": _USER_AGENT})
         if r.status_code == 200:
@@ -104,6 +113,11 @@ def _get_json(client: httpx.Client, url: str) -> dict | None:
 
 def _probe_resource_metadata_url(client: httpx.Client, server_url: str) -> str | None:
     """Send an unauthenticated MCP request to read the WWW-Authenticate hint."""
+    # SSRF guard (finding mcp#1): server_url is operator-supplied.
+    ok, reason = is_safe_outbound_url(server_url)
+    if not ok:
+        logger.warning("Blocked OAuth 401 probe to unsafe URL %s: %s", server_url, reason)
+        return None
     init_body = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -159,11 +173,21 @@ def discover(server_url: str) -> dict:
     ``registration_endpoint`` (may be ""), ``scopes_supported`` (list),
     ``resource`` (canonical URI). Raises :class:`OAuthDiscoveryError`.
     """
+    # SSRF guard (finding mcp#1): server_url is operator-supplied at
+    # registration. Reject internal / loopback / link-local / cloud-metadata
+    # targets before running the discovery chain.
+    ok, reason = is_safe_outbound_url(server_url)
+    if not ok:
+        raise OAuthDiscoveryError(f"Server URL rejected by SSRF guard: {reason}")
+
     resource = canonical_resource(server_url)
     origin = _origin(server_url)
     server_path = urlparse(server_url).path.rstrip("/")
 
-    with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=True) as client:
+    # follow_redirects=False — a redirect to an internal address would bypass
+    # the per-URL SSRF checks (redirect-based SSRF). Each candidate URL is
+    # validated individually instead (see _get_json / _probe_resource_metadata_url).
+    with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=False) as client:
         # 1. Locate the protected-resource-metadata document.
         prm_hint = _probe_resource_metadata_url(client, server_url)
         prm_candidates = []
@@ -212,6 +236,14 @@ def discover(server_url: str) -> dict:
 
 def register_client(registration_endpoint: str, redirect_uri: str, client_name: str) -> dict:
     """Register a public OAuth client via DCR. Returns the registration response."""
+    # B10 (second-order SSRF): registration_endpoint is derived VERBATIM from the
+    # attacker-controlled RFC-8414 metadata document — validating the metadata URL
+    # does NOT validate the endpoints inside it. Re-validate here and disable
+    # redirect-following (a redirect to an internal address was the exact bypass
+    # the discovery client was hardened against).
+    _ok, _reason = is_safe_outbound_url(registration_endpoint)
+    if not _ok:
+        raise OAuthDiscoveryError(f"Unsafe registration endpoint rejected: {_reason}")
     body = {
         "client_name": client_name,
         "redirect_uris": [redirect_uri],
@@ -220,7 +252,7 @@ def register_client(registration_endpoint: str, redirect_uri: str, client_name: 
         "token_endpoint_auth_method": "none",  # public client; PKCE provides protection
         "application_type": "native",
     }
-    with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=True) as client:
+    with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=False) as client:
         r = client.post(
             registration_endpoint,
             json=body,
@@ -272,7 +304,12 @@ def _token_request(token_endpoint: str, data: dict, client_secret: str | None) -
     auth = None
     if client_secret:
         auth = (data.get("client_id", ""), client_secret)
-    with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=True) as client:
+    # B10: token_endpoint comes from attacker-controlled metadata and is persisted
+    # + reused on refresh — re-validate every call and disable redirect-following.
+    _ok, _reason = is_safe_outbound_url(token_endpoint)
+    if not _ok:
+        raise OAuthDiscoveryError(f"Unsafe token endpoint rejected: {_reason}")
+    with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=False) as client:
         r = client.post(token_endpoint, data=data, headers=headers, auth=auth)
         if r.status_code != 200:
             raise OAuthDiscoveryError(

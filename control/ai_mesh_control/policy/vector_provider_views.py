@@ -83,6 +83,25 @@ class VectorProviderConfigViewSet(ModelViewSet):
                 {"detail": "Organization scope is required for vector provider configuration."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # One config per (org, provider_type): treat POST of an existing pair as
+        # an UPSERT rather than letting the unique constraint raise IntegrityError
+        # -> unhandled 500. Blank secret fields keep the stored value (a POST that
+        # omits the key must not clobber an existing encrypted key with "").
+        provider_type = serializer.validated_data.get("provider_type")
+        existing = VectorProviderConfig.objects.filter(
+            organization=org, provider_type=provider_type
+        ).first()
+        if existing is not None:
+            for k, v in serializer.validated_data.items():
+                if k in ("api_key", "embedding_api_key") and not v:
+                    continue
+                setattr(existing, k, v)
+            existing.save()
+            logger.info("Upserted VectorProviderConfig %s for org=%s", provider_type, org)
+            return Response(
+                VectorProviderConfigReadSerializer(existing).data,
+                status=status.HTTP_200_OK,
+            )
         instance = serializer.save(organization=org)
         logger.info("Created VectorProviderConfig %s for org=%s", instance.provider_type, org)
         return Response(

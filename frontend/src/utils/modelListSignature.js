@@ -4,7 +4,7 @@ export function modelListSignature(models) {
   return models
     .map(
       (m) =>
-        `${m.id ?? ""}:${m.model_name ?? ""}:${m.model_id ?? ""}:${m.provider ?? ""}:${m.is_active ? 1 : 0}:${m.api_key_set ? 1 : 0}`,
+        `${m.id ?? ""}:${m.model_name ?? ""}:${m.model_id ?? ""}:${m.provider ?? ""}:${m.is_active ? 1 : 0}:${m.api_key_set ? 1 : 0}:${m.api_key_env_var ? 1 : 0}`,
     )
     .sort()
     .join("|");

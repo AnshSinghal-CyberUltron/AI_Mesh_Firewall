@@ -1,5 +1,7 @@
 """
-AWS Bedrock client for Tier-2 scanning using boto3 invoke_model.
+AWS Bedrock client for platform ML (Tier-2 scan, routing adjudicator).
+
+Uses Converse for Anthropic/Global CRIS models and invoke_model for OpenAI-compat.
 
 Authentication uses standard AWS IAM credentials from environment:
   - AWS_ACCESS_KEY_ID
@@ -7,7 +9,8 @@ Authentication uses standard AWS IAM credentials from environment:
 
 Configuration:
   - BEDROCK_REGION: AWS region (default: ap-south-1)
-    - BEDROCK_MODEL: model ID (default: openai.gpt-oss-120b-1:0)
+  - BEDROCK_TIER2_SCANNER_MODEL / BEDROCK_ADJUDICATOR_MODEL: Haiku 4.5 global profile
+  - BEDROCK_MAX_TOKENS: decode cap (default: 256)
   - BEDROCK_TIMEOUT: request timeout in seconds (default: 60)
 """
 from __future__ import annotations
@@ -35,6 +38,38 @@ except Exception:
     BLOG = None  # type: ignore[assignment]
 
 LOG = logging.getLogger("gateway.bedrock_client")
+
+try:
+    from .platform_models import (
+        default_tier2_scanner_model,
+        uses_converse_api,
+    )
+except ImportError:
+    from platform_models import (
+        default_tier2_scanner_model,
+        uses_converse_api,
+    )
+
+
+def _normalize_converse_to_openai(raw_response: Dict[str, Any]) -> Dict[str, Any]:
+    """Map Bedrock Converse output to OpenAI-style choices for shared parsers."""
+    text_parts: list[str] = []
+    output = raw_response.get("output") or {}
+    message = output.get("message") or {}
+    for block in message.get("content") or []:
+        if isinstance(block, dict) and isinstance(block.get("text"), str):
+            text_parts.append(block["text"])
+    text = "".join(text_parts)
+    usage = raw_response.get("usage") or {}
+    return {
+        "choices": [{"message": {"content": text}}],
+        "usage": {
+            "prompt_tokens": usage.get("inputTokens", 0),
+            "completion_tokens": usage.get("outputTokens", 0),
+            "input_tokens": usage.get("inputTokens", 0),
+            "output_tokens": usage.get("outputTokens", 0),
+        },
+    }
 
 
 def _extract_prompt_preview(payload: Dict[str, Any]) -> str:
@@ -119,7 +154,7 @@ class BedrockClient:
             )
 
         self.region: str = region or os.getenv("BEDROCK_REGION", "ap-south-1")
-        self.model_id: str = model_id or os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0")
+        self.model_id: str = model_id or default_tier2_scanner_model()
         self.timeout: float = timeout
 
         boto_config = BotoConfig(
@@ -138,12 +173,132 @@ class BedrockClient:
             self.model_id, self.region, self.timeout, aws_key_prefix,
         )
 
+    def converse(
+        self,
+        *,
+        model: str,
+        system_text: str,
+        user_text: str,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+        call_site: str = "platform",
+        request_id: Optional[str] = None,
+        enable_prompt_cache: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Invoke Bedrock Converse API (Anthropic / Global CRIS models).
+
+        Returns dict with keys: raw, tokens_in, tokens_out, elapsed_s.
+        ``raw`` is normalized to OpenAI chat-completion shape (choices).
+        """
+        effective_model = model or self.model_id
+        reqid = request_id or (new_request_id() if BLOG else "")
+        system_blocks: list[Dict[str, Any]] = [{"text": system_text}]
+        if enable_prompt_cache and len(system_text) >= 4096:
+            system_blocks.append({"cachePoint": {"type": "default"}})
+
+        converse_input = {
+            "modelId": effective_model,
+            "system": system_blocks,
+            "messages": [
+                {"role": "user", "content": [{"text": user_text}]},
+            ],
+            "inferenceConfig": {
+                "maxTokens": max_tokens,
+                "temperature": temperature,
+            },
+        }
+        payload_bytes = len(json.dumps(converse_input, default=str))
+
+        if BLOG:
+            log_bedrock_request(
+                request_id=reqid,
+                model=effective_model,
+                region=self.region,
+                payload_bytes=payload_bytes,
+                prompt_len=len(system_text) + len(user_text),
+                truncated_len=len(user_text),
+                max_tokens=max_tokens,
+                prompt_preview=f"system: {system_text[:200]} | user: {user_text[:200]}",
+                call_site=call_site,
+                api_method="converse",
+            )
+
+        start = time.time()
+        try:
+            response = self._client.converse(**converse_input)
+        except Exception as exc:
+            elapsed = time.time() - start
+            LOG.error(
+                "Bedrock converse FAILED: model=%s, call_site=%s, elapsed=%.3fs, error=%s",
+                effective_model, call_site, elapsed, exc,
+            )
+            if BLOG:
+                log_bedrock_error(
+                    request_id=reqid,
+                    model=effective_model,
+                    region=self.region,
+                    elapsed_s=elapsed,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                    payload_bytes=payload_bytes,
+                )
+            raise
+        elapsed = time.time() - start
+
+        normalized_raw = _normalize_converse_to_openai(response)
+        usage = response.get("usage") or {}
+        tokens_in = int(usage.get("inputTokens") or 0)
+        tokens_out = int(usage.get("outputTokens") or 0)
+        output_preview = _extract_output_preview(normalized_raw)
+
+        LOG.info(
+            "Bedrock converse DONE: model=%s, call_site=%s, elapsed=%.3fs, "
+            "tokens_in=%d, tokens_out=%d",
+            effective_model, call_site, elapsed, tokens_in, tokens_out,
+        )
+
+        if BLOG:
+            log_bedrock_response(
+                request_id=reqid,
+                model=effective_model,
+                region=self.region,
+                elapsed_s=elapsed,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                success=True,
+                response_keys=list(response.keys()),
+                output_preview=output_preview,
+                call_site=call_site,
+                api_method="converse",
+            )
+            log_metrics(
+                method="converse",
+                model=effective_model,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                elapsed_s=elapsed,
+                success=True,
+                call_site=call_site,
+            )
+
+        return {
+            "raw": normalized_raw,
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
+            "elapsed_s": elapsed,
+            "model_id": effective_model,
+            "call_site": call_site,
+            "api_method": "converse",
+        }
+
     def scan_prompt(
         self,
         model: str,
         prompt_payload: Dict[str, Any],
         deployment_path: Optional[str] = None,
         request_id: Optional[str] = None,
+        call_site: str = "tier2_scan",
     ) -> Dict[str, Any]:
         """
         Send prompt to Bedrock via invoke_model and return normalized result.
@@ -153,6 +308,36 @@ class BedrockClient:
         should follow the OpenAI chat-completion schema (with ``choices``).
         """
         effective_model = model or self.model_id
+        if uses_converse_api(effective_model):
+            system_text = ""
+            user_text = ""
+            if isinstance(prompt_payload.get("system"), str):
+                system_text = prompt_payload["system"]
+            for msg in prompt_payload.get("messages") or []:
+                if not isinstance(msg, dict):
+                    continue
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if role == "system" and isinstance(content, str):
+                    system_text = content
+                elif role == "user":
+                    user_text = str(content)
+            max_tokens = int(
+                prompt_payload.get("max_tokens")
+                or prompt_payload.get("maxTokens")
+                or os.getenv("BEDROCK_MAX_TOKENS", "256")
+            )
+            return self.converse(
+                model=effective_model,
+                system_text=system_text,
+                user_text=user_text,
+                max_tokens=max_tokens,
+                temperature=float(prompt_payload.get("temperature", 0.0)),
+                call_site=call_site,
+                request_id=request_id,
+                enable_prompt_cache=bool(prompt_payload.get("enable_prompt_cache")),
+            )
+
         body = json.dumps(prompt_payload)
         payload_bytes = len(body)
         reqid = request_id or (new_request_id() if BLOG else "")
@@ -174,6 +359,8 @@ class BedrockClient:
                 truncated_len=payload_bytes,
                 deployment_path=deployment_path,
                 prompt_preview=prompt_preview,
+                call_site=call_site,
+                api_method="invoke_model",
             )
 
         start = time.time()
@@ -241,6 +428,8 @@ class BedrockClient:
                 success=True,
                 response_keys=list(response_body.keys()),
                 output_preview=output_preview,
+                call_site=call_site,
+                api_method="invoke_model",
             )
             log_metrics(
                 method="invoke_model",
@@ -249,6 +438,7 @@ class BedrockClient:
                 tokens_out=int(tokens_out),
                 elapsed_s=elapsed,
                 success=True,
+                call_site=call_site,
             )
 
         return {
@@ -256,6 +446,9 @@ class BedrockClient:
             "tokens_in": int(tokens_in),
             "tokens_out": int(tokens_out),
             "elapsed_s": elapsed,
+            "model_id": effective_model,
+            "call_site": call_site,
+            "api_method": "invoke_model",
         }
 
     def is_available(self) -> bool:
@@ -285,6 +478,6 @@ def default_bedrock_client() -> BedrockClient:
     """Convenience factory using environment configuration."""
     return BedrockClient(
         region=os.getenv("BEDROCK_REGION", "ap-south-1"),
-        model_id=os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0"),
+        model_id=default_tier2_scanner_model(),
         timeout=float(os.getenv("BEDROCK_TIMEOUT", "60.0")),
     )

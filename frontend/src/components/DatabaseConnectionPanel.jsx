@@ -213,7 +213,7 @@ export function DatabaseConnectionPanel({ embedded = false }) {
             Connect, test, and simulate queries against vector databases
           </p>
         </div>
-        <InfoTooltip text="Test connectivity to ChromaDB, Pinecone, or Milvus through the gateway. After connecting, run simulation queries through the RAG pipeline to verify end-to-end data flow." />
+        <InfoTooltip text="Test connectivity to your Pinecone or Milvus vector DB through the gateway. After connecting, run simulation queries through the guardrails-only RAG path (scan + policy enforcement) to verify end-to-end data flow." />
       </div>
       )}
 
@@ -290,6 +290,7 @@ export function DatabaseConnectionPanel({ embedded = false }) {
                 value={fieldValues[field.key] || ""}
                 onChange={(e) => handleFieldChange(field.key, e.target.value)}
                 placeholder={field.placeholder}
+                aria-label={field.label}
                 className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
             </div>
@@ -397,6 +398,7 @@ export function DatabaseConnectionPanel({ embedded = false }) {
                     value={simFieldValues[field.key] || ""}
                     onChange={(e) => handleSimFieldChange(field.key, e.target.value)}
                     placeholder={field.placeholder}
+                    aria-label={field.label}
                     className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   />
                   {field.helpText && <p className="text-[10px] text-slate-400 mt-0.5">{field.helpText}</p>}
@@ -467,10 +469,10 @@ export function DatabaseConnectionPanel({ embedded = false }) {
                             <div key={i} className="flex items-center gap-1">
                               <div className="text-center">
                                 <div className={`w-8 h-8 rounded-full ${actionColor} flex items-center justify-center`}>
-                                  <span className="text-[9px] text-white font-bold">{(stage.name || "?").charAt(0).toUpperCase()}</span>
+                                  <span className="text-[10px] text-white font-bold">{(stage.name || "?").charAt(0).toUpperCase()}</span>
                                 </div>
-                                <div className="text-[8px] text-slate-500 mt-0.5">{stage.name}</div>
-                                <div className="text-[8px] text-slate-400">{stage.latency_ms?.toFixed(0) || 0}ms</div>
+                                <div className="text-[10px] text-slate-500 mt-0.5">{stage.name}</div>
+                                <div className="text-[10px] text-slate-400">{stage.latency_ms?.toFixed(0) || 0}ms</div>
                               </div>
                               {i < simResult.pipelineAudit.stages.length - 1 && (
                                 <div className="w-3 h-px bg-slate-300 dark:bg-slate-600" />

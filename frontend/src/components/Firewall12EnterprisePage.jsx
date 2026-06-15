@@ -22,6 +22,7 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { useFirewallData } from "../hooks/useFirewallData";
 import { useAuth } from "../context/AuthContext";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
@@ -276,7 +277,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
       <section className="grid gap-4 xl:grid-cols-3">
         <ChartCard title="Event Trend">
           {firewallData.loading && trendData.length === 0 ? sectionSkeleton() : (
-            <ResponsiveContainer width="100%" height={210}>
+            <SafeResponsiveChart className="h-[210px] w-full">
               <LineChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
                 <XAxis dataKey="time" tick={{ fontSize: 11 }} />
@@ -284,7 +285,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
                 <Tooltip />
                 <Line type="monotone" dataKey="primary" stroke="#6b7280" strokeWidth={2} dot={false} />
               </LineChart>
-            </ResponsiveContainer>
+            </SafeResponsiveChart>
           )}
         </ChartCard>
 
@@ -317,7 +318,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
 
         <ChartCard title="Top Categories">
           {firewallData.loading && categoryData.length === 0 ? sectionSkeleton() : (
-            <ResponsiveContainer width="100%" height={210}>
+            <SafeResponsiveChart className="h-[210px] w-full">
               <BarChart data={categoryData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
                 <XAxis dataKey="name" hide />
@@ -325,7 +326,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
                 <Tooltip />
                 <Bar dataKey="value" fill="#6b7280" radius={[0, 6, 6, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </SafeResponsiveChart>
           )}
         </ChartCard>
       </section>

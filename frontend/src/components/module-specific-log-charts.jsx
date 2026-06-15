@@ -3,6 +3,7 @@ import {
   ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 
 export function getModuleLogCharts(logData) {
   const moduleId = detectModuleId(logData);
@@ -70,40 +71,40 @@ function get11LogCharts(logData) {
       {
         title: "Request Processing Timeline",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <LineChart data={requestTimeline}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="step" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip /><Line type="monotone" dataKey="latency" stroke="#14b8a6" strokeWidth={2} name="Latency (ms)" />
             </LineChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Authentication Breakdown",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={authBreakdown} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="phase" stroke="#64748b" tick={{ fontSize: 10 }} width={120} />
               <Tooltip /><Bar dataKey="duration" fill="#8b5cf6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Token Usage Distribution",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <PieChart>
               <Pie data={tokenUsage} cx="50%" cy="50%" outerRadius={90} dataKey="tokens" label={({ type, tokens }) => `${type}: ${tokens}`}>
                 {tokenUsage.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Pie>
               <Tooltip />
             </PieChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -180,7 +181,7 @@ function get12LogCharts(logData) {
       {
         title: hasAudit ? "Pipeline Stage Latency (real audit)" : (hasStageData ? `Pipeline Stage: ${stageHint.charAt(0).toUpperCase() + stageHint.slice(1)}` : "Pipeline Stage (no stage data)"),
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={pipelineStages}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="stage" stroke="#64748b" tick={{ fontSize: 11 }} />
@@ -188,13 +189,13 @@ function get12LogCharts(logData) {
               <Tooltip />
               <Bar dataKey="latency" fill="#8b5cf6" name="Latency (ms)" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: hasAudit ? "Stage Verdicts (real audit)" : "Detection vs Passed by Stage",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={detectionFlow}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="stage" stroke="#64748b" tick={{ fontSize: 11 }} />
@@ -204,20 +205,20 @@ function get12LogCharts(logData) {
               <Bar dataKey="flagged" fill="#f59e0b" stackId="a" name="Flagged/Rewritten" />
               <Bar dataKey="passed" fill="#10b981" stackId="a" name="Passed" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: hasAudit ? "Document Filtering Funnel (real audit)" : "Stage Completion Funnel",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={docFunnel} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="stage" stroke="#64748b" tick={{ fontSize: 11 }} width={80} />
               <Tooltip /><Bar dataKey="documents" fill="#14b8a6" name="Documents" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -250,40 +251,40 @@ function get13LogCharts(logData) {
       {
         title: "Document Similarity Scores",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={similarityScores}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="doc" stroke="#64748b" tick={{ fontSize: 10 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 1]} />
               <Tooltip /><Bar dataKey="similarity" fill="#8b5cf6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Retrieval Performance Radar",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <RadarChart data={retrievalMetrics}>
               <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
               <PolarAngleAxis dataKey="metric" stroke="#64748b" tick={{ fontSize: 11 }} />
               <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 10 }} />
               <Radar name="Score" dataKey="value" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.6} /><Tooltip />
             </RadarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Query Response Time Breakdown",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <PieChart>
               <Pie data={timeBreakdown} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}ms`}>
                 {timeBreakdown.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Pie>
               <Tooltip />
             </PieChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -318,40 +319,40 @@ function get14LogCharts(logData) {
       {
         title: "Context Field Sizes (tokens)",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={fieldSizes}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="field" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip /><Bar dataKey="size" fill="#14b8a6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "PII Detections by Type",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <PieChart>
               <Pie data={piiDetections} cx="50%" cy="50%" outerRadius={90} dataKey="count" label={({ type, count }) => `${type}: ${count}`}>
                 {piiDetections.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Pie>
               <Tooltip />
             </PieChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Assembly Process Timeline",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={timeline} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="phase" stroke="#64748b" tick={{ fontSize: 10 }} width={120} />
               <Tooltip /><Bar dataKey="duration" fill="#8b5cf6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -387,40 +388,40 @@ function get15LogCharts(logData) {
       {
         title: "Routing Decision Factors",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <RadarChart data={routingDecision}>
               <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
               <PolarAngleAxis dataKey="factor" stroke="#64748b" tick={{ fontSize: 11 }} />
               <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 10 }} />
               <Radar name="Score" dataKey="score" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.6} /><Tooltip />
             </RadarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Cost Comparison",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={costComparison}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="model" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip /><Bar dataKey="cost" fill="#8b5cf6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Response Time Breakdown",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <PieChart>
               <Pie data={timeBreakdown} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}ms`}>
                 {timeBreakdown.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Pie>
               <Tooltip />
             </PieChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -453,7 +454,7 @@ function get16LogCharts(logData) {
       {
         title: "Risk Score Trend",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <AreaChart data={riskTrend}>
               <defs>
                 <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1">
@@ -466,33 +467,33 @@ function get16LogCharts(logData) {
               <Tooltip />
               <Area type="monotone" dataKey="risk" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#riskGradient)" />
             </AreaChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Model Health Metrics",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <RadarChart data={isolationMetrics}>
               <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
               <PolarAngleAxis dataKey="metric" stroke="#64748b" tick={{ fontSize: 10 }} />
               <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 10 }} />
               <Radar name="Score" dataKey="value" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.6} /><Tooltip />
             </RadarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Isolation Decision Timeline",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={timeline} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="phase" stroke="#64748b" tick={{ fontSize: 11 }} width={100} />
               <Tooltip /><Bar dataKey="duration" fill="#ef4444" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -528,40 +529,40 @@ function get17LogCharts(logData) {
       {
         title: "Guardrail Confidence Scores",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={guardrailScores}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="guardrail" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 1]} />
               <Tooltip /><Bar dataKey="score" fill="#8b5cf6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Content Analysis Results",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <PieChart>
               <Pie data={contentAnalysis} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ category, value }) => `${category}: ${value}%`}>
                 {contentAnalysis.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Pie>
               <Tooltip />
             </PieChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Processing Pipeline",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={pipeline} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="stage" stroke="#64748b" tick={{ fontSize: 10 }} width={100} />
               <Tooltip /><Bar dataKey="duration" fill="#14b8a6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -575,14 +576,14 @@ function getDefaultLogCharts(logData) {
       {
         title: "Processing Timeline",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <LineChart data={[{ step: 1, value }]}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="step" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip /><Line type="monotone" dataKey="value" stroke="#14b8a6" strokeWidth={2} />
             </LineChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],

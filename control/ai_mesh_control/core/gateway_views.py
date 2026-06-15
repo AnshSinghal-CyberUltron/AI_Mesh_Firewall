@@ -41,6 +41,23 @@ def _meta(agent, key, default=None):
     return (agent.metadata or {}).get(key, default)
 
 
+def _safe_int(value, default=0):
+    """Coerce an untrusted ``Agent.metadata`` value to int.
+
+    M-24: gateway telemetry metadata is agent-supplied JSON, so counters may
+    arrive as strings ("1542", "abc"), floats, None, or arbitrary junk. A bad
+    value must degrade to *default* instead of raising TypeError/ValueError
+    from a bare int() cast and 500-ing the whole stats dashboard.
+
+    Goes through float() first so numeric strings like "12.5" coerce instead
+    of raising; OverflowError covers float("inf").
+    """
+    try:
+        return int(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
 def _top_blocked_rules_for_agent(agent_id, limit=10):
     """Return formatted string of top blocked rules for this gateway agent."""
     from collections import defaultdict
@@ -135,15 +152,14 @@ class GatewayStatsListView(APIView):
         results = []
         now = timezone.now()
         for agent in gateways:
-            total = _meta(agent, "total_requests") or 0
-            blocked = _meta(agent, "blocked") or 0
-            allowed = _meta(agent, "allowed") or 0
-            total = int(total)
-            blocked = int(blocked)
-            allowed = int(allowed)
+            # M-24: safe coercion \u2014 a string/garbage metadata value must not
+            # 500 the dashboard (these used to be unguarded int() casts).
+            total = _safe_int(_meta(agent, "total_requests"), 0)
+            blocked = _safe_int(_meta(agent, "blocked"), 0)
+            allowed = _safe_int(_meta(agent, "allowed"), 0)
             block_rate = round(blocked / total * 100, 1) if total > 0 else 0.0
-            avg_ms = _meta(agent, "avg_latency_ms")
-            avg_latency = f"{int(avg_ms)}ms" if avg_ms is not None else "\u2014"
+            avg_ms = _safe_int(_meta(agent, "avg_latency_ms"), None)
+            avg_latency = f"{avg_ms}ms" if avg_ms is not None else "\u2014"
             delta = now - agent.updated_at if agent.updated_at else None
             status_label = "HEALTHY" if delta and delta.total_seconds() < GATEWAY_STALE_MINUTES * 60 else "WARNING"
             results.append(
@@ -151,14 +167,14 @@ class GatewayStatsListView(APIView):
                     "serverId": str(agent.id),
                     "serverName": agent.name,
                     "location": _meta(agent, "location") or "\u2014",
-                    "rulesApplied": _meta(agent, "rules_applied") or 0,
+                    "rulesApplied": _safe_int(_meta(agent, "rules_applied"), 0),
                     "rulesTriggered": rules_triggered_by_agent.get(str(agent.id), 0),
                     "totalRequests": total,
                     "blocked": blocked,
                     "allowed": allowed,
                     "blockRate": block_rate,
                     "avgLatency": avg_latency,
-                    "activeConn": _meta(agent, "active_connections") or 0,
+                    "activeConn": _safe_int(_meta(agent, "active_connections"), 0),
                     "topBlockedRules": _top_blocked_rules_for_agent(agent.id),
                     "status": status_label,
                 }
@@ -235,10 +251,11 @@ class SimulatorDefaultGatewayKeyView(APIView):
 
         # Idempotent provisioning: ALWAYS return the org's single existing active
         # simulator key (ensure_simulator_for_org mints one only when none is
-        # active, and collapses any duplicates to one). The plaintext `key` is
-        # returned ONLY when a key is newly created — we never revoke-and-recreate
-        # just to hand back plaintext. That rotate-on-ensure behavior churned the
-        # org through dozens of keys and broke the one-key-per-org invariant.
+        # active, and collapses any duplicates to one). For recoverable keys the
+        # plaintext comes back on every call — the SAME stable key — so we never
+        # revoke-and-recreate just to hand back plaintext. That rotate-on-ensure
+        # behavior churned the org through dozens of keys and broke the
+        # one-key-per-org invariant.
         # `?ensure=1` is accepted for backwards-compat but no longer rotates;
         # explicit rotation is a separate, user-triggered action.
         _ = request.query_params.get("ensure")  # back-compat; no longer triggers rotation
@@ -320,6 +337,11 @@ class IsolationPlaygroundGatewayKeyView(APIView):
                 "project_id": key.project_id,
                 "org_id": org.id,
                 "org_slug": org.slug,
+                # SCALE (M-25a): GatewayAPIKey.risk_score is a FRACTION in
+                # [0.0, 1.0] — NOT the 0-100 percentage used by
+                # ModelState.risk_score. The playground UI renders this as a
+                # fraction (riskScore.toFixed(2)); multiply by 100 before
+                # comparing against any ModelState score/threshold.
                 "risk_score": key.risk_score,
                 "storage_key": storage_key,
             }
@@ -343,6 +365,8 @@ class IsolationPlaygroundGatewayKeyView(APIView):
             "project_id": key_instance.project_id,
             "org_id": org.id,
             "org_slug": org.slug,
+            # SCALE (M-25a): fraction in [0.0, 1.0] (GatewayAPIKey scale),
+            # not the ModelState 0-100 percentage.
             "risk_score": key_instance.risk_score,
             "storage_key": storage_key,
             "created": bool(raw_key),
@@ -387,6 +411,8 @@ class IsolationPlaygroundRotateView(APIView):
                 "project_id": key_instance.project_id,
                 "org_id": org.id,
                 "org_slug": org.slug,
+                # SCALE (M-25a): fraction in [0.0, 1.0] (GatewayAPIKey scale),
+                # not the ModelState 0-100 percentage.
                 "risk_score": key_instance.risk_score,
                 "storage_key": storage_key,
                 "key": raw_key,

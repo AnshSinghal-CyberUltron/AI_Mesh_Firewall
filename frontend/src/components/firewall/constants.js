@@ -13,7 +13,7 @@ export const FIREWALL_SECTIONS = [
   { id: "alerting", label: "Security Alerting & Notifications" },
   { id: "llm-connections", label: "LLM Model Connections" },
   { id: "vector-db", label: "Vector Database Connection" },
-  { id: "zeroshield-test", label: "ZeroShield Guard Model Test" },
+  { id: "zeroshield-test", label: "ZeroShield Model Test" },
 ];
 
 export const COMPLIANCE_OPTIONS = ["SOC2", "ISO27001", "HIPAA", "GDPR", "PCI-DSS", "NIST"];

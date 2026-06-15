@@ -48,6 +48,49 @@ logger = logging.getLogger(__name__)
 # MCP codes that map to toolOverreach
 _TOOL_OVERREACH_CODES = frozenset(f"MCP{i:02d}" for i in range(1, 11))
 
+# Canonical, user-facing name for the reserved platform/guard model. Its upstream
+# id/size/provider must NEVER reach a client surface (graph node, chart slice,
+# threat-feed entry). See core.models.platform_guard_model_names / R4.
+_CANONICAL_PLATFORM_MODEL_NAME = "zeroshield-model"
+
+# Substrings that identify a reserved platform/guard/bedrock model id even when it
+# does not exactly match a registered name (e.g. a raw client-supplied or upstream
+# string). Any model name containing one of these is normalized to the canonical
+# name so the leaky upstream id is never reflected back to a client.
+_RESERVED_MODEL_TOKENS = (
+    "zeroshield-guard",
+    "gpt-oss",
+    "120b",
+    "bedrock",
+    "claude-haiku",
+    "claude-3-haiku",
+    "haiku",
+    "anthropic",
+)
+
+
+def _canonicalize_model_name(model) -> str:
+    """Map any platform/guard/bedrock model identifier to the canonical user-facing name.
+
+    Returns the canonical "zeroshield-model" for reserved ids (exact registered
+    names from core.models, or any string containing a reserved token); otherwise
+    returns the stripped original string. Returns "" for empty/None input so callers
+    can skip surfacing an absent model.
+    """
+    name = str(model or "").strip()
+    if not name:
+        return ""
+    lowered = name.lower()
+    try:
+        from core.models import platform_guard_model_names
+
+        reserved_exact = platform_guard_model_names()
+    except Exception:
+        reserved_exact = frozenset({_CANONICAL_PLATFORM_MODEL_NAME})
+    if lowered in reserved_exact or any(tok in lowered for tok in _RESERVED_MODEL_TOKENS):
+        return _CANONICAL_PLATFORM_MODEL_NAME
+    return name
+
 # All OWASP vector codes for LLM, MCP, Agentic
 OWASP_LLM_VECTORS = [f"LLM{i:02d}" for i in range(1, 11)]
 OWASP_MCP_VECTORS = [f"MCP{i:02d}" for i in range(1, 11)]
@@ -84,7 +127,14 @@ def _enforcement_events_for_request(request, base_queryset=None):
 
 
 def _event_organization_id(ev):
-    """Return organization_id for an EnforcementEvent (from endpoint, agent's endpoint, or policy), or None."""
+    """Return organization_id for an EnforcementEvent.
+
+    Prefers the direct organization FK (set by the telemetry drain on drained
+    ingestion events that carry no endpoint/agent/policy); falls back to the
+    legacy endpoint / agent's endpoint / policy org derivation.
+    """
+    if ev.organization_id:
+        return ev.organization_id
     if ev.endpoint_id:
         ep = Endpoint.objects.filter(pk=ev.endpoint_id).values_list("organization_id", flat=True).first()
         return ep
@@ -99,11 +149,35 @@ def _event_organization_id(ev):
 
 
 def _tools_invoked_with_model(meta):
-    """Return tools_invoked from metadata; when empty, include model so UI can show it (e.g. gpt-5.2)."""
+    """Return tools_invoked from metadata; when empty, include model so UI can show it (e.g. gpt-5.2).
+
+    The model fallback is canonicalized so a reserved platform/guard/bedrock id is
+    never surfaced verbatim to the client (R4).
+    """
     tools = meta.get("tools_invoked") or []
     if not tools and meta.get("model"):
-        return [str(meta["model"])]
+        canonical = _canonicalize_model_name(meta.get("model"))
+        return [canonical] if canonical else []
     return list(tools)
+
+
+def _sanitized_meta_for_client(meta):
+    """Return a shallow copy of metadata safe to reflect to a client surface.
+
+    Canonicalizes a reserved platform/guard/bedrock model id under metadata.model
+    so the raw upstream id is never echoed back in a threat-feed entry (R4). Leaves
+    the original metadata dict untouched.
+    """
+    if not isinstance(meta, dict):
+        return meta
+    if not meta.get("model"):
+        return meta
+    canonical = _canonicalize_model_name(meta.get("model"))
+    if canonical == str(meta.get("model") or "").strip():
+        return meta
+    sanitized = dict(meta)
+    sanitized["model"] = canonical
+    return sanitized
 
 
 def _enforcement_action_text(action, source, metadata):
@@ -336,7 +410,9 @@ class ThreatFeedView(APIView):
         ],
     )
     def get(self, request):
-        hours = int(request.query_params.get("hours", 48))
+        # Clamp hours to a sane window so a huge/negative value can't OverflowError
+        # in timedelta() (consistent with peer endpoints like owasp-stats).
+        hours = min(max(int(request.query_params.get("hours", 48)), 1), 8760)
         limit = min(int(request.query_params.get("limit", 100)), 500)
         offset = max(0, int(request.query_params.get("offset", 0)))
         source_filter = request.query_params.get("source")
@@ -467,7 +543,7 @@ class ThreatFeedView(APIView):
                     "action": ev.action,
                     "source": source,
                     "source_display": source_display,
-                    "metadata": meta,
+                    "metadata": _sanitized_meta_for_client(meta),
                     "incident_title": get_incident_title(category, subcategory, source),
                     "enforcement_action_text": _enforcement_action_text(ev.action, source, meta),
                     "prompt_lineage": meta.get("prompt_lineage") or [],
@@ -635,7 +711,7 @@ class ThreatFeedView(APIView):
                     "action": ev.action,
                     "source": source,
                     "source_display": source_display,
-                    "metadata": meta,
+                    "metadata": _sanitized_meta_for_client(meta),
                     "incident_title": get_incident_title(category, subcategory, source),
                     "enforcement_action_text": _enforcement_action_text(ev.action, source, meta),
                     "prompt_lineage": meta.get("prompt_lineage") or [],
@@ -855,45 +931,35 @@ class SocKpisView(APIView):
 
         base_events = EnforcementEvent.objects.filter(created_at__gte=since)
         events = _enforcement_events_for_request(request, base_events)
-        total = events.count()
-        blocked = events.filter(action=ACTION_BLOCK).count()
-        redacted = events.filter(action=ACTION_REDACT).count()
 
-        block_rate = round(blocked / total * 100, 1) if total else 0
-        redact_rate = round(redacted / total * 100, 1) if total else 0
-        enforcement_rate = round((blocked + redacted) / total * 100, 1) if total else 0
+        # PERF: fetch (action, metadata) ONCE and compute everything in a single
+        # Python pass. The previous code ran 3 separate COUNT queries + an
+        # action GROUP BY + pulled every row's metadata JSON TWICE (the
+        # critical-count loop and the latency loop each re-fetched all metadata),
+        # making this view CPU/IO-heavy on every poll. Mirrors ModuleKpisView.
+        from collections import Counter
 
-        # "Critical" = events where security_risk_score in metadata >= 80
-        # We do this in Python to avoid a JSONField annotation that may not be
-        # supported on all DB backends without extra effort.
-        critical_count = sum(
-            1 for ev in events.values("metadata") if (ev.get("metadata") or {}).get("security_risk_score", 0) >= 80
-        )
-
-        # MTTR: average time from creation to resolution for resolved events in the time window
-        resolved = events.filter(incident_status="resolved", resolved_at__isnull=False)
-        avg_duration = resolved.annotate(
-            duration=ExpressionWrapper(
-                F("resolved_at") - F("created_at"),
-                output_field=DurationField(),
-            )
-        ).aggregate(avg=Avg("duration"))["avg"]
-        mttr_minutes = round(avg_duration.total_seconds() / 60, 1) if avg_duration else None
-
-        # Action breakdown for enforcement action distribution chart
-        action_breakdown = dict(
-            events.values("action").annotate(count=Count("id")).values_list("action", "count")
-        )
-
-        # ── Latency distribution from metadata.latency_ms ──
+        rows = list(events.values("action", "metadata"))
+        total = len(rows)
+        blocked = redacted = critical_count = 0
+        action_counts: Counter = Counter()
         latency_buckets = {"0-50ms": 0, "50-100ms": 0, "100-250ms": 0, "250-500ms": 0, "500ms-1s": 0, "1s+": 0}
-        latency_values = []
-        for ev in events.values("metadata"):
-            lat = 0
-            meta = ev.get("metadata") or {}
+        latency_sum = 0.0
+        for row in rows:
+            action = row.get("action")
+            action_counts[action] += 1
+            if action == ACTION_BLOCK:
+                blocked += 1
+            elif action == ACTION_REDACT:
+                redacted += 1
+            meta = row.get("metadata")
             if isinstance(meta, dict):
+                if (meta.get("security_risk_score", 0) or 0) >= 80:
+                    critical_count += 1
                 lat = meta.get("latency_ms", 0) or 0
-            latency_values.append(lat)
+            else:
+                lat = 0
+            latency_sum += lat
             if lat <= 50:
                 latency_buckets["0-50ms"] += 1
             elif lat <= 100:
@@ -906,8 +972,24 @@ class SocKpisView(APIView):
                 latency_buckets["500ms-1s"] += 1
             else:
                 latency_buckets["1s+"] += 1
+
+        block_rate = round(blocked / total * 100, 1) if total else 0
+        redact_rate = round(redacted / total * 100, 1) if total else 0
+        enforcement_rate = round((blocked + redacted) / total * 100, 1) if total else 0
+        action_breakdown = dict(action_counts)
         latency_distribution = [{"range": k, "count": v} for k, v in latency_buckets.items()]
-        avg_latency_ms = round(sum(latency_values) / max(len(latency_values), 1), 2) if latency_values else 0
+        avg_latency_ms = round(latency_sum / total, 2) if total else 0
+
+        # MTTR: average time from creation to resolution for resolved events in the
+        # time window (cheap DB aggregate — no metadata, kept as its own query).
+        resolved = events.filter(incident_status="resolved", resolved_at__isnull=False)
+        avg_duration = resolved.annotate(
+            duration=ExpressionWrapper(
+                F("resolved_at") - F("created_at"),
+                output_field=DurationField(),
+            )
+        ).aggregate(avg=Avg("duration"))["avg"]
+        mttr_minutes = round(avg_duration.total_seconds() / 60, 1) if avg_duration else None
 
         # ── Health score radar ──
         uptime_score = 95 if total > 0 else 0
@@ -1411,14 +1493,45 @@ class ModuleChartsView(APIView):
         return {"key": "threat_breakdown", "title": "Threat Breakdown", "type": "pie", "data": data}
 
     def _build_action_distribution(self, events: list) -> dict:
-        action_counts: dict[str, int] = defaultdict(int)
+        # L5: bucket actions to MATCH the §1.7 engine card's actionBucket semantics
+        # so the card and this chart reconcile (they previously diverged: the card
+        # folds flag/rewrite/redact into "Redacted" while this chart showed them as
+        # separate raw slices). block→Blocked; redact/rewrite/flag/alert/
+        # model_downgrade→Redacted (content modified); monitor/allow→Allowed.
+        _BUCKET = {
+            "block": "Blocked",
+            "redact": "Redacted", "rewrite": "Redacted", "flag": "Redacted",
+            "alert": "Redacted", "model_downgrade": "Redacted",
+            # C-3: the live kill-switch model-downgrade action string is "reroute"
+            # (not "model_downgrade"), so the original mapping never fired and
+            # reroute interventions silently fell into the "Allowed" default —
+            # under-reporting firewall enforcement on the pie. A reroute IS an
+            # intervention (content/route modified) → Redacted bucket. "confirm"
+            # and "pass" are non-intervening → Allowed (explicit, not defaulted).
+            "reroute": "Redacted",
+            "monitor": "Allowed", "monitored": "Allowed", "allow": "Allowed", "allowed": "Allowed",
+            "confirm": "Allowed", "pass": "Allowed",
+        }
+        bucket_counts: dict[str, int] = defaultdict(int)
+        _unmapped: set = set()
         for ev in events:
-            action_counts[ev.get("action", "allow")] += 1
+            _act = str(ev.get("action", "allow")).lower()
+            if _act not in _BUCKET:
+                # C-3: surface unknown/corrupt action strings instead of silently
+                # folding them into Allowed (so new actions + ingestion artifacts
+                # like the 'XXXXXXXXXXXXXXXX' mask are observable, not hidden).
+                _unmapped.add(_act)
+            bucket_counts[_BUCKET.get(_act, "Allowed")] += 1
+        if _unmapped:
+            logger.warning(
+                "action_distribution: %d unmapped action value(s) folded into Allowed: %s",
+                len(_unmapped), sorted(_unmapped)[:10],
+            )
 
-        color_map = {"allow": "#10b981", "block": "#ef4444", "redact": "#f59e0b", "monitor": "#8b5cf6"}
+        color_map = {"Blocked": "#ef4444", "Redacted": "#f59e0b", "Allowed": "#10b981"}
         data = [
-            {"name": a.title(), "value": c, "color": color_map.get(a, "#64748b")}
-            for a, c in sorted(action_counts.items(), key=lambda x: -x[1])
+            {"name": name, "value": c, "color": color_map.get(name, "#64748b")}
+            for name, c in sorted(bucket_counts.items(), key=lambda x: -x[1])
         ]
         return {"key": "action_distribution", "title": "Action Distribution", "type": "pie", "data": data}
 
@@ -1460,7 +1573,9 @@ class ModuleChartsView(APIView):
         counts: dict[str, int] = defaultdict(int)
         for ev in events:
             meta = ev.get("metadata") or {}
-            model = meta.get("model", "")
+            # Canonicalize so reserved platform/guard/bedrock ids collapse into a
+            # single "zeroshield-model" slice rather than leaking the upstream id (R4).
+            model = _canonicalize_model_name(meta.get("model"))
             if model:
                 counts[model] += 1
 
@@ -1642,14 +1757,14 @@ class AttackGraphView(APIView):
                 add_node(nid, f"User {user_id}", "user", risk)
                 user_node = nid
 
-            model = meta.get("model")
+            # Canonicalize so a reserved platform/guard/bedrock id is never reflected
+            # as a graph node label/id; it collapses into "zeroshield-model" (R4).
+            model = _canonicalize_model_name(meta.get("model"))
             if model:
-                model = str(model).strip()
-                if model:
-                    nid = f"model_{model}"
-                    add_node(nid, model, "model", risk)
-                    if user_node:
-                        add_edge(user_node, nid)
+                nid = f"model_{model}"
+                add_node(nid, model, "model", risk)
+                if user_node:
+                    add_edge(user_node, nid)
 
             tools = meta.get("tools_invoked") or []
             if isinstance(tools, str):
@@ -1730,26 +1845,26 @@ class EscalateIncidentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        try:
-            ev = EnforcementEvent.objects.get(pk=pk)
-        except EnforcementEvent.DoesNotExist:
-            return Response({"detail": "Incident not found."}, status=404)
-
         from auth.utils import get_request_organization
 
         request_org_id = get_request_organization(request)
         if request_org_id is not None:
             request_org_id = request_org_id.id
+
+        # Fail-closed tenant scoping: non-superusers may only act on incidents in
+        # their own org. Scope the lookup itself so cross-org / org-less requests
+        # 404 rather than fall through (drained events have only organization_id).
+        base_qs = EnforcementEvent.objects.all()
+        if not request.user.is_superuser:
+            if request_org_id is None:
+                return Response({"detail": "Incident not found."}, status=404)
+            base_qs = base_qs.filter(organization_id=request_org_id)
+        try:
+            ev = base_qs.get(pk=pk)
+        except EnforcementEvent.DoesNotExist:
+            return Response({"detail": "Incident not found."}, status=404)
+
         event_org_id = _event_organization_id(ev)
-        if (
-            event_org_id is not None
-            and request_org_id is not None
-            and event_org_id != request_org_id
-            and not request.user.is_superuser
-        ):
-            return Response({"detail": "Incident not found."}, status=404)
-        if event_org_id is not None and request_org_id is None and not request.user.is_superuser:
-            return Response({"detail": "Incident not found."}, status=404)
 
         if ev.incident_status == "resolved":
             return Response({"detail": "Incident is already resolved."}, status=400)
@@ -1824,26 +1939,26 @@ class ResolveIncidentView(APIView):
         if not _is_platform_admin(request.user):
             raise PermissionDenied("Only admins can resolve incidents.")
 
-        try:
-            ev = EnforcementEvent.objects.get(pk=pk)
-        except EnforcementEvent.DoesNotExist:
-            return Response({"detail": "Incident not found."}, status=404)
-
         from auth.utils import get_request_organization
 
         request_org_id = get_request_organization(request)
         if request_org_id is not None:
             request_org_id = request_org_id.id
+
+        # Fail-closed tenant scoping: non-superusers may only act on incidents in
+        # their own org. Scope the lookup itself so cross-org / org-less requests
+        # 404 rather than fall through (drained events have only organization_id).
+        base_qs = EnforcementEvent.objects.all()
+        if not request.user.is_superuser:
+            if request_org_id is None:
+                return Response({"detail": "Incident not found."}, status=404)
+            base_qs = base_qs.filter(organization_id=request_org_id)
+        try:
+            ev = base_qs.get(pk=pk)
+        except EnforcementEvent.DoesNotExist:
+            return Response({"detail": "Incident not found."}, status=404)
+
         event_org_id = _event_organization_id(ev)
-        if (
-            event_org_id is not None
-            and request_org_id is not None
-            and event_org_id != request_org_id
-            and not request.user.is_superuser
-        ):
-            return Response({"detail": "Incident not found."}, status=404)
-        if event_org_id is not None and request_org_id is None and not request.user.is_superuser:
-            return Response({"detail": "Incident not found."}, status=404)
 
         if ev.incident_status == "resolved":
             return Response({"detail": "Incident is already resolved."}, status=400)

@@ -27,6 +27,17 @@ LOG = logging.getLogger("gateway.context_guard")
 
 DEFAULT_THREAD_POOL_SIZE = 4
 
+# M-19 (truncation-order invariant): the ONLY truncation in this module is
+# the evidence snippet recorded in verdicts (``match.group(0)[:SNIPPET_MAX_CHARS]``).
+# It is applied strictly AFTER the guard decision: every regex / PII / secret
+# scan runs over the FULL document text, the verdict (block/flag/allow) is
+# decided from that full-text result, and only then is the *reported* match
+# trimmed so telemetry payloads stay bounded and never replay whole documents.
+# Do NOT "optimize" by slicing the document before scanning — a threat planted
+# beyond the slice boundary would silently bypass the guard
+# (see tests/test_context_guard.py::TestNoEarlyTruncation).
+SNIPPET_MAX_CHARS = 100
+
 
 @dataclass
 class ContextScanVerdict:
@@ -206,7 +217,12 @@ class ContextGuard:
         )
 
     def _scan_single_document_sync(self, text: str) -> ContextScanVerdict:
-        """Synchronous scan of a single document."""
+        """Synchronous scan of a single document.
+
+        Scans the FULL ``text`` — the ``[:SNIPPET_MAX_CHARS]`` slices below
+        truncate only the evidence snippet reported in the verdict, never the
+        text being scanned (see module-level truncation-order invariant).
+        """
         if not text:
             return ContextScanVerdict()
 
@@ -218,8 +234,8 @@ class ContextGuard:
                     action="block",
                     threat_type="indirect_injection",
                     confidence=0.95,
-                    detail=f"Indirect prompt injection in document: {match.group(0)[:100]}",
-                    matched_patterns=[match.group(0)[:100]],
+                    detail=f"Indirect prompt injection in document: {match.group(0)[:SNIPPET_MAX_CHARS]}",
+                    matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
                 )
 
         for pattern_str in HIDDEN_INSTRUCTION_PATTERNS:
@@ -242,8 +258,8 @@ class ContextGuard:
                     action="flag",
                     threat_type="toxicity",
                     confidence=0.8,
-                    detail=f"Toxic content in document: {match.group(0)[:100]}",
-                    matched_patterns=[match.group(0)[:100]],
+                    detail=f"Toxic content in document: {match.group(0)[:SNIPPET_MAX_CHARS]}",
+                    matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
                 )
 
         pii_found = detect_pii(text)

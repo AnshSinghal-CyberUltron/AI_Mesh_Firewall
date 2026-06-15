@@ -7,6 +7,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { copyToClipboard } from "../lib/clipboard";
 import { getModuleLogCharts } from "./module-specific-log-charts";
 import { useTheme } from "../context/ThemeContext";
@@ -142,7 +143,7 @@ export function LogDetailPage({ logData, onBack }) {
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm p-6">
         <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">Request Latency</h3>
-        <ResponsiveContainer width="100%" height={220}>
+        <SafeResponsiveChart className="h-[220px] w-full">
           <AreaChart data={timelineData}>
             <defs>
               <linearGradient id="colorLatency" x1="0" y1="0" x2="0" y2="1">
@@ -172,7 +173,7 @@ export function LogDetailPage({ logData, onBack }) {
               activeDot={{ r: 4, fill: "#3b82f6", stroke: isDark ? "#0f172a" : "#ffffff", strokeWidth: 2 }}
             />
           </AreaChart>
-        </ResponsiveContainer>
+        </SafeResponsiveChart>
       </div>
 
       {/* Module-Specific Log Detail Charts */}

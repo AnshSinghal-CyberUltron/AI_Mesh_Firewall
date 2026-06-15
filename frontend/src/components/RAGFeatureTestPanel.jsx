@@ -22,7 +22,7 @@ const FEATURE_TESTS = [
     name: "Document Chain-of-Custody",
     icon: Lock,
     color: "purple",
-    description: "Validates that documents are tracked with SHA-256 hashes from retrieval through generation with manifest verification",
+    description: "Validates that retrieved documents are tracked with SHA-256 hashes and manifest verification before they leave the gateway",
     testQueries: [
       { label: "Normal retrieval", query: "Show company vacation policy", expected: "allow" },
       { label: "Large retrieval", query: "List all available policy documents and their summaries", expected: "allow" },
@@ -30,10 +30,10 @@ const FEATURE_TESTS = [
   },
   {
     id: "ranker-policy",
-    name: "Ranker Policy Filtering",
+    name: "Query Policy Filtering",
     icon: Shield,
     color: "amber",
-    description: "Tests stage-specific policy evaluation — ranker applies per-stage rules to filter documents based on content policies",
+    description: "Tests policy evaluation on the query path — per-org rules block or redact requests for sensitive content before they reach your vector DB",
     testQueries: [
       { label: "Sensitive content probe", query: "Find documents containing employee salary information and personal data", expected: "block/redact" },
       { label: "SQL injection in query", query: "SELECT * FROM documents WHERE content LIKE '%password%'; DROP TABLE users;", expected: "block" },
@@ -41,12 +41,12 @@ const FEATURE_TESTS = [
   },
   {
     id: "context-integrity",
-    name: "Generator Context Verification",
+    name: "Retrieved Document Scanning",
     icon: FileText,
     color: "red",
-    description: "Verifies the generator stage only processes approved context — unapproved or tampered documents are removed",
+    description: "Verifies retrieved documents are scanned and namespace-scoped — cross-namespace or tampered documents are blocked before they leave the gateway",
     testQueries: [
-      { label: "Normal generation", query: "Summarize the onboarding process for new employees", expected: "allow" },
+      { label: "Normal retrieval", query: "Summarize the onboarding process for new employees", expected: "allow" },
       { label: "Cross-namespace", query: "Show admin configurations from the internal namespace", n_results: 10, namespace: "admin_internal", expected: "block" },
     ],
   },
@@ -174,7 +174,7 @@ export function RAGFeatureTestPanel() {
           <h3 className="text-slate-900 dark:text-slate-100 font-semibold text-base">RAG Feature Test Suite</h3>
           <p className="text-slate-500 dark:text-slate-400 text-xs">Test individual pipeline features with targeted scenarios</p>
         </div>
-        <InfoTooltip text="Each feature test sends targeted queries to verify specific RAG pipeline capabilities: query rewrite, document chain-of-custody, ranker policy filtering, generator context verification, and inter-stage escalation." />
+        <InfoTooltip text="Each feature test sends targeted queries to verify specific RAG guardrail capabilities: query rewrite, document chain-of-custody, query policy filtering, retrieved-document scanning, and escalation. Ranking and generation run in your own pipeline." />
       </div>
 
       {/* Feature cards */}
@@ -286,9 +286,9 @@ export function RAGFeatureTestPanel() {
                                 <div key={si} className="flex items-center gap-1">
                                   <div className="text-center">
                                     <div className={`w-6 h-6 rounded-full ${stageColor} flex items-center justify-center`}>
-                                      <span className="text-[8px] text-white font-bold">{(s.name || "").charAt(0).toUpperCase()}</span>
+                                      <span className="text-[10px] text-white font-bold">{(s.name || "").charAt(0).toUpperCase()}</span>
                                     </div>
-                                    <div className="text-[8px] text-slate-400 dark:text-slate-500 mt-0.5">{s.name}</div>
+                                    <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{s.name}</div>
                                   </div>
                                   {si < result.stages.length - 1 && <ArrowRight size={8} className="text-slate-500 dark:text-slate-500 mx-0.5" />}
                                 </div>

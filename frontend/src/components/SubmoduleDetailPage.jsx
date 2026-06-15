@@ -36,6 +36,7 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
 } from "recharts";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { createPortal } from "react-dom";
 import { copyToClipboard } from "../lib/clipboard";
 import { useTheme } from "../context/ThemeContext";
@@ -134,9 +135,9 @@ function ResponsiveChart({ height, children, placeholderMessage = "Preparing cha
   return (
     <div ref={containerRef} style={{ height }}>
       {isReady ? (
-        <ResponsiveContainer width="100%" height="100%">
+        <SafeResponsiveChart className="h-full w-full">
           {children}
-        </ResponsiveContainer>
+        </SafeResponsiveChart>
       ) : (
         <EmptyState message={placeholderMessage} compact={height <= 260} />
       )}
@@ -598,7 +599,10 @@ export function SubModuleDetailPage({
             <EmptyState message="No events found for this time range" />
           ) : (
             <div className="overflow-x-auto rounded-[24px] border border-slate-200/80 dark:border-slate-700">
-              <table className="w-full min-w-[780px] text-sm">
+              {/* L9: responsive min-width — on small screens the table can shrink
+                  further (the overflow-x-auto wrapper still scrolls if needed)
+                  rather than forcing a fixed 780px internal scroll. */}
+              <table className="w-full min-w-[600px] sm:min-w-[700px] md:min-w-[780px] text-sm">
                 <thead>
                   <tr className="bg-slate-50/80 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700">
                     {previewColumns.map((column, index) => (

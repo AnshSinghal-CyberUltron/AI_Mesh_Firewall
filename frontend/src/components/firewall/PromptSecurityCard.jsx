@@ -34,13 +34,13 @@ export function PromptSecurityCard({ config, onPatch, index }) {
           }
         />
         <FieldRow
-          label="Guard Model Execution Mode"
-          hint="Choose if the ZeroShield guard model runs before or after LLM forwarding"
+          label="ZeroShield Model Execution Mode"
+          hint="Choose if the ZeroShield Model runs before or after LLM forwarding"
           control={
             <Select
               value={config.tier2ExecutionMode}
               onChange={(e) => onPatch("tier2ExecutionMode", e.target.value)}
-              aria-label="Guard Model Execution Mode"
+              aria-label="ZeroShield Model Execution Mode"
               className="w-80"
             >
               <option value="sync_pre_llm">Sync Pre-LLM (recommended for strict blocking)</option>
@@ -49,18 +49,18 @@ export function PromptSecurityCard({ config, onPatch, index }) {
           }
         />
         <FieldRow
-          label="Guard Model Stream Hold"
+          label="ZeroShield Model Stream Hold"
           hint="Allow a short pre-stream hold window in async mode for block semantics"
           control={
             <ConfigSwitch
               checked={config.tier2StreamHoldEnabled}
               onCheckedChange={(v) => onPatch("tier2StreamHoldEnabled", v)}
-              label="Guard Model Stream Hold"
+              label="ZeroShield Model Stream Hold"
             />
           }
         />
         <FieldRow
-          label="Guard Model Stream Hold Timeout"
+          label="ZeroShield Model Stream Hold Timeout"
           hint="Max hold time before stream starts when hold mode is enabled"
           control={
             <NumberStepper

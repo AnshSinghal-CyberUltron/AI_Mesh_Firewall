@@ -31,10 +31,22 @@ const firewallTabToModuleId = {
   "firewall-1-7": "1.7",
 };
 
+// Whitelist of valid ?tab= values. Anything else (typos, stale links,
+// crafted URLs) falls back to the overview tab instead of leaking an
+// arbitrary string into layout/navigation state.
+const KNOWN_TABS = new Set([
+  "firewall",
+  "profile",
+  "settings",
+  "firewall-config",
+  ...Object.keys(firewallTabToModuleId),
+]);
+
 function DashboardApp() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "firewall";
+  const rawTab = searchParams.get("tab");
+  const activeTab = rawTab && KNOWN_TABS.has(rawTab) ? rawTab : "firewall";
   const [resultsTab, setResultsTab] = useState(null);
   const [logDetailData, setLogDetailData] = useState(null);
   const tabInitializedRef = useRef(false);
@@ -49,11 +61,14 @@ function DashboardApp() {
 
   useEffect(() => {
     if (!user || tabInitializedRef.current) return;
-    if (!searchParams.get("tab")) {
-      setActiveTab("firewall");
+    const tab = searchParams.get("tab");
+    // Normalize missing or unknown ?tab= values to the overview URL once on
+    // first authenticated render.
+    if (!tab || !KNOWN_TABS.has(tab)) {
+      setSearchParams({}, { replace: true });
     }
     tabInitializedRef.current = true;
-  }, [user, searchParams]);
+  }, [user, searchParams, setSearchParams]);
 
   const handleViewResults = (tabId) => {
     setResultsTab(tabId);

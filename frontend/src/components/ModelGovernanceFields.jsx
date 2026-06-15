@@ -175,7 +175,7 @@ export function ModelGovernanceFields({
                     <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">
                       {m.provider_display || m.provider}
                       {m.model_id && m.model_id !== m.model_name ? ` · ${m.model_id}` : ""}
-                      {!m.api_key_set ? " · API key missing" : ""}
+                      {m.api_key_set ? "" : m.api_key_env_var ? " · Env-var key" : " · API key missing"}
                       {inactive ? " · inactive" : ""}
                     </span>
                   </span>
@@ -198,6 +198,7 @@ export function ModelGovernanceFields({
           value={defaultModel || ""}
           disabled={disabled || !defaultOptions.length}
           onChange={(e) => onDefaultChange(e.target.value)}
+          aria-label="Default model"
           className="w-full min-h-[44px] bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white font-mono appearance-none cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 transition-colors disabled:opacity-50"
         >
           <option value="">— Select default —</option>

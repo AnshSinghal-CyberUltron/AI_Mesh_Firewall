@@ -18,6 +18,24 @@ _SENSITIVITY_ORDER = {
     "restricted": 3,
 }
 
+
+def _req_sensitivity_level(value: object) -> int:
+    """Resolve a CALLER-supplied data_sensitivity to a numeric level, FAIL-CLOSED.
+
+    An unknown, non-empty value ('topsecret', a typo) is treated as the MOST
+    restrictive level rather than defaulting to 0 (public). Otherwise a caller
+    could downgrade restricted data onto a public model simply by sending an
+    unrecognized-but-clearly-sensitive label — the gate already counts it as a
+    compliance demand, so the filter must agree.
+    """
+    key = str(value or "").strip().lower()
+    if key in _SENSITIVITY_ORDER:
+        return _SENSITIVITY_ORDER[key]
+    if key in ("", "public"):
+        return 0
+    return max(_SENSITIVITY_ORDER.values())
+
+
 SCOPE_CREDENTIAL = "credential"
 SCOPE_ORG_MODEL = "org_model"
 SCOPE_ORG_GLOBAL = "org_global"
@@ -53,8 +71,11 @@ def model_passes_hard_filters(
         model_tags = model.get("compliance_tags") or []
         if not all(tag in model_tags for tag in required_tags):
             return False
-    req_level = _SENSITIVITY_ORDER.get(data_sensitivity, 0)
-    model_level = _SENSITIVITY_ORDER.get(model.get("data_sensitivity_level", "public"), 0)
+    # Caller sensitivity fails CLOSED on unknown/mis-cased values; model level
+    # defaults to public (low clearance) so an unknown model level can't qualify
+    # for a high request.
+    req_level = _req_sensitivity_level(data_sensitivity)
+    model_level = _SENSITIVITY_ORDER.get(str(model.get("data_sensitivity_level", "public")).strip().lower(), 0)
     return model_level >= req_level
 
 
@@ -83,8 +104,18 @@ def resolve_compliant_fallback(
         if m.get("model_name")
     }
 
+    try:
+        from platform_models import is_platform_model_name as _is_platform_model
+    except ImportError:  # pragma: no cover - package-relative import
+        from .platform_models import is_platform_model_name as _is_platform_model
+
     def _eligible(name: str) -> bool:
         if not name or name == primary_model:
+            return False
+        # A reserved platform/guard model (zeroshield-guard-120b, Bedrock
+        # foundation IDs) must never be selected as a reroute target — it is
+        # internal ML, not an org inference model.
+        if _is_platform_model(name):
             return False
         entry = models_by_name.get(name)
         if not entry:

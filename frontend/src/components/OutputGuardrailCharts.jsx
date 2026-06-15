@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { BarChart3, RefreshCw, Loader2, Eye } from "lucide-react";
+import { BarChart3, RefreshCw, Loader2, Eye, AlertTriangle } from "lucide-react";
 import {
   AreaChart, Area, PieChart, Pie, Cell, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -47,6 +47,7 @@ export function OutputGuardrailCharts({ timeRange = "7d", moduleId = "1.7" }) {
   const [charts, setCharts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
   const fetchCharts = useCallback(
     async (background = false) => {
@@ -56,9 +57,14 @@ export function OutputGuardrailCharts({ timeRange = "7d", moduleId = "1.7" }) {
         if (res.ok) {
           const data = await res.json();
           setCharts(Array.isArray(data.charts) ? data.charts : []);
+          setError(null);
+        } else {
+          // Distinguish a backend failure from a genuinely-empty window: a bad
+          // request/outage must NOT collapse into the benign "No activity" copy.
+          setError(`Failed to load output analytics (HTTP ${res.status}).`);
         }
-      } catch {
-        /* non-blocking */
+      } catch (err) {
+        setError(`Failed to load output analytics: ${err?.message || "request failed"}`);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -113,6 +119,19 @@ export function OutputGuardrailCharts({ timeRange = "7d", moduleId = "1.7" }) {
         <div className="flex items-center justify-center py-10">
           <Loader2 className="h-5 w-5 animate-spin text-teal-500" />
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading analytics…</span>
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <div>{error}</div>
+          </div>
+          <button
+            onClick={() => fetchCharts(true)}
+            className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Retry
+          </button>
         </div>
       ) : !hasData ? (
         <div className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
@@ -174,7 +193,7 @@ export function OutputGuardrailCharts({ timeRange = "7d", moduleId = "1.7" }) {
                         innerRadius={42}
                         outerRadius={70}
                         paddingAngle={2}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        label={({ name, percent }) => `${name} ${(Number.isFinite(percent) ? percent * 100 : 0).toFixed(0)}%`}
                         labelLine={false}
                       >
                         {actions.data.map((d, i) => (

@@ -35,7 +35,7 @@ def services_health_view(request):
         result["database"] = {"status": "ok", "error": None}
     except Exception as exc:
         logger.warning("Health: database probe failed: %s", exc)
-        result["database"] = {"status": "error", "error": str(exc)}
+        result["database"] = {"status": "error", "error": None}  # FJ: str(exc) leaked DB DSN/host/user to an unauthenticated caller; logged server-side only
 
     # ── Redis ──
     try:
@@ -46,7 +46,7 @@ def services_health_view(request):
         result["redis"] = {"status": "ok", "error": None}
     except Exception as exc:
         logger.warning("Health: Redis probe failed: %s", exc)
-        result["redis"] = {"status": "error", "error": str(exc)}
+        result["redis"] = {"status": "error", "error": None}  # FJ: str(exc) leaked DB DSN/host/user to an unauthenticated caller; logged server-side only
 
     # ── Celery (implicit: proves worker + broker reachable) ──
     try:
@@ -55,12 +55,14 @@ def services_health_view(request):
         _pings = _inspector.ping() or {}
         _workers = list(_pings.keys())
         if _workers:
-            result["celery"] = {"status": "ok", "workers": _workers, "error": None}
+            # FJ: return a worker COUNT, not container hostnames, to an
+            # unauthenticated caller.
+            result["celery"] = {"status": "ok", "worker_count": len(_workers), "error": None}
         else:
-            result["celery"] = {"status": "error", "workers": [], "error": "No Celery workers responded"}
+            result["celery"] = {"status": "error", "worker_count": 0, "error": "No Celery workers responded"}
     except Exception as exc:
         logger.warning("Health: Celery probe failed: %s", exc)
-        result["celery"] = {"status": "error", "workers": [], "error": str(exc)}
+        result["celery"] = {"status": "error", "worker_count": 0, "error": None}  # FJ: str(exc) leaked broker host/creds
 
     # ── RabbitMQ (direct AMQP connection probe via kombu) ──
     try:
@@ -72,6 +74,6 @@ def services_health_view(request):
         result["rabbitmq"] = {"status": "ok", "error": None}
     except Exception as exc:
         logger.warning("Health: RabbitMQ probe failed: %s", exc)
-        result["rabbitmq"] = {"status": "error", "error": str(exc)}
+        result["rabbitmq"] = {"status": "error", "error": None}  # FJ: str(exc) leaked DB DSN/host/user to an unauthenticated caller; logged server-side only
 
     return JsonResponse(result)

@@ -1,11 +1,72 @@
 """
 Configuration for the AIGuardX Gateway Proxy (Phase 3).
 """
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 
 def get_env(key, default=None):
     return os.environ.get(key, default)
+
+
+def _env_int(key, default, *, min_value=None, max_value=None):
+    """
+    M-09: Safely parse an int env var.
+
+    A typo'd value (e.g. GATEWAY_PORT="8300x") previously crashed the whole
+    gateway at import/startup via a bare int(). This falls back to ``default``
+    and logs a warning instead, then clamps to [min_value, max_value] so a
+    pathological-but-parseable value (e.g. a 2GB stream buffer) can't take the
+    process down either. ``default`` is returned unchanged for the common
+    valid-input case, preserving existing behavior.
+    """
+    raw = get_env(key, None)
+    if raw is None or str(raw).strip() == "":
+        value = default
+    else:
+        try:
+            value = int(str(raw).strip())
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid int for env %s=%r; falling back to default %r",
+                key, raw, default,
+            )
+            value = default
+    if min_value is not None and value < min_value:
+        logger.warning("Env %s=%r below min %r; clamping", key, value, min_value)
+        value = min_value
+    if max_value is not None and value > max_value:
+        logger.warning("Env %s=%r above max %r; clamping", key, value, max_value)
+        value = max_value
+    return value
+
+
+def _env_float(key, default, *, min_value=None, max_value=None):
+    """
+    M-09: Safely parse a float env var (see ``_env_int`` for rationale).
+    Falls back to ``default`` + logs on a bad value, then clamps to bounds.
+    """
+    raw = get_env(key, None)
+    if raw is None or str(raw).strip() == "":
+        value = default
+    else:
+        try:
+            value = float(str(raw).strip())
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid float for env %s=%r; falling back to default %r",
+                key, raw, default,
+            )
+            value = default
+    if min_value is not None and value < min_value:
+        logger.warning("Env %s=%r below min %r; clamping", key, value, min_value)
+        value = min_value
+    if max_value is not None and value > max_value:
+        logger.warning("Env %s=%r above max %r; clamping", key, value, max_value)
+        value = max_value
+    return value
 
 
 def is_http_allowed_for_url(url, allow_env_var="GATEWAY_ALLOW_HTTP"):
@@ -35,8 +96,8 @@ def load_config():
     api_key = get_env("AIGUARDX_API_KEY", "")
     upstream_url = get_env("GATEWAY_UPSTREAM_LLM_URL", "").rstrip("/")
     llm_api_key = get_env("GATEWAY_LLM_API_KEY", "")
-    port = int(get_env("GATEWAY_PORT", "8300"))
-    stats_interval = int(get_env("GATEWAY_STATS_INTERVAL_SEC", "120"))
+    port = _env_int("GATEWAY_PORT", 8300, min_value=1, max_value=65535)
+    stats_interval = _env_int("GATEWAY_STATS_INTERVAL_SEC", 120)
     call_security_scan = get_env("GATEWAY_CALL_SECURITY_SCAN", "false").lower() in ("true", "1", "yes")
     redis_url = get_env("GATEWAY_REDIS_URL", "redis://localhost:6379/0")
     auth_enabled = get_env("GATEWAY_AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
@@ -47,24 +108,49 @@ def load_config():
     scan_block_on_injection = get_env("GATEWAY_SCAN_BLOCK_ON_INJECTION", "true").lower() in ("true", "1", "yes")
     scan_block_on_pii = get_env("GATEWAY_SCAN_BLOCK_ON_PII", "false").lower() in ("true", "1", "yes")
     tier2_fail_closed_enabled = get_env("GATEWAY_TIER2_FAIL_CLOSED_ENABLED", "true").lower() in ("true", "1", "yes")
+    # When a Tier-2 INPUT scan returns a degraded/unparseable verdict (the case
+    # reached by prompts that evade Tier-1 signatures), block instead of
+    # fail-open 'flag'. Default OFF preserves availability; enable per-deployment
+    # or per-org for a stricter input posture. Output scanning stays fail-open.
+    tier2_input_fail_closed = get_env("GATEWAY_TIER2_INPUT_FAIL_CLOSED", "false").lower() in ("true", "1", "yes")
     tier2_execution_mode = get_env("GATEWAY_TIER2_EXECUTION_MODE", "sync_pre_llm").strip().lower()
     tier2_stream_hold_enabled = get_env("GATEWAY_TIER2_STREAM_HOLD_ENABLED", "false").lower() in ("true", "1", "yes")
-    tier2_stream_hold_timeout_ms = int(get_env("GATEWAY_TIER2_STREAM_HOLD_TIMEOUT_MS", "1200"))
+    # M-09: clamp hold/finalize timeouts to a sane window so a bad value can't
+    # hang a request indefinitely (or fire instantly with 0).
+    tier2_stream_hold_timeout_ms = _env_int(
+        "GATEWAY_TIER2_STREAM_HOLD_TIMEOUT_MS", 1200, min_value=0, max_value=60000)
     stream_preflight_fail_closed = get_env("GATEWAY_STREAM_PREFLIGHT_FAIL_CLOSED", "true").lower() in ("true", "1", "yes")
-    stream_max_buffer_bytes = int(get_env("GATEWAY_STREAM_MAX_BUFFER_BYTES", "4096"))
-    stream_max_buffer_chunks = int(get_env("GATEWAY_STREAM_MAX_BUFFER_CHUNKS", "64"))
+    # M-09: bound stream buffers so a typo can't request a multi-GB allocation.
+    stream_max_buffer_bytes = _env_int(
+        "GATEWAY_STREAM_MAX_BUFFER_BYTES", 4096, min_value=64, max_value=10_485_760)
+    stream_max_buffer_chunks = _env_int(
+        "GATEWAY_STREAM_MAX_BUFFER_CHUNKS", 64, min_value=1, max_value=10000)
     stream_emit_debug_headers = get_env("GATEWAY_STREAM_EMIT_DEBUG_HEADERS", "false").lower() in ("true", "1", "yes")
-    stream_finalize_timeout_ms = int(get_env("GATEWAY_STREAM_FINALIZE_TIMEOUT_MS", "5000"))
-    scan_buffer_max_bytes = int(get_env("GATEWAY_SCAN_BUFFER_MAX_BYTES", "4096"))
-    scan_thread_pool_size = int(get_env("GATEWAY_SCAN_THREAD_POOL_SIZE", "4"))
+    stream_finalize_timeout_ms = _env_int(
+        "GATEWAY_STREAM_FINALIZE_TIMEOUT_MS", 5000, min_value=0, max_value=120000)
+    scan_buffer_max_bytes = _env_int(
+        "GATEWAY_SCAN_BUFFER_MAX_BYTES", 4096, min_value=64, max_value=10_485_760)
+    scan_thread_pool_size = _env_int(
+        "GATEWAY_SCAN_THREAD_POOL_SIZE", 4, min_value=1, max_value=256)
     deep_scan_enabled = get_env("GATEWAY_DEEP_SCAN_ENABLED", "false").lower() in ("true", "1", "yes")
     org_only_inference = get_env("GATEWAY_ORG_ONLY_INFERENCE", "true").lower() in ("true", "1", "yes")
     litellm_default_model = (get_env("LITELLM_DEFAULT_MODEL", "") or "").strip()
     litellm_fallback_models = get_env("LITELLM_FALLBACK_MODELS", "gpt-4o-mini")
-    litellm_request_timeout = int(get_env("LITELLM_REQUEST_TIMEOUT", "120"))
-    litellm_num_retries = int(get_env("LITELLM_NUM_RETRIES", "2"))
+    # M-09: clamp request timeout/retries to keep upstream calls from hanging
+    # forever or retrying an unbounded number of times.
+    litellm_request_timeout = _env_int(
+        "LITELLM_REQUEST_TIMEOUT", 120, min_value=1, max_value=3600)
+    litellm_num_retries = _env_int(
+        "LITELLM_NUM_RETRIES", 2, min_value=0, max_value=10)
     litellm_drop_params = get_env("LITELLM_DROP_PARAMS", "true").lower() in ("true", "1", "yes")
     rag_enabled = get_env("GATEWAY_RAG_ENABLED", "false").lower() in ("true", "1", "yes")
+    # Guardrails-only RAG: the reranker + generator pipeline stages are the
+    # client's own RAG-app responsibility (the gateway provides retrieval
+    # guardrails only). Default OFF — the query pipeline returns retriever
+    # documents directly; the client assembles context and calls the generator
+    # model through the normal chat pipeline (Tier-1/Tier-2 + output guard).
+    rag_ranker_enabled = get_env("GATEWAY_RAG_RANKER_ENABLED", "false").lower() in ("true", "1", "yes")
+    rag_generator_enabled = get_env("GATEWAY_RAG_GENERATOR_ENABLED", "false").lower() in ("true", "1", "yes")
     pinecone_api_key = get_env("GATEWAY_PINECONE_API_KEY", "")
     pinecone_environment = get_env("GATEWAY_PINECONE_ENVIRONMENT", "")
     milvus_uri = get_env("GATEWAY_MILVUS_URI", "")
@@ -75,39 +161,84 @@ def load_config():
     vault_db_dsn = get_env("GATEWAY_VAULT_DB_DSN", "") or get_env("DATABASE_URL", "")
     rag_context_scan_enabled = get_env("GATEWAY_RAG_CONTEXT_SCAN_ENABLED", "true").lower() in ("true", "1", "yes")
     rag_anomaly_detection_enabled = get_env("GATEWAY_RAG_ANOMALY_DETECTION_ENABLED", "true").lower() in ("true", "1", "yes")
-    rag_max_query_length = int(get_env("GATEWAY_RAG_MAX_QUERY_LENGTH", "2000"))
-    rag_default_max_results = int(get_env("GATEWAY_RAG_DEFAULT_MAX_RESULTS", "10"))
-    default_max_context_tokens = int(get_env("GATEWAY_DEFAULT_MAX_CONTEXT_TOKENS", "0"))
+    rag_max_query_length = _env_int(
+        "GATEWAY_RAG_MAX_QUERY_LENGTH", 2000, min_value=1, max_value=1_000_000)
+    rag_default_max_results = _env_int(
+        "GATEWAY_RAG_DEFAULT_MAX_RESULTS", 10, min_value=1, max_value=1000)
+    default_max_context_tokens = _env_int(
+        "GATEWAY_DEFAULT_MAX_CONTEXT_TOKENS", 0, min_value=0)  # 0=unlimited
     kill_switch_enabled = get_env("GATEWAY_KILL_SWITCH_ENABLED", "true").lower() in ("true", "1", "yes")
     telemetry_enabled = get_env("GATEWAY_TELEMETRY_ENABLED", "true").lower() in ("true", "1", "yes")
-    telemetry_flush_interval = float(get_env("GATEWAY_TELEMETRY_FLUSH_INTERVAL", "2.0"))
-    telemetry_buffer_size = int(get_env("GATEWAY_TELEMETRY_BUFFER_SIZE", "100"))
+    telemetry_flush_interval = _env_float(
+        "GATEWAY_TELEMETRY_FLUSH_INTERVAL", 2.0, min_value=0.1, max_value=3600.0)
+    telemetry_buffer_size = _env_int(
+        "GATEWAY_TELEMETRY_BUFFER_SIZE", 100, min_value=1, max_value=1_000_000)
     output_guard_enabled = get_env("GATEWAY_OUTPUT_GUARD_ENABLED", "true").lower() in ("true", "1", "yes")
     output_grounding_enabled = get_env("GATEWAY_OUTPUT_GROUNDING_ENABLED", "true").lower() in ("true", "1", "yes")
     output_block_on_credential = get_env("GATEWAY_OUTPUT_BLOCK_ON_CREDENTIAL", "true").lower() in ("true", "1", "yes")
     output_block_on_ip_leakage = get_env("GATEWAY_OUTPUT_BLOCK_ON_IP_LEAKAGE", "false").lower() in ("true", "1", "yes")
     hallucination_flag_enabled = get_env("GATEWAY_HALLUCINATION_FLAG_ENABLED", "true").lower() in ("true", "1", "yes")
 
-    # Smart routing weights
-    routing_risk_weight = float(get_env("GATEWAY_ROUTING_RISK_WEIGHT", "0.30"))
-    routing_cost_weight = float(get_env("GATEWAY_ROUTING_COST_WEIGHT", "0.20"))
-    routing_latency_weight = float(get_env("GATEWAY_ROUTING_LATENCY_WEIGHT", "0.20"))
-    routing_priority_weight = float(get_env("GATEWAY_ROUTING_PRIORITY_WEIGHT", "0.30"))
+    # Smart routing weights (each clamped to [0,1]; sum validated below)
+    routing_risk_weight = _env_float(
+        "GATEWAY_ROUTING_RISK_WEIGHT", 0.30, min_value=0.0, max_value=1.0)
+    routing_cost_weight = _env_float(
+        "GATEWAY_ROUTING_COST_WEIGHT", 0.20, min_value=0.0, max_value=1.0)
+    routing_latency_weight = _env_float(
+        "GATEWAY_ROUTING_LATENCY_WEIGHT", 0.20, min_value=0.0, max_value=1.0)
+    routing_priority_weight = _env_float(
+        "GATEWAY_ROUTING_PRIORITY_WEIGHT", 0.30, min_value=0.0, max_value=1.0)
+
+    # M-09: routing weights must sum to ~1.0 for the scoring math to be balanced.
+    # If a misconfigured set doesn't (and isn't all-zero), warn and normalize so
+    # routing stays well-behaved instead of silently skewing toward one factor.
+    _routing_sum = (
+        routing_risk_weight + routing_cost_weight
+        + routing_latency_weight + routing_priority_weight
+    )
+    if _routing_sum <= 0:
+        logger.warning(
+            "Routing weights sum to %r (<=0); restoring defaults", _routing_sum)
+        routing_risk_weight, routing_cost_weight = 0.30, 0.20
+        routing_latency_weight, routing_priority_weight = 0.20, 0.30
+    elif abs(_routing_sum - 1.0) > 0.01:
+        logger.warning(
+            "Routing weights sum to %r (expected 1.0); normalizing", _routing_sum)
+        routing_risk_weight /= _routing_sum
+        routing_cost_weight /= _routing_sum
+        routing_latency_weight /= _routing_sum
+        routing_priority_weight /= _routing_sum
 
     # Circuit breaker
     circuit_breaker_enabled = get_env("GATEWAY_CIRCUIT_BREAKER_ENABLED", "true").lower() in ("true", "1", "yes")
-    circuit_breaker_error_threshold = float(get_env("GATEWAY_CIRCUIT_BREAKER_ERROR_THRESHOLD", "0.5"))
-    circuit_breaker_min_requests = int(get_env("GATEWAY_CIRCUIT_BREAKER_MIN_REQUESTS", "10"))
-    circuit_breaker_cooldown_seconds = int(get_env("GATEWAY_CIRCUIT_BREAKER_COOLDOWN_SECONDS", "120"))
+    circuit_breaker_error_threshold = _env_float(
+        "GATEWAY_CIRCUIT_BREAKER_ERROR_THRESHOLD", 0.5, min_value=0.0, max_value=1.0)
+    circuit_breaker_min_requests = _env_int(
+        "GATEWAY_CIRCUIT_BREAKER_MIN_REQUESTS", 10, min_value=1, max_value=1_000_000)
+    circuit_breaker_cooldown_seconds = _env_int(
+        "GATEWAY_CIRCUIT_BREAKER_COOLDOWN_SECONDS", 120, min_value=0, max_value=86400)
     semantic_leakage_enabled = get_env("GATEWAY_SEMANTIC_LEAKAGE_ENABLED", "false").lower() in ("true", "1", "yes")
 
     # RAG Pipeline (4-stage governed pipeline)
-    rag_rate_limit_rpm = int(get_env("GATEWAY_RAG_RATE_LIMIT_RPM", "0"))  # 0=unlimited
+    rag_rate_limit_rpm = _env_int(
+        "GATEWAY_RAG_RATE_LIMIT_RPM", 0, min_value=0)  # 0=unlimited
     rag_circuit_breaker_enabled = get_env("GATEWAY_RAG_CIRCUIT_BREAKER_ENABLED", "true").lower() in ("true", "1", "yes")
     rag_context_binding_enabled = get_env("GATEWAY_RAG_CONTEXT_BINDING_ENABLED", "true").lower() in ("true", "1", "yes")
-    rag_context_binding_ttl = int(get_env("GATEWAY_RAG_CONTEXT_BINDING_TTL", "300"))
-    rag_relevance_threshold = float(get_env("GATEWAY_RAG_RELEVANCE_THRESHOLD", "0.75"))
-    prompt_rewrite_threshold = float(get_env("GATEWAY_PROMPT_REWRITE_THRESHOLD", "0.50"))
+    rag_context_binding_ttl = _env_int(
+        "GATEWAY_RAG_CONTEXT_BINDING_TTL", 300, min_value=0, max_value=86400)
+    # Default OFF (0.0). This filter was a dead no-op for a long time (it read a
+    # `score` key the clients didn't emit and fell back to 1.0), so the old 0.75
+    # default never actually applied. Now that the filter is functional, a fixed
+    # non-zero default is unsafe ACROSS embedding models: e5 scores relevant docs
+    # ~0.8+ but OpenAI/text-embedding-3-small scores them ~0.3-0.5, so 0.75 would
+    # silently drop ALL results for OpenAI-embedding orgs. There is no single
+    # threshold that fits every model — operators opt in to a model-appropriate
+    # value per-org (rag_relevance_threshold). Degenerate matches from embedding
+    # failure are already prevented upstream (fail-closed embed). (H6)
+    rag_relevance_threshold = _env_float(
+        "GATEWAY_RAG_RELEVANCE_THRESHOLD", 0.0, min_value=0.0, max_value=1.0)
+    prompt_rewrite_threshold = _env_float(
+        "GATEWAY_PROMPT_REWRITE_THRESHOLD", 0.50, min_value=0.0, max_value=1.0)
 
     return {
         "backend_url": backend_url,
@@ -130,6 +261,7 @@ def load_config():
         "scan_block_on_injection": scan_block_on_injection,
         "scan_block_on_pii": scan_block_on_pii,
         "tier2_fail_closed_enabled": tier2_fail_closed_enabled,
+        "tier2_input_fail_closed": tier2_input_fail_closed,
         "tier2_execution_mode": tier2_execution_mode,
         "tier2_stream_hold_enabled": tier2_stream_hold_enabled,
         "tier2_stream_hold_timeout_ms": tier2_stream_hold_timeout_ms,
@@ -159,6 +291,8 @@ def load_config():
         "rag_anomaly_detection_enabled": rag_anomaly_detection_enabled,
         "rag_max_query_length": rag_max_query_length,
         "rag_default_max_results": rag_default_max_results,
+        "rag_ranker_enabled": rag_ranker_enabled,
+        "rag_generator_enabled": rag_generator_enabled,
         "default_max_context_tokens": default_max_context_tokens,
         "kill_switch_enabled": kill_switch_enabled,
         "telemetry_enabled": telemetry_enabled,

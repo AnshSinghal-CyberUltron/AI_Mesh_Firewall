@@ -8,7 +8,7 @@ import {
   formatModelDisplayName,
   formatRoutingReason,
   isRoutingReroute,
-} from "../constants/zeroshieldBrand";
+} from "../constants/zeroshieldBrand.js";
 
 export function chatCompletionBody({
   prompt,
@@ -71,6 +71,33 @@ export async function consumeSSEStream(response) {
   let aggregatedContent = "";
   let terminalError = null;
 
+  // Parse a single SSE "event block" (already split on the \n\n boundary).
+  // Returns nothing; mutates events/aggregatedContent/terminalError in place.
+  const processPart = (part) => {
+    const line = part.trim();
+    if (!line.startsWith("data: ")) return;
+    const payload = line.slice(6).trim();
+    if (payload === "[DONE]") {
+      events.push({ type: "done" });
+      return;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      events.push({ type: "raw", payload });
+      return;
+    }
+    events.push({ type: "data", payload: parsed });
+    if (parsed?.error) {
+      terminalError = parsed.error;
+    }
+    const delta = parsed?.choices?.[0]?.delta?.content;
+    if (typeof delta === "string") {
+      aggregatedContent += delta;
+    }
+  };
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -78,29 +105,17 @@ export async function consumeSSEStream(response) {
     const parts = buffer.split("\n\n");
     buffer = parts.pop() || "";
     for (const part of parts) {
-      const line = part.trim();
-      if (!line.startsWith("data: ")) continue;
-      const payload = line.slice(6).trim();
-      if (payload === "[DONE]") {
-        events.push({ type: "done" });
-        continue;
-      }
-      let parsed;
-      try {
-        parsed = JSON.parse(payload);
-      } catch {
-        events.push({ type: "raw", payload });
-        continue;
-      }
-      events.push({ type: "data", payload: parsed });
-      if (parsed?.error) {
-        terminalError = parsed.error;
-      }
-      const delta = parsed?.choices?.[0]?.delta?.content;
-      if (typeof delta === "string") {
-        aggregatedContent += delta;
-      }
+      processPart(part);
     }
+  }
+
+  // Flush any trailing buffer: if the stream ends without a final \n\n
+  // (common when the gateway closes after the last delta or an error frame),
+  // the last event would otherwise be silently dropped. Drain the decoder
+  // and process whatever remains so terminal errors / final deltas survive.
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    processPart(buffer);
   }
 
   return { isStream: true, events, aggregatedContent, terminalError, raw: "" };
@@ -114,9 +129,15 @@ export function normalizeStreamChatPipelineResult(
   context = {},
 ) {
   const headers = responseHeaders || {};
-  const scanMode = headers.get?.("x-zeroshield-stream-scan-mode")
-    || headers["x-zeroshield-stream-scan-mode"]
-    || "";
+  // Read case-insensitively: real fetch Headers.get() is already CI, but a
+  // plain-object fallback (tests / proxies) is not — so try both casings.
+  const readHeader = (key) => getHeaderValue(headers, key);
+  const scanMode = readHeader("x-zeroshield-stream-scan-mode");
+  // Always thread responseHeaders into the downstream context so the
+  // X-ZeroShield-* routing telemetry survives BOTH the success and the 4xx
+  // error path (extractRoutingFromHeaders reads context.responseHeaders).
+  // Prefer the explicit arg; fall back to whatever the caller already set.
+  const ctx = { ...context, responseHeaders: responseHeaders || context.responseHeaders };
   const terminalErr = sseResult?.terminalError;
   const blockedInStream = Boolean(
     terminalErr
@@ -124,7 +145,7 @@ export function normalizeStreamChatPipelineResult(
   );
 
   if (httpStatus === 403 || (httpStatus >= 400 && !sseResult?.isStream)) {
-    return normalizeChatPipelineResult(sseResult?.data || {}, httpStatus, context);
+    return normalizeChatPipelineResult(sseResult?.data || {}, httpStatus, ctx);
   }
 
   const synthetic = {
@@ -140,7 +161,7 @@ export function normalizeStreamChatPipelineResult(
     error: terminalErr || undefined,
   };
 
-  const normalized = normalizeChatPipelineResult(synthetic, blockedInStream ? 403 : httpStatus, context);
+  const normalized = normalizeChatPipelineResult(synthetic, blockedInStream ? 403 : httpStatus, ctx);
   return {
     ...normalized,
     stream: true,
@@ -425,13 +446,29 @@ function truncateText(text, limit = 1200) {
   return `${raw.slice(0, limit)}…`;
 }
 
+/**
+ * Read a single header value case-insensitively.
+ * Real fetch Headers.get() is already case-insensitive; a plain-object
+ * fallback (tests, server-side proxies) is not, so probe the requested
+ * key plus its lower/upper-cased variants before giving up.
+ */
+function getHeaderValue(headers, key) {
+  if (!headers) return "";
+  if (typeof headers.get === "function") return headers.get(key) || "";
+  if (headers[key] != null) return headers[key] || "";
+  const lower = key.toLowerCase();
+  if (headers[lower] != null) return headers[lower] || "";
+  const upper = key.toUpperCase();
+  if (headers[upper] != null) return headers[upper] || "";
+  // Last resort: linear case-insensitive scan of the plain object's keys.
+  const match = Object.keys(headers).find((k) => k.toLowerCase() === lower);
+  return match ? (headers[match] || "") : "";
+}
+
 /** Read routing telemetry from gateway response headers when zeroshield is redacted. */
 export function extractRoutingFromHeaders(headers) {
   if (!headers) return {};
-  const get = (key) => {
-    if (typeof headers.get === "function") return headers.get(key) || "";
-    return headers[key] || "";
-  };
+  const get = (key) => getHeaderValue(headers, key);
   return {
     requested_model: get("X-ZeroShield-Original-Model"),
     original_model: get("X-ZeroShield-Original-Model"),
@@ -465,11 +502,10 @@ function latencyForStage(stageName, stageMetrics, zs = {}, context = {}) {
     output_guardrail: roundMs(stageMetrics.output_guard_ms, 0.2),
   };
   if (map[stageName] > 0) return map[stageName];
-  const total = roundMs(context.totalLatencyMs);
-  if (total > 0) {
-    const idx = stageIndex(stageName);
-    if (idx >= 0) return roundMs(total / PIPELINE_STAGE_ORDER.length, 0.1);
-  }
+  // Do NOT fabricate an even total/N split for stages with no real metric — it
+  // rendered an identical (e.g. 714.7ms) latency on multiple unrelated stages,
+  // misrepresenting where time was spent. Return the honest small default; the
+  // real end-to-end time is surfaced separately as total_latency_ms.
   return 0.1;
 }
 

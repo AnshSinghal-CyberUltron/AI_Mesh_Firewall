@@ -1,5 +1,6 @@
 import json
 import logging
+import socket
 import time
 from datetime import timedelta
 
@@ -26,6 +27,11 @@ _THREAT_TYPE_TO_OWASP = THREAT_TYPE_TO_OWASP
 
 REDIS_TELEMETRY_KEY = "telemetry:events"
 REDIS_GATEWAY_JOBS_KEY = "gateway:jobs"
+
+# EnforcementEvent.action is a CharField(max_length=16); a longer ``action``
+# from a malformed/poison telemetry event raises StringDataRightTruncation on
+# the atomic bulk_create, dropping the whole batch. Truncate defensively.
+_MAX_ENFORCEMENT_ACTION_LEN = 16
 
 _EVENT_TYPE_TO_SOURCE: dict[str, str] = {
     "input_blocked": "security_scan",
@@ -385,6 +391,50 @@ def _auto_create_review_items_and_incidents(events: list) -> None:
             logger.warning("Failed to bulk-create SecurityIncidents", exc_info=True)
 
 
+def _safe_bulk_create_enforcement_events(events_to_create: list) -> list:
+    """
+    Insert EnforcementEvents with per-row isolation so a single poison-pill row
+    cannot drop the entire batch.
+
+    A single malformed telemetry event (e.g. an ``action`` longer than the
+    column, or any value the DB rejects) makes one atomic ``bulk_create`` raise
+    and roll back EVERY row in the batch — including healthy events for other
+    tenants. Those events are then permanently lost because their dedupe keys
+    were already written. We first try the fast bulk path; only if it fails do
+    we fall back to per-row inserts, logging and skipping the offender(s) and
+    persisting the rest. Returns the list of rows that were actually persisted.
+    """
+    from policy.models import EnforcementEvent
+
+    if not events_to_create:
+        return []
+    try:
+        EnforcementEvent.objects.bulk_create(events_to_create)
+        return events_to_create
+    except Exception:
+        logger.warning(
+            "drain_telemetry_from_redis: bulk insert failed for %d events; "
+            "falling back to per-row inserts to isolate poison pills",
+            len(events_to_create),
+            exc_info=True,
+        )
+
+    persisted: list = []
+    for ev in events_to_create:
+        try:
+            ev.save()
+            persisted.append(ev)
+        except Exception:
+            logger.warning(
+                "drain_telemetry_from_redis: skipped poison-pill telemetry event "
+                "(org=%s action=%r) — persisting the rest of the batch",
+                getattr(ev, "organization_id", None),
+                getattr(ev, "action", None),
+                exc_info=True,
+            )
+    return persisted
+
+
 def drain_telemetry_from_redis(batch_size: int = 50) -> int:
     """
     Drain telemetry events from Redis list and batch-insert
@@ -406,6 +456,13 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
 
     events_to_create: list[EnforcementEvent] = []
     processed = 0
+    # R9 FIX: in-batch idempotency guard. Even with the per-consumer processing
+    # key and the Redis dedupe set, a single drain pass must never write two
+    # EnforcementEvents for the same (organization_id, request_id) — e.g. when
+    # the same request_id appears twice in one dequeued batch. Track the pairs
+    # already accepted in THIS pass and skip duplicates before constructing the
+    # row.
+    seen_in_batch: set[tuple[int, str]] = set()
 
     # DATA-01 FIX: Atomic dequeue using Lua script to prevent event loss
     ATOMIC_DEQUEUE_LUA = """
@@ -419,8 +476,35 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
     return events
     """
     
-    PROCESSING_KEY = f"{REDIS_TELEMETRY_KEY}:processing"
-    
+    # R9 FIX: the control-web background-thread drain and the Celery worker drain
+    # both run drain_telemetry_from_redis concurrently. A single shared
+    # PROCESSING_KEY let each drainer's recovery path "recover" the OTHER
+    # drainer's in-flight batch and re-process it (2x-4x EnforcementEvent
+    # duplication). Scope the processing queue PER-CONSUMER (stable per
+    # container via gethostname) so each drainer only ever recovers its OWN
+    # crashed batch and never steals another consumer's in-flight events.
+    try:
+        _consumer_id = socket.gethostname() or "unknown"
+    except Exception:
+        _consumer_id = "unknown"
+    PROCESSING_KEY = f"{REDIS_TELEMETRY_KEY}:processing:{_consumer_id}"
+
+    # M5: single-runner lock per consumer. The worker runs --concurrency=2, so two
+    # processes share one hostname (and thus one PROCESSING_KEY); a 2s-scheduled
+    # drain that overlaps a still-running one made each run's recovery path
+    # re-push the OTHER's in-flight batch — the "recovered N pending" churn. Skip
+    # this run if a drain is already in progress for this consumer. The TTL
+    # auto-releases a crashed holder; fail-OPEN so a Redis hiccup never wedges the
+    # drain (worst case = the prior concurrent behavior, which dedupe already
+    # guards against). Released in the finally below.
+    DRAIN_LOCK_KEY = f"{REDIS_TELEMETRY_KEY}:drain_lock:{_consumer_id}"
+    try:
+        _got_drain_lock = bool(client.set(DRAIN_LOCK_KEY, "1", nx=True, ex=60))
+    except redis.RedisError:
+        _got_drain_lock = True  # fail-open
+    if not _got_drain_lock:
+        return 0
+
     DEDUPE_KEY_PREFIX = "telemetry:dedupe:"
     try:
         # Recovery path: if a previous run crashed after moving events to
@@ -449,22 +533,39 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
                 or (event.get("metadata") or {}).get("request_id")
                 or event.get("pipeline_request_id")
             )
-            if request_id:
-                dedupe_key = f"{DEDUPE_KEY_PREFIX}{request_id}"
-                is_new = client.set(dedupe_key, "1", nx=True, ex=86400)
-                if not is_new:
-                    logger.debug(
-                        "drain_telemetry_from_redis: skipped duplicate telemetry request_id=%s",
-                        request_id,
-                    )
-                    continue
 
-            # Set organization from telemetry event (injected by gateway)
+            # Resolve org BEFORE the dedupe so the dedupe key can be org-scoped
+            # (this copy previously deduped on the bare request_id — see below).
             org_id = event.get("organization_id") or (event.get("metadata") or {}).get("organization_id")
             try:
                 org_id = int(org_id) if org_id is not None else None
             except (TypeError, ValueError):
                 org_id = None
+
+            _dedupe_event_type = str(event.get("event_type") or "request")
+            _dedupe_action = str(event.get("action") or "allow")
+
+            # FIX-B (parity with the control drain) + degenerate-id guard: the old
+            # key here was the BARE client-influenceable request_id, so an attacker
+            # could pin one request_id to collapse a later BLOCK into an earlier
+            # ALLOW (silent security UNDER-COUNT), and a degenerate id (e.g. "h")
+            # created a sticky 24h dedupe sink. Scope the key by org + event
+            # identity (event_type, action) and require a minimum-length id, so
+            # distinct security events never collide cross-type while genuine
+            # retries of the SAME event still dedupe.
+            if request_id and len(str(request_id).strip()) >= 8:
+                dedupe_key = (
+                    f"{DEDUPE_KEY_PREFIX}{org_id}:{_dedupe_event_type}:"
+                    f"{_dedupe_action}:{request_id}"
+                )
+                is_new = client.set(dedupe_key, "1", nx=True, ex=86400)
+                if not is_new:
+                    logger.debug(
+                        "drain_telemetry_from_redis: skipped duplicate telemetry "
+                        "(org=%s event_type=%s action=%s request_id=%s)",
+                        org_id, _dedupe_event_type, _dedupe_action, request_id,
+                    )
+                    continue
 
             if not org_id or org_id <= 0:
                 logger.warning(
@@ -473,33 +574,80 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
                 )
                 continue
 
-            built_metadata = _build_enforcement_metadata(event)
-            action = event.get("action", "allow")
-            from policy.telemetry_resolution import resolve_policy_rule_from_event
+            # R9 FIX: in-batch idempotency, scoped the same way as the Redis key.
+            if request_id:
+                batch_key = (org_id, _dedupe_event_type, _dedupe_action, str(request_id))
+                if batch_key in seen_in_batch:
+                    logger.debug(
+                        "drain_telemetry_from_redis: skipped in-batch duplicate "
+                        "(org=%s event_type=%s action=%s request_id=%s)",
+                        org_id, _dedupe_event_type, _dedupe_action, request_id,
+                    )
+                    continue
+                seen_in_batch.add(batch_key)
 
-            policy, rule = resolve_policy_rule_from_event(
-                action=action,
-                organization_id=org_id,
-                raw_metadata=event.get("metadata"),
-                built_metadata=built_metadata,
-            )
-            enforcement_event = EnforcementEvent(
-                policy=policy,
-                rule=rule,
-                action=action,
-                user_id=event.get("user_id"),
-                endpoint_id=event.get("endpoint_id"),
-                agent=None,
-                metadata=built_metadata,
-                organization_id=org_id,
-            )
+            # Build + construct the row inside a per-event guard so a single
+            # malformed event (poison pill) is skipped + logged rather than
+            # raising and aborting the whole batch loop.
+            try:
+                built_metadata = _build_enforcement_metadata(event)
+                action = event.get("action", "allow")
+                # ``action`` is a CharField(max_length=16). An oversized value
+                # (poison pill) raises StringDataRightTruncation on the atomic
+                # bulk_create and drops the whole batch — coerce + truncate.
+                if not isinstance(action, str):
+                    action = str(action)
+                if len(action) > _MAX_ENFORCEMENT_ACTION_LEN:
+                    action = action[:_MAX_ENFORCEMENT_ACTION_LEN]
+                from policy.telemetry_resolution import resolve_policy_rule_from_event
+
+                policy, rule = resolve_policy_rule_from_event(
+                    action=action,
+                    organization_id=org_id,
+                    raw_metadata=event.get("metadata"),
+                    built_metadata=built_metadata,
+                )
+                # ``user_id`` / ``endpoint_id`` are IntegerFields; a non-scalar
+                # value (e.g. user_id={'x': 1}) is a poison pill that fails the
+                # whole atomic bulk_create below. Null any non-integer value.
+                _raw_uid = event.get("user_id")
+                _raw_eid = event.get("endpoint_id")
+                try:
+                    _uid = int(_raw_uid) if _raw_uid is not None else None
+                except (TypeError, ValueError):
+                    _uid = None
+                try:
+                    _eid = int(_raw_eid) if _raw_eid is not None else None
+                except (TypeError, ValueError):
+                    _eid = None
+                enforcement_event = EnforcementEvent(
+                    policy=policy,
+                    rule=rule,
+                    action=action,
+                    user_id=_uid,
+                    endpoint_id=_eid,
+                    agent=None,
+                    metadata=built_metadata,
+                    organization_id=org_id,
+                )
+            except Exception:
+                logger.warning(
+                    "drain_telemetry_from_redis: skipped unbuildable telemetry "
+                    "event (org=%s event_type=%s)",
+                    org_id,
+                    event.get("event_type", "unknown"),
+                    exc_info=True,
+                )
+                continue
             events_to_create.append(enforcement_event)
             processed += 1
 
         if events_to_create:
-            EnforcementEvent.objects.bulk_create(events_to_create)
-            # Clear processing queue after successful commit
-            client.delete(PROCESSING_KEY)
+            # Per-row isolated insert: a single poison-pill row that slips past
+            # the build-time coercion above cannot drop healthy rows for other
+            # tenants. Downstream notifications / incident creation / critical
+            # alerts act only on the rows that were actually persisted.
+            events_to_create = _safe_bulk_create_enforcement_events(events_to_create)
             logger.info(
                 "drain_telemetry_from_redis: inserted %d events",
                 len(events_to_create),
@@ -516,12 +664,41 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
             # Auto-create HumanReviewItems for flagged events and
             # SecurityIncidents for blocked events so the frontend
             # ReviewQueuePanel and SecurityIncidentPanel have data.
-            _auto_create_review_items_and_incidents(events_to_create)
+            # M5: wrap this POST-insert side-effect so a failure here cannot jump
+            # to the except handlers and SKIP the processing-key ack (delete)
+            # below. The events are already persisted (and dedupe-marked), so a
+            # skipped ack would make the next run "recover" an already-committed
+            # batch — the spurious "recovered N pending" churn — and re-run
+            # review/incident creation. Side-effect failures must not block the ack.
+            try:
+                _auto_create_review_items_and_incidents(events_to_create)
+            except Exception:
+                logger.warning(
+                    "drain_telemetry_from_redis: review/incident creation failed for drained batch",
+                    exc_info=True,
+                )
+
+        # Clear the processing queue after a clean iteration — even when
+        # events_to_create is empty. A batch of all-skipped events (unscoped /
+        # duplicate) is intentionally discarded, not retried; leaving the delete
+        # inside `if events_to_create` meant an all-skipped batch never cleared
+        # the processing queue, so the recovery path re-appended the same events
+        # to the main list on every run and an unscoped telemetry flood could
+        # never drain (the queue grew without bound, starving real events behind
+        # it). A bulk_create exception above jumps to the handlers below and skips
+        # this delete, so genuine commit failures are still recovered and retried.
+        client.delete(PROCESSING_KEY)
 
     except redis.RedisError:
         logger.exception("drain_telemetry_from_redis: Redis error during drain")
     except Exception:
         logger.exception("drain_telemetry_from_redis: unexpected error")
+    finally:
+        # M5: release the single-runner lock so the next scheduled drain can run.
+        try:
+            client.delete(DRAIN_LOCK_KEY)
+        except redis.RedisError:
+            pass  # TTL will expire it
 
     for event_data in events_to_create:
         meta = event_data.metadata or {}

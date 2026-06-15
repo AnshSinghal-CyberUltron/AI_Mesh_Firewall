@@ -227,6 +227,7 @@ export function GatewayKeyPanel() {
                           <button
                             onClick={() => handleRevoke(k.id)}
                             className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
+                            aria-label={`Revoke gateway key ${k.name || k.prefix || ""}`.trim()}
                             title="Revoke Key"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

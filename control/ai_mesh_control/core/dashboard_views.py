@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 from core.models import Agent, Endpoint
 from policy.constants import ACTION_BLOCK, ACTION_REDACT
 from policy.models import ComplianceViolation, EnforcementEvent, Policy, Rule
-from policy.security_views import OWASP_ALL_VECTORS
+from policy.security_views import OWASP_ALL_VECTORS, _enforcement_events_for_request
 try:
     from third_party_integrations.export_reporter import ExportReporter
 except ModuleNotFoundError:
@@ -56,7 +56,11 @@ class DashboardSummaryView(APIView):
         now = timezone.now()
         thirty_days_ago = now - timedelta(days=30)
 
-        if endpoint_ids is not None and len(endpoint_ids) == 0:
+        # Only short-circuit for the genuine no-org case (non-superuser without an
+        # organization). A real org with ZERO endpoints can still have thousands of
+        # telemetry-drain events (organization set, endpoint_id NULL); those are
+        # counted via the org-FK scoping below — so don't zero it out here.
+        if org is None and endpoint_ids is not None and len(endpoint_ids) == 0:
             return Response(
                 {
                     "endpoint_count": 0,
@@ -87,9 +91,11 @@ class DashboardSummaryView(APIView):
         active_policies_count = policies_qs.count()
         rules_applied = Rule.objects.filter(policy__in=policies_qs, enabled=True).count()
 
-        events_30d = EnforcementEvent.objects.filter(created_at__gte=thirty_days_ago)
-        if endpoint_ids is not None:
-            events_30d = events_30d.filter(endpoint_id__in=endpoint_ids)
+        # Scope by org FK (telemetry-drain events have organization set, endpoint NULL)
+        # in addition to legacy endpoint scoping; matches ModuleKpisView.
+        events_30d = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=thirty_days_ago)
+        )
         total_threats_30d = events_30d.count()
         blocked_30d = events_30d.filter(action=ACTION_BLOCK).count()
         redacted_30d = events_30d.filter(action=ACTION_REDACT).count()
@@ -103,13 +109,14 @@ class DashboardSummaryView(APIView):
         total_agents = sum(agents_by_type.values())
 
         # MTTR: average time from creation to resolution for resolved events in the last 30 days
-        resolved_events_30d = EnforcementEvent.objects.filter(
-            incident_status="resolved",
-            resolved_at__isnull=False,
-            created_at__gte=thirty_days_ago,
+        resolved_events_30d = _enforcement_events_for_request(
+            request,
+            EnforcementEvent.objects.filter(
+                incident_status="resolved",
+                resolved_at__isnull=False,
+                created_at__gte=thirty_days_ago,
+            ),
         )
-        if endpoint_ids is not None:
-            resolved_events_30d = resolved_events_30d.filter(endpoint_id__in=endpoint_ids)
         avg_duration = resolved_events_30d.annotate(
             duration=ExpressionWrapper(
                 F("resolved_at") - F("created_at"),
@@ -216,9 +223,9 @@ class DashboardReportView(APIView):
             agents_qs = agents_qs.none()
             policies_qs = policies_qs.none()
 
-        events_qs = EnforcementEvent.objects.filter(created_at__gte=since)
-        if endpoint_ids is not None:
-            events_qs = events_qs.filter(endpoint_id__in=endpoint_ids)
+        events_qs = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
 
         summary = {
             "period_days": days,
@@ -411,16 +418,20 @@ class ModelUsageView(APIView):
         org, endpoint_ids = _dashboard_org_context(request)
         days = min(int(request.query_params.get("days", 30)), 365)
         since = timezone.now() - timedelta(days=days)
-        events_qs = EnforcementEvent.objects.filter(created_at__gte=since).values("metadata", "action")
-        if endpoint_ids is not None:
-            events_qs = events_qs.filter(endpoint_id__in=endpoint_ids)
+        events_qs = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        ).values("metadata", "action")
         events = events_qs
 
         by_model = defaultdict(lambda: {"total": 0, "blocked": 0, "allowed": 0, "risk_scores": []})
+        from core.model_state_bootstrap import canonicalize_model_name_safe
         for ev in events:
             meta = ev.get("metadata") or {}
             model = meta.get("model") or "Unknown"
             model = str(model).strip() or "Unknown"
+            # P5c: collapse raw guard/upstream model ids to the public label so the
+            # model-usage breakdown never leaks bedrock/claude-haiku/gpt-oss ids.
+            model = canonicalize_model_name_safe(model) or "Unknown"
             by_model[model]["total"] += 1
             if ev["action"] == ACTION_BLOCK:
                 by_model[model]["blocked"] += 1
@@ -531,9 +542,9 @@ class RiskDistributionView(APIView):
         days = min(int(request.query_params.get("days", 30)), 365)
         buckets_mode = request.query_params.get("buckets", "default").lower()
         since = timezone.now() - timedelta(days=days)
-        events_qs = EnforcementEvent.objects.filter(created_at__gte=since).values("metadata")
-        if endpoint_ids is not None:
-            events_qs = events_qs.filter(endpoint_id__in=endpoint_ids)
+        events_qs = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        ).values("metadata")
         events = events_qs
 
         if buckets_mode == "fine":

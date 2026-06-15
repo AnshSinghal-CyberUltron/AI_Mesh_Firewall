@@ -19,7 +19,10 @@ class Policy(models.Model):
         ("mcp", "MCP"),
     ]
     name = models.CharField(max_length=255)
-    code = models.SlugField(max_length=64, unique=True, help_text="Unique identifier (e.g. POL001)")
+    # FINDING-23: ``code`` is unique PER ORGANIZATION, not globally (see the
+    # UniqueConstraint in Meta). A table-wide unique=True leaked a cross-tenant
+    # existence oracle and let one org deny a code namespace for every other org.
+    code = models.SlugField(max_length=64, help_text="Unique identifier within the organization (e.g. POL001)")
     policy_domain = models.CharField(
         max_length=16,
         choices=DOMAIN_CHOICES,
@@ -91,6 +94,14 @@ class Policy(models.Model):
     class Meta:
         ordering = ["-priority", "code"]
         verbose_name_plural = "Policies"
+        constraints = [
+            # FINDING-23: scope code uniqueness to the tenant (organization) FK
+            # instead of the whole table.
+            models.UniqueConstraint(
+                fields=["organization", "code"],
+                name="policy_org_code_unique",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.code} ({self.name})"

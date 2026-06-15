@@ -7,7 +7,9 @@
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
     "preview": "vite preview",
-    "test:acceptance:create-policy": "node --test src/utils/policyCreateBehavior.test.js"
+    "test:acceptance:create-policy": "node --test src/utils/policyCreateBehavior.test.js",
+    "test:unit:live-gateway": "node --test src/utils/liveGateway.test.js",
+    "test:unit": "node --test \"src/utils/*.test.js\""
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.1.8",

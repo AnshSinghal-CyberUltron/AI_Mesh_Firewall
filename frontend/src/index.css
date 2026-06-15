@@ -84,6 +84,7 @@ body {
 
 .zs-app-shell button:not(:disabled),
 .zs-app-shell [role="button"] {
+  cursor: pointer;
   transition: transform 180ms ease, box-shadow 220ms ease, background-color 180ms ease, border-color 180ms ease;
 }
 

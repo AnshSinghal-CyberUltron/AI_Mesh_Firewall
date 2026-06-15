@@ -54,6 +54,9 @@ class VectorCollectionPolicy(models.Model):
         max_length=255,
         help_text="Human-readable policy label.",
     )
+    # NOTE: enforcement is keyed by organization_id (see VectorPolicyCompiler),
+    # NOT by project_id — this field does NOT reliably match GatewayAPIKey
+    # .project_id (simulator keys use 'simulator-{slug}'). Display-only.
     project_id = models.CharField(
         max_length=128,
         db_index=True,
@@ -162,6 +165,7 @@ class VectorCollectionPolicy(models.Model):
         return {
             "id": str(self.id),
             "name": self.name,
+            "organization_id": self.organization_id,
             "project_id": self.project_id,
             "collection_name": self.collection_name,
             "vector_db_type": self.vector_db_type,

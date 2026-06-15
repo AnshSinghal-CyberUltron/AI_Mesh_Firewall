@@ -189,7 +189,7 @@ export function RAGIngestionPanel() {
                   <option key={c.name} value={c.name} />
                 ))}
             </datalist>
-            <button onClick={refreshCollections} disabled={collectionsLoading} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" title="Refresh collections">
+            <button onClick={refreshCollections} disabled={collectionsLoading} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" aria-label="Refresh collections" title="Refresh collections">
               <RefreshCw className={`w-3 h-3 text-slate-400 ${collectionsLoading ? "animate-spin" : ""}`} />
             </button>
           </div>

@@ -30,7 +30,7 @@ _RE_EMAIL = r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"
 _RE_PHONE_US = r"\b(?:\+1[\s\-]?)?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}\b"
 _RE_SSN = r"\b\d{3}[-\s]\d{2}[-\s]\d{4}\b"
 _RE_CREDIT_CARD = r"\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b"
-_RE_AADHAAR = r"\b\d{4}\s?\d{4}\s?\d{4}\b(?!\s?\d{4})"
+_RE_AADHAAR = r"(?<!\d)(?<!\d\s)\b\d{4}\s?\d{4}\s?\d{4}\b(?!\s?\d{4})"
 _RE_CARD_CVV = r"\b(?:CVV|CVC|CID)[:\s#]*\d{3,4}\b"
 _RE_CARD_EXPIRY = r"\b(?:exp(?:iry)?|valid\s+thru)[:\s]*\d{2}[/\-]\d{2,4}\b"
 
@@ -255,10 +255,22 @@ POLICIES: list[dict] = [
         "redaction_fields": [],
         "rules": [
             {
+                # Persona-ANCHORED regex (was a bare-keyword rule). The keyword
+                # "do anything now" matched via naive substring containment
+                # (engine.py), so a benign sentence containing that common English
+                # phrase was blocked (false positive). Require explicit DAN
+                # persona / acronym framing instead; "dan mode" / "jailbreak"
+                # remain as anchored alternatives.
                 "name": "Block known jailbreak personas",
-                "rule_type": "keywords",
-                "keywords": ["do anything now", "dan mode", "developer mode enabled", "jailbreak", "stay in character as dan"],
-                "regex": None,
+                "rule_type": "regex",
+                "keywords": None,
+                "regex": (
+                    r"(?:you\s+are|act\s+as|pretend\s+to\s+be|roleplay\s+as|enable|activate|stay\s+in\s+character\s+as)\s+(?:now\s+)?dan\b"
+                    r"|\bdan\s+mode\b"
+                    r"|developer\s+mode\s+enabled"
+                    r"|\bjailbreak(?:ing|\s+the\s+(?:model|ai|assistant|llm))?\b"
+                    r"|\bdan\b\s*(?:\([^)]{0,30}\)|[,:\-]?\s*(?:which\s+)?(?:stands?\s+for|means?|=))\s*(?:do\s+anything\s+now)?"
+                ),
                 "field": "both",
                 "action": "block",
                 "replacement": None,

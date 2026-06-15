@@ -1,22 +1,24 @@
 """
-Unit tests for telemetry functionality across Gateway and Backend.
+Unit tests for gateway telemetry.
 
 Covers:
-- TelemetryProducer  (gateway/telemetry.py)
-- build_telemetry_event helper  (gateway/telemetry.py)
-- process_telemetry_batch Celery task  (backend/core/tasks.py)
+- TelemetryProducer  (gateway/ai_mesh_gateway/telemetry.py)
+- build_telemetry_event helper  (gateway/ai_mesh_gateway/telemetry.py)
+
+The Redis-drain consumer (process_telemetry_batch) is control-plane Django
+code (control/ai_mesh_control/core/tasks.py) and is exercised by the control
+test suite, not this workspace unit tree.
 """
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import redis.asyncio as aioredis
 
-from gateway.telemetry import (
+from ai_mesh_gateway.telemetry import (
     REDIS_TELEMETRY_KEY,
     TelemetryProducer,
     build_telemetry_event,
@@ -295,168 +297,3 @@ class TestBuildTelemetryEvent:
         assert event["tokens_used"] == tokens
         assert event["compliance_tags"] == tags
         assert event["metadata"] == meta
-
-
-# ---------------------------------------------------------------------------
-# TestTelemetryBatchConsumer
-# ---------------------------------------------------------------------------
-
-class TestTelemetryBatchConsumer:
-    """Tests for process_telemetry_batch Celery task in backend/core/tasks.py."""
-
-    @patch("core.tasks.redis.Redis")
-    @patch("policy.models.EnforcementEvent")
-    @patch("django.conf.settings", new_callable=MagicMock)
-    def test_drains_events_from_redis(
-        self,
-        mock_settings: MagicMock,
-        mock_enforcement_event_cls: MagicMock,
-        mock_redis_cls: MagicMock,
-    ) -> None:
-        from core.tasks import process_telemetry_batch
-
-        mock_settings.REDIS_URL = "redis://localhost:6379/0"
-
-        events = [
-            json.dumps({
-                "event_type": "request",
-                "action": "allow",
-                "model": "gpt-4o-mini",
-                "user_id": 1,
-                "organization_id": 101,
-            }),
-            json.dumps({
-                "event_type": "block",
-                "action": "block",
-                "model": "gpt-4o-mini",
-                "user_id": 2,
-                "threat_type": "prompt_injection",
-                "organization_id": 101,
-            }),
-            None,
-        ]
-
-        mock_client = MagicMock()
-        mock_redis_cls.from_url.return_value = mock_client
-        mock_client.eval = MagicMock(return_value=[events[0], events[1]])
-        mock_client.delete = MagicMock()
-
-        mock_enforcement_event_cls.return_value = MagicMock()
-        mock_enforcement_event_cls.objects = MagicMock()
-        mock_enforcement_event_cls.objects.bulk_create = MagicMock()
-
-        result = process_telemetry_batch(batch_size=50)
-
-        assert result == 2
-        mock_client.eval.assert_called_once()
-        mock_enforcement_event_cls.objects.bulk_create.assert_called_once()
-        created_batch = mock_enforcement_event_cls.objects.bulk_create.call_args[0][0]
-        assert len(created_batch) == 2
-
-    @patch("core.tasks.redis.Redis")
-    @patch("policy.models.EnforcementEvent")
-    @patch("django.conf.settings", new_callable=MagicMock)
-    def test_handles_malformed_json_gracefully(
-        self,
-        mock_settings: MagicMock,
-        mock_enforcement_event_cls: MagicMock,
-        mock_redis_cls: MagicMock,
-    ) -> None:
-        from core.tasks import process_telemetry_batch
-
-        mock_settings.REDIS_URL = "redis://localhost:6379/0"
-
-        events = [
-            "NOT_VALID_JSON{{{",
-            json.dumps({"event_type": "request", "action": "allow", "organization_id": 101}),
-            None,
-        ]
-
-        mock_client = MagicMock()
-        mock_redis_cls.from_url.return_value = mock_client
-        mock_client.eval = MagicMock(return_value=[events[0], events[1]])
-        mock_client.delete = MagicMock()
-
-        mock_enforcement_event_cls.return_value = MagicMock()
-        mock_enforcement_event_cls.objects = MagicMock()
-        mock_enforcement_event_cls.objects.bulk_create = MagicMock()
-
-        result = process_telemetry_batch(batch_size=50)
-
-        assert result == 1
-        mock_enforcement_event_cls.objects.bulk_create.assert_called_once()
-
-    @patch("core.tasks.redis.Redis")
-    @patch("policy.models.EnforcementEvent")
-    @patch("django.conf.settings", new_callable=MagicMock)
-    def test_skips_unscoped_events_without_organization_id(
-        self,
-        mock_settings: MagicMock,
-        mock_enforcement_event_cls: MagicMock,
-        mock_redis_cls: MagicMock,
-    ) -> None:
-        from core.tasks import process_telemetry_batch
-
-        mock_settings.REDIS_URL = "redis://localhost:6379/0"
-
-        events = [
-            json.dumps({"event_type": "request", "action": "allow", "user_id": 1}),
-            None,
-        ]
-
-        mock_client = MagicMock()
-        mock_redis_cls.from_url.return_value = mock_client
-        mock_client.eval = MagicMock(return_value=[events[0]])
-        mock_client.delete = MagicMock()
-
-        mock_enforcement_event_cls.return_value = MagicMock()
-        mock_enforcement_event_cls.objects = MagicMock()
-        mock_enforcement_event_cls.objects.bulk_create = MagicMock()
-
-        result = process_telemetry_batch(batch_size=50)
-
-        assert result == 0
-        mock_enforcement_event_cls.objects.bulk_create.assert_not_called()
-
-    @patch("core.tasks.redis.Redis")
-    @patch("policy.models.EnforcementEvent")
-    @patch("django.conf.settings", new_callable=MagicMock)
-    def test_handles_empty_redis_list(
-        self,
-        mock_settings: MagicMock,
-        mock_enforcement_event_cls: MagicMock,
-        mock_redis_cls: MagicMock,
-    ) -> None:
-        from core.tasks import process_telemetry_batch
-
-        mock_settings.REDIS_URL = "redis://localhost:6379/0"
-
-        mock_client = MagicMock()
-        mock_redis_cls.from_url.return_value = mock_client
-        mock_client.eval = MagicMock(return_value=[])
-
-        result = process_telemetry_batch(batch_size=50)
-
-        assert result == 0
-        mock_enforcement_event_cls.objects.bulk_create.assert_not_called()
-
-    @patch("core.tasks.redis.Redis")
-    @patch("django.conf.settings", new_callable=MagicMock)
-    def test_handles_redis_connection_failure(
-        self,
-        mock_settings: MagicMock,
-        mock_redis_cls: MagicMock,
-    ) -> None:
-        import redis as sync_redis
-
-        from core.tasks import process_telemetry_batch
-
-        mock_settings.REDIS_URL = "redis://localhost:6379/0"
-
-        mock_redis_cls.from_url.side_effect = sync_redis.RedisError(
-            "Connection refused"
-        )
-
-        result = process_telemetry_batch(batch_size=50)
-
-        assert result == 0

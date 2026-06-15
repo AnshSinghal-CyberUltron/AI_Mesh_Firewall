@@ -77,6 +77,34 @@ class PolicyCompileView(APIView):
                 {"detail": "Organization scope is required to compile policies."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # Defense-in-depth: the bundle compiled below is scoped to `org`, so
+        # assert the requesting user actually belongs to that org before
+        # compiling/pushing. R11: cross-org compile-push is reserved for
+        # PLATFORM OPERATORS only (is_staff AND profile.is_platform_operator),
+        # the same contract get_request_organization enforces for
+        # ?organization_id. A plain superuser or per-tenant org admin is
+        # ORG-scoped: even though they may carry is_superuser, they may only
+        # compile/push their OWN org's bundle (product rule: "org admins and
+        # superusers are ORG-scoped only, NO global cross-org"). This guard
+        # makes the invariant explicit so a future org-resolution change can
+        # never let an admin of org A compile and push org B's bundle.
+        from auth.models import is_platform_operator
+
+        if not is_platform_operator(request.user):
+            profile_org_id = getattr(
+                getattr(request.user, "profile", None), "organization_id", None
+            )
+            if profile_org_id != org.pk:
+                logger.warning(
+                    "Policy compile denied: user=%s (org=%s) requested bundle for org=%s",
+                    request.user.pk,
+                    profile_org_id,
+                    org.pk,
+                )
+                return Response(
+                    {"detail": "You may only compile policies for your own organization."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         compiler = PolicyCompiler()
         bundle = compiler.compile_all(organization=org)
         success = compiler.push_to_redis(

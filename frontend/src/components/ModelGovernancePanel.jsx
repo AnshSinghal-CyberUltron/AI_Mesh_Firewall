@@ -10,6 +10,7 @@ import { useFirewallConfig } from "../hooks/useFirewallConfig";
 import { ModelGovernanceFields } from "./ModelGovernanceFields";
 import { PanelLoadingShell } from "./PanelLoadingShell";
 import { formatAllowedModelsForApi, parseAllowedModels } from "../utils/firewallAllowlist";
+import { filterUserManagedModels } from "../constants/zeroshieldBrand";
 
 function governanceFromConfig(data) {
   const allowed = formatAllowedModelsForApi(
@@ -112,7 +113,12 @@ export function ModelGovernancePanel() {
   };
 
   const displayError = error || configError;
-  const connectedModels = Array.isArray(config?.connected_models) ? config.connected_models : [];
+  // Strip platform/guard (ZeroShield) entries so the reserved guard model and
+  // its raw upstream id never surface in the org governance allowlist UI —
+  // mirrors ModelStatePanel / ModelConnectionPanel / kill-switch.
+  const connectedModels = filterUserManagedModels(
+    Array.isArray(config?.connected_models) ? config.connected_models : [],
+  );
 
   if (loading && !config) {
     return <PanelLoadingShell variant="governance" rows={5} />;

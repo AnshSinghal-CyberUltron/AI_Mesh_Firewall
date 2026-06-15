@@ -22,8 +22,10 @@ PII_PATTERNS: dict[str, re.Pattern[str]] = {
     "IN_PHONE_NUMBER": re.compile(r"\b(?:\+91[\s\-]?)?[6-9]\d{9}\b"),
     "PHONE_NUMBER": re.compile(r"\b(?:\+1[\s\-]?)?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}\b"),
     "US_SSN": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
-    # 12-digit Aadhaar; exclude fourth 4-digit group (16-digit credit card prefix).
-    "AADHAAR_NUMBER": re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b(?!\s?\d{4})"),
+    # 12-digit Aadhaar; reject both a trailing 4th group (16-digit card suffix) AND
+    # a PRECEDING 4-digit group, so the trailing 12 digits of a 16-digit credit card
+    # never sub-match as Aadhaar (mirrors the policy-catalog AADHAAR lookbehind fix).
+    "AADHAAR_NUMBER": re.compile(r"(?<!\d)(?<!\d\s)\b\d{4}\s?\d{4}\s?\d{4}\b(?!\s?\d{4})"),
     "IN_PAN": re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b", re.IGNORECASE),
     "IN_VOTER_ID": re.compile(r"\b[A-Z]{3}\d{7}\b"),
     "IN_DRIVING_LICENSE": re.compile(

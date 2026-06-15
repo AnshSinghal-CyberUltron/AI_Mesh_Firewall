@@ -229,7 +229,7 @@ function SubModuleCard({ id, title, icon: Icon, color, summary, metrics, chartDa
             <span>Pressure Curve</span>
             <span>{curveSubtitle}</span>
           </div>
-          <ResponsiveContainer width="100%" height={72}>
+          <SafeResponsiveChart className="h-[72px] w-full">
             <AreaChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id={`mesh-card-${id}`} x1="0" y1="0" x2="0" y2="1">
@@ -239,7 +239,7 @@ function SubModuleCard({ id, title, icon: Icon, color, summary, metrics, chartDa
               </defs>
               <Area type="monotone" dataKey="value" stroke={tone.hex} strokeWidth={2.2} fill={`url(#mesh-card-${id})`} dot={false} />
             </AreaChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         </div>
       </div>
     </button>
@@ -314,7 +314,7 @@ function AttackVectorTrendChart({ data, compact = false }) {
       {empty ? (
         <div className="flex h-[300px] items-center justify-center text-sm text-slate-400">No attack events recorded in this period</div>
       ) : (
-        <ResponsiveContainer width="100%" height={compact ? 240 : 300}>
+        <SafeResponsiveChart className={`${compact ? "h-[240px]" : "h-[300px]"} w-full`}>
           <AreaChart data={data} margin={{ top: 4, right: compact ? 0 : 4, bottom: 0, left: compact ? -14 : -8 }}>
             <defs>
               {VECTOR_KEYS.map((k) => (
@@ -358,7 +358,7 @@ function AttackVectorTrendChart({ data, compact = false }) {
               />
             ))}
           </AreaChart>
-        </ResponsiveContainer>
+        </SafeResponsiveChart>
       )}
     </OverviewChartCard>
   );
@@ -454,7 +454,7 @@ function ModuleComparisonChart({ data, compact = false }) {
         </div>
       }
     >
-      <ResponsiveContainer width="100%" height={compact ? 260 : 300}>
+      <SafeResponsiveChart className={`${compact ? "h-[260px]" : "h-[300px]"} w-full`}>
         <BarChart data={data} margin={{ top: 4, right: 4, bottom: compact ? 12 : 24, left: compact ? -14 : -8 }} barGap={3} barCategoryGap={compact ? "18%" : "28%"}>
           <defs>
             <linearGradient id="bargrad-teal" x1="0" y1="0" x2="0" y2="1">
@@ -489,7 +489,7 @@ function ModuleComparisonChart({ data, compact = false }) {
           <Bar dataKey="requests" fill="url(#bargrad-teal)" radius={[6, 6, 0, 0]} name="Total events" maxBarSize={40} />
           <Bar dataKey="interventions" fill="url(#bargrad-rose)" radius={[6, 6, 0, 0]} name="Interventions" maxBarSize={40} />
         </BarChart>
-      </ResponsiveContainer>
+      </SafeResponsiveChart>
     </OverviewChartCard>
   );
 }
@@ -614,7 +614,7 @@ function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">Breakdown of how the firewall responds to every request — allow, block, or sanitise.</p>
 
           <div className="mt-5 flex items-center justify-center rounded-[24px] border border-slate-200/80 bg-white/75 p-4 dark:border-slate-700 dark:bg-slate-950/40">
-            <ResponsiveContainer width="100%" height={200}>
+            <SafeResponsiveChart className="h-[200px] w-full">
               <PieChart>
                 <Pie
                   data={actionData}
@@ -642,7 +642,7 @@ function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 
                 </Pie>
                 <Tooltip content={<ChartTooltip />} />
               </PieChart>
-            </ResponsiveContainer>
+            </SafeResponsiveChart>
           </div>
 
           <div className="mt-4 space-y-2.5">
@@ -768,11 +768,20 @@ export function AIMeshFirewallOverview({ onTabChange }) {
     }
   }, [fetchWithAuth, period]);
 
+  const lastFetchedPeriodRef = useRef(null);
   useEffect(() => {
-    fetchOverviewData(true);
+    // M3: fetch the 4 analytics endpoints ONCE per actual `period` value — not on
+    // every effect re-run. React 18 StrictMode (and any incidental re-mount)
+    // otherwise re-fires the initial loader fetch, multiplying network requests
+    // per page load. The single-flight guard collapses CONCURRENT bursts, but a
+    // post-resolve re-mount slips through; this ref dedupes against the period.
+    if (lastFetchedPeriodRef.current !== period) {
+      lastFetchedPeriodRef.current = period;
+      fetchOverviewData(true);
+    }
     intervalRef.current = setInterval(() => fetchOverviewData(false), 10_000);
     return () => clearInterval(intervalRef.current);
-  }, [fetchOverviewData]);
+  }, [fetchOverviewData, period]);
 
   // Real-time WebSocket: refresh on new enforcement events, but coalesce bursts
   // with a 2s trailing debounce so N events/min collapse to a single refetch

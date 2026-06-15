@@ -44,6 +44,65 @@ except ImportError:
 
 LOG = logging.getLogger("backend.bedrock_client")
 
+_ANTHROPIC_BEDROCK_VERSION = "bedrock-2023-05-31"
+
+
+def _to_anthropic_body(payload: dict[str, Any]) -> dict[str, Any]:
+    """Translate an OpenAI chat-completion payload into the Anthropic
+    Messages body that Bedrock's Claude models require: ``system`` is a
+    top-level string (Claude rejects a ``system`` message role) and the
+    ``messages`` list carries only user/assistant turns.
+    """
+    messages = payload.get("messages") or []
+    system_parts: list[str] = []
+    chat_messages: list[dict[str, Any]] = []
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role == "system":
+            if content:
+                system_parts.append(content if isinstance(content, str) else json.dumps(content))
+            continue
+        chat_messages.append({"role": role, "content": content})
+    body: dict[str, Any] = {
+        "anthropic_version": _ANTHROPIC_BEDROCK_VERSION,
+        "messages": chat_messages,
+        "max_tokens": int(payload.get("max_tokens", 1024)),
+    }
+    if system_parts:
+        body["system"] = "\n\n".join(system_parts)
+    if "temperature" in payload:
+        body["temperature"] = payload["temperature"]
+    return body
+
+
+def _from_anthropic_body(response_body: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a Claude (Anthropic Messages) response into the OpenAI
+    chat-completion schema (``choices`` + ``usage.prompt_tokens``) so the
+    rest of the scanner can parse it model-agnostically.
+    """
+    content_blocks = response_body.get("content") or []
+    text_parts = [
+        b.get("text", "")
+        for b in content_blocks
+        if isinstance(b, dict) and b.get("type") == "text"
+    ]
+    text = "".join(text_parts)
+    usage = response_body.get("usage") or {}
+    return {
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": response_body.get("stop_reason"),
+            }
+        ],
+        "usage": {
+            "prompt_tokens": usage.get("input_tokens", 0),
+            "completion_tokens": usage.get("output_tokens", 0),
+            "total_tokens": (usage.get("input_tokens", 0) + usage.get("output_tokens", 0)),
+        },
+    }
+
 
 class BedrockClient:
     """
@@ -112,7 +171,11 @@ class BedrockClient:
         should follow the OpenAI chat-completion schema (with ``choices``).
         """
         effective_model = model or self.model_id
-        body = json.dumps(prompt_payload)
+        is_anthropic = "anthropic" in effective_model.lower() or "claude" in effective_model.lower()
+        request_payload = (
+            _to_anthropic_body(prompt_payload) if is_anthropic else prompt_payload
+        )
+        body = json.dumps(request_payload)
         payload_bytes = len(body)
 
         LOG.info(
@@ -145,6 +208,8 @@ class BedrockClient:
         elapsed = time.time() - start
 
         response_body = json.loads(response["body"].read())
+        if is_anthropic:
+            response_body = _from_anthropic_body(response_body)
 
         usage = response_body.get("usage") or {}
         tokens_in = usage.get("prompt_tokens") or usage.get("total_tokens") or 0

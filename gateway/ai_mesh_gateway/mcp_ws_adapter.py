@@ -26,6 +26,11 @@ from dataclasses import dataclass, field
 import websockets
 import websockets.client
 
+try:  # package vs top-level import (mirrors gateway module import style)
+    from ._url_guard import is_safe_outbound_url
+except ImportError:  # pragma: no cover - flat-module deployment
+    from _url_guard import is_safe_outbound_url
+
 LOG = logging.getLogger("gateway.mcp_ws_adapter")
 
 # How long an idle connection lives before being closed (seconds)
@@ -112,6 +117,16 @@ async def _ensure_connection(key: str, url: str,
         if len(_connections) >= _MAX_CONNECTIONS:
             oldest_key = min(_connections, key=lambda k: _connections[k].last_used)
             await _close_connection(oldest_key)
+
+        # SSRF guard (finding mcp#1): the WS URL is operator-supplied. Reject
+        # internal / loopback / link-local / cloud-metadata targets before
+        # opening the connection. ws/wss (and http/https upgrade) are permitted.
+        _ok, _reason = is_safe_outbound_url(
+            url, allowed_schemes=("ws", "wss", "http", "https")
+        )
+        if not _ok:
+            LOG.warning("Blocked WebSocket connect to unsafe URL (key=%s): %s", key, _reason)
+            raise RuntimeError(f"WebSocket URL rejected by SSRF guard: {_reason}")
 
         extra_headers = auth_headers or {}
         LOG.info("Opening WebSocket connection to %s (key=%s)", url, key)

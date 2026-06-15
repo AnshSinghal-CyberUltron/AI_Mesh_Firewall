@@ -17,6 +17,9 @@ OPENAI_TOP_LEVEL_KEYS = frozenset({
     "stop", "presence_penalty", "frequency_penalty", "tools", "tool_choice",
     "response_format", "seed", "n", "user",
     "reasoning", "reasoning_effort", "logprobs", "max_output_tokens", "text",
+    # SDK-compat additions: GPT-5.x / function-calling params the stock SDK emits
+    # that were previously stripped (silently degrading the request).
+    "max_completion_tokens", "parallel_tool_calls", "stream_options", "top_logprobs",
 })
 
 
@@ -39,8 +42,16 @@ def _normalize_content_parts(content):
 def _normalize_messages(messages):
     if not messages:
         return messages
+    # Be tolerant of malformed shapes: let the downstream clean per-field
+    # validators reject them (so the client gets a stable, sanitized 400)
+    # instead of a raw CPython TypeError from dict()/iteration here.
+    if not isinstance(messages, list):
+        return messages
     out = []
     for m in messages:
+        if not isinstance(m, dict):
+            out.append(m)
+            continue
         msg = dict(m)
         if "content" in msg:
             msg["content"] = _normalize_content_parts(msg["content"])

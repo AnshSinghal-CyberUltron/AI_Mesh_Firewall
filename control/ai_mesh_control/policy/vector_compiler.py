@@ -27,6 +27,27 @@ REDIS_KEY_COMPILED = "vector:policies:compiled"
 REDIS_KEY_VERSION = "vector:policies:version"
 PUBSUB_CHANNEL = "vector_policy_updates"
 
+
+def _scrub_reserved_embedding_model(payload: dict[str, Any]) -> dict[str, Any]:
+    """R2: never emit the reserved platform/guard model as a vector embedding
+    target. Embedding is BYOK (OpenRouter); the internal ML model
+    ("zeroshield-model" + legacy 120b aliases) must never reach the gateway as
+    an embedding destination. Drops ``embedding_model`` when it names a reserved
+    model so the gateway falls back to its configured BYOK embedding model.
+    Returns the payload unchanged when no reserved name is present."""
+    if not isinstance(payload, dict):
+        return payload
+    try:
+        from core.models import is_platform_managed_llm_model_name
+    except Exception:  # pragma: no cover - import safety; never block a compile
+        return payload
+    val = payload.get("embedding_model")
+    if isinstance(val, str) and is_platform_managed_llm_model_name(val):
+        payload = dict(payload)
+        payload.pop("embedding_model", None)
+        logger.warning("Scrubbed reserved platform model from compiled vector embedding_model")
+    return payload
+
 _redis_pool: redis.ConnectionPool | None = None
 
 
@@ -74,8 +95,17 @@ class VectorPolicyCompiler:
 
         compiled_policies: dict[str, dict[str, Any]] = {}
         for policy in policies_qs:
-            lookup_key = f"{policy.project_id}::{policy.collection_name}"
-            compiled_policies[lookup_key] = policy.build_redis_payload()
+            # Key by ``{organization_id}::{collection_name}`` — the only
+            # collision-free tenant identifier. Keying by ``project_id`` was
+            # ambiguous: the gateway derives ``project_id`` from the gateway key
+            # (e.g. ``simulator-{slug}``) which rarely equals the operator-set
+            # ``policy.project_id``, so UI/seeded policies silently missed and
+            # the collection fell back to the permissive monitor default. It was
+            # also unsafe across tenants (two orgs can share a project_id).
+            lookup_key = f"{policy.organization_id}::{policy.collection_name}"
+            compiled_policies[lookup_key] = _scrub_reserved_embedding_model(
+                policy.build_redis_payload()
+            )
 
         bundle: dict[str, Any] = {
             "compiled_at": time.time(),

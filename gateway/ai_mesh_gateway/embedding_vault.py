@@ -3,12 +3,37 @@ Embedding Vault for the Gateway Data Plane.
 
 Stores embeddings of known prompt injection attacks in PostgreSQL and compares
 incoming queries against the vault using cosine distance on pgvector.
+
+Failure handling
+----------------
+Vault check errors are classified into two kinds:
+
+* **auth/config errors** (HTTP 401/403, invalid API keys, bad DB credentials,
+  permission denied) — these are persistent misconfigurations. They are logged
+  at ERROR once per cooldown window (not per request) and counted in the
+  ``amf_gateway_embedding_vault_errors_total`` Prometheus counter
+  (kind="auth") on the gateway /metrics surface.
+* **transient errors** (timeouts, 5xx, connection resets) — logged at WARNING
+  per occurrence and counted with kind="transient".
+
+Environment variables
+---------------------
+``EMBEDDING_VAULT_STRICT``
+    When truthy ("1", "true", "yes", "on"), auth/config failures fail CLOSED:
+    the vault returns a deny verdict (synthetic match ``vault-auth-unavailable``)
+    so the scanner blocks the request. Defaults to unset (fail-open: vault
+    errors degrade to allow, preserving historical behavior). Transient errors
+    always fail open regardless of this flag.
+``EMBEDDING_VAULT_AUTH_LOG_COOLDOWN_S``
+    Seconds between repeated ERROR logs for auth/config failures
+    (default 300). Suppressed occurrences are logged at DEBUG.
 """
 
 import asyncio
 import hashlib
 import logging
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -75,6 +100,122 @@ def _format_vector(values: list[float]) -> str:
     return "[" + ",".join(f"{float(v):.8f}" for v in values) + "]"
 
 
+DEFAULT_AUTH_LOG_COOLDOWN_S = 300.0
+
+# Module-local counters: always available (even without prometheus_client) and
+# cheap to inspect from tests/diagnostics. Keys are error kinds ("auth",
+# "transient"); values are monotonically increasing ints for process lifetime.
+VAULT_ERROR_COUNTERS: dict[str, int] = {}
+
+_PROM_VAULT_ERRORS = None
+_PROM_VAULT_ERRORS_FAILED = False
+
+_AUTH_ERROR_NAME_MARKERS = (
+    "authentication",
+    "permissiondenied",
+    "unauthorized",
+    "forbidden",
+    "invalidcredentials",
+)
+_AUTH_ERROR_MSG_MARKERS = (
+    "unauthorized",
+    "forbidden",
+    "invalid api key",
+    "incorrect api key",
+    "invalid_api_key",
+    "api key not valid",
+    "bad credentials",
+    "invalid credentials",
+    "password authentication failed",
+    "no password supplied",
+    "access denied",
+    "permission denied",
+)
+_AUTH_STATUS_RE = re.compile(r"\b(?:401|403)\b")
+
+
+def _is_auth_error(exc: BaseException) -> bool:
+    """Classify an exception as an auth/config failure vs a transient error.
+
+    Auth/config errors (401/403 statuses, bad credentials, permission denied)
+    are persistent until an operator fixes configuration; everything else
+    (timeouts, 5xx, connection failures) is treated as transient.
+    """
+    for attr in ("status_code", "http_status"):
+        try:
+            status = int(getattr(exc, attr, None) or 0)
+        except (TypeError, ValueError):
+            status = 0
+        if status in (401, 403):
+            return True
+    name = type(exc).__name__.lower()
+    if any(marker in name for marker in _AUTH_ERROR_NAME_MARKERS):
+        return True
+    msg = str(exc).lower()
+    if any(marker in msg for marker in _AUTH_ERROR_MSG_MARKERS):
+        return True
+    return bool(_AUTH_STATUS_RE.search(msg))
+
+
+def _strict_mode() -> bool:
+    """Whether auth failures should fail closed (deny). Default: fail open."""
+    return os.environ.get("EMBEDDING_VAULT_STRICT", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _vault_errors_prom_counter():
+    """Best-effort Prometheus counter on the shared gateway metrics registry.
+
+    Lazily registered so the vault keeps working when prometheus_client or the
+    metrics module is unavailable. Tolerates the module being imported under
+    both flat and package names (duplicate registration reuses the existing
+    collector).
+    """
+    global _PROM_VAULT_ERRORS, _PROM_VAULT_ERRORS_FAILED
+    if _PROM_VAULT_ERRORS is not None or _PROM_VAULT_ERRORS_FAILED:
+        return _PROM_VAULT_ERRORS
+    try:
+        try:
+            import metrics as _metrics  # flat import (gateway runtime layout)
+        except ImportError:  # pragma: no cover - package-style import fallback
+            from ai_mesh_gateway import metrics as _metrics  # type: ignore[no-redef]
+        if not getattr(_metrics, "_PROM_AVAILABLE", False):
+            _PROM_VAULT_ERRORS_FAILED = True
+            return None
+        from prometheus_client import Counter
+
+        try:
+            _PROM_VAULT_ERRORS = Counter(
+                "amf_gateway_embedding_vault_errors_total",
+                "Embedding vault check failures by error kind and resulting action.",
+                ["kind", "action"],
+                registry=_metrics.REGISTRY,
+            )
+        except ValueError:  # already registered under another import name
+            _PROM_VAULT_ERRORS = _metrics.REGISTRY._names_to_collectors.get(
+                "amf_gateway_embedding_vault_errors_total"
+            )
+    except Exception:  # pragma: no cover - metrics must never break the vault
+        _PROM_VAULT_ERRORS_FAILED = True
+        return None
+    return _PROM_VAULT_ERRORS
+
+
+def _record_vault_error(kind: str, action: str) -> None:
+    """Increment the module-local and (best-effort) Prometheus error counters."""
+    VAULT_ERROR_COUNTERS[kind] = VAULT_ERROR_COUNTERS.get(kind, 0) + 1
+    counter = _vault_errors_prom_counter()
+    if counter is not None:
+        try:
+            counter.labels(kind=kind, action=action).inc()
+        except Exception:  # pragma: no cover - metrics must never break the vault
+            pass
+
+
 class EmbeddingVault:
     """Stores known attack embeddings and detects similar inputs."""
 
@@ -99,6 +240,16 @@ class EmbeddingVault:
         )
         self._pool = None
         self._initialized = False
+        try:
+            self._auth_log_cooldown_s = float(
+                os.environ.get(
+                    "EMBEDDING_VAULT_AUTH_LOG_COOLDOWN_S",
+                    str(DEFAULT_AUTH_LOG_COOLDOWN_S),
+                )
+            )
+        except ValueError:
+            self._auth_log_cooldown_s = DEFAULT_AUTH_LOG_COOLDOWN_S
+        self._auth_error_last_log: float | None = None
         LOG.info(
             "EmbeddingVault created (pg_enabled=%s, threshold=%.3f, model=%s, dim=%d)",
             self._enabled,
@@ -227,8 +378,64 @@ class EmbeddingVault:
             )
         except Exception as exc:
             latency = (time.perf_counter() - start) * 1000
-            LOG.warning("Embedding vault check failed (%.1fms): %s", latency, exc)
-            return VaultVerdict(error=str(exc), latency_ms=latency)
+            return self._handle_check_error(exc, latency)
+
+    def _log_auth_error(self, exc: BaseException, latency_ms: float, action: str) -> None:
+        """Log auth/config failures at ERROR once per cooldown window."""
+        now = time.monotonic()
+        if (
+            self._auth_error_last_log is None
+            or (now - self._auth_error_last_log) >= self._auth_log_cooldown_s
+        ):
+            self._auth_error_last_log = now
+            LOG.error(
+                "Embedding vault auth/config failure (%.1fms, action=%s): %s "
+                "— further auth errors suppressed for %.0fs "
+                "(set EMBEDDING_VAULT_STRICT=true to fail closed)",
+                latency_ms,
+                action,
+                exc,
+                self._auth_log_cooldown_s,
+            )
+        else:
+            LOG.debug(
+                "Embedding vault auth/config failure (suppressed, %.1fms): %s",
+                latency_ms,
+                exc,
+            )
+
+    def _handle_check_error(self, exc: BaseException, latency_ms: float) -> VaultVerdict:
+        """Classify a vault check failure and return the resulting verdict.
+
+        Transient errors always fail open (allow). Auth/config errors fail
+        open by default but fail closed (deny) when EMBEDDING_VAULT_STRICT
+        is enabled.
+        """
+        if _is_auth_error(exc):
+            strict = _strict_mode()
+            action = "deny" if strict else "allow"
+            _record_vault_error("auth", action)
+            self._log_auth_error(exc, latency_ms, action)
+            if strict:
+                return VaultVerdict(
+                    is_match=True,
+                    confidence=1.0,
+                    closest_distance=0.0,
+                    matches=[
+                        VaultMatch(
+                            attack_id="vault-auth-unavailable",
+                            attack_text="",
+                            attack_type="vault_unavailable",
+                            distance=0.0,
+                        )
+                    ],
+                    error=f"embedding vault auth failure (strict mode: deny): {exc}",
+                    latency_ms=latency_ms,
+                )
+            return VaultVerdict(error=str(exc), latency_ms=latency_ms)
+        _record_vault_error("transient", "allow")
+        LOG.warning("Embedding vault check failed (%.1fms): %s", latency_ms, exc)
+        return VaultVerdict(error=str(exc), latency_ms=latency_ms)
 
     async def check(self, text: str) -> VaultVerdict:
         if not text.strip():

@@ -18,13 +18,13 @@ from typing import Any, Optional
 import redis.asyncio as aioredis
 
 try:
-    from .policy_signing import signing_enforced, verify_bundle
+    from .policy_signing import _get_signing_key, signing_enforced, verify_bundle
     from .telemetry_ops import (
         emit_operational_event,
         EVENT_CLASS_POLICY_HMAC_FAILURE,
     )
 except ImportError:
-    from policy_signing import signing_enforced, verify_bundle
+    from policy_signing import _get_signing_key, signing_enforced, verify_bundle
     from telemetry_ops import (
         emit_operational_event,
         EVENT_CLASS_POLICY_HMAC_FAILURE,
@@ -82,6 +82,88 @@ class PolicySync:
         # zero-policy bundles are a valid state for a fresh org — only an
         # unreachable control plane should mark the gateway as degraded.
         self._sync_completed: bool = False
+        # M-19: one-time flag for the unsigned-acceptance warning (signing
+        # not configured). Avoids per-bundle log spam while still surfacing
+        # the degraded trust mode once per process.
+        self._unsigned_accept_warned: bool = False
+
+    # ── M-19: explicit signed/unsigned bundle acceptance decision ──────────
+    #
+    # Decision matrix (resolves the previous signed/unsigned ambiguity where
+    # a configured POLICY_SIGNING_KEY could still accept unsigned bundles
+    # when GATEWAY_POLICY_SIGNING_REQUIRED=false):
+    #
+    #   1. Signature verifies                          → ACCEPT
+    #   2. POLICY_SIGNING_KEY configured               → REJECT (always —
+    #      the key's presence means a signer is expected; an unsigned or
+    #      tampered bundle is an integrity failure regardless of the
+    #      GATEWAY_POLICY_SIGNING_REQUIRED cutover flag)
+    #   3. No key + GATEWAY_POLICY_SIGNING_REQUIRED    → REJECT (fail-closed
+    #      misconfiguration; main.py logs CRITICAL at startup for this)
+    #   4. No key + signing not required               → ACCEPT with a
+    #      ONE-TIME warning (deliberate dev / cutover mode)
+    def _accept_bundle(
+        self,
+        bundle: dict[str, Any],
+        org_slug: str,
+        site: str,
+        redis_key: str,
+    ) -> bool:
+        """Return True if *bundle* may be loaded into the cache.
+
+        Logs the decision explicitly; on rejection emits the operational
+        POLICY_HMAC_FAILURE event (fire-and-forget) so dashboards see it.
+        """
+        if verify_bundle(bundle):
+            LOG.debug(
+                "Policy bundle signature verified for org '%s' (%s)", org_slug, site
+            )
+            return True
+
+        key_configured = _get_signing_key() is not None
+        if key_configured or signing_enforced():
+            reason = (
+                "POLICY_SIGNING_KEY is configured but the bundle is unsigned "
+                "or its signature is invalid"
+                if key_configured
+                else "GATEWAY_POLICY_SIGNING_REQUIRED is true but no "
+                "POLICY_SIGNING_KEY is configured; nothing can verify"
+            )
+            LOG.critical(
+                "REFUSING policy bundle for org '%s' at key '%s' (%s): %s. "
+                "Gateway keeps its last-good policies for this org.",
+                org_slug,
+                redis_key,
+                site,
+                reason,
+            )
+            metadata: dict[str, Any] = {"site": site, "redis_key": redis_key}
+            if site == "refresh":
+                metadata["current_version"] = self._org_versions.get(org_slug, 0)
+            asyncio.create_task(
+                emit_operational_event(
+                    EVENT_CLASS_POLICY_HMAC_FAILURE,
+                    org_slug=org_slug,
+                    severity="critical",
+                    metadata=metadata,
+                )
+            )
+            return False
+
+        # No signing key and enforcement explicitly disabled: accept, but
+        # surface the degraded trust mode once per process.
+        if not self._unsigned_accept_warned:
+            self._unsigned_accept_warned = True
+            LOG.warning(
+                "Accepting UNSIGNED policy bundles: POLICY_SIGNING_KEY is not "
+                "configured and GATEWAY_POLICY_SIGNING_REQUIRED=false. Bundle "
+                "integrity is NOT verified — only safe during the signing "
+                "cutover window or local development. (Logged once; first "
+                "occurrence: org '%s', %s.)",
+                org_slug,
+                site,
+            )
+        return True
 
     def get_policies(self, org_slug: str = "default") -> list[dict[str, Any]]:
         """Return compiled policy entries for a specific org."""
@@ -150,6 +232,22 @@ class PolicySync:
         2. Spawn the subscriber loop as an asyncio background task
         """
         self._running = True
+        # M-19: state the signing mode once, explicitly, at startup.
+        if _get_signing_key() is not None:
+            LOG.info(
+                "Policy bundle signing: ENFORCED (POLICY_SIGNING_KEY configured; "
+                "unsigned or tampered bundles will be rejected)"
+            )
+        elif signing_enforced():
+            LOG.info(
+                "Policy bundle signing: ENFORCED but POLICY_SIGNING_KEY is missing "
+                "— ALL bundles will be rejected until the key is configured"
+            )
+        else:
+            LOG.info(
+                "Policy bundle signing: DISABLED (no POLICY_SIGNING_KEY, "
+                "GATEWAY_POLICY_SIGNING_REQUIRED=false) — unsigned bundles accepted"
+            )
         await self._load_initial_bundle()
         self._subscriber_task = asyncio.create_task(self._subscriber_loop())
         LOG.info(
@@ -195,37 +293,16 @@ class PolicySync:
                 bundle = json.loads(raw)
                 slug = key.split(":", 2)[-1]  # "policies:compiled:default" → "default"
 
-                # HMAC verification (fail-closed). When signing is enforced
-                # we DROP unsigned or tampered bundles entirely so a malicious
-                # writer cannot replace policies with an empty allow-all set.
-                if not verify_bundle(bundle):
-                    if signing_enforced():
-                        LOG.critical(
-                            "REFUSING unsigned/invalid policy bundle for org '%s' at key '%s'. "
-                            "Gateway will not load these policies.",
-                            slug,
-                            key,
-                        )
-                        # Phase 0 D-G1-v3: emit operational event with
-                        # site=initial_load so dashboards can disambiguate
-                        # cold-start failures from refresh failures.
-                        asyncio.create_task(
-                            emit_operational_event(
-                                EVENT_CLASS_POLICY_HMAC_FAILURE,
-                                org_slug=slug,
-                                severity="critical",
-                                metadata={
-                                    "site": "initial_load",
-                                    "redis_key": key,
-                                },
-                            )
-                        )
-                        continue
-                    LOG.warning(
-                        "Loading unsigned policy bundle for org '%s' "
-                        "(GATEWAY_POLICY_SIGNING_REQUIRED=false; only safe during cutover)",
-                        slug,
-                    )
+                # HMAC verification (fail-closed). When a signing key is
+                # configured (or enforcement is required) we DROP unsigned or
+                # tampered bundles entirely so a malicious writer cannot
+                # replace policies with an empty allow-all set.
+                # Phase 0 D-G1-v3: site=initial_load lets dashboards
+                # disambiguate cold-start failures from refresh failures.
+                if not self._accept_bundle(
+                    bundle, slug, site="initial_load", redis_key=key
+                ):
+                    continue
 
                 self._org_caches[slug] = bundle
                 ver = bundle.get("version", 0)
@@ -238,12 +315,9 @@ class PolicySync:
                     ver,
                     bundle.get("policy_count", 0),
                 )
-
-                if not self._org_caches:
-                    LOG.warning(
-                        "No org-scoped compiled policy bundles found in Redis. "
-                        "Gateway will operate without policies until backend compiles per-organization bundles."
-                    )
+                # (M-19: the unreachable in-loop "no bundles" warning that
+                # lived here was removed — the post-loop ZERO-bundles warning
+                # below covers that case.)
 
             await client.aclose()
             # Phase 1 Fx-1: sync round-trip with control plane succeeded.
@@ -263,6 +337,67 @@ class PolicySync:
                 "Will retry when Pub/Sub connects.",
                 exc_info=True,
             )
+
+    def _is_newer_notification(
+        self,
+        org_slug: str,
+        incoming_version: int,
+        incoming_compiled_at: Optional[float],
+    ) -> bool:
+        """Return True if a policy-update notification should trigger a refresh.
+
+        Normal path: a higher ``version`` than the cached one is newer.
+
+        Robustness: a version-counter RESET (e.g. a redis reseed / failover /
+        flush leaves ``policies:version:{slug}`` gone, so the next compile
+        restarts the counter at 1) would make a genuinely-newer bundle look
+        "stale" by version alone and permanently wedge propagation until the
+        gateway restarts. Fall back to the bundle's monotonic ``compiled_at``
+        wall-clock: if the incoming compile is strictly newer in time, accept
+        it even when its version number went backwards. Truly stale / out-of-
+        order notifications (older compiled_at) are still skipped, preserving
+        the WATCH/MULTI ordering guarantee.
+        """
+        # Defensive coercion: a malformed pub/sub notification may carry
+        # ``version`` / ``compiled_at`` as a string, JSON ``null``, or other
+        # non-numeric value. Comparing those with ``>`` raises TypeError, and
+        # ``float()`` of a non-numeric string raises ValueError — either of
+        # which, uncaught in the subscriber loop, drops the subscription and
+        # causes a ~5s propagation blackout until reconnect. A non-numeric
+        # *cached* compiled_at (e.g. an ISO string written by another code
+        # version) would permanently wedge propagation for that org. Normalize
+        # every value before comparing.
+        def _to_float_or_none(val):
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                return None
+
+        def _to_int_or_zero(val):
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                return 0
+
+        inc_v = _to_int_or_zero(incoming_version)
+        cur_v = _to_int_or_zero(self._org_versions.get(org_slug, 0))
+        if inc_v > cur_v:
+            return True
+        cached = self._org_caches.get(org_slug) or {}
+        inc_ts = _to_float_or_none(incoming_compiled_at)
+        cur_ts = _to_float_or_none(cached.get("compiled_at"))
+        if inc_ts is not None and cur_ts is not None and inc_ts > cur_ts:
+            LOG.info(
+                "Accepting policy bundle for org '%s' despite version reset "
+                "(incoming v=%s compiled_at=%s > cached v=%s compiled_at=%s)",
+                org_slug,
+                inc_v,
+                inc_ts,
+                cur_v,
+                cur_ts,
+            )
+            return True
+        return False
 
     async def _subscriber_loop(self) -> None:
         """
@@ -298,15 +433,23 @@ class PolicySync:
                         continue
 
                     org_slug = notification.get("org_slug", "default")
-                    incoming_version = notification.get("version", 0)
-                    current_org_version = self._org_versions.get(org_slug, 0)
+                    # Coerce defensively: a malformed notification could carry a
+                    # string/null version, which would later crash the ``%d``
+                    # debug log and pollute the stored version counter.
+                    try:
+                        incoming_version = int(notification.get("version", 0))
+                    except (TypeError, ValueError):
+                        incoming_version = 0
+                    incoming_compiled_at = notification.get("compiled_at")
 
-                    if incoming_version <= current_org_version:
+                    if not self._is_newer_notification(
+                        org_slug, incoming_version, incoming_compiled_at
+                    ):
                         LOG.debug(
                             "Skipping stale notification for org '%s' (incoming=%d, current=%d)",
                             org_slug,
                             incoming_version,
-                            current_org_version,
+                            self._org_versions.get(org_slug, 0),
                         )
                         continue
 
@@ -355,34 +498,12 @@ class PolicySync:
 
             # Same fail-closed verification as initial load. Keep the
             # previous cache untouched if the new bundle is tampered.
-            if not verify_bundle(bundle):
-                if signing_enforced():
-                    LOG.critical(
-                        "REFUSING tampered policy bundle for org '%s' on refresh; "
-                        "retaining previous cache (version=%d)",
-                        org_slug,
-                        self._org_versions.get(org_slug, 0),
-                    )
-                    # Phase 0 D-G1-v3: site=refresh so we can alert on
-                    # post-startup tampering (more suspicious than init).
-                    asyncio.create_task(
-                        emit_operational_event(
-                            EVENT_CLASS_POLICY_HMAC_FAILURE,
-                            org_slug=org_slug,
-                            severity="critical",
-                            metadata={
-                                "site": "refresh",
-                                "redis_key": redis_key,
-                                "current_version": self._org_versions.get(org_slug, 0),
-                            },
-                        )
-                    )
-                    return
-                LOG.warning(
-                    "Refreshing unsigned policy bundle for org '%s' "
-                    "(GATEWAY_POLICY_SIGNING_REQUIRED=false)",
-                    org_slug,
-                )
+            # Phase 0 D-G1-v3: site=refresh so we can alert on post-startup
+            # tampering (more suspicious than init).
+            if not self._accept_bundle(
+                bundle, org_slug, site="refresh", redis_key=redis_key
+            ):
+                return
 
             new_version = bundle.get("version", 0)
 

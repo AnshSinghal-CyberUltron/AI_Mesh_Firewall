@@ -13,6 +13,20 @@ import {
   buildKillSwitchTargetOptions,
 } from "../utils/killSwitchModelOptions";
 
+// Extract a human-readable message from a kill-switch API error response.
+// DRF returns field-keyed validation errors (e.g. {"fallback_model": ["..."]})
+// for serializer failures and {"detail": "..."} for permission/other errors.
+function extractKillSwitchError(data, fallback) {
+  if (!data || typeof data !== "object") return fallback;
+  if (typeof data.error === "string" && data.error) return data.error;
+  if (typeof data.detail === "string" && data.detail) return data.detail;
+  for (const value of Object.values(data)) {
+    if (typeof value === "string" && value) return value;
+    if (Array.isArray(value) && typeof value[0] === "string" && value[0]) return value[0];
+  }
+  return fallback;
+}
+
 export function KillSwitchPanel() {
   const { fetchWithAuth, user } = useAuth();
   const orgSlug = user?.organization?.slug || "";
@@ -28,7 +42,9 @@ export function KillSwitchPanel() {
     reason: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [actionError, setActionError] = useState(null);
   const [redisScanning, setRedisScanning] = useState(false);
   const [redisResult, setRedisResult] = useState(null);
   const [redisError, setRedisError] = useState(null);
@@ -163,12 +179,14 @@ export function KillSwitchPanel() {
 
   const openCreateModal = () => {
     setEditingId(null);
+    setSubmitError(null);
     setFormData({ model_name: "", api_key_prefix: "", action: "disable", fallback_model: "", reason: "" });
     setModalOpen(true);
   };
 
   const openEditModal = (ks) => {
     setEditingId(ks.id);
+    setSubmitError(null);
     setFormData({
       model_name: ks.model_name || "",
       api_key_prefix: ks.api_key_prefix || "",
@@ -182,25 +200,36 @@ export function KillSwitchPanel() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const payload = { ...formData };
       if (payload.action !== "reroute") {
         payload.fallback_model = "";
       }
 
-      if (editingId) {
-        await fetchWithAuth(`/api/kill-switches/${editingId}/`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await fetchWithAuth("/api/kill-switches/", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+      const res = editingId
+        ? await fetchWithAuth(`/api/kill-switches/${editingId}/`, {
+            method: "PATCH",
+            body: JSON.stringify(payload),
+          })
+        : await fetchWithAuth("/api/kill-switches/", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSubmitError(
+          extractKillSwitchError(
+            data,
+            editingId ? "Could not update kill-switch." : "Could not create kill-switch.",
+          ),
+        );
+        return;
       }
       setModalOpen(false);
       await fetchKillSwitches();
+    } catch {
+      setSubmitError("Network error saving kill-switch.");
     } finally {
       setSubmitting(false);
     }
@@ -208,9 +237,17 @@ export function KillSwitchPanel() {
 
   const handleActivate = async (id) => {
     setActionLoading(id);
+    setActionError(null);
     try {
-      await fetchWithAuth(`/api/kill-switches/${id}/activate/`, { method: "POST" });
+      const res = await fetchWithAuth(`/api/kill-switches/${id}/activate/`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setActionError(extractKillSwitchError(data, "Could not activate kill-switch."));
+        return;
+      }
       await fetchKillSwitches();
+    } catch {
+      setActionError("Network error activating kill-switch.");
     } finally {
       setActionLoading(null);
     }
@@ -218,9 +255,17 @@ export function KillSwitchPanel() {
 
   const handleDeactivate = async (id) => {
     setActionLoading(id);
+    setActionError(null);
     try {
-      await fetchWithAuth(`/api/kill-switches/${id}/deactivate/`, { method: "POST" });
+      const res = await fetchWithAuth(`/api/kill-switches/${id}/deactivate/`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setActionError(extractKillSwitchError(data, "Could not deactivate kill-switch."));
+        return;
+      }
       await fetchKillSwitches();
+    } catch {
+      setActionError("Network error deactivating kill-switch.");
     } finally {
       setActionLoading(null);
     }
@@ -229,9 +274,17 @@ export function KillSwitchPanel() {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this kill-switch? This action cannot be undone.")) return;
     setActionLoading(id);
+    setActionError(null);
     try {
-      await fetchWithAuth(`/api/kill-switches/${id}/`, { method: "DELETE" });
+      const res = await fetchWithAuth(`/api/kill-switches/${id}/`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setActionError(extractKillSwitchError(data, "Could not delete kill-switch."));
+        return;
+      }
       await fetchKillSwitches();
+    } catch {
+      setActionError("Network error deleting kill-switch.");
     } finally {
       setActionLoading(null);
     }
@@ -247,11 +300,16 @@ export function KillSwitchPanel() {
                 <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   {editingId ? "Edit Kill-Switch" : "Create Kill-Switch"}
                 </h3>
-                <button onClick={() => setModalOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors">
+                <button onClick={() => setModalOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors" aria-label="Close dialog" title="Close">
                   <X className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                 </button>
               </div>
               <form onSubmit={handleSubmit} className="space-y-4">
+                {submitError && (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-800 dark:text-red-200" role="alert">
+                    {submitError}
+                  </div>
+                )}
                 {orgSlug && (
                   <div>
                     <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -262,6 +320,7 @@ export function KillSwitchPanel() {
                       readOnly
                       value={orgSlug}
                       className="text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/80 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono"
+                      aria-label="Organization slug"
                     />
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                       Redis keys use this slug — verify it matches your gateway API key org.
@@ -353,6 +412,7 @@ export function KillSwitchPanel() {
                     value={formData.action}
                     onChange={(e) => setFormData({ ...formData, action: e.target.value })}
                     className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full min-h-[44px] px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    aria-label="Kill-switch action"
                   >
                     <option value="disable">Disable (reject all requests)</option>
                     <option value="reroute" disabled={isGlobalTarget}>
@@ -409,6 +469,7 @@ export function KillSwitchPanel() {
                     placeholder="Optional: reason for this kill-switch"
                     rows={2}
                     className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
+                    aria-label="Kill-switch reason"
                   />
                 </div>
                 <div className="flex items-center justify-end gap-2 pt-2">
@@ -506,6 +567,12 @@ export function KillSwitchPanel() {
         </div>
       )}
 
+      {actionError && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-800 dark:text-red-200" role="alert">
+          {actionError}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-5 h-5 text-teal-500 animate-spin" />
@@ -532,7 +599,7 @@ export function KillSwitchPanel() {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {killSwitches.map((ks) => (
-                <tr key={ks.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <tr key={ks.id ?? `ms:${ks.model_name}`} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
                   <td className="px-3 py-2.5 font-mono text-xs text-slate-800 dark:text-slate-200">{ks.model_name}</td>
                   <td className="px-3 py-2.5 font-mono text-xs text-slate-600 dark:text-slate-400">{ks.api_key_prefix || "—"}</td>
                   <td className="px-3 py-2.5">
@@ -563,7 +630,14 @@ export function KillSwitchPanel() {
                   <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">{ks.activated_by_username || "--"}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
-                      {actionLoading === ks.id ? (
+                      {ks.source === "model_state" ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                          title="Isolation set in Model State & Risk Monitor — manage it there."
+                        >
+                          Risk-monitor
+                        </span>
+                      ) : actionLoading === ks.id ? (
                         <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
                       ) : (
                         <>

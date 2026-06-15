@@ -30,7 +30,12 @@ _SEVERITY_PRIORITY = {"CRITICAL": 400, "HIGH": 300, "MEDIUM": 200, "LOW": 100}
 
 
 def _org_project_id(organization) -> str:
-    """Canonical tenant id for the org (matches GatewayAPIKey.project_id = slug)."""
+    """Display label stored on VectorCollectionPolicy.project_id (the org slug).
+
+    This is DISPLAY-ONLY: vector-policy enforcement is keyed by organization_id,
+    not by project_id (the gateway authenticates with a 'simulator-{slug}' key
+    whose project_id does not equal the slug), so this value is not load-bearing.
+    """
     return organization.slug
 
 

@@ -75,7 +75,11 @@ function formatStageLatency(stage) {
   if (Number.isFinite(ms) && ms >= 0) {
     return `${ms < 1 ? "<1" : Math.round(ms * 10) / 10}ms latency`;
   }
-  return "0.1ms latency";
+  // Honest placeholder: never fabricate a latency number when the gateway did
+  // not report one for this stage. Both render sites cope with the dash — the
+  // stage card shows "—" and the detail card's `.replace(" latency", "")`
+  // leaves it untouched.
+  return "—";
 }
 
 /**

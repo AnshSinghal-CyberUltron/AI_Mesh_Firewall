@@ -2,6 +2,7 @@
 
 import logging
 
+from django.db import transaction
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -38,15 +39,28 @@ class FirewallConfigView(APIView):
 
     def put(self, request):
         org = self._get_org(request)
-        config = FirewallConfig.load(organization=org)
-        serializer = FirewallConfigSerializer(
-            config,
-            data=request.data,
-            partial=True,
-            context={"organization": org},
-        )
-        serializer.is_valid(raise_exception=True)
-        serializer.save(updated_by=request.user)
+        # Ensure the singleton row exists (load() get_or_creates it) so the
+        # select_for_update().get() below always finds a row to lock.
+        FirewallConfig.load(organization=org)
+
+        # Serialize the whole read-modify-write under a row-level lock so
+        # concurrent PUTs to the same org's config serialize on the row instead
+        # of clobbering each other (lost update). The serializer's validate()
+        # merges request fields with the instance's stored values, so it must
+        # run against the freshly-locked row, not a stale snapshot.
+        with transaction.atomic():
+            if org is not None:
+                config = FirewallConfig.objects.select_for_update().get(organization=org)
+            else:
+                config = FirewallConfig.objects.select_for_update().get(organization__isnull=True)
+            serializer = FirewallConfigSerializer(
+                config,
+                data=request.data,
+                partial=True,
+                context={"organization": org},
+            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save(updated_by=request.user)
         logger.info(
             "FirewallConfig updated by user=%s (fields=%s)",
             request.user.username,
