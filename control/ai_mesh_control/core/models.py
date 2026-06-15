@@ -1295,14 +1295,7 @@ class LLMModelConfig(models.Model):
 
     @property
     def api_key_set(self) -> bool:
-        if self.encrypted_api_key:
-            return True
-        if self.api_key_env_var:
-            return True
-        # Bedrock/internal models use gateway container AWS credentials (IAM/env).
-        if str(self.provider or "").lower() in {"aws_bedrock", "internal"}:
-            return True
-        return False
+        return bool(self.encrypted_api_key)
 
     @property
     def is_platform_managed(self) -> bool:
