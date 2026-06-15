@@ -212,8 +212,15 @@ def enrich_stream_headers(
 
 
 def _latin1_safe_value(value: Any) -> str:
-    """Coerce a header value to a latin-1-encodable str (replace offenders)."""
+    """Coerce a header value to a latin-1-encodable, control-char-free str."""
+    import re
     s = "" if value is None else str(value)
+    # B1/FD: CR/LF/NUL and other C0/DEL control chars ARE latin-1-encodable, so
+    # they slip past the except branch below and reach h11/uvicorn, which raises
+    # LocalProtocolError AFTER the streaming response has started (a mid-flight
+    # abort). Collapse them to a space — mirror of main._latin1_safe_headers (the
+    # FD fix was applied only to the non-stream helper; this is the stream half).
+    s = re.sub(r"[\r\n\x00-\x1f\x7f]", " ", s)
     try:
         s.encode("latin-1")
         return s

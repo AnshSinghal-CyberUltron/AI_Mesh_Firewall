@@ -582,7 +582,15 @@ class ConfigSync:
                         self._model_routing_by_org[slug] = normalized.get("routing", [])
                     if "fallback_chains" in normalized:
                         self._fallback_chains_by_org[slug] = normalized["fallback_chains"]
-                all_models.extend(normalized.get("models", []))
+                # H7: tag each deployment with its OWNING org so the router can
+                # org-qualify the routing key — without this tag the global merge
+                # keys deployments by bare model_name only, letting two tenants'
+                # same-named models (and their distinct BYOK keys) load-balance.
+                _slug_models = normalized.get("models", [])
+                for _m in _slug_models:
+                    if isinstance(_m, dict):
+                        _m["_zs_org"] = slug
+                all_models.extend(_slug_models)
 
             if not all_models:
                 LOG.info("Empty model list from Redis; skipping reload")

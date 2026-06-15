@@ -523,7 +523,10 @@ async def query_vector_db(
             )
 
         provider_type = provider_config.get("provider_type", "pinecone")
-        project_id = auth_context.get("project_id", org_id)
+        # B6: org-isolated vector namespace — bind to the immutable org_id, not the
+        # client-settable project_id (same format as main._org_ns_project_id so
+        # /v1/vector/* and /v1/rag/* land in the same namespace for a given org).
+        project_id = f"org{org_id}-{auth_context.get('project_id') or 'default'}"
 
         # Execute query through RAG Firewall
         if RAG_PIPELINE is None:
@@ -776,7 +779,10 @@ async def upsert_vector_documents(
             )
 
         provider_type = provider_config.get("provider_type", "pinecone")
-        project_id = auth_context.get("project_id", org_id)
+        # B6: org-isolated vector namespace — bind to the immutable org_id, not the
+        # client-settable project_id (same format as main._org_ns_project_id so
+        # /v1/vector/* and /v1/rag/* land in the same namespace for a given org).
+        project_id = f"org{org_id}-{auth_context.get('project_id') or 'default'}"
 
         # Get vector client
         vector_client = _resolve_runtime_vector_client(provider_type, provider_config)
@@ -940,7 +946,10 @@ async def delete_vector_documents(
             )
 
         provider_type = provider_config.get("provider_type", "pinecone")
-        project_id = auth_context.get("project_id", org_id)
+        # B6: org-isolated vector namespace — bind to the immutable org_id, not the
+        # client-settable project_id (same format as main._org_ns_project_id so
+        # /v1/vector/* and /v1/rag/* land in the same namespace for a given org).
+        project_id = f"org{org_id}-{auth_context.get('project_id') or 'default'}"
 
         vector_client = _resolve_runtime_vector_client(provider_type, provider_config)
         if not vector_client:

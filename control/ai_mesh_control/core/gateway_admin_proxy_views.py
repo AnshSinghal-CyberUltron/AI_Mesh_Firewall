@@ -105,12 +105,32 @@ def _proxy(method: str, gw_path: str, payload: dict | None = None) -> Response:
     )
 
 
+def _cb_forbidden(request):
+    """FF: the circuit-breaker Redis namespace is GLOBAL per model (no org
+    dimension), so trip/reset/read affects ALL tenants. Restrict to platform
+    operators — a per-org tenant admin (IsAdminOrSuperuser admits platform_admin)
+    must not control another org's breaker. Returns a 403 Response when forbidden,
+    else None."""
+    from auth.models import is_platform_operator
+    # Allow true platform admins (is_superuser, platform-level) OR explicit
+    # platform operators; block per-org tenant admins (is_staff + platform_admin
+    # role) who IsAdminOrSuperuser would otherwise admit to a global resource.
+    if request.user.is_superuser or is_platform_operator(request.user):
+        return None
+    return Response(
+        {"detail": "Circuit-breaker control is restricted to platform operators."},
+        status=403,
+    )
+
+
 class CircuitBreakerStateProxyView(APIView):
     """GET /api/admin/gateway/circuit-breaker/state/"""
 
     permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
 
     def get(self, request: Request) -> Response:
+        if _cb_forbidden(request):
+            return _cb_forbidden(request)
         return _proxy("GET", "/v1/admin/circuit-breaker-state")
 
 
@@ -123,6 +143,8 @@ class CircuitBreakerTriggerProxyView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
 
     def post(self, request: Request) -> Response:
+        if _cb_forbidden(request):
+            return _cb_forbidden(request)
         return _proxy("POST", "/v1/admin/circuit-breaker-trigger", request.data)
 
 
@@ -135,6 +157,8 @@ class CircuitBreakerResetProxyView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
 
     def post(self, request: Request) -> Response:
+        if _cb_forbidden(request):
+            return _cb_forbidden(request)
         return _proxy("POST", "/v1/admin/circuit-breaker-reset", request.data)
 
 

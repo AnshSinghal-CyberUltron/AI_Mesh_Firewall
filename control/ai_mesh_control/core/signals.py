@@ -142,6 +142,14 @@ def resync_all_gateway_keys() -> int:
         try:
             redis_key = _build_redis_key(key.key_hash)
             payload = json.dumps(key.build_redis_payload())
+            # FC: the row was chunk-fetched into memory (.iterator), widening the
+            # window in which a concurrent DELETE/deactivate can land. Re-check the
+            # row is STILL live immediately before the blind SET so this reconcile
+            # cannot resurrect a key revoked after the fetch (mirrors the F3
+            # only-if-live gateway guard).
+            if not GatewayAPIKey.objects.filter(pk=key.pk, is_active=True).exists():
+                client.delete(redis_key)
+                continue
             if key.expires_at:
                 ttl = int((key.expires_at - timezone.now()).total_seconds())
                 if ttl <= 0:
@@ -168,10 +176,33 @@ def resync_all_gateway_keys() -> int:
                 pruned += 1
         except Exception:  # noqa: BLE001 - one bad key must not abort the reconcile
             logger.exception("resync_all_gateway_keys: prune failed for prefix=%s", getattr(key, "prefix", "?"))
+
+    # FC: orphan reap (true reconcile by ground truth). A blind SET can still lose
+    # a microsecond race and resurrect a HARD-deleted key — whose Redis entry then
+    # has NO DB row, so neither the active loop (is_active=True) nor the prune loop
+    # (is_active=False) ever reaps it and the deleted credential authenticates
+    # forever. Delete any auth:apikey:* entry whose hash is not in the CURRENT
+    # active set. Guarded with a non-empty check so a transient empty/failed active
+    # query can never mass-delete live keys.
+    reaped = 0
+    try:
+        _active_keys = {
+            _build_redis_key(h)
+            for h in GatewayAPIKey.objects.filter(is_active=True).values_list("key_hash", flat=True)
+        }
+        if _active_keys:
+            for rkey in client.scan_iter(match=f"{REDIS_KEY_PREFIX}*", count=500):
+                _rk = rkey.decode() if isinstance(rkey, (bytes, bytearray)) else rkey
+                if _rk not in _active_keys and client.delete(_rk):
+                    reaped += 1
+    except Exception:  # noqa: BLE001 - reap is best-effort; never abort the reconcile
+        logger.exception("resync_all_gateway_keys: orphan reap failed")
+
     logger.info(
-        "resync_all_gateway_keys: reconciled %d active gateway keys into Redis (pruned %d inactive)",
+        "resync_all_gateway_keys: reconciled %d active gateway keys into Redis (pruned %d inactive, reaped %d orphan)",
         synced,
         pruned,
+        reaped,
     )
     return synced
 

@@ -183,6 +183,7 @@ class LLMRouter:
         self._config = config
         self._router: LiteLLMRouter | None = None
         self._active_model_names: list[str] = []
+        self._qualified_model_names: set[str] = set()  # H7: org::model routing keys
 
         #global litellm settings
         litellm.drop_params = config.get("litellm_drop_params", True)
@@ -205,10 +206,13 @@ class LLMRouter:
             )
 
     def _set_active_model_names(self, model_list: list[dict]) -> None:
+        # H7: use the BARE name (model_info.base_model_name) — clients send bare
+        # model names, so validation/active-name matching must stay un-qualified
+        # even though the litellm routing key is org-qualified.
         self._active_model_names = [
-            self._normalize_model_alias(entry.get("model_name", ""))
+            self._normalize_model_alias((entry.get("model_info") or {}).get("base_model_name") or entry.get("model_name", ""))
             for entry in model_list
-            if entry.get("model_name")
+            if (entry.get("model_info") or {}).get("base_model_name") or entry.get("model_name")
         ]
 
     def _resolve_runtime_model(self, requested_model: str) -> str:
@@ -397,19 +401,44 @@ class LLMRouter:
         return await litellm.aembedding(**kwargs)
 
     def _apply_redaction(self, body: dict, redacted_content: str | None) -> dict:
-        """Replace last user message content with redacted version."""
+        """Redact PII/secrets in EVERY conversation message before the upstream call.
+
+        Previously this overwrote ONLY the last user message with the whole
+        redacted-conversation blob, which (a) dumped the entire role-prefixed
+        concatenation into that one slot and (b) left every EARLIER user turn with
+        its ORIGINAL raw content — so PII in any non-final turn reached the
+        upstream LLM verbatim, defeating the "the model never sees raw PII"
+        guarantee for any multi-turn chat (the common case for SDK/history replay).
+        ``redacted_content`` is now only a SIGNAL that input redaction fired; we
+        redact each message's content in place with the SAME deterministic
+        redactor the input scanner uses (patterns.redact_all), covering str and
+        multimodal text parts. System messages (instructions) are left untouched.
+        """
         if redacted_content is None or not body.get("messages"):
             return body
-        messages = list(body["messages"])
-        for i in range(len(messages) - 1, -1, -1):
-            if messages[i].get("role") == "user":
-                messages = (
-                    messages[:i]
-                    + [{"role": "user", "content": redacted_content}]
-                    + messages[i + 1:]
-                )
-                break
-        return {**body, "messages": messages}
+        try:
+            from patterns import redact_all
+        except ImportError:
+            from .patterns import redact_all
+        new_messages = []
+        for m in body["messages"]:
+            if not isinstance(m, dict) or m.get("role") == "system":
+                new_messages.append(m)
+                continue
+            c = m.get("content")
+            if isinstance(c, str) and c:
+                new_messages.append({**m, "content": redact_all(c)})
+            elif isinstance(c, list):
+                parts = [
+                    ({**p, "text": redact_all(p["text"])}
+                     if isinstance(p, dict) and isinstance(p.get("text"), str) and p["text"]
+                     else p)
+                    for p in c
+                ]
+                new_messages.append({**m, "content": parts})
+            else:
+                new_messages.append(m)
+        return {**body, "messages": new_messages}
 
     def _build_kwargs(
         self,
@@ -451,8 +480,19 @@ class LLMRouter:
                 model,
             )
         messages = body.get("messages") or body.get("input") or []
+        # H7: org-qualify the routing key so litellm selects THIS org's deployment
+        # (and its BYOK key), never a same-named peer from another tenant. The
+        # router deployments are keyed `{org}::{model}`; the bare name stays
+        # everywhere else. Qualify only when the qualified key actually exists in
+        # the router (fail-safe to bare so a missing tag never 404s a request).
+        _org = str(body.get("_zs_org_slug") or "")
+        _route_model = model
+        if _org and "::" not in str(model):
+            _qualified = f"{_org}::{model}"
+            if _qualified in self._qualified_model_names:
+                _route_model = _qualified
         kwargs = {
-            "model": model,
+            "model": _route_model,
             "messages": messages,
             "stream": stream,
         }
@@ -484,6 +524,15 @@ class LLMRouter:
         allowlist = self._pop_inference_allowlist(body)
         compliant_chain = self._pop_compliant_fallback_chain(body)
         kwargs = self._build_kwargs(body, stream=False, inference_allowlist=allowlist)
+        # H2: disable LiteLLM's constructor cross-model auto-failover on the chat
+        # path. That map is built from the STATIC catalog and is blind to the live
+        # kill_switch:*/model_state:* override namespaces, so a retryable provider
+        # error (429/5xx/timeout) on the requested model could silently fail over
+        # to ANY org chat model — including one an operator kill-switched/isolated.
+        # The gateway's OWN compliant_chain (below, kill-switch/model-state
+        # re-checked per G6/B7) owns all vetted failover; num_retries still retries
+        # the SAME allowed model for transient errors.
+        kwargs["fallbacks"] = []
 
         if not kwargs['model']:
             return 400, {
@@ -637,6 +686,7 @@ class LLMRouter:
         allowlist = self._pop_inference_allowlist(body)
         compliant_chain = self._pop_compliant_fallback_chain(body)
         kwargs = self._build_kwargs(body, stream=True, inference_allowlist=allowlist)
+        kwargs["fallbacks"] = []  # H2: see acompletion — gateway owns vetted failover, not LiteLLM's catalog-blind constructor map
 
         if not kwargs['model']:
             error_chunk = {
@@ -1000,6 +1050,29 @@ class LLMRouter:
         if not valid_models:
             LOG.error("All model entries were invalid during reload; keeping previous configuration")
             return
+
+        # H7: org-qualify each deployment's litellm ROUTING KEY to `{org}::{model}`
+        # so two tenants' same-named models cannot become load-balanced peers (and
+        # cross-use their distinct BYOK keys). The BARE name is kept in
+        # model_info.base_model_name for active-name validation / telemetry; the
+        # request path (_build_kwargs) qualifies kwargs['model'] the same way.
+        for _e in valid_models:
+            if not isinstance(_e, dict):
+                continue
+            _org = str(_e.get("_zs_org") or "")
+            _bare = str(_e.get("model_name") or "")
+            if _org and _bare and "::" not in _bare:
+                _mi = _e.get("model_info")
+                if not isinstance(_mi, dict):
+                    _mi = {}
+                    _e["model_info"] = _mi
+                _mi["base_model_name"] = _bare
+                _e["model_name"] = f"{_org}::{_bare}"
+        self._qualified_model_names = {
+            _e["model_name"]
+            for _e in valid_models
+            if isinstance(_e, dict) and _e.get("model_name") and "::" in str(_e["model_name"])
+        }
 
         try:
             fallbacks = self._build_fallbacks(valid_models)

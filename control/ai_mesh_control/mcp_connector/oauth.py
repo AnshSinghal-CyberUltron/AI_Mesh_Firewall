@@ -236,6 +236,14 @@ def discover(server_url: str) -> dict:
 
 def register_client(registration_endpoint: str, redirect_uri: str, client_name: str) -> dict:
     """Register a public OAuth client via DCR. Returns the registration response."""
+    # B10 (second-order SSRF): registration_endpoint is derived VERBATIM from the
+    # attacker-controlled RFC-8414 metadata document — validating the metadata URL
+    # does NOT validate the endpoints inside it. Re-validate here and disable
+    # redirect-following (a redirect to an internal address was the exact bypass
+    # the discovery client was hardened against).
+    _ok, _reason = is_safe_outbound_url(registration_endpoint)
+    if not _ok:
+        raise OAuthDiscoveryError(f"Unsafe registration endpoint rejected: {_reason}")
     body = {
         "client_name": client_name,
         "redirect_uris": [redirect_uri],
@@ -244,7 +252,7 @@ def register_client(registration_endpoint: str, redirect_uri: str, client_name: 
         "token_endpoint_auth_method": "none",  # public client; PKCE provides protection
         "application_type": "native",
     }
-    with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=True) as client:
+    with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=False) as client:
         r = client.post(
             registration_endpoint,
             json=body,
@@ -296,7 +304,12 @@ def _token_request(token_endpoint: str, data: dict, client_secret: str | None) -
     auth = None
     if client_secret:
         auth = (data.get("client_id", ""), client_secret)
-    with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=True) as client:
+    # B10: token_endpoint comes from attacker-controlled metadata and is persisted
+    # + reused on refresh — re-validate every call and disable redirect-following.
+    _ok, _reason = is_safe_outbound_url(token_endpoint)
+    if not _ok:
+        raise OAuthDiscoveryError(f"Unsafe token endpoint rejected: {_reason}")
+    with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=False) as client:
         r = client.post(token_endpoint, data=data, headers=headers, auth=auth)
         if r.status_code != 200:
             raise OAuthDiscoveryError(

@@ -169,9 +169,10 @@ services:
       GATEWAY_ORG_ONLY_INFERENCE: "true"
       GATEWAY_ALLOW_HTTP: "1"
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      # AWS creds are NOT pinned here: an empty ${AWS_ACCESS_KEY_ID:-} would
+      # SHADOW the AWS credential chain (an explicit empty key makes boto3 fail
+      # instead of falling back). Bedrock auth therefore resolves via the chain:
+      # keys in env_file (.env) for local dev, or the EC2 instance role in prod.
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-${BEDROCK_REGION:-ap-south-1}}
       BEDROCK_REGION: ${BEDROCK_REGION:-ap-south-1}
       BEDROCK_MODEL: ${BEDROCK_MODEL:-openai.gpt-oss-120b-1:0}

@@ -668,6 +668,14 @@ def _latin1_safe_headers(headers):
     safe = {}
     for k, v in headers.items():
         s = str(v)
+        # FD: CR/LF/NUL and other C0/DEL control chars ARE latin-1-encodable, so
+        # they slip past the UnicodeEncodeError branch and reach uvicorn's wire
+        # serializer, which raises RuntimeError AFTER the response has started
+        # (header injection / aborted half-sent response). Collapse them to a
+        # space unconditionally so the "can never 500 on header encoding"
+        # invariant actually holds (the reroute reason comes from LLM-adjudicator
+        # free text whose internal newlines survive .strip()).
+        s = re.sub(r"[\r\n\x00-\x1f\x7f]", " ", s)
         try:
             s.encode("latin-1")
         except UnicodeEncodeError:
@@ -863,6 +871,27 @@ def _security_scan(prompt, response_text=""):
     url = f"{cfg['backend_url']}/api/security/scan/"
     payload = {"prompt": prompt, "response": response_text or ""}
     return _http_request_with_retry("POST", url, data=payload, api_key=cfg.get("api_key"))
+
+
+def _org_ns_project_id(auth_ctx) -> str:
+    """B6: bind the vector-store namespace to the IMMUTABLE organization_id.
+
+    The data namespace is built as ``{project_id}__{collection}`` and project_id
+    is client-settable and was NEVER org-validated, so two tenants that chose the
+    same project_id (e.g. the common 'default'/'e2e') shared one physical
+    namespace — a cross-tenant read. Prefixing the org id (taken from the
+    authenticated key payload, not client-controllable) makes the namespace
+    tenant-isolated regardless of project_id. Applied at EVERY project_id
+    resolution so reads and writes land in the SAME namespace. project_id is kept
+    inside the prefix for sub-org labeling. (Existing project_id-namespaced
+    vectors are orphaned by this rekey and must be re-ingested.)
+    """
+    if auth_ctx is None:
+        return "default"
+    oid = getattr(auth_ctx, "organization_id", None)
+    pid = getattr(auth_ctx, "project_id", None)
+    base = str(pid) if pid else "default"
+    return f"org{oid}-{base}" if oid is not None else base
 
 
 def _extract_prompt_from_messages(messages):
@@ -2140,8 +2169,13 @@ def _filter_inference_eligible_models(routing_models: list[dict] | None) -> list
         env_var = str(model.get("api_key_env_var") or "").strip()
         api_key_via_env = bool(env_var and os.environ.get(env_var))
         # Organization-owned inference must carry tenant credentials.
-        # Local/self-hosted ollama can run without an API key.
-        if provider not in {"ollama"} and not (api_key_set or api_key_via_env):
+        # Local/self-hosted ollama can run without an API key. AWS Bedrock
+        # authenticates via the AWS credential chain (env keys, shared config,
+        # or — in prod — the EC2 instance role), NOT an api_key, so a keyless
+        # Bedrock config is legitimately credentialed via that chain.
+        if provider not in {"ollama", "bedrock", "aws_bedrock"} and not (
+            api_key_set or api_key_via_env
+        ):
             continue
         eligible.append(model)
     return eligible
@@ -2403,6 +2437,9 @@ async def _rewrite_output_response_text_via_router(
             "temperature": 0.0,
             # Never recurse the firewall / routing adjudication for the rewrite.
             "routing_preferences": {"enable_routing": False},
+            # H7: inherit the org so the rewrite re-inference also routes to THIS
+            # org's deployment + BYOK key.
+            "_zs_org_slug": base_body.get("_zs_org_slug", ""),
         }
         code, resp = await LLM_ROUTER.acompletion(rewrite_body, None)
         if code == 200:
@@ -3868,6 +3905,11 @@ async def proxy_chat(
 
         # ── Org-aware config lookup ──
         org_slug = auth_ctx.org_slug if auth_ctx else ""
+        # H7: carry the org on the body so LLMRouter._build_kwargs can org-qualify
+        # the litellm routing key ({org}::{model}) and select THIS org's deployment
+        # + BYOK key — never a same-named peer from another tenant. Inert otherwise
+        # (not in litellm passthrough params). Flows to the stream + rewrite bodies.
+        body["_zs_org_slug"] = org_slug
         org_config = CONFIG_SYNC.get_config(org_slug) if CONFIG_SYNC else CONFIG
         routing_models = CONFIG_SYNC.get_model_routing(org_slug) if CONFIG_SYNC else []
         if not routing_models and CONFIG_SYNC is not None:
@@ -3912,7 +3954,7 @@ async def proxy_chat(
         global_allowed_models = _coerce_string_list(org_config.get("allowed_models", []))
         if auth_ctx is not None:
             user_id = auth_ctx.user_id
-            project_id = auth_ctx.project_id
+            project_id = _org_ns_project_id(auth_ctx)  # B6: org-isolated vector namespace
             risk_score = auth_ctx.risk_score
             allowed_models = auth_ctx.allowed_models
             rate_limit_tpm = auth_ctx.rate_limit_tpm
@@ -4164,6 +4206,35 @@ async def proxy_chat(
                         reason=ks_verdict.reason,
                     )
                     if compliant_model:
+                        # B7: the reroute resolver derives is_active from the static
+                        # synced catalog and never consults the live kill_switch:
+                        # Redis namespace, so it can select a target that is ITSELF
+                        # operator-disabled by a kill-switch. Re-check the chosen
+                        # target; if it too is killed, fail closed rather than
+                        # serving an operator-disabled model.
+                        _tgt_ks = await check_kill_switch(
+                            REDIS_CLIENT, compliant_model, org_slug=org_slug, key_prefix=ks_key_prefix,
+                        )
+                        # G6: also re-check the live MODEL-STATE namespace on the
+                        # target (symmetric with the model-state branch) — a
+                        # kill-switch reroute must not land on a model-state-isolated
+                        # model either.
+                        try:
+                            from model_state import check_model_state as _cms_g6
+                        except ImportError:
+                            from .model_state import check_model_state as _cms_g6
+                        _tgt_ms = await _cms_g6(REDIS_CLIENT, compliant_model, org_slug=org_slug or "default")
+                        if getattr(_tgt_ks, "is_killed", False) or getattr(_tgt_ms, "status", "") in ("isolated", "suspended"):
+                            METRICS["blocked"] += 1
+                            return JSONResponse(
+                                status_code=503,
+                                content={
+                                    "error": "service_unavailable",
+                                    "message": "All eligible models are currently disabled by an operator kill-switch.",
+                                    "code": "kill_switch_active",
+                                    "zeroshield": {"routing": route_metadata or {}},
+                                },
+                            )
                         LOG.warning(
                             "Kill-switch reroute: %s -> %s (reason: %s)",
                             ks_original, compliant_model, ks_verdict.reason,
@@ -4292,6 +4363,37 @@ async def proxy_chat(
                         reason=ms_verdict.reason,
                     )
                     if compliant_model:
+                        # G6: mirror the B7 re-check on the MODEL-STATE reroute target
+                        # (B7 patched only the kill-switch branch — this is its
+                        # untouched sibling). resolve_compliant_fallback derives
+                        # is_active from the STATIC synced catalog and is blind to
+                        # BOTH live Redis override namespaces (kill_switch:* and
+                        # model_state:*), so a model-state reroute could land on a
+                        # model that is itself kill-switched OR model-state-isolated
+                        # for the org. Re-check both; fail closed if the target is
+                        # operator-disabled rather than serving it.
+                        try:
+                            from kill_switch import check_kill_switch as _ck_g6
+                        except ImportError:
+                            from .kill_switch import check_kill_switch as _ck_g6
+                        _tgt_ks = await _ck_g6(
+                            REDIS_CLIENT, compliant_model,
+                            org_slug=org_slug, key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        )
+                        _tgt_ms = await check_model_state(
+                            REDIS_CLIENT, compliant_model, org_slug=org_slug or "default",
+                        )
+                        if getattr(_tgt_ks, "is_killed", False) or getattr(_tgt_ms, "status", "") in ("isolated", "suspended"):
+                            METRICS["blocked"] += 1
+                            return JSONResponse(
+                                status_code=503,
+                                content={
+                                    "error": "service_unavailable",
+                                    "message": "All eligible models are currently disabled by an operator control.",
+                                    "code": "model_unavailable",
+                                    "zeroshield": {"routing": route_metadata or {}},
+                                },
+                            )
                         LOG.warning(
                             "Model-state reroute: %s -> %s (reason: %s)",
                             ms_original, compliant_model, ms_verdict.reason,
@@ -5833,9 +5935,14 @@ async def proxy_chat(
             from platform_models import is_platform_model_name as _is_platform_model_final
         except ImportError:
             from .platform_models import is_platform_model_name as _is_platform_model_final
+        # B9: these final model re-checks must NOT be gated on routing_probe_only
+        # (needs_inference). Chat inference runs regardless of max_tokens/stream
+        # (per the #27 fix), so a concrete platform/guard or non-allowlisted model
+        # — including a REROUTE target — would otherwise be served on a request
+        # that merely omitted max_tokens. Mirror the FIX-1.5a/tenant-ownership
+        # un-gating; the _is_routing_sentinel_model carve-out still skips 'auto'.
         if (
-            not routing_probe_only
-            and requested_model
+            requested_model
             and not _is_routing_sentinel_model(requested_model)
             and _is_platform_model_final(requested_model)
         ):
@@ -5852,8 +5959,7 @@ async def proxy_chat(
 
         # ── Final allowlist enforcement against the routed model ──
         if (
-            not routing_probe_only
-            and allowed_models
+            allowed_models
             and requested_model
             and not _is_routing_sentinel_model(requested_model)
             and requested_model not in allowed_models
@@ -5878,7 +5984,6 @@ async def proxy_chat(
                 and requested_model
                 and not _is_routing_sentinel_model(requested_model)
                 and requested_model not in global_allowed
-                and not routing_probe_only
             ):
                 if enforcement_mode == "block":
                     METRICS["blocked"] += 1
@@ -6665,14 +6770,27 @@ async def proxy_chat(
             #      check_rate_limit only runs when rate_limit_tpm is set); a
             #      negative delta then INCRBY'd an un-charged bucket below 0.
             #      Only reconcile a bucket we actually pre-charged.
-            if RATE_LIMITER is not None and auth_ctx is not None and rate_limit_tpm:
+            if RATE_LIMITER is not None and auth_ctx is not None:
                 _actual_tokens = max(0, int(usage.get("total_tokens", 0) or 0))
                 _pre_charged = max(0, int(estimated_request_tokens or 0))
-                await RATE_LIMITER.record_usage(
-                    auth_ctx.key_hash,
-                    _actual_tokens,
-                    estimated_tokens=_pre_charged,
-                )
+                if rate_limit_tpm:
+                    await RATE_LIMITER.record_usage(
+                        auth_ctx.key_hash,
+                        _actual_tokens,
+                        estimated_tokens=_pre_charged,
+                    )
+                # G11: reconcile the ORG TPM bucket too. The per-key reconcile above
+                # was wired but record_org_usage was only called on the STREAM path,
+                # so the non-stream org window kept the prompt-only pre-charge and
+                # never corrected to actual completion tokens — letting orgs exceed
+                # a configured org_tpm_limit. Mirror stream_orchestration; only
+                # reconcile a bucket we actually pre-charged (org_tpm_limit > 0).
+                _org_tpm = int(org_config.get("org_tpm_limit", 0) or 0)
+                if _org_tpm > 0 and org_slug:
+                    try:
+                        await RATE_LIMITER.record_org_usage(org_slug, _actual_tokens, _pre_charged)
+                    except Exception as exc:  # noqa: BLE001 - best-effort, fail-open
+                        LOG.warning("Non-stream org TPM finalize failed: %s", exc)
 
         METRICS["allowed"] += 1
         elapsed_ms = (time.perf_counter() - start) * 1000
@@ -7101,7 +7219,7 @@ async def proxy_embeddings(request: Request):
         requested_model = _rm if isinstance(_rm, str) else "text-embedding-3-small"
         if auth_ctx is not None:
             user_id = auth_ctx.user_id
-            project_id = auth_ctx.project_id
+            project_id = _org_ns_project_id(auth_ctx)  # B6: org-isolated vector namespace
             allowed_models = auth_ctx.allowed_models
 
             if allowed_models and requested_model not in allowed_models:
@@ -7624,7 +7742,7 @@ async def rag_query(request: Request):
                     "code": "auth_required",
                 },
             )
-        project_id = auth_ctx.project_id
+        project_id = _org_ns_project_id(auth_ctx)  # B6: org-isolated vector namespace
 
         # ── Phase 1 §1.1: per-org TPM ceiling on RAG query traffic ──
         _rl_resp = await _enforce_org_tpm_rate_limit(
@@ -8088,6 +8206,25 @@ async def rag_ingest(request: Request):
         if not isinstance(metadatas, list):
             metadatas = []
 
+        # FI: cap batch COUNT + total size BEFORE the per-document scan fan-out
+        # (each doc runs an inline ContextGuard scan + optional Tier-2 upstream
+        # call). Sibling capacity endpoints (/v1/vector/upsert, /v1/embeddings)
+        # cap this; rag_ingest never did, so a huge batch could exhaust the worker
+        # via scan fan-out. The TPM limiter ahead is fail-open by design.
+        if isinstance(documents, list):
+            _max_docs = int(os.getenv("RAG_INGEST_MAX_DOCS", "1000"))
+            if len(documents) > _max_docs:
+                return JSONResponse(
+                    status_code=413,
+                    content={"error": "payload_too_large", "message": f"Batch exceeds {_max_docs} documents.", "code": "rag_batch_too_large", "max_documents": _max_docs},
+                )
+            _max_chars = int(os.getenv("RAG_INGEST_MAX_CHARS", "2000000"))
+            if sum(len(str(d)) for d in documents) > _max_chars:
+                return JSONResponse(
+                    status_code=413,
+                    content={"error": "payload_too_large", "message": "Ingest payload too large.", "code": "rag_input_too_large"},
+                )
+
         if not collection_name:
             return JSONResponse(status_code=400, content={"error": "Missing 'collection'."})
         if not _is_valid_collection_name(collection_name):
@@ -8118,7 +8255,7 @@ async def rag_ingest(request: Request):
         auth_ctx = getattr(request.state, "auth_context", None)
         if auth_ctx is None:
             return JSONResponse(status_code=403, content={"error": "Authentication required."})
-        project_id = str(auth_ctx.project_id)
+        project_id = _org_ns_project_id(auth_ctx)  # B6: org-isolated vector namespace
         org_id = coerce_org_id(getattr(auth_ctx, "organization_id", None))
 
         # ── Phase 1 §1.1: per-org TPM ceiling on RAG ingest (largest write surface) ──
@@ -8232,6 +8369,16 @@ async def rag_ingest(request: Request):
                     text_to_scan = doc_text.get("content", "") or doc_text.get("text", "") or str(doc_text)
                 else:
                     text_to_scan = str(doc_text)
+                # FA: also scan this doc's METADATA string values. Metadata is
+                # attacker-controllable on ingest and round-trips to the caller (and
+                # into downstream RAG prompts) but was never scanned — only document
+                # content was. Folding metadata values into the scan input means an
+                # injection/PII string hidden in metadata is now detected/blocked.
+                _meta_i = metadatas[i] if i < len(metadatas) else None
+                if isinstance(_meta_i, dict):
+                    _mvals = [str(_v) for _v in _meta_i.values() if isinstance(_v, (str, int, float)) and str(_v).strip()]
+                    if _mvals:
+                        text_to_scan = (text_to_scan or "") + "\n" + "\n".join(_mvals)
                 action = "allow"
                 threats: list[str] = []
                 if CONTEXT_GUARD is not None:
@@ -8302,6 +8449,13 @@ async def rag_ingest(request: Request):
                     text = _r.text
             doc_strings.append(text)
             normalized_ids.append(doc_id)
+            if isinstance(meta, dict):
+                # FA-low: strip caller-supplied provenance trust-boost keys so a
+                # tenant cannot self-assert 'verified_source' / 'created_by'=system
+                # to inflate the ranker's trust score — these are platform-asserted
+                # signals and must be server-stamped, never honored from inbound
+                # metadata.
+                meta = {k: v for k, v in meta.items() if k not in ("verified_source", "created_by")}
             normalized_metas.append(meta if meta else {"source": "gateway"})
 
         # ── Async upsert (decision: implement the worker) ──
@@ -8487,7 +8641,7 @@ async def rag_delete_documents(request: Request):
         auth_ctx = getattr(request.state, "auth_context", None)
         if auth_ctx is None:
             return JSONResponse(status_code=403, content={"error": "Authentication required."})
-        project_id = str(auth_ctx.project_id)
+        project_id = _org_ns_project_id(auth_ctx)  # B6: org-isolated vector namespace
         org_id = coerce_org_id(getattr(auth_ctx, "organization_id", None))
         # NOTE: the no-provider 422 is enforced AFTER the delete-op policy check
         # below (see `if not targets:`), so a denied collection returns 403 — not
@@ -8617,7 +8771,7 @@ async def rag_list_collections(request: Request):
     auth_ctx = getattr(request.state, "auth_context", None)
     if auth_ctx is None:
         return JSONResponse(status_code=403, content={"error": "Authentication required."})
-    project_id = str(auth_ctx.project_id)
+    project_id = _org_ns_project_id(auth_ctx)  # B6: org-isolated vector namespace
     org_id = getattr(auth_ctx, "organization_id", None)
 
     rl_block = await _enforce_org_tpm_rate_limit(
@@ -8682,7 +8836,7 @@ async def rag_create_collection(request: Request):
     auth_ctx = getattr(request.state, "auth_context", None)
     if auth_ctx is None:
         return JSONResponse(status_code=403, content={"error": "Authentication required."})
-    project_id = str(auth_ctx.project_id)
+    project_id = _org_ns_project_id(auth_ctx)  # B6: org-isolated vector namespace
     org_id = getattr(auth_ctx, "organization_id", None)
 
     rl_block = await _enforce_org_tpm_rate_limit(
@@ -8792,7 +8946,7 @@ async def rag_delete_collection(request: Request):
     auth_ctx = getattr(request.state, "auth_context", None)
     if auth_ctx is None:
         return JSONResponse(status_code=403, content={"error": "Authentication required."})
-    project_id = str(auth_ctx.project_id)
+    project_id = _org_ns_project_id(auth_ctx)  # B6: org-isolated vector namespace
     org_id = getattr(auth_ctx, "organization_id", None)
 
     rl_block = await _enforce_org_tpm_rate_limit(
@@ -9267,7 +9421,14 @@ async def admin_rag_list_collections(
     )
     if scope_block is not None:
         return scope_block
-    project_id = (scoped_project or "").strip()
+    # B6: admin RAG ops MUST use the same org-prefixed namespace as tenant ops
+    # (else an operator can't read tenant data). org_id is the TARGET org from
+    # _resolve_admin_rag_scope, not the operator's own org.
+    project_id = (
+        f"org{org_id}-{(scoped_project or '').strip() or 'default'}"
+        if org_id is not None
+        else (scoped_project or "").strip()
+    )
     if not project_id:
         return JSONResponse(status_code=400, content={"error": "Missing 'project_id' query parameter."})
 
@@ -9313,7 +9474,14 @@ async def admin_rag_create_collection(request: Request):
     )
     if scope_block is not None:
         return scope_block
-    project_id = (scoped_project or "").strip()
+    # B6: admin RAG ops MUST use the same org-prefixed namespace as tenant ops
+    # (else an operator can't read tenant data). org_id is the TARGET org from
+    # _resolve_admin_rag_scope, not the operator's own org.
+    project_id = (
+        f"org{org_id}-{(scoped_project or '').strip() or 'default'}"
+        if org_id is not None
+        else (scoped_project or "").strip()
+    )
     if not project_id:
         return JSONResponse(status_code=400, content={"error": "Missing 'project_id'."})
     if not collection_name:
@@ -9382,7 +9550,14 @@ async def admin_rag_delete_collection(request: Request):
     )
     if scope_block is not None:
         return scope_block
-    project_id = (scoped_project or "").strip()
+    # B6: admin RAG ops MUST use the same org-prefixed namespace as tenant ops
+    # (else an operator can't read tenant data). org_id is the TARGET org from
+    # _resolve_admin_rag_scope, not the operator's own org.
+    project_id = (
+        f"org{org_id}-{(scoped_project or '').strip() or 'default'}"
+        if org_id is not None
+        else (scoped_project or "").strip()
+    )
     if not project_id:
         return JSONResponse(status_code=400, content={"error": "Missing 'project_id'."})
     if not collection_name:

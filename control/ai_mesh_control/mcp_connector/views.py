@@ -2622,12 +2622,24 @@ class MCPOAuthCallbackView(APIView):
     authentication_classes: list = []
 
     def _html(self, ok: bool, message: str, server_name: str = "") -> HttpResponse:
+        # B3: this hand-built HTML bypasses Django template auto-escaping, and
+        # `message` (and server_name via return_url) are attacker-controlled on an
+        # unauthenticated callback (request.GET error/error_description), so a raw
+        # f-string interpolation is a reflected/stored XSS that — with JWT in
+        # localStorage on the single prod origin — exfiltrates the session. Escape
+        # every dynamic value; only allow http(s) return URLs (no javascript:).
+        from django.utils.html import escape
+
         return_url = _oauth_frontend_return_url(ok, server_name, message)
+        if not isinstance(return_url, str) or not return_url.lower().startswith(("http://", "https://", "/")):
+            return_url = "/"
         status_word = "succeeded" if ok else "failed"
         color = "#16a34a" if ok else "#dc2626"
+        _msg = escape(str(message or ""))
+        _url = escape(return_url)
         body = f"""<!doctype html><html><head><meta charset="utf-8">
 <title>MCP OAuth {status_word}</title>
-<meta http-equiv="refresh" content="3;url={return_url}">
+<meta http-equiv="refresh" content="3;url={_url}">
 <style>body{{font-family:system-ui,sans-serif;background:#0b1020;color:#e5e7eb;
 display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}
 .card{{background:#111827;padding:32px 40px;border-radius:12px;max-width:520px;
@@ -2635,10 +2647,13 @@ box-shadow:0 10px 40px rgba(0,0,0,.4);border:1px solid #1f2937}}
 h1{{color:{color};margin:0 0 12px;font-size:20px}}
 p{{margin:6px 0;line-height:1.5}} a{{color:#60a5fa}}</style></head>
 <body><div class="card"><h1>Authorization {status_word}</h1>
-<p>{message}</p>
-<p>Returning to the dashboard… <a href="{return_url}">click here</a> if you are not redirected.</p>
+<p>{_msg}</p>
+<p>Returning to the dashboard… <a href="{_url}">click here</a> if you are not redirected.</p>
 </div></body></html>"""
-        return HttpResponse(body, content_type="text/html")
+        resp = HttpResponse(body, content_type="text/html")
+        resp["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
+        resp["X-Content-Type-Options"] = "nosniff"
+        return resp
 
     def get(self, request):
         from . import oauth as oauth_mod
