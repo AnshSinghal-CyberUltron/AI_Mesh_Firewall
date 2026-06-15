@@ -898,6 +898,80 @@ def _org_ns_project_id(auth_ctx) -> str:
     return f"org{oid}-{base}" if oid is not None else f"orgNone-{base}"
 
 
+def _extract_prompt_from_responses_input(input_value, instructions=None):
+    """Flatten an OpenAI Responses ``input`` (str | list of input items) + optional
+    ``instructions`` into a single scannable prompt string. Mirrors
+    _extract_prompt_from_messages: fold every text-bearing field, emit a stable
+    placeholder for non-text parts (so multimodal base64 never trips the length cap)."""
+    parts: list[str] = []
+    if isinstance(instructions, str) and instructions.strip():
+        parts.append(instructions)
+    if isinstance(input_value, str):
+        parts.append(input_value)
+    elif isinstance(input_value, list):
+        for item in input_value:
+            if isinstance(item, str):
+                parts.append(item)
+                continue
+            if not isinstance(item, dict):
+                continue
+            content = item.get("content")
+            if isinstance(content, str):
+                parts.append(content)
+            elif isinstance(content, list):
+                for c in content:
+                    if not isinstance(c, dict):
+                        continue
+                    _t = c.get("text")
+                    if isinstance(_t, str):
+                        parts.append(_t)
+                    elif c.get("type") not in (None, "input_text", "output_text", "text"):
+                        parts.append(f"[{c.get('type', 'non_text')}]")
+            # bare text on the item (some shapes)
+            _it = item.get("text")
+            if isinstance(_it, str):
+                parts.append(_it)
+    return "\n".join(p for p in parts if p)
+
+
+def _extract_responses_output_text(response) -> str:
+    """Concatenate every text-bearing output channel of a Responses object for the
+    OUTPUT guard: output[].content[].text (output_text), plus top-level output_text
+    if the provider supplied it. Mirrors _extract_scannable_output_text."""
+    if not isinstance(response, dict):
+        return ""
+    parts: list[str] = []
+    _ot = response.get("output_text")
+    if isinstance(_ot, str) and _ot:
+        parts.append(_ot)
+    for item in (response.get("output") or []):
+        if not isinstance(item, dict):
+            continue
+        for c in (item.get("content") or []):
+            if isinstance(c, dict):
+                _t = c.get("text")
+                if isinstance(_t, str) and _t:
+                    parts.append(_t)
+    return "\n".join(parts)
+
+
+def _set_responses_output_text(response, text: str) -> None:
+    """Enforcement: replace the Responses output text with ``text`` across every
+    output_text content block + the top-level output_text convenience field."""
+    if not isinstance(response, dict):
+        return
+    if "output_text" in response:
+        response["output_text"] = text
+    _wrote = False
+    for item in (response.get("output") or []):
+        if not isinstance(item, dict):
+            continue
+        for c in (item.get("content") or []):
+            if isinstance(c, dict) and isinstance(c.get("text"), str):
+                c["text"] = text if not _wrote else ""
+                _wrote = True
+
+
 def _extract_prompt_from_messages(messages):
     """Build a single prompt string from OpenAI-style messages."""
     parts = []
@@ -921,6 +995,40 @@ def _extract_prompt_from_messages(messages):
                     _seg.append(f"[{c.get('type') or 'non-text'}]")
             content = " ".join(_seg)
         parts.append(f"{role}: {content}")
+        # G7: fold an assistant message's tool_calls (function name + arguments)
+        # into the scannable text. Injection / PII / credentials hidden inside
+        # tool_calls[].function.arguments previously bypassed Tier-1/Tier-2
+        # entirely (only message *content* was scanned) — a live fail-open.
+        for _tc in (m.get("tool_calls") or []):
+            if not isinstance(_tc, dict):
+                continue
+            _fn = _tc.get("function") or {}
+            _name = _fn.get("name") or ""
+            _args = _fn.get("arguments")
+            if not isinstance(_args, str):
+                try:
+                    _args = json.dumps(_args) if _args is not None else ""
+                except (TypeError, ValueError):
+                    _args = ""
+            if _name or _args:
+                parts.append(f"{role}.tool_call[{_name}]: {_args}")
+    return "\n".join(parts)
+
+
+def _extract_tool_definitions_text(tools) -> str:
+    """G7: fold top-level ``tools[].function.{name,description}`` into scannable
+    text so a prompt-injection smuggled in a tool *definition* is scanned too."""
+    if not isinstance(tools, list):
+        return ""
+    parts: list[str] = []
+    for t in tools:
+        if not isinstance(t, dict):
+            continue
+        fn = t.get("function") or {}
+        name = fn.get("name") or ""
+        desc = fn.get("description") or ""
+        if name or desc:
+            parts.append(f"tool_def[{name}]: {desc}")
     return "\n".join(parts)
 
 
@@ -1034,9 +1142,15 @@ def _neutralize_secondary_output_channels(msg: dict) -> None:
         if isinstance(msg.get("refusal"), str) and msg.get("refusal"):
             msg["refusal"] = ""
         # R12 (#16): blank an audio-output transcript on enforcement.
+        # R14: also blank audio.data — the base64 audio bytes carry the SPOKEN
+        # content, so redacting only the transcript still ships the secret as
+        # audio to the client. Drop both on enforcement.
         _au = msg.get("audio")
-        if isinstance(_au, dict) and isinstance(_au.get("transcript"), str) and _au.get("transcript"):
-            _au["transcript"] = ""
+        if isinstance(_au, dict):
+            if isinstance(_au.get("transcript"), str) and _au.get("transcript"):
+                _au["transcript"] = ""
+            if isinstance(_au.get("data"), str) and _au.get("data"):
+                _au["data"] = ""
     except Exception:  # noqa: BLE001 - neutralization must never crash the response
         pass
 
@@ -4794,6 +4908,11 @@ async def proxy_chat(
             body["messages"] = messages
 
         prompt = prompt_for_estimate or _extract_prompt_from_messages(messages)
+        # G7: fold top-level tool DEFINITIONS (name + description) into the scanned
+        # prompt so an injection smuggled in a tool definition is caught too.
+        _tool_defs_text = _extract_tool_definitions_text(body.get("tools"))
+        if _tool_defs_text:
+            prompt = (prompt + "\n" + _tool_defs_text) if prompt else _tool_defs_text
         _prompt_snippet = prompt[:500] if prompt else ""
         agent_data = _extract_agent_data(body, x_agent_data)
 
@@ -7159,6 +7278,256 @@ async def proxy_chat(
             pass
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# OpenAI Responses API (POST /v1/responses, client.responses.create)
+#
+# Implemented as a FORMAT ADAPTER over the proven chat-completions pipeline: a
+# Responses request is translated to a chat request, run through the UNCHANGED
+# ``proxy_chat`` enforcement chain (auth -> rate-limit -> kill-switch -> policy
+# -> Tier-1/Tier-2 scan -> output-guard -> redaction -> telemetry), then the
+# chat result is translated back into a Responses object. The firewall is
+# therefore INHERITED, never forked (master plan §3 — the keystone decision).
+# ════════════════════════════════════════════════════════════════════════════
+from starlette.requests import Request as _StarletteRequest  # noqa: E402
+from responses_adapters import (  # noqa: E402
+    generate_openai_id as _gen_oai_id,
+    build_openai_error as _build_oai_error,
+    coerce_chat_error_to_openai as _coerce_chat_error,
+    responses_to_chat as _responses_to_chat,
+    chat_completion_to_responses as _chat_to_responses,
+    extract_assistant_messages_for_replay as _replay_msgs,
+)
+from responses_store import ResponseStore as _ResponseStore  # noqa: E402
+
+
+async def _dispatch_chat_internally(request, chat_body: dict, x_user_id, x_endpoint_id, x_agent_data):
+    """Run a translated chat request through the unchanged ``proxy_chat`` handler
+    by synthesizing a Request that carries the new body but the ORIGINAL request's
+    scope/state (so middleware-set ``auth_context`` and headers flow through)."""
+    payload = json.dumps(chat_body).encode("utf-8")
+    scope = dict(request.scope)
+    scope["path"] = "/v1/chat/completions"
+    scope["raw_path"] = b"/v1/chat/completions"
+    scope.setdefault("state", request.scope.get("state", {}))
+
+    async def _receive():
+        return {"type": "http.request", "body": payload, "more_body": False}
+
+    internal_req = _StarletteRequest(scope, _receive)
+    return await proxy_chat(internal_req, x_user_id=x_user_id,
+                            x_endpoint_id=x_endpoint_id, x_agent_data=x_agent_data)
+
+
+def _responses_sse(event_type: str, data: dict) -> str:
+    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+
+async def _translate_chat_stream_to_responses(chat_stream, response_id: str, model: str,
+                                              created_at: int, store_ctx: dict):
+    """Translate the chat-completions SSE stream into Responses typed events.
+    Emits response.created -> output_item.added -> output_text.delta* ->
+    output_text.done -> output_item.done -> response.completed, plus the terminal
+    ``[DONE]``. The chat terminal zeroshield trace frame (M-51) is folded into the
+    final ``response.completed`` object."""
+    item_id = _gen_oai_id("message")
+    seq = 0
+    accumulated = []
+    final_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    zeroshield = None
+    finish_reason = None
+    base_resp = {
+        "id": response_id, "object": "response", "created_at": created_at,
+        "model": model, "status": "in_progress", "output": [],
+    }
+    yield _responses_sse("response.created", {"type": "response.created", "response": dict(base_resp, status="in_progress")})
+    yield _responses_sse("response.in_progress", {"type": "response.in_progress", "response": dict(base_resp, status="in_progress")})
+    yield _responses_sse("response.output_item.added", {
+        "type": "response.output_item.added", "output_index": 0,
+        "item": {"id": item_id, "type": "message", "status": "in_progress", "role": "assistant", "content": []}})
+    started_text = False
+
+    buf = ""
+    async for raw in chat_stream:
+        chunk = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
+        buf += chunk
+        while "\n\n" in buf:
+            frame, buf = buf.split("\n\n", 1)
+            line = frame.strip()
+            if not line.startswith("data:"):
+                continue
+            data_str = line[len("data:"):].strip()
+            if data_str == "[DONE]":
+                continue
+            try:
+                obj = json.loads(data_str)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(obj.get("zeroshield"), dict):
+                zeroshield = obj["zeroshield"]
+            if obj.get("usage"):
+                u = obj["usage"]
+                final_usage = {"input_tokens": u.get("prompt_tokens", 0),
+                               "output_tokens": u.get("completion_tokens", 0),
+                               "total_tokens": u.get("total_tokens", 0)}
+            for ch in (obj.get("choices") or []):
+                delta = ch.get("delta") or {}
+                if ch.get("finish_reason"):
+                    finish_reason = ch["finish_reason"]
+                piece = delta.get("content")
+                if isinstance(piece, str) and piece:
+                    if not started_text:
+                        yield _responses_sse("response.content_part.added", {
+                            "type": "response.content_part.added", "item_id": item_id,
+                            "output_index": 0, "content_index": 0,
+                            "part": {"type": "output_text", "text": "", "annotations": []}})
+                        started_text = True
+                    accumulated.append(piece)
+                    seq += 1
+                    yield _responses_sse("response.output_text.delta", {
+                        "type": "response.output_text.delta", "item_id": item_id,
+                        "output_index": 0, "content_index": 0, "delta": piece, "sequence_number": seq})
+
+    full_text = "".join(accumulated)
+    if started_text:
+        yield _responses_sse("response.output_text.done", {
+            "type": "response.output_text.done", "item_id": item_id,
+            "output_index": 0, "content_index": 0, "text": full_text})
+    out_item = {"id": item_id, "type": "message", "status": "completed", "role": "assistant",
+                "content": [{"type": "output_text", "text": full_text, "annotations": []}]}
+    yield _responses_sse("response.output_item.done", {
+        "type": "response.output_item.done", "output_index": 0, "item": out_item})
+    status = "incomplete" if finish_reason == "length" else "completed"
+    final_response = dict(base_resp, status=status, output=[out_item],
+                          output_text=full_text, usage=final_usage)
+    if zeroshield is not None:
+        final_response["zeroshield"] = zeroshield
+    # persist for previous_response_id chaining
+    if store_ctx.get("store") and store_ctx.get("org_id") is not None and full_text:
+        try:
+            await store_ctx["store"].save(
+                store_ctx["org_id"], final_response,
+                replay_messages=store_ctx.get("input_messages", []) + [{"role": "assistant", "content": full_text}],
+                input_items=store_ctx.get("input_items", []))
+        except Exception:
+            pass
+    yield _responses_sse("response.completed", {"type": "response.completed", "response": final_response})
+    yield "data: [DONE]\n\n"
+
+
+@app.post("/v1/responses", summary="Create a model response (OpenAI Responses API)")
+async def proxy_responses(
+    request: Request,
+    x_user_id: str | None = Header(None),
+    x_endpoint_id: str | None = Header(None),
+    x_agent_data: str | None = Header(None),
+):
+    try:
+        raw_body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content=_build_oai_error(400, "Invalid JSON in request body."))
+    raw_body = _strip_lone_surrogates(raw_body)
+    if not isinstance(raw_body, dict):
+        return JSONResponse(status_code=400, content=_build_oai_error(400, "Request body must be a JSON object."))
+    if not raw_body.get("model"):
+        return JSONResponse(status_code=400, content=_build_oai_error(400, "Missing required parameter: 'model'.", param="model"))
+    if raw_body.get("input") is None and not raw_body.get("instructions"):
+        return JSONResponse(status_code=400, content=_build_oai_error(400, "Missing required parameter: 'input'.", param="input"))
+
+    auth_ctx = getattr(request.state, "auth_context", None)
+    org_id = getattr(auth_ctx, "organization_id", None) if auth_ctx else None
+    store = _ResponseStore(REDIS_CLIENT)
+
+    # previous_response_id -> prepend prior turn (org-scoped; fail closed on miss)
+    prior_messages = []
+    prev_id = raw_body.get("previous_response_id")
+    if prev_id:
+        if org_id is None:
+            return JSONResponse(status_code=401, content=_build_oai_error(401, "Authentication required to continue a stored response.", error_type="authentication_error"))
+        prior = await store.get_replay_messages(org_id, prev_id)
+        if prior is None:
+            return JSONResponse(status_code=404, content=_build_oai_error(404, f"Previous response '{prev_id}' not found.", code="response_not_found"))
+        prior_messages = prior
+
+    chat_body = _responses_to_chat(raw_body, prior_messages=prior_messages)
+    response_id = _gen_oai_id("response")
+    created_at = int(time.time())
+    is_stream = bool(raw_body.get("stream"))
+
+    chat_response = await _dispatch_chat_internally(request, chat_body, x_user_id, x_endpoint_id, x_agent_data)
+
+    # ── Streaming path ──
+    if is_stream and hasattr(chat_response, "body_iterator"):
+        store_ctx = {"store": store if raw_body.get("store") else None,
+                     "org_id": org_id,
+                     "input_messages": chat_body.get("messages", []),
+                     "input_items": raw_body.get("input") if isinstance(raw_body.get("input"), list) else [{"role": "user", "content": raw_body.get("input")}]}
+        headers = {"x-request-id": response_id, "Content-Type": "text/event-stream",
+                   "Cache-Control": "no-cache", "Connection": "keep-alive"}
+        return StreamingResponse(
+            _translate_chat_stream_to_responses(chat_response.body_iterator, response_id,
+                                                chat_body.get("model") or raw_body["model"], created_at, store_ctx),
+            media_type="text/event-stream", headers=headers)
+
+    # ── Non-streaming path ──
+    status = getattr(chat_response, "status_code", 500)
+    try:
+        chat_json = json.loads(bytes(getattr(chat_response, "body", b"") or b"{}"))
+    except (TypeError, ValueError):
+        chat_json = {}
+    if status >= 400:
+        return JSONResponse(status_code=status, content=_coerce_chat_error(status, chat_json),
+                            headers={"x-request-id": response_id})
+    resp_obj = _chat_to_responses(chat_json, response_id=response_id, model=raw_body["model"],
+                                  store=bool(raw_body.get("store")), metadata=raw_body.get("metadata"),
+                                  previous_response_id=prev_id)
+    if raw_body.get("store") and org_id is not None:
+        replay = prior_messages + chat_body.get("messages", [])[len(prior_messages):] + _replay_msgs(resp_obj)
+        await store.save(org_id, resp_obj, replay_messages=replay,
+                         input_items=(raw_body.get("input") if isinstance(raw_body.get("input"), list)
+                                      else [{"role": "user", "content": raw_body.get("input")}]))
+    return JSONResponse(status_code=200, content=resp_obj, headers={"x-request-id": response_id})
+
+
+@app.get("/v1/responses/{response_id}", summary="Retrieve a model response")
+async def get_response(response_id: str, request: Request):
+    auth_ctx = getattr(request.state, "auth_context", None)
+    org_id = getattr(auth_ctx, "organization_id", None) if auth_ctx else None
+    if org_id is None:
+        return JSONResponse(status_code=401, content=_build_oai_error(401, "Authentication required.", error_type="authentication_error"))
+    obj = await _ResponseStore(REDIS_CLIENT).get_response(org_id, response_id)
+    if obj is None:
+        return JSONResponse(status_code=404, content=_build_oai_error(404, f"Response '{response_id}' not found.", code="response_not_found"))
+    return JSONResponse(status_code=200, content=obj)
+
+
+@app.delete("/v1/responses/{response_id}", summary="Delete a model response")
+async def delete_response(response_id: str, request: Request):
+    auth_ctx = getattr(request.state, "auth_context", None)
+    org_id = getattr(auth_ctx, "organization_id", None) if auth_ctx else None
+    if org_id is None:
+        return JSONResponse(status_code=401, content=_build_oai_error(401, "Authentication required.", error_type="authentication_error"))
+    ok = await _ResponseStore(REDIS_CLIENT).delete(org_id, response_id)
+    if not ok:
+        return JSONResponse(status_code=404, content=_build_oai_error(404, f"Response '{response_id}' not found.", code="response_not_found"))
+    return JSONResponse(status_code=200, content={"id": response_id, "object": "response.deleted", "deleted": True})
+
+
+@app.get("/v1/responses/{response_id}/input_items", summary="List input items for a response")
+async def list_response_input_items(response_id: str, request: Request):
+    auth_ctx = getattr(request.state, "auth_context", None)
+    org_id = getattr(auth_ctx, "organization_id", None) if auth_ctx else None
+    if org_id is None:
+        return JSONResponse(status_code=401, content=_build_oai_error(401, "Authentication required.", error_type="authentication_error"))
+    items = await _ResponseStore(REDIS_CLIENT).get_input_items(org_id, response_id)
+    if items is None:
+        return JSONResponse(status_code=404, content=_build_oai_error(404, f"Response '{response_id}' not found.", code="response_not_found"))
+    data = [{"id": _gen_oai_id("message"), "object": "message", **(it if isinstance(it, dict) else {"content": it})}
+            for it in items]
+    return JSONResponse(status_code=200, content={"object": "list", "data": data, "has_more": False,
+                                                  "first_id": data[0]["id"] if data else None,
+                                                  "last_id": data[-1]["id"] if data else None})
+
+
 @app.post(
     "/v1/embeddings",
     summary="Create embeddings (OpenAI-compatible proxy)",
@@ -7549,6 +7918,128 @@ async def proxy_embeddings(request: Request):
         METRICS["sum_latency_ms"] += (time.perf_counter() - start) * 1000
 
 
+@app.post(
+    "/v1/responses",
+    summary="Responses API (OpenAI-compatible proxy)",
+    description="OpenAI Responses API (client.responses.create). Firewall-mediated: input scan, kill-switch/model-state, output guard. Non-streaming.",
+)
+async def proxy_responses(request: Request):
+    """OpenAI Responses API endpoint. Reuses the chat firewall leaf helpers on the
+    flattened ``input``, routes via LLM_ROUTER.aresponses (org-scoped BYOK), and
+    runs the OUTPUT guard on the Responses output channels."""
+    start = time.perf_counter()
+    try:
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse(status_code=400, content={"error": {"message": "Invalid JSON body.", "type": "invalid_request_error"}})
+        if not isinstance(body, dict):
+            return JSONResponse(status_code=400, content={"error": {"message": "Request body must be a JSON object.", "type": "invalid_request_error"}})
+        if body.get("input") in (None, ""):
+            return JSONResponse(status_code=400, content={"error": {"message": "Missing required parameter: 'input'.", "type": "invalid_request_error", "param": "input"}})
+
+        # Streaming arrives in the next increment; reject cleanly so an SDK caller
+        # gets a clear error instead of a broken/partial stream.
+        if body.get("stream"):
+            return JSONResponse(status_code=400, content={"error": {"message": "Streaming for /v1/responses is not yet enabled on this gateway; retry with stream=false.", "type": "invalid_request_error", "code": "stream_unsupported", "param": "stream"}})
+
+        auth_ctx = getattr(request.state, "auth_context", None)
+        org_slug = auth_ctx.org_slug if auth_ctx else ""
+        body["_zs_org_slug"] = org_slug
+        org_config = CONFIG_SYNC.get_config(org_slug) if CONFIG_SYNC else CONFIG
+        user_id = getattr(auth_ctx, "user_id", None) if auth_ctx else None
+        key_prefix = getattr(auth_ctx, "prefix", "") if auth_ctx else ""
+        requested_model = body.get("model", "") or ""
+
+        # Flatten input (+ instructions) for the firewall.
+        prompt = _extract_prompt_from_responses_input(body.get("input"), body.get("instructions"))
+
+        # Kill-switch + model-state gate (parity with chat/embeddings; fail-closed).
+        if org_config.get("kill_switch_enabled", True):
+            if REDIS_CLIENT is None:
+                METRICS["blocked"] += 1
+                return JSONResponse(status_code=503, content={"error": {"message": "Kill-switch enforcement unavailable.", "type": "service_unavailable", "code": "kill_switch_active"}})
+            try:
+                from kill_switch import check_kill_switch as _ck_r
+            except ImportError:
+                from .kill_switch import check_kill_switch as _ck_r
+            _ks = await _ck_r(REDIS_CLIENT, requested_model, org_slug=org_slug, key_prefix=key_prefix or "")
+            if getattr(_ks, "is_killed", False):
+                METRICS["blocked"] += 1
+                return JSONResponse(status_code=503, content={"error": {"message": "This model is currently disabled by an operator kill-switch.", "type": "service_unavailable", "code": "kill_switch_active"}})
+        if REDIS_CLIENT is not None:
+            try:
+                from model_state import check_model_state as _cms_r
+            except ImportError:
+                from .model_state import check_model_state as _cms_r
+            _ms = await _cms_r(REDIS_CLIENT, requested_model, org_slug=org_slug or "default")
+            if getattr(_ms, "status", "") in ("isolated", "suspended"):
+                METRICS["blocked"] += 1
+                return JSONResponse(status_code=503, content={"error": {"message": "This model is currently isolated by an operator.", "type": "service_unavailable", "code": "model_unavailable"}})
+
+        # INPUT scan (tier-1 + tier-2) — block / redact identical to chat.
+        redacted_input = None
+        if INPUT_SCANNER is not None and prompt and org_config.get("input_scan_enabled", True):
+            try:
+                verdict = await INPUT_SCANNER.scan_prompt_with_tier2(
+                    prompt, is_rag=False, org_slug=org_slug or "",
+                    org_tier2_strict=False, request_id=_REQUEST_ID.get(""),
+                )
+            except TypeError:
+                verdict = await INPUT_SCANNER.scan_prompt(prompt, is_rag=False)
+            _action = getattr(verdict, "action", "allow")
+            if _action == "block":
+                METRICS["blocked"] += 1
+                return _build_safe_block_response(
+                    status_code=403, code="input_blocked",
+                    threat_category=getattr(verdict, "threat_type", "policy_violation") or "policy_violation",
+                    request_id=_REQUEST_ID.get(""), detection_tier=getattr(verdict, "tier", ""),
+                )
+            if _action in ("redact", "rewrite") and isinstance(body.get("input"), str):
+                redacted_input = INPUT_SCANNER.redact_pii(prompt)
+
+        # Route via the org-scoped Responses path (BYOK key isolation preserved).
+        status, resp = await LLM_ROUTER.aresponses(body, redacted_content=redacted_input)
+        if status != 200 or not isinstance(resp, dict):
+            return JSONResponse(status_code=status, content=resp)
+
+        # OUTPUT guard on the Responses output channels.
+        out_action = "allow"
+        out_text = _extract_responses_output_text(resp)
+        if out_text and OUTPUT_GUARD is not None and org_config.get("output_scan_enabled", True):
+            try:
+                o_verdict = await OUTPUT_GUARD.inspect(out_text, context_chunks=[], org_config=org_config, org_slug=org_slug or "")
+            except TypeError:
+                o_verdict = await OUTPUT_GUARD.inspect(out_text)
+            out_action = getattr(o_verdict, "action", "allow")
+            if out_action == "block" or out_action == "rewrite":
+                METRICS["blocked"] += 1
+                return _build_safe_block_response(
+                    status_code=403, code="output_blocked",
+                    threat_category=getattr(o_verdict, "threat_type", "policy_violation") or "policy_violation",
+                    request_id=_REQUEST_ID.get(""),
+                )
+            if out_action == "redact":
+                _red = INPUT_SCANNER.redact_pii(out_text) if INPUT_SCANNER is not None else out_text
+                _set_responses_output_text(resp, _red)
+
+        # Attach the zeroshield trace (SDK ignores the extra top-level field).
+        resp["zeroshield"] = {
+            "action": "redacted" if (redacted_input or out_action == "redact") else "allow",
+            "input_redacted": bool(redacted_input),
+            "output_action": out_action,
+            "model": requested_model,
+            "request_id": _REQUEST_ID.get(""),
+        }
+        METRICS["allowed"] = METRICS.get("allowed", 0) + 1
+        return JSONResponse(status_code=200, content=resp)
+    except Exception:
+        LOG.exception("Unexpected error in proxy_responses")
+        return JSONResponse(status_code=500, content={"error": {"message": "Internal error processing responses request.", "type": "internal_error"}})
+    finally:
+        METRICS["sum_latency_ms"] += (time.perf_counter() - start) * 1000
+
+
 # ── Dynamic vector client resolution (org config → env-var default) ──
 
 def _resolve_vector_client(vector_db_type: str, org_id: int | str | None = None):
@@ -7690,49 +8181,61 @@ def _is_valid_collection_name(name: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z0-9._-]+", name))
 
 
-async def _rag_embedding_killswitch_block(org_slug, org_id, key_prefix, vector_db_type, policy_embedding_model):
-    """R12 (#2/#4/#6): apply the SAME kill-switch + model-state gate to the RAG
-    embedding model that proxy_embeddings applies. RAG embeds via
-    byok_embedder → litellm.embedding directly (NOT LLM_ROUTER.aembedding), so the
-    I3-Med gate on /v1/embeddings did NOT cover it — an operator-disabled embedding
-    model was still usable through /v1/rag/query and /v1/rag/ingest. Resolves the
-    effective embedding model (collection-pinned policy model, else the org's
-    VectorProviderConfig model) and returns a JSONResponse(503) when it is
-    killed/isolated/suspended (or Redis-down with kill-switch on); else None.
-    No-op when no model name can be resolved (nothing to gate on)."""
-    model_name = (policy_embedding_model or "").strip()
-    if not model_name and org_id is not None and VECTOR_PROVIDER_SYNC is not None:
+async def _rag_embedding_killswitch_block(org_slug, org_id, key_prefix, vector_db_type, policy_embedding_model, check_reranker=False):
+    """R12 (#2/#4/#6) + R14 (#3): apply the SAME kill-switch + model-state gate to
+    the RAG embedding model — AND, for the query/rerank path, the reranker model —
+    that proxy_embeddings applies. RAG embeds via byok_embedder → litellm.embedding
+    directly (NOT LLM_ROUTER.aembedding) and reranks via the vector client, so the
+    /v1/embeddings I3-Med gate did NOT cover either. Resolves the effective models
+    (collection-pinned policy embedding model, else the org VectorProviderConfig
+    embedding_model; reranker_model from the provider config when check_reranker)
+    and returns a JSONResponse(503) when ANY is killed/isolated/suspended (or
+    Redis-down with kill-switch on); else None. No-op when nothing resolves."""
+    _cfg = None
+    if org_id is not None and VECTOR_PROVIDER_SYNC is not None:
         try:
             _cfg = VECTOR_PROVIDER_SYNC.get_provider_config(org_id, vector_db_type)
-            if _cfg:
-                model_name = str(_cfg.get("embedding_model") or "").strip()
         except Exception:  # noqa: BLE001 - resolution best-effort; absence => no gate
-            model_name = ""
-    if not model_name:
+            _cfg = None
+    models: list[str] = []
+    _emb = (policy_embedding_model or "").strip()
+    if not _emb and _cfg:
+        _emb = str(_cfg.get("embedding_model") or "").strip()
+    if _emb:
+        models.append(_emb)
+    if check_reranker and _cfg:
+        _rr = str(_cfg.get("reranker_model") or "").strip()
+        if _rr and _rr not in models:
+            models.append(_rr)
+    if not models:
         return None
     org_config = CONFIG_SYNC.get_config(org_slug) if CONFIG_SYNC else CONFIG
-    _ks_block = JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "kill_switch_active", "message": "This embedding model is currently disabled by an operator kill-switch."})
-    if org_config.get("kill_switch_enabled", True):
-        if REDIS_CLIENT is None:
-            METRICS["blocked"] += 1
-            return JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "kill_switch_active", "message": "Kill-switch enforcement unavailable."})
+    _ks_enabled = bool(org_config.get("kill_switch_enabled", True))
+    if _ks_enabled and REDIS_CLIENT is None:
+        METRICS["blocked"] += 1
+        return JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "kill_switch_active", "message": "Kill-switch enforcement unavailable."})
+    _ck_rag = _cms_rag = None
+    if _ks_enabled and REDIS_CLIENT is not None:
         try:
             from kill_switch import check_kill_switch as _ck_rag
         except ImportError:
             from .kill_switch import check_kill_switch as _ck_rag
-        _ks = await _ck_rag(REDIS_CLIENT, model_name, org_slug=org_slug, key_prefix=key_prefix or "")
-        if getattr(_ks, "is_killed", False):
-            METRICS["blocked"] += 1
-            return _ks_block
     if REDIS_CLIENT is not None:
         try:
             from model_state import check_model_state as _cms_rag
         except ImportError:
             from .model_state import check_model_state as _cms_rag
-        _ms = await _cms_rag(REDIS_CLIENT, model_name, org_slug=org_slug or "default")
-        if getattr(_ms, "status", "") in ("isolated", "suspended"):
-            METRICS["blocked"] += 1
-            return JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "model_unavailable", "message": "This embedding model is currently isolated by an operator."})
+    for _m in models:
+        if _ck_rag is not None:
+            _ks = await _ck_rag(REDIS_CLIENT, _m, org_slug=org_slug, key_prefix=key_prefix or "")
+            if getattr(_ks, "is_killed", False):
+                METRICS["blocked"] += 1
+                return JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "kill_switch_active", "message": "A model required for this RAG request is disabled by an operator kill-switch."})
+        if _cms_rag is not None:
+            _ms = await _cms_rag(REDIS_CLIENT, _m, org_slug=org_slug or "default")
+            if getattr(_ms, "status", "") in ("isolated", "suspended"):
+                METRICS["blocked"] += 1
+                return JSONResponse(status_code=503, content={"error": "service_unavailable", "code": "model_unavailable", "message": "A model required for this RAG request is currently isolated by an operator."})
     return None
 
 
@@ -8139,6 +8642,7 @@ async def rag_query(request: Request):
             rag_policy["_org_slug"], org_id_for_client,
             (getattr(auth_ctx, "prefix", "") if auth_ctx else ""),
             effective_vector_db_type, policy_embedding_model,
+            check_reranker=True,  # R14 (#3): the query path reranks — gate it too
         )
         if _rag_ks_block is not None:
             return _rag_ks_block
@@ -8873,6 +9377,19 @@ async def rag_delete_documents(request: Request):
         )
         if _rl_resp is not None:
             return _rl_resp
+
+        # R14 (#10): per-org burst (req/s) + RPM ceiling — rag_delete had only the
+        # TPM gate (org_tpm_limit is usually 0 so it never fires); mirror
+        # rag_query/rag_ingest so delete can't be hammered to evade the rate ceiling.
+        _burst_resp = await _enforce_org_burst_rpm(
+            auth_ctx,
+            event_type="rag_delete_blocked",
+            model="",
+            user_id=getattr(auth_ctx, "user_id", None),
+            project_id=project_id,
+        )
+        if _burst_resp is not None:
+            return _burst_resp
 
         policy = VECTOR_POLICY_SYNC.get_policy(project_id, collection_name, organization_id=getattr(auth_ctx, "organization_id", None))
         if policy is None:

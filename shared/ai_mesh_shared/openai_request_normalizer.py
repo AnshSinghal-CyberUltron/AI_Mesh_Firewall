@@ -17,6 +17,9 @@ OPENAI_TOP_LEVEL_KEYS = frozenset({
     "stop", "presence_penalty", "frequency_penalty", "tools", "tool_choice",
     "response_format", "seed", "n", "user",
     "reasoning", "reasoning_effort", "logprobs", "max_output_tokens", "text",
+    # SDK-compat additions: GPT-5.x / function-calling params the stock SDK emits
+    # that were previously stripped (silently degrading the request).
+    "max_completion_tokens", "parallel_tool_calls", "stream_options", "top_logprobs",
 })
 
 

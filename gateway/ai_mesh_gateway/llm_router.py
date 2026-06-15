@@ -69,6 +69,19 @@ _PASSTHROUGH_PARAMS = (
     # also synthesizes one in stream_with_finalize as a fallback for providers
     # that do not.
     "stream_options",
+    # SDK-compat: forward GPT-5.x / function-calling params to the provider.
+    # All are pure passthrough (no content) — the firewall runs pre-LLM and is
+    # unaffected; tool-call scanning (G7) inspects tool_calls regardless of these.
+    "logprobs", "top_logprobs", "max_completion_tokens",
+    "parallel_tool_calls", "reasoning", "reasoning_effort", "user",
+)
+
+# OpenAI Responses API top-level params forwarded to litellm.aresponses.
+_RESPONSES_PASSTHROUGH_PARAMS = (
+    "instructions", "max_output_tokens", "temperature", "top_p",
+    "tools", "tool_choice", "reasoning", "text", "truncation",
+    "store", "previous_response_id", "metadata", "parallel_tool_calls",
+    "include", "user",
 )
 
 # Keep compatibility with historical or UI-facing aliases.
@@ -184,6 +197,7 @@ class LLMRouter:
         self._router: LiteLLMRouter | None = None
         self._active_model_names: list[str] = []
         self._qualified_model_names: set[str] = set()  # H7: org::model routing keys
+        self._deployment_params: dict[str, dict] = {}   # Responses API: name -> resolved litellm_params (BYOK)
 
         #global litellm settings
         litellm.drop_params = config.get("litellm_drop_params", True)
@@ -231,6 +245,24 @@ class LLMRouter:
             return preferred_default
 
         return self._active_model_names[0]
+
+    def _qualify_like_primary(self, candidate_model: str, primary: str) -> str:
+        """Org-qualify a vetted-failover candidate with the SAME org prefix as the
+        primary routing key. H7 (#17): the compliant-chain retry previously routed
+        ``_resolve_runtime_model(candidate)`` — a BARE name — so a failover could be
+        resolved by the shared LiteLLM Router to a same-named PEER org's deployment
+        (and its BYOK key). Re-applying the primary's ``{org}::`` prefix keeps the
+        retry inside the requesting tenant. Fail-safe to bare when the qualified
+        deployment doesn't exist (mirrors ``_build_kwargs``)."""
+        runtime = self._resolve_runtime_model(candidate_model)
+        if "::" in str(runtime):
+            return runtime
+        _org = str(primary).split("::", 1)[0] if "::" in str(primary) else ""
+        if _org:
+            _q = f"{_org}::{runtime}"
+            if _q in self._qualified_model_names:
+                return _q
+        return runtime
 
     def _init_legacy(self, config: dict):
         """Backward-compat: use single upstream_llm_url as custom OpenAI-like base."""
@@ -400,6 +432,71 @@ class LLMRouter:
             return await self._router.aembedding(**kwargs)
         return await litellm.aembedding(**kwargs)
 
+    def _resolve_responses_deployment(self, body: dict) -> tuple[str, dict | None]:
+        """Resolve (route_model_name, litellm_params) for a Responses request,
+        org-qualifying the model EXACTLY like _build_kwargs (H7). Returns
+        (resolved_name, params) — params is None when the requested model is not a
+        configured deployment for this org, so the caller maps it to a 404
+        model_not_found (the clean OpenAI model-name contract)."""
+        requested = self._normalize_model_alias(body.get("model") or self._default_fallback_model())
+        _org = str(body.get("_zs_org_slug") or "")
+        _qualified = f"{_org}::{requested}" if _org else ""
+        # Clean OpenAI model-name contract: the CLIENT's requested model must be a
+        # configured model for this org. Do NOT silently remap to the first active
+        # model (the legacy _resolve_runtime_model fallback) — return None so the
+        # caller emits a 404 model_not_found.
+        if (
+            requested not in self._active_model_names
+            and (not _qualified or _qualified not in self._qualified_model_names)
+            and requested not in self._deployment_params
+        ):
+            return requested, None
+        route_model = requested
+        if _org and "::" not in str(requested) and _qualified in self._qualified_model_names:
+            route_model = _qualified
+        params = self._deployment_params.get(route_model) or self._deployment_params.get(requested)
+        return route_model, (dict(params) if isinstance(params, dict) else None)
+
+    async def aresponses(self, body: dict, redacted_content: str | None = None) -> tuple[int, dict]:
+        """OpenAI Responses API (non-streaming). Returns (http_status, response_dict).
+
+        litellm.Router exposes no aresponses in this version, so route via
+        module-level ``litellm.aresponses`` with the org deployment's explicit
+        decrypted BYOK api_key/api_base (the byok_embedder pattern) — preserving
+        per-tenant key isolation. ``redacted_content`` (when input is a plain
+        string) replaces the input so the upstream model never sees raw PII."""
+        if redacted_content is not None and isinstance(body.get("input"), str):
+            body = {**body, "input": redacted_content}
+        route_model, params = self._resolve_responses_deployment(body)
+        if params is None:
+            return 404, {"error": {
+                "message": f"Model '{body.get('model')}' is not configured for this organization.",
+                "type": "invalid_request_error",
+                "code": "model_not_found",
+            }}
+        upstream_model = str(params.get("model") or route_model)
+        kwargs: dict = {"input": body.get("input"), "model": upstream_model}
+        if params.get("api_key"):
+            kwargs["api_key"] = params["api_key"]
+        if params.get("api_base"):
+            kwargs["api_base"] = params["api_base"]
+        for p in _RESPONSES_PASSTHROUGH_PARAMS:
+            if p in body and body[p] is not None:
+                kwargs[p] = body[p]
+        try:
+            resp = await litellm.aresponses(**kwargs)
+            return 200, (resp.model_dump() if hasattr(resp, "model_dump") else dict(resp))
+        except (BadRequestError, NotFoundError) as exc:
+            status = _EXCEPTION_STATUS_MAP.get(type(exc), 400)
+            return status, {"error": {"message": _sanitize_exception_message(exc, status), "type": type(exc).__name__, "code": status}}
+        except tuple(_EXCEPTION_STATUS_MAP.keys()) as exc:
+            status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
+            LOG.warning("litellm responses error [%s %d]: %s", type(exc).__name__, status, _scrub_internal_topology(exc))
+            return status, {"error": {"message": _sanitize_exception_message(exc, status), "type": type(exc).__name__, "code": status}}
+        except Exception as exc:  # noqa: BLE001
+            LOG.exception("Unexpected responses error")
+            return 502, {"error": {"message": _sanitize_exception_message(exc, 502), "type": "internal_error"}}
+
     def _apply_redaction(self, body: dict, redacted_content: str | None) -> dict:
         """Redact PII/secrets in EVERY conversation message before the upstream call.
 
@@ -551,7 +648,7 @@ class LLMRouter:
                     if candidate == primary:
                         continue
                     try:
-                        retry_kwargs = {**kwargs, "model": self._resolve_runtime_model(candidate)}
+                        retry_kwargs = {**kwargs, "model": self._qualify_like_primary(candidate, primary)}
                         response = await self._execute_completion(retry_kwargs)
                         LOG.warning(
                             "Compliant fallback retry: %s -> %s after %s",
@@ -739,7 +836,7 @@ class LLMRouter:
                     if candidate == primary:
                         continue
                     try:
-                        retry_kwargs = {**kwargs, "model": self._resolve_runtime_model(candidate)}
+                        retry_kwargs = {**kwargs, "model": self._qualify_like_primary(candidate, primary)}
                         local_metrics.fallback_before_first_token = True
                         response = await self._execute_completion(retry_kwargs)
                         async for chunk in self._stream_chunks_from_response(response):
@@ -901,8 +998,18 @@ class LLMRouter:
                 }
             }
 
+        # H7: org-qualify the routing key (mirror _build_kwargs) so litellm selects
+        # THIS org's embedding deployment + its own BYOK key. The allowed-names
+        # gate above validated the BARE client name; the router deployments are
+        # keyed {org}::{model}. Fail-safe to bare if no qualified key exists.
+        _org = str(body.get("_zs_org_slug") or "")
+        _route_model = model
+        if _org and "::" not in str(model):
+            _q = f"{_org}::{model}"
+            if _q in self._qualified_model_names:
+                _route_model = _q
         kwargs = {
-            "model": model,
+            "model": _route_model,
             "input": input_list,
         }
         # Pass encoding_format if specified
@@ -914,7 +1021,7 @@ class LLMRouter:
         # global fallback map is built from chat models; without this an embedding
         # failure would fall back onto chat models (and add to the retry storm).
         if self._router is not None:
-            kwargs["fallbacks"] = self._embedding_fallbacks_for(model)
+            kwargs["fallbacks"] = self._embedding_fallbacks_for(_route_model)
 
         try:
             response = await self._execute_embedding(kwargs)
@@ -954,7 +1061,11 @@ class LLMRouter:
         for entry in router.model_list:
             if not isinstance(entry, dict) or self._is_reserved_model_entry(entry):
                 continue
-            name = self._normalize_model_alias(str(entry.get("model_name") or ""))
+            # H7 regression fix: clients send the BARE model name, but H7 rewrote
+            # router model_name to {org}::{model}. Use base_model_name so the gate
+            # accepts the bare client name (the route is org-qualified separately
+            # in aembedding). Without this, /v1/embeddings 404'd for every org.
+            name = self._normalize_model_alias(str((entry.get("model_info") or {}).get("base_model_name") or entry.get("model_name") or ""))
             if not name:
                 continue
             litellm_id = str((entry.get("litellm_params") or {}).get("model") or "")
@@ -974,13 +1085,20 @@ class LLMRouter:
         if router is None or not hasattr(router, "model_list"):
             return []
         embedding_names: list[str] = []
+        # H7: the requested model is now an org-qualified routing key ({org}::name).
+        # Keep embedding fallbacks WITHIN that org so a failure can't fall back to
+        # ANOTHER tenant's embedding deployment + BYOK key.
+        _model_org = str(model).split("::", 1)[0] if "::" in str(model) else ""
         for entry in router.model_list:
             if not isinstance(entry, dict):
                 continue
             if self._is_reserved_model_entry(entry):
                 continue
+            # Fallback TARGETS must be the qualified routing keys litellm knows.
             name = self._normalize_model_alias(str(entry.get("model_name") or ""))
             if not name or name == model or name in embedding_names:
+                continue
+            if _model_org and "::" in name and not name.startswith(f"{_model_org}::"):
                 continue
             litellm_id = str((entry.get("litellm_params") or {}).get("model") or "")
             if not self._is_embedding_model_id(litellm_id):
@@ -1073,6 +1191,27 @@ class LLMRouter:
             for _e in valid_models
             if isinstance(_e, dict) and _e.get("model_name") and "::" in str(_e["model_name"])
         }
+
+        # Responses API: litellm.Router exposes NO aresponses in this version, so
+        # stash each deployment's resolved litellm_params (decrypted api_key +
+        # api_base + upstream model id) keyed by BOTH the qualified model_name and
+        # the bare base_model_name. aresponses() routes via module-level
+        # litellm.aresponses with these explicit BYOK creds (the byok_embedder
+        # pattern), preserving per-tenant key isolation.
+        _dep: dict[str, dict] = {}
+        for _e in valid_models:
+            if not isinstance(_e, dict):
+                continue
+            _lp = _e.get("litellm_params")
+            if not isinstance(_lp, dict):
+                continue
+            _nm = str(_e.get("model_name") or "")
+            if _nm:
+                _dep[_nm] = _lp
+            _bn = str((_e.get("model_info") or {}).get("base_model_name") or "")
+            if _bn and _bn not in _dep:
+                _dep[_bn] = _lp
+        self._deployment_params = _dep
 
         try:
             fallbacks = self._build_fallbacks(valid_models)
