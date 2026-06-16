@@ -92,6 +92,13 @@ class LaneHelperUnitTests(SimpleTestCase):
         self.assertEqual(summary["vector"]["total"], 1)
         self.assertEqual(summary["chat"]["total"], 2)
 
+    def test_build_lane_summary_zero_events_has_zero_block_rate(self):
+        summary = build_lane_summary(FakeQS([]))
+        for lane in ("chat", "rag", "vector", "mcp"):
+            self.assertEqual(summary[lane]["total"], 0)
+            self.assertEqual(summary[lane]["blocked"], 0)
+            self.assertEqual(summary[lane]["block_rate_pct"], 0.0)
+
     def test_build_rag_pipeline_kpis_stages_and_funnel(self):
         qs = FakeQS([
             _row("allow", event_type="rag_pipeline", pipeline_stage="query"),
@@ -135,8 +142,8 @@ class LaneHelperUnitTests(SimpleTestCase):
         self.assertEqual(payload["summary"]["unique_tools"], 2)
 
         ledger = {r["tool"]: r["violations"] for r in payload["tool_ledger"]}
-        self.assertEqual(ledger["execute_sql"], 2)
-        self.assertEqual(ledger["read_file"], 2)
+        self.assertEqual(ledger["execute_sql"], 1)
+        self.assertEqual(ledger["read_file"], 1)
 
         direction = payload["direction_split"]
         self.assertEqual(direction["inbound"]["total"], 3)  # explicit + default + legacy
@@ -266,12 +273,13 @@ class LaneExpansionApiTests(TestCase):
         resp = self.client.get("/api/module2/dashboard/?period=24h")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        for key in ("lane_summary", "rag_funnel", "mcp_summary"):
+        for key in ("lane_summary", "incidents_snapshot", "threat_trend", "key_risk_distribution"):
             self.assertIn(key, data)
         self.assertGreaterEqual(data["lane_summary"]["mcp"]["total"], 1)
         self.assertGreaterEqual(data["lane_summary"]["rag"]["total"], 1)
-        self.assertIn("stages", data["rag_funnel"])
-        self.assertIn("tool_ledger", data["mcp_summary"])
+        self.assertNotIn("mcp_summary", data)
+        self.assertNotIn("model_exposure", data)
+        self.assertNotIn("rag_funnel", data)
         snapshot = data["incidents_snapshot"]
         self.assertTrue(snapshot)
         self.assertEqual(snapshot[0]["source"], "mcp")
@@ -284,6 +292,8 @@ class LaneExpansionApiTests(TestCase):
         self.assertIn("stage_hit_distribution", data)
         stages = {r["stage"]: r["count"] for r in data["stage_hit_distribution"]}
         self.assertEqual(stages.get("query"), 1)
+        self.assertIn("ioc_library", data)
+        self.assertIn("total", data["ioc_library"])
 
     def test_incident_source_filters(self):
         self._incident("MCP case", event_type="mcp_tool_call", tools_invoked=["x"])

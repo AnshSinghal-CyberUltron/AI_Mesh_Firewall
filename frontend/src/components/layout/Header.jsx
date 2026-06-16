@@ -157,8 +157,8 @@ const TAB_TITLES = {
   "m2-dashboard": "M2.1 Gateway Intelligence",
   "m2-ueba-api-keys": "M2.2 API Key Behavior (UEBA)",
   "m2-models-exposure": "M2.3 Model Health & Exposure",
-  "m2-threat-intel": "M2.4 Threat Intelligence",
-  "m2-incidents": "M2.5 Incidents",
+  "m2-threat-intel": "M2.5 Threat Intelligence Ops",
+  "m2-incidents": "M2.6 Incidents & Forensics",
 };
 
 export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSearchSubmit, onTabChange, onMobileMenuToggle }) {

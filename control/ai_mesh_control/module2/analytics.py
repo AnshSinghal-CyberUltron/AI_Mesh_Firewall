@@ -30,19 +30,92 @@ def key_prefix_from_meta(meta: dict) -> str:
     return str(meta.get("key_prefix") or meta.get("api_key_prefix") or "").strip()
 
 
+def prefixes_match(stored_prefix: str, meta_prefix: str) -> bool:
+    """Case-insensitive API key prefix comparison."""
+    left = str(stored_prefix or "").strip().lower()
+    right = str(meta_prefix or "").strip().lower()
+    return bool(left) and left == right
+
+
+def prompt_snippet_from_meta(meta: dict | None, max_len: int = 200) -> str:
+    """Extract a display-safe prompt preview from enforcement metadata."""
+    data = meta or {}
+    direct = str(data.get("prompt_snippet") or "").strip()
+    if direct:
+        return direct[:max_len]
+
+    lineage = data.get("prompt_lineage") or []
+    if isinstance(lineage, list):
+        for entry in lineage:
+            if not isinstance(entry, dict):
+                continue
+            prompt = str(entry.get("prompt") or entry.get("text") or "").strip()
+            if prompt:
+                return prompt[:max_len]
+
+    extra = data.get("extra")
+    if isinstance(extra, dict):
+        for field in ("prompt_snippet", "prompt", "user_message", "query"):
+            value = str(extra.get(field) or "").strip()
+            if value:
+                return value[:max_len]
+
+    fallback = str(data.get("intent") or data.get("detail") or "").strip()
+    return fallback[:max_len]
+
+
+def build_recent_request_json(ev: dict, max_snippet: int = 500) -> dict:
+    """SOC-friendly JSON row for the last-N request panel."""
+    meta = dict(ev.get("metadata") or {})
+    snippet = prompt_snippet_from_meta(meta, max_len=max_snippet)
+    lineage = meta.get("prompt_lineage")
+    if not isinstance(lineage, list):
+        lineage = []
+    return {
+        "event_id": ev.get("id"),
+        "timestamp": ev.get("created_at").isoformat() if ev.get("created_at") else None,
+        "action": ev.get("action"),
+        "endpoint_id": ev.get("endpoint_id"),
+        "model": meta.get("model"),
+        "threat_type": meta.get("threat_type"),
+        "event_type": meta.get("event_type"),
+        "owasp_code": meta.get("owasp_code"),
+        "intent": meta.get("intent"),
+        "detail": meta.get("detail"),
+        "prompt_snippet": snippet,
+        "prompt_lineage": lineage[:3],
+        "metadata": {
+            "key_prefix": key_prefix_from_meta(meta),
+            "source": meta.get("source"),
+            "pipeline_stage": meta.get("pipeline_stage"),
+            "security_risk_score": meta.get("security_risk_score"),
+        },
+    }
+
+
+def _meta_detail(meta: dict) -> str:
+    """Detail string from top-level metadata or nested gateway extra envelope."""
+    extra = meta.get("extra")
+    if isinstance(extra, dict):
+        nested = str(extra.get("detail") or "").strip()
+        if nested:
+            return nested
+    return str(meta.get("detail") or "").strip()
+
+
 def event_source(meta: dict) -> str:
     event_type = str(meta.get("event_type") or "").lower()
+    detail = _meta_detail(meta).lower()
+    src = str(meta.get("source") or "").lower()
+    threat_type = str(meta.get("threat_type") or "").lower()
+    if "threat intel" in detail or "threat_intel" in src or threat_type.startswith("threat_intel"):
+        return "threat_intel"
     if event_type == "mcp_tool_call" or _looks_like_mcp_event(meta):
         return "mcp"
     if event_type == "rag_pipeline":
         return "rag"
     if meta.get("collection") or meta.get("vector_collection") or meta.get("vector_namespace"):
         return "vector"
-    detail = str(meta.get("detail") or "").lower()
-    src = str(meta.get("source") or "").lower()
-    threat_type = str(meta.get("threat_type") or "").lower()
-    if "threat intel" in detail or "threat_intel" in src or threat_type.startswith("threat_intel"):
-        return "threat_intel"
     if key_prefix_from_meta(meta):
         return "ueba"
     return "chat"
@@ -64,12 +137,12 @@ def classify_telemetry_bucket(meta: dict, action: str) -> str:
     category = str(meta.get("category") or meta.get("violation_type") or "").lower()
     combined = f"{threat} {category}"
 
-    if any(k in combined for k in INJECTION_KEYWORDS) or "injection" in str(meta.get("detail") or "").lower():
+    if event_source(meta) == "threat_intel":
+        return "threat_intel_matches"
+    if any(k in combined for k in INJECTION_KEYWORDS) or "injection" in _meta_detail(meta).lower():
         return "injection_attempts"
     if action == ACTION_REDACT and any(k in combined for k in PII_KEYWORDS):
         return "pii_leaks"
-    if event_source(meta) == "threat_intel":
-        return "threat_intel_matches"
     if key_prefix_from_meta(meta):
         return "behavior_scoring"
     return "other"
@@ -126,9 +199,9 @@ def build_model_exposure_payload(events: list[dict], llm_map: dict[str, str], pe
 
     rows = []
     for model, s in stats.items():
-        total = s["requests"] or 1
-        block_rate = s["blocked"] / total
-        redact_rate = s["redacted"] / total
+        request_total = s["requests"]
+        block_rate = (s["blocked"] / request_total) if request_total else 0.0
+        redact_rate = (s["redacted"] / request_total) if request_total else 0.0
         latency_avg = (sum(s["latencies"]) / len(s["latencies"])) if s["latencies"] else 0.0
         exposure_score = min((0.7 * block_rate) + (0.2 * redact_rate) + (0.1 * min(latency_avg / 2000, 1)), 1.0)
         band = "high" if exposure_score >= 0.7 else "medium" if exposure_score >= 0.35 else "low"
@@ -251,11 +324,12 @@ def build_lane_summary(events) -> dict:
             lanes[lane]["blocked"] += 1
     result = {}
     for lane, counts in lanes.items():
-        total = counts["total"] or 1
+        total_events = counts["total"]
+        block_rate = round(counts["blocked"] / total_events * 100, 1) if total_events else 0.0
         result[lane] = {
-            "total": counts["total"],
+            "total": total_events,
             "blocked": counts["blocked"],
-            "block_rate_pct": round(counts["blocked"] / total * 100, 1),
+            "block_rate_pct": block_rate,
         }
     return result
 
@@ -334,13 +408,16 @@ def build_mcp_activity_payload(events, top_n: int = 10) -> dict:
         elif action == ACTION_REDACT:
             redacted += 1
 
+        is_violation = action in (ACTION_BLOCK, ACTION_REDACT)
         tools = meta.get("tools_invoked") or []
         if isinstance(tools, str):
             tools = [tools]
         for tool in tools:
-            if tool:
+            if not tool:
+                continue
+            unique_tools.add(str(tool))
+            if is_violation:
                 tool_counts[str(tool)] += 1
-                unique_tools.add(str(tool))
 
         server = str(meta.get("mcp_server") or meta.get("server_slug") or "unknown")
         server_counts[server] += 1
@@ -400,8 +477,8 @@ def build_vector_exposure_payload(events, top_n: int = 12) -> dict:
 
     rows = []
     for collection, stats in collection_stats.items():
-        total = stats["total"] or 1
-        block_rate = round(stats["blocked"] / total * 100, 1)
+        total_events = stats["total"]
+        block_rate = round(stats["blocked"] / total_events * 100, 1) if total_events else 0.0
         rows.append(
             {
                 "collection": collection,
@@ -426,6 +503,57 @@ def build_stage_hit_distribution(events) -> list:
         stage = str(meta.get("pipeline_stage") or "ingress").strip() or "ingress"
         stage_counts[stage] += 1
     return [{"stage": stage, "count": count} for stage, count in stage_counts.most_common()]
+
+
+def _incident_stats_queryset(qs):
+    """Join-free queryset for status counts (select_related breaks values().annotate)."""
+    return qs.model.objects.filter(pk__in=qs.values("pk"))
+
+
+def _incident_by_source_counts(qs) -> dict:
+    by_source: Counter = Counter()
+    for incident in qs.select_related("enforcement_event").iterator(chunk_size=200):
+        meta = {}
+        if incident.enforcement_event_id and incident.enforcement_event:
+            meta = incident.enforcement_event.metadata or {}
+        by_source[event_source(meta)] += 1
+    return dict(by_source)
+
+
+def build_incident_queue_summary(qs, org_id=None) -> dict:
+    """Aggregate incident queue stats for the M2.6 SOC KPI strip (always fresh)."""
+    from django.db.models import Count
+
+    stats_qs = _incident_stats_queryset(qs)
+    status_map = {
+        row["status"]: row["c"]
+        for row in stats_qs.values("status").annotate(c=Count("id"))
+    }
+    active_statuses = ("open", "investigating", "escalated")
+    active_count = sum(status_map.get(s, 0) for s in active_statuses)
+
+    return {
+        "total": sum(status_map.values()),
+        "open": status_map.get("open", 0),
+        "investigating": status_map.get("investigating", 0),
+        "escalated": status_map.get("escalated", 0),
+        "resolved": status_map.get("resolved", 0),
+        "active": active_count,
+        "critical_high": stats_qs.filter(
+            status__in=active_statuses,
+            severity__in=("critical", "high"),
+        ).count(),
+        "by_source": _incident_by_source_counts(qs),
+    }
+
+
+def invalidate_incident_summary_cache(org_id) -> None:
+    """Drop legacy cached KPI blobs after incident mutations."""
+    if org_id is None:
+        return
+    from django.core.cache import cache
+
+    cache.delete(f"module2:incident_summary:{org_id}")
 
 
 def serialize_incident_row(incident, serializer_data: dict) -> dict:

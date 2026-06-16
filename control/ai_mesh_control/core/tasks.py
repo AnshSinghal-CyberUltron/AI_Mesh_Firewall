@@ -74,6 +74,68 @@ RISK_SCORE_CAP: float = 1.0
 RISK_SCORE_DECAY_PER_DAY: float = 0.01
 _EMAIL_LOGO_PATH = Path(__file__).resolve().parent / "email_assets" / "zeroshield-logo.png"
 
+_TELEMETRY_CANONICAL_PRIORITY: dict[str, int] = {
+    "request": 100,
+    "stream_complete": 95,
+    "rag_pipeline": 90,
+    "input_blocked": 90,
+    "output_scan": 85,
+    "output_guard": 85,
+    "kill_switch": 80,
+    "model_routed": 20,
+    "critical_alert": 10,
+}
+
+
+def _telemetry_request_id(event: dict) -> str:
+    """Stable per-request id used for drain dedupe (matches gateway emit)."""
+    event_metadata = event.get("metadata") or {}
+    return (
+        str(event.get("request_id") or "").strip()
+        or str(event_metadata.get("request_id") or "").strip()
+        or str(event.get("pipeline_request_id") or "").strip()
+        or str(event.get("prompt_hash") or "").strip()
+        or f"evt-{int(time.time() * 1000)}"
+    )
+
+
+def _merge_telemetry_group(group: list[dict]) -> dict:
+    """Keep one canonical event per request_id, preserving prompt and key attribution."""
+    best = max(
+        group,
+        key=lambda e: _TELEMETRY_CANONICAL_PRIORITY.get(str(e.get("event_type") or ""), 50),
+    )
+    merged = dict(best)
+    if not str(merged.get("prompt_snippet") or "").strip():
+        for event in group:
+            snippet = str(event.get("prompt_snippet") or "").strip()
+            if snippet:
+                merged["prompt_snippet"] = snippet
+                break
+    if not str(merged.get("key_prefix") or "").strip():
+        for event in group:
+            prefix = str(event.get("key_prefix") or "").strip()
+            if prefix:
+                merged["key_prefix"] = prefix
+                break
+    return merged
+
+
+def _collapse_telemetry_batch(events: list[dict]) -> list[dict]:
+    """Keep one canonical EnforcementEvent candidate per shared request_id."""
+    groups: dict[str, list[dict]] = {}
+    orphans: list[dict] = []
+    for event in events:
+        rid = _telemetry_request_id(event)
+        if rid.startswith("evt-"):
+            orphans.append(event)
+            continue
+        groups.setdefault(rid, []).append(event)
+
+    collapsed = [_merge_telemetry_group(group) for group in groups.values() if group]
+    collapsed.extend(orphans)
+    return collapsed
+
 
 def _resolve_logo_src() -> str:
     explicit_url = os.environ.get("ZEROSHIELD_LOGO_URL", "").strip()
@@ -106,12 +168,7 @@ def _build_enforcement_metadata(event: dict) -> dict:
         or _EVENT_TYPE_TO_MODULE.get(event_type)
         or "1.1"
     )
-    request_id = (
-        event_metadata.get("request_id")
-        or event.get("request_id")
-        or event.get("prompt_hash")
-        or f"evt-{int(time.time() * 1000)}"
-    )
+    request_id = _telemetry_request_id(event)
     extra_payload = dict(event_metadata)
     owasp_codes = resolve_owasp_codes(threat_type, extra_payload, event_type=event_type)
     owasp_code = primary_owasp_code(owasp_codes) or _THREAT_TYPE_TO_OWASP.get(threat_type, "")
@@ -170,8 +227,9 @@ def _build_enforcement_metadata(event: dict) -> dict:
     }
 
     # Build prompt_lineage from gateway prompt_snippet so forensics page shows the prompt
-    prompt_snippet = event.get("prompt_snippet", "")
+    prompt_snippet = str(event.get("prompt_snippet") or "").strip()
     if prompt_snippet:
+        result["prompt_snippet"] = prompt_snippet[:500]
         result["prompt_lineage"] = [{"prompt": prompt_snippet, "risk_score": security_risk_score}]
 
     if event_type == "model_routed":
@@ -652,20 +710,17 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
 
         # Use Lua script for atomic move to processing queue
         raw_events = client.eval(ATOMIC_DEQUEUE_LUA, 2, REDIS_TELEMETRY_KEY, PROCESSING_KEY, batch_size)
-        
+
+        parsed_events: list[dict] = []
         for raw in raw_events:
             try:
-                event = json.loads(raw)
+                parsed_events.append(json.loads(raw))
             except (json.JSONDecodeError, TypeError):
                 logger.warning("Malformed telemetry event: %s", raw[:200] if raw else "None")
-                continue
 
-            request_id = (
-                event.get("request_id")
-                or (event.get("metadata") or {}).get("request_id")
-                or event.get("pipeline_request_id")
-            )
-            if request_id:
+        for event in _collapse_telemetry_batch(parsed_events):
+            request_id = _telemetry_request_id(event)
+            if request_id and not request_id.startswith("evt-"):
                 dedupe_key = f"{DEDUPE_KEY_PREFIX}{request_id}"
                 is_new = client.set(dedupe_key, "1", nx=True, ex=86400)
                 if not is_new:

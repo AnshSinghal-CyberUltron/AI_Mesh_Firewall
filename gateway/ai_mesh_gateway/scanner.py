@@ -879,7 +879,12 @@ class InputScanner:
             * strict=False -> Tier-2 is skipped; the Tier-1 verdict is
               returned and a ``tier2_degraded_pass`` event is emitted.
         """
-        tier1 = await self.scan_prompt(text, is_rag, toxicity_threshold=toxicity_threshold)
+        tier1 = await self.scan_prompt(
+            text,
+            is_rag,
+            toxicity_threshold=toxicity_threshold,
+            org_slug=org_slug,
+        )
         if tier1.action == "block":
             return tier1
 

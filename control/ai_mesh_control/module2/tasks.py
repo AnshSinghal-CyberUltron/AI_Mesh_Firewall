@@ -86,8 +86,10 @@ def evaluate_alert_rules(self, org_id=None):
             if recent:
                 continue
 
+            trigger_event = events.order_by("-created_at").first()
             incident = SecurityIncident.objects.create(
                 organization=org,
+                enforcement_event=trigger_event,
                 title=f"Alert: {rule.name}",
                 severity=rule.severity,
                 status="open",
@@ -105,6 +107,9 @@ def evaluate_alert_rules(self, org_id=None):
                 execute_playbook.delay(run.id)
 
             logger.info("Alert fired: rule=%s org=%s value=%.2f", rule.id, org.id, current_value)
+            from module2.analytics import invalidate_incident_summary_cache
+
+            invalidate_incident_summary_cache(org.id)
 
 
 @shared_task(queue="compute.heavy", bind=True, max_retries=2)
@@ -142,8 +147,14 @@ def run_anomaly_detection(self, org_id=None):
             if z_score < rule.z_score_threshold:
                 continue
 
+            trigger_event = (
+                events.filter(created_at__gte=timezone.now() - timedelta(hours=1))
+                .order_by("-created_at")
+                .first()
+            )
             incident = SecurityIncident.objects.create(
                 organization=org,
+                enforcement_event=trigger_event,
                 title=f"Anomaly: {rule.name or rule.metric}",
                 severity="high",
                 status="open",
@@ -154,6 +165,9 @@ def run_anomaly_detection(self, org_id=None):
                 execute_playbook.delay(run.id)
 
             logger.info("Anomaly detected: rule=%s org=%s z=%.2f", rule.id, org.id, z_score)
+            from module2.analytics import invalidate_incident_summary_cache
+
+            invalidate_incident_summary_cache(org.id)
 
 
 @shared_task(queue="policy.compile", bind=True, max_retries=3)

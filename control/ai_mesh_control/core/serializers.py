@@ -221,6 +221,23 @@ class KillSwitchCreateSerializer(serializers.ModelSerializer):
             )
         model_name = (attrs.get("model_name") or "").strip()
         api_key_prefix = (attrs.get("api_key_prefix") or "").strip()
+        if model_name == KillSwitch.SCOPE_CREDENTIAL:
+            if not api_key_prefix:
+                raise serializers.ValidationError(
+                    {
+                        "api_key_prefix": (
+                            "Credential-wide kill-switch requires an API key prefix."
+                        )
+                    }
+                )
+            if attrs.get("action") == "reroute":
+                raise serializers.ValidationError(
+                    {
+                        "action": (
+                            "Credential-wide kill-switch only supports disable at the gateway."
+                        )
+                    }
+                )
         if model_name == KillSwitch.SCOPE_GLOBAL:
             if api_key_prefix:
                 raise serializers.ValidationError(
@@ -241,7 +258,11 @@ class KillSwitchCreateSerializer(serializers.ModelSerializer):
                     }
                 )
         request = self.context.get("request")
-        if request and model_name and model_name != KillSwitch.SCOPE_GLOBAL:
+        if (
+            request
+            and model_name
+            and model_name not in (KillSwitch.SCOPE_GLOBAL, KillSwitch.SCOPE_CREDENTIAL)
+        ):
             org = getattr(getattr(request.user, "profile", None), "organization", None)
             if org:
                 from core.models import LLMModelConfig

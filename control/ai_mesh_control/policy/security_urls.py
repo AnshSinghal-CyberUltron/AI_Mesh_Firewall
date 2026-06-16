@@ -26,6 +26,7 @@ from .security_views import (
     UserBlockageStatsView,
     ViolationCategoriesView,
 )
+from .review_views import SecurityIncidentEscalateView, SecurityIncidentResolveView
 
 urlpatterns = [
     path("attack-catalog/", AttackCatalogView.as_view(), name="security-attack-catalog"),
@@ -42,6 +43,16 @@ urlpatterns = [
     path("module-charts/<str:module_id>/", ModuleChartsView.as_view(), name="security-module-charts"),
     path("incidents/<int:pk>/escalate/", EscalateIncidentView.as_view(), name="incident-escalate"),
     path("incidents/<int:pk>/resolve/", ResolveIncidentView.as_view(), name="incident-resolve"),
+    path(
+        "incidents/<int:pk>/escalate-incident/",
+        SecurityIncidentEscalateView.as_view(),
+        name="security-incident-escalate",
+    ),
+    path(
+        "incidents/<int:pk>/resolve-incident/",
+        SecurityIncidentResolveView.as_view(),
+        name="security-incident-resolve",
+    ),
     path("user-blockage-kpis/", UserBlockageKpisView.as_view(), name="security-user-blockage-kpis"),
     path("blockage-trend/", BlockageTrendView.as_view(), name="security-blockage-trend"),
     path("usage-patterns/", UsagePatternsView.as_view(), name="security-usage-patterns"),

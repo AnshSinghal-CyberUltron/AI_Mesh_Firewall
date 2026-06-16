@@ -3,14 +3,19 @@ import assert from "node:assert/strict";
 import {
   buildContainmentKpiItems,
   buildExposureKpis,
+  buildIncidentKpiItems,
   buildRagKpis,
   buildTelemetryKpis,
+  formatIncidentAge,
   formatRagDocumentFunnel,
   formatRagStageChartData,
   exposureBandClass,
   formatAttackVectors,
   formatExposureChartData,
   formatTelemetryTimeline,
+  mergeTickerFeed,
+  patchIncidentSummaryForMutation,
+  resolveEventLane,
   sourceBadgeClass,
 } from "./pageData.js";
 
@@ -108,9 +113,10 @@ test("buildRagKpis aggregates stage and collection metrics", () => {
     },
     { collections: [{ block_rate_pct: 60 }, { block_rate_pct: 10 }] },
   );
-  assert.equal(kpis[0].value, 18);
+  assert.equal(kpis[0].value, 10);
   assert.equal(kpis[1].value, 9);
   assert.equal(kpis[3].value, 1);
+  assert.equal(kpis[4].value, "50%");
 });
 
 test("formatRagStageChartData computes allowed and block rate", () => {
@@ -148,6 +154,25 @@ test("buildContainmentKpiItems marks clickable cards only when requested", () =>
   assert.equal(panel, "disabled");
 });
 
+test("mergeTickerFeed dedupes live events and merges incidents", () => {
+  const merged = mergeTickerFeed(
+    [
+      { id: "1", action: "block", metadata: { event_type: "rag_pipeline" } },
+      { id: "1", action: "block", metadata: { event_type: "rag_pipeline" } },
+    ],
+    [{ id: 9, title: "Open case", source: "mcp", severity: "high" }],
+    5,
+  );
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0]._fromFeed, true);
+  assert.equal(merged[1].title, "Open case");
+});
+
+test("resolveEventLane prefers pipeline metadata over policy source", () => {
+  assert.equal(resolveEventLane({ source: "policy", metadata: { event_type: "mcp_tool_call" } }), "mcp");
+  assert.equal(resolveEventLane({ source: "rag", title: "Case" }), "rag");
+});
+
 test("KPI builders attach analyst helpText to every card", () => {
   for (const kpi of buildExposureKpis(EXPOSURE_FIXTURE.summary)) {
     assert.ok(kpi.helpText && kpi.helpText.length > 10, `missing helpText: ${kpi.key}`);
@@ -158,4 +183,68 @@ test("KPI builders attach analyst helpText to every card", () => {
   for (const kpi of buildContainmentKpiItems({ disabledKeys: 0, activeKillSwitches: 0 })) {
     assert.ok(kpi.helpText && kpi.helpText.length > 10, `missing helpText: ${kpi.key}`);
   }
+});
+
+test("formatIncidentAge renders compact durations", () => {
+  const hourAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  assert.equal(formatIncidentAge(hourAgo), "2h");
+  assert.equal(formatIncidentAge(""), "—");
+});
+
+test("patchIncidentSummaryForMutation updates open and resolved counts on resolve", () => {
+  const summary = {
+    total: 10,
+    active: 4,
+    open: 3,
+    investigating: 1,
+    escalated: 0,
+    resolved: 6,
+    critical_high: 2,
+    by_source: {},
+  };
+  const next = patchIncidentSummaryForMutation(summary, {
+    action: "resolve",
+    previousStatus: "open",
+    severity: "high",
+  });
+  assert.equal(next.open, 2);
+  assert.equal(next.resolved, 7);
+  assert.equal(next.active, 3);
+  assert.equal(next.critical_high, 1);
+});
+
+test("patchIncidentSummaryForMutation moves escalated counts on escalate", () => {
+  const summary = {
+    total: 5,
+    active: 2,
+    open: 2,
+    investigating: 0,
+    escalated: 0,
+    resolved: 3,
+    critical_high: 0,
+    by_source: {},
+  };
+  const next = patchIncidentSummaryForMutation(summary, {
+    action: "escalate",
+    previousStatus: "open",
+    severity: "medium",
+  });
+  assert.equal(next.open, 1);
+  assert.equal(next.escalated, 1);
+  assert.equal(next.active, 2);
+});
+
+test("buildIncidentKpiItems wires critical/high severity toggle", () => {
+  const calls = [];
+  const items = buildIncidentKpiItems(
+    { active: 3, open: 2, escalated: 1, resolved: 0, critical_high: 2 },
+    {
+      severityFilter: "critical",
+      onSeverityFilter: (v) => calls.push(v),
+    },
+  );
+  const criticalHigh = items.find((k) => k.key === "critical-high");
+  assert.equal(criticalHigh.active, true);
+  criticalHigh.onClick();
+  assert.deepEqual(calls, [""]);
 });

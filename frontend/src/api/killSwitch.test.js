@@ -7,16 +7,26 @@ import {
   filterKillSwitchesForPrefix,
 } from "./killSwitch.js";
 
-test("buildCredentialKillSwitchPayload shapes disable request", () => {
+test("buildCredentialKillSwitchPayload defaults to credential-wide scope", () => {
   const payload = buildCredentialKillSwitchPayload({
     modelName: "gpt-4o",
     apiKeyPrefix: "abc12345",
     reason: "UEBA high risk",
   });
-  assert.equal(payload.model_name, "gpt-4o");
+  assert.equal(payload.model_name, "__credential__");
   assert.equal(payload.api_key_prefix, "abc12345");
   assert.equal(payload.action, "disable");
   assert.equal(payload.reason, "UEBA high risk");
+});
+
+test("buildCredentialKillSwitchPayload can target a single model", () => {
+  const payload = buildCredentialKillSwitchPayload({
+    modelName: "gpt-4o",
+    apiKeyPrefix: "abc12345",
+    reason: "UEBA high risk",
+    credentialWide: false,
+  });
+  assert.equal(payload.model_name, "gpt-4o");
 });
 
 test("buildUebaKillSwitchReason includes band and metrics", () => {

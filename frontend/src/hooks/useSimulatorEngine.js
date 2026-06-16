@@ -7,6 +7,10 @@ import {
   migrateGatewayStorage,
   setGatewayApiKey,
 } from "../utils/gatewayStorage";
+import {
+  resolveGatewayKeyContext,
+  writeStoredGatewayKeyContext,
+} from "../api/gatewayContext";
 
 const HEALTH_POLL_INTERVAL = 15000;
 
@@ -38,7 +42,15 @@ export function useSimulatorEngine() {
   const updateGatewayKey = useCallback((key) => {
     setGatewayKey(key);
     setGatewayApiKey(key);
-  }, []);
+    const trimmed = String(key || "").trim();
+    if (trimmed) {
+      resolveGatewayKeyContext(fetchWithAuth, trimmed)
+        .then((ctx) => {
+          if (ctx) writeStoredGatewayKeyContext(ctx);
+        })
+        .catch(() => {});
+    }
+  }, [fetchWithAuth]);
 
   // Authenticated fetch to gateway
   const gatewayFetch = useCallback(async (path, opts = {}) => {
@@ -167,6 +179,13 @@ export function useSimulatorEngine() {
         const data = await res.json();
         if (data?.key) {
           updateGatewayKey(data.key);
+          if (data.prefix && data.key_id) {
+            writeStoredGatewayKeyContext({
+              prefix: data.prefix,
+              keyId: data.key_id,
+              name: data.name || "simulator-default",
+            });
+          }
         }
       } catch {
         // Simulator bootstrap is best-effort; manual entry still works.

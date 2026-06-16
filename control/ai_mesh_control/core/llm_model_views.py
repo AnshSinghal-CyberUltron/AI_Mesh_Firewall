@@ -99,10 +99,24 @@ class LLMModelConfigListView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
+        from django.db import IntegrityError
+
         serializer = LLMModelConfigSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         org = self._get_org(request)
-        instance = serializer.save(organization=org)
+        try:
+            instance = serializer.save(organization=org)
+        except IntegrityError:
+            model_name = serializer.validated_data.get("model_name", "")
+            return Response(
+                {
+                    "detail": (
+                        f'Model "{model_name}" is already configured for this organization. '
+                        "Edit the existing row in LLM Model Connections to update its API key."
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
         key_changed, key_cleared = _api_key_change_flags(request.data)
         _audit_model_credential(
             request,

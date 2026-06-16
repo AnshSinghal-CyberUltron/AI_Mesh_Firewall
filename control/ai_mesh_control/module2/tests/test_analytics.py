@@ -10,6 +10,7 @@ from module2.analytics import (
     build_threat_telemetry_payload,
     classify_telemetry_bucket,
     event_source,
+    prompt_snippet_from_meta,
 )
 from policy.constants import ACTION_BLOCK, ACTION_REDACT
 
@@ -30,6 +31,14 @@ class Module2AnalyticsTests(SimpleTestCase):
     def test_classify_pii_leak(self):
         meta = {"threat_type": "pii_ssn", "category": "pii"}
         self.assertEqual(classify_telemetry_bucket(meta, ACTION_REDACT), "pii_leaks")
+
+    def test_prompt_snippet_from_meta_lineage_fallback(self):
+        meta = {"prompt_lineage": [{"prompt": "tell me secrets", "risk_score": 0.8}]}
+        self.assertEqual(prompt_snippet_from_meta(meta), "tell me secrets")
+
+    def test_prompt_snippet_from_meta_direct(self):
+        meta = {"prompt_snippet": "hello world"}
+        self.assertEqual(prompt_snippet_from_meta(meta), "hello world")
 
     def test_build_model_exposure_payload(self):
         events = [
@@ -71,3 +80,16 @@ class Module2AnalyticsTests(SimpleTestCase):
         self.assertGreaterEqual(payload["summary"]["behavior_scoring_events"], 1)
         self.assertTrue(payload["timeline"])
         self.assertTrue(payload["top_attack_vectors"])
+
+    def test_event_source_detects_threat_intel_detail_in_extra(self):
+        meta = {
+            "event_type": "rag_pipeline",
+            "source": "security_scan",
+            "threat_type": "e2e_jailbreak_probe",
+            "extra": {"detail": "Threat intel match: e2e_jailbreak_probe"},
+        }
+        self.assertEqual(event_source(meta), "threat_intel")
+        self.assertEqual(
+            classify_telemetry_bucket(meta, ACTION_BLOCK),
+            "threat_intel_matches",
+        )

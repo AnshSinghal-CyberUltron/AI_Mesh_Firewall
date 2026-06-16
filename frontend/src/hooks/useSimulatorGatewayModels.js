@@ -10,11 +10,18 @@ function parseModelList(data) {
   return data?.results ?? [];
 }
 
-/** Gateway-connected org models eligible for live simulators (active + API key set). */
+/** Gateway-connected org models eligible for live simulators. */
+export function isSimulatorInferenceReady(model) {
+  if (!model || model.is_active === false) return false;
+  const provider = String(model.provider || "").toLowerCase();
+  if (provider === "ollama") return true;
+  // Bedrock uses gateway AWS env credentials (no per-model encrypted key).
+  if (provider === "aws_bedrock") return true;
+  return Boolean(model.api_key_set);
+}
+
 export function filterSimulatorEligibleModels(models) {
-  return filterUserManagedModels(models).filter(
-    (m) => m.is_active !== false && m.api_key_set,
-  );
+  return filterUserManagedModels(models).filter(isSimulatorInferenceReady);
 }
 
 /**

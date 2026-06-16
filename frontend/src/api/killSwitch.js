@@ -2,15 +2,23 @@
 
 import { notifyContainmentChanged } from "../utils/containmentEvents.js";
 
+/** Blocks all models for a credential (matches control KillSwitch.SCOPE_CREDENTIAL). */
+export const CREDENTIAL_WIDE_MODEL_SCOPE = "__credential__";
+
 export function buildCredentialKillSwitchPayload({
   modelName,
   apiKeyPrefix,
   reason,
   action = "disable",
+  credentialWide = true,
 }) {
+  const prefix = String(apiKeyPrefix || "").trim();
+  const resolvedModel = credentialWide
+    ? CREDENTIAL_WIDE_MODEL_SCOPE
+    : String(modelName || "").trim();
   return {
-    model_name: String(modelName || "").trim(),
-    api_key_prefix: String(apiKeyPrefix || "").trim(),
+    model_name: resolvedModel,
+    api_key_prefix: prefix,
     action,
     reason: String(reason || "").trim() || "UEBA high-risk API key containment",
     fallback_model: "",

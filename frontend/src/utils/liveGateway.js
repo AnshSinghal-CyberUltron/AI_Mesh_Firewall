@@ -4,6 +4,49 @@
 
 import { formatDetectionTier, formatModelDisplayName } from "../constants/zeroshieldBrand";
 
+/** Distinguish gateway-key 401 (middleware) from upstream provider 401 (LiteLLM). */
+export function describeGatewayHttp401(data, { modelName = "" } = {}) {
+  if (data?.error === "unauthorized") {
+    return "Authentication failed. Your Gateway API Key is invalid or expired.";
+  }
+  const providerMsg = String(data?.error?.message || data?.message || "").trim();
+  if (
+    data?.error?.type === "AuthenticationError"
+    || /incorrect api key|invalid api key|authenticationerror/i.test(providerMsg)
+  ) {
+    const modelHint = modelName ? ` (${modelName})` : "";
+    return (
+      `Provider API key rejected${modelHint}. The gateway accepted your request, but the `
+      + "OpenAI/Anthropic key stored under Model Connection is invalid. Edit that model and save a real API key."
+    );
+  }
+  return providerMsg || "Authentication failed (HTTP 401).";
+}
+
+/** Gateway middleware 403 — disabled/expired key (not input scan or kill switch). */
+export function describeGatewayHttp403(data) {
+  const message = String(data?.message || extractErrorPayload(data).message || "").trim();
+  const code = String(data?.code || "").toLowerCase();
+  if (code === "forbidden" && /api key is disabled/i.test(message)) {
+    return "Gateway API key is disabled. Re-enable it under API Keys or M2.2 UEBA Fleet.";
+  }
+  if (code === "forbidden" && /api key has expired/i.test(message)) {
+    return "Gateway API key has expired. Create a new key or extend expiry.";
+  }
+  return message || "Request forbidden (HTTP 403).";
+}
+
+export function isGatewayAuthForbidden(data, httpStatus) {
+  if (httpStatus === 401 || data?.error === "unauthorized") return true;
+  const message = String(data?.message || extractErrorPayload(data).message || "").toLowerCase();
+  const code = String(data?.code || "").toLowerCase();
+  return (
+    httpStatus === 403
+    && code === "forbidden"
+    && (message.includes("api key is disabled") || message.includes("api key has expired"))
+  );
+}
+
 export function chatCompletionBody({
   prompt,
   model = "auto",
@@ -284,6 +327,7 @@ function inferBlockedStage(data, httpStatus, zs) {
     return "rate_limit";
   }
   if (code === "kill_switch_active") return "kill_switch";
+  if (isGatewayAuthForbidden(data, httpStatus)) return "auth";
   if (INFERENCE_SETUP_CODES.has(code) || data?.category === "inference_not_configured") {
     return "model_routing";
   }
@@ -329,7 +373,7 @@ function inferBlockedStage(data, httpStatus, zs) {
   if (code === "content_blocked" && category === "blocked_keyword") return "policy";
   if (code === "content_blocked" && tier) return tier.startsWith("tier") ? "input_scan" : "policy";
 
-  if (httpStatus === 403) return "input_scan";
+  if (httpStatus === 403 && !isGatewayAuthForbidden(data, httpStatus)) return "input_scan";
   if (httpStatus === 429) return "rate_limit";
   if (httpStatus >= 500 || (httpStatus >= 400 && data?.error)) return "model_output";
   return "";
@@ -560,7 +604,11 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       name: "auth",
       action: at === "blocked" ? "block" : "allow",
       latency_ms: latencyForStage("auth", stageMetrics, zs, context),
-      detail: at === "blocked" ? "Gateway API key invalid or missing" : "Gateway API key accepted",
+      detail: at === "blocked"
+        ? (isGatewayAuthForbidden(data, httpStatus)
+          ? describeGatewayHttp403(data)
+          : "Gateway API key invalid or missing")
+        : "Gateway API key accepted",
     });
   }
 

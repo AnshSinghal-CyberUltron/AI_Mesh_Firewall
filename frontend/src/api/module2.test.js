@@ -28,6 +28,34 @@ test("listIncidents builds query params for filters and pagination", async () =>
   assert.ok(url.includes("page_size=25"));
 });
 
+test("listIncidents accepts cache-bust opts", async () => {
+  const calls = [];
+  const fetchWithAuth = async (url) => {
+    calls.push(url);
+    return { ok: true, json: async () => ({ count: 0, results: [], summary: {} }) };
+  };
+  const api = createModule2Api(fetchWithAuth);
+  await api.listIncidents({}, { useCache: false });
+  assert.ok(calls[0].includes("_="));
+});
+
+test("escalateIncident posts to security API and clears cache", async () => {
+  const calls = [];
+  const fetchWithAuth = async (url, opts = {}) => {
+    calls.push({ url, method: opts.method || "GET" });
+    if (opts.method === "POST") {
+      return { ok: true, json: async () => ({ id: 1, status: "escalated" }) };
+    }
+    return { ok: true, json: async () => ({ incident: { id: 1 }, timeline: [] }) };
+  };
+  const api = createModule2Api(fetchWithAuth);
+  await api.getIncident(1);
+  await api.escalateIncident(1);
+  await api.getIncident(1);
+  assert.equal(calls.filter((c) => c.method === "GET").length, 2);
+  assert.ok(calls.some((c) => c.url.includes("/api/security/incidents/1/escalate-incident/")));
+});
+
 test("getThreatTelemetry requests telemetry endpoint with period", async () => {
   const calls = [];
   const fetchWithAuth = async (url) => {

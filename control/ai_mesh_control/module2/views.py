@@ -16,10 +16,12 @@ from auth.utils import get_request_organization
 from core.admin_views import IsAdminOrSuperuser
 from core.models import GatewayAPIKey, KillSwitch, LLMModelConfig
 from module2.analytics import (
+    build_incident_queue_summary,
     build_lane_summary,
     build_mcp_activity_payload,
     build_model_exposure_payload,
     build_rag_pipeline_kpis,
+    build_recent_request_json,
     build_stage_hit_distribution,
     build_threat_telemetry_payload,
     build_vector_exposure_payload,
@@ -27,6 +29,8 @@ from module2.analytics import (
     hours_from_period,
     key_prefix_from_meta,
     paginate_queryset,
+    prefixes_match,
+    prompt_snippet_from_meta,
     serialize_incident_row,
 )
 from module2.models import ThreatIntelEntry
@@ -51,7 +55,9 @@ _event_source = event_source
 
 
 def _collect_key_metrics(keys_qs, events_qs):
-    key_by_prefix = {k.prefix: k for k in keys_qs}
+    keys = list(keys_qs)
+    key_by_prefix = {k.prefix: k for k in keys}
+    prefix_lookup = {k.prefix.lower(): k.prefix for k in keys}
     metrics = defaultdict(
         lambda: {
             "total": 0,
@@ -70,10 +76,11 @@ def _collect_key_metrics(keys_qs, events_qs):
         prefix = _key_prefix_from_meta(meta)
         if not prefix:
             continue
-        if prefix not in key_by_prefix:
+        canonical = prefix_lookup.get(prefix.lower())
+        if not canonical:
             continue
         hour_bucket = ev["created_at"].replace(minute=0, second=0, microsecond=0).isoformat()
-        m = metrics[prefix]
+        m = metrics[canonical]
         m["total"] += 1
         if ev["action"] == ACTION_BLOCK:
             m["blocked"] += 1
@@ -229,7 +236,12 @@ def _risk_payload(prefix: str, key_obj, metric: dict):
     hourly_values = list(metric["hourly"].values()) or [0]
     baseline = sum(hourly_values) / len(hourly_values)
     current = hourly_values[-1] if hourly_values else 0
-    velocity_spike = (current / baseline) if baseline else 0.0
+    if baseline:
+        velocity_spike = current / baseline
+    elif current:
+        velocity_spike = float(current)
+    else:
+        velocity_spike = 1.0
     velocity_factor = min(max((velocity_spike - 1.0) / 3.0, 0.0), 1.0)
     risk_score = min((0.55 * block_rate) + (0.2 * redact_rate) + (0.25 * velocity_factor), 1.0)
     if risk_score >= 0.7:
@@ -289,6 +301,10 @@ class UebaApiKeySummaryView(APIView):
         key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
         rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
         rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+        fleet_risk_rows = [
+            _risk_payload(k.prefix, k, metrics.get(k.prefix) or _empty_key_metric())
+            for k in keys_qs
+        ]
 
         containment = _build_key_containment_payload(org, keys_qs)
 
@@ -299,7 +315,7 @@ class UebaApiKeySummaryView(APIView):
                     "total_keys": keys_qs.count(),
                     "active_keys": keys_qs.filter(is_active=True).count(),
                     "keys_with_activity": len(rows),
-                    "high_risk_keys": sum(1 for r in rows if r["risk_band"] == "high"),
+                    "high_risk_keys": sum(1 for r in fleet_risk_rows if r["risk_band"] == "high"),
                     "disabled_keys": containment["disabled_keys"],
                     "active_kill_switches": containment["active_kill_switches"],
                 },
@@ -404,12 +420,18 @@ class UebaApiKeyBehaviorView(APIView):
         if not key:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        period = request.query_params.get("period", "7d")
+        period = request.query_params.get("period", "24h")
         since = timezone.now() - timedelta(hours=_hours_from_period(period))
-        events = _enforcement_events_for_request(
+        events_qs = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
-        events = [e for e in events.values("created_at", "action", "endpoint_id", "metadata") if _key_prefix_from_meta(e.get("metadata") or {}) == key.prefix]
+        from module2.telemetry_health import normalize_enforcement_metadata
+
+        events = []
+        for raw in events_qs.values("id", "created_at", "action", "endpoint_id", "metadata"):
+            meta, _ = normalize_enforcement_metadata(raw.get("metadata") or {})
+            if prefixes_match(key.prefix, key_prefix_from_meta(meta)):
+                events.append({**raw, "metadata": meta})
 
         endpoint_counts = defaultdict(int)
         model_counts = defaultdict(int)
@@ -455,6 +477,13 @@ class UebaApiKeyBehaviorView(APIView):
                     mcp_tool_counts[str(tool)] += 1
         payload["top_collections"] = sorted(collection_counts.items(), key=lambda x: -x[1])[:10]
         payload["top_mcp_tools"] = sorted(mcp_tool_counts.items(), key=lambda x: -x[1])[:10]
+        recent = sorted(
+            events,
+            key=lambda e: (e["created_at"], e.get("id") or 0),
+            reverse=True,
+        )[:5]
+        payload["recent_requests"] = [build_recent_request_json(ev) for ev in recent]
+        payload["recent_requests_json"] = payload["recent_requests"]
         return Response(payload)
 
 
@@ -464,7 +493,7 @@ class ModelExposureView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        period = request.query_params.get("period", "30d")
+        period = request.query_params.get("period", "24h")
         since = timezone.now() - timedelta(hours=_hours_from_period(period))
         org = _org_or_403(request)
         events = list(
@@ -489,12 +518,23 @@ class ThreatIntelTelemetryView(APIView):
     def get(self, request):
         period = request.query_params.get("period", "7d")
         since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        org = _org_or_403(request)
         events_qs = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
         events = list(events_qs.values("created_at", "action", "metadata"))
         payload = build_threat_telemetry_payload(events, period, since)
         payload["stage_hit_distribution"] = build_stage_hit_distribution(events_qs)
+        now = timezone.now()
+        if org:
+            ioc_qs = ThreatIntelEntry.objects.filter(organization=org)
+            payload["ioc_library"] = {
+                "total": ioc_qs.count(),
+                "auto_block_enabled": ioc_qs.filter(auto_block=True).count(),
+                "expired": ioc_qs.filter(expires_at__lt=now).count(),
+            }
+        else:
+            payload["ioc_library"] = {"total": 0, "auto_block_enabled": 0, "expired": 0}
         return Response(payload)
 
 
@@ -525,6 +565,10 @@ class UnifiedDashboardView(APIView):
         key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
         risky_rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
         risky_rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+        fleet_risk_rows = [
+            _risk_payload(k.prefix, k, metrics.get(k.prefix) or _empty_key_metric())
+            for k in keys_qs
+        ]
 
         bucket_hours = 1 if hours <= 24 else 6
         trend = []
@@ -548,7 +592,6 @@ class UnifiedDashboardView(APIView):
             incidents = incidents.none()
         open_incidents = incidents.filter(status__in=["open", "investigating", "escalated"])
 
-        model_data = ModelExposureView().get(request).data.get("models", [])[:8]
         incidents_snapshot = [
             {
                 "id": i.id,
@@ -570,7 +613,7 @@ class UnifiedDashboardView(APIView):
                     "blocked": blocked,
                     "redacted": redacted,
                     "open_incidents": open_incidents.count(),
-                    "risky_keys": sum(1 for r in risky_rows if r["risk_band"] == "high"),
+                    "risky_keys": sum(1 for r in fleet_risk_rows if r["risk_band"] == "high"),
                     "block_rate": round((blocked / total) * 100, 1) if total else 0.0,
                     "disabled_keys": containment["disabled_keys"],
                     "active_kill_switches": containment["active_kill_switches"],
@@ -578,12 +621,9 @@ class UnifiedDashboardView(APIView):
                 "containment": containment,
                 "threat_trend": trend,
                 "top_risky_keys": risky_rows[:8],
-                "key_risk_distribution": dict(Counter([r["risk_band"] for r in risky_rows])),
-                "model_exposure": model_data,
+                "key_risk_distribution": dict(Counter([r["risk_band"] for r in fleet_risk_rows])),
                 "incidents_snapshot": incidents_snapshot,
                 "lane_summary": build_lane_summary(events),
-                "rag_funnel": build_rag_pipeline_kpis(events),
-                "mcp_summary": build_mcp_activity_payload(events),
             }
         )
 
@@ -651,9 +691,14 @@ class IncidentListView(APIView):
         elif not request.user.is_superuser:
             qs = qs.none()
 
+        summary = build_incident_queue_summary(qs, org_id=org.id if org else None)
+
         status_filter = request.query_params.get("status", "").strip()
+        queue_filter = request.query_params.get("queue", "").strip()
         if status_filter:
             qs = qs.filter(status=status_filter)
+        elif queue_filter == "active":
+            qs = qs.filter(status__in=("open", "investigating", "escalated"))
 
         severity_filter = request.query_params.get("severity", "").strip()
         if severity_filter:
@@ -682,14 +727,18 @@ class IncidentListView(APIView):
                 Q(enforcement_event__metadata__has_key="detail")
                 & Q(enforcement_event__metadata__detail__icontains="threat intel")
             )
+            | (
+                Q(enforcement_event__metadata__has_key="extra")
+                & Q(enforcement_event__metadata__extra__has_key="detail")
+                & Q(enforcement_event__metadata__extra__detail__icontains="threat intel")
+            )
+            | Q(enforcement_event__metadata__threat_type__istartswith="threat_intel")
         )
 
         source_filter = request.query_params.get("source", "").strip()
+
         if source_filter == "threat_intel":
-            qs = qs.filter(
-                _threat_intel_q
-                | Q(enforcement_event__metadata__threat_type__istartswith="threat_intel")
-            )
+            qs = qs.filter(_threat_intel_q)
         elif source_filter == "ueba":
             qs = qs.filter(
                 Q(enforcement_event__metadata__has_key="key_prefix")
@@ -748,6 +797,7 @@ class IncidentListView(APIView):
                 "page": page,
                 "page_size": page_size,
                 "total_pages": total_pages,
+                "summary": summary,
                 "results": out,
             }
         )
@@ -764,13 +814,20 @@ class IncidentDetailView(APIView):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         events = []
+        seen_ids = set()
+        candidates = []
         if incident.enforcement_event_id:
-            events.append(incident.enforcement_event)
+            candidates.append(incident.enforcement_event)
         related = EnforcementEvent.objects.filter(
             organization=incident.organization,
             metadata__incident_id=incident.id,
         ).order_by("-created_at")[:50]
-        events.extend(related)
+        candidates.extend(related)
+        for ev in candidates:
+            if ev and ev.id not in seen_ids:
+                seen_ids.add(ev.id)
+                events.append(ev)
+        events.sort(key=lambda e: e.created_at, reverse=True)
 
         timeline = []
         source = "generic"

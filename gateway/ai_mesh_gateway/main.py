@@ -545,6 +545,8 @@ def _policy_check(
     project_id=None,
     risk_score=None,
     model=None,
+    key_prefix=None,
+    organization_id=None,
 ):
     cfg = CONFIG
     url = f"{cfg['backend_url']}/api/policy/check/"
@@ -559,8 +561,15 @@ def _policy_check(
         payload["project_id"] = project_id
     if risk_score is not None:
         payload["risk_score"] = risk_score
+    metadata = {}
     if model:
-        payload["metadata"] = {"model": str(model)}
+        metadata["model"] = str(model)
+    if key_prefix:
+        metadata["key_prefix"] = str(key_prefix)
+    if organization_id is not None:
+        metadata["organization_id"] = organization_id
+    if metadata:
+        payload["metadata"] = metadata
     if agent_data is not None and isinstance(agent_data, dict):
         payload["agent_data"] = agent_data
     return _http_request_with_retry("POST", url, data=payload, api_key=cfg.get("api_key"))
@@ -576,6 +585,8 @@ def _policy_check_cached(
     risk_score=None,
     model=None,
     org_slug="default",
+    key_prefix="",
+    organization_id=None,
 ):
     """
     Evaluate prompt/response against cached policies locally.
@@ -601,6 +612,8 @@ def _policy_check_cached(
         return _policy_check(
             prompt, response_text, user_id, endpoint_id,
             agent_data, project_id, risk_score, model,
+            key_prefix=key_prefix,
+            organization_id=organization_id,
         )
 
     from policy_engine import evaluate, apply_redaction
@@ -1192,8 +1205,8 @@ def _filter_inference_eligible_models(routing_models: list[dict] | None) -> list
         provider = str(model.get("provider") or "").strip().lower()
         api_key_set = bool(model.get("api_key_set"))
         # Organization-owned inference must carry tenant credentials.
-        # Local/self-hosted ollama can run without an API key.
-        if provider not in {"ollama"} and not api_key_set:
+        # Local/self-hosted ollama and Bedrock (gateway AWS env) can run without encrypted BYOK.
+        if provider not in {"ollama", "aws_bedrock"} and not api_key_set:
             continue
         eligible.append(model)
     return eligible
@@ -1499,6 +1512,7 @@ _REQUEST_ORG_ID: _ctxvars.ContextVar[int | None] = _ctxvars.ContextVar("_req_org
 _REQUEST_ORG_SLUG: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_org_slug", default="")
 _REQUEST_SOURCE_IP: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_src_ip", default="")
 _REQUEST_METHOD: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_method", default="POST")
+_CHAT_REQUEST_ID: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_chat_request_id", default="")
 
 # Event types that represent isolation / kill-switch / circuit-breaker actions.
 # These are security-critical and MUST always be recorded, even when an org
@@ -1549,6 +1563,11 @@ def _emit_telemetry(status_code: int = 200, **kwargs):
     kwargs.setdefault("organization_id", _REQUEST_ORG_ID.get())
     kwargs.setdefault("source_ip", _REQUEST_SOURCE_IP.get())
     kwargs.setdefault("method", _REQUEST_METHOD.get())
+    req_id = _CHAT_REQUEST_ID.get("")
+    if req_id:
+        md = dict(kwargs.get("metadata") or {})
+        md.setdefault("request_id", req_id)
+        kwargs["metadata"] = md
     kwargs.setdefault("status_code", status_code)
     event_type = kwargs.get("event_type") or ""
     _is_isolation = event_type in _ALWAYS_AUDIT_EVENT_TYPES
@@ -2290,10 +2309,19 @@ async def proxy_chat(
         "upstream_ms": 0.0,
         "telemetry_enqueue_ms": 0.0,
     }
+    # When the control-plane policy engine already persisted an EnforcementEvent
+    # (event_id in check response), skip the gateway's terminal request telemetry
+    # so one user activity does not increment dashboards by 2.
+    _policy_audit_event_id = None
+    _gateway_lifecycle_telemetry_emitted = False
 
     # Set per-request telemetry context
     _REQUEST_SOURCE_IP.set(request.client.host if request.client else "")
     _REQUEST_METHOD.set(request.method)
+    _CHAT_REQUEST_ID.set(
+        (request.headers.get("X-Request-ID") or "").strip()
+        or f"zs-{_uuid.uuid4().hex[:12]}"
+    )
 
     try:
         try:
@@ -3188,6 +3216,8 @@ async def proxy_chat(
                 risk_score,
                 requested_model,
                 org_slug,
+                auth_ctx.prefix if auth_ctx else "",
+                getattr(auth_ctx, "organization_id", None) if auth_ctx else None,
             )
             if code != 200:
                 METRICS["blocked"] += 1
@@ -3201,6 +3231,8 @@ async def proxy_chat(
                 )
 
             action = check_resp.get("action") or "allow"
+            if check_resp.get("event_id"):
+                _policy_audit_event_id = check_resp.get("event_id")
             if action == "block":
                 has_policy_match = bool(
                     check_resp.get("matched_policies")
@@ -3272,6 +3304,7 @@ async def proxy_chat(
                 rewrite_detail = check_resp.get("message") or "Content policy applied"
                 effective_prompt = f"[Content policy applied: harmful content removed] {effective_prompt}"
                 redacted_prompt = effective_prompt
+                _gateway_lifecycle_telemetry_emitted = True
                 _emit_telemetry(
                         event_type="input_blocked",
                         model=body.get("model", ""),
@@ -3631,20 +3664,21 @@ async def proxy_chat(
                 _tel_threat = (scan_verdict.threat_type if scan_verdict and redacted_prompt is not None else "")
                 _tel_risk = (scan_verdict.confidence if scan_verdict and redacted_prompt is not None else 0.0)
                 telemetry_start = time.perf_counter()
-                _emit_telemetry(
-                    event_type="request",
-                    model=body.get("model", ""),
-                    user_id=user_id,
-                    project_id=str(project_id or ""),
-                    key_prefix=auth_ctx.prefix if auth_ctx else "",
-                    latency_ms=(time.perf_counter() - start) * 1000,
-                    risk_score=_tel_risk,
-                    action=_tel_action,
-                    threat_type=_tel_threat,
-                    prompt_snippet=_prompt_snippet,
-                    endpoint_id=endpoint_id,
-                    metadata={"stage_metrics_ms": stage_metrics},
-                )
+                if _policy_audit_event_id is None and not _gateway_lifecycle_telemetry_emitted:
+                    _emit_telemetry(
+                        event_type="request",
+                        model=body.get("model", ""),
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        latency_ms=(time.perf_counter() - start) * 1000,
+                        risk_score=_tel_risk,
+                        action=_tel_action,
+                        threat_type=_tel_threat,
+                        prompt_snippet=_prompt_snippet,
+                        endpoint_id=endpoint_id,
+                        metadata={"stage_metrics_ms": stage_metrics},
+                    )
                 stage_metrics["telemetry_enqueue_ms"] = round((time.perf_counter() - telemetry_start) * 1000, 2)
                 preflight_block = _stream_preflight_block_if_needed(org_config)
                 if preflight_block is not None:
@@ -3675,20 +3709,21 @@ async def proxy_chat(
                 _tel_threat = (scan_verdict.threat_type if scan_verdict and redacted_prompt is not None else "")
                 _tel_risk = (scan_verdict.confidence if scan_verdict and redacted_prompt is not None else 0.0)
                 telemetry_start = time.perf_counter()
-                _emit_telemetry(
-                    event_type="request",
-                    model=body.get("model", ""),
-                    user_id=user_id,
-                    project_id=str(project_id or ""),
-                    key_prefix=auth_ctx.prefix if auth_ctx else "",
-                    latency_ms=elapsed_ms,
-                    risk_score=_tel_risk,
-                    action=_tel_action,
-                    threat_type=_tel_threat,
-                    prompt_snippet=_prompt_snippet,
-                    endpoint_id=endpoint_id,
-                    metadata={"stage_metrics_ms": stage_metrics},
-                )
+                if _policy_audit_event_id is None and not _gateway_lifecycle_telemetry_emitted:
+                    _emit_telemetry(
+                        event_type="request",
+                        model=body.get("model", ""),
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        latency_ms=elapsed_ms,
+                        risk_score=_tel_risk,
+                        action=_tel_action,
+                        threat_type=_tel_threat,
+                        prompt_snippet=_prompt_snippet,
+                        endpoint_id=endpoint_id,
+                        metadata={"stage_metrics_ms": stage_metrics},
+                    )
                 stage_metrics["telemetry_enqueue_ms"] = round((time.perf_counter() - telemetry_start) * 1000, 2)
                 response_headers: dict[str, str] = {}
                 if isinstance(resp, dict):
@@ -3785,23 +3820,8 @@ async def proxy_chat(
                     selection.decision_source,
                     selection.reason,
                 )
-                if TELEMETRY is not None:
-                    _emit_telemetry(
-                        event_type="model_routed",
-                        model=selection.model_name,
-                        user_id=user_id,
-                        project_id=str(project_id or ""),
-                        key_prefix=auth_ctx.prefix if auth_ctx else "",
-                        action="reroute" if selection.model_name != (selection.requested_model or "auto") else "confirm",
-                        risk_score=routing_prefs["request_risk_score"],
-                        threat_type="none",
-                        pipeline_stage="routing",
-                        intent=_request_intent,
-                        latency_ms=(time.perf_counter() - start) * 1000,
-                        metadata=route_metadata,
-                        prompt_snippet=_prompt_snippet,
-                        endpoint_id=endpoint_id,
-                    )
+                # Routing is merged into the terminal request telemetry event so one
+                # simulator/gateway activity increments dashboards by 1 (dev parity).
         else:
             route_metadata = {
                 "original_model": body.get("model") or "auto",
@@ -4433,6 +4453,8 @@ async def proxy_chat(
                 org_slug,
             )
             resp_action = _normalize_output_action(resp_check.get("action") if resp_check else "allow")
+            if resp_check and resp_check.get("event_id"):
+                _policy_audit_event_id = resp_check.get("event_id")
             # §1.7 output policy control: the operator-configured output_policy_action
             # is authoritative for the output path. When the policy engine reports a
             # violation, route it through the configured action (block/redact/rewrite/
@@ -4446,6 +4468,7 @@ async def proxy_chat(
                 resp_categories = resp_check.get("matched_policy_categories") or []
                 resp_threat_type = _category_to_threat_type(resp_categories[0]) if resp_categories else "policy_violation"
                 if TELEMETRY is not None and not resp_check.get("event_id"):
+                    _gateway_lifecycle_telemetry_emitted = True
                     _emit_telemetry(
                         status_code=200,
                         event_type="output_scan",
@@ -4523,6 +4546,7 @@ async def proxy_chat(
                     },
                 )
                 if TELEMETRY is not None and not resp_check.get("event_id"):
+                    _gateway_lifecycle_telemetry_emitted = True
                     _emit_telemetry(
                         status_code=200,
                         event_type="output_scan",
@@ -4569,6 +4593,7 @@ async def proxy_chat(
                     },
                 )
                 if TELEMETRY is not None and not resp_check.get("event_id"):
+                    _gateway_lifecycle_telemetry_emitted = True
                     _emit_telemetry(
                         status_code=200,
                         event_type="output_scan",
@@ -4607,21 +4632,27 @@ async def proxy_chat(
         _tel_threat = (scan_verdict.threat_type if scan_verdict and redacted_prompt is not None else "")
         _tel_risk = (scan_verdict.confidence if scan_verdict and redacted_prompt is not None else 0.0)
         telemetry_start = time.perf_counter()
-        _emit_telemetry(
-            event_type="request",
-            model=body.get("model", ""),
-            user_id=user_id,
-            project_id=str(project_id or ""),
-            key_prefix=auth_ctx.prefix if auth_ctx else "",
-            prompt_snippet=_prompt_snippet,
-            endpoint_id=endpoint_id,
-            latency_ms=elapsed_ms,
-            risk_score=_tel_risk,
-            action=_tel_action,
-            threat_type=_tel_threat,
-            tokens_used=usage or {},
-            metadata={"stage_metrics_ms": stage_metrics},
-        )
+        if _policy_audit_event_id is None and not _gateway_lifecycle_telemetry_emitted:
+            _request_metadata: dict = {"stage_metrics_ms": stage_metrics}
+            if isinstance(route_metadata, dict) and route_metadata:
+                _request_metadata.update(route_metadata)
+                if route_selection is not None:
+                    _request_metadata["source"] = "routing"
+            _emit_telemetry(
+                event_type="request",
+                model=body.get("model", ""),
+                user_id=user_id,
+                project_id=str(project_id or ""),
+                key_prefix=auth_ctx.prefix if auth_ctx else "",
+                prompt_snippet=_prompt_snippet,
+                endpoint_id=endpoint_id,
+                latency_ms=elapsed_ms,
+                risk_score=_tel_risk,
+                action=_tel_action,
+                threat_type=_tel_threat,
+                tokens_used=usage or {},
+                metadata=_request_metadata,
+            )
         stage_metrics["telemetry_enqueue_ms"] = round((time.perf_counter() - telemetry_start) * 1000, 2)
         if tier2_execution_mode == "async_post_llm":
             await enqueue_job(

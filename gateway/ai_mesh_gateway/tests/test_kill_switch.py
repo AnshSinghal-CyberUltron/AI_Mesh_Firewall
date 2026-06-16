@@ -115,6 +115,28 @@ def test_credential_takes_precedence_over_model(fake_redis, fake_sync_redis):
     assert verdict.scope == "credential"
 
 
+def test_credential_wide_blocks_any_model(fake_redis, fake_sync_redis):
+    fake_sync_redis.set(
+        "kill_switch:acme:credential:zs_key_abc",
+        json.dumps({
+            "is_active": True,
+            "action": "disable",
+            "reason": "UEBA containment",
+        }),
+    )
+    verdict = _run(
+        check_kill_switch(
+            fake_redis,
+            "totally-different-model",
+            org_slug="acme",
+            key_prefix="zs_key_abc",
+        )
+    )
+    assert verdict.is_killed is True
+    assert verdict.action == "disable"
+    assert verdict.scope == "credential"
+
+
 def test_inactive_switches_allow(fake_redis, fake_sync_redis):
     fake_sync_redis.set("kill_switch:acme:global", json.dumps({"is_active": False}))
     fake_sync_redis.set(

@@ -116,6 +116,14 @@ def normalize_enforcement_metadata(metadata: dict | None) -> tuple[dict, bool]:
         meta["event_type"] = "rag_pipeline"
         changed = True
 
+    if not str(meta.get("prompt_snippet") or "").strip():
+        from module2.analytics import prompt_snippet_from_meta
+
+        snippet = prompt_snippet_from_meta(meta)
+        if snippet:
+            meta["prompt_snippet"] = snippet[:500]
+            changed = True
+
     return meta, changed
 
 

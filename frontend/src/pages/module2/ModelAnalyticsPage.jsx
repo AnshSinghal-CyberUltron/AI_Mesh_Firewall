@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -7,13 +8,15 @@ import {
   BookOpen, Cpu, Database, Filter, RefreshCw, Search, Sparkles,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { createModule2Api } from "../../api/module2";
+import { clearModule2Cache, createModule2Api } from "../../api/module2";
+import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
+import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { ChartCard } from "../../components/module2/ChartCard";
 import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
-import { Module2EmptyState, Module2ErrorState, Module2PageSkeleton } from "../../components/module2/PageStates";
+import { Module2EmptyState, Module2ErrorState, Module2PageErrorBoundary, Module2PageSkeleton } from "../../components/module2/PageStates";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import {
   buildExposureKpis,
@@ -26,6 +29,10 @@ import {
   formatRagStageChartData,
 } from "./pageData";
 import { ANALYST_BRIEF_TITLE, PAGE_BRIEFS } from "./pageCopy";
+
+const PERIOD_LABELS = { "1h": "1 hour", "24h": "24 hours", "7d": "7 days", "30d": "30 days" };
+const REFRESH_DEBOUNCE_MS = 300;
+const RAG_STAGE_EMPTY_MSG = "No stage-level RAG events — run Module 1.3 RAG Pipeline Simulator with event_type=rag_pipeline metadata.";
 
 const TABS = [
   {
@@ -64,6 +71,10 @@ const RAG_STAGE_GUIDE = [
     text: "Final LLM answer — output guardrails and grounding checks run here.",
   },
 ];
+
+function RagChartEmpty({ message }) {
+  return <p className="py-12 text-center text-sm text-slate-400">{message}</p>;
+}
 
 function TabBar({ active, onChange }) {
   return (
@@ -162,6 +173,10 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
   const collectionChart = formatRagCollectionChartData(collections);
   const escalationData = formatRagEscalationChartData(kpis.escalation_distribution);
   const totalPipelineEvents = stageData.reduce((s, r) => s + r.total, 0);
+  const hasStageVolume = totalPipelineEvents > 0;
+  const hasFunnelData = funnelSteps.some((step) => step.value > 0);
+  const hasLatency = stageData.some((s) => s.avg_latency_ms > 0);
+  const latencyData = stageData.filter((s) => s.avg_latency_ms > 0);
 
   if (totalPipelineEvents === 0 && collections.length === 0) {
     return (
@@ -186,65 +201,79 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
           title="Pipeline Stage Volume"
           titleHelpText="Stacked counts per stage — red = blocked, green = allowed. Shows WHERE enforcement fires, not just the percentage."
         >
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={stageData} layout="vertical" margin={{ left: 10, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-              <XAxis type="number" fontSize={11} allowDecimals={false} />
-              <YAxis dataKey="stage" type="category" fontSize={11} width={80} />
-              <Tooltip content={<RagStageTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="allowed" stackId="a" fill="#10b981" name="Allowed" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="flagged" stackId="a" fill="#f59e0b" name="Flagged" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="blocked" stackId="a" fill="#ef4444" name="Blocked" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {hasStageVolume ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={stageData} layout="vertical" margin={{ left: 10, right: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                <XAxis type="number" fontSize={11} allowDecimals={false} />
+                <YAxis dataKey="stage" type="category" fontSize={11} width={80} />
+                <Tooltip content={<RagStageTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="allowed" stackId="a" fill="#10b981" name="Allowed" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="flagged" stackId="a" fill="#f59e0b" name="Flagged" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="blocked" stackId="a" fill="#ef4444" name="Blocked" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <RagChartEmpty message={RAG_STAGE_EMPTY_MSG} />
+          )}
         </ChartCard>
 
         <ChartCard
           title="Stage Block Rate"
           titleHelpText="Percentage of checks blocked at each gate. High rates at Retriever often mean vector ACL or collection poisoning."
         >
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={stageData}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-              <XAxis dataKey="stage" fontSize={11} />
-              <YAxis fontSize={11} unit="%" domain={[0, 100]} />
-              <Tooltip content={<RagStageTooltip />} />
-              <Bar dataKey="block_rate" fill="#8b5cf6" name="Block %" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {hasStageVolume ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={stageData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                <XAxis dataKey="stage" fontSize={11} />
+                <YAxis fontSize={11} unit="%" domain={[0, 100]} />
+                <Tooltip content={<RagStageTooltip />} />
+                <Bar dataKey="block_rate" fill="#8b5cf6" name="Block %" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <RagChartEmpty message={RAG_STAGE_EMPTY_MSG} />
+          )}
         </ChartCard>
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
-          title="Document Survival Funnel"
-          titleHelpText="How many retrieval paths survive each gate. Large drops after Retriever or Ranker indicate chunk filtering or policy kills."
+          title="Stage Throughput Snapshot"
+          titleHelpText="Per-stage event counts from telemetry — not a per-request funnel. Compare volume across Retriever, Ranker, and Generator together."
         >
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={funnelSteps}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-              <XAxis dataKey="step" fontSize={10} interval={0} angle={-12} textAnchor="end" height={50} />
-              <YAxis fontSize={11} allowDecimals={false} />
-              <Tooltip
-                formatter={(value, name, props) => {
-                  if (name === "Documents") {
-                    return [`${value} (${props.payload.pct}% of retrieved)`, name];
-                  }
-                  return [value, name];
-                }}
-              />
-              <Bar dataKey="value" name="Documents" fill="#6366f1" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-            {funnelSteps.map((step) => (
-              <div key={step.step} className="rounded-lg bg-slate-50 px-2 py-2 dark:bg-slate-800/60">
-                <p className="font-semibold text-slate-800 dark:text-slate-100">{step.value}</p>
-                <p className="text-slate-500">{step.pct}% of retrieved</p>
+          {hasFunnelData ? (
+            <>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={funnelSteps}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis dataKey="step" fontSize={10} interval={0} angle={-12} textAnchor="end" height={50} />
+                  <YAxis fontSize={11} allowDecimals={false} />
+                  <Tooltip
+                    formatter={(value, name, props) => {
+                      if (name === "Documents") {
+                        return [`${value} (${props.payload.pct}% of retrieved)`, name];
+                      }
+                      return [value, name];
+                    }}
+                  />
+                  <Bar dataKey="value" name="Documents" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                {funnelSteps.map((step) => (
+                  <div key={step.step} className="rounded-lg bg-slate-50 px-2 py-2 dark:bg-slate-800/60">
+                    <p className="font-semibold text-slate-800 dark:text-slate-100">{step.value}</p>
+                    <p className="text-slate-500">{step.pct}% of retrieved</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <RagChartEmpty message={RAG_STAGE_EMPTY_MSG} />
+          )}
         </ChartCard>
 
         <ChartCard
@@ -308,17 +337,18 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
           title="Stage Latency (avg ms)"
           titleHelpText="Mean processing time per pipeline stage — latency spikes at Retriever may indicate vector DB or scanner load."
         >
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={stageData.filter((s) => s.avg_latency_ms > 0)}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-              <XAxis dataKey="stage" fontSize={11} />
-              <YAxis fontSize={11} unit="ms" />
-              <Tooltip formatter={(v) => [`${v} ms`, "Avg latency"]} />
-              <Bar dataKey="avg_latency_ms" fill="#0ea5e9" name="Avg latency" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          {!stageData.some((s) => s.avg_latency_ms > 0) && (
-            <p className="-mt-16 text-center text-sm text-slate-400">No latency metadata on RAG events yet.</p>
+          {hasLatency ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={latencyData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                <XAxis dataKey="stage" fontSize={11} />
+                <YAxis fontSize={11} unit="ms" />
+                <Tooltip formatter={(v) => [`${v} ms`, "Avg latency"]} />
+                <Bar dataKey="avg_latency_ms" fill="#0ea5e9" name="Avg latency" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <RagChartEmpty message="No latency metadata on RAG events yet." />
           )}
         </ChartCard>
       </div>
@@ -355,10 +385,24 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
 }
 
 export function ModelExposurePage() {
+  return (
+    <Module2PageErrorBoundary title="Model & RAG Health failed to render">
+      <ModelExposurePageInner />
+    </Module2PageErrorBoundary>
+  );
+}
+
+function ModelExposurePageInner() {
   const { fetchWithAuth } = useAuth();
   const api = useMemo(() => createModule2Api(fetchWithAuth), [fetchWithAuth]);
-  const [period, setPeriod] = useState("30d");
-  const [activeTab, setActiveTab] = useState("model");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const periodParam = searchParams.get("period");
+  const initialTab = tabParam === "rag" ? "rag" : "model";
+  const [period, setPeriod] = useState(
+    periodParam && PERIOD_LABELS[periodParam] ? periodParam : "24h",
+  );
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -368,46 +412,108 @@ export function ModelExposurePage() {
   const [ragLoading, setRagLoading] = useState(false);
   const [ragError, setRagError] = useState(null);
 
+  const loadSeqRef = useRef(0);
+  const ragLoadSeqRef = useRef(0);
+  const refreshTimerRef = useRef(null);
+
   const loadModel = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setError(null);
     try {
-      setData(await api.getModelExposure(period));
+      clearModule2Cache();
+      const result = await api.getModelExposure(period, { useCache: false });
+      if (seq !== loadSeqRef.current) return;
+      setData(result);
     } catch (e) {
+      if (seq !== loadSeqRef.current) return;
       setError(e.message || "Failed to load model exposure data.");
       setData(null);
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [api, period]);
 
   const loadRag = useCallback(async () => {
+    const seq = ++ragLoadSeqRef.current;
     setRagLoading(true);
     setRagError(null);
     try {
-      setRagData(await api.getRagHealth(period));
+      clearModule2Cache();
+      const result = await api.getRagHealth(period, { useCache: false });
+      if (seq !== ragLoadSeqRef.current) return;
+      setRagData(result);
     } catch (e) {
+      if (seq !== ragLoadSeqRef.current) return;
       setRagError(e.message || "Failed to load RAG health data.");
       setRagData(null);
     } finally {
-      setRagLoading(false);
+      if (seq === ragLoadSeqRef.current) setRagLoading(false);
     }
   }, [api, period]);
 
+  const refreshActiveTab = useCallback(() => {
+    clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      if (activeTab === "model") loadModel();
+      else loadRag();
+    }, REFRESH_DEBOUNCE_MS);
+  }, [activeTab, loadModel, loadRag]);
+
+  useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
+
+  useRealtimeNotifications({ onEnforcementEvent: refreshActiveTab });
+
+  useEffect(() => {
+    const onTelemetry = () => refreshActiveTab();
+    window.addEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
+    return () => window.removeEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
+  }, [refreshActiveTab]);
+
   useEffect(() => { loadModel(); }, [loadModel]);
-  useEffect(() => { if (activeTab === "rag") loadRag(); }, [activeTab, loadRag]);
+  useEffect(() => {
+    if (activeTab === "rag") loadRag();
+  }, [activeTab, loadRag]);
+
+  useEffect(() => {
+    setRagData(null);
+  }, [period]);
+
+  useEffect(() => {
+    if (periodParam && PERIOD_LABELS[periodParam]) {
+      setPeriod(periodParam);
+    }
+  }, [periodParam]);
+
+  useEffect(() => {
+    if (tabParam === "rag" || tabParam === "model") {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
+
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+    setSearchParams({ tab, period }, { replace: true });
+  }, [period, setSearchParams]);
+
+  const handlePeriodChange = useCallback((next) => {
+    setPeriod(next);
+    setSearchParams({ tab: activeTab, period: next }, { replace: true });
+  }, [activeTab, setSearchParams]);
 
   const chartData = formatExposureChartData(data?.exposure_by_model || []);
+  const modelRows = data?.models || [];
+  const hasModelActivity = modelRows.length > 0;
 
   return (
     <div>
       <ContextualAppBar title={ANALYST_BRIEF_TITLE} description={PAGE_BRIEFS.modelRag} />
       <PageHeader
         title="Model & RAG Health"
-        subtitle="Model exposure scores and RAG pipeline health metrics from live enforcement data"
+        subtitle={`Model exposure and RAG pipeline health · ${PERIOD_LABELS[period] || period} window (server UTC)`}
         actions={
           <>
-            <PeriodSelector value={period} onChange={setPeriod} />
+            <PeriodSelector value={period} onChange={handlePeriodChange} />
             <button
               type="button"
               onClick={activeTab === "model" ? loadModel : loadRag}
@@ -420,13 +526,20 @@ export function ModelExposurePage() {
         }
       />
 
-      <TabBar active={activeTab} onChange={setActiveTab} />
+      <TabBar active={activeTab} onChange={handleTabChange} />
 
       {activeTab === "model" && (
         <>
           {error && !data && <Module2ErrorState message={error} onRetry={loadModel} />}
           {loading && !data && !error && <Module2PageSkeleton />}
-          {data && (
+          {data && !hasModelActivity && (
+            <Module2EmptyState
+              title="No model traffic in this period"
+              message="Routed LLM requests with model metadata will populate exposure scores, block rates, and the active-models table."
+              hint="Tip: Run Attack Simulator under Module 1.1 to generate model-attributed enforcement events."
+            />
+          )}
+          {data && hasModelActivity && (
             <>
               <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-3 text-xs leading-relaxed text-sky-900 dark:border-sky-800/60 dark:bg-sky-950/20 dark:text-sky-200">
                 <strong>Model Exposure</strong> ranks each LLM by a composite score (block rate, redact rate,
@@ -446,7 +559,11 @@ export function ModelExposurePage() {
                       <XAxis type="number" domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} fontSize={11} />
                       <YAxis type="category" dataKey="name" width={100} fontSize={11} />
                       <Tooltip formatter={(value) => [`${(value * 100).toFixed(1)}%`, "Exposure Score"]} />
-                      <Bar dataKey="score" radius={[0, 4, 4, 0]} fill="#0ea5e9" />
+                      <Bar dataKey="score" radius={[0, 4, 4, 0]}>
+                        {chartData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.fill} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartCard>
@@ -459,7 +576,7 @@ export function ModelExposurePage() {
                     <BarChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
                       <XAxis dataKey="name" fontSize={10} interval={0} angle={-20} textAnchor="end" height={60} />
-                      <YAxis fontSize={11} unit="%" />
+                      <YAxis fontSize={11} unit="%" domain={[0, 100]} />
                       <Tooltip />
                       <Bar dataKey="blockRate" fill="#ef4444" radius={[4, 4, 0, 0]} />
                     </BarChart>
@@ -490,7 +607,7 @@ export function ModelExposurePage() {
                     },
                     { key: "exposure_score", label: "Score", helpText: "Normalized exposure index (0–1). Pair with block % for triage priority." },
                   ]}
-                  rows={data?.models || []}
+                  rows={modelRows}
                   emptyMessage="No model enforcement events in this period."
                 />
               </div>

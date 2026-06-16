@@ -14,7 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.models import Agent
+from core.models import Agent, GatewayAPIKey
 from policy.models import EnforcementEvent
 
 # Minutes after which gateway is considered not healthy
@@ -171,4 +171,55 @@ class SimulatorDefaultGatewayKeyView(APIView):
         if not raw_key:
             return Response({"detail": "Simulator default gateway key is not seeded."}, status=404)
 
-        return Response({"key": raw_key, "storage_key": "zeroshield_gateway_key"})
+        key_meta = {}
+        try:
+            key_hash = GatewayAPIKey.hash_raw_key(raw_key)
+            db_key = GatewayAPIKey.objects.filter(key_hash=key_hash).first()
+            if db_key:
+                key_meta = {
+                    "prefix": db_key.prefix,
+                    "key_id": str(db_key.id),
+                    "name": db_key.name,
+                    "is_simulator_default": db_key.name == "simulator-default",
+                }
+        except Exception:
+            pass
+
+        return Response({"key": raw_key, "storage_key": "zeroshield_gateway_key", **key_meta})
+
+
+class GatewayKeyContextView(APIView):
+    """Resolve a gateway API key to its UEBA prefix (org-scoped, authenticated)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from auth.utils import get_request_organization
+
+        org = get_request_organization(request)
+        if org is None and not getattr(request.user, "is_superuser", False):
+            return Response({"detail": "Organization scope is required."}, status=403)
+
+        raw_key = str((request.data or {}).get("api_key") or "").strip()
+        if raw_key.lower().startswith("bearer "):
+            raw_key = raw_key[7:].strip()
+        if not raw_key:
+            return Response({"detail": "api_key is required."}, status=400)
+
+        key_hash = GatewayAPIKey.hash_raw_key(raw_key)
+        qs = GatewayAPIKey.objects.filter(key_hash=key_hash)
+        if org is not None:
+            qs = qs.filter(organization=org)
+        db_key = qs.first()
+        if not db_key:
+            return Response({"detail": "API key not found for your organization."}, status=404)
+
+        return Response(
+            {
+                "prefix": db_key.prefix,
+                "key_id": str(db_key.id),
+                "name": db_key.name,
+                "is_simulator_default": db_key.name == "simulator-default",
+                "is_active": db_key.is_active,
+            }
+        )

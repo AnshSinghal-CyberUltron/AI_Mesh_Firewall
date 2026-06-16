@@ -114,6 +114,8 @@ class Module2PagesApiTests(TestCase):
         self.assertEqual(data["page"], 1)
         self.assertEqual(data["page_size"], 10)
         self.assertIn("total_pages", data)
+        self.assertIn("summary", data)
+        self.assertIn("by_source", data["summary"])
         self.assertGreaterEqual(data["count"], 1)
         self.assertTrue(all(row["severity"] == "high" for row in data["results"]))
 
@@ -123,10 +125,43 @@ class Module2PagesApiTests(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["source"], "threat_intel")
 
+        extra_ev = self._event(
+            self.org,
+            ACTION_BLOCK,
+            extra={"detail": "Threat intel IOC match on prompt"},
+        )
+        extra_inc = SecurityIncident.objects.create(
+            organization=self.org,
+            enforcement_event=extra_ev,
+            title="IOC extra detail",
+            severity="high",
+            status="open",
+        )
+        ti_resp = self.client.get("/api/module2/incidents/?source=threat_intel")
+        self.assertEqual(ti_resp.status_code, 200)
+        ti_ids = [row["id"] for row in ti_resp.json()["results"]]
+        self.assertIn(extra_inc.id, ti_ids)
+
         search_resp = self.client.get("/api/module2/incidents/?search=UEBA")
         self.assertEqual(search_resp.status_code, 200)
         self.assertEqual(len(search_resp.json()["results"]), 1)
         self.assertIn("key_prefix", search_resp.json()["results"][0])
+
+    def test_incident_summary_counts_statuses_with_enforcement_join(self):
+        """select_related(enforcement_event) must not break status KPI aggregation."""
+        for i in range(4):
+            self._incident(self.org, f"Open case {i}", status="open", severity="medium")
+        self._incident(self.org, "Escalated case", status="escalated", severity="high")
+        self._incident(self.org, "Resolved case", status="resolved", severity="low")
+
+        resp = self.client.get("/api/module2/incidents/")
+        self.assertEqual(resp.status_code, 200)
+        summary = resp.json()["summary"]
+        self.assertEqual(summary["open"], 4)
+        self.assertEqual(summary["escalated"], 1)
+        self.assertEqual(summary["resolved"], 1)
+        self.assertEqual(summary["active"], 5)
+        self.assertEqual(summary["total"], 6)
 
     def test_org_scoping_hides_other_org_incidents(self):
         self._incident(self.other_org, "Foreign incident", severity="critical", status="open")
@@ -134,3 +169,13 @@ class Module2PagesApiTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         titles = [row["title"] for row in resp.json()["results"]]
         self.assertNotIn("Foreign incident", titles)
+
+    def test_resolve_incident_endpoint_updates_security_incident(self):
+        incident = self._incident(self.org, "Resolvable case", severity="medium", status="open")
+        resp = self.client.post(f"/api/security/incidents/{incident.id}/resolve-incident/", {}, format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertEqual(data["status"], "resolved")
+        self.assertIsNotNone(data.get("resolved_at"))
+        incident.refresh_from_db()
+        self.assertEqual(incident.status, "resolved")

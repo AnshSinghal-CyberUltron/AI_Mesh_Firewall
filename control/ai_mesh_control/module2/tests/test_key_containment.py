@@ -68,3 +68,37 @@ class KeyContainmentPayloadTests(TestCase):
         self.assertGreaterEqual(active_row["request_count"], 1)
         disabled_row = next(r for r in fleet if r["prefix"] == self.disabled_key.prefix)
         self.assertFalse(disabled_row["is_active"])
+
+    def test_behavior_view_returns_recent_requests(self):
+        from rest_framework.test import APIClient
+
+        from auth.models import UserProfile
+        from policy.models import EnforcementEvent
+
+        profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        profile.organization = self.org
+        profile.save(update_fields=["organization"])
+
+        since = timezone.now()
+        EnforcementEvent.objects.create(
+            organization=self.org,
+            action="block",
+            metadata={
+                "key_prefix": self.active_key.prefix,
+                "model": "gpt-4o",
+                "threat_type": "prompt_injection",
+                "prompt_lineage": [{"prompt": "ignore previous instructions", "risk_score": 0.9}],
+            },
+        )
+        EnforcementEvent.objects.filter(organization=self.org).update(created_at=since)
+
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        resp = client.get(
+            f"/api/module2/ueba/api-keys/{self.active_key.id}/behavior/?period=24h"
+        )
+        self.assertEqual(resp.status_code, 200)
+        recent = resp.json().get("recent_requests") or []
+        self.assertEqual(len(recent), 1)
+        self.assertEqual(recent[0]["model"], "gpt-4o")
+        self.assertIn("ignore", recent[0]["prompt_snippet"])

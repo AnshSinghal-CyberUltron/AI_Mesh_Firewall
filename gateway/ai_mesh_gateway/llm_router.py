@@ -19,7 +19,12 @@ import litellm
 from litellm import Router as LiteLLMRouter
 
 from ai_mesh_shared.llm_model_crypto import decrypt_api_key
-from ai_mesh_shared.litellm_byok import normalize_litellm_params
+from ai_mesh_shared.litellm_byok import (
+    apply_bedrock_byok_credentials,
+    apply_bedrock_env_credentials,
+    normalize_litellm_params,
+    resolve_bedrock_model_id,
+)
 
 from litellm.exceptions import (
     APIConnectionError,
@@ -231,6 +236,12 @@ class LLMRouter:
         if not isinstance(entry, dict):
             return entry
         params = dict(entry.get("litellm_params") or {})
+        provider = str(entry.get("provider") or params.get("provider") or "")
+        bedrock_region = (
+            str(params.get("aws_region_name") or "").strip()
+            or os.environ.get("BEDROCK_REGION", "")
+            or os.environ.get("AWS_DEFAULT_REGION", "")
+        )
         encrypted = params.pop("api_key_encrypted", None)
         if encrypted and not params.get("api_key"):
             fallback_secret = os.environ.get("DJANGO_SECRET_KEY", "") or os.environ.get(
@@ -241,7 +252,28 @@ class LLMRouter:
                 fallback_secret=fallback_secret,
             )
             if decrypted:
-                params["api_key"] = decrypted
+                if provider.lower() == "aws_bedrock":
+                    params = apply_bedrock_byok_credentials(
+                        params,
+                        decrypted,
+                        env_access_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                        env_secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                        default_region=bedrock_region,
+                    )
+                else:
+                    params["api_key"] = decrypted
+        elif provider.lower() == "aws_bedrock":
+            params = apply_bedrock_env_credentials(
+                params,
+                env_access_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                env_secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                default_region=bedrock_region,
+            )
+        if provider.lower() == "aws_bedrock" and params.get("model"):
+            params["model"] = resolve_bedrock_model_id(
+                str(params.get("model") or ""),
+                region=bedrock_region,
+            )
         provider = str(entry.get("provider") or params.pop("provider", "") or "")
         params = normalize_litellm_params(params, provider=provider)
         return {**entry, "litellm_params": params}

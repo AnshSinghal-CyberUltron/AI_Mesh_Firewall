@@ -172,6 +172,10 @@ def ensure_simulator_default_gateway_key() -> bool:
         existing = GatewayAPIKey.objects.filter(name="simulator-default").first()
         if existing and existing.organization_id:
             org = existing.organization
+        if existing and not existing.is_active:
+            existing.is_active = True
+            existing.save(update_fields=["is_active", "updated_at"])
+            logger.info("Re-enabled simulator-default gateway key (prefix=%s)", existing.prefix)
         user = (
             User.objects.filter(email="admin@zeroshield.io").first()
             or User.objects.first()

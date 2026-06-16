@@ -11,9 +11,11 @@ import { SimulatorModelSelector } from "./simulator/SimulatorModelSelector";
 import { StageTimeline } from "./simulator/StageTimeline";
 import {
   chatCompletionBody,
+  describeGatewayHttp401,
   normalizeChatPipelineResult,
   normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
+import { notifyTelemetryActivity } from "../utils/telemetryEvents";
 import { ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
 
 const ATTACK_SCENARIOS = [
@@ -225,7 +227,7 @@ export function AttackSimulatorPanel() {
       const elapsed = Math.round(performance.now() - startTime);
 
       if (res.status === 401) {
-        setError("Authentication failed. Your Gateway API Key is invalid or expired.");
+        setError(describeGatewayHttp401(res.data, { modelName: gatewayModels.selectedModel }));
       } else if (
         res.status === 422
         && [
@@ -317,6 +319,7 @@ export function AttackSimulatorPanel() {
           action: normalized.final_action || (res.status === 403 ? "block" : res.status >= 400 ? "error" : "allow"),
         });
       }
+      notifyTelemetryActivity("attack-simulator", { model: gatewayModels.selectedModel });
     } catch (err) {
       setError(
         err.message === "Failed to fetch"
@@ -428,6 +431,7 @@ export function AttackSimulatorPanel() {
       rate_limited: normalized.filter((r) => r.rate_limited).length,
       allowed: normalized.filter((r) => r.action === "allow").length,
     });
+    notifyTelemetryActivity("attack-simulator-burst", { count: requestCount });
     setBurstRunning(false);
   }, [activePrompt, burstConcurrency, burstCount, burstEstimatedTokens, burstProfile, gatewayFetch, gatewayKey]);
 

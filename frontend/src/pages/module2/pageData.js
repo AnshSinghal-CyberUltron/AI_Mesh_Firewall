@@ -22,17 +22,25 @@ export function formatExposureChartData(exposureByModel = []) {
   }));
 }
 
-export function formatTelemetryTimeline(timeline = []) {
-  return timeline.map((point) => ({
-    ...point,
-    label: point.timestamp?.slice(5, 16)?.replace("T", " ") || "",
-  }));
+export function formatTelemetryTimeline(timeline) {
+  const points = Array.isArray(timeline) ? timeline : [];
+  return points.map((point) => {
+    const ts = point?.timestamp;
+    const label =
+      typeof ts === "string"
+        ? ts.slice(5, 16).replace("T", " ")
+        : ts != null
+          ? String(ts).slice(0, 16)
+          : "";
+    return { ...point, label };
+  });
 }
 
-export function formatAttackVectors(vectors = []) {
-  return vectors.map((row) => ({
-    name: row.vector,
-    count: row.count,
+export function formatAttackVectors(vectors) {
+  const rows = Array.isArray(vectors) ? vectors : [];
+  return rows.map((row) => ({
+    name: row?.vector ?? "unknown",
+    count: Number(row?.count) || 0,
   }));
 }
 
@@ -46,27 +54,32 @@ const RAG_STAGE_LABELS = {
 export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
   const stages = ragPipelineKpis?.stages || {};
   const stageList = Object.values(stages);
-  const totalEvents = stageList.reduce((sum, st) => sum + (st?.total || 0), 0);
+  const query = stages.query || {};
+  const retriever = stages.retriever || {};
+  const pipelineIngress = query.total || retriever.total || 0;
+  const totalStageChecks = stageList.reduce((sum, st) => sum + (st?.total || 0), 0);
   const totalBlocked = stageList.reduce((sum, st) => sum + (st?.blocked || 0), 0);
   const collections = vectorExposure?.collections || [];
   const hotCollections = collections.filter((c) => (c.block_rate_pct ?? 0) >= 50).length;
-  const passRate = totalEvents
-    ? Math.round(((totalEvents - totalBlocked) / totalEvents) * 100)
+  const retrieverTotal = retriever.total || 0;
+  const retrieverBlocked = retriever.blocked || 0;
+  const passRate = retrieverTotal
+    ? Math.round(((retrieverTotal - retrieverBlocked) / retrieverTotal) * 100)
     : 100;
 
   return [
     {
       key: "pipeline-events",
       label: "Pipeline Events",
-      value: totalEvents,
-      helpText: "Total RAG requests scanned across Query → Retriever → Ranker → Generator stages.",
+      value: pipelineIngress || totalStageChecks,
+      helpText: "RAG requests entering the pipeline (Query stage volume when present).",
     },
     {
       key: "blocked-at-gate",
       label: "Blocked at Gate",
       value: totalBlocked,
       color: totalBlocked > 0 ? "text-red-600" : undefined,
-      helpText: "Requests stopped by policy at any pipeline stage before completion.",
+      helpText: "Hard blocks recorded at any pipeline stage in this window.",
     },
     {
       key: "collections",
@@ -83,10 +96,10 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
     },
     {
       key: "pass-rate",
-      label: "Pass-Through Rate",
+      label: "Retriever Pass Rate",
       value: `${passRate}%`,
       color: passRate >= 80 ? "text-emerald-600" : passRate >= 50 ? "text-amber-600" : "text-red-600",
-      helpText: "Share of pipeline stage checks that were not hard-blocked.",
+      helpText: "Share of Retriever stage checks that were not hard-blocked.",
     },
   ];
 }
@@ -97,7 +110,7 @@ export function formatRagStageChartData(stages = {}) {
     const total = st.total || 0;
     const blocked = st.blocked || 0;
     const flagged = st.flagged || 0;
-    const allowed = st.allowed || Math.max(0, total - blocked - flagged - (st.rewritten || 0));
+    const allowed = st.allowed ?? Math.max(0, total - blocked - flagged - (st.rewritten || 0));
     return {
       stage: RAG_STAGE_LABELS[key] || key,
       stageKey: key,
@@ -189,13 +202,89 @@ export function buildExposureKpis(summary = {}) {
   ];
 }
 
+export function formatConfidencePercent(confidence) {
+  const c = Number(confidence) || 0;
+  return c <= 1 ? `${Math.round(c * 100)}%` : `${Math.round(c)}%`;
+}
+
+/** Normalize list / paginated threat-intel API payloads to a row array. */
+export function normalizeThreatIntelRows(data) {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.results)) return data.results;
+  return [];
+}
+
+/** Fleet stats for the IOC library table — used on M2.5 SOC panels. */
+export function buildIocFleetStats(entries = []) {
+  const list = Array.isArray(entries) ? entries : [];
+  const now = Date.now();
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  let autoBlock = 0;
+  let expired = 0;
+  let expiringSoon = 0;
+  const bySource = { manual: 0, feed: 0, auto: 0 };
+
+  for (const entry of list) {
+    if (entry.auto_block) autoBlock += 1;
+    const src = entry.source || "manual";
+    if (Object.prototype.hasOwnProperty.call(bySource, src)) {
+      bySource[src] += 1;
+    } else {
+      bySource.manual += 1;
+    }
+    if (entry.expires_at) {
+      const expiresAt = new Date(entry.expires_at).getTime();
+      if (expiresAt < now) expired += 1;
+      else if (expiresAt - now < weekMs) expiringSoon += 1;
+    }
+  }
+
+  return { total: list.length, autoBlock, expired, expiringSoon, bySource };
+}
+
+export function iocMatchRatePct(summary = {}) {
+  const total = summary.total_events ?? 0;
+  const hits = summary.threat_intel_matches ?? 0;
+  if (!total) return 0;
+  return Math.min(100, Math.round((hits / total) * 100));
+}
+
 export function buildTelemetryKpis(summary = {}) {
   return [
-    { key: "total-events", label: "Total Events", value: summary.total_events ?? 0, helpText: "All categorized enforcement events in the selected analysis window." },
-    { key: "injection-attempts", label: "Injection Attempts", value: summary.injection_attempts ?? 0, color: "text-red-600", helpText: "Prompt injection, jailbreak, or LLM01/LLM02-class attack signals." },
-    { key: "pii-leaks", label: "PII Leaks", value: summary.pii_leaks ?? 0, color: "text-amber-600", helpText: "Events where sensitive data was detected and redacted or blocked." },
-    { key: "behavior-scoring", label: "Behavior Scoring", value: summary.behavior_scoring_events ?? 0, color: "text-sky-600", helpText: "Events contributing to API-key UEBA risk scoring." },
-    { key: "threat-intel-hits", label: "Threat Intel Hits", value: summary.threat_intel_matches ?? 0, color: "text-violet-600", helpText: "Enforcement events that matched a configured IOC or threat signature." },
+    {
+      key: "total-events",
+      label: "Total Events",
+      value: summary.total_events ?? 0,
+      helpText: "Every enforcement event in this time window (blocks, redactions, monitors). Broader than the category KPIs below.",
+    },
+    {
+      key: "injection-attempts",
+      label: "Injection & Jailbreak",
+      value: summary.injection_attempts ?? 0,
+      color: "text-red-600",
+      helpText: "Prompt injection, jailbreak, or LLM01-style attacks — including Attack Simulator blocks.",
+    },
+    {
+      key: "pii-leaks",
+      label: "PII Detected",
+      value: summary.pii_leaks ?? 0,
+      color: "text-amber-600",
+      helpText: "Requests where sensitive data was redacted by policy (SSN, PHI, credentials, etc.).",
+    },
+    {
+      key: "behavior-scoring",
+      label: "API Key Activity",
+      value: summary.behavior_scoring_events ?? 0,
+      color: "text-sky-600",
+      helpText: "Events tied to a gateway API key prefix — feeds M2.2 UEBA; shown here for attack-volume context.",
+    },
+    {
+      key: "threat-intel-hits",
+      label: "IOC Matches",
+      value: summary.threat_intel_matches ?? 0,
+      color: "text-violet-600",
+      helpText: "Traffic that matched an indicator from your IOC table after Sync to Gateway. Not the same as generic injection blocks.",
+    },
   ];
 }
 
@@ -213,6 +302,82 @@ export function exposureBandClass(band) {
   return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
 }
 
+const RISK_BAND_ORDER = ["low", "medium", "high"];
+
+/** Pie chart rows for UEBA key risk bands — always includes all three tiers. */
+export function formatRiskDistributionChart(distribution = {}) {
+  return RISK_BAND_ORDER.map((band) => ({
+    name: band.charAt(0).toUpperCase() + band.slice(1),
+    band,
+    value: distribution[band] ?? 0,
+  })).filter((row) => row.value > 0);
+}
+
+/** Derive enforcement lane (chat/rag/vector/mcp/ueba/threat_intel) from WS or incident payloads. */
+export function resolveEventLane(item = {}) {
+  if (item.source && item.source !== "policy" && item.source !== "gateway") {
+    return item.source;
+  }
+  const meta = item.metadata || {};
+  const eventType = String(meta.event_type || "").toLowerCase();
+  if (eventType === "mcp_tool_call" || meta.tools_invoked || meta.mcp_server || meta.server_slug) {
+    return "mcp";
+  }
+  if (eventType === "rag_pipeline") return "rag";
+  if (meta.collection || meta.vector_collection || meta.vector_namespace) return "vector";
+  const detail = String(meta.detail || "").toLowerCase();
+  const src = String(meta.source || item.source || "").toLowerCase();
+  const threatType = String(meta.threat_type || "").toLowerCase();
+  if (detail.includes("threat intel") || src.includes("threat_intel") || threatType.startsWith("threat_intel")) {
+    return "threat_intel";
+  }
+  if (meta.key_prefix || meta.api_key_prefix) return "ueba";
+  return "chat";
+}
+
+export function formatTickerHeadline(item = {}) {
+  if (item.title) return item.title;
+  const meta = item.metadata || {};
+  const parts = [];
+  if (item.action) parts.push(String(item.action).toUpperCase());
+  if (meta.threat_type) parts.push(meta.threat_type.replace(/_/g, " "));
+  if (meta.model) parts.push(meta.model);
+  const prefix = meta.key_prefix || meta.api_key_prefix;
+  if (prefix) parts.push(prefix);
+  if (meta.pipeline_stage) parts.push(`stage:${meta.pipeline_stage}`);
+  return parts.length ? parts.join(" · ") : "Enforcement event";
+}
+
+export function formatTickerDetail(item = {}) {
+  if (item.status && item.severity) return `${item.severity} · ${item.status}`;
+  if (item.severity) return String(item.severity);
+  if (item.category) {
+    const sub = item.subcategory ? ` (${item.subcategory})` : "";
+    return `${item.category}${sub}`;
+  }
+  if (item.message) return item.message;
+  if (item.timestamp) return item.timestamp.replace("T", " ").slice(0, 19);
+  return "";
+}
+
+/** Merge live WS feed with open incidents — dedupe by event/incident id. */
+export function mergeTickerFeed(liveFeed = [], incidents = [], limit = 12) {
+  const seen = new Set();
+  const merged = [];
+  const push = (item, fromFeed) => {
+    const lane = resolveEventLane(item);
+    const key = item.id
+      ? (fromFeed ? `ev-${item.id}` : `inc-${item.id}`)
+      : `live-${item.timestamp || ""}-${lane}-${formatTickerHeadline(item)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push({ ...item, _fromFeed: fromFeed });
+  };
+  liveFeed.forEach((item) => push(item, true));
+  incidents.forEach((item) => push(item, false));
+  return merged.slice(0, limit);
+}
+
 export function sourceBadgeClass(source) {
   if (source === "threat_intel") return "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
   if (source === "ueba") return "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300";
@@ -221,4 +386,200 @@ export function sourceBadgeClass(source) {
   if (source === "vector") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
   if (source === "chat") return "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300";
   return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+}
+
+/** Read human-readable detail from enforcement metadata (top-level or nested extra). */
+export function metadataDetail(meta = {}) {
+  if (!meta || typeof meta !== "object") return "";
+  if (meta.detail) return String(meta.detail);
+  const extra = meta.extra;
+  if (extra && typeof extra === "object" && extra.detail) return String(extra.detail);
+  return "";
+}
+
+const INCIDENT_LANE_DRILL_DOWN = {
+  chat: { to: "/models/exposure", label: "M2.3 Model exposure" },
+  rag: { to: "/models/exposure?tab=rag", label: "M2.3 RAG health" },
+  vector: { to: "/models/exposure?tab=rag", label: "M2.3 Vectors" },
+  mcp: { to: "/mcp/risk", label: "M2.4 MCP risk" },
+  ueba: { to: "/ueba/api-keys", label: "M2.2 UEBA" },
+  threat_intel: { to: "/threat-intel", label: "M2.5 Threat intel" },
+};
+
+export function incidentLaneDrillDown(source) {
+  return INCIDENT_LANE_DRILL_DOWN[source] || null;
+}
+
+const INCIDENT_SOURCE_ORDER = ["chat", "rag", "vector", "mcp", "ueba", "threat_intel", "generic"];
+
+export function formatIncidentsBySourceChart(bySource = {}) {
+  const map = bySource && typeof bySource === "object" ? bySource : {};
+  return INCIDENT_SOURCE_ORDER.map((lane) => ({
+    lane,
+    label:
+      lane === "threat_intel"
+        ? "Threat Intel"
+        : lane.charAt(0).toUpperCase() + lane.slice(1),
+    count: map[lane] ?? 0,
+  })).filter((row) => row.count > 0);
+}
+
+export function formatIncidentAge(isoString) {
+  if (!isoString) return "—";
+  const ms = Date.now() - new Date(isoString).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 48) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
+}
+
+const ACTIVE_INCIDENT_STATUSES = new Set(["open", "investigating", "escalated"]);
+const CRITICAL_HIGH_SEVERITIES = new Set(["critical", "high"]);
+
+function decCount(value) {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? Math.max(0, n - 1) : 0;
+}
+
+function incCount(value) {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n + 1 : 1;
+}
+
+/** Optimistically adjust org-wide KPI summary after escalate/resolve. */
+export function patchIncidentSummaryForMutation(summary, { action, previousStatus, severity }) {
+  if (!summary || typeof summary !== "object") return summary;
+  const prev = previousStatus || "";
+  const next = { ...summary, by_source: { ...(summary.by_source || {}) } };
+  const wasActive = ACTIVE_INCIDENT_STATUSES.has(prev);
+  const wasCriticalHigh = wasActive && CRITICAL_HIGH_SEVERITIES.has(severity || "");
+
+  if (action === "resolve") {
+    if (prev) next[prev] = decCount(next[prev]);
+    next.resolved = incCount(next.resolved);
+    if (wasActive) next.active = decCount(next.active);
+    if (wasCriticalHigh) next.critical_high = decCount(next.critical_high);
+    return next;
+  }
+
+  if (action === "escalate" && prev !== "escalated") {
+    if (prev) next[prev] = decCount(next[prev]);
+    next.escalated = incCount(next.escalated);
+  }
+  return next;
+}
+
+function incidentRemovesFromFilteredView(previousStatus, filters = {}) {
+  const { status: statusFilter = "", queue: queueFilter = "" } = filters;
+  if (statusFilter && statusFilter === previousStatus) return true;
+  return queueFilter === "active" && ACTIVE_INCIDENT_STATUSES.has(previousStatus);
+}
+
+export function applyIncidentListMutation(data, { incidentId, action, previousStatus, severity }, filters = {}) {
+  if (!data || !incidentId) return data;
+  const rowSeverity =
+    severity || data.results?.find((r) => r.id === incidentId)?.severity || "";
+  const next = { ...data };
+  if (next.summary) {
+    next.summary = patchIncidentSummaryForMutation(next.summary, {
+      action,
+      previousStatus,
+      severity: rowSeverity,
+    });
+  }
+
+  const removesFromView = incidentRemovesFromFilteredView(previousStatus, filters);
+  if (action === "resolve") {
+    if (removesFromView) {
+      next.results = (next.results || []).filter((r) => r.id !== incidentId);
+      next.count = Math.max(0, (next.count ?? 0) - 1);
+    } else {
+      next.results = (next.results || []).map((r) =>
+        r.id === incidentId ? { ...r, status: "resolved" } : r,
+      );
+    }
+  } else if (action === "escalate") {
+    if (removesFromView && previousStatus !== "escalated") {
+      next.results = (next.results || []).filter((r) => r.id !== incidentId);
+      next.count = Math.max(0, (next.count ?? 0) - 1);
+    } else {
+      next.results = (next.results || []).map((r) =>
+        r.id === incidentId ? { ...r, status: "escalated" } : r,
+      );
+    }
+  }
+  return next;
+}
+
+export function buildIncidentKpiItems(summary = {}, handlers = {}) {
+  const {
+    statusFilter = "",
+    severityFilter = "",
+    queueFilter = "",
+    onStatusFilter,
+    onSeverityFilter,
+    onQueueFilter,
+  } = handlers;
+  const active = summary.active ?? 0;
+  const criticalHigh = summary.critical_high ?? 0;
+
+  return [
+    {
+      key: "active",
+      label: "Active Queue",
+      value: active,
+      color: active > 0 ? "text-amber-600" : undefined,
+      clickable: !!onQueueFilter,
+      active: queueFilter === "active" && !statusFilter,
+      onClick: () => onQueueFilter?.(queueFilter === "active" ? "" : "active"),
+      helpText: "Cases still in progress (open, investigating, or escalated). Click to show only active work in the table.",
+    },
+    {
+      key: "open",
+      label: "Open",
+      value: summary.open ?? 0,
+      clickable: !!onStatusFilter,
+      active: statusFilter === "open",
+      onClick: () => onStatusFilter?.(statusFilter === "open" ? "" : "open"),
+      helpText: "New cases awaiting first review. Click to filter the table to open incidents only.",
+    },
+    {
+      key: "escalated",
+      label: "Escalated",
+      value: summary.escalated ?? 0,
+      color: (summary.escalated ?? 0) > 0 ? "text-red-600" : undefined,
+      clickable: !!onStatusFilter,
+      active: statusFilter === "escalated",
+      onClick: () => onStatusFilter?.(statusFilter === "escalated" ? "" : "escalated"),
+      helpText: "Cases promoted for senior review or IR handoff.",
+    },
+    {
+      key: "critical-high",
+      label: "Critical / High",
+      value: criticalHigh,
+      color: criticalHigh > 0 ? "text-red-600" : undefined,
+      clickable: !!onSeverityFilter,
+      active: severityFilter === "high" || severityFilter === "critical",
+      onClick: () => {
+        if (severityFilter === "high" || severityFilter === "critical") {
+          onSeverityFilter?.("");
+        } else {
+          onSeverityFilter?.("high");
+        }
+      },
+      helpText: "Active incidents at high or critical severity among open work.",
+    },
+    {
+      key: "resolved",
+      label: "Resolved",
+      value: summary.resolved ?? 0,
+      color: "text-emerald-600",
+      clickable: !!onStatusFilter,
+      active: statusFilter === "resolved",
+      onClick: () => onStatusFilter?.(statusFilter === "resolved" ? "" : "resolved"),
+      helpText: "Closed incidents in the org queue (all time).",
+    },
+  ];
 }

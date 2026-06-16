@@ -3,8 +3,16 @@
 const GET_CACHE = new Map();
 const CACHE_TTL_MS = 30_000;
 
+export const INCIDENT_QUEUE_MUTATED_EVENT = "ai-mesh:incident-queue-mutated";
+
 export function clearModule2Cache() {
   GET_CACHE.clear();
+}
+
+function notifyIncidentQueueMutated() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(INCIDENT_QUEUE_MUTATED_EVENT));
+  }
 }
 
 function buildCacheKey(path, params = {}) {
@@ -21,7 +29,9 @@ export function createModule2Api(fetchWithAuth) {
         return cached.data;
       }
     }
-    const res = await fetchWithAuth(url);
+    const res = await fetchWithAuth(
+      useCache ? url : `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`,
+    );
     if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
     const data = await res.json();
     if (useCache) {
@@ -49,11 +59,11 @@ export function createModule2Api(fetchWithAuth) {
     getUebaSummary: (period = "24h", opts = {}) => get("/ueba/api-keys/summary/", { period }, opts),
     getUebaTimeline: (period = "24h", opts = {}) => get("/ueba/api-keys/timeline/", { period }, opts),
     getUebaRegistry: (period = "24h", opts = {}) => get("/ueba/api-keys/registry/", { period }, opts),
-    getUebaBehavior: (keyId, period = "7d") => get(`/ueba/api-keys/${keyId}/behavior/`, { period }),
-    getModelExposure: (period = "30d") => get("/models/exposure/", { period }),
-    getRagHealth: (period = "24h") => get("/rag/health/", { period }),
-    getMcpRisk: (period = "24h") => get("/mcp/risk/", { period }),
-    getThreatTelemetry: (period = "7d") => get("/threat-intel/telemetry/", { period }),
+    getUebaBehavior: (keyId, period = "24h", opts = {}) => get(`/ueba/api-keys/${keyId}/behavior/`, { period }, opts),
+    getModelExposure: (period = "24h", opts = {}) => get("/models/exposure/", { period }, opts),
+    getRagHealth: (period = "24h", opts = {}) => get("/rag/health/", { period }, opts),
+    getMcpRisk: (period = "24h", opts = {}) => get("/mcp/risk/", { period }, opts),
+    getThreatTelemetry: (period = "7d", opts = {}) => get("/threat-intel/telemetry/", { period }, opts),
 
     listThreatIntel: () => get("/threat-intel/"),
     createThreatIntel: (data) => mutate("/threat-intel/", "POST", data),
@@ -61,16 +71,43 @@ export function createModule2Api(fetchWithAuth) {
     deleteThreatIntel: (id) => mutate(`/threat-intel/${id}/`, "DELETE"),
     syncThreatIntel: () => mutate("/threat-intel/sync/", "POST"),
 
-    listIncidents: (filters = {}) => {
+    listIncidents: (filters = {}, opts = {}) => {
       const params = {};
       if (filters.status) params.status = filters.status;
+      if (filters.queue) params.queue = filters.queue;
       if (filters.severity) params.severity = filters.severity;
       if (filters.source) params.source = filters.source;
       if (filters.search) params.search = filters.search;
       if (filters.page) params.page = String(filters.page);
       if (filters.page_size) params.page_size = String(filters.page_size);
-      return get("/incidents/", params);
+      return get("/incidents/", params, opts);
     },
-    getIncident: (id) => get(`/incidents/${id}/`),
+    getIncident: (id, opts = {}) => get(`/incidents/${id}/`, {}, opts),
+    escalateIncident: async (id) => {
+      const res = await fetchWithAuth(`/api/security/incidents/${id}/escalate-incident/`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Escalate failed (${res.status})`);
+      }
+      clearModule2Cache();
+      notifyIncidentQueueMutated();
+      return res.json();
+    },
+    resolveIncident: async (id) => {
+      const res = await fetchWithAuth(`/api/security/incidents/${id}/resolve-incident/`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Resolve failed (${res.status})`);
+      }
+      clearModule2Cache();
+      notifyIncidentQueueMutated();
+      return res.json();
+    },
   };
 }

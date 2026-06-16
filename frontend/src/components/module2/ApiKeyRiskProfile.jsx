@@ -77,24 +77,167 @@ function MetricBar({ label, value, colorClass }) {
   );
 }
 
-export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, showActions = true }) {
+function formatRequestTime(timestamp) {
+  return (timestamp || "").replace("T", " ").slice(0, 19);
+}
+
+function promptPreview(req) {
+  return (req?.prompt_snippet || req?.intent || req?.detail || "").trim();
+}
+
+function compactRequestJson(req) {
+  return {
+    timestamp: req.timestamp,
+    action: req.action,
+    model: req.model,
+    threat_type: req.threat_type,
+    prompt: promptPreview(req) || null,
+  };
+}
+
+function promptPositionLabel(index) {
+  if (index === 0) return "Last prompt";
+  if (index === 1) return "2nd last";
+  if (index === 2) return "3rd last";
+  if (index === 3) return "4th last";
+  if (index === 4) return "5th last";
+  return `${index + 1}th last`;
+}
+
+function RecentRequestsSection({ requests, requestCount, refreshing }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showJson, setShowJson] = useState(false);
+
+  const latestFingerprint = requests?.[0]
+    ? `${requests[0].event_id ?? ""}:${requests[0].timestamp ?? ""}:${promptPreview(requests[0])}`
+    : "";
+
+  useEffect(() => {
+    setSelectedIndex(0);
+    setShowJson(false);
+  }, [latestFingerprint, requests?.length]);
+
+  if (!requestCount && !requests?.length) return null;
+
+  const safeIndex = Math.min(selectedIndex, Math.max(0, (requests?.length || 1) - 1));
+  const selected = requests?.[safeIndex];
+  const canGoNewer = safeIndex > 0;
+  const canGoOlder = safeIndex < (requests?.length || 0) - 1;
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-600">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase text-slate-500">
+          Recent prompts
+          {requestCount ? ` · ${requestCount} total` : ""}
+        </p>
+        {refreshing && <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-500" aria-label="Refreshing" />}
+      </div>
+
+      {requests?.length > 0 ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {requests.map((req, i) => (
+              <button
+                key={`${req.event_id || req.timestamp}-${i}`}
+                type="button"
+                onClick={() => {
+                  setSelectedIndex(i);
+                  setShowJson(false);
+                }}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  i === safeIndex
+                    ? "bg-teal-600 text-white shadow-sm"
+                    : "border border-slate-200 bg-white text-slate-600 hover:border-teal-300 hover:text-teal-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-teal-600 dark:hover:text-teal-300"
+                }`}
+              >
+                {promptPositionLabel(i)}
+              </button>
+            ))}
+          </div>
+
+          {requests.length > 1 && (
+            <div className="flex items-center gap-2 text-[11px]">
+              <button
+                type="button"
+                disabled={!canGoNewer}
+                onClick={() => {
+                  setSelectedIndex((i) => Math.max(0, i - 1));
+                  setShowJson(false);
+                }}
+                className="rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Next (newer)
+              </button>
+              <span className="text-slate-400">
+                Viewing {promptPositionLabel(safeIndex).toLowerCase()}
+              </span>
+              <button
+                type="button"
+                disabled={!canGoOlder}
+                onClick={() => {
+                  setSelectedIndex((i) => Math.min(requests.length - 1, i + 1));
+                  setShowJson(false);
+                }}
+                className="rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Previous prompt
+              </button>
+            </div>
+          )}
+
+          {selected && (
+            <div className="rounded-md border border-slate-100 bg-white/70 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/60">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-600 dark:text-teal-400">
+                {promptPositionLabel(safeIndex)}
+              </p>
+              <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">
+                {(selected.action || "—").toUpperCase()}
+                {" · "}{selected.model || "—"}
+                {" · "}{selected.threat_type || "—"}
+              </p>
+              <p className="mt-1 text-[10px] text-slate-400">
+                {formatRequestTime(selected.timestamp)} UTC
+              </p>
+              <p className="mt-2 whitespace-pre-wrap break-words text-slate-600 dark:text-slate-300">
+                {promptPreview(selected) || "No prompt captured for this event."}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowJson((v) => !v)}
+                className="mt-2 text-[11px] font-medium text-teal-600 hover:underline dark:text-teal-400"
+              >
+                {showJson ? "Hide JSON" : "Show JSON"}
+              </button>
+              {showJson && (
+                <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-slate-900 p-2 font-mono text-[10px] leading-relaxed text-emerald-300 dark:bg-black/50">
+                  {JSON.stringify(compactRequestJson(selected), null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-400">
+          {requestCount} event(s) in this period — waiting for prompt detail…
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, showActions = true, requestsRefreshing = false, simulatorKeyPrefix = "" }) {
   const api = useMemo(() => createKillSwitchApi(fetchWithAuth), [fetchWithAuth]);
   const [killSwitches, setKillSwitches] = useState([]);
   const [ksLoading, setKsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [actionSuccess, setActionSuccess] = useState(null);
-  const [killModalOpen, setKillModalOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("");
 
   const scopedKillSwitches = useMemo(
     () => filterKillSwitchesForPrefix(killSwitches, behavior?.prefix),
     [killSwitches, behavior?.prefix],
   );
-
-  const modelOptions = useMemo(() => {
-    return (behavior?.top_models || []).map(([name]) => name).filter((name) => name && name !== "unknown");
-  }, [behavior]);
 
   const allowRate = useMemo(() => {
     if (!behavior?.request_count) return 0;
@@ -119,12 +262,6 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
     loadKillSwitches();
   }, [loadKillSwitches]);
 
-  useEffect(() => {
-    if (modelOptions.length && !selectedModel) {
-      setSelectedModel(modelOptions[0]);
-    }
-  }, [modelOptions, selectedModel]);
-
   if (!behavior) {
     return (
       <p className="py-8 text-center text-sm text-slate-400">
@@ -137,13 +274,9 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
   const styles = BAND_STYLES[band] || BAND_STYLES.low;
 
   const handleApplyKillSwitch = async () => {
-    if (!selectedModel) {
-      setActionError("Select a model to scope the credential kill switch.");
-      return;
-    }
     const confirmed = window.confirm(
-      `Apply credential kill switch for key ${behavior.prefix} on model "${selectedModel}"? `
-      + "Future requests using this key for that model will be blocked at the gateway.",
+      `Apply credential kill switch for key ${behavior.prefix}? `
+      + "All models using this API key will be blocked at the gateway.",
     );
     if (!confirmed) return;
 
@@ -152,13 +285,11 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
     setActionSuccess(null);
     try {
       const payload = buildCredentialKillSwitchPayload({
-        modelName: selectedModel,
         apiKeyPrefix: behavior.prefix,
         reason: buildUebaKillSwitchReason(behavior),
       });
       await api.createAndActivateKillSwitch(payload);
-      setActionSuccess(`Kill switch activated for ${behavior.prefix} → ${selectedModel}`);
-      setKillModalOpen(false);
+      setActionSuccess(`Kill switch activated for ${behavior.prefix} (all models)`);
       await loadKillSwitches();
       onActionComplete?.();
     } catch (err) {
@@ -204,6 +335,14 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
 
   return (
     <div className="space-y-4">
+      {simulatorKeyPrefix && behavior.prefix && behavior.prefix !== simulatorKeyPrefix && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          Attack Simulator records traffic under key{" "}
+          <span className="font-mono font-semibold">{simulatorKeyPrefix}</span>, not{" "}
+          <span className="font-mono font-semibold">{behavior.prefix}</span>.
+          {" "}Expand the row marked <strong>Simulator</strong> to see new prompts and request counts.
+        </div>
+      )}
       <div className="flex flex-wrap items-start gap-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-600 dark:bg-slate-800/40">
         <RiskGauge score={behavior.risk_score} band={band} />
         <div className="min-w-0 flex-1">
@@ -263,6 +402,12 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
         </div>
       </div>
 
+      <RecentRequestsSection
+        requests={behavior.recent_requests}
+        requestCount={behavior.request_count}
+        refreshing={requestsRefreshing}
+      />
+
       <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-600">
         <p className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase text-slate-500">
           <ShieldAlert className="h-3.5 w-3.5" />
@@ -293,6 +438,7 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
                       try {
                         await api.deactivateKillSwitch(ks.id);
                         await loadKillSwitches();
+                        onActionComplete?.();
                       } finally {
                         setActionLoading(null);
                       }
@@ -325,7 +471,7 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
             <button
               type="button"
               disabled={!!actionLoading}
-              onClick={() => setKillModalOpen(true)}
+              onClick={handleApplyKillSwitch}
               className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
             >
               {actionLoading === "kill-switch" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
@@ -359,56 +505,6 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
             Open Kill Switch panel
             <ExternalLink className="h-3 w-3" />
           </a>
-        </div>
-      )}
-
-      {showActions && killModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Credential kill switch</h4>
-            <p className="mt-1 text-xs text-slate-500">
-              Blocks requests for key <span className="font-mono">{behavior.prefix}</span> on the selected model only.
-            </p>
-            <label className="mt-4 block text-xs font-medium text-slate-600 dark:text-slate-300">
-              Target model
-              {modelOptions.length > 0 ? (
-                <select
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
-                >
-                  {modelOptions.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  placeholder="e.g. gpt-4o"
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
-                />
-              )}
-            </label>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setKillModalOpen(false)}
-                className="rounded-lg px-3 py-2 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={actionLoading === "kill-switch"}
-                onClick={handleApplyKillSwitch}
-                className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-              >
-                Activate kill switch
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

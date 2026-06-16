@@ -100,27 +100,45 @@ class LLMModelConfigSerializer(serializers.ModelSerializer):
             )
         submitted_key = str(attrs.get("api_key") or "").strip()
         has_existing_key = bool(getattr(self.instance, "api_key_set", False))
-        if provider not in {"internal", "ollama"} and not submitted_key and not has_existing_key:
+        if provider == "aws_bedrock":
+            # Development default: gateway .env AWS credentials (no per-model API key required).
+            attrs["api_key_env_var"] = "AWS_ACCESS_KEY_ID"
+        elif provider not in {"internal", "ollama"} and not submitted_key and not has_existing_key:
             raise serializers.ValidationError(
                 {"api_key": "Provider API key is required for organization-owned inference models."}
             )
-        # Organization inference never uses platform environment-variable fallbacks.
-        if "api_key_env_var" in attrs:
-            attrs["api_key_env_var"] = ""
+        else:
+            # Organization inference never uses platform environment-variable fallbacks.
+            if "api_key_env_var" in attrs:
+                attrs["api_key_env_var"] = ""
         return attrs
 
     def create(self, validated_data):
         api_key = validated_data.pop("api_key", None)
+        provider = str(validated_data.get("provider", "")).strip().lower()
         instance = super().create(validated_data)
-        if api_key is not None:
+        if provider == "aws_bedrock":
+            if api_key:
+                instance.set_api_key(api_key)
+            else:
+                instance.set_api_key("")
+            instance.save(update_fields=["encrypted_api_key", "api_key_last4", "updated_at"])
+        elif api_key is not None:
             instance.set_api_key(api_key)
             instance.save(update_fields=["encrypted_api_key", "api_key_last4", "updated_at"])
         return instance
 
     def update(self, instance, validated_data):
         api_key = validated_data.pop("api_key", None)
+        provider = str(validated_data.get("provider", instance.provider or "")).strip().lower()
         instance = super().update(instance, validated_data)
-        if api_key is not None:
+        if provider == "aws_bedrock":
+            if api_key is not None:
+                instance.set_api_key(api_key or "")
+            else:
+                instance.set_api_key("")
+            instance.save(update_fields=["encrypted_api_key", "api_key_last4", "updated_at"])
+        elif api_key is not None:
             instance.set_api_key(api_key)
             instance.save(update_fields=["encrypted_api_key", "api_key_last4", "updated_at"])
         return instance

@@ -106,7 +106,7 @@ const MODEL_ID_MAP = {
   "vicuna-13b": "huggingface/lmsys/vicuna-13b-v1.5",
   "flan-t5-large": "huggingface/google/flan-t5-large",
   [ZEROSHIELD_GUARD_MODEL]: "bedrock/openai.gpt-oss-120b-1:0",
-  "bedrock-llama-3": "bedrock/meta.llama3-1-70b-instruct-v1:0",
+  "bedrock-llama-3": "bedrock/meta.llama3-70b-instruct-v1:0",
   "local-llama": "ollama/llama3",
   "local-mistral": "ollama/mistral",
   "local-codellama": "ollama/codellama",
@@ -294,7 +294,8 @@ export function ModelConnectionPanel({
   const selectedProvider = PROVIDERS.find((p) => p.value === formData.provider);
   const useCustomModelName = formData.model_name === "__custom__";
   const showBaseUrl = formData.provider === "custom";
-  const showRegion = false;
+  const showRegion = formData.provider === "aws_bedrock";
+  const showApiKey = formData.provider !== "aws_bedrock";
   const activeApiKey = providerApiKeys[formData.provider] || "";
 
   const handleProviderChange = (provider) => {
@@ -624,7 +625,9 @@ export function ModelConnectionPanel({
                     {m.model_name === ZEROSHIELD_GUARD_MODEL ? ZEROSHIELD_GUARD_MODEL_LABEL : (m.model_id || "--")}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">
-                    {m.api_key_set
+                    {m.provider === "aws_bedrock"
+                      ? "Gateway AWS env"
+                      : m.api_key_set
                       ? `Encrypted key set${m.api_key_last4 ? ` (••••${m.api_key_last4})` : ""}`
                       : (m.provider === "ollama" ? "Local (no key)" : "Not configured")}
                   </td>
@@ -834,9 +837,10 @@ export function ModelConnectionPanel({
                 </select>
               </div>
 
+              {showApiKey && (
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 p-3">
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  {selectedProvider?.label || "Provider"} API Key
+                  {`${selectedProvider?.label || "Provider"} API Key`}
                 </label>
                 <input
                   type="password"
@@ -851,6 +855,19 @@ export function ModelConnectionPanel({
                   When you click Add/Save Model, this key is sent to backend and encrypted at rest per organization.
                 </p>
               </div>
+              )}
+
+              {formData.provider === "aws_bedrock" && (
+                <div className="rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20 p-3">
+                  <p className="text-xs font-medium text-teal-800 dark:text-teal-200 mb-1">AWS credentials from gateway environment</p>
+                  <p className="text-[10px] text-teal-700 dark:text-teal-300 leading-relaxed">
+                    Bedrock models use <span className="font-mono">AWS_ACCESS_KEY_ID</span>,{" "}
+                    <span className="font-mono">AWS_SECRET_ACCESS_KEY</span>, and{" "}
+                    <span className="font-mono">BEDROCK_REGION</span> from the gateway <span className="font-mono">.env</span> file
+                    (same as the development branch). No per-model API key is required. Set Region below to override the default region for this model.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Model Name *</label>

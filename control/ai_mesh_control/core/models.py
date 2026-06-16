@@ -502,6 +502,8 @@ class KillSwitch(models.Model):
     """
 
     SCOPE_GLOBAL = "__global__"
+    # Credential-wide: block all models for a single API key prefix.
+    SCOPE_CREDENTIAL = "__credential__"
 
     organization = models.ForeignKey(
         "auth_api.Organization",
@@ -569,6 +571,8 @@ class KillSwitch(models.Model):
         if self.model_name == self.SCOPE_GLOBAL:
             return f"kill_switch:{prefix}:global"
         credential_prefix = (self.api_key_prefix or "").strip()
+        if credential_prefix and self.model_name == self.SCOPE_CREDENTIAL:
+            return f"kill_switch:{prefix}:credential:{credential_prefix}"
         if credential_prefix:
             return f"kill_switch:{prefix}:credential:{credential_prefix}:model:{self.model_name}"
         return f"kill_switch:{prefix}:model:{self.model_name}"
@@ -1337,17 +1341,43 @@ class LLMModelConfig(models.Model):
 
     def build_litellm_entry(self) -> dict[str, Any]:
         """Build a LiteLLM model_list entry for organization-owned inference."""
-        from ai_mesh_shared.litellm_byok import normalize_litellm_params
+        from ai_mesh_shared.litellm_byok import normalize_litellm_params, resolve_bedrock_model_id
 
-        params: dict[str, Any] = {"model": self.model_id}
-        if self.encrypted_api_key:
+        provider_key = str(self.provider or "").lower()
+        bedrock_region = (self.region or "").strip()
+        model_id = self.model_id
+        if provider_key == "aws_bedrock":
+            if not bedrock_region:
+                import os
+
+                bedrock_region = (
+                    os.environ.get("BEDROCK_REGION", "")
+                    or os.environ.get("AWS_DEFAULT_REGION", "")
+                ).strip()
+            model_id = resolve_bedrock_model_id(self.model_id, region=bedrock_region)
+        params: dict[str, Any] = {"model": model_id}
+        if provider_key == "aws_bedrock":
+            # Bedrock uses gateway AWS env credentials by default (see apply_bedrock_env_credentials).
+            # Optional per-org BYOK override is stored encrypted when explicitly provided.
+            if self.encrypted_api_key:
+                params["api_key_encrypted"] = self.encrypted_api_key
+            if self.region:
+                params["aws_region_name"] = self.region
+            else:
+                import os
+
+                default_region = (
+                    os.environ.get("BEDROCK_REGION", "")
+                    or os.environ.get("AWS_DEFAULT_REGION", "")
+                ).strip()
+                if default_region:
+                    params["aws_region_name"] = default_region
+        elif self.encrypted_api_key:
             params["api_key_encrypted"] = self.encrypted_api_key
         elif self.api_key_env_var:
             params["api_key"] = f"os.environ/{self.api_key_env_var}"
         if self.api_base:
             params["api_base"] = self.api_base
-        if self.region and str(self.provider or "").lower() == "aws_bedrock":
-            params["aws_region_name"] = self.region
         params = normalize_litellm_params(params, provider=self.provider)
         return {
             "model_name": self.model_name,
