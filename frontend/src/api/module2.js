@@ -2,11 +2,20 @@
 
 const GET_CACHE = new Map();
 const CACHE_TTL_MS = 30_000;
+let CACHE_SCOPE = "anon";
 
 export const INCIDENT_QUEUE_MUTATED_EVENT = "ai-mesh:incident-queue-mutated";
 
 export function clearModule2Cache() {
   GET_CACHE.clear();
+}
+
+export function setModule2CacheScope(scopeKey) {
+  const nextScope = String(scopeKey || "anon");
+  if (nextScope !== CACHE_SCOPE) {
+    clearModule2Cache();
+    CACHE_SCOPE = nextScope;
+  }
 }
 
 function notifyIncidentQueueMutated() {

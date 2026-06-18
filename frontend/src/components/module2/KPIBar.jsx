@@ -1,10 +1,22 @@
-export function KPIBar({ items }) {
+export function KPIBar({ items, loading = false }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="relative isolate overflow-visible">
+      {loading && (
+        <div
+          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/60 dark:bg-slate-900/50"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm dark:bg-slate-800 dark:text-slate-300">
+            Updating metrics…
+          </span>
+        </div>
+      )}
+      <div className={`grid grid-cols-2 gap-3 overflow-visible sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 ${loading ? "opacity-50" : ""}`}>
       {items.map((item) => {
         const interactive = item.clickable && typeof item.onClick === "function";
         const className = [
-          "group relative rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-800/60",
+          "group relative z-0 rounded-xl border bg-white p-4 shadow-sm hover:z-20 focus-within:z-20 dark:bg-slate-800/60",
           item.active
             ? "border-teal-400 ring-2 ring-teal-400/30 dark:border-teal-500"
             : "border-slate-200 dark:border-slate-700",
@@ -34,7 +46,7 @@ export function KPIBar({ items }) {
             {item.helpText && (
               <span
                 role="tooltip"
-                className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-64 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-normal leading-relaxed text-slate-100 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100"
+                className="pointer-events-none absolute bottom-full left-1/2 z-[70] mb-2 w-64 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-normal leading-relaxed text-slate-100 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100"
               >
                 {item.helpText}
               </span>
@@ -61,6 +73,7 @@ export function KPIBar({ items }) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

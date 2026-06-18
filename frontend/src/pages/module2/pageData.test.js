@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildUebaKpiItems,
   buildContainmentKpiItems,
   buildExposureKpis,
   buildIncidentKpiItems,
@@ -132,6 +133,27 @@ test("formatRagDocumentFunnel shows survival percentages", () => {
   const steps = formatRagDocumentFunnel({ retrieved: 10, post_ranker: 6, post_generator: 3 });
   assert.equal(steps[1].pct, 60);
   assert.equal(steps[2].value, 3);
+});
+
+test("buildUebaKpiItems labels fleet vs period-scoped metrics", () => {
+  const items = buildUebaKpiItems({
+    summary: {
+      total_keys: 5,
+      active_keys: 4,
+      total_events: 12,
+      blocked_events: 3,
+      keys_with_activity: 2,
+      high_risk_keys: 1,
+      disabled_keys: 0,
+      active_kill_switches: 0,
+    },
+    periodLabel: "24 hours",
+  });
+  const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+  assert.equal(byKey["total-keys"].sub, "Registered fleet");
+  assert.equal(byKey["total-events"].sub, "Last 24 hours");
+  assert.equal(byKey["high-risk-keys"].sub, "Active in 24 hours");
+  assert.equal(byKey["total-events"].value, 12);
 });
 
 test("buildContainmentKpiItems marks clickable cards only when requested", () => {

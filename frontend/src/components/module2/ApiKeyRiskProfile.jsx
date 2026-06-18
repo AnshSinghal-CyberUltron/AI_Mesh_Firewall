@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Loader2, Power, PowerOff, ShieldAlert, ExternalLink } from "lucide-react";
 import {
   buildCredentialKillSwitchPayload,
-  buildUebaKillSwitchReason,
+  buildAnalystKillSwitchReason,
   createKillSwitchApi,
   filterKillSwitchesForPrefix,
 } from "../../api/killSwitch";
+import { RiskBandBadge } from "./RiskBandBadge";
 
 const BAND_STYLES = {
   low: {
@@ -104,18 +105,36 @@ function promptPositionLabel(index) {
   return `${index + 1}th last`;
 }
 
-function RecentRequestsSection({ requests, requestCount, refreshing }) {
+function requestIdentity(req) {
+  if (!req) return "";
+  return `${req.event_id ?? ""}:${req.timestamp ?? ""}:${promptPreview(req)}`;
+}
+
+function RecentRequestsSection({ requests, requestCount }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showJson, setShowJson] = useState(false);
-
-  const latestFingerprint = requests?.[0]
-    ? `${requests[0].event_id ?? ""}:${requests[0].timestamp ?? ""}:${promptPreview(requests[0])}`
-    : "";
+  const selectedIdentityRef = useRef("");
 
   useEffect(() => {
-    setSelectedIndex(0);
-    setShowJson(false);
-  }, [latestFingerprint, requests?.length]);
+    if (!requests?.length) {
+      setSelectedIndex(0);
+      selectedIdentityRef.current = "";
+      return;
+    }
+    const remembered = selectedIdentityRef.current;
+    if (remembered) {
+      const matchedIndex = requests.findIndex((req) => requestIdentity(req) === remembered);
+      if (matchedIndex >= 0) {
+        setSelectedIndex(matchedIndex);
+        return;
+      }
+    }
+    setSelectedIndex((prev) => {
+      const next = Math.min(prev, requests.length - 1);
+      selectedIdentityRef.current = requestIdentity(requests[next]);
+      return next;
+    });
+  }, [requests]);
 
   if (!requestCount && !requests?.length) return null;
 
@@ -131,7 +150,6 @@ function RecentRequestsSection({ requests, requestCount, refreshing }) {
           Recent prompts
           {requestCount ? ` · ${requestCount} total` : ""}
         </p>
-        {refreshing && <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-500" aria-label="Refreshing" />}
       </div>
 
       {requests?.length > 0 ? (
@@ -142,6 +160,7 @@ function RecentRequestsSection({ requests, requestCount, refreshing }) {
                 key={`${req.event_id || req.timestamp}-${i}`}
                 type="button"
                 onClick={() => {
+                  selectedIdentityRef.current = requestIdentity(req);
                   setSelectedIndex(i);
                   setShowJson(false);
                 }}
@@ -162,7 +181,11 @@ function RecentRequestsSection({ requests, requestCount, refreshing }) {
                 type="button"
                 disabled={!canGoNewer}
                 onClick={() => {
-                  setSelectedIndex((i) => Math.max(0, i - 1));
+                  setSelectedIndex((i) => {
+                    const next = Math.max(0, i - 1);
+                    selectedIdentityRef.current = requestIdentity(requests[next]);
+                    return next;
+                  });
                   setShowJson(false);
                 }}
                 className="rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -176,7 +199,11 @@ function RecentRequestsSection({ requests, requestCount, refreshing }) {
                 type="button"
                 disabled={!canGoOlder}
                 onClick={() => {
-                  setSelectedIndex((i) => Math.min(requests.length - 1, i + 1));
+                  setSelectedIndex((i) => {
+                    const next = Math.min(requests.length - 1, i + 1);
+                    selectedIdentityRef.current = requestIdentity(requests[next]);
+                    return next;
+                  });
                   setShowJson(false);
                 }}
                 className="rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -226,7 +253,7 @@ function RecentRequestsSection({ requests, requestCount, refreshing }) {
   );
 }
 
-export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, showActions = true, requestsRefreshing = false, simulatorKeyPrefix = "" }) {
+export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, showActions = true, simulatorKeyPrefix = "" }) {
   const api = useMemo(() => createKillSwitchApi(fetchWithAuth), [fetchWithAuth]);
   const [killSwitches, setKillSwitches] = useState([]);
   const [ksLoading, setKsLoading] = useState(true);
@@ -286,7 +313,7 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
     try {
       const payload = buildCredentialKillSwitchPayload({
         apiKeyPrefix: behavior.prefix,
-        reason: buildUebaKillSwitchReason(behavior),
+        reason: buildAnalystKillSwitchReason(behavior),
       });
       await api.createAndActivateKillSwitch(payload);
       setActionSuccess(`Kill switch activated for ${behavior.prefix} (all models)`);
@@ -347,9 +374,7 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
         <RiskGauge score={behavior.risk_score} band={band} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${styles.badge}`}>
-              {band} risk
-            </span>
+            <RiskBandBadge type="behavioral" band={band} score={behavior.risk_score} />
             {!behavior.is_active && (
               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                 Key disabled
@@ -405,7 +430,6 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
       <RecentRequestsSection
         requests={behavior.recent_requests}
         requestCount={behavior.request_count}
-        refreshing={requestsRefreshing}
       />
 
       <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-600">

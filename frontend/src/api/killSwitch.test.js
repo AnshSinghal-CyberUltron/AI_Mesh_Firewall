@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildCredentialKillSwitchPayload,
-  buildUebaKillSwitchReason,
+  buildAnalystKillSwitchReason,
   createKillSwitchApi,
   filterKillSwitchesForPrefix,
 } from "./killSwitch.js";
@@ -29,8 +29,8 @@ test("buildCredentialKillSwitchPayload can target a single model", () => {
   assert.equal(payload.model_name, "gpt-4o");
 });
 
-test("buildUebaKillSwitchReason includes band and metrics", () => {
-  const reason = buildUebaKillSwitchReason({
+test("buildAnalystKillSwitchReason includes band and metrics", () => {
+  const reason = buildAnalystKillSwitchReason({
     risk_band: "high",
     risk_score: 0.82,
     block_rate_pct: 75,
@@ -76,4 +76,40 @@ test("createKillSwitchApi createAndActivateKillSwitch posts then activates", asy
   assert.equal(created.id, 99);
   assert.equal(calls.length, 2);
   assert.equal(calls[1].method, "POST");
+});
+
+test("createAndActivateKillSwitch rolls back created switch when activate fails", async () => {
+  const calls = [];
+  const fetchWithAuth = async (url, opts = {}) => {
+    calls.push({ url, method: opts.method || "GET", body: opts.body });
+    if (url === "/api/kill-switches/") {
+      return { ok: true, json: async () => ({ id: 42, model_name: "gpt-4o" }) };
+    }
+    if (url === "/api/kill-switches/42/activate/") {
+      return { ok: false, status: 500, json: async () => ({ detail: "activation failed" }) };
+    }
+    if (url === "/api/kill-switches/42/") {
+      return { ok: true, status: 204, json: async () => ({}) };
+    }
+    return { ok: false, json: async () => ({ detail: "unexpected" }) };
+  };
+
+  const api = createKillSwitchApi(fetchWithAuth);
+  await assert.rejects(
+    () => api.createAndActivateKillSwitch(buildCredentialKillSwitchPayload({
+      modelName: "gpt-4o",
+      apiKeyPrefix: "abc12345",
+      reason: "test",
+    })),
+    /activation failed/,
+  );
+  assert.equal(calls.length, 3);
+  assert.deepEqual(
+    calls.map((c) => `${c.method} ${c.url}`),
+    [
+      "POST /api/kill-switches/",
+      "POST /api/kill-switches/42/activate/",
+      "DELETE /api/kill-switches/42/",
+    ],
+  );
 });

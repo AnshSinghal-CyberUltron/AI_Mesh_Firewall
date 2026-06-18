@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createModule2Api } from "./module2.js";
+import { createModule2Api, clearModule2Cache, setModule2CacheScope } from "./module2.js";
 
 test("listIncidents builds query params for filters and pagination", async () => {
   const calls = [];
@@ -97,6 +97,29 @@ test("getMcpRisk requests mcp risk endpoint with period and uses GET cache", asy
   assert.ok(calls[0].includes("/api/module2/mcp/risk/"));
   assert.ok(calls[0].includes("period=7d"));
   assert.deepEqual(second, first);
+});
+
+test("cache is invalidated when auth scope changes", async () => {
+  clearModule2Cache();
+  setModule2CacheScope("org-a:user-a");
+
+  const calls = [];
+  const fetchWithAuth = async (url) => {
+    calls.push(url);
+    return {
+      ok: true,
+      json: async () => ({ summary: {}, tool_ledger: [], direction_split: {}, top_servers: [] }),
+    };
+  };
+
+  const api = createModule2Api(fetchWithAuth);
+  await api.getMcpRisk("24h");
+  await api.getMcpRisk("24h");
+  assert.equal(calls.length, 1, "same scope should use cache");
+
+  setModule2CacheScope("org-b:user-b");
+  await api.getMcpRisk("24h");
+  assert.equal(calls.length, 2, "scope switch must clear cache");
 });
 
 test("getModelExposure throws on non-ok response", async () => {

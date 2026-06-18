@@ -6,15 +6,16 @@ import { createModule2Api } from "../../api/module2";
 import { TELEMETRY_ACTIVITY_EVENT, TELEMETRY_STORAGE_KEY } from "../../utils/telemetryEvents";
 import {
   buildCredentialKillSwitchPayload,
-  buildUebaKillSwitchReason,
+  buildAnalystKillSwitchReason,
   createKillSwitchApi,
 } from "../../api/killSwitch";
 import { ApiKeyRiskProfile } from "./ApiKeyRiskProfile";
+import { RiskBandBadge } from "./RiskBandBadge";
 import { InfoTooltip } from "./InfoTooltip";
 
 const FLASH_DISMISS_MS = 5000;
-const BEHAVIOR_RELOAD_DELAYS_POLLING_MS = [0, 800, 2000, 4000];
-const BEHAVIOR_RELOAD_DELAYS_LIVE_MS = [0, 2000];
+const BEHAVIOR_RELOAD_DELAYS_POLLING_MS = [0, 2000];
+const BEHAVIOR_RELOAD_DELAYS_LIVE_MS = [0];
 const BEHAVIOR_TELEMETRY_DEBOUNCE_MS = 150;
 const BEHAVIOR_POLL_MS = 10_000;
 
@@ -159,7 +160,6 @@ export function ApiKeyFleetTable({
   const [expandedKeyId, setExpandedKeyId] = useState(null);
   const [expandedBehavior, setExpandedBehavior] = useState(null);
   const [expandLoading, setExpandLoading] = useState(false);
-  const [behaviorRefreshing, setBehaviorRefreshing] = useState(false);
   const reloadTimersRef = useRef([]);
   const behaviorSeqRef = useRef(0);
   const telemetryDebounceRef = useRef(null);
@@ -206,18 +206,31 @@ export function ApiKeyFleetTable({
     }
   }, [selectedKeyId]);
 
+  const behaviorSnapshotEqual = useCallback((prev, next) => {
+    if (!prev || !next) return false;
+    return (
+      prev.request_count === next.request_count
+      && prev.blocked_count === next.blocked_count
+      && prev.redacted_count === next.redacted_count
+      && prev.risk_score === next.risk_score
+      && prev.risk_band === next.risk_band
+      && JSON.stringify(prev.recent_requests) === JSON.stringify(next.recent_requests)
+    );
+  }, []);
+
   const loadExpandedBehavior = useCallback(async (keyId, { silent = false } = {}) => {
     const seq = ++behaviorSeqRef.current;
-    if (silent) {
-      setBehaviorRefreshing(true);
-    } else {
+    if (!silent) {
       setExpandLoading(true);
       setExpandedBehavior(null);
     }
     try {
       const data = await module2Api.getUebaBehavior(keyId, period, { useCache: false });
       if (seq !== behaviorSeqRef.current) return;
-      setExpandedBehavior(data);
+      setExpandedBehavior((prev) => {
+        if (silent && prev && behaviorSnapshotEqual(prev, data)) return prev;
+        return data;
+      });
     } catch (err) {
       if (seq !== behaviorSeqRef.current) return;
       if (!silent) {
@@ -226,13 +239,9 @@ export function ApiKeyFleetTable({
       showFlash(err.message || "Failed to load key behavior.", "error");
     } finally {
       if (seq !== behaviorSeqRef.current) return;
-      if (silent) {
-        setBehaviorRefreshing(false);
-      } else {
-        setExpandLoading(false);
-      }
+      if (!silent) setExpandLoading(false);
     }
-  }, [module2Api, period, showFlash]);
+  }, [module2Api, period, showFlash, behaviorSnapshotEqual]);
 
   const scheduleBehaviorReload = useCallback((keyId) => {
     const delays = liveConnected ? BEHAVIOR_RELOAD_DELAYS_LIVE_MS : BEHAVIOR_RELOAD_DELAYS_POLLING_MS;
@@ -240,7 +249,7 @@ export function ApiKeyFleetTable({
     reloadTimersRef.current = delays.map((delay) => (
       setTimeout(() => {
         if (expandedKeyId === keyId) {
-          loadExpandedBehavior(keyId, { silent: delay > 0 });
+          loadExpandedBehavior(keyId, { silent: true });
         }
       }, delay)
     ));
@@ -340,7 +349,7 @@ export function ApiKeyFleetTable({
         : killModalRow;
       const payload = buildCredentialKillSwitchPayload({
         apiKeyPrefix: killModalRow.prefix,
-        reason: buildUebaKillSwitchReason(behavior),
+        reason: buildAnalystKillSwitchReason(behavior),
       });
       await killApi.createAndActivateKillSwitch(payload);
       showFlash(`Kill switch activated for ${killModalRow.prefix} (all models)`);
@@ -471,10 +480,7 @@ export function ApiKeyFleetTable({
                         </span>
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`rounded px-2 py-0.5 text-xs font-semibold uppercase ${riskBandClass(row.risk_band)}`}>
-                          {row.risk_band || "low"}
-                        </span>
-                        <span className="ml-1 text-xs text-slate-500">({row.risk_score ?? 0})</span>
+                        <RiskBandBadge type="behavioral" band={row.risk_band} score={row.risk_score} />
                       </td>
                       <td className="px-3 py-2">
                         <span className={row.block_rate_pct >= 35 ? "font-semibold text-red-600" : ""}>
@@ -525,7 +531,6 @@ export function ApiKeyFleetTable({
                               fetchWithAuth={fetchWithAuth}
                               onActionComplete={onActionComplete}
                               showActions={false}
-                              requestsRefreshing={behaviorRefreshing}
                               simulatorKeyPrefix={simulatorKeyPrefix}
                             />
                           ) : (

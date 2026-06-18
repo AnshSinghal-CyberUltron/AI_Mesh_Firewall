@@ -10,6 +10,7 @@ import {
   Radio,
   RefreshCw,
   Search,
+  UserRound,
   X,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -17,6 +18,7 @@ import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api, INCIDENT_QUEUE_MUTATED_EVENT } from "../../api/module2";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
+import { formatRiskBandLabel } from "../../utils/riskLabels";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { ChartCard } from "../../components/module2/ChartCard";
@@ -642,6 +644,10 @@ function IncidentsPageInner() {
           ))}
         </div>
 
+        <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-2 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900/20 dark:text-slate-300">
+          Actions: <span className="font-medium">Escalate</span> = senior review, <span className="font-medium">Resolve</span> = close case, <span className="font-medium">View</span> = full forensics.
+        </div>
+
         {filterChips.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5 dark:border-slate-700 dark:bg-slate-900/30">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Table showing</span>
@@ -716,7 +722,7 @@ function IncidentsPageInner() {
                   helpText: "Business impact tier assigned when the case was opened.",
                   render: (r) => (
                     <span className={`rounded px-2 py-0.5 text-xs font-medium ${SEVERITY_CLASS[r.severity] || SEVERITY_CLASS.low}`}>
-                      {r.severity}
+                      {formatRiskBandLabel("severity", r.severity)}
                     </span>
                   ),
                 },
@@ -750,7 +756,19 @@ function IncidentsPageInner() {
                 {
                   key: "assigned_to_username",
                   label: "Assigned",
-                  render: (r) => r.assigned_to_username || "Unassigned",
+                  helpText: "Current case owner. Unassigned means nobody has claimed the case yet.",
+                  render: (r) => (
+                    r.assigned_to_username ? (
+                      <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                        <UserRound className="h-3 w-3" />
+                        {r.assigned_to_username}
+                      </span>
+                    ) : (
+                      <span className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                        Unassigned
+                      </span>
+                    )
+                  ),
                 },
                 {
                   key: "age",

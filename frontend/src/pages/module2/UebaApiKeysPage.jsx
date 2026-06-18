@@ -21,8 +21,9 @@ import { PeriodSelector } from "../../components/module2/PeriodSelector";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import { ApiKeyFleetTable } from "../../components/module2/ApiKeyFleetTable";
 import { ApiKeyContainmentDetailPanel } from "../../components/module2/ApiKeyContainmentDetailPanel";
+import { RiskBandBadge } from "../../components/module2/RiskBandBadge";
 import { Module2EmptyState, Module2ErrorState, Module2PageErrorBoundary, Module2PageSkeleton } from "../../components/module2/PageStates";
-import { buildContainmentKpiItems } from "./pageData";
+import { buildUebaKpiItems } from "./pageData";
 import { ANALYST_BRIEF_TITLE, PAGE_BRIEFS } from "./pageCopy";
 
 const REFRESH_DEBOUNCE_MS = 300;
@@ -191,29 +192,20 @@ function UebaApiKeysPageInner() {
   const containment = summary?.containment || {};
   const timelineData = timeline?.timeline || [];
   const hasTimeline = timelineData.some((p) => (p.total_events ?? 0) > 0);
+  const periodLabel = PERIOD_LABELS[period] || period;
+  const kpiPeriodStale = Boolean(summary?.period && summary.period !== period);
+  const kpiLoading = loading || kpiPeriodStale;
 
-  const kpiItems = [
-    { key: "total-keys", label: "Total Keys", value: s.total_keys ?? 0, helpText: "All API keys provisioned for this organization." },
-    { key: "active-keys", label: "Active Keys", value: s.active_keys ?? 0, color: "text-teal-600", helpText: "Keys currently enabled and able to pass ingress auth." },
-    ...buildContainmentKpiItems({
-      disabledKeys: s.disabled_keys ?? containment.disabled_keys ?? 0,
-      activeKillSwitches: s.active_kill_switches ?? containment.active_kill_switches ?? 0,
-      clickable: true,
-      activePanel: containmentPanel,
-      onDisabledClick: () => setContainmentPanel((p) => (p === "disabled" ? null : "disabled")),
-      onKillSwitchClick: () => setContainmentPanel((p) => (p === "kill-switch" ? null : "kill-switch")),
-    }),
-    { key: "keys-with-activity", label: "Keys With Activity", value: s.keys_with_activity ?? 0, helpText: "Keys with at least one enforcement event in this window." },
-    {
-      key: "high-risk-keys",
-      label: "High Risk Keys",
-      value: s.high_risk_keys ?? 0,
-      color: "text-red-600",
-      helpText: "Fleet-wide count of keys in the high UEBA band (includes idle keys).",
-    },
-  ];
+  const kpiItems = buildUebaKpiItems({
+    summary: s,
+    containment,
+    periodLabel,
+    containmentPanel,
+    onDisabledClick: () => setContainmentPanel((p) => (p === "disabled" ? null : "disabled")),
+    onKillSwitchClick: () => setContainmentPanel((p) => (p === "kill-switch" ? null : "kill-switch")),
+  });
 
-  const noKeyActivity = (s.keys_with_activity ?? 0) === 0;
+  const noKeyActivity = !kpiLoading && (s.keys_with_activity ?? 0) === 0;
 
   return (
     <div>
@@ -242,10 +234,11 @@ function UebaApiKeysPageInner() {
             <button
               type="button"
               onClick={() => load()}
-              className="rounded-lg border border-slate-200 p-2 dark:border-slate-600"
+              disabled={loading}
+              className="rounded-lg border border-slate-200 p-2 disabled:opacity-50 dark:border-slate-600"
               aria-label="Refresh UEBA data"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
           </>
         }
@@ -269,7 +262,7 @@ function UebaApiKeysPageInner() {
         </div>
       )}
 
-      <KPIBar items={kpiItems} />
+      <KPIBar items={kpiItems} loading={kpiLoading} />
 
       <ApiKeyContainmentDetailPanel
         panel={containmentPanel}
@@ -336,18 +329,10 @@ function UebaApiKeysPageInner() {
               { key: "request_count", label: "Requests", helpText: "Enforcement events attributed to this key." },
               {
                 key: "risk_band",
-                label: "Risk",
-                helpText: "Current UEBA band: low, medium, or high.",
+                label: "Behavioral risk",
+                helpText: "UEBA behavioral tier from velocity, violations, and anomaly signals.",
                 render: (r) => (
-                  <span className={
-                    r.risk_band === "high"
-                      ? "font-semibold text-red-600"
-                      : r.risk_band === "medium"
-                        ? "font-semibold text-amber-600"
-                        : "text-slate-600"
-                  }>
-                    {r.risk_band} ({r.risk_score})
-                  </span>
+                  <RiskBandBadge type="behavioral" band={r.risk_band} score={r.risk_score} />
                 ),
               },
               { key: "velocity_spike", label: "Velocity x", helpText: "Burst factor vs. baseline; values above 3x warrant review." },

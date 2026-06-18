@@ -14,6 +14,8 @@ import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
+import { copyToClipboard } from "../../lib/clipboard";
+import { formatRiskBandLabel } from "../../utils/riskLabels";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { ChartCard } from "../../components/module2/ChartCard";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
@@ -158,6 +160,35 @@ function IncidentDetailPageInner() {
     load();
   }, [load]);
 
+  const promptPayload = useMemo(() => {
+    if (!selectedEvent) return null;
+    const meta = selectedEvent.metadata || {};
+    const source = String(selectedEvent.source || data?.source || "generic").toLowerCase();
+    const extra = meta.extra && typeof meta.extra === "object" ? meta.extra : {};
+    const promptLineage = Array.isArray(meta.prompt_lineage) ? meta.prompt_lineage.slice(0, 3) : [];
+    const promptSnippet = String(
+      meta.prompt_snippet
+      || extra.prompt_snippet
+      || extra.prompt
+      || extra.user_message
+      || extra.query
+      || "",
+    ).trim();
+    if (!promptSnippet && promptLineage.length === 0 && source !== "chat") {
+      return null;
+    }
+    return {
+      lane: source,
+      request_id: meta.request_id || meta.pipeline_request_id || null,
+      model: selectedEvent.model || meta.model || null,
+      key_prefix: selectedEvent.key_prefix || meta.key_prefix || meta.api_key_prefix || null,
+      prompt_snippet: promptSnippet || null,
+      prompt_lineage: promptLineage,
+      intent: meta.intent || null,
+      detail: meta.detail || extra.detail || null,
+    };
+  }, [selectedEvent, data?.source]);
+
   const escalate = async () => {
     setActionLoading(true);
     setActionError(null);
@@ -232,7 +263,7 @@ function IncidentDetailPageInner() {
         title={incident.title}
         subtitle={
           <>
-            Severity: {incident.severity} · Status: {incident.status} ·{" "}
+            {formatRiskBandLabel("severity", incident.severity)} · Status: {incident.status} ·{" "}
             <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${sourceBadgeClass(data.source)}`}>
               {data.source || "generic"}
             </span>
@@ -331,17 +362,57 @@ function IncidentDetailPageInner() {
           titleHelpText="Policy, rule, key, model, and prompt/response snippets for the selected event."
         >
           {selectedEvent ? (
-            <div className="space-y-2 text-sm">
-              <p><strong>Source:</strong> {selectedEvent.source || data.source || "generic"}</p>
-              <p><strong>Action:</strong> {selectedEvent.action}</p>
-              <p><strong>Policy:</strong> {selectedEvent.policy_id || "—"}</p>
-              <p><strong>Rule:</strong> {selectedEvent.rule_id || "—"}</p>
-              <p><strong>API Key Prefix:</strong> {selectedEvent.key_prefix || data?.evidence?.key_prefix || "—"}</p>
-              <p><strong>Project:</strong> {selectedEvent.metadata?.project_id || data?.evidence?.project_id || "—"}</p>
-              <p><strong>Model:</strong> {selectedEvent.model || data?.evidence?.model || "—"}</p>
-              <p><strong>Threat Type:</strong> {selectedEvent.metadata?.threat_type || data?.evidence?.threat_type || "—"}</p>
+            <div className="space-y-3 text-sm">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Selected event context (what fired, where it fired, and what identity/model was involved).
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/40">
+                  <p className="text-[11px] font-semibold uppercase text-slate-500">Source</p>
+                  <p className="mt-0.5">{selectedEvent.source || data.source || "generic"}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/40">
+                  <p className="text-[11px] font-semibold uppercase text-slate-500">Action</p>
+                  <p className="mt-0.5 capitalize">{selectedEvent.action || "—"}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/40">
+                  <p className="text-[11px] font-semibold uppercase text-slate-500">Policy / Rule</p>
+                  <p className="mt-0.5">{selectedEvent.policy_id || "—"} / {selectedEvent.rule_id || "—"}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/40">
+                  <p className="text-[11px] font-semibold uppercase text-slate-500">Identity</p>
+                  <p className="mt-0.5">{selectedEvent.key_prefix || data?.evidence?.key_prefix || "—"}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/40">
+                  <p className="text-[11px] font-semibold uppercase text-slate-500">Project / Model</p>
+                  <p className="mt-0.5">{selectedEvent.metadata?.project_id || data?.evidence?.project_id || "—"} / {selectedEvent.model || data?.evidence?.model || "—"}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/40">
+                  <p className="text-[11px] font-semibold uppercase text-slate-500">Threat Type</p>
+                  <p className="mt-0.5">{selectedEvent.metadata?.threat_type || data?.evidence?.threat_type || "—"}</p>
+                </div>
+              </div>
               {selectedDetail && (
                 <p><strong>Detail:</strong> {selectedDetail}</p>
+              )}
+              {promptPayload && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50/70 p-3 dark:border-indigo-800/60 dark:bg-indigo-900/20">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                      Prompt JSON
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(JSON.stringify(promptPayload, null, 2))}
+                      className="rounded border border-indigo-300 px-2 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:text-indigo-300 dark:hover:bg-indigo-900/40"
+                    >
+                      Copy JSON
+                    </button>
+                  </div>
+                  <pre className="max-h-44 overflow-auto rounded bg-slate-900 p-2 text-[10px] leading-relaxed text-emerald-300">
+                    {JSON.stringify(promptPayload, null, 2)}
+                  </pre>
+                </div>
               )}
               {selectedEvent.metadata?.prompt_snippet && (
                 <div className="rounded bg-slate-900 p-3 text-xs text-green-400">

@@ -5,9 +5,17 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import timedelta
 
+from django.db.models import Q
 from django.utils import timezone
 
-from policy.constants import ACTION_BLOCK, ACTION_REDACT
+from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
+
+ROUTING_EVENT_Q = (
+    Q(metadata__source="routing")
+    | Q(metadata__event_type="model_routed")
+    | Q(metadata__extra__source="routing")
+)
+REROUTED_FLAG_Q = Q(metadata__rerouted=True) | Q(metadata__extra__rerouted=True)
 
 INJECTION_KEYWORDS = (
     "injection",
@@ -158,6 +166,36 @@ def attack_vector_key(meta: dict) -> str:
 
 def hours_from_period(period: str) -> int:
     return {"1h": 1, "24h": 24, "7d": 168, "30d": 720}.get((period or "24h").lower(), 24)
+
+
+def is_routing_event_metadata(meta: dict) -> bool:
+    """True when enforcement metadata represents model-routing telemetry."""
+    if not isinstance(meta, dict):
+        return False
+    source = str(meta.get("source") or "").lower()
+    event_type = str(meta.get("event_type") or "").lower()
+    if source == "routing" or event_type == "model_routed":
+        return True
+    extra = meta.get("extra")
+    return isinstance(extra, dict) and str(extra.get("source") or "").lower() == "routing"
+
+
+def is_rerouted_metadata(meta: dict) -> bool:
+    """True when routing metadata captured a model reroute decision."""
+    if not isinstance(meta, dict):
+        return False
+    if meta.get("rerouted") is True:
+        return True
+    extra = meta.get("extra")
+    return isinstance(extra, dict) and extra.get("rerouted") is True
+
+
+def count_monitored_events(events_qs) -> int:
+    return events_qs.filter(action=ACTION_MONITOR).count()
+
+
+def count_rerouted_events(events_qs) -> int:
+    return events_qs.filter(ROUTING_EVENT_Q & REROUTED_FLAG_Q).count()
 
 
 def build_time_buckets(hours: int, since):

@@ -21,9 +21,11 @@ from module2.analytics import (
     build_rag_pipeline_kpis,
     build_stage_hit_distribution,
     build_vector_exposure_payload,
+    count_monitored_events,
+    count_rerouted_events,
     event_source,
 )
-from policy.constants import ACTION_BLOCK, ACTION_REDACT
+from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
 
 User = get_user_model()
 
@@ -283,6 +285,56 @@ class LaneExpansionApiTests(TestCase):
         snapshot = data["incidents_snapshot"]
         self.assertTrue(snapshot)
         self.assertEqual(snapshot[0]["source"], "mcp")
+
+    def test_dashboard_kpis_include_monitored_and_rerouted(self):
+        self._event(ACTION_MONITOR, source="policy", threat_type="prompt_injection")
+        self._event(
+            "allow",
+            source="routing",
+            event_type="request",
+            rerouted=True,
+            original_model="gpt-4o",
+            selected_model="gpt-4o-mini",
+            extra={"source": "routing", "rerouted": True},
+        )
+        self._event(
+            "allow",
+            source="routing",
+            event_type="request",
+            rerouted=False,
+            extra={"source": "routing", "rerouted": False},
+        )
+
+        resp = self.client.get("/api/module2/dashboard/?period=24h")
+        self.assertEqual(resp.status_code, 200)
+        kpis = resp.json()["kpis"]
+        self.assertEqual(kpis["monitored"], 1)
+        self.assertEqual(kpis["rerouted"], 1)
+
+    def test_dashboard_rerouted_kpi_counts_hoisted_and_nested_flags(self):
+        self._event(
+            "allow",
+            event_type="model_routed",
+            source="routing",
+            rerouted=True,
+            original_model="claude-3-opus",
+            selected_model="claude-3-haiku",
+        )
+        self._event(
+            "allow",
+            source="routing",
+            extra={"rerouted": True, "original_model": "gpt-4o", "selected_model": "gpt-4o-mini"},
+        )
+
+        from policy.models import EnforcementEvent
+
+        events = EnforcementEvent.objects.filter(organization=self.org)
+        self.assertEqual(count_monitored_events(events), 0)
+        self.assertEqual(count_rerouted_events(events), 2)
+
+        resp = self.client.get("/api/module2/dashboard/?period=24h")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["kpis"]["rerouted"], 2)
 
     def test_threat_telemetry_includes_stage_hit_distribution(self):
         self._event(ACTION_BLOCK, source="threat_intel", pipeline_stage="query")

@@ -1,4 +1,4 @@
-/** Kill-switch and gateway key control APIs for UEBA response actions. */
+/** Kill-switch and gateway key control APIs for M2.2 analyst response actions. */
 
 import { notifyContainmentChanged } from "../utils/containmentEvents.js";
 
@@ -20,17 +20,17 @@ export function buildCredentialKillSwitchPayload({
     model_name: resolvedModel,
     api_key_prefix: prefix,
     action,
-    reason: String(reason || "").trim() || "UEBA high-risk API key containment",
+    reason: String(reason || "").trim() || "SOC API key containment (analyst)",
     fallback_model: "",
   };
 }
 
-export function buildUebaKillSwitchReason(behavior) {
+export function buildAnalystKillSwitchReason(behavior) {
   if (!behavior) {
-    return "UEBA high-risk API key containment";
+    return "SOC API key containment (analyst)";
   }
   return (
-    `UEBA ${behavior.risk_band} risk (score ${behavior.risk_score}): `
+    `Analyst containment — ${behavior.risk_band} risk (score ${behavior.risk_score}): `
     + `block ${behavior.block_rate_pct ?? 0}%, velocity ${behavior.velocity_spike ?? 1}x`
   );
 }
@@ -67,11 +67,26 @@ export function createKillSwitchApi(fetchWithAuth) {
         body: JSON.stringify(payload),
       });
       const created = await parseJson(createRes);
-      const activateRes = await fetchWithAuth(`/api/kill-switches/${created.id}/activate/`, {
-        method: "POST",
-        body: JSON.stringify({ reason: payload.reason || "" }),
-      });
-      await parseJson(activateRes);
+      if (!created?.id) {
+        throw new Error("Kill switch creation response missing id");
+      }
+      try {
+        const activateRes = await fetchWithAuth(`/api/kill-switches/${created.id}/activate/`, {
+          method: "POST",
+          body: JSON.stringify({ reason: payload.reason || "" }),
+        });
+        await parseJson(activateRes);
+      } catch (error) {
+        try {
+          const rollbackRes = await fetchWithAuth(`/api/kill-switches/${created.id}/`, { method: "DELETE" });
+          if (!rollbackRes.ok && rollbackRes.status !== 404) {
+            throw new Error(`Rollback failed (${rollbackRes.status})`);
+          }
+        } catch (rollbackError) {
+          error.rollbackError = rollbackError;
+        }
+        throw error;
+      }
       notifyContainmentChanged("kill-switch-activate");
       return created;
     },

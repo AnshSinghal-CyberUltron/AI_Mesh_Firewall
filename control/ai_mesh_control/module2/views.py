@@ -2,12 +2,13 @@
 
 from collections import Counter, defaultdict
 from datetime import timedelta
+import logging
 from uuid import UUID
 
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
@@ -25,6 +26,8 @@ from module2.analytics import (
     build_stage_hit_distribution,
     build_threat_telemetry_payload,
     build_vector_exposure_payload,
+    count_monitored_events,
+    count_rerouted_events,
     event_source,
     hours_from_period,
     key_prefix_from_meta,
@@ -41,6 +44,8 @@ from policy.models import EnforcementEvent, SecurityIncident
 from policy.review_views import SecurityIncidentSerializer
 from policy.security_views import _enforcement_events_for_request
 
+logger = logging.getLogger(__name__)
+
 
 def _org_or_403(request):
     org = get_request_organization(request)
@@ -49,9 +54,118 @@ def _org_or_403(request):
     return org
 
 
+class _ReadOnlyOrAdminPermission(BasePermission):
+    """Allow authenticated reads; restrict writes to admin/superuser."""
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        return IsAdminOrSuperuser().has_permission(request, view)
+
+
 _hours_from_period = hours_from_period
 _key_prefix_from_meta = key_prefix_from_meta
 _event_source = event_source
+
+
+_TIMELINE_META_ALLOWLIST = {
+    "event_type",
+    "pipeline_stage",
+    "source",
+    "detail",
+    "threat_type",
+    "request_id",
+    "pipeline_request_id",
+    "model",
+    "project_id",
+    "key_prefix",
+    "api_key_prefix",
+    "collection",
+    "vector_collection",
+    "vector_namespace",
+    "tools_invoked",
+    "mcp_server",
+    "server_slug",
+    "mcp_direction",
+    "scan_direction",
+    "rerouted",
+    "original_model",
+    "selected_model",
+    "prompt_snippet",
+    "response_snippet",
+    "prompt_lineage",
+    "intent",
+    "extra",
+}
+
+_TIMELINE_EXTRA_ALLOWLIST = {
+    "detail",
+    "source",
+    "prompt",
+    "prompt_snippet",
+    "user_message",
+    "query",
+    "rerouted",
+    "original_model",
+    "selected_model",
+}
+
+_VALID_INCIDENT_STATUSES = {"open", "investigating", "escalated", "resolved"}
+_VALID_INCIDENT_SEVERITIES = {"low", "medium", "high", "critical"}
+_VALID_INCIDENT_SOURCES = {"threat_intel", "ueba", "rag", "mcp", "vector", "chat", "generic"}
+_VALID_INCIDENT_QUEUES = {"active"}
+
+
+def _sanitize_incident_metadata(meta):
+    src = meta if isinstance(meta, dict) else {}
+    out = {}
+    for key in _TIMELINE_META_ALLOWLIST:
+        if key not in src:
+            continue
+        value = src.get(key)
+        if key == "extra":
+            extra = value if isinstance(value, dict) else {}
+            out["extra"] = {k: extra[k] for k in _TIMELINE_EXTRA_ALLOWLIST if k in extra}
+            continue
+        out[key] = value
+    return out
+
+
+def _build_event_trend(events_qs, since, hours, bucket_hours):
+    bucket_count = max(hours // bucket_hours, 1)
+    timeline = []
+    for i in range(bucket_count):
+        start = since + timedelta(hours=i * bucket_hours)
+        timeline.append(
+            {
+                "timestamp": start.isoformat(),
+                "total": 0,
+                "blocked": 0,
+                "redacted": 0,
+            }
+        )
+
+    window_end = since + timedelta(hours=bucket_count * bucket_hours)
+    rows = list(
+        events_qs.filter(created_at__gte=since, created_at__lt=window_end).values("created_at", "action")
+    )
+    bucket_seconds = bucket_hours * 3600
+    for row in rows:
+        ts = row.get("created_at")
+        if not ts:
+            continue
+        idx = int((ts - since).total_seconds() // bucket_seconds)
+        if idx < 0 or idx >= bucket_count:
+            continue
+        target = timeline[idx]
+        target["total"] += 1
+        if row.get("action") == ACTION_BLOCK:
+            target["blocked"] += 1
+        if row.get("action") == ACTION_REDACT:
+            target["redacted"] += 1
+    return timeline
 
 
 def _collect_key_metrics(keys_qs, events_qs):
@@ -301,10 +415,8 @@ class UebaApiKeySummaryView(APIView):
         key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
         rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
         rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
-        fleet_risk_rows = [
-            _risk_payload(k.prefix, k, metrics.get(k.prefix) or _empty_key_metric())
-            for k in keys_qs
-        ]
+        total_events = sum(m["total"] for m in metrics.values())
+        blocked_events = sum(m["blocked"] for m in metrics.values())
 
         containment = _build_key_containment_payload(org, keys_qs)
 
@@ -315,7 +427,9 @@ class UebaApiKeySummaryView(APIView):
                     "total_keys": keys_qs.count(),
                     "active_keys": keys_qs.filter(is_active=True).count(),
                     "keys_with_activity": len(rows),
-                    "high_risk_keys": sum(1 for r in fleet_risk_rows if r["risk_band"] == "high"),
+                    "high_risk_keys": sum(1 for r in rows if r["risk_band"] == "high"),
+                    "total_events": total_events,
+                    "blocked_events": blocked_events,
                     "disabled_keys": containment["disabled_keys"],
                     "active_kill_switches": containment["active_kill_switches"],
                 },
@@ -358,6 +472,7 @@ class UebaApiKeyTimelineView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        started_at = timezone.now()
         period = request.query_params.get("period", "24h")
         hours = _hours_from_period(period)
         since = timezone.now() - timedelta(hours=hours)
@@ -378,26 +493,45 @@ class UebaApiKeyTimelineView(APIView):
         tracked_prefixes = {r["prefix"] for r in risky_rows[:5]}
 
         bucket_size = 1 if hours <= 24 else 6
+        base_timeline = _build_event_trend(events, since, hours, bucket_size)
         timeline = []
-        for i in range(max(hours // bucket_size, 1)):
-            start = since + timedelta(hours=i * bucket_size)
-            end = start + timedelta(hours=bucket_size)
-            bucket_events = events.filter(created_at__gte=start, created_at__lt=end)
-            counts = {prefix: 0 for prefix in tracked_prefixes}
-            for ev in bucket_events.values("metadata"):
-                prefix = _key_prefix_from_meta(ev.get("metadata") or {})
-                if prefix in counts:
-                    counts[prefix] += 1
+        for row in base_timeline:
             timeline.append(
                 {
-                    "timestamp": start.isoformat(),
-                    "total_events": bucket_events.count(),
-                    "blocked": bucket_events.filter(action=ACTION_BLOCK).count(),
-                    "redacted": bucket_events.filter(action=ACTION_REDACT).count(),
-                    "keys": counts,
+                    "timestamp": row["timestamp"],
+                    "total_events": row["total"],
+                    "blocked": row["blocked"],
+                    "redacted": row["redacted"],
+                    "keys": {prefix: 0 for prefix in tracked_prefixes},
                 }
             )
+        if tracked_prefixes:
+            bucket_seconds = bucket_size * 3600
+            bucket_count = len(timeline)
+            window_end = since + timedelta(hours=bucket_count * bucket_size)
+            for ev in events.filter(created_at__gte=since, created_at__lt=window_end).values(
+                "created_at",
+                "metadata",
+            ):
+                ts = ev.get("created_at")
+                if not ts:
+                    continue
+                idx = int((ts - since).total_seconds() // bucket_seconds)
+                if idx < 0 or idx >= bucket_count:
+                    continue
+                prefix = _key_prefix_from_meta(ev.get("metadata") or {})
+                if prefix in tracked_prefixes:
+                    timeline[idx]["keys"][prefix] += 1
 
+        elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
+        logger.info(
+            "module2_ueba_timeline_ready org=%s period=%s buckets=%s tracked=%s elapsed_ms=%s",
+            getattr(org, "id", None),
+            period,
+            len(timeline),
+            len(tracked_prefixes),
+            elapsed_ms,
+        )
         return Response({"period": period, "tracked_prefixes": sorted(tracked_prefixes), "timeline": timeline})
 
 
@@ -544,6 +678,7 @@ class UnifiedDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        started_at = timezone.now()
         period = request.query_params.get("period", "24h")
         hours = _hours_from_period(period)
         since = timezone.now() - timedelta(hours=hours)
@@ -555,6 +690,8 @@ class UnifiedDashboardView(APIView):
         total = events.count()
         blocked = events.filter(action=ACTION_BLOCK).count()
         redacted = events.filter(action=ACTION_REDACT).count()
+        monitored = count_monitored_events(events)
+        rerouted = count_rerouted_events(events)
 
         keys_qs = GatewayAPIKey.objects.all()
         if org:
@@ -571,19 +708,7 @@ class UnifiedDashboardView(APIView):
         ]
 
         bucket_hours = 1 if hours <= 24 else 6
-        trend = []
-        for i in range(max(hours // bucket_hours, 1)):
-            start = since + timedelta(hours=i * bucket_hours)
-            end = start + timedelta(hours=bucket_hours)
-            bqs = events.filter(created_at__gte=start, created_at__lt=end)
-            trend.append(
-                {
-                    "timestamp": start.isoformat(),
-                    "total": bqs.count(),
-                    "blocked": bqs.filter(action=ACTION_BLOCK).count(),
-                    "redacted": bqs.filter(action=ACTION_REDACT).count(),
-                }
-            )
+        trend = _build_event_trend(events, since, hours, bucket_hours)
 
         incidents = SecurityIncident.objects.all()
         if org:
@@ -605,13 +730,15 @@ class UnifiedDashboardView(APIView):
         ]
         containment = _build_key_containment_payload(org, keys_qs)
 
-        return Response(
+        response = Response(
             {
                 "period": period,
                 "kpis": {
                     "total_events": total,
                     "blocked": blocked,
                     "redacted": redacted,
+                    "monitored": monitored,
+                    "rerouted": rerouted,
                     "open_incidents": open_incidents.count(),
                     "risky_keys": sum(1 for r in fleet_risk_rows if r["risk_band"] == "high"),
                     "block_rate": round((blocked / total) * 100, 1) if total else 0.0,
@@ -626,6 +753,16 @@ class UnifiedDashboardView(APIView):
                 "lane_summary": build_lane_summary(events),
             }
         )
+        elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
+        logger.info(
+            "module2_dashboard_ready org=%s period=%s total=%s incidents_open=%s elapsed_ms=%s",
+            getattr(org, "id", None),
+            period,
+            total,
+            open_incidents.count(),
+            elapsed_ms,
+        )
+        return response
 
 
 class OrgScopedViewSet(ModelViewSet):
@@ -654,6 +791,7 @@ class ThreatIntelViewSet(OrgScopedViewSet):
     org_scoped_model = ThreatIntelEntry
     queryset = ThreatIntelEntry.objects.all()
     serializer_class = ThreatIntelEntrySerializer
+    permission_classes = [IsAuthenticated, _ReadOnlyOrAdminPermission]
 
 
 class ThreatIntelSyncView(APIView):
@@ -684,6 +822,7 @@ class IncidentListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        started_at = timezone.now()
         org = _org_or_403(request)
         qs = SecurityIncident.objects.select_related("enforcement_event").order_by("-created_at")
         if org:
@@ -695,12 +834,27 @@ class IncidentListView(APIView):
 
         status_filter = request.query_params.get("status", "").strip()
         queue_filter = request.query_params.get("queue", "").strip()
+        if status_filter and status_filter not in _VALID_INCIDENT_STATUSES:
+            return Response(
+                {"detail": "Invalid status filter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if queue_filter and queue_filter not in _VALID_INCIDENT_QUEUES:
+            return Response(
+                {"detail": "Invalid queue filter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if status_filter:
             qs = qs.filter(status=status_filter)
         elif queue_filter == "active":
             qs = qs.filter(status__in=("open", "investigating", "escalated"))
 
         severity_filter = request.query_params.get("severity", "").strip()
+        if severity_filter and severity_filter not in _VALID_INCIDENT_SEVERITIES:
+            return Response(
+                {"detail": "Invalid severity filter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if severity_filter:
             qs = qs.filter(severity=severity_filter)
 
@@ -736,6 +890,11 @@ class IncidentListView(APIView):
         )
 
         source_filter = request.query_params.get("source", "").strip()
+        if source_filter and source_filter not in _VALID_INCIDENT_SOURCES:
+            return Response(
+                {"detail": "Invalid source filter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if source_filter == "threat_intel":
             qs = qs.filter(_threat_intel_q)
@@ -791,7 +950,7 @@ class IncidentListView(APIView):
         ]
         total_pages = (total + page_size - 1) // page_size if page_size else 1
 
-        return Response(
+        response = Response(
             {
                 "count": total,
                 "page": page,
@@ -801,6 +960,19 @@ class IncidentListView(APIView):
                 "results": out,
             }
         )
+        elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
+        logger.info(
+            "module2_incident_list_ready org=%s status=%s queue=%s severity=%s source=%s search=%s count=%s elapsed_ms=%s",
+            getattr(org, "id", None),
+            status_filter or "-",
+            queue_filter or "-",
+            severity_filter or "-",
+            source_filter or "-",
+            "yes" if search else "no",
+            total,
+            elapsed_ms,
+        )
+        return response
 
 
 class IncidentDetailView(APIView):
@@ -808,8 +980,14 @@ class IncidentDetailView(APIView):
 
     def get(self, request, pk):
         org = _org_or_403(request)
+        if org is None and not request.user.is_superuser:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         try:
-            incident = SecurityIncident.objects.get(pk=pk, organization=org) if org else SecurityIncident.objects.get(pk=pk)
+            incident = (
+                SecurityIncident.objects.get(pk=pk, organization=org)
+                if org
+                else SecurityIncident.objects.get(pk=pk)
+            )
         except SecurityIncident.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -833,7 +1011,7 @@ class IncidentDetailView(APIView):
         source = "generic"
         evidence = {"key_prefix": "", "model": "", "project_id": "", "threat_type": ""}
         for ev in events:
-            meta = ev.metadata or {}
+            meta = _sanitize_incident_metadata(ev.metadata or {})
             source = source if source != "generic" else _event_source(meta)
             evidence["key_prefix"] = evidence["key_prefix"] or _key_prefix_from_meta(meta)
             evidence["model"] = evidence["model"] or str(meta.get("model") or "")

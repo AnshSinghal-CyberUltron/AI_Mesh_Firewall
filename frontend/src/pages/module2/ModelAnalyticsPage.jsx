@@ -16,12 +16,12 @@ import { KPIBar } from "../../components/module2/KPIBar";
 import { ChartCard } from "../../components/module2/ChartCard";
 import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
+import { RiskBandBadge } from "../../components/module2/RiskBandBadge";
 import { Module2EmptyState, Module2ErrorState, Module2PageErrorBoundary, Module2PageSkeleton } from "../../components/module2/PageStates";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import {
   buildExposureKpis,
   buildRagKpis,
-  exposureBandClass,
   formatExposureChartData,
   formatRagCollectionChartData,
   formatRagDocumentFunnel,
@@ -598,11 +598,9 @@ function ModelExposurePageInner() {
                     {
                       key: "exposure_band",
                       label: "Exposure",
-                      helpText: "Risk band derived from exposure score: low, medium, or high.",
+                      helpText: "Risk band derived from exposure score.",
                       render: (r) => (
-                        <span className={`rounded px-2 py-0.5 text-xs font-medium ${exposureBandClass(r.exposure_band)}`}>
-                          {r.exposure_band}
-                        </span>
+                        <RiskBandBadge type="exposure" band={r.exposure_band} score={r.exposure_score} />
                       ),
                     },
                     { key: "exposure_score", label: "Score", helpText: "Normalized exposure index (0–1). Pair with block % for triage priority." },

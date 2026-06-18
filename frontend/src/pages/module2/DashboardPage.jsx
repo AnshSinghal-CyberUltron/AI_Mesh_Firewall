@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Area, AreaChart, CartesianGrid,
   ResponsiveContainer, Tooltip, XAxis, YAxis, PieChart, Pie, Cell, Legend,
@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
+import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { ChartCard } from "../../components/module2/ChartCard";
@@ -16,6 +17,7 @@ import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import { InfoTooltip } from "../../components/module2/InfoTooltip";
+import { RiskBandBadge } from "../../components/module2/RiskBandBadge";
 import { Module2EmptyState, Module2ErrorState, Module2PageSkeleton } from "../../components/module2/PageStates";
 import {
   buildContainmentKpiItems,
@@ -123,26 +125,31 @@ function LaneSummaryGrid({ laneSummary, period = "24h" }) {
 
 export function DashboardPage() {
   const { fetchWithAuth } = useAuth();
+  const navigate = useNavigate();
   const api = useMemo(() => createModule2Api(fetchWithAuth), [fetchWithAuth]);
   const [period, setPeriod] = useState("24h");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [feed, setFeed] = useState([]);
+  const loadSeqRef = useRef(0);
   const refreshTimerRef = useRef(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
+    const seq = ++loadSeqRef.current;
     if (!silent) setLoading(true);
-    setError(null);
+    if (!silent) setError(null);
     try {
       clearModule2Cache();
       const res = await api.getDashboard(period);
+      if (seq !== loadSeqRef.current) return;
       setData(res);
     } catch (e) {
+      if (seq !== loadSeqRef.current) return;
       setError(e.message || "Failed to load dashboard.");
       if (!silent) setData(null);
     } finally {
-      if (!silent) setLoading(false);
+      if (seq === loadSeqRef.current && !silent) setLoading(false);
     }
   }, [api, period]);
 
@@ -152,13 +159,18 @@ export function DashboardPage() {
   const refreshLive = useCallback(() => {
     clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(async () => {
+      const seq = ++loadSeqRef.current;
       clearModule2Cache();
       try {
         const res = await api.getDashboard(period, { useCache: false });
+        if (seq !== loadSeqRef.current) return;
         setData(res);
         setError(null);
+        setLoading(false);
       } catch (e) {
+        if (seq !== loadSeqRef.current) return;
         setError(e.message || "Failed to refresh dashboard.");
+        setLoading(false);
       }
     }, REFRESH_DEBOUNCE_MS);
   }, [api, period]);
@@ -173,6 +185,12 @@ export function DashboardPage() {
       refreshLive();
     },
   });
+
+  useEffect(() => {
+    const onTelemetry = () => refreshLive();
+    window.addEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
+    return () => window.removeEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
+  }, [refreshLive]);
 
   const riskDistribution = useMemo(
     () => formatRiskDistributionChart(data?.key_risk_distribution),
@@ -211,8 +229,26 @@ export function DashboardPage() {
     { key: "total-events", label: "Total Events", value: kpis.total_events ?? 0, helpText: "All gateway enforcement events in the selected time window." },
     { key: "blocked", label: "Blocked", value: kpis.blocked ?? 0, color: "text-red-600", helpText: "Requests hard-stopped by policy (deny / kill-switch)." },
     { key: "redacted", label: "Redacted", value: kpis.redacted ?? 0, color: "text-amber-600", helpText: "Requests allowed after PII or sensitive fields were masked." },
+    {
+      key: "monitored",
+      label: "Monitored",
+      value: kpis.monitored ?? 0,
+      color: "text-sky-600",
+      helpText: "Policy monitor verdicts — traffic allowed but flagged for analyst review.",
+      clickable: true,
+      onClick: () => navigate("/threat-intel"),
+    },
+    {
+      key: "rerouted",
+      label: "Rerouted",
+      value: kpis.rerouted ?? 0,
+      color: "text-violet-600",
+      helpText: "Routing decisions that sent traffic to a different model than the caller requested.",
+      clickable: true,
+      onClick: () => { window.location.href = "/?tab=firewall-1-5"; },
+    },
     { key: "open-incidents", label: "Open Incidents", value: kpis.open_incidents ?? 0, color: "text-orange-600", helpText: "Cases still open, investigating, or escalated in the incident queue." },
-    { key: "risky-keys", label: "High-Risk Keys", value: kpis.risky_keys ?? 0, color: "text-red-600", helpText: "Registered API keys in the high UEBA risk band (fleet-wide)." },
+    { key: "risky-keys", label: "High behavioral risk keys", value: kpis.risky_keys ?? 0, color: "text-red-600", helpText: "API keys in the high UEBA behavioral band (fleet with activity in window)." },
     ...buildContainmentKpiItems({
       disabledKeys: kpis.disabled_keys ?? containment.disabled_keys ?? 0,
       activeKillSwitches: kpis.active_kill_switches ?? containment.active_kill_switches ?? 0,
@@ -224,7 +260,7 @@ export function DashboardPage() {
   const violatorCols = [
     { key: "prefix", label: "Key Prefix", helpText: "Truncated API key ID for attribution without exposing the secret." },
     { key: "project_id", label: "Project", helpText: "Application or project scope tied to this key." },
-    { key: "risk_band", label: "Risk", helpText: "UEBA tier (low / medium / high) from velocity, violations, and anomaly signals." },
+    { key: "risk_band", label: "Behavioral risk", helpText: "UEBA behavioral tier from velocity, violations, and anomaly signals.", render: (r) => <RiskBandBadge type="behavioral" band={r.risk_band} score={r.risk_score} /> },
     { key: "request_count", label: "Requests", helpText: "Event count for this key in the selected period." },
     { key: "velocity_spike", label: "Velocity x", helpText: "Traffic multiplier vs. this key's baseline; spikes may indicate compromise." },
   ];

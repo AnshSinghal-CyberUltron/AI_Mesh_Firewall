@@ -147,6 +147,16 @@ class Module2PagesApiTests(TestCase):
         self.assertEqual(len(search_resp.json()["results"]), 1)
         self.assertIn("key_prefix", search_resp.json()["results"][0])
 
+    def test_incidents_list_rejects_invalid_filters(self):
+        for query in (
+            "status=bad",
+            "severity=urgent",
+            "source=foo",
+            "queue=everything",
+        ):
+            resp = self.client.get(f"/api/module2/incidents/?{query}")
+            self.assertEqual(resp.status_code, 400, query)
+
     def test_incident_summary_counts_statuses_with_enforcement_join(self):
         """select_related(enforcement_event) must not break status KPI aggregation."""
         for i in range(4):
@@ -169,6 +179,53 @@ class Module2PagesApiTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         titles = [row["title"] for row in resp.json()["results"]]
         self.assertNotIn("Foreign incident", titles)
+
+    def test_incident_detail_rejects_orgless_non_superuser(self):
+        incident = self._incident(self.other_org, "Foreign incident detail", severity="critical", status="open")
+        no_org_user = User.objects.create_user(username="no-org-user", password="pass-no-org")
+        no_org_client = APIClient()
+        no_org_client.force_authenticate(user=no_org_user)
+        resp = no_org_client.get(f"/api/module2/incidents/{incident.id}/")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_threat_intel_write_requires_admin_or_superuser(self):
+        payload = {
+            "source": "manual",
+            "threat_type": "prompt_injection",
+            "indicator": "ignore previous instructions",
+            "owasp_code": "LLM01",
+            "confidence": 0.95,
+            "auto_block": True,
+        }
+        resp = self.client.post("/api/module2/threat-intel/", payload, format="json")
+        self.assertEqual(resp.status_code, 403)
+
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        resp_admin = self.client.post("/api/module2/threat-intel/", payload, format="json")
+        self.assertEqual(resp_admin.status_code, 201, resp_admin.content)
+
+    def test_incident_detail_timeline_redacts_unknown_metadata_fields(self):
+        incident = self._incident(
+            self.org,
+            "Metadata redaction case",
+            event_type="mcp_tool_call",
+            detail="tool call blocked",
+            prompt_snippet="hello world",
+            secret_token="should_not_leak",
+            extra={"detail": "nested detail", "secret": "hidden"},
+        )
+
+        resp = self.client.get(f"/api/module2/incidents/{incident.id}/")
+        self.assertEqual(resp.status_code, 200)
+        timeline = resp.json()["timeline"]
+        self.assertTrue(timeline)
+        meta = timeline[0]["metadata"]
+        self.assertEqual(meta.get("detail"), "tool call blocked")
+        self.assertNotIn("secret_token", meta)
+        self.assertIn("extra", meta)
+        self.assertEqual(meta["extra"].get("detail"), "nested detail")
+        self.assertNotIn("secret", meta["extra"])
 
     def test_resolve_incident_endpoint_updates_security_incident(self):
         incident = self._incident(self.org, "Resolvable case", severity="medium", status="open")

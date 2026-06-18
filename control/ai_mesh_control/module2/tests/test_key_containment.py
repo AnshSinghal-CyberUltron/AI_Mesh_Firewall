@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from auth_api.models import Organization
+from auth.models import Organization
 from core.models import GatewayAPIKey, KillSwitch
 from module2.views import _build_key_containment_payload
 

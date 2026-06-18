@@ -10,6 +10,7 @@ from datetime import timedelta
 import redis
 from celery import shared_task
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from ai_mesh_shared.redis_pool import connection_pool_kwargs
@@ -39,77 +40,94 @@ def evaluate_alert_rules(self, org_id=None):
     from policy.constants import ACTION_BLOCK, ACTION_REDACT
     from policy.models import EnforcementEvent, SecurityIncident
 
+    started_at = timezone.now()
     orgs = Organization.objects.filter(pk=org_id) if org_id else Organization.objects.filter(is_active=True)
+    fired_count = 0
     for org in orgs:
         rules = AlertRule.objects.filter(organization=org, enabled=True)
         for rule in rules:
-            since = timezone.now() - timedelta(seconds=rule.window_seconds)
-            events = EnforcementEvent.objects.filter(organization=org, created_at__gte=since)
-            total = events.count()
-            if total == 0 and rule.metric != "incident_count":
-                continue
+            with transaction.atomic():
+                locked_rule = AlertRule.objects.select_for_update().filter(pk=rule.pk, enabled=True).first()
+                if not locked_rule:
+                    continue
+                since = timezone.now() - timedelta(seconds=locked_rule.window_seconds)
+                events = EnforcementEvent.objects.filter(organization=org, created_at__gte=since)
+                total = events.count()
+                if total == 0 and locked_rule.metric != "incident_count":
+                    continue
 
-            current_value = 0.0
-            if rule.metric == "block_rate":
-                current_value = events.filter(action=ACTION_BLOCK).count() / total * 100
-            elif rule.metric == "pii_rate":
-                pii = sum(
-                    1 for ev in events.values("metadata")
-                    if (ev.get("metadata") or {}).get("threat_type") in ("pii", "sensitive_data", "data_leakage")
-                )
-                current_value = pii / total * 100 if total else 0
-            elif rule.metric == "tier2_score":
-                scores = [
-                    (ev.get("metadata") or {}).get("security_risk_score", 0)
-                    for ev in events.values("metadata")
-                ]
-                current_value = max(scores) if scores else 0
-            elif rule.metric == "incident_count":
-                current_value = SecurityIncident.objects.filter(
+                current_value = 0.0
+                if locked_rule.metric == "block_rate":
+                    current_value = events.filter(action=ACTION_BLOCK).count() / total * 100
+                elif locked_rule.metric == "pii_rate":
+                    pii = sum(
+                        1 for ev in events.values("metadata")
+                        if (ev.get("metadata") or {}).get("threat_type") in ("pii", "sensitive_data", "data_leakage")
+                    )
+                    current_value = pii / total * 100 if total else 0
+                elif locked_rule.metric == "tier2_score":
+                    scores = [
+                        (ev.get("metadata") or {}).get("security_risk_score", 0)
+                        for ev in events.values("metadata")
+                    ]
+                    current_value = max(scores) if scores else 0
+                elif locked_rule.metric == "incident_count":
+                    current_value = SecurityIncident.objects.filter(
+                        organization=org,
+                        status__in=["open", "investigating", "escalated"],
+                        created_at__gte=since,
+                    ).count()
+                elif locked_rule.metric == "anomaly_z":
+                    continue  # handled by run_anomaly_detection
+
+                op_fn = _OPERATORS.get(locked_rule.operator)
+                if not op_fn or not op_fn(current_value, locked_rule.threshold):
+                    continue
+
+                # Dedupe: skip if same rule fired in last window
+                recent = AlertFiring.objects.filter(
+                    rule=locked_rule,
+                    fired_at__gte=since,
+                    resolved_at__isnull=True,
+                ).exists()
+                if recent:
+                    continue
+                # Safety dedupe: avoid duplicate open incidents even if firing row is missing.
+                if SecurityIncident.objects.filter(
                     organization=org,
+                    title=f"Alert: {locked_rule.name}",
                     status__in=["open", "investigating", "escalated"],
                     created_at__gte=since,
-                ).count()
-            elif rule.metric == "anomaly_z":
-                continue  # handled by run_anomaly_detection
+                ).exists():
+                    continue
 
-            op_fn = _OPERATORS.get(rule.operator)
-            if not op_fn or not op_fn(current_value, rule.threshold):
-                continue
+                trigger_event = events.order_by("-created_at").first()
+                incident = SecurityIncident.objects.create(
+                    organization=org,
+                    enforcement_event=trigger_event,
+                    title=f"Alert: {locked_rule.name}",
+                    severity=locked_rule.severity,
+                    status="open",
+                    notes=f"Metric {locked_rule.metric}={current_value:.2f} exceeded threshold {locked_rule.threshold}",
+                )
+                AlertFiring.objects.create(
+                    rule=locked_rule,
+                    current_value=current_value,
+                    linked_incident=incident,
+                    message=f"{locked_rule.metric}={current_value:.2f} (threshold {locked_rule.operator} {locked_rule.threshold})",
+                )
 
-            # Dedupe: skip if same rule fired in last window
-            recent = AlertFiring.objects.filter(
-                rule=rule,
-                fired_at__gte=since,
-                resolved_at__isnull=True,
-            ).exists()
-            if recent:
-                continue
+                if locked_rule.playbook_id:
+                    run = PlaybookRun.objects.create(playbook=locked_rule.playbook, trigger="alert", status="running")
+                    execute_playbook.delay(run.id)
 
-            trigger_event = events.order_by("-created_at").first()
-            incident = SecurityIncident.objects.create(
-                organization=org,
-                enforcement_event=trigger_event,
-                title=f"Alert: {rule.name}",
-                severity=rule.severity,
-                status="open",
-                notes=f"Metric {rule.metric}={current_value:.2f} exceeded threshold {rule.threshold}",
-            )
-            firing = AlertFiring.objects.create(
-                rule=rule,
-                current_value=current_value,
-                linked_incident=incident,
-                message=f"{rule.metric}={current_value:.2f} (threshold {rule.operator} {rule.threshold})",
-            )
+                logger.info("Alert fired: rule=%s org=%s value=%.2f", locked_rule.id, org.id, current_value)
+                from module2.analytics import invalidate_incident_summary_cache
 
-            if rule.playbook_id:
-                run = PlaybookRun.objects.create(playbook=rule.playbook, trigger="alert", status="running")
-                execute_playbook.delay(run.id)
-
-            logger.info("Alert fired: rule=%s org=%s value=%.2f", rule.id, org.id, current_value)
-            from module2.analytics import invalidate_incident_summary_cache
-
-            invalidate_incident_summary_cache(org.id)
+                invalidate_incident_summary_cache(org.id)
+                fired_count += 1
+    elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
+    logger.info("evaluate_alert_rules_done org_id=%s fired=%s elapsed_ms=%s", org_id, fired_count, elapsed_ms)
 
 
 @shared_task(queue="compute.heavy", bind=True, max_retries=2)
@@ -119,55 +137,73 @@ def run_anomaly_detection(self, org_id=None):
     from module2.models import AnomalyRule, PlaybookRun
     from policy.models import EnforcementEvent, SecurityIncident
 
+    started_at = timezone.now()
     orgs = Organization.objects.filter(pk=org_id) if org_id else Organization.objects.filter(is_active=True)
+    anomaly_count = 0
     for org in orgs:
         for rule in AnomalyRule.objects.filter(organization=org, enabled=True):
-            since = timezone.now() - timedelta(hours=rule.baseline_window_hours)
-            events = EnforcementEvent.objects.filter(organization=org, created_at__gte=since)
-            if rule.scope == "agent" and rule.scope_id:
-                events = events.filter(agent_id=rule.scope_id)
-            elif rule.scope == "model" and rule.scope_id:
-                events = events.filter(metadata__model=rule.scope_id)
+            with transaction.atomic():
+                locked_rule = AnomalyRule.objects.select_for_update().filter(pk=rule.pk, enabled=True).first()
+                if not locked_rule:
+                    continue
+                since = timezone.now() - timedelta(hours=locked_rule.baseline_window_hours)
+                events = EnforcementEvent.objects.filter(organization=org, created_at__gte=since)
+                if locked_rule.scope == "agent" and locked_rule.scope_id:
+                    events = events.filter(agent_id=locked_rule.scope_id)
+                elif locked_rule.scope == "model" and locked_rule.scope_id:
+                    events = events.filter(metadata__model=locked_rule.scope_id)
 
-            bucket_hours = max(1, rule.baseline_window_hours // 24)
-            rates = []
-            for i in range(24):
-                end = since + timedelta(hours=(i + 1) * bucket_hours)
-                start = since + timedelta(hours=i * bucket_hours)
-                count = events.filter(created_at__gte=start, created_at__lt=end).count()
-                rates.append(count / bucket_hours if bucket_hours else count)
+                bucket_hours = max(1, locked_rule.baseline_window_hours // 24)
+                rates = []
+                for i in range(24):
+                    end = since + timedelta(hours=(i + 1) * bucket_hours)
+                    start = since + timedelta(hours=i * bucket_hours)
+                    count = events.filter(created_at__gte=start, created_at__lt=end).count()
+                    rates.append(count / bucket_hours if bucket_hours else count)
 
-            if len(rates) < 2:
-                continue
-            mean = statistics.mean(rates)
-            stdev = statistics.stdev(rates)
-            current = events.filter(created_at__gte=timezone.now() - timedelta(hours=1)).count()
-            z_score = (current - mean) / stdev if stdev else 0
+                if len(rates) < 2:
+                    continue
+                mean = statistics.mean(rates)
+                stdev = statistics.stdev(rates)
+                current = events.filter(created_at__gte=timezone.now() - timedelta(hours=1)).count()
+                z_score = (current - mean) / stdev if stdev else 0
 
-            if z_score < rule.z_score_threshold:
-                continue
+                if z_score < locked_rule.z_score_threshold:
+                    continue
 
-            trigger_event = (
-                events.filter(created_at__gte=timezone.now() - timedelta(hours=1))
-                .order_by("-created_at")
-                .first()
-            )
-            incident = SecurityIncident.objects.create(
-                organization=org,
-                enforcement_event=trigger_event,
-                title=f"Anomaly: {rule.name or rule.metric}",
-                severity="high",
-                status="open",
-                notes=f"Z-score {z_score:.2f} exceeded threshold {rule.z_score_threshold}",
-            )
-            if rule.playbook_id:
-                run = PlaybookRun.objects.create(playbook=rule.playbook, trigger="anomaly", status="running")
-                execute_playbook.delay(run.id)
+                incident_title = f"Anomaly: {locked_rule.name or locked_rule.metric}"
+                if SecurityIncident.objects.filter(
+                    organization=org,
+                    title=incident_title,
+                    status__in=["open", "investigating", "escalated"],
+                    created_at__gte=since,
+                ).exists():
+                    continue
 
-            logger.info("Anomaly detected: rule=%s org=%s z=%.2f", rule.id, org.id, z_score)
-            from module2.analytics import invalidate_incident_summary_cache
+                trigger_event = (
+                    events.filter(created_at__gte=timezone.now() - timedelta(hours=1))
+                    .order_by("-created_at")
+                    .first()
+                )
+                SecurityIncident.objects.create(
+                    organization=org,
+                    enforcement_event=trigger_event,
+                    title=incident_title,
+                    severity="high",
+                    status="open",
+                    notes=f"Z-score {z_score:.2f} exceeded threshold {locked_rule.z_score_threshold}",
+                )
+                if locked_rule.playbook_id:
+                    run = PlaybookRun.objects.create(playbook=locked_rule.playbook, trigger="anomaly", status="running")
+                    execute_playbook.delay(run.id)
 
-            invalidate_incident_summary_cache(org.id)
+                logger.info("Anomaly detected: rule=%s org=%s z=%.2f", locked_rule.id, org.id, z_score)
+                from module2.analytics import invalidate_incident_summary_cache
+
+                invalidate_incident_summary_cache(org.id)
+                anomaly_count += 1
+    elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
+    logger.info("run_anomaly_detection_done org_id=%s fired=%s elapsed_ms=%s", org_id, anomaly_count, elapsed_ms)
 
 
 @shared_task(queue="policy.compile", bind=True, max_retries=3)

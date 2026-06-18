@@ -1,5 +1,7 @@
 /** Pure data formatters for Module 2 page charts and tables. */
 
+import { formatRiskBandLabel } from "../../utils/riskLabels.js";
+
 const EXPOSURE_COLORS = {
   high: "#ef4444",
   medium: "#f59e0b",
@@ -160,6 +162,72 @@ export function formatRagEscalationChartData(escalation = {}) {
   ];
 }
 
+export function buildUebaKpiItems({
+  summary = {},
+  containment = {},
+  periodLabel = "selected window",
+  containmentPanel = null,
+  onDisabledClick,
+  onKillSwitchClick,
+}) {
+  const s = summary;
+  return [
+    {
+      key: "total-keys",
+      label: "Total Keys",
+      value: s.total_keys ?? 0,
+      sub: "Registered fleet",
+      helpText: "All API keys provisioned for this organization (not filtered by time window).",
+    },
+    {
+      key: "active-keys",
+      label: "Active Keys",
+      value: s.active_keys ?? 0,
+      color: "text-teal-600",
+      sub: "Currently enabled",
+      helpText: "Keys currently enabled and able to pass ingress auth (fleet snapshot).",
+    },
+    ...buildContainmentKpiItems({
+      disabledKeys: s.disabled_keys ?? containment.disabled_keys ?? 0,
+      activeKillSwitches: s.active_kill_switches ?? containment.active_kill_switches ?? 0,
+      clickable: true,
+      activePanel: containmentPanel,
+      onDisabledClick,
+      onKillSwitchClick,
+    }),
+    {
+      key: "total-events",
+      label: "Key Events",
+      value: s.total_events ?? 0,
+      sub: `Last ${periodLabel}`,
+      helpText: "Enforcement events attributed to API keys in the selected time window.",
+    },
+    {
+      key: "blocked-events",
+      label: "Blocked",
+      value: s.blocked_events ?? 0,
+      color: "text-red-600",
+      sub: `Last ${periodLabel}`,
+      helpText: "Hard-blocked requests from API keys in the selected time window.",
+    },
+    {
+      key: "keys-with-activity",
+      label: "Keys With Activity",
+      value: s.keys_with_activity ?? 0,
+      sub: `Last ${periodLabel}`,
+      helpText: "Distinct API keys with at least one enforcement event in the selected window.",
+    },
+    {
+      key: "high-risk-keys",
+      label: "High behavioral risk keys",
+      value: s.high_risk_keys ?? 0,
+      color: "text-red-600",
+      sub: `Active in ${periodLabel}`,
+      helpText: "Keys with activity in the window that score in the high UEBA risk band.",
+    },
+  ];
+}
+
 export function buildContainmentKpiItems({
   disabledKeys = 0,
   activeKillSwitches = 0,
@@ -175,6 +243,7 @@ export function buildContainmentKpiItems({
       value: disabledKeys,
       color: disabledKeys > 0 ? "text-orange-600" : undefined,
       helpText: "API credentials disabled at the gateway — all requests with these keys fail authentication.",
+      sub: "Current state",
       clickable,
       onClick: onDisabledClick,
       active: activePanel === "disabled",
@@ -185,6 +254,7 @@ export function buildContainmentKpiItems({
       value: activeKillSwitches,
       color: activeKillSwitches > 0 ? "text-red-600" : undefined,
       helpText: "Credential- or model-scoped kill switches currently blocking traffic at the gateway.",
+      sub: "Current state",
       clickable,
       onClick: onKillSwitchClick,
       active: activePanel === "kill-switch",
@@ -307,7 +377,7 @@ const RISK_BAND_ORDER = ["low", "medium", "high"];
 /** Pie chart rows for UEBA key risk bands — always includes all three tiers. */
 export function formatRiskDistributionChart(distribution = {}) {
   return RISK_BAND_ORDER.map((band) => ({
-    name: band.charAt(0).toUpperCase() + band.slice(1),
+    name: formatRiskBandLabel("behavioral", band),
     band,
     value: distribution[band] ?? 0,
   })).filter((row) => row.value > 0);
