@@ -601,6 +601,43 @@ def _scrub_trace_for_client(trace: dict | None) -> dict | None:
     return scrubbed
 
 
+# D-a (OpenAI-SDK exact-compat — block status): CONTENT-category blocks
+# (prompt_injection / jailbreak / pii / secret / content-policy / toxicity ...) are
+# emitted as HTTP 400 with error.code="content_filter" + error.type=
+# "invalid_request_error" so the stock SDK raises BadRequestError and downstream
+# LiteLLM/LangChain key on "content_filter". AUTHORIZATION / actor blocks
+# (threat-intel high-risk actor, model-not-allowed) MUST stay at their current
+# status (403 / 401) — they are NOT a content filter and a 400 would mislead
+# callers into retrying with a "fixed" prompt. This deny-list names the categories
+# that keep their incoming status; everything else flowing through this content
+# funnel is a content filter.
+_NON_CONTENT_BLOCK_CATEGORIES = frozenset({
+    "high_risk_actor",   # threat-intel actor block (insufficient permissions)
+    "threat_intel",
+    "model_not_allowed",
+    "tier2_degraded",    # service-unavailable surrogate (503-shaped)
+})
+
+
+def _resolve_content_block_status(status_code: int, threat_category: str) -> int:
+    """Map a CONTENT-category 403 block to ``GATEWAY_BLOCK_STATUS`` (default 400).
+
+    Only re-maps a content block that currently carries 403 — auth/actor
+    categories and any non-403 status pass through untouched. The knob accepts
+    "400" (default, new contract) or "403" (migration / rollback). Any other
+    value is ignored (fail-safe to the default) and NEVER yields a retryable
+    409/429/5xx.
+    """
+    if status_code != 403:
+        return status_code
+    if (threat_category or "").strip().lower() in _NON_CONTENT_BLOCK_CATEGORIES:
+        return status_code
+    raw = (os.getenv("GATEWAY_BLOCK_STATUS", "400") or "400").strip()
+    if raw == "403":
+        return 403
+    return 400  # default + fail-safe for any unexpected value
+
+
 def _build_safe_block_response(
     status_code: int,
     code: str,
@@ -657,6 +694,15 @@ def _build_safe_block_response(
         threat_category=threat_category,
         detection_tier=detection_tier,
     )
+    # D-a: re-map CONTENT-category 403s to GATEWAY_BLOCK_STATUS (default 400) and
+    # surface error.code="content_filter" so the stock SDK raises BadRequestError
+    # and LiteLLM/LangChain key on "content_filter". Auth/actor blocks keep their
+    # incoming status (and their original code). The ORIGINAL ZeroShield ``code``
+    # is preserved at the TOP level for ZS/demo consumers (dual-key).
+    effective_status = _resolve_content_block_status(status_code, threat_category)
+    is_content_filter = effective_status == 400 and status_code == 403
+    error_code = "content_filter" if is_content_filter else code
+    error_type = "invalid_request_error" if is_content_filter else None
     # D2 (OpenAI-SDK exact-compat): the stock `openai` client reads
     # e.code / e.type / e.param / e.message from a NESTED body["error"] object. A
     # flat top-level "error":"blocked" string left all of those None, so customer
@@ -666,9 +712,11 @@ def _build_safe_block_response(
     # TOP level so existing ZS consumers + the /demo client keep working unchanged.
     from responses_adapters import build_openai_error as _build_openai_error
     content = {
-        **_build_openai_error(status_code, message, code=code),
+        **_build_openai_error(
+            effective_status, message, error_type=error_type, code=error_code
+        ),
         "message": message,
-        "code": code,
+        "code": code,  # ORIGINAL ZeroShield code preserved for ZS/demo consumers
         "request_id": _request_id,  # For support inquiries only
         "category": threat_category,  # Generic: NOT specific threat type
         "blocked_by": blocked_by,
@@ -684,7 +732,7 @@ def _build_safe_block_response(
     # D3: surface the request id as the SDK-native x-request-id header so
     # response._request_id / error.request_id are populated on every block.
     return JSONResponse(
-        status_code=status_code,
+        status_code=effective_status,
         content=content,
         headers={"x-request-id": _request_id},
     )
