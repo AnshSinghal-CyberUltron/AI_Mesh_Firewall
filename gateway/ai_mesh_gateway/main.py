@@ -8252,11 +8252,18 @@ async def proxy_embeddings(request: Request):
     METRICS["total_requests"] += 1
     start = time.perf_counter()
     # P9c: one request_id for the whole request, threaded into logs.
-    _REQUEST_ID.set(
+    # Phase-5 (correlation): set the canonical id on request.state too, so the
+    # _openai_compat_shim stamps the x-request-id HEADER with the SAME id threaded into
+    # telemetry/audit/logs (previously embeddings minted _REQUEST_ID but not
+    # request.state, so the shim minted a DIFFERENT header id -> e.request_id could not
+    # be joined to the embeddings telemetry/audit record).
+    _rid = (
         request.headers.get("X-Request-ID")
         or request.headers.get("x-request-id")
         or f"zs-emb-{_uuid.uuid4().hex[:12]}"
     )
+    _REQUEST_ID.set(_rid)
+    request.state.gw_request_id = _rid
 
     try:
         try:
