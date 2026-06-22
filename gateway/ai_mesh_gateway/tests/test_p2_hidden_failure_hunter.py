@@ -175,7 +175,9 @@ async def test_responses_reasoning_effort_survives_end_to_end(appctx):
 # path, and input-content collapse correctness.
 # ════════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=True, reason="NEW P2-RESP-MCT-double-injection (MED): on the responses path, a client sending max_output_tokens (-> chat max_tokens) then the inner proxy_chat's max_response_tokens enforcement is fine, BUT if a client sends max_completion_tokens to /v1/responses, responses_to_chat maps it to max_tokens AND the inner proxy_chat else-branch (main.py:5278) can still inject. Here we assert the simpler/真 defect: responses_to_chat maps max_completion_tokens to max_tokens, so on the responses path max_completion_tokens NEVER reaches upstream as max_completion_tokens — a reasoning model behind /v1/responses gets max_tokens (deprecated for o-series) instead. Asymmetry vs chat path which forwards max_completion_tokens verbatim.")
+# SEAM-A FIXED (fix/oai-W4): responses_to_chat now forwards max_completion_tokens
+# VERBATIM (no rename to max_tokens) and the chat-path injection no longer adds a
+# second max_tokens, so it reaches upstream intact on /v1/responses. xfail removed.
 @pytest.mark.asyncio
 async def test_responses_max_completion_tokens_not_silently_renamed(appctx):
     app, cap = appctx

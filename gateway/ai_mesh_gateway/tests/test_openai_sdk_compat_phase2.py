@@ -70,7 +70,9 @@ def _raw(app):
 
 # ════════════════════════════════ HIGH ════════════════════════════════
 
-@pytest.mark.xfail(strict=True, reason="DEFECT P2-MCT-CHAT-injects-max_tokens (HIGH): a client sending ONLY max_completion_tokens has max_tokens=max_response_tokens(4096) injected alongside it (main.py:5278 else-branch), producing a dual-field request that OpenAI reasoning models (o1/o3/gpt-5) reject with 400. Fix: apply the ceiling to max_completion_tokens; don't inject max_tokens when the client never sent it.")
+# SEAM-A FIXED (fix/oai-W4): a client sending ONLY max_completion_tokens no longer
+# has max_tokens injected alongside it (main.py max_response_tokens enforcement) — the
+# dual-field request that o1/o3/gpt-5 reject is gone. xfail marker removed.
 @pytest.mark.asyncio
 async def test_max_completion_tokens_not_shadowed_by_injected_max_tokens(appctx):
     app, cap = appctx
@@ -87,7 +89,8 @@ async def test_max_completion_tokens_not_shadowed_by_injected_max_tokens(appctx)
         f"dual-field forwarded: max_tokens={cap.get('max_tokens')} max_completion_tokens={cap.get('max_completion_tokens')}"
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT P2-MCT-CHAT-uncapped (MEDIUM; agent rated HIGH but the injected max_tokens=4096 partially caps it): max_completion_tokens bypasses the max_tokens ceiling/sign validation (main.py:4059-4126 keys only on max_tokens). max_completion_tokens=50_000_000 -> 200 while max_tokens=50_000_000 -> 400. Fix: validate max_completion_tokens with the same ceiling/sign rules.")
+# SEAM-A FIXED (fix/oai-W4): max_completion_tokens now passes through the SAME
+# ceiling/sign validation as max_tokens (50_000_000 -> 400). xfail marker removed.
 @pytest.mark.asyncio
 async def test_max_completion_tokens_over_ceiling_is_rejected(appctx):
     app, _cap = appctx

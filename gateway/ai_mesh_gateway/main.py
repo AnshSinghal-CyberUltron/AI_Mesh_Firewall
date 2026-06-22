@@ -4142,6 +4142,66 @@ async def proxy_chat(
                 # type-safe regardless of whether the client sent "100" / 100.0 / etc.
                 body["max_tokens"] = _max_tokens_int
 
+        # SEAM-A: ``max_completion_tokens`` (the OpenAI replacement for ``max_tokens``
+        # on reasoning models o1/o3/gpt-5) was NEVER inspected here, so a client could
+        # smuggle a negative or absurd-over-ceiling completion budget straight to the
+        # provider while the same value on ``max_tokens`` was rejected. Apply the SAME
+        # ceiling + sign + integral rules so the two fields are symmetric.
+        _mct_val = body.get("max_completion_tokens")
+        if _mct_val is None:
+            # Explicit JSON ``null`` == absent: drop so downstream never does
+            # ``min(None, int)`` / ``int(None)``.
+            body.pop("max_completion_tokens", None)
+        else:
+            if isinstance(_mct_val, float) and not _mct_val.is_integer():
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_request",
+                        "message": "'max_completion_tokens' must be an integer.",
+                        "param": "max_completion_tokens",
+                        "code": "invalid_max_completion_tokens",
+                    },
+                )
+            try:
+                _mct_int = int(_mct_val)
+            except (TypeError, ValueError, OverflowError):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_request",
+                        "message": "'max_completion_tokens' must be an integer.",
+                        "param": "max_completion_tokens",
+                        "code": "invalid_max_completion_tokens",
+                    },
+                )
+            if _mct_int < 0:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_request",
+                        "message": "'max_completion_tokens' must be a positive integer.",
+                        "param": "max_completion_tokens",
+                        "code": "invalid_max_completion_tokens",
+                    },
+                )
+            if _mct_int == 0:
+                # Parity with max_tokens==0: treat a zero completion budget as the
+                # scan-only sentinel and drop the key rather than forwarding 0.
+                body.pop("max_completion_tokens", None)
+            elif _mct_int > MAX_OUTPUT_TOKENS_CEILING:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_request",
+                        "message": f"'max_completion_tokens' must not exceed {MAX_OUTPUT_TOKENS_CEILING}.",
+                        "param": "max_completion_tokens",
+                        "code": "invalid_max_completion_tokens",
+                    },
+                )
+            else:
+                body["max_completion_tokens"] = _mct_int
+
         messages_raw = body.get("messages")
         if messages_raw is not None and not isinstance(messages_raw, list):
             return JSONResponse(
@@ -5289,9 +5349,18 @@ async def proxy_chat(
             # non-int slips through (None / float / str) a bare min() raises
             # TypeError -> unhandled 500. Fall back to the configured ceiling.
             _mt = body.get("max_tokens")
-            body["max_tokens"] = (
-                min(_mt, max_tokens_config) if isinstance(_mt, int) else max_tokens_config
-            )
+            if isinstance(_mt, int):
+                body["max_tokens"] = min(_mt, max_tokens_config)
+            elif body.get("max_completion_tokens") is not None:
+                # SEAM-A: the client sent ONLY max_completion_tokens (the o1/o3/gpt-5
+                # field). Injecting max_tokens here too produced a DUAL-field request
+                # that reasoning models reject with 400. The completion budget is
+                # already validated/clamped above, so leave max_tokens absent.
+                _mct = body.get("max_completion_tokens")
+                if isinstance(_mct, int):
+                    body["max_completion_tokens"] = min(_mct, max_tokens_config)
+            else:
+                body["max_tokens"] = max_tokens_config
 
         if firewall_disabled:
             # Firewall is off -- skip all scanning, route directly to LLM

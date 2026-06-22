@@ -251,12 +251,11 @@ async def test_FP_responses_n_drop_is_correct_single_output(appctx):
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# BONUS CHALLENGE 6 — P2-MCT-CHAT-injects-max_tokens: confirm the MECHANISM but probe
-# whether it actually reaches upstream as a dual field in a way OpenAI would reject.
-# The phase2 claim says a dual max_tokens+max_completion_tokens body is forwarded. Let me
-# verify the captured upstream body to CONFIRM (not refute) — if max_completion_tokens is
-# actually dropped before upstream, the dual-field harm would be a false positive.
-# EXPECT: this CONFIRMS the defect (dual field really forwarded) => leave as confirmed.
+# BONUS CHALLENGE 6 — P2-MCT-CHAT-injects-max_tokens: this probe ORIGINALLY confirmed
+# the dual-field defect (max_tokens=4096 injected alongside the client's
+# max_completion_tokens). SEAM-A (fix/oai-W4) fixed it, so the assertion is inverted to
+# a regression guard: a client sending ONLY max_completion_tokens must reach upstream
+# WITHOUT an injected max_tokens, and with max_completion_tokens preserved.
 # ════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
@@ -269,14 +268,14 @@ async def test_confirm_mct_dual_field_actually_forwarded_upstream(appctx):
             max_completion_tokens=77)
     finally:
         await client.close()
-    # Document the EXACT forwarded shape for triage.
     has_mct = "max_completion_tokens" in cap
     has_mt = "max_tokens" in cap
-    # If BOTH present -> the dual-field defect is REAL (confirm). If max_completion_tokens
-    # was dropped, the OpenAI-reasoning-model-400 harm would not occur (would weaken claim).
-    assert has_mt, "max_tokens injected (4096 ceiling) — confirms half the claim"
-    # Record whether max_completion_tokens also survives (the dual-field condition).
     print(f"[MCT-PROBE] max_tokens={cap.get('max_tokens')} max_completion_tokens={cap.get('max_completion_tokens')} dual={has_mt and has_mct}")
+    # FIXED invariant: no dual-field; the completion budget survives, no max_tokens injected.
+    assert has_mct and cap.get("max_completion_tokens") == 77, \
+        f"max_completion_tokens dropped/altered: {cap.get('max_completion_tokens')!r}"
+    assert not has_mt, \
+        f"max_tokens injected alongside max_completion_tokens (dual-field regression): {cap.get('max_tokens')!r}"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -366,7 +365,8 @@ async def test_NEW_responses_header_request_id_matches_object_id(appctx):
         f"header request_id={r._request_id!r} != object.id={r.id!r} (shim clobbered the resp_ id)"
 
 
-@pytest.mark.xfail(strict=True, reason="NEW P2-MCT-CHAT-negative-unvalidated (LOW-MED): the chat boundary validator rejects max_tokens<0 with 400 (main.py:4095) but never inspects max_completion_tokens, so max_completion_tokens=-5 is FORWARDED to upstream (observed status 200, fwd_mct=-5). A negative completion budget is an invalid OpenAI value the real API 400s; here it reaches the provider unguarded. Concrete sub-case of the lead's P2-MCT-CHAT-uncapped, settled by observed forwarding.")
+# SEAM-A FIXED (fix/oai-W4): the chat boundary validator now rejects a negative
+# max_completion_tokens with 400 (parity with max_tokens<0). xfail marker removed.
 @pytest.mark.asyncio
 async def test_NEW_negative_max_completion_tokens_rejected(appctx):
     app, _cap = appctx

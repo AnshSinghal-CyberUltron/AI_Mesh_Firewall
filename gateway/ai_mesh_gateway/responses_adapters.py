@@ -204,11 +204,14 @@ def responses_to_chat(body: dict, prior_messages: list[dict] | None = None) -> d
             if m:
                 messages.append(m)
     chat["messages"] = messages
-    # token cap: Responses uses max_output_tokens
+    # token cap: Responses uses max_output_tokens -> chat max_tokens.
     if body.get("max_output_tokens") is not None:
         chat["max_tokens"] = body["max_output_tokens"]
     elif body.get("max_completion_tokens") is not None:
-        chat["max_tokens"] = body["max_completion_tokens"]
+        # SEAM-A: forward max_completion_tokens VERBATIM. Reasoning models
+        # (o1/o3/gpt-5) require this field and reject the deprecated max_tokens;
+        # silently renaming it to max_tokens broke the responses path for them.
+        chat["max_completion_tokens"] = body["max_completion_tokens"]
     for k in _RESP_DIRECT_PASSTHROUGH:
         if body.get(k) is not None:
             chat[k] = body[k]
