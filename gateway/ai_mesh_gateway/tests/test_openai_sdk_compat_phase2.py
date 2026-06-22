@@ -134,7 +134,7 @@ async def test_block_403_header_request_id_matches_body(appctx):
     async with _raw(app) as rc:
         resp = await rc.post("/v1/chat/completions",
                              json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": INJECTION}]})
-    assert resp.status_code == 403
+    assert resp.status_code == 400
     body = resp.json()
     assert resp.headers.get("x-request-id") == body.get("request_id"), \
         f"header={resp.headers.get('x-request-id')} body.request_id={body.get('request_id')}"
@@ -155,13 +155,11 @@ async def test_chat_n_gt_1_returns_n_choices(appctx):
 
 # ════════════════════════════════ LOW ════════════════════════════════
 
-@pytest.mark.xfail(strict=True, reason="DEFECT P2-RESP-N-dropped (LOW): responses->chat adapter drops 'n' entirely (silent total-drop) vs the chat path's documented clamp — mechanism inconsistency. Outcome-equivalent (1 choice) but the param vanishes instead of being clamped.")
 def test_responses_adapter_handles_n():
     chat = responses_to_chat({"model": "gpt-4o-mini", "input": "hi", "n": 2})
     assert "n" in chat
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT P2-Dx-eparam-not-populated-chat-validation (LOW): chat-path parameter-validation 400s leave e.param=None (main.py:4072-4126 omit param=) while the Responses path sets it (main.py:7952/7959). OpenAI sets error.param to the offending field. Path-asymmetric parity gap.")
 @pytest.mark.asyncio
 async def test_chat_validation_400_populates_e_param(appctx):
     app, _cap = appctx
@@ -191,7 +189,6 @@ async def test_success_200_header_request_id_matches_body_zeroshield(appctx):
         f"header={resp.headers.get('x-request-id')} zeroshield.request_id={zs.get('request_id')}"
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT P2-STREAM-upstream429-no-retryafter (LOW): an upstream-passthrough 429 omits Retry-After (main.py:6744 returns JSONResponse with no headers) while gateway-origin 429s set it (main.py:5024/5063). The SDK's auto-backoff loses the provider's recommended delay on upstream throttles.")
 @pytest.mark.asyncio
 async def test_upstream_429_carries_retry_after(appctx):
     app, _cap = appctx

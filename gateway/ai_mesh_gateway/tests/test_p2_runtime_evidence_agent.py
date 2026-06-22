@@ -263,7 +263,7 @@ async def test_responses_block_header_matches_body_request_id(appctx):
     app, _ = appctx
     async with _raw(app) as rc:
         r = await rc.post("/v1/responses", json={"model": "gpt-4o-mini", "input": INJECTION})
-    assert r.status_code == 403, r.text
+    assert r.status_code == 400, r.text
     body = r.json()
     # OpenAI contract: error.request_id (the header) is the join key into the body the
     # SDK hands the caller. On the responses block path they diverge.
@@ -290,7 +290,7 @@ async def test_chat_block_header_matches_security_block_log(appctx, caplog):
         async with _raw(app) as rc:
             r = await rc.post("/v1/chat/completions",
                               json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": INJECTION}]})
-    assert r.status_code == 403
+    assert r.status_code == 400
     logged = [rec.getMessage() for rec in caplog.records if "[SECURITY_BLOCK]" in rec.getMessage()]
     assert logged, "no [SECURITY_BLOCK] log line captured"
     m = re.search(r"request_id=(\S+?),", logged[-1])
