@@ -85,7 +85,6 @@ async def _resp_capture(app, cap, **extra):
 # parallel session's "chat path forwards it" premise is false.
 # ════════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=True, reason="CHALLENGE P2-RESP-drops-logit_bias premise: the parallel test says the CHAT path forwards logit_bias. It does NOT — logit_bias is absent from OPENAI_TOP_LEVEL_KEYS (normalizer.py:15) so the chat normalizer strips it before forwarding. The defect is a TWO-LAYER drop (normalizer + adapter allowlist), not a responses-only asymmetry.")
 @pytest.mark.asyncio
 async def test_CHAT_path_also_drops_logit_bias(appctx):
     app, cap = appctx
@@ -94,7 +93,6 @@ async def test_CHAT_path_also_drops_logit_bias(appctx):
         f"chat path forwarded logit_bias? -> {body.get('logit_bias')}"
 
 
-@pytest.mark.xfail(strict=True, reason="CHALLENGE P2-RESP-drops-service_tier premise: service_tier is dropped on the CHAT path too (not in OPENAI_TOP_LEVEL_KEYS). Adding it only to _RESP_DIRECT_PASSTHROUGH is INSUFFICIENT — the inner chat normalizer re-strips it on the responses path. Root cause is the normalizer allowlist, not just the adapter.")
 @pytest.mark.asyncio
 async def test_CHAT_path_also_drops_service_tier(appctx):
     app, cap = appctx
@@ -103,7 +101,6 @@ async def test_CHAT_path_also_drops_service_tier(appctx):
         f"chat path forwarded service_tier? -> {body.get('service_tier')}"
 
 
-@pytest.mark.xfail(strict=True, reason="CHALLENGE P2-RESP-drops-prediction premise: predicted outputs are dropped on the CHAT path too (not in OPENAI_TOP_LEVEL_KEYS). Same two-layer root cause.")
 @pytest.mark.asyncio
 async def test_CHAT_path_also_drops_prediction(appctx):
     app, cap = appctx
@@ -115,7 +112,6 @@ async def test_CHAT_path_also_drops_prediction(appctx):
 # inner chat normalizer strips it. Prove the two-layer trap with response_format
 # (which IS in OPENAI_TOP_LEVEL_KEYS, so it would survive) vs service_tier (which
 # is NOT). This documents WHY the parallel fix-recipe is incomplete.
-@pytest.mark.xfail(strict=True, reason="ROOT-CAUSE PROOF P2-RESP-allowlist-fix-insufficient: even simulating the proposed fix (service_tier added to _RESP_DIRECT_PASSTHROUGH so responses_to_chat emits it), the value still won't reach upstream on the responses path because _dispatch_chat_internally re-enters proxy_chat which re-runs normalize_openai_chat_request(strip_unknown_top_level=True) and OPENAI_TOP_LEVEL_KEYS has no service_tier. End-to-end the param is dropped. Captured here via the live responses endpoint.")
 @pytest.mark.asyncio
 async def test_responses_service_tier_dropped_end_to_end(appctx):
     app, cap = appctx
@@ -196,7 +192,6 @@ async def test_responses_list_input_text_collapse_correct(appctx):
     assert msgs and msgs[-1] == {"role": "user", "content": "alpha"}, f"msgs={msgs}"
 
 
-@pytest.mark.xfail(strict=True, reason="NEW P2-RESP-multi-text-parts-merge-gap (LOW-MED): when an input item has MULTIPLE input_text parts, OpenAI concatenates them into the single user turn's text. responses_to_chat instead emits a chat content-PARTS list [{text},{text}] (no collapse since len>1), which is still semantically fine for chat — BUT a part with an UNKNOWN ctype (e.g. 'input_file', 'refusal', 'reasoning') is silently DROPPED with no error, so a multimodal/file Responses input loses content invisibly. Here: an input_file part is dropped, leaving only the text -> data loss with no signal.")
 @pytest.mark.asyncio
 async def test_responses_unknown_input_part_not_silently_dropped(appctx):
     chat = responses_to_chat({"model": "gpt-4o-mini", "input": [

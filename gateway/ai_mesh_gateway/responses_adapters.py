@@ -119,7 +119,41 @@ _RESP_DIRECT_PASSTHROUGH = (
     # has the same passthrough fidelity as /v1/chat/completions.
     "response_format", "frequency_penalty", "presence_penalty", "top_logprobs",
     "n", "logit_bias",
+    # SEAM-B widen (2-layer fix; see OPENAI_TOP_LEVEL_KEYS): latency/billing tier,
+    # output-modality selection, abuse/cache attribution, predicted-output, and the
+    # cache-routing hint were all dropped by the narrow allowlist.
+    "service_tier", "modalities", "safety_identifier", "prediction", "prompt_cache_key",
 )
+
+# Responses input-content part types this adapter knows how to translate into a
+# chat content part. Anything else (input_file, input_audio, refusal, reasoning, ...)
+# must NOT be silently dropped: _input_item_to_message carries it through, and
+# proxy_responses returns a clear 400 (see SUPPORTED_INPUT_PART_TYPES usage there).
+SUPPORTED_INPUT_PART_TYPES = frozenset({
+    "input_text", "output_text", "text", "input_image", "image_url",
+})
+
+
+def find_unsupported_input_part(inp: Any) -> str | None:
+    """Return the ``type`` of the first Responses input-content part this adapter
+    cannot translate (e.g. ``input_file``, ``input_audio``), else ``None``. Used by
+    proxy_responses to reject with a clean 400 instead of forwarding (or dropping) a
+    part the chat pipeline does not understand."""
+    if not isinstance(inp, list):
+        return None
+    for item in inp:
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for c in content:
+            if not isinstance(c, dict):
+                continue
+            ctype = c.get("type")
+            if ctype is not None and ctype not in SUPPORTED_INPUT_PART_TYPES:
+                return str(ctype)
+    return None
 
 
 def _input_item_to_message(item: Any) -> dict | None:
@@ -161,6 +195,11 @@ def _input_item_to_message(item: Any) -> dict | None:
                     url = url.get("url")
                 if url:
                     parts.append({"type": "image_url", "image_url": {"url": url}})
+            else:
+                # B12: an UNKNOWN content part (input_file, input_audio, refusal, ...)
+                # must NOT vanish silently. Carry it verbatim so the data is visible;
+                # proxy_responses rejects unsupported parts up front with a clean 400.
+                parts.append(dict(c))
         if parts:
             # single text part -> string content (maximal SDK compatibility)
             if len(parts) == 1 and parts[0].get("type") == "text":
@@ -212,6 +251,18 @@ def responses_to_chat(body: dict, prior_messages: list[dict] | None = None) -> d
     for k in _RESP_DIRECT_PASSTHROUGH:
         if body.get(k) is not None:
             chat[k] = body[k]
+    # SEAM-B: the NATIVE Responses structured-output key text:{format:{...}} (what
+    # client.responses.parse() emits) has no chat equivalent — translate it to the
+    # chat response_format so structured output is enforced, not silently dropped.
+    # An explicit chat-style response_format (already passed through above) wins.
+    text_obj = body.get("text")
+    if isinstance(text_obj, dict) and isinstance(text_obj.get("format"), dict) \
+            and "response_format" not in chat:
+        chat["response_format"] = text_obj["format"]
+    # truncation is Responses-native (not a chat param) but the inner pipeline
+    # tolerates/forwards it; honor it so long-context auto-truncation isn't lost.
+    if body.get("truncation") is not None:
+        chat["truncation"] = body["truncation"]
     # ZeroShield gateway fields (extra_body from stock SDK) must survive the
     # adapter so MCP context, routing prefs, and agent_data reach proxy_chat.
     for k in ("mcp_context", "agent_data", "routing_preferences"):

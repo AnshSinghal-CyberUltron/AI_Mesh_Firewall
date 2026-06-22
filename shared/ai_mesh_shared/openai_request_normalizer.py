@@ -20,6 +20,13 @@ OPENAI_TOP_LEVEL_KEYS = frozenset({
     # SDK-compat additions: GPT-5.x / function-calling params the stock SDK emits
     # that were previously stripped (silently degrading the request).
     "max_completion_tokens", "parallel_tool_calls", "stream_options", "top_logprobs",
+    # SEAM-B 2-layer fix: these survive responses_to_chat's allowlist but were
+    # RE-STRIPPED here when proxy_responses re-enters proxy_chat ->
+    # normalize_openai_chat_request(strip_unknown_top_level=True). Adding them only
+    # to _RESP_DIRECT_PASSTHROUGH is end-to-end ineffective without this layer.
+    # (logit_bias was also dropped on the DIRECT chat path — fixed here too.)
+    "logit_bias", "service_tier", "modalities", "safety_identifier",
+    "prediction", "prompt_cache_key", "truncation",
 })
 
 

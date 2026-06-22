@@ -7786,6 +7786,7 @@ try:
         responses_to_chat as _responses_to_chat,
         chat_completion_to_responses as _chat_to_responses,
         extract_assistant_messages_for_replay as _replay_msgs,
+        find_unsupported_input_part as _find_unsupported_input_part,
     )
     from .responses_store import ResponseStore as _ResponseStore  # noqa: E402
 except ImportError:
@@ -7796,6 +7797,7 @@ except ImportError:
         responses_to_chat as _responses_to_chat,
         chat_completion_to_responses as _chat_to_responses,
         extract_assistant_messages_for_replay as _replay_msgs,
+        find_unsupported_input_part as _find_unsupported_input_part,
     )
     from responses_store import ResponseStore as _ResponseStore  # noqa: E402
 
@@ -7970,6 +7972,21 @@ async def proxy_responses(
         )
     if raw_body.get("input") is None and not raw_body.get("instructions"):
         return JSONResponse(status_code=400, content=_build_oai_error(400, "Missing required parameter: 'input'.", param="input"))
+
+    # B12: reject an unsupported Responses input-content part (input_file, input_audio,
+    # ...) with a clean 400 instead of silently dropping it or forwarding a part the
+    # chat pipeline cannot translate.
+    _bad_part = _find_unsupported_input_part(raw_body.get("input"))
+    if _bad_part is not None:
+        return JSONResponse(
+            status_code=400,
+            content=_build_oai_error(
+                400,
+                f"Unsupported input content part type: '{_bad_part}'.",
+                param="input",
+                code="unsupported_content_part",
+            ),
+        )
 
     auth_ctx = getattr(request.state, "auth_context", None)
     org_id = getattr(auth_ctx, "organization_id", None) if auth_ctx else None

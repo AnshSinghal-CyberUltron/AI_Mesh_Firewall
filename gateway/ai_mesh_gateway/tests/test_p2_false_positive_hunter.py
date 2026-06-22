@@ -292,7 +292,6 @@ async def _responses_capture(app, cap, **extra):
     return dict(cap)
 
 
-@pytest.mark.xfail(strict=True, reason="NEW P2-RESP-drops-modalities: 'modalities' (text/audio output selection) is absent from _RESP_DIRECT_PASSTHROUGH and not special-cased -> silently dropped on /v1/responses while the chat path forwards it verbatim. Same narrow-allowlist root cause as the lead's set; not in the lead's 5.")
 @pytest.mark.asyncio
 async def test_NEW_responses_drops_modalities(appctx):
     app, cap = appctx
@@ -300,7 +299,6 @@ async def test_NEW_responses_drops_modalities(appctx):
     assert body.get("modalities") == ["text"]
 
 
-@pytest.mark.xfail(strict=True, reason="NEW P2-RESP-drops-prompt_cache_key: 'prompt_cache_key' (OpenAI cache-routing hint, replaces 'user' for caching) dropped by the responses->chat adapter -> cache-affinity hint lost on /v1/responses. Chat path forwards it.")
 @pytest.mark.asyncio
 async def test_NEW_responses_drops_prompt_cache_key(appctx):
     app, cap = appctx
@@ -308,7 +306,6 @@ async def test_NEW_responses_drops_prompt_cache_key(appctx):
     assert body.get("prompt_cache_key") == "tenant-7"
 
 
-@pytest.mark.xfail(strict=True, reason="NEW P2-RESP-drops-safety_identifier: 'safety_identifier' (OpenAI's replacement for 'user' for abuse-tracking) dropped by the responses->chat adapter while the chat path forwards it -> the abuse-attribution signal is lost on /v1/responses.")
 @pytest.mark.asyncio
 async def test_NEW_responses_drops_safety_identifier(appctx):
     app, cap = appctx
