@@ -4520,6 +4520,13 @@ async def proxy_chat(
             # client/telemetry-facing string so a malicious model name can't
             # reflect into charts / threat-feed (R4).
             _safe_req = _safe_model_echo(requested_model)
+            # Phase-6 (P6-missing-model): OpenAI requires 'model'; a missing/empty model
+            # with no auto-routing is a 400 invalid_request_error (param='model'), NOT the
+            # 403 model_not_allowed that "" produced by falling through the allowlist check
+            # below. Mirrors /v1/responses. routing_active => the client opted into auto.
+            if not requested_model and not routing_active:
+                return JSONResponse(status_code=400, content=_build_oai_error(
+                    400, "Missing required parameter: 'model'.", param="model"))
             if allowed_models and requested_model not in allowed_models and not routing_active:
                 METRICS["blocked"] += 1
                 _emit_telemetry(
