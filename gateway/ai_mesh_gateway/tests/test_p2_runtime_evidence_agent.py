@@ -204,7 +204,9 @@ async def test_header_present_models_list_401(appctx):
 # SAME root cause (three independent ids per request) onto the NON-chat surfaces. Each is
 # xfail(strict=True): XFAIL confirms the divergence is real on that surface too.
 
-@pytest.mark.xfail(strict=True, reason="P2-XRID-MOD-id-ne-header (MED): /v1/moderations mints a body id 'modr-<uuid>' (main.py:11532) wholly independent of the x-request-id header. The SDK exposes response._request_id = the HEADER; a customer cannot join their moderation result id to the gateway's x-request-id (no correlation key). Same SEAM-C root cause, new surface.")
+# SEAM-C FIXED (oai-W2): create_moderations now mints the modr-<uuid> id ONCE and exposes
+# it on both body.id and request.state.gw_request_id, so the compat shim threads it onto the
+# x-request-id header. header == body.id.
 @pytest.mark.asyncio
 async def test_moderations_body_id_matches_header(appctx):
     app, _ = appctx
@@ -215,7 +217,9 @@ async def test_moderations_body_id_matches_header(appctx):
     assert _hdr(r) == body_id, f"header={_hdr(r)} body.id={body_id}"
 
 
-@pytest.mark.xfail(strict=True, reason="P2-XRID-EMB-log-ne-header (MED): proxy_embeddings sets _REQUEST_ID='zs-emb-<uuid>' (main.py:8173) used for ALL its logs/telemetry, but never sets request.state.gw_request_id, so the compat shim MINTS a THIRD independent 'zs-<uuid>' for the header (main.py:257). The SDK's response._request_id therefore cannot be joined to ANY embedding log line. Root-cause fix: thread the handler's _REQUEST_ID onto request.state.gw_request_id (as proxy_chat does at main.py:4004).")
+# SEAM-C FIXED (oai-W2): proxy_embeddings now threads its _REQUEST_ID (zs-emb-<uuid>) onto
+# request.state.gw_request_id, so the compat shim adopts the SAME id for the x-request-id
+# header. header == handler _REQUEST_ID (the id on every embedding log/telemetry line).
 @pytest.mark.asyncio
 async def test_embeddings_header_matches_handler_request_id(appctx, caplog):
     app, _ = appctx
@@ -238,7 +242,9 @@ async def test_embeddings_header_matches_handler_request_id(appctx, caplog):
     assert _hdr(r) == handler_rid, f"header={_hdr(r)} handler _REQUEST_ID={handler_rid}"
 
 
-@pytest.mark.xfail(strict=True, reason="P2-XRID-RESP-header-ne-body-id (MED): on /v1/responses 200 the handler sets x-request-id=response_id ('resp-<uuid>', == body.id) at main.py:8015, BUT _dispatch_chat_internally runs proxy_chat which overwrites request.scope state gw_request_id with its own 'zs-<uuid>' (main.py:4004 over the SHARED scope state at main.py:7798); the compat shim then OVERWRITES the header back to that 'zs-' id (main.py:259). Net: the SDK's response._request_id ('zs-...') != the response object's own id ('resp-...'), breaking the natural self-correlation the responses surface tried to provide.")
+# SEAM-C FIXED (oai-W2): the compat shim now PREFERS the handler-set x-request-id header,
+# so proxy_responses' response_id (resp-<uuid>, == body.id) is no longer clobbered by the
+# inner-chat zs- id. header == body.id.
 @pytest.mark.asyncio
 async def test_responses_header_matches_response_object_id(appctx):
     app, _ = appctx
@@ -249,7 +255,9 @@ async def test_responses_header_matches_response_object_id(appctx):
     assert _hdr(r) == body_id, f"header={_hdr(r)} body.id={body_id}"
 
 
-@pytest.mark.xfail(strict=True, reason="P2-XRID-RESP-block-header-ne-body (MED, runtime evidence): on a /v1/responses 403 block the SDK x-request-id header (the OUTER request's canonical gw_request_id, set by the shim at main.py:259) != the body 'request_id' (the INNER _dispatch_chat_internally block envelope's _build_zeroshield_metadata uuid, main.py:294). Measured: hdr='zs-e37c...' vs body.request_id='zs-5ff3...' — even within the zs-family the header cannot be joined to the body the customer receives. SEAM-C breadth onto the responses block surface.")
+# SEAM-C FIXED (oai-W2): the responses block path no longer pins the header to response_id;
+# the compat shim folds the inner block body's request_id into x-request-id. header ==
+# body.request_id (the id the customer's error.request_id carries).
 @pytest.mark.asyncio
 async def test_responses_block_header_matches_body_request_id(appctx):
     app, _ = appctx
@@ -272,7 +280,9 @@ async def test_responses_block_header_matches_body_request_id(appctx):
 # with the ACTUAL captured log record (not just the body field). It means even a customer holding
 # their e.request_id cannot grep the gateway's security-incident log for it. xfail(strict=True).
 
-@pytest.mark.xfail(strict=True, reason="P2-XRID-block-header-ne-SECURITY_BLOCK-log (MED, runtime evidence for the LOG dimension of phase2 P2-XRID-block): the SDK x-request-id header (canonical gw_request_id) != the request_id in the captured [SECURITY_BLOCK] incident log (the independent _build_zeroshield_metadata uuid, main.py:1533->645). A customer's e.request_id cannot be joined to the security-incident audit log. Same root cause as P2-XRID-block; this asserts it against the live log record.")
+# SEAM-C FIXED (oai-W2): _build_zeroshield_metadata derives request_id from the canonical
+# _REQUEST_ID ContextVar (== gw_request_id == the x-request-id header). The [SECURITY_BLOCK]
+# log prints that same id, so a customer's e.request_id joins the security-incident log.
 @pytest.mark.asyncio
 async def test_chat_block_header_matches_security_block_log(appctx, caplog):
     app, _ = appctx
