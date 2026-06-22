@@ -257,6 +257,10 @@ async def _openai_compat_shim(request, call_next):
            or f"zs-{_uuid.uuid4().hex[:12]}")
     try:
         response.headers["x-request-id"] = rid
+        # Phase-4 (P2-N-CHAT-clamp): surface the silent n>1->1 clamp on a response
+        # header (the handler sets request.state.n_clamped) so a client can detect it.
+        if getattr(request.state, "n_clamped", False):
+            response.headers["X-ZeroShield-N-Clamped"] = "true"
     except Exception:
         pass
     ctype = response.headers.get("content-type", "")
@@ -657,6 +661,23 @@ def _build_safe_block_response(
         threat_category=threat_category,
         detection_tier=detection_tier,
     )
+    # Phase-4 (D-a, config-gated): a CONTENT-policy block (injection / PII / jailbreak /
+    # toxicity / content) is idiomatically 400 + code="content_filter" — Azure-OpenAI AND
+    # litellm's ContentPolicyViolationError are both 400, and the gateway ALREADY 400s an
+    # upstream content-policy block (_EXCEPTION_STATUS_MAP), so this UNIFIES the contract.
+    # ENTITLEMENT blocks (model_not_allowed, threat_intel) stay 403/permission_error.
+    # Default keeps the legacy 403 so nothing breaks; opt in for a deprecation window via
+    # CONFIG["openai_content_block_status"]="content_filter_400". blocked_by / the
+    # [SECURITY_BLOCK] log above keep the ORIGINAL code; only the client status+code change.
+    _CONTENT_BLOCK_CATEGORIES = {
+        "prompt_injection", "jailbreak", "pii", "secret", "toxicity",
+        "compliance_violation", "policy_violation", "content",
+    }
+    if (status_code == 403 and threat_category in _CONTENT_BLOCK_CATEGORIES
+            and str((CONFIG or {}).get("openai_content_block_status", "permission_403"))
+            == "content_filter_400"):
+        status_code = 400
+        code = "content_filter"
     # D2 (OpenAI-SDK exact-compat): the stock `openai` client reads
     # e.code / e.type / e.param / e.message from a NESTED body["error"] object. A
     # flat top-level "error":"blocked" string left all of those None, so customer
@@ -728,6 +749,7 @@ def _redact_for_client_response(zeroshield_dict: dict | None) -> dict | None:
         "enforcement_source",
         "scan_outcome",
         "risk_score",
+        "n_clamped",  # Phase-4 (P2-N-CHAT-clamp): surface the silent n>1->1 clamp
     }
     redacted = {k: v for k, v in zeroshield_dict.items() if k in safe_fields}
 
@@ -3163,6 +3185,10 @@ def _category_to_threat_type(category: str) -> str:
 import contextvars as _ctxvars
 
 _REQUEST_ID: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("gw_request_id", default="")
+# Phase-4 (P2-N-CHAT-clamp): per-request flag set when a client-requested n>1 is
+# clamped to 1, surfaced as zeroshield.n_clamped so the silent single-choice
+# override (kept for output-guard coverage) is no longer invisible to the client.
+_N_CLAMPED: _ctxvars.ContextVar[bool] = _ctxvars.ContextVar("gw_n_clamped", default=False)
 _REQUEST_ORG_ID: _ctxvars.ContextVar[int | None] = _ctxvars.ContextVar("_req_org_id", default=None)
 _REQUEST_ORG_SLUG: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_org_slug", default="")
 _REQUEST_SOURCE_IP: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_src_ip", default="")
@@ -4007,6 +4033,7 @@ async def proxy_chat(
         or f"zs-{_uuid.uuid4().hex[:12]}"
     )
     _REQUEST_ID.set(_rid)
+    _N_CLAMPED.set(False)  # Phase-4: reset the n-clamp flag per request
     # D3: expose this same id on the x-request-id RESPONSE header (the OpenAI-compat
     # shim middleware reads request.state.gw_request_id after the handler returns) so
     # the SDK's response._request_id / error.request_id is populated and matches the body.
@@ -4142,6 +4169,32 @@ async def proxy_chat(
                 # type-safe regardless of whether the client sent "100" / 100.0 / etc.
                 body["max_tokens"] = _max_tokens_int
 
+        # Phase-4 (P2-MCT-uncapped): max_completion_tokens (the o1/o3/gpt-5 replacement
+        # for max_tokens) was forwarded with NO ceiling/sign validation (only max_tokens
+        # was checked above). Apply the SAME rules so it cannot bypass the budget ceiling
+        # or the negative-value guard. ``param`` is set for OpenAI e.param parity.
+        _mct_val = body.get("max_completion_tokens")
+        if _mct_val is not None:
+            _mct_bad = None
+            if isinstance(_mct_val, float) and not _mct_val.is_integer():
+                _mct_bad = "'max_completion_tokens' must be an integer."
+            else:
+                try:
+                    _mct_int = int(_mct_val)
+                except (TypeError, ValueError, OverflowError):
+                    _mct_bad = "'max_completion_tokens' must be an integer."
+                else:
+                    if _mct_int < 0:
+                        _mct_bad = "'max_completion_tokens' must be a positive integer."
+                    elif _mct_int > MAX_OUTPUT_TOKENS_CEILING:
+                        _mct_bad = f"'max_completion_tokens' must not exceed {MAX_OUTPUT_TOKENS_CEILING}."
+                    else:
+                        body["max_completion_tokens"] = _mct_int
+            if _mct_bad:
+                return JSONResponse(status_code=400, content={
+                    "error": "invalid_request", "message": _mct_bad,
+                    "param": "max_completion_tokens", "code": "invalid_max_completion_tokens"})
+
         messages_raw = body.get("messages")
         if messages_raw is not None and not isinstance(messages_raw, list):
             return JSONResponse(
@@ -4242,6 +4295,13 @@ async def proxy_chat(
                                         _bad = "type=image_url requires 'image_url.url' (non-empty string)"
                                 else:
                                     _bad = "type=image_url requires an 'image_url' (string or object)"
+                            elif _ptype in ("input_audio", "audio", "video_url", "file", "image"):
+                                # Phase-4 (P2-CONTENT): an allowlisted non-text/image_url part
+                                # must carry its eponymous payload key; a bare {"type":"file"}
+                                # otherwise reaches upstream malformed (slow-502 vector C2,
+                                # closed for image_url, reopened for the others).
+                                if part.get(_ptype) in (None, "", {}, []):
+                                    _bad = f"type={_ptype} requires a non-empty '{_ptype}'"
                         if _bad:
                             return JSONResponse(
                                 status_code=400,
@@ -4320,6 +4380,9 @@ async def proxy_chat(
             # a SECOND int(body["n"]) in _extract_chat_routing_preferences. The
             # output guard is single-choice, so n is always forced to 1 anyway.
             body["n"] = 1 if _n_int != 1 else _n_int
+            if _n_int != 1:
+                _N_CLAMPED.set(True)  # Phase-4: surface the clamp (zeroshield.n_clamped)
+                request.state.n_clamped = True  # + reliable X-ZeroShield-N-Clamped header via the shim
 
         # C-5: locally reject non-finite float sampling params (temperature/top_p/
         # frequency_penalty/presence_penalty). Without this a NaN/Inf value was
@@ -5284,14 +5347,20 @@ async def proxy_chat(
         # ── Max response tokens enforcement ──
         max_tokens_config = org_config.get("max_response_tokens", 4096)
         if max_tokens_config and not firewall_disabled:
-            # Defensive clamp: only min() when the request value is an int.
-            # The boundary validator coerces/pops max_tokens, but if anything
-            # non-int slips through (None / float / str) a bare min() raises
-            # TypeError -> unhandled 500. Fall back to the configured ceiling.
+            # Defensive clamp: only min() when the request value is an int (a
+            # non-int slipping through a bare min() raises TypeError -> 500).
             _mt = body.get("max_tokens")
-            body["max_tokens"] = (
-                min(_mt, max_tokens_config) if isinstance(_mt, int) else max_tokens_config
-            )
+            _mct = body.get("max_completion_tokens")
+            if isinstance(_mt, int):
+                body["max_tokens"] = min(_mt, max_tokens_config)
+            elif isinstance(_mct, int):
+                # Phase-4 (P2-MCT-injects): the client used the modern
+                # max_completion_tokens (o1/o3/gpt-5). Cap IT and do NOT inject
+                # max_tokens — a request carrying BOTH is rejected by reasoning
+                # models, and the 4096 ceiling would silently shadow the budget.
+                body["max_completion_tokens"] = min(_mct, max_tokens_config)
+            else:
+                body["max_tokens"] = max_tokens_config
 
         if firewall_disabled:
             # Firewall is off -- skip all scanning, route directly to LLM
