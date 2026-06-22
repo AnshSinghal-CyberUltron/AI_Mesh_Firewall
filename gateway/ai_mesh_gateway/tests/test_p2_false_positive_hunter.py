@@ -352,7 +352,9 @@ async def test_PROBE_responses_request_id_vs_object_id(appctx):
     # Probe: document whether the responses path keeps header==object.id (it should: both resp_).
 
 
-@pytest.mark.xfail(strict=True, reason="NEW P2-XRID-RESP-shim-clobbers-resp-id (MED): proxy_responses deliberately sets x-request-id=response_id (a resp_<hex> id == the SDK's r.id, main.py:7991/8006/8015) so header==object.id, but the outer _openai_compat_shim UNCONDITIONALLY overwrites it (main.py:259) with gw_request_id (a zs_<hex> id). Net: on /v1/responses the SDK's r._request_id (zs-) NEVER matches r.id (resp-), defeating the handler's own correlation design. Distinct surface from the lead's CHAT-path XRID claims; same shim/handler id-split root cause. Fix: have the responses handler set request.state.gw_request_id=response_id (or let the shim prefer the handler's already-set OpenAI-shaped header).")
+# SEAM-C FIXED (oai-W2): the compat shim now PREFERS the handler-set x-request-id header, so
+# proxy_responses' resp_<hex> id is no longer clobbered by the inner-chat zs- id. The stock
+# SDK's r._request_id (header) == r.id (response object id).
 @pytest.mark.asyncio
 async def test_NEW_responses_header_request_id_matches_object_id(appctx):
     app, _cap = appctx

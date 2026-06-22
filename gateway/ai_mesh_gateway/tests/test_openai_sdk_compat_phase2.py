@@ -125,7 +125,9 @@ def test_responses_adapter_forwards_top_logprobs():
     assert chat.get("top_logprobs") == 3
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT P2-XRID-block-403-header-ne-body (MEDIUM): on a 403 security block the x-request-id header (= canonical _REQUEST_ID, what the SDK exposes as e.request_id) differs from the body request_id and the [SECURITY_BLOCK] log id (= _build_zeroshield_metadata uuid, main.py:1533), so a customer's e.request_id cannot be joined to the gateway's block log. Root-cause fix: thread _REQUEST_ID into _build_zeroshield_metadata.")
+# SEAM-C FIXED (oai-W2): _build_zeroshield_metadata derives request_id from the canonical
+# _REQUEST_ID ContextVar and the compat shim folds the body request_id into the x-request-id
+# header, so on a 403 block header == body.request_id (== the [SECURITY_BLOCK] log id).
 @pytest.mark.asyncio
 async def test_block_403_header_request_id_matches_body(appctx):
     app, _cap = appctx
@@ -174,7 +176,9 @@ async def test_chat_validation_400_populates_e_param(appctx):
         await client.close()
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT P2-XRID-success-header-ne-body (LOW): on a 200 success the x-request-id header != body.zeroshield.request_id, violating the shim's own header==body invariant (docstring main.py:242-243). Three independent ids exist per request. Same root cause as the block mismatch.")
+# SEAM-C FIXED (oai-W2): on a 200 success the compat shim adopts the canonical
+# gw_request_id (== _REQUEST_ID == body.zeroshield.request_id) for the x-request-id header,
+# so header == body.zeroshield.request_id.
 @pytest.mark.asyncio
 async def test_success_200_header_request_id_matches_body_zeroshield(appctx):
     app, _cap = appctx

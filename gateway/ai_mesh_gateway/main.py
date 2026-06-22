@@ -251,14 +251,24 @@ async def _openai_compat_shim(request, call_next):
     if not request.url.path.startswith("/v1/"):
         return await call_next(request)
     response = await call_next(request)
-    rid = (getattr(request.state, "gw_request_id", "")
+    # SEAM-C precedence: PREFER a handler-set ``x-request-id`` so the shim never
+    # clobbers a canonical, OpenAI-shaped id the handler chose (responses ``resp_…``,
+    # moderations ``modr-…``, embeddings ``zs-emb-…`` threaded via gw_request_id). Only
+    # mint a fresh id when no handler id and no canonical request id exist. The body
+    # ``request_id`` (when present in an error body) is folded in by the error-rebuild
+    # branch below, AFTER the body is buffered, so header == body == [SECURITY_BLOCK] log.
+    _hdr_set = response.headers.get("x-request-id")
+    rid = (_hdr_set
+           or getattr(request.state, "gw_request_id", "")
            or request.headers.get("X-Request-ID")
            or request.headers.get("x-request-id")
            or f"zs-{_uuid.uuid4().hex[:12]}")
-    try:
-        response.headers["x-request-id"] = rid
-    except Exception:
-        pass
+    # Never REPLACE a handler-set header with a different value; only set when absent.
+    if not _hdr_set:
+        try:
+            response.headers["x-request-id"] = rid
+        except Exception:
+            pass
     ctype = response.headers.get("content-type", "")
     # Successes and streaming (SSE) bodies are left as-is (only the header was added).
     if response.status_code < 400 or "text/event-stream" in ctype or "application/json" not in ctype:
@@ -274,7 +284,6 @@ async def _openai_compat_shim(request, call_next):
     except Exception:
         pass
     _hdrs = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
-    _hdrs["x-request-id"] = rid
     # Phase-4 (P2-STREAM-429): a retryable upstream status (429/503) must carry a
     # Retry-After hint so the stock SDK's auto-backoff has a delay. Single choke point
     # covers EVERY 429/503 path; never override a value a handler already set.
@@ -284,6 +293,17 @@ async def _openai_compat_shim(request, call_next):
         parsed = json.loads(_buf) if _buf else {}
     except Exception:
         parsed = None
+    # SEAM-C precedence (error branch): handler-set header > body request_id >
+    # canonical gw_request_id > fresh. Folding in the body request_id here makes the
+    # error header EQUAL the body the customer receives (and the [SECURITY_BLOCK] log
+    # id, which shares the same _build_zeroshield_metadata request_id).
+    rid = (_hdr_set
+           or (parsed.get("request_id") if isinstance(parsed, dict) else "")
+           or getattr(request.state, "gw_request_id", "")
+           or request.headers.get("X-Request-ID")
+           or request.headers.get("x-request-id")
+           or rid)
+    _hdrs["x-request-id"] = rid
     if not isinstance(parsed, dict):
         # Non-JSON / unparseable body — pass the original bytes through unchanged.
         return Response(content=_buf, status_code=response.status_code,
@@ -8015,8 +8035,11 @@ async def proxy_responses(
     except (TypeError, ValueError):
         chat_json = {}
     if status >= 400:
-        return JSONResponse(status_code=status, content=_coerce_chat_error(status, chat_json),
-                            headers={"x-request-id": response_id})
+        # SEAM-C: an INNER-chat block/error carries its OWN canonical request_id in the
+        # body (the _build_zeroshield_metadata id). Do NOT pin the header to response_id
+        # here — let the compat shim fold the body request_id into x-request-id so the
+        # SDK's error.request_id == the body the customer receives == the security log.
+        return JSONResponse(status_code=status, content=_coerce_chat_error(status, chat_json))
     resp_obj = _chat_to_responses(chat_json, response_id=response_id, model=raw_body["model"],
                                   store=bool(raw_body.get("store")), metadata=raw_body.get("metadata"),
                                   previous_response_id=prev_id)
@@ -8025,6 +8048,11 @@ async def proxy_responses(
         await store.save(org_id, resp_obj, replay_messages=replay,
                          input_items=(raw_body.get("input") if isinstance(raw_body.get("input"), list)
                                       else [{"role": "user", "content": raw_body.get("input")}]))
+    # SEAM-C: pin the SDK's response._request_id to the response object's own id
+    # (resp_…) so r._request_id == r.id. Set request.state.gw_request_id AFTER the inner
+    # dispatch (proxy_chat overwrote the shared scope state with its zs- id); the handler
+    # header below is preferred by the shim, this is belt-and-suspenders for the body==hdr.
+    request.state.gw_request_id = response_id
     return JSONResponse(status_code=200, content=resp_obj, headers={"x-request-id": response_id})
 
 
@@ -8183,11 +8211,16 @@ async def proxy_embeddings(request: Request):
     METRICS["total_requests"] += 1
     start = time.perf_counter()
     # P9c: one request_id for the whole request, threaded into logs.
-    _REQUEST_ID.set(
+    _emb_rid = (
         request.headers.get("X-Request-ID")
         or request.headers.get("x-request-id")
         or f"zs-emb-{_uuid.uuid4().hex[:12]}"
     )
+    _REQUEST_ID.set(_emb_rid)
+    # SEAM-C: expose the SAME canonical id on the x-request-id RESPONSE header (the
+    # compat shim reads request.state.gw_request_id) so the SDK's response._request_id
+    # joins the handler's _REQUEST_ID used for every embedding log/telemetry line.
+    request.state.gw_request_id = _emb_rid
 
     try:
         try:
@@ -11541,8 +11574,13 @@ async def create_moderations(request: Request):
         flagged = action in ("block", "flag", "redact") or any(zs.values())
         scores = {k: (round(conf, 4) if v else 0.0) for k, v in categories.items()}
         results.append({"flagged": bool(flagged), "categories": categories, "category_scores": scores})
+    # SEAM-C: mint the moderation id ONCE and expose it on both the body ``id`` and the
+    # x-request-id RESPONSE header (via request.state.gw_request_id, read by the compat
+    # shim) so the SDK's response._request_id can be joined to the moderation result id.
+    _mod_id = f"modr-{_uuid.uuid4().hex[:24]}"
+    request.state.gw_request_id = _mod_id
     return JSONResponse(content={
-        "id": f"modr-{_uuid.uuid4().hex[:24]}",
+        "id": _mod_id,
         "model": (body.get("model") if isinstance(body, dict) else None) or "zeroshield-moderation",
         "results": results})
 
