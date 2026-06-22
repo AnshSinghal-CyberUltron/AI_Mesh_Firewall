@@ -105,7 +105,6 @@ async def test_max_completion_tokens_over_ceiling_is_rejected(appctx):
         await client.close()
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT P2-RESP-drops-response_format (HIGH): the responses->chat adapter (_RESP_DIRECT_PASSTHROUGH, responses_adapters.py:111) omits response_format, so structured-output control is silently dropped on /v1/responses while it works on /v1/chat/completions. Fix: add response_format to the passthrough (or switch to a denylist).")
 def test_responses_adapter_forwards_response_format():
     chat = responses_to_chat({"model": "gpt-4o-mini", "input": "hi",
                               "response_format": {"type": "json_object"}})
@@ -114,14 +113,12 @@ def test_responses_adapter_forwards_response_format():
 
 # ════════════════════════════════ MEDIUM ════════════════════════════════
 
-@pytest.mark.xfail(strict=True, reason="DEFECT P2-RESP-drops-frequency-presence-penalty (MEDIUM): responses->chat adapter drops frequency_penalty/presence_penalty (not in _RESP_DIRECT_PASSTHROUGH) though the direct chat path forwards both. Same narrow-allowlist root cause.")
 def test_responses_adapter_forwards_sampling_penalties():
     chat = responses_to_chat({"model": "gpt-4o-mini", "input": "hi",
                               "frequency_penalty": 0.2, "presence_penalty": 0.1})
     assert chat.get("frequency_penalty") == 0.2 and chat.get("presence_penalty") == 0.1
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT P2-RESP-drops-top_logprobs (MEDIUM): responses->chat adapter keeps logprobs but drops its companion top_logprobs (inconsistent pair) — _RESP_DIRECT_PASSTHROUGH has 'logprobs' not 'top_logprobs'.")
 def test_responses_adapter_forwards_top_logprobs():
     chat = responses_to_chat({"model": "gpt-4o-mini", "input": "hi",
                               "logprobs": True, "top_logprobs": 3})

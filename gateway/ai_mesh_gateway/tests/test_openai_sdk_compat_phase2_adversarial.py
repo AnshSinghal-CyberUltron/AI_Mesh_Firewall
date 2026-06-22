@@ -67,7 +67,6 @@ async def _responses_capture(app, cap: dict, **extra) -> dict:
 
 # ── SEAM-B EXTENSIONS — the allowlist drops more than first reported ──
 
-@pytest.mark.xfail(strict=True, reason="P2-RESP-drops-text-format (HIGH): the NATIVE Responses structured-output mechanism text:{format:{...}} (emitted by responses.parse()) is not handled by responses_to_chat AT ALL -> structured output silently dropped on /v1/responses. Distinct from (and bigger than) the chat-style response_format gap. Fix: map text.format -> chat response_format in responses_to_chat.")
 @pytest.mark.asyncio
 async def test_responses_adapter_maps_native_text_format(appctx):
     app, cap = appctx
@@ -75,7 +74,6 @@ async def test_responses_adapter_maps_native_text_format(appctx):
     assert body.get("response_format", {}).get("type") == "json_schema"
 
 
-@pytest.mark.xfail(strict=True, reason="P2-RESP-drops-logit_bias (MED): logit_bias is absent from _RESP_DIRECT_PASSTHROUGH -> token biasing silently ignored on /v1/responses while the chat path forwards it. Same narrow-allowlist root cause.")
 @pytest.mark.asyncio
 async def test_responses_adapter_forwards_logit_bias(appctx):
     app, cap = appctx
@@ -83,7 +81,6 @@ async def test_responses_adapter_forwards_logit_bias(appctx):
     assert body.get("logit_bias") == {"123": -100}
 
 
-@pytest.mark.xfail(strict=True, reason="P2-RESP-drops-service_tier (LOW-MED): service_tier (auto/default/flex/priority) dropped -> the caller's latency/billing tier choice is silently ignored on /v1/responses.")
 @pytest.mark.asyncio
 async def test_responses_adapter_forwards_service_tier(appctx):
     app, cap = appctx
@@ -91,7 +88,6 @@ async def test_responses_adapter_forwards_service_tier(appctx):
     assert body.get("service_tier") == "flex"
 
 
-@pytest.mark.xfail(strict=True, reason="P2-RESP-drops-prediction (LOW): predicted outputs (prediction) dropped -> the latency optimization is silently ignored on /v1/responses.")
 @pytest.mark.asyncio
 async def test_responses_adapter_forwards_prediction(appctx):
     app, cap = appctx
@@ -99,7 +95,6 @@ async def test_responses_adapter_forwards_prediction(appctx):
     assert "prediction" in body
 
 
-@pytest.mark.xfail(strict=True, reason="P2-RESP-drops-truncation (LOW): the Responses-native truncation:'auto' (which prevents context-overflow 400s by auto-dropping middle-of-context) is dropped -> long-context callers that rely on it get a hard 400 instead.")
 @pytest.mark.asyncio
 async def test_responses_adapter_forwards_truncation(appctx):
     app, cap = appctx
