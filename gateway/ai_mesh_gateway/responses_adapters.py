@@ -40,6 +40,10 @@ def generate_openai_id(object_type: str) -> str:
 # ZeroShield internal codes -> OpenAI error `type` strings so the stock SDK
 # raises the correct exception class (PermissionDeniedError, RateLimitError, ...).
 _ZS_CODE_TO_OPENAI_TYPE = {
+    # D-a: CONTENT-category blocks now surface error.code="content_filter" and
+    # must resolve to invalid_request_error (HTTP 400 / BadRequestError) so the
+    # stock SDK + LiteLLM/LangChain key on the content-filter signal.
+    "content_filter": "invalid_request_error",
     "content_blocked": "permission_error",
     "blocked": "permission_error",
     "forbidden": "permission_error",

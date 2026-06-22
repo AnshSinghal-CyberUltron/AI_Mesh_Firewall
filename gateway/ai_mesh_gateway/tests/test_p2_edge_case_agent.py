@@ -90,17 +90,20 @@ async def _collect_sse(app, payload: dict) -> list:
 # ════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
-async def test_b_blocked_input_stream_returns_json_403_not_sse(appctx):
-    """(b) blocked-input on stream=true → JSON 403, never a corrupt SSE body."""
+async def test_b_blocked_input_stream_returns_json_not_sse(appctx):
+    """(b) blocked-input on stream=true → JSON (never a corrupt SSE body).
+
+    D-a: content-category input blocks are HTTP 400/content_filter (was 403);
+    the block-vs-SSE invariant this test guards is unchanged — only the status."""
     app, _cap = appctx
     async with _raw(app) as rc:
         resp = await rc.post("/v1/chat/completions",
                              json={"model": "gpt-4o-mini", "stream": True,
                                    "messages": [{"role": "user", "content": INJECTION}]})
-    assert resp.status_code == 403
+    assert resp.status_code == 400
     assert resp.headers.get("content-type", "").startswith("application/json")
     body = resp.json()
-    assert isinstance(body.get("error"), dict), f"403 body not nested-error: {body}"
+    assert isinstance(body.get("error"), dict), f"block body not nested-error: {body}"
 
 
 @pytest.mark.asyncio

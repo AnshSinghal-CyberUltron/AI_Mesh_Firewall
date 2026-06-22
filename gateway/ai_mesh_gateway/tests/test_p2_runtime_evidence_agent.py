@@ -100,8 +100,10 @@ async def test_header_present_chat_block(appctx):
     async with _raw(app) as rc:
         r = await rc.post("/v1/chat/completions",
                           json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": INJECTION}]})
-    assert r.status_code == 403
-    assert _RID_RE.match(_hdr(r) or ""), f"chat 403 header missing: {dict(r.headers)}"
+    # D-a: content-category blocks are 400/content_filter (was 403); the x-request-id
+    # header invariant this test guards is unchanged.
+    assert r.status_code == 400
+    assert _RID_RE.match(_hdr(r) or ""), f"chat block header missing: {dict(r.headers)}"
 
 
 @pytest.mark.asyncio
@@ -118,8 +120,10 @@ async def test_header_present_responses_block(appctx):
     app, _ = appctx
     async with _raw(app) as rc:
         r = await rc.post("/v1/responses", json={"model": "gpt-4o-mini", "input": INJECTION})
-    assert r.status_code == 403
-    assert _RID_RE.match(_hdr(r) or ""), f"responses 403 header missing: {dict(r.headers)}"
+    # D-a: content-category blocks are 400/content_filter (was 403); the x-request-id
+    # header invariant this test guards is unchanged.
+    assert r.status_code == 400
+    assert _RID_RE.match(_hdr(r) or ""), f"responses block header missing: {dict(r.headers)}"
 
 
 @pytest.mark.asyncio
