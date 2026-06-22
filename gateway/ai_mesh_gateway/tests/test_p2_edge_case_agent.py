@@ -238,7 +238,9 @@ async def test_usage_chunk_present_when_include_usage(appctx):
     assert usage_frames, f"no usage chunk emitted despite include_usage=true; frames={frames}"
 
 
-@pytest.mark.xfail(strict=True, reason="EDGE-RESP-STREAM-DROPS-TOOLCALLS (HIGH): /v1/responses streaming translation (_translate_chat_stream_to_responses main.py:7870-7886) only handles delta.content TEXT and silently DROPS delta.tool_calls. A streamed function/tool call on the Responses API produces NO response.output_item of type function_call and NO function-call-arguments events — the tool call vanishes. The non-stream chat path forwards tool_calls fine; the Responses stream path loses them entirely.")
+# FIXED (oai-W5/S1): _translate_chat_stream_to_responses now accumulates delta.tool_calls
+# and emits typed function_call events (output_item.added + function_call_arguments.delta/done)
+# plus the function_call item in response.completed.output — parity with the non-stream path.
 @pytest.mark.asyncio
 async def test_responses_stream_preserves_tool_calls(monkeypatch):
     app, auth_redis = await T._make_sdk_app(monkeypatch, redis_client=None)

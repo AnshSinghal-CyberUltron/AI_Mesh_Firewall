@@ -7833,6 +7833,11 @@ async def _translate_chat_stream_to_responses(chat_stream, response_id: str, mod
     item_id = _gen_oai_id("message")
     seq = 0
     accumulated = []
+    # Streamed function/tool calls: accumulate per upstream delta.tool_calls index.
+    # Each entry tracks the Responses output item plus its incremental arguments so the
+    # call surfaces as a typed function_call item (parity with the non-stream path).
+    tool_calls: dict[int, dict] = {}
+    tool_order: list[int] = []
     final_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
     zeroshield = None
     finish_reason = None
@@ -7897,6 +7902,46 @@ async def _translate_chat_stream_to_responses(chat_stream, response_id: str, mod
                     yield _responses_sse("response.output_text.delta", {
                         "type": "response.output_text.delta", "item_id": item_id,
                         "output_index": 0, "content_index": 0, "delta": piece, "sequence_number": seq})
+                # Streamed function/tool calls: accumulate arguments per index and
+                # surface each as a typed function_call output item (parity w/ non-stream).
+                for tc in (delta.get("tool_calls") or []):
+                    if not isinstance(tc, dict):
+                        continue
+                    idx = tc.get("index", 0)
+                    fn = tc.get("function") or {}
+                    entry = tool_calls.get(idx)
+                    if entry is None:
+                        # message item is output_index 0; tool calls follow it.
+                        entry = {
+                            "output_index": 1 + len(tool_order),
+                            "fc_id": _gen_oai_id("function_call"),
+                            "call_id": tc.get("id") or _gen_oai_id("function_call"),
+                            "name": fn.get("name") or "",
+                            "arguments": "",
+                            "added": False,
+                        }
+                        tool_calls[idx] = entry
+                        tool_order.append(idx)
+                    if tc.get("id"):
+                        entry["call_id"] = tc["id"]
+                    if fn.get("name"):
+                        entry["name"] = fn["name"]
+                    if not entry["added"]:
+                        entry["added"] = True
+                        yield _responses_sse("response.output_item.added", {
+                            "type": "response.output_item.added",
+                            "output_index": entry["output_index"],
+                            "item": {"id": entry["fc_id"], "type": "function_call",
+                                     "status": "in_progress", "call_id": entry["call_id"],
+                                     "name": entry["name"], "arguments": ""}})
+                    arg_piece = fn.get("arguments")
+                    if isinstance(arg_piece, str) and arg_piece:
+                        entry["arguments"] += arg_piece
+                        seq += 1
+                        yield _responses_sse("response.function_call_arguments.delta", {
+                            "type": "response.function_call_arguments.delta",
+                            "item_id": entry["fc_id"], "output_index": entry["output_index"],
+                            "delta": arg_piece, "sequence_number": seq})
 
     if stream_error is not None:
         seq += 1
@@ -7929,8 +7974,25 @@ async def _translate_chat_stream_to_responses(chat_stream, response_id: str, mod
                 "content": [{"type": "output_text", "text": full_text, "annotations": []}]}
     yield _responses_sse("response.output_item.done", {
         "type": "response.output_item.done", "output_index": 0, "item": out_item})
+    final_output = [out_item]
+    # Finalize streamed function/tool calls: emit arguments.done + output_item.done and
+    # include each as a completed function_call item in the response output (non-stream parity).
+    for idx in tool_order:
+        entry = tool_calls[idx]
+        seq += 1
+        yield _responses_sse("response.function_call_arguments.done", {
+            "type": "response.function_call_arguments.done",
+            "item_id": entry["fc_id"], "output_index": entry["output_index"],
+            "arguments": entry["arguments"], "sequence_number": seq})
+        fc_item = {"id": entry["fc_id"], "type": "function_call", "status": "completed",
+                   "call_id": entry["call_id"], "name": entry["name"],
+                   "arguments": entry["arguments"]}
+        yield _responses_sse("response.output_item.done", {
+            "type": "response.output_item.done",
+            "output_index": entry["output_index"], "item": fc_item})
+        final_output.append(fc_item)
     status = "incomplete" if finish_reason == "length" else "completed"
-    final_response = dict(base_resp, status=status, output=[out_item],
+    final_response = dict(base_resp, status=status, output=final_output,
                           output_text=full_text, usage=final_usage)
     if zeroshield is not None:
         final_response["zeroshield"] = zeroshield
