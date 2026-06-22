@@ -32,4 +32,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.24", "fakeredis>=2"]
+# openai is PINNED EXACTLY: the conformance harness (tests/test_openai_sdk_compat.py)
+# is the executable definition of "exact OpenAI-SDK compatibility", so the SDK version
+# it validates against is part of the contract. Bump deliberately + re-run the suite.
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "fakeredis>=2", "openai==2.38.0", "httpx>=0.25.0"]

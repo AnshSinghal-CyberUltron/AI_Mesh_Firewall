@@ -232,6 +232,18 @@ class SecureStreamingResponse:
                 # Older/duck-typed guard: inspect(text) only.
                 verdict = await self._output_guard.inspect(full_text)
 
+            # H-03 FIX: a tier-2 output-guard OUTAGE sets verdict.scan_degraded,
+            # meaning the streamed response was passed only partially / UN-scanned
+            # (fail-open by design). The non-stream path (M11) emits an operator
+            # 'output_scan_degraded' signal so the outage is observable — streaming
+            # had NO such signal, so a silent guard outage on a streamed response
+            # was completely invisible to operators. Emit the same visibility
+            # telemetry here, once per stream (the flush handler can run on every
+            # flush; the guard flag prevents one outage producing N duplicate events).
+            if getattr(verdict, "scan_degraded", False) and not getattr(self, "_degraded_emitted", False):
+                self._degraded_emitted = True
+                self._emit_degraded_telemetry(verdict, flush_reason=reason)
+
             effective_action = verdict.action
             if verdict.action == "flag" and self._enforcement_mode == "block":
                 effective_action = "block"
@@ -268,6 +280,7 @@ class SecureStreamingResponse:
 
             if verdict.action == "redact":
                 redacted_text = self._scanner.redact_pii(full_text)
+                self._record_output(redacted_text)
                 LOG.info(
                     "Output guard redacted streaming content (type=%s, patterns=%s, flush=%s)",
                     verdict.threat_type,
@@ -291,6 +304,7 @@ class SecureStreamingResponse:
             # Clean / flag: release, but on a NON-final flush hold back the
             # lookahead tail so a PII token split across this boundary cannot be
             # half-streamed before a later scan blocks it (streaming PII race).
+            self._record_output(full_text)
             if reason == FlushReason.DONE:
                 for original_sse, _ in self._chunk_queue:
                     yield original_sse
@@ -304,6 +318,7 @@ class SecureStreamingResponse:
 
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
             redacted_text = self._scanner.redact_pii(full_text)
+            self._record_output(redacted_text)
             LOG.info(
                 "PII redacted in streaming output (type=%s, patterns=%s, flush=%s)",
                 verdict.threat_type,
@@ -316,6 +331,7 @@ class SecureStreamingResponse:
                 yield redacted_chunk
             self._clear_buffers()
         elif reason == FlushReason.DONE:
+            self._record_output(full_text)
             for original_sse, _ in self._chunk_queue:
                 yield original_sse
             self._clear_buffers()
@@ -348,6 +364,18 @@ class SecureStreamingResponse:
             # Best-effort: context binding never breaks the stream.
             self._context_chunks = []
         return self._context_chunks
+
+    def _record_output(self, text: str) -> None:
+        """Accumulate the client-facing (post-redaction) streamed text onto the
+        shared StreamRunMetrics so the Scan Detail "Output" panel can show the
+        delivered response for STREAMED requests. Blocked content is never
+        recorded here — only what was actually released to the client."""
+        if self._stream_metrics is None or not text:
+            return
+        try:
+            self._stream_metrics.append_output(text)
+        except Exception:
+            pass
 
     def _record_metric(self, action: str) -> None:
         if self._record_guard_metric is not None:
@@ -413,6 +441,37 @@ class SecureStreamingResponse:
                 source_ip=self._source_ip,
                 metadata={
                     "detail": (verdict.detail or "")[:256],
+                    "streaming": True,
+                    "request_id": self._request_id,
+                    "flush_reason": flush_reason.value,
+                    "module": "1.7",
+                    "module_id": "1.7",
+                },
+            ))
+        except Exception:
+            pass
+
+    def _emit_degraded_telemetry(self, verdict, *, flush_reason: FlushReason) -> None:
+        """H-03: surface a tier-2 output-guard OUTAGE on the STREAMING path the
+        same way the non-stream M11 branch does, so a silent guard outage on a
+        streamed response is observable to operators. Fail-open (the stream is
+        still delivered) is intentional, but it must never be invisible."""
+        if self._telemetry is None:
+            return
+        try:
+            from telemetry import build_telemetry_event
+
+            self._telemetry.emit(build_telemetry_event(
+                event_type="output_scan_degraded",
+                action="allow",
+                threat_type="scanner_degraded",
+                user_id=self._user_id,
+                organization_id=self._organization_id,
+                model=self._model,
+                project_id=self._project_id,
+                source_ip=self._source_ip,
+                metadata={
+                    "detail": "Tier-2 output guard model unavailable — streamed output passed UNSCANNED",
                     "streaming": True,
                     "request_id": self._request_id,
                     "flush_reason": flush_reason.value,

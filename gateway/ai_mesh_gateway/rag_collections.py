@@ -65,8 +65,14 @@ def client_from_provider_config(cfg: dict[str, Any]) -> tuple[Any | None, str]:
                 auth_token=cfg.get("api_key", ""),
             ), "chroma"
         if provider_type in ("milvus", "custom") and cfg.get("connection_url"):
+            url = str(cfg["connection_url"])
+            if provider_type == "custom" and (url.startswith("http://") or url.startswith("https://")):
+                return ChromaDBClient(
+                    url=url,
+                    auth_token=cfg.get("api_key", ""),
+                ), "chroma"
             return MilvusClient(
-                uri=cfg["connection_url"],
+                uri=url,
                 token=cfg.get("api_key", ""),
             ), provider_type
     except Exception:

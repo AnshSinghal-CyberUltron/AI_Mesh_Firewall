@@ -74,13 +74,26 @@ PII_PATTERNS: Dict[str, str] = {
     #   * country code + at least two separated groups (rejects "+1 2" / "+100").
     # Every group is bounded and separators between groups are mandatory in the
     # separated branch, so there is no nested/ambiguous repeat — LINEAR-time.
-    "phone_intl": r"\+(?:\d{10,15}|\d{1,3}(?:[\s\-]\d{1,4}){2,6})\b",
+    # Added `\d{1,4}[\s\-]?\d{6,12}` branch so `+<country>-<run-together digits>`
+    # (e.g. +91-8088054321) is masked. The previous pattern only caught fully
+    # run-together (`\d{10,15}` right after `+`) or separator-grouped numbers, so an
+    # international number with the country code split off by a single dash leaked —
+    # incl. through redact_all (the scrubber used on guard-model evidence/advisory).
+    "phone_intl": r"\+(?:\d{10,15}|\d{1,4}[\s\-]?\d{6,12}|\d{1,3}(?:[\s\-]\d{1,4}){2,6})\b",
     # Dotted phone ("415.555.0142"). The 3.3.4 dotted grouping is distinctive;
     # fixed quantifiers keep it linear and the \b bounds avoid swallowing
     # adjacent digits. Version strings ("1.2.3") and dotted-quad IPs do not fit
     # the exact 3.3.4 digit-count shape.
     "phone_dotted": r"\b\d{3}\.\d{3}\.\d{4}\b",
-    "api_key_openai": r"\bsk-[a-zA-Z0-9]{32,}\b",
+    # N-CRED FIX: the original r"\bsk-[a-zA-Z0-9]{32,}\b" required an UNBROKEN
+    # alphanumeric run, so it MISSED every modern hyphenated key format —
+    # OpenAI project/service keys (sk-proj-…, sk-svcacct-…, sk-admin-…) and
+    # OpenRouter keys (sk-or-v1-…). Those leaked through the OUTPUT credential
+    # detector as a soft "flag" instead of a hard redact/block under a block
+    # policy. Match the known modern prefixes (high-entropy tail) AND keep the
+    # classic 32-char form. Prefix-anchored + a 16+ char tail keeps false
+    # positives on benign "sk-…" prose negligible.
+    "api_key_openai": r"\bsk-(?:proj|svcacct|admin|or-v1|or|live|test)-[a-zA-Z0-9_-]{16,}\b|\bsk-[a-zA-Z0-9]{32,}\b",
     "aws_access_key": r"\bAKIA[0-9A-Z]{16}\b",
     # AWS SECRET access key — the high-value credential. It has no fixed prefix
     # (40 chars of [A-Za-z0-9/+]), so match it in context of its variable name to
@@ -130,6 +143,14 @@ SECRET_PATTERNS: Dict[str, str] = {
     "password_assignment": r'password["\s]*[:=][\s"\']*' + _CREDENTIAL_VALUE,
     "secret_assignment": r'secret["\s]*[:=][\s"\']*' + _CREDENTIAL_VALUE,
     "token_assignment": r'token["\s]*[:=][\s"\']*' + _TOKEN_VALUE,
+    # RAG-C5-CRED-COVERAGE: standalone credential FORMATS the assignment patterns
+    # above miss. detect_secrets had no Slack token / JWT / Bearer inventory, so
+    # these credential forms were stored unblocked at RAG ingest (and unredacted in
+    # chat input). bearer_token already existed in CREDENTIAL_EXPOSURE_PATTERNS (the
+    # output guard) — fold the class into the ingest secret inventory too.
+    "slack_token": r'\bxox[baprs]-[0-9A-Za-z-]{10,}\b',
+    "jwt": r'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b',
+    "bearer_token": r'Bearer\s+[A-Za-z0-9_\-\.]{20,}',
 }
 
 PHI_PATTERNS: Dict[str, str] = {
@@ -236,6 +257,16 @@ CREDENTIAL_EXPOSURE_PATTERNS: Dict[str, str] = {
     "exposed_password": r"(?:password|passwd|pwd)\s*[:=]\s*['\"]?" + _CREDENTIAL_VALUE,
     "connection_string": r"(?:mongodb|mysql|postgres(?:ql)?|redis|amqp)://[^\s]{10,}",
     "private_key_block": r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
+    # C4-CRED-INGEST-*: modern provider credential formats the assignment/url patterns
+    # above miss. Folded into the MASTER inventory so the RAG-ingest path (which now
+    # runs detect_credential_exposure) and the output guard share one credential set.
+    "github_fine_grained_pat": r"\bgithub_pat_[A-Za-z0-9_]{22,}\b",
+    "stripe_key": r"\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b",
+    "azure_storage_key": r"AccountKey=[A-Za-z0-9+/=]{40,}",
+    "twilio_api_key": r"\bSK[0-9a-fA-F]{32}\b",
+    "gcp_service_account_key": r'"private_key"\s*:\s*"-----BEGIN PRIVATE KEY-----',
+    "slack_token": r"\bxox[baprs]-[0-9A-Za-z-]{10,}\b",
+    "jwt": r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b",
 }
 
 COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {

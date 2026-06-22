@@ -352,7 +352,15 @@ class OutputGuard:
         # deterministic ip_leakage verdict (e.g. a textbook 192.168.0.1). The
         # guard model is the authoritative arbiter for the infra-leakage heuristic;
         # other categories (PII/secret/credential/hallucination) are unaffected.
-        if guard_rated_clean and verdicts:
+        #
+        # N-IP FIX: but do NOT suppress when the org EXPLICITLY opted into hard
+        # deterministic IP blocking via output_block_on_ip_leakage. That flag is a
+        # deliberate "I care about internal IPs even if they look benign" signal —
+        # letting a tier-2 "clean" rating silently drop the verdict would override
+        # the org's explicit policy. Default orgs (no opt-in) still get the FP
+        # reduction; opt-in orgs get deterministic blocking tier-2 cannot undo.
+        _ip_hard_block = bool(self._config.get("output_block_on_ip_leakage", False))
+        if guard_rated_clean and verdicts and not _ip_hard_block:
             verdicts = [v for v in verdicts if str(getattr(v, "threat_type", "")) != "ip_leakage"]
 
         if not verdicts:
@@ -909,7 +917,11 @@ def output_guard_telemetry_meta(
         "sanitized_output": sanitized_output,
         "guardrail_reasoning": verdict.detail,
         "matched_patterns": list(verdict.matched_patterns or []),
-        "matched_values": dict(verdict.matched_values or {}),
+        # AUDIT-2: matched_values previously persisted the RAW matched PII/secret into
+        # EnforcementEvent.metadata.extra.matched_values (a dict, so it escaped the
+        # telemetry.py _TEXT_KEYS scrub). Mask each value here at the source — the
+        # operator console still gets matched_patterns + a masked value, never raw PII.
+        "matched_values": {k: _mask_value_for_detail(str(v)) for k, v in (verdict.matched_values or {}).items()},
         "output_snippet_truncated": True,
         "full_output_scanned": True,
     }

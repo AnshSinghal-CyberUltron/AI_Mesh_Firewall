@@ -42,12 +42,28 @@ class OutputGuardrailMetadataTests(unittest.TestCase):
         self.assertEqual(metadata["rewritten_response"], "Corrected answer without fabricated claims.")
 
     def test_redact_all_masks_bearer_tokens_in_output_text(self):
-        raw_text = "Authorization: Bearer sk-proj-abcdefghij1234567890abcdefghij"
+        # Use an OPAQUE (non-sk) bearer token so this exercises the bearer_token
+        # credential path specifically. (An sk-proj-… token is now ALSO recognized
+        # as an API key — see test_redact_all_masks_modern_api_keys — and gets the
+        # api-key mask first, which is the more precise redaction.)
+        raw_text = "Authorization: Bearer eyJhbGciOiJIUzI1Ni1234567890OPAQUEjwtTOKENvalue"
 
         safe_text = redact_all(raw_text)
 
-        self.assertNotIn("sk-proj-abcdefghij1234567890abcdefghij", safe_text)
+        self.assertNotIn("eyJhbGciOiJIUzI1Ni1234567890OPAQUEjwtTOKENvalue", safe_text)
         self.assertIn("[BEARER_TOKEN_REDACTED]", safe_text)
+
+    def test_redact_all_masks_modern_api_keys(self):
+        # N-CRED: modern hyphenated key formats (OpenAI sk-proj-…/sk-svcacct-…,
+        # OpenRouter sk-or-v1-…) must be redacted out of OUTPUT text — the old
+        # \bsk-[a-zA-Z0-9]{32,}\b pattern required an unbroken run and missed them.
+        for raw_key in (
+            "sk-proj-abcdefghij1234567890abcdefghij",
+            "sk-or-v1-deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            "sk-svcacct-ABCDEFghijkl1234567890mnopqr",
+        ):
+            safe_text = redact_all(f"The key is {raw_key} use it now.")
+            self.assertNotIn(raw_key, safe_text)
 
 
 if __name__ == "__main__":

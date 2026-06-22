@@ -61,7 +61,7 @@ _BOOL_KEYS = (
     "output_policy_enabled", "output_incident_logging_enabled",
     "rag_enabled", "vector_db_isolation",
     "rag_redaction_enabled", "rag_tier2_enabled", "threat_intel_enabled",
-    "auto_block_threats", "telemetry_enabled", "alerting_enabled",
+    "auto_block_threats", "telemetry_enabled",
 )
 _NUM_KEYS = (  # bools are explicitly excluded in _value_type_ok
     "requests_per_minute", "burst_limit", "toxicity_threshold",
@@ -70,7 +70,6 @@ _NUM_KEYS = (  # bools are explicitly excluded in _value_type_ok
     "routing_priority_weight", "hallucination_grounding_threshold",
     "max_response_tokens", "rag_default_max_results",
     "rag_relevance_threshold", "threat_score_threshold", "retention_days",
-    "critical_alert_threshold",
 )
 _STR_KEYS = (
     "enforcement_mode", "log_level", "tier2_execution_mode",
@@ -78,7 +77,7 @@ _STR_KEYS = (
     "hallucination_grounding_mode", "hallucination_grounding_model",
     "output_pii_action", "output_credential_action",
     "output_ip_leakage_action", "output_policy_action",
-    "output_hallucination_action", "alert_recipients",
+    "output_hallucination_action",
 )
 _LIST_KEYS = ("blocked_keywords", "allowed_models", "compliance_frameworks")
 
@@ -353,7 +352,6 @@ class ConfigSync:
                     if data is None:
                         continue  # warn+skip; other org keys still load
                     slug = key.replace(REDIS_KEY_PREFIX, "")
-                    self._apply(data)
                     self._config_by_org[slug] = {**self._config, **data}
                     LOG.info("Loaded org config for '%s' (%d keys)", slug, len(data))
 
@@ -526,11 +524,14 @@ class ConfigSync:
                     key,
                 )
                 return
-            # Always apply to global CONFIG so components like InputScanner
-            # (which hold a reference to the global dict) see the latest values.
-            self._apply(data)
+            # Per-org refreshes must NOT mutate the global CONFIG dict — that would
+            # bleed one tenant's enforcement settings into every other tenant's
+            # fallback path (components that read CONFIG directly, or requests
+            # whose org_slug has no dedicated cache entry yet).
             if org_slug:
                 self._config_by_org[org_slug] = {**self._config, **data}
+            else:
+                self._apply(data)
 
             LOG.info(
                 "Firewall config hot-reloaded from Redis (%s, %d keys, "

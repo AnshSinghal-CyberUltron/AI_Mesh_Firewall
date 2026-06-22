@@ -17,11 +17,14 @@ import uvicorn
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[1]
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
+_PKG = Path(__file__).resolve().parent
+for _path in (_ROOT, _PKG):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 from fastapi import FastAPI, Request, Header
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import StreamingResponse
 
 
@@ -174,6 +177,33 @@ async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
+@app.exception_handler(StarletteHTTPException)
+async def _openai_shaped_http_exc(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """OpenAI-SDK parity: for /v1/* paths, return the nested OpenAI error envelope
+    ({"error":{message,type,code}}) instead of FastAPI's default {"detail": "..."}.
+    Covers unimplemented endpoints (client.completions.create / models.retrieve /
+    moderations / files / batches -> a clean OpenAI 404) and any HTTPException
+    raised on the OpenAI surface. The SDK already raises the right exception CLASS
+    by status code; this fixes the BODY shape so response.json()['error'] works.
+    Non-/v1 paths keep FastAPI's default shape unchanged."""
+    if str(request.url.path).startswith("/v1/"):
+        try:
+            from .responses_adapters import build_openai_error as _boe
+        except ImportError:
+            from responses_adapters import build_openai_error as _boe
+        _detail = exc.detail if isinstance(exc.detail, str) and exc.detail else "Not Found"
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=_boe(exc.status_code, _detail),
+            headers=getattr(exc, "headers", None),
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=getattr(exc, "headers", None),
+    )
+
+
 @app.middleware("http")
 async def _prom_observe(request, call_next):
     # Skip self-observation on the metrics endpoint to avoid recursion noise.
@@ -201,6 +231,74 @@ async def _prom_observe(request, call_next):
             _prom_record_request(org, decision, elapsed_s)
         except Exception:
             pass
+
+
+@app.middleware("http")
+async def _openai_compat_shim(request, call_next):
+    """OpenAI-SDK exact-compat shim (single choke point — D2 + D3).
+
+    For every ``/v1/*`` response:
+      - D3: guarantee an ``x-request-id`` header (-> SDK ``response._request_id`` /
+        ``error.request_id``), reusing the gateway's own request id when the handler
+        set it on ``request.state.gw_request_id`` (so header == body).
+      - D2: rewrite any FLAT error body ``{"error": "<str>", "message": ..., "code": ...}``
+        into the nested OpenAI envelope ``{"error": {message,type,param,code}}`` via the
+        existing ``coerce_chat_error_to_openai`` (idempotent on already-nested bodies), so
+        the SDK populates ``e.code`` / ``e.type`` / ``e.param`` instead of ``None``.
+        ZeroShield diagnostics (request_id, category, pipeline_trace, …) are preserved at
+        the TOP level. Streaming (SSE) responses are passed through untouched.
+    """
+    if not request.url.path.startswith("/v1/"):
+        return await call_next(request)
+    response = await call_next(request)
+    rid = (getattr(request.state, "gw_request_id", "")
+           or request.headers.get("X-Request-ID")
+           or request.headers.get("x-request-id")
+           or f"zs-{_uuid.uuid4().hex[:12]}")
+    try:
+        response.headers["x-request-id"] = rid
+    except Exception:
+        pass
+    ctype = response.headers.get("content-type", "")
+    # Successes and streaming (SSE) bodies are left as-is (only the header was added).
+    if response.status_code < 400 or "text/event-stream" in ctype or "application/json" not in ctype:
+        return response
+    # Error JSON: collect the (non-streaming) body and coerce it to the nested envelope.
+    # NOTE: once body_iterator is consumed the original response can't be returned
+    # (its body is exhausted), so EVERY path below rebuilds a fresh response from the
+    # buffered bytes — never `return response`.
+    _buf = b""
+    try:
+        async for _chunk in response.body_iterator:
+            _buf += _chunk
+    except Exception:
+        pass
+    _hdrs = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
+    _hdrs["x-request-id"] = rid
+    # Phase-4 (P2-STREAM-429): a retryable upstream status (429/503) must carry a
+    # Retry-After hint so the stock SDK's auto-backoff has a delay. Single choke point
+    # covers EVERY 429/503 path; never override a value a handler already set.
+    if response.status_code in (429, 503) and not any(k.lower() == "retry-after" for k in _hdrs):
+        _hdrs["Retry-After"] = "1"
+    try:
+        parsed = json.loads(_buf) if _buf else {}
+    except Exception:
+        parsed = None
+    if not isinstance(parsed, dict):
+        # Non-JSON / unparseable body — pass the original bytes through unchanged.
+        return Response(content=_buf, status_code=response.status_code,
+                        headers=_hdrs, media_type=ctype or None)
+    try:
+        try:
+            from .responses_adapters import coerce_chat_error_to_openai as _cc
+        except ImportError:
+            from responses_adapters import coerce_chat_error_to_openai as _cc
+        coerced = _cc(response.status_code, parsed)
+    except Exception:
+        coerced = parsed
+    if isinstance(coerced, dict) and not coerced.get("request_id"):
+        coerced["request_id"] = rid
+    return JSONResponse(status_code=response.status_code, content=coerced, headers=_hdrs)
 
 
 # SEC-01 FIX: Environment-based CORS origins instead of wildcard
@@ -559,8 +657,16 @@ def _build_safe_block_response(
         threat_category=threat_category,
         detection_tier=detection_tier,
     )
+    # D2 (OpenAI-SDK exact-compat): the stock `openai` client reads
+    # e.code / e.type / e.param / e.message from a NESTED body["error"] object. A
+    # flat top-level "error":"blocked" string left all of those None, so customer
+    # `except ... as e: if e.code == "content_filter"` blocks never fired. Emit the
+    # nested OpenAI error envelope (responses_adapters.build_openai_error — the same
+    # helper /v1/responses already uses). ZeroShield diagnostics stay MIRRORED at the
+    # TOP level so existing ZS consumers + the /demo client keep working unchanged.
+    from responses_adapters import build_openai_error as _build_openai_error
     content = {
-        "error": "blocked",
+        **_build_openai_error(status_code, message, code=code),
         "message": message,
         "code": code,
         "request_id": _request_id,  # For support inquiries only
@@ -575,7 +681,13 @@ def _build_safe_block_response(
         # rule/pattern fired in a 403 body is an evasion oracle. Operator and
         # telemetry channels still receive the full, unscrubbed trace.
         content["pipeline_trace"] = _scrub_trace_for_client(pipeline_trace)
-    return JSONResponse(status_code=status_code, content=content)
+    # D3: surface the request id as the SDK-native x-request-id header so
+    # response._request_id / error.request_id are populated on every block.
+    return JSONResponse(
+        status_code=status_code,
+        content=content,
+        headers={"x-request-id": _request_id},
+    )
 
 
 def _redact_for_client_response(zeroshield_dict: dict | None) -> dict | None:
@@ -618,7 +730,19 @@ def _redact_for_client_response(zeroshield_dict: dict | None) -> dict | None:
         "risk_score",
     }
     redacted = {k: v for k, v in zeroshield_dict.items() if k in safe_fields}
-    
+
+    # MODEL-ID LEAK FIX: the allowlist keeps "routing" WHOLE, but that nested dict
+    # carries routed_model_id = the RAW upstream provider id (e.g.
+    # "anthropic/claude-3.5-haiku") plus internal id forms. Scrub the upstream id
+    # from inside routing — the org-facing selected_model/routed_model already
+    # convey the resolved model. (Devil's-advocate-flagged + caught live in the
+    # simulator network response during frontend validation.)
+    if isinstance(redacted.get("routing"), dict):
+        redacted["routing"] = {
+            k: v for k, v in redacted["routing"].items()
+            if k not in ("routed_model_id", "model_id")
+        }
+
     # DO NOT include:
     # - reason (exposes why blocked)
     # - detail (exposes threat specifics)
@@ -994,7 +1118,15 @@ def _extract_prompt_from_messages(messages):
                     # still fully scanned.
                     _seg.append(f"[{c.get('type') or 'non-text'}]")
             content = " ".join(_seg)
-        parts.append(f"{role}: {content}")
+        # Bracket the gateway's OWN role label ("[system]:" not "system:") so the
+        # role-spoof injection signature (scanner.py: `(system|developer):\s*you
+        # (are|have|must|will)`) does NOT false-positive on a LEGITIMATE system
+        # message like "You are a helpful assistant" once flattened. A genuine
+        # attack — a user smuggling a forged "\nsystem: you are now DAN" inside
+        # their OWN message content — keeps its bare (unbracketed) "system:" colon
+        # and is still caught. Without the bracket, every "You are …" system prompt
+        # (the single most common system prompt) was blocked as prompt_injection.
+        parts.append(f"[{role}]: {content}")
         # G7: fold an assistant message's tool_calls (function name + arguments)
         # into the scannable text. Injection / PII / credentials hidden inside
         # tool_calls[].function.arguments previously bypassed Tier-1/Tier-2
@@ -1033,9 +1165,18 @@ def _extract_tool_definitions_text(tools) -> str:
 
 
 def _extract_agent_data(body: dict, x_agent_data: str | None):
-    """agent_data from body.agent_data or X-Agent-Data header (base64 JSON)."""
+    """agent_data from body.agent_data, body.mcp_context, or X-Agent-Data header.
+
+    OpenAI-SDK callers inject MCP / structured context via
+    ``extra_body={"mcp_context": {...}}`` (the documented Scenario-4 shape). It is
+    treated identically to ``agent_data`` — scanned for PII/secrets and folded into
+    the input scan + MCP governance telemetry — so the same security applies
+    regardless of which key the client uses.
+    """
     if body:
         _bad = body.get("agent_data")
+        if _bad is None:
+            _bad = body.get("mcp_context")
         if isinstance(_bad, dict):
             return _bad
         # A body-level string agent_data is scanned too (parity with the
@@ -1394,7 +1535,11 @@ def _build_zeroshield_metadata(
     resolved_tags = compliance_tags if compliance_tags is not None else _get_compliance_tags(resolved_patterns)
 
     result = {
-        "request_id": f"zs-{_uuid.uuid4().hex[:12]}",
+        # Phase-4 D-b root fix: reuse the canonical per-request id (_REQUEST_ID,
+        # set in proxy_chat / proxy_embeddings) so the body request_id == the
+        # x-request-id header (shim) == the [SECURITY_BLOCK] log id. Mint a fresh
+        # id only when the ContextVar is unset (non-request / background context).
+        "request_id": _REQUEST_ID.get("") or f"zs-{_uuid.uuid4().hex[:12]}",
         "action": action,
         "reason": reason,
         "detail": detail or reason,
@@ -1466,21 +1611,70 @@ _SAFE_MODEL_NAME_RE = re.compile(r"[A-Za-z0-9._:/+-]+")
 
 _LONE_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
 
+# C6b: a ~1KB deeply-nested JSON body (depth >= CPython's ~1000 recursion limit)
+# crashed _strip_lone_surrogates with RecursionError -> HTTP 500 (a cheap DoS),
+# because it ran on the raw body BEFORE any size/DoS gate. Cap the recursion depth
+# far above any legitimate request body (messages + tool JSON-schemas nest only a
+# handful of levels) and well below the interpreter limit; past the cap, stop
+# recursing and return the subtree unchanged so the existing downstream shape
+# validation rejects the pathological body with a clean 400 instead of a 500.
+_MAX_BODY_SANITIZE_DEPTH = 200
 
-def _strip_lone_surrogates(value):
+
+def _strip_lone_surrogates(value, _depth: int = 0):
     """Replace lone UTF-8 surrogate code points (e.g. ``\\ud800`` arriving via a
     JSON escape) with U+FFFD. A lone surrogate is not encodable to UTF-8, so left
     in place it raises ``UnicodeEncodeError`` deep in litellm/openai serialization
     (a 502 + multi-second hang) and poisons the telemetry JSON column (Postgres
     rejects it, dropping the security EnforcementEvent). Sanitizing at the gateway
     boundary keeps every downstream consumer on valid Unicode."""
+    if _depth > _MAX_BODY_SANITIZE_DEPTH:
+        # Over-nested body (DoS): stop recursing. The shape/size gates downstream
+        # reject it (400), so this subtree is never serialized to an upstream anyway.
+        return value
     if isinstance(value, str):
         return _LONE_SURROGATE_RE.sub("�", value) if _LONE_SURROGATE_RE.search(value) else value
     if isinstance(value, list):
-        return [_strip_lone_surrogates(v) for v in value]
+        return [_strip_lone_surrogates(v, _depth + 1) for v in value]
     if isinstance(value, dict):
-        return {k: _strip_lone_surrogates(v) for k, v in value.items()}
+        return {k: _strip_lone_surrogates(v, _depth + 1) for k, v in value.items()}
     return value
+
+
+def _normalize_chatcmpl_id(_id):
+    """OAS-LEAK-I3-01: litellm passes the RAW upstream generation id through the
+    top-level ``id`` (e.g. an OpenRouter ``gen-…``), leaking the provider. Rewrite a
+    non-``chatcmpl-`` prefix to ``chatcmpl-`` (keeping the opaque suffix) for OpenAI
+    parity + topology hygiene."""
+    if isinstance(_id, str) and _id and not _id.startswith("chatcmpl-"):
+        return re.sub(r"^[A-Za-z]+-", "chatcmpl-", _id, count=1) if re.match(r"^[A-Za-z]+-", _id) else f"chatcmpl-{_id}"
+    return _id
+
+
+def _scrub_upstream_passthrough(body: dict, request_id: str = "") -> None:
+    """OAS-LEAK (class): the gateway returns the upstream LLM body verbatim apart from
+    the zeroshield-envelope scrub. Comprehensively strip upstream-internal passthrough
+    that leaks the provider family / topology and is NOT part of the OpenAI schema:
+      - top-level ``id`` (raw upstream generation id) -> normalized ``chatcmpl-…``;
+      - top-level ``citations`` (OpenRouter/Perplexity-family);
+      - ``provider_specific_fields`` at the CHOICE and message/delta level (holds
+        ``reasoning_details[].format`` = provider family, and native finish reasons);
+      - choice-level ``native_finish_reason``.
+    Denylist (not allowlist) so a legit new OpenAI field is never dropped. Mutates in place."""
+    if not isinstance(body, dict):
+        return
+    body["id"] = _normalize_chatcmpl_id(body.get("id"))
+    body.pop("citations", None)
+    body.pop("provider_specific_fields", None)  # OAS-LEAK-STREAM-ROOT-PSF (top-level parity)
+    for _ch in (body.get("choices") or []):
+        if not isinstance(_ch, dict):
+            continue
+        _ch.pop("provider_specific_fields", None)
+        _ch.pop("native_finish_reason", None)
+        for _slot_key in ("message", "delta"):
+            _slot = _ch.get(_slot_key)
+            if isinstance(_slot, dict):
+                _slot.pop("provider_specific_fields", None)
 
 
 def _collect_nested_strings(obj, _depth: int = 0) -> list:
@@ -1494,7 +1688,14 @@ def _collect_nested_strings(obj, _depth: int = 0) -> list:
         if obj:
             out.append(obj)
     elif isinstance(obj, dict):
-        for v in obj.values():
+        for k, v in obj.items():
+            # RAG-C5-META-1: also fold dict KEY NAMES into the scan. A secret/injection
+            # placed as a metadata KEY (e.g. {"ghp_…":"x"} or {"ignore all previous
+            # instructions":"v"}) was stored UNSCANNED and round-tripped on query,
+            # because only .values() were collected. The exact token blocks as a value
+            # but sailed through as a key.
+            if isinstance(k, str) and k:
+                out.append(k)
             out.extend(_collect_nested_strings(v, _depth + 1))
     elif isinstance(obj, (list, tuple)):
         for v in obj:
@@ -1657,9 +1858,16 @@ def _extract_chat_routing_preferences(body: dict, org_config: dict, auth_ctx, sc
         if _w is None:
             _w = org_config.get(org_key, CONFIG.get(org_key, default))
         try:
-            return float(_w)
+            _wf = float(_w)
         except (ValueError, TypeError):
             return float(default)
+        # R2-RT-3: a caller-supplied weight is unvalidated input. Clamp to [0,1] so a
+        # NEGATIVE weight can't invert _normalize_weights (negative Σ flips every
+        # component → forces the worst/dead model) and a huge weight (1e308) can't
+        # dominate. 0 stays legitimate ("ignore this dimension").
+        if _wf != _wf:  # NaN
+            return float(default)
+        return max(0.0, min(_wf, 1.0))
 
     weights = {
         "risk": _weight("risk_weight", "routing_risk_weight", 0.30),
@@ -2095,11 +2303,31 @@ def _build_stream_zeroshield_base(
         if route_selection is not None:
             requested = getattr(route_selection, "requested_model", None) or "auto"
             routed = getattr(route_selection, "model_name", "") or ""
+            _rerouted = bool(requested and requested != "auto" and routed and routed != requested)
+            _routing_reason = getattr(route_selection, "reason", "") or ""
+            _decision_source = getattr(route_selection, "decision_source", "") or ""
             zs["selected_model"] = routed
             zs["original_model"] = requested
-            zs["rerouted"] = bool(requested and requested != "auto" and routed and routed != requested)
-            zs["routing_reason"] = getattr(route_selection, "reason", "") or ""
-            zs["decision_source"] = getattr(route_selection, "decision_source", "") or ""
+            zs["rerouted"] = _rerouted
+            zs["routing_reason"] = _routing_reason
+            zs["decision_source"] = _decision_source
+            # STREAMING PIPELINE FIX: also surface the NESTED ``routing`` object so a
+            # streamed terminal frame has the SAME shape as the non-stream response
+            # (zeroshield.routing.*). Without this, clients that read
+            # ``zeroshield.routing.selected_model`` (the demo's routing visualizer,
+            # any customer dashboard) get null routing on streamed requests even
+            # though the decision happened. Org-facing names ONLY — routed_model_id
+            # (the raw upstream id) is never set here and is scrubbed by
+            # _redact_for_client_response regardless.
+            zs["routing"] = {
+                "requested_model": requested,
+                "original_model": requested,
+                "selected_model": routed,
+                "routed_model": routed,
+                "rerouted": _rerouted,
+                "routing_reason": _routing_reason,
+                "decision_source": _decision_source,
+            }
         client_zs = _redact_for_client_response(zs) or {}
         client_zs["request_id"] = request_id
         return client_zs
@@ -2136,7 +2364,18 @@ def _launch_chat_stream_response(
         input_scanner=INPUT_SCANNER if secure_output_scan else None,
         output_guard=OUTPUT_GUARD if secure_output_scan else None,
     )
-    request_id = request.headers.get("X-Request-ID", f"zs-stream-{_uuid.uuid4().hex[:12]}")
+    # Use the canonical per-request id set in proxy_chat (_REQUEST_ID ContextVar,
+    # line ~3780) so EVERY event of a streamed request (model_routed, input_blocked,
+    # output_guard, …) shares ONE request_id. Previously this minted a separate
+    # `zs-stream-<uuid>` id, so a streamed request's output_guard event carried a
+    # DIFFERENT id than its model_routed event — making distinct-request counting
+    # (module 1.1 "Requests inspected") see ONE request as TWO. Fall back to the
+    # header, then a fresh id, only when the ContextVar is somehow unset.
+    request_id = (
+        _REQUEST_ID.get("")
+        or request.headers.get("X-Request-ID")
+        or f"zs-stream-{_uuid.uuid4().hex[:12]}"
+    )
     model = body.get("model", "")
     enforcement_mode = str(org_config.get("enforcement_mode", CONFIG.get("enforcement_mode", "block")))
     ctx = StreamLaunchContext(
@@ -2167,8 +2406,13 @@ def _launch_chat_stream_response(
     )
     stream_metrics = StreamRunMetrics()
 
+    # MODEL-ID LEAK FIX: echo the ORIGINAL requested model in stream chunks (parity
+    # with the non-stream path), never the raw upstream id. route_selection carries
+    # the original requested name; fall back to the resolved body model.
+    _stream_echo_model = (getattr(route_selection, "requested_model", "") or model or "")
+
     async def _provider_stream():
-        async for chunk in LLM_ROUTER.acompletion_stream(body, redacted_prompt, metrics=stream_metrics):
+        async for chunk in LLM_ROUTER.acompletion_stream(body, redacted_prompt, metrics=stream_metrics, echo_model=_stream_echo_model):
             yield chunk
 
     inner = _provider_stream()
@@ -2205,6 +2449,35 @@ def _launch_chat_stream_response(
                 request=request,  # streaming #4
             )
 
+    # M-51: terminal zeroshield trace frame (emitted once before [DONE]).
+    _stream_zs_base = _build_stream_zeroshield_base(
+        request_id=request_id,
+        scan_verdict=scan_verdict,
+        redacted_prompt=redacted_prompt,
+        route_selection=route_selection,
+    )
+    # FULL-PIPELINE-ON-STREAM: build the SAME 9-stage pipeline_trace the non-stream
+    # path returns, so streaming clients render the COMPLETE pipeline (auth → rate
+    # limit → policy → input scan → kill switch → routing → model input → model
+    # output → output guard), not just the routing summary. Stages come from
+    # scan_verdict + the routing already in the zeroshield base; the output_guard
+    # stage is overlaid with the mid-stream guard outcome inside
+    # build_stream_trace_frame. Fail-open — a trace build error never breaks the stream.
+    _stream_pt_base = None
+    try:
+        from pipeline_trace import build_pipeline_trace as _bpt_stream
+
+        _stream_pt_base = _bpt_stream(
+            forwarded_prompt=redacted_prompt or "",
+            scan_verdict=scan_verdict,
+            zeroshield=_stream_zs_base,
+            requested_model=_stream_echo_model,
+            final_action=str((_stream_zs_base or {}).get("action") or "allow"),
+            http_status=200,
+        )
+    except Exception:
+        LOG.debug("streaming pipeline_trace build failed; routing-only trace emitted", exc_info=True)
+
     finalized = stream_with_finalize(
         inner,
         ctx,
@@ -2215,13 +2488,8 @@ def _launch_chat_stream_response(
         finalize_timeout_ms=int(
             org_config.get("stream_finalize_timeout_ms", CONFIG.get("stream_finalize_timeout_ms", 5000))
         ),
-        # M-51: terminal zeroshield trace frame (emitted once before [DONE]).
-        zeroshield_base=_build_stream_zeroshield_base(
-            request_id=request_id,
-            scan_verdict=scan_verdict,
-            redacted_prompt=redacted_prompt,
-            route_selection=route_selection,
-        ),
+        zeroshield_base=_stream_zs_base,
+        pipeline_trace_base=_stream_pt_base,
     )
     return StreamingResponse(
         finalized,
@@ -2372,6 +2640,53 @@ def _filter_inference_eligible_models(routing_models: list[dict] | None) -> list
     return eligible
 
 
+async def _drop_isolated_or_killed_candidates(models, org_slug: str, key_prefix: str):
+    """B1 FIX (CRITICAL): drop models that are runtime-ISOLATED (model_state) or
+    KILL-SWITCHED from the routing candidate set so the adjudicator can never SELECT
+    a disabled model. Isolation/kill-switch were previously enforced only on the
+    pre-routing *requested* model (``check_model_state``/``check_kill_switch`` at the
+    request gate), but ``_score_routing_models`` hard-filters only on ``is_active`` —
+    so ``model='auto'`` / adjudicated routing routed straight onto isolated/killed
+    models (B1). Returns ``(servable_models, excluded_names)``. Fails OPEN on a check
+    error (never breaks routing) but honours the checks' own fail-CLOSED verdicts
+    (``suspended``/``is_killed``). Logs exclusions (B3 audit trail)."""
+    if not models or REDIS_CLIENT is None:
+        return models, []
+    try:
+        from model_state import check_model_state as _cms
+        from kill_switch import check_kill_switch as _cks
+    except ImportError:
+        from .model_state import check_model_state as _cms
+        from .kill_switch import check_kill_switch as _cks
+    import asyncio as _aio
+
+    async def _servable(m: dict) -> bool:
+        name = str(m.get("model_name") or m.get("model_id") or "").strip()
+        if not name:
+            return True
+        try:
+            ms = await _cms(REDIS_CLIENT, name, org_slug or "default")
+            if str(getattr(ms, "status", "active")) in ("isolated", "suspended") and \
+                    str(getattr(ms, "action", "")) != "alert":
+                return False
+            ks = await _cks(REDIS_CLIENT, name, org_slug or "", key_prefix or "")
+            if getattr(ks, "is_killed", False):
+                return False
+        except Exception:
+            return True  # never break routing on a transient check error
+        return True
+
+    flags = await _aio.gather(*[_servable(m) for m in models])
+    kept = [m for m, ok in zip(models, flags) if ok]
+    excluded = [str(m.get("model_name")) for m, ok in zip(models, flags) if not ok]
+    if excluded:
+        LOG.warning(
+            "B1: excluded isolated/kill-switched models from routing candidates: %s (org=%s)",
+            excluded, org_slug,
+        )
+    return kept, excluded
+
+
 def _filter_embedding_eligible_models(routing_models: list[dict] | None) -> list[dict]:
     """Org-connected EMBEDDING models only — the embeddings-path analogue of
     ``_filter_inference_eligible_models``. Keeps only active, credentialed
@@ -2448,7 +2763,7 @@ def _validate_org_inference_model(
     _safe_final = _safe_model_echo(final_model)
     if final_model and final_model not in allowed and final_model != "auto":
         return JSONResponse(
-            status_code=422,
+            status_code=404,
             content={
                 "error": "model_not_configured",
                 "message": (
@@ -2464,7 +2779,7 @@ def _validate_org_inference_model(
         return None
     if final_model not in allowed:
         return JSONResponse(
-            status_code=422,
+            status_code=404,
             content={
                 "error": "model_not_configured",
                 "message": f"Model '{_safe_final}' is not available for this organization.",
@@ -3052,50 +3367,6 @@ def _require_admin_role(request) -> JSONResponse | None:
 
     auth_ctx = getattr(request.state, "auth_context", None)
     return require_admin(auth_ctx)
-
-
-def _maybe_emit_critical_alert(
-    threat_type: str,
-    confidence: float,
-    user_id: int | None = None,
-    detail: str = "",
-    org_slug: str = "",
-) -> None:
-    """
-    If alerting is enabled and the confidence score exceeds the critical
-    threshold, emit a critical_alert telemetry event for backend processing.
-    """
-    alert_cfg = CONFIG
-    if org_slug and CONFIG_SYNC is not None:
-        alert_cfg = CONFIG_SYNC.get_config(org_slug)
-    if not alert_cfg.get("alerting_enabled", True):
-        return
-    if TELEMETRY is None:
-        return
-    risk_score_pct = int(confidence * 100)
-    critical_threshold = alert_cfg.get("critical_alert_threshold", 90)
-    if risk_score_pct >= critical_threshold:
-        _emit_telemetry(
-            event_type="critical_alert",
-            action="alert",
-            threat_type=threat_type,
-            risk_score=confidence,
-            user_id=user_id,
-            compliance_tags=alert_cfg.get("compliance_frameworks", []),
-            metadata={
-                "alert_level": "critical",
-                "risk_score_pct": risk_score_pct,
-                "critical_threshold": critical_threshold,
-                "detail": detail,
-                "alert_recipients": alert_cfg.get("alert_recipients", ""),
-                "module": "1.2",
-                "module_id": "1.2",
-            },
-        )
-        LOG.warning(
-            "Critical alert emitted: threat_type=%s, risk_score=%d%%, threshold=%d%%, user=%s",
-            threat_type, risk_score_pct, critical_threshold, user_id,
-        )
 
 
 async def _telemetry_loop():
@@ -3730,11 +4001,16 @@ async def proxy_chat(
     # P9c: establish ONE request_id for the whole request and thread it through
     # logs + the control telemetry emit. Honour an inbound correlation header,
     # else mint a fresh one. Never crash if headers are unusual.
-    _REQUEST_ID.set(
+    _rid = (
         request.headers.get("X-Request-ID")
         or request.headers.get("x-request-id")
         or f"zs-{_uuid.uuid4().hex[:12]}"
     )
+    _REQUEST_ID.set(_rid)
+    # D3: expose this same id on the x-request-id RESPONSE header (the OpenAI-compat
+    # shim middleware reads request.state.gw_request_id after the handler returns) so
+    # the SDK's response._request_id / error.request_id is populated and matches the body.
+    request.state.gw_request_id = _rid
 
     try:
         try:
@@ -3807,6 +4083,7 @@ async def proxy_chat(
                     content={
                         "error": "invalid_request",
                         "message": "'max_tokens' must be an integer.",
+                        "param": "max_tokens",
                         "code": "invalid_max_tokens",
                     },
                 )
@@ -3822,33 +4099,48 @@ async def proxy_chat(
                     content={
                         "error": "invalid_request",
                         "message": "'max_tokens' must be an integer.",
+                        "param": "max_tokens",
                         "code": "invalid_max_tokens",
                     },
                 )
-            if _max_tokens_int < 1:
+            if _max_tokens_int < 0:
                 return JSONResponse(
                     status_code=400,
                     content={
                         "error": "invalid_request",
                         "message": "'max_tokens' must be a positive integer.",
+                        "param": "max_tokens",
                         "code": "invalid_max_tokens",
                     },
                 )
+            if _max_tokens_int == 0:
+                # max_tokens == 0 is the ZeroShield "scan-only / no-inference" probe
+                # sentinel: the rest of the gateway already treats it that way
+                # (needs_inference = max_tokens > 0). Rejecting 0 here as "invalid"
+                # CONTRADICTED that and broke every input-scan probe — the simulator
+                # (and any client that sends 0 to run guardrails WITHOUT paying for a
+                # completion) got a 400 "'max_tokens' must be a positive integer"
+                # instead of an input-scan verdict. Treat it like an absent
+                # max_tokens: drop the key so the request runs input scan + policy
+                # with no inference. (A negative value is still rejected above.)
+                body.pop("max_tokens", None)
             # C5: cap an absurd upper bound. A huge int was previously forwarded
             # upstream unbounded (provider-side error / quota burn). 1,000,000 is
             # a generous absolute ceiling well above any real output budget.
-            if _max_tokens_int > MAX_OUTPUT_TOKENS_CEILING:
+            elif _max_tokens_int > MAX_OUTPUT_TOKENS_CEILING:
                 return JSONResponse(
                     status_code=400,
                     content={
                         "error": "invalid_request",
                         "message": f"'max_tokens' must not exceed {MAX_OUTPUT_TOKENS_CEILING}.",
+                        "param": "max_tokens",
                         "code": "invalid_max_tokens",
                     },
                 )
-            # Normalize to the coerced int so the later min()/comparison is
-            # type-safe regardless of whether the client sent "100" / 100.0 / etc.
-            body["max_tokens"] = _max_tokens_int
+            else:
+                # Normalize to the coerced int so the later min()/comparison is
+                # type-safe regardless of whether the client sent "100" / 100.0 / etc.
+                body["max_tokens"] = _max_tokens_int
 
         messages_raw = body.get("messages")
         if messages_raw is not None and not isinstance(messages_raw, list):
@@ -4189,7 +4481,7 @@ async def proxy_chat(
                 )
             if requested_model and routing_identities and requested_model not in routing_identities and not routing_active:
                 return JSONResponse(
-                    status_code=422,
+                    status_code=404,
                     content={
                         "error": "model_not_configured",
                         "message": f"Model '{_safe_req}' is not configured for external inference in this organization.",
@@ -5411,17 +5703,29 @@ async def proxy_chat(
                 # ``Retry-After``.
                 METRICS["blocked"] += 1
                 retry_after = int(getattr(_t2err, "retry_after_seconds", 30) or 30)
+                LOG.warning(
+                    "Tier-2 scanner breaker OPEN (strict) — refusing request, retry_after=%ss",
+                    retry_after,
+                )
+                # OPENAI-COMPAT FIX: use 503 (not 451). A transient scanner-breaker
+                # outage is RETRYABLE — the stock OpenAI SDK honors Retry-After and
+                # auto-retries on 5xx, but treats 451 as a terminal non-retryable
+                # error (and has no 451 exception class → generic APIStatusError).
+                # Body is the nested OpenAI envelope; ZeroShield diagnostics ride at
+                # the top level so they never confuse the SDK.
+                try:
+                    from .responses_adapters import build_openai_error as _boe
+                except ImportError:
+                    from responses_adapters import build_openai_error as _boe
                 return JSONResponse(
-                    status_code=451,
-                    content={
-                        "status": "degraded",
-                        "reason": "tier2_unavailable_strict",
-                        "retry_after": retry_after,
-                        "detail": (
-                            "Tier-2 scanner circuit breaker is open; refusing request "
-                            "while strict mode is enabled."
-                        ),
-                    },
+                    status_code=503,
+                    content=_boe(
+                        503,
+                        "Security scanner is temporarily unavailable; please retry shortly.",
+                        error_type="service_unavailable_error",
+                        code="tier2_unavailable",
+                        extra_top_level={"reason": "tier2_unavailable_strict", "retry_after": retry_after},
+                    ),
                     headers={"Retry-After": str(retry_after)},
                 )
 
@@ -5523,13 +5827,6 @@ async def proxy_chat(
                     prompt_snippet=_prompt_snippet,
                     endpoint_id=endpoint_id,
                 )
-                _maybe_emit_critical_alert(
-                    threat_type=verdict.threat_type,
-                    confidence=verdict.confidence,
-                    user_id=user_id,
-                    detail=verdict.detail,
-                    org_slug=org_slug or "",
-                )
                 if enforcement_mode == "block":
                     METRICS["blocked"] += 1
                     elapsed_ms = (time.perf_counter() - start) * 1000
@@ -5592,13 +5889,6 @@ async def proxy_chat(
                 LOG.info(
                     "PII/secret detected, redacting before LLM call (type=%s, patterns=%s, user=%s)",
                     verdict.threat_type, _safe_patterns, user_id,
-                )
-                _maybe_emit_critical_alert(
-                    threat_type=verdict.threat_type,
-                    confidence=verdict.confidence,
-                    user_id=user_id,
-                    detail=f"PII/secret detected and redacted: {', '.join(verdict.matched_patterns)}",
-                    org_slug=org_slug or "",
                 )
                 effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt)
                 redacted_prompt = effective_prompt
@@ -5785,6 +6075,7 @@ async def proxy_chat(
                         prompt=_redact_trace_text(prompt),
                         forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
                         policy_redacted_prompt=policy_redacted_prompt,
+                        policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
                         stage_metrics=stage_metrics,
                         final_action=_zs_full.get("action") or "allow",
                         http_status=200,
@@ -5852,8 +6143,25 @@ async def proxy_chat(
         if auth_ctx is not None and requested_model and not _is_routing_sentinel_model(requested_model):
             _org_identities = _routing_identity_set(inference_models)
             if _org_identities and requested_model not in _org_identities:
-                return JSONResponse(
+                # B1.1-undercount: request passed the gateway but targets a concrete
+                # model the org has not connected — count it once (action=block) so it
+                # is visible in module 1.1 "Requests inspected".
+                _emit_telemetry(
                     status_code=422,
+                    event_type="request",
+                    model=body.get("model", ""),
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_prefix=auth_ctx.prefix if auth_ctx else "",
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    risk_score=0.0,
+                    action="block",
+                    threat_type="model_not_configured",
+                    endpoint_id=endpoint_id,
+                    metadata={"stage_metrics_ms": stage_metrics, "outcome": "model_not_configured"},
+                )
+                return JSONResponse(
+                    status_code=404,
                     content={
                         "error": "model_not_configured",
                         "message": (
@@ -5867,6 +6175,19 @@ async def proxy_chat(
                     },
                 )
         if routing_active:
+            # B1 FIX (CRITICAL): exclude runtime-ISOLATED (model_state) and KILL-SWITCHED
+            # models from the routing candidate set BEFORE adjudication. The scorer
+            # (_score_routing_models) only hard-filters on LLMModelConfig.is_active and
+            # never consulted model_state:*/kill_switch:*, so model='auto' / adjudicated
+            # routing could SELECT and SERVE an operator-isolated or killed model
+            # (isolation was enforced only on the pre-routing *requested* model). Removing
+            # them here makes isolation/kill-switch effective on every routing path; if all
+            # compliant candidates are down, adjudicate returns None and the existing
+            # compliance/availability gate returns 503 (fail-closed). B3: the exclusion is
+            # logged so the previously-silent bypass now leaves an audit trail.
+            inference_models, _zs_excluded = await _drop_isolated_or_killed_candidates(
+                inference_models, org_slug, auth_ctx.prefix if auth_ctx else "",
+            )
             selection = await LLM_ROUTER.adjudicate_model_selection(
                 routing_models=inference_models,
                 request_messages=body.get("messages") or [],
@@ -6032,8 +6353,42 @@ async def proxy_chat(
         routing_probe_only = not needs_inference
         if routing_probe_only and _is_routing_sentinel_model(requested_model):
             if not inference_models:
+                # B1.1-undercount: this request PASSED the gateway (auth + input
+                # scan) but is rejected because no inference provider is connected.
+                # Emit one canonical ingress `request` event so it is still counted
+                # in module 1.1 "Requests inspected" (action=block → "stopped before
+                # downstream completion"). request_id is auto-injected from the
+                # _REQUEST_ID ContextVar by _emit_telemetry.
+                _emit_telemetry(
+                    status_code=422,
+                    event_type="request",
+                    model=body.get("model", ""),
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_prefix=auth_ctx.prefix if auth_ctx else "",
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    risk_score=0.0,
+                    action="block",
+                    threat_type="no_inference_provider",
+                    endpoint_id=endpoint_id,
+                    metadata={"stage_metrics_ms": stage_metrics, "outcome": "no_inference_provider"},
+                )
                 return _build_no_inference_provider_response()
             if route_selection is None:
+                _emit_telemetry(
+                    status_code=422,
+                    event_type="request",
+                    model=body.get("model", ""),
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_prefix=auth_ctx.prefix if auth_ctx else "",
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    risk_score=0.0,
+                    action="block",
+                    threat_type="routing_target_unresolved",
+                    endpoint_id=endpoint_id,
+                    metadata={"stage_metrics_ms": stage_metrics, "outcome": "routing_target_unresolved"},
+                )
                 return JSONResponse(
                     status_code=422,
                     content={
@@ -6375,6 +6730,28 @@ async def proxy_chat(
                     except (json.JSONDecodeError, TypeError):
                         pass
                 await check_auto_isolate(REDIS_CLIENT, requested_model, org_slug or "default", composite, ms_threshold, ms_action)
+            # B1.1-undercount: the request PASSED the gateway but upstream inference
+            # failed (model unavailable / 5xx / provider error). Previously NO
+            # `request` event was emitted on this path, so the request was invisible
+            # to module 1.1 "Requests inspected" (and, with routing on, only the
+            # earlier model_routed event existed → it was mis-counted as "allowed").
+            # Emit one canonical ingress `request` event (action=block → "stopped
+            # before downstream completion") so it is counted exactly once and
+            # classified honestly. request_id is auto-injected by _emit_telemetry.
+            _emit_telemetry(
+                status_code=code if code else 502,
+                event_type="request",
+                model=body.get("model", ""),
+                user_id=user_id,
+                project_id=str(project_id or ""),
+                key_prefix=auth_ctx.prefix if auth_ctx else "",
+                latency_ms=(time.perf_counter() - start) * 1000,
+                risk_score=0.0,
+                action="block",
+                threat_type="upstream_inference_error",
+                endpoint_id=endpoint_id,
+                metadata={"stage_metrics_ms": stage_metrics, "outcome": "upstream_inference_error", "upstream_status": code},
+            )
             # Never reflect raw LiteLLM exception text (fallback topology +
             # OpenRouter user_id) to the client (R5).
             return JSONResponse(
@@ -6599,7 +6976,13 @@ async def proxy_chat(
                 )
                 _audit_output_incident(
                     org_slug=org_slug or "",
-                    decision="rewrite",
+                    # H-01 FIX: the executed action on this path is redact (or flag
+                    # when nothing maskable matched, per _oact) — NOT rewrite. The
+                    # decision was hardcoded "rewrite", mislabeling every output-guard
+                    # redact in the audit trail and contradicting both the telemetry
+                    # action (_oact) and the rule_code (..._redact_...). Use the honest
+                    # executed action.
+                    decision=_oact,
                     rule_code=f"output_guard_redact_{output_verdict.threat_type}",
                     metadata={
                         "input_bytes": len((response_text or "").encode("utf-8")),
@@ -6615,6 +6998,39 @@ async def proxy_chat(
                 )
                 _set_completion_response_text(llm_resp, rewritten_response)
                 response_text = rewritten_response
+                # H-07 FIX: re-validate the REWRITTEN output ONCE. A rewrite is a
+                # fresh model inference that can re-introduce — or NEWLY leak — an
+                # internal IP / hostname / file path / secret the original detector
+                # never saw. The rewriter's internal redact_all only covers
+                # PII/secret/credential (NOT ip_leakage/policy/hallucination) and
+                # inspect() was never re-run, so a poisoned rewrite shipped unscanned.
+                # Re-inspect once; if the rewrite is STILL unsafe, do NOT ship it —
+                # fall back to the static canned safe message (guaranteed leak-free).
+                # Single pass (never a 2nd rewrite) => no inference loop; fail-closed.
+                try:
+                    _rw_recheck = await OUTPUT_GUARD.inspect(
+                        rewritten_response,
+                        context_chunks=context_chunks,
+                        org_config=org_config,
+                        org_slug=org_slug or "",
+                    )
+                    _rw_unsafe = _rw_recheck is not None and str(
+                        getattr(_rw_recheck, "action", "allow")
+                    ) in ("block", "redact", "rewrite")
+                except Exception:  # noqa: BLE001 - never crash the response; fail CLOSED
+                    _rw_unsafe = True
+                if _rw_unsafe:
+                    LOG.warning(
+                        "Output rewrite re-validation FAILED (rewrite still unsafe: type=%s) — "
+                        "replacing with static canned safe message",
+                        output_verdict.threat_type,
+                    )
+                    rewritten_response = _rewrite_output_response_text(
+                        output_verdict.threat_type, output_verdict.detail
+                    )
+                    _set_completion_response_text(llm_resp, rewritten_response)
+                    response_text = rewritten_response
+                    _rw_reinferred = False
                 # R3: surface whether the rewrite was a genuine model re-inference
                 # or a degraded static canned replacement.
                 _rw_degraded = not _rw_reinferred
@@ -6706,6 +7122,25 @@ async def proxy_chat(
                     metadata={"detail": output_verdict.detail, "response_snippet": _raw_model_output, "raw_output": _raw_model_output, "sanitized_output": response_text[:500] if response_text else "", "guardrail_reasoning": output_verdict.detail, "matched_patterns": getattr(output_verdict, 'matched_patterns', [])},
                     prompt_snippet=_prompt_snippet,
                     endpoint_id=endpoint_id,
+                )
+                # FLAG-AUDIT FIX: block / redact / rewrite each write an
+                # _audit_output_incident row, but the flag path only emitted
+                # telemetry — so a flagged (review_required) output left NO entry
+                # in the Security Incident Log even when incident logging is on,
+                # making the most-actionable "needs human review" outputs invisible
+                # to the audit/incident surface. Write the incident here too (the
+                # wrapper is itself gated on output_incident_logging_enabled).
+                _audit_output_incident(
+                    org_slug=org_slug or "",
+                    decision="flag",
+                    rule_code=f"output_guard_flag_{output_verdict.threat_type}",
+                    metadata={
+                        "input_bytes": len((response_text or "").encode("utf-8")),
+                        "model_id": body.get("model", ""),
+                        "score": getattr(output_verdict, "confidence", 0.60),
+                        "matched_patterns": getattr(output_verdict, "matched_patterns", []),
+                        "review_required": True,
+                    },
                 )
         elif INPUT_SCANNER is not None and response_text and org_config.get("output_scan_enabled", True):
             output_verdict = await INPUT_SCANNER.scan_output(response_text)
@@ -7004,23 +7439,9 @@ async def proxy_chat(
         _tel_action = "redact" if redacted_prompt is not None else "allow"
         _tel_threat = (scan_verdict.threat_type if scan_verdict and redacted_prompt is not None else "")
         _tel_risk = (scan_verdict.confidence if scan_verdict and redacted_prompt is not None else 0.0)
-        telemetry_start = time.perf_counter()
-        _emit_telemetry(
-            event_type="request",
-            model=body.get("model", ""),
-            user_id=user_id,
-            project_id=str(project_id or ""),
-            key_prefix=auth_ctx.prefix if auth_ctx else "",
-            prompt_snippet=_prompt_snippet,
-            endpoint_id=endpoint_id,
-            latency_ms=elapsed_ms,
-            risk_score=_tel_risk,
-            action=_tel_action,
-            threat_type=_tel_threat,
-            tokens_used=usage or {},
-            metadata={"stage_metrics_ms": stage_metrics},
-        )
-        stage_metrics["telemetry_enqueue_ms"] = round((time.perf_counter() - telemetry_start) * 1000, 2)
+        # Request telemetry is emitted AFTER pipeline_trace is built (below) so Scan
+        # Detail / Activity Preview receive the full 9-stage trace + I/O, not just
+        # stage_metrics_ms.
         if tier2_execution_mode == "async_post_llm":
             await enqueue_job(
                 job_type="chat_postprocess",
@@ -7226,6 +7647,7 @@ async def proxy_chat(
                 prompt=_redact_trace_text(prompt),
                 forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
                 policy_redacted_prompt=policy_redacted_prompt,
+                policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
                 stage_metrics=stage_metrics,
                 final_action=_final,
                 blocked_stage="",
@@ -7241,10 +7663,77 @@ async def proxy_chat(
                 output_scan_verdict=output_verdict,
             )
 
+        # Emit request telemetry with full pipeline_trace + I/O for Activity Preview.
+        telemetry_start = time.perf_counter()
+        _pt_for_tel = llm_resp.get("pipeline_trace") if isinstance(llm_resp, dict) else None
+        _rid_tel = _REQUEST_ID.get("") or request.headers.get("X-Request-ID", "")
+        _tel_md: dict[str, Any] = {"stage_metrics_ms": stage_metrics}
+        if _pt_for_tel:
+            _tel_md["pipeline_trace"] = _pt_for_tel
+        if _rid_tel:
+            _tel_md["request_id"] = _rid_tel
+            _tel_md["incident_id"] = _rid_tel
+        if _prompt_snippet:
+            _tel_md["prompt_snippet"] = _prompt_snippet[:2000]
+            if isinstance(_pt_for_tel, dict):
+                _tel_md["prompt_submitted"] = (
+                    _pt_for_tel.get("prompt_submitted")
+                    or _pt_for_tel.get("forwarded_prompt")
+                    or _prompt_snippet[:2000]
+                )
+            else:
+                _tel_md["prompt_submitted"] = _prompt_snippet[:2000]
+        if response_text:
+            _tel_md["response_snippet"] = (response_text or "")[:2000]
+            _tel_md["sanitized_output"] = (response_text or "")[:2000]
+        _emit_telemetry(
+            event_type="request",
+            model=body.get("model", ""),
+            user_id=user_id,
+            project_id=str(project_id or ""),
+            key_prefix=auth_ctx.prefix if auth_ctx else "",
+            prompt_snippet=_prompt_snippet,
+            endpoint_id=endpoint_id,
+            latency_ms=(time.perf_counter() - start) * 1000,
+            risk_score=_tel_risk,
+            action=_tel_action,
+            threat_type=_tel_threat,
+            tokens_used=usage or {},
+            metadata=_tel_md,
+        )
+        stage_metrics["telemetry_enqueue_ms"] = round((time.perf_counter() - telemetry_start) * 1000, 2)
+
         # ── SECURITY FIX: Redact sensitive fields from zeroshield metadata before returning to client ──
         # The zeroshield object contains internal security details that MUST NOT be exposed to clients.
         if isinstance(llm_resp.get("zeroshield"), dict):
             llm_resp["zeroshield"] = _redact_for_client_response(llm_resp["zeroshield"]) or {}
+
+        # MODEL-ID LEAK FIX: litellm sets the top-level `model` to the RAW upstream
+        # provider id (e.g. "anthropic/claude-3-5-haiku") — this leaks the platform's
+        # BYOK/provider topology AND breaks OpenAI-SDK parity (a stock client expects
+        # its requested model echoed back). Rewrite to the client-facing name: the
+        # original requested model (or the org-facing routed alias), NEVER the raw
+        # upstream id. Same resolution the pipeline_trace already uses above.
+        if isinstance(llm_resp, dict):
+            _client_facing_model = (route_metadata or {}).get("original_model") or body.get("model") or ""
+            if _client_facing_model:
+                llm_resp["model"] = _client_facing_model
+            # TOPOLOGY LEAK FIX (caught live in the simulator response during Phase-7
+            # frontend validation): strip litellm/OpenRouter passthrough fields that
+            # leak the upstream PROVIDER (e.g. "Amazon Bedrock") and the platform's
+            # COST BASIS / margin. None are part of the OpenAI response schema and
+            # none are consumed by any client (verified) — so removing them improves
+            # both OpenAI parity and topology hygiene.
+            llm_resp.pop("provider", None)
+            _usage = llm_resp.get("usage")
+            if isinstance(_usage, dict):
+                for _k in ("cost", "cost_details", "is_byok"):
+                    _usage.pop(_k, None)
+            # OAS-LEAK (class): comprehensively strip upstream-internal passthrough that
+            # leaks the provider family/topology — the raw upstream generation id, the
+            # OpenRouter/Perplexity `citations`, and provider_specific_fields (carrying
+            # reasoning_details[].format + native_finish_reason) at choice + message level.
+            _scrub_upstream_passthrough(llm_resp, _rid_tel)
 
         return JSONResponse(content=llm_resp, headers=_latin1_safe_headers(response_headers_final))
 
@@ -7289,15 +7778,26 @@ async def proxy_chat(
 # therefore INHERITED, never forked (master plan §3 — the keystone decision).
 # ════════════════════════════════════════════════════════════════════════════
 from starlette.requests import Request as _StarletteRequest  # noqa: E402
-from responses_adapters import (  # noqa: E402
-    generate_openai_id as _gen_oai_id,
-    build_openai_error as _build_oai_error,
-    coerce_chat_error_to_openai as _coerce_chat_error,
-    responses_to_chat as _responses_to_chat,
-    chat_completion_to_responses as _chat_to_responses,
-    extract_assistant_messages_for_replay as _replay_msgs,
-)
-from responses_store import ResponseStore as _ResponseStore  # noqa: E402
+try:
+    from .responses_adapters import (  # noqa: E402
+        generate_openai_id as _gen_oai_id,
+        build_openai_error as _build_oai_error,
+        coerce_chat_error_to_openai as _coerce_chat_error,
+        responses_to_chat as _responses_to_chat,
+        chat_completion_to_responses as _chat_to_responses,
+        extract_assistant_messages_for_replay as _replay_msgs,
+    )
+    from .responses_store import ResponseStore as _ResponseStore  # noqa: E402
+except ImportError:
+    from responses_adapters import (  # noqa: E402
+        generate_openai_id as _gen_oai_id,
+        build_openai_error as _build_oai_error,
+        coerce_chat_error_to_openai as _coerce_chat_error,
+        responses_to_chat as _responses_to_chat,
+        chat_completion_to_responses as _chat_to_responses,
+        extract_assistant_messages_for_replay as _replay_msgs,
+    )
+    from responses_store import ResponseStore as _ResponseStore  # noqa: E402
 
 
 async def _dispatch_chat_internally(request, chat_body: dict, x_user_id, x_endpoint_id, x_agent_data):
@@ -7327,14 +7827,16 @@ async def _translate_chat_stream_to_responses(chat_stream, response_id: str, mod
     """Translate the chat-completions SSE stream into Responses typed events.
     Emits response.created -> output_item.added -> output_text.delta* ->
     output_text.done -> output_item.done -> response.completed, plus the terminal
-    ``[DONE]``. The chat terminal zeroshield trace frame (M-51) is folded into the
-    final ``response.completed`` object."""
+    ``[DONE]``. Mid-stream chat error frames (e.g. output guard ``output_blocked``)
+    emit ``response.failed`` instead of a false ``response.completed``. The chat
+    terminal zeroshield trace frame (M-51) is folded into the final object."""
     item_id = _gen_oai_id("message")
     seq = 0
     accumulated = []
     final_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
     zeroshield = None
     finish_reason = None
+    stream_error = None
     base_resp = {
         "id": response_id, "object": "response", "created_at": created_at,
         "model": model, "status": "in_progress", "output": [],
@@ -7364,6 +7866,15 @@ async def _translate_chat_stream_to_responses(chat_stream, response_id: str, mod
                 continue
             if isinstance(obj.get("zeroshield"), dict):
                 zeroshield = obj["zeroshield"]
+            err_obj = obj.get("error")
+            if isinstance(err_obj, dict) and err_obj:
+                stream_error = err_obj
+                err_kind = str(err_obj.get("code") or err_obj.get("type") or "")
+                if err_kind == "output_blocked":
+                    # Fail-closed: never complete successfully with blocked content.
+                    accumulated.clear()
+                    started_text = False
+                continue
             if obj.get("usage"):
                 u = obj["usage"]
                 final_usage = {"input_tokens": u.get("prompt_tokens", 0),
@@ -7386,6 +7897,28 @@ async def _translate_chat_stream_to_responses(chat_stream, response_id: str, mod
                     yield _responses_sse("response.output_text.delta", {
                         "type": "response.output_text.delta", "item_id": item_id,
                         "output_index": 0, "content_index": 0, "delta": piece, "sequence_number": seq})
+
+    if stream_error is not None:
+        seq += 1
+        err_msg = stream_error.get("message") or "The response was blocked."
+        err_code = stream_error.get("code") or stream_error.get("type") or "server_error"
+        failed_response = dict(
+            base_resp,
+            status="failed",
+            output=[],
+            output_text="",
+            usage=final_usage,
+            error={"message": err_msg, "code": err_code},
+        )
+        if zeroshield is not None:
+            failed_response["zeroshield"] = zeroshield
+        yield _responses_sse("response.failed", {
+            "type": "response.failed",
+            "sequence_number": seq,
+            "response": failed_response,
+        })
+        yield "data: [DONE]\n\n"
+        return
 
     full_text = "".join(accumulated)
     if started_text:
@@ -7430,6 +7963,11 @@ async def proxy_responses(
         return JSONResponse(status_code=400, content=_build_oai_error(400, "Request body must be a JSON object."))
     if not raw_body.get("model"):
         return JSONResponse(status_code=400, content=_build_oai_error(400, "Missing required parameter: 'model'.", param="model"))
+    if not isinstance(raw_body.get("model"), str):
+        return JSONResponse(
+            status_code=400,
+            content=_build_oai_error(400, "'model' must be a string.", param="model", code="invalid_model"),
+        )
     if raw_body.get("input") is None and not raw_body.get("instructions"):
         return JSONResponse(status_code=400, content=_build_oai_error(400, "Missing required parameter: 'input'.", param="input"))
 
@@ -7456,7 +7994,9 @@ async def proxy_responses(
     chat_response = await _dispatch_chat_internally(request, chat_body, x_user_id, x_endpoint_id, x_agent_data)
 
     # ── Streaming path ──
-    if is_stream and hasattr(chat_response, "body_iterator"):
+    # Pre-stream blocks/errors from proxy_chat are JSONResponse, not SSE. Passing
+    # them through as text/event-stream breaks stock SDK stream parsers.
+    if is_stream and isinstance(chat_response, StreamingResponse):
         store_ctx = {"store": store if raw_body.get("store") else None,
                      "org_id": org_id,
                      "input_messages": chat_body.get("messages", []),
@@ -7855,7 +8395,7 @@ async def proxy_embeddings(request: Request):
                         },
                     )
                 return JSONResponse(
-                    status_code=422,
+                    status_code=404,
                     content={
                         "error": "model_not_configured",
                         "message": (
@@ -7985,128 +8525,6 @@ async def proxy_embeddings(request: Request):
         METRICS["sum_latency_ms"] += (time.perf_counter() - start) * 1000
 
 
-@app.post(
-    "/v1/responses",
-    summary="Responses API (OpenAI-compatible proxy)",
-    description="OpenAI Responses API (client.responses.create). Firewall-mediated: input scan, kill-switch/model-state, output guard. Non-streaming.",
-)
-async def proxy_responses(request: Request):
-    """OpenAI Responses API endpoint. Reuses the chat firewall leaf helpers on the
-    flattened ``input``, routes via LLM_ROUTER.aresponses (org-scoped BYOK), and
-    runs the OUTPUT guard on the Responses output channels."""
-    start = time.perf_counter()
-    try:
-        try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse(status_code=400, content={"error": {"message": "Invalid JSON body.", "type": "invalid_request_error"}})
-        if not isinstance(body, dict):
-            return JSONResponse(status_code=400, content={"error": {"message": "Request body must be a JSON object.", "type": "invalid_request_error"}})
-        if body.get("input") in (None, ""):
-            return JSONResponse(status_code=400, content={"error": {"message": "Missing required parameter: 'input'.", "type": "invalid_request_error", "param": "input"}})
-
-        # Streaming arrives in the next increment; reject cleanly so an SDK caller
-        # gets a clear error instead of a broken/partial stream.
-        if body.get("stream"):
-            return JSONResponse(status_code=400, content={"error": {"message": "Streaming for /v1/responses is not yet enabled on this gateway; retry with stream=false.", "type": "invalid_request_error", "code": "stream_unsupported", "param": "stream"}})
-
-        auth_ctx = getattr(request.state, "auth_context", None)
-        org_slug = auth_ctx.org_slug if auth_ctx else ""
-        body["_zs_org_slug"] = org_slug
-        org_config = CONFIG_SYNC.get_config(org_slug) if CONFIG_SYNC else CONFIG
-        user_id = getattr(auth_ctx, "user_id", None) if auth_ctx else None
-        key_prefix = getattr(auth_ctx, "prefix", "") if auth_ctx else ""
-        requested_model = body.get("model", "") or ""
-
-        # Flatten input (+ instructions) for the firewall.
-        prompt = _extract_prompt_from_responses_input(body.get("input"), body.get("instructions"))
-
-        # Kill-switch + model-state gate (parity with chat/embeddings; fail-closed).
-        if org_config.get("kill_switch_enabled", True):
-            if REDIS_CLIENT is None:
-                METRICS["blocked"] += 1
-                return JSONResponse(status_code=503, content={"error": {"message": "Kill-switch enforcement unavailable.", "type": "service_unavailable", "code": "kill_switch_active"}})
-            try:
-                from kill_switch import check_kill_switch as _ck_r
-            except ImportError:
-                from .kill_switch import check_kill_switch as _ck_r
-            _ks = await _ck_r(REDIS_CLIENT, requested_model, org_slug=org_slug, key_prefix=key_prefix or "")
-            if getattr(_ks, "is_killed", False):
-                METRICS["blocked"] += 1
-                return JSONResponse(status_code=503, content={"error": {"message": "This model is currently disabled by an operator kill-switch.", "type": "service_unavailable", "code": "kill_switch_active"}})
-        if REDIS_CLIENT is not None:
-            try:
-                from model_state import check_model_state as _cms_r
-            except ImportError:
-                from .model_state import check_model_state as _cms_r
-            _ms = await _cms_r(REDIS_CLIENT, requested_model, org_slug=org_slug or "default")
-            if getattr(_ms, "status", "") in ("isolated", "suspended"):
-                METRICS["blocked"] += 1
-                return JSONResponse(status_code=503, content={"error": {"message": "This model is currently isolated by an operator.", "type": "service_unavailable", "code": "model_unavailable"}})
-
-        # INPUT scan (tier-1 + tier-2) — block / redact identical to chat.
-        redacted_input = None
-        if INPUT_SCANNER is not None and prompt and org_config.get("input_scan_enabled", True):
-            try:
-                verdict = await INPUT_SCANNER.scan_prompt_with_tier2(
-                    prompt, is_rag=False, org_slug=org_slug or "",
-                    org_tier2_strict=False, request_id=_REQUEST_ID.get(""),
-                )
-            except TypeError:
-                verdict = await INPUT_SCANNER.scan_prompt(prompt, is_rag=False)
-            _action = getattr(verdict, "action", "allow")
-            if _action == "block":
-                METRICS["blocked"] += 1
-                return _build_safe_block_response(
-                    status_code=403, code="input_blocked",
-                    threat_category=getattr(verdict, "threat_type", "policy_violation") or "policy_violation",
-                    request_id=_REQUEST_ID.get(""), detection_tier=getattr(verdict, "tier", ""),
-                )
-            if _action in ("redact", "rewrite") and isinstance(body.get("input"), str):
-                redacted_input = INPUT_SCANNER.redact_pii(prompt)
-
-        # Route via the org-scoped Responses path (BYOK key isolation preserved).
-        status, resp = await LLM_ROUTER.aresponses(body, redacted_content=redacted_input)
-        if status != 200 or not isinstance(resp, dict):
-            return JSONResponse(status_code=status, content=resp)
-
-        # OUTPUT guard on the Responses output channels.
-        out_action = "allow"
-        out_text = _extract_responses_output_text(resp)
-        if out_text and OUTPUT_GUARD is not None and org_config.get("output_scan_enabled", True):
-            try:
-                o_verdict = await OUTPUT_GUARD.inspect(out_text, context_chunks=[], org_config=org_config, org_slug=org_slug or "")
-            except TypeError:
-                o_verdict = await OUTPUT_GUARD.inspect(out_text)
-            out_action = getattr(o_verdict, "action", "allow")
-            if out_action == "block" or out_action == "rewrite":
-                METRICS["blocked"] += 1
-                return _build_safe_block_response(
-                    status_code=403, code="output_blocked",
-                    threat_category=getattr(o_verdict, "threat_type", "policy_violation") or "policy_violation",
-                    request_id=_REQUEST_ID.get(""),
-                )
-            if out_action == "redact":
-                _red = INPUT_SCANNER.redact_pii(out_text) if INPUT_SCANNER is not None else out_text
-                _set_responses_output_text(resp, _red)
-
-        # Attach the zeroshield trace (SDK ignores the extra top-level field).
-        resp["zeroshield"] = {
-            "action": "redacted" if (redacted_input or out_action == "redact") else "allow",
-            "input_redacted": bool(redacted_input),
-            "output_action": out_action,
-            "model": requested_model,
-            "request_id": _REQUEST_ID.get(""),
-        }
-        METRICS["allowed"] = METRICS.get("allowed", 0) + 1
-        return JSONResponse(status_code=200, content=resp)
-    except Exception:
-        LOG.exception("Unexpected error in proxy_responses")
-        return JSONResponse(status_code=500, content={"error": {"message": "Internal error processing responses request.", "type": "internal_error"}})
-    finally:
-        METRICS["sum_latency_ms"] += (time.perf_counter() - start) * 1000
-
-
 # ── Dynamic vector client resolution (org config → env-var default) ──
 
 def _resolve_vector_client(vector_db_type: str, org_id: int | str | None = None):
@@ -8118,15 +8536,20 @@ def _resolve_vector_client(vector_db_type: str, org_id: int | str | None = None)
     """
     # Try org-level config first
     if org_id and VECTOR_PROVIDER_SYNC is not None:
-        cfg = VECTOR_PROVIDER_SYNC.get_provider_config(org_id, vector_db_type)
-        if cfg and cfg.get("is_active"):
+        lookup_types = [vector_db_type]
+        if vector_db_type == "custom":
+            lookup_types.append("chroma")
+        for resolved_type in lookup_types:
+            cfg = VECTOR_PROVIDER_SYNC.get_provider_config(org_id, resolved_type)
+            if not (cfg and cfg.get("is_active")):
+                continue
             # R12 (#8): SSRF guard on the org-supplied connection_url (mirrors
             # rag_collections.client_from_provider_config). Blocks metadata/loopback/
             # link-local; permits private RFC1918 (legit self-hosted vector DBs).
             # Pinecone (no connection_url) is unaffected.
             _conn_url = cfg.get("connection_url")
             _vp_ok = True
-            if _conn_url and vector_db_type in ("chroma", "milvus", "custom"):
+            if _conn_url and resolved_type in ("chroma", "milvus", "custom"):
                 try:
                     from _url_guard import is_safe_vector_provider_url as _safe_vp
                 except ImportError:
@@ -8137,7 +8560,7 @@ def _resolve_vector_client(vector_db_type: str, org_id: int | str | None = None)
             if _vp_ok:
                 from vector_client import PineconeClient, MilvusClient, ChromaDBClient
                 try:
-                    if vector_db_type == "pinecone" and cfg.get("api_key"):
+                    if resolved_type == "pinecone" and cfg.get("api_key"):
                         return PineconeClient(
                             api_key=cfg["api_key"],
                             environment=cfg.get("environment", ""),
@@ -8145,26 +8568,34 @@ def _resolve_vector_client(vector_db_type: str, org_id: int | str | None = None)
                             embedding_api_key=cfg.get("embedding_api_key", ""),
                             reranker_model=cfg.get("reranker_model", ""),
                         ), "pinecone"
-                    elif vector_db_type == "chroma" and cfg.get("connection_url"):
+                    elif resolved_type == "chroma" and cfg.get("connection_url"):
                         # BYOK Chroma: the org connects their own Chroma server.
                         return ChromaDBClient(
                             url=cfg["connection_url"],
                             auth_token=cfg.get("api_key", ""),
                         ), "chroma"
-                    elif vector_db_type == "milvus" and cfg.get("connection_url"):
+                    elif resolved_type == "milvus" and cfg.get("connection_url"):
                         return MilvusClient(
                             uri=cfg["connection_url"],
                             token=cfg.get("api_key", ""),
                         ), "milvus"
-                    elif vector_db_type == "custom" and cfg.get("connection_url"):
-                        # Custom provider support is currently backed by Milvus-compatible
-                        # URI/token contracts until dedicated adapters are introduced.
+                    elif resolved_type == "custom" and cfg.get("connection_url"):
+                        url = str(cfg["connection_url"])
+                        if url.startswith("http://") or url.startswith("https://"):
+                            return ChromaDBClient(
+                                url=url,
+                                auth_token=cfg.get("api_key", ""),
+                            ), "chroma"
                         return MilvusClient(
-                            uri=cfg["connection_url"],
+                            uri=url,
                             token=cfg.get("api_key", ""),
                         ), "custom"
                 except Exception:
-                    LOG.warning("Failed to create org-level %s client for org=%s, falling back to default", vector_db_type, org_id)
+                    LOG.warning(
+                        "Failed to create org-level %s client for org=%s, falling back to default",
+                        resolved_type,
+                        org_id,
+                    )
 
     # Fall back to gateway-level default
     client = VECTOR_CLIENTS.get(vector_db_type)
@@ -8651,7 +9082,7 @@ async def rag_query(request: Request):
         if not policy_embedding_model and _req_emb_concrete:
             METRICS["blocked"] += 1
             return JSONResponse(
-                status_code=422,
+                status_code=404,
                 content={
                     "error": "model_not_configured",
                     "message": (
@@ -8721,6 +9152,9 @@ async def rag_query(request: Request):
         # _resolve_vector_client silently falls back to a different provider.
         # Mirror the create/delete handlers' no_provider_configured → 422 pattern.
         _known_vector_provider_types = {"pinecone", "chroma", "milvus", "custom"}
+        _org_provider_types = [effective_vector_db_type]
+        if effective_vector_db_type == "custom":
+            _org_provider_types.append("chroma")
         _provider_configured = (
             effective_vector_db_type in _known_vector_provider_types
             and (
@@ -8728,9 +9162,10 @@ async def rag_query(request: Request):
                 or (
                     org_id_for_client is not None
                     and VECTOR_PROVIDER_SYNC is not None
-                    and VECTOR_PROVIDER_SYNC.get_provider_config(
-                        org_id_for_client, effective_vector_db_type
-                    ) is not None
+                    and any(
+                        VECTOR_PROVIDER_SYNC.get_provider_config(org_id_for_client, ptype) is not None
+                        for ptype in _org_provider_types
+                    )
                 )
             )
         )
@@ -9155,16 +9590,26 @@ async def rag_ingest(request: Request):
                     text_to_scan = doc_text.get("content", "") or doc_text.get("text", "") or str(doc_text)
                 else:
                     text_to_scan = str(doc_text)
-                # FA: also scan this doc's METADATA string values. Metadata is
-                # attacker-controllable on ingest and round-trips to the caller (and
-                # into downstream RAG prompts) but was never scanned — only document
-                # content was. Folding metadata values into the scan input means an
-                # injection/PII string hidden in metadata is now detected/blocked.
+                # FA + RAG-C5-META-BYPASS: scan this doc's METADATA string values.
+                # Metadata is attacker-controllable on ingest and round-trips to the
+                # caller (and into downstream RAG prompts). Scan BOTH the top-level
+                # metadatas[i] AND the inline-document-dict's own ``d['metadata']`` —
+                # the inline shape is what STORAGE persists below, so scanning only the
+                # synthetic top-level placeholder let a poisoned inline metadata be
+                # stored UNSCANNED. _collect_nested_strings folds every string in the
+                # (possibly nested) metadata so a secret/injection can't hide in a
+                # nested dict/list either.
+                _meta_sources = []
                 _meta_i = metadatas[i] if i < len(metadatas) else None
                 if isinstance(_meta_i, dict):
-                    _mvals = [str(_v) for _v in _meta_i.values() if isinstance(_v, (str, int, float)) and str(_v).strip()]
-                    if _mvals:
-                        text_to_scan = (text_to_scan or "") + "\n" + "\n".join(_mvals)
+                    _meta_sources.append(_meta_i)
+                if isinstance(doc_text, dict) and isinstance(doc_text.get("metadata"), dict):
+                    _meta_sources.append(doc_text["metadata"])
+                _mvals: list[str] = []
+                for _ms in _meta_sources:
+                    _mvals.extend(_collect_nested_strings(_ms))
+                if _mvals:
+                    text_to_scan = (text_to_scan or "") + "\n" + "\n".join(_mvals)
                 action = "allow"
                 threats: list[str] = []
                 if CONTEXT_GUARD is not None:
@@ -10996,25 +11441,35 @@ async def list_models(request: Request):
                 "code": "unauthorized",
             },
         )
+    return JSONResponse(content={"object": "list", "data": _resolve_models_for_request(request)})
+
+
+def _resolve_models_for_request(request: Request) -> list[dict]:
+    """OpenAI-format model list for the request's org. Shared by GET /v1/models and
+    GET /v1/models/{model} so a single-model lookup never diverges from the list.
+    Caller is responsible for auth-gating (both endpoints reject a missing auth_ctx)."""
     if LLM_ROUTER is None:
-        return JSONResponse(content={"object": "list", "data": []})
-
+        return []
+    auth_ctx = getattr(request.state, "auth_context", None)
     models = LLM_ROUTER.get_model_list()
-
-    # Filter by org if auth context is available (optional auth — endpoint stays in EXCLUDED_PATHS)
     org_slug = auth_ctx.org_slug if auth_ctx else ""
     if org_slug and CONFIG_SYNC:
         org_routing = CONFIG_SYNC.get_model_routing(org_slug)
-        if org_routing:
-            eligible = _filter_inference_eligible_models(org_routing)
-            allowed = _routing_identity_set(eligible)
-            models = [m for m in models if m.get("id") in allowed]
-        else:
-            models = []
-
-    # R8: dedup by id — a model can appear under multiple routing identities /
-    # aliases in the router model_list, which surfaced the same model twice in
-    # the public /v1/models response.
+        eligible = _filter_inference_eligible_models(org_routing) if org_routing else []
+        # Enumerate the org's OWN inference-eligible models by CLIENT-FACING name
+        # (model_name) — the exact string a caller passes as `model`.
+        _ordered: list[str] = []
+        _seen_names: set[str] = set()
+        for _m in eligible:
+            _nm = str(_m.get("model_name") or _m.get("model_id") or "").strip()
+            if _nm and _nm not in _seen_names and not _is_routing_sentinel_model(_nm):
+                _seen_names.add(_nm)
+                _ordered.append(_nm)
+        models = [
+            {"id": _n, "object": "model", "created": 1704067200, "owned_by": org_slug}
+            for _n in _ordered
+        ]
+    # R8: dedup by id (a model can appear under multiple routing identities/aliases).
     _seen: set = set()
     _deduped = []
     for _m in models:
@@ -11023,7 +11478,96 @@ async def list_models(request: Request):
             continue
         _seen.add(_mid)
         _deduped.append(_m)
-    return JSONResponse(content={"object": "list", "data": _deduped})
+    return _deduped
+
+
+@app.get("/v1/models/{model_id:path}", summary="Retrieve a model", tags=["Models"])
+async def retrieve_model(model_id: str, request: Request):
+    """D4-P0: ``client.models.retrieve(id)`` — many tools probe a model before use."""
+    auth_ctx = getattr(request.state, "auth_context", None)
+    if auth_ctx is None:
+        return JSONResponse(status_code=401, content={
+            "error": "unauthorized", "message": "A valid API key is required.", "code": "unauthorized"})
+    for _m in _resolve_models_for_request(request):
+        if _m.get("id") == model_id:
+            return JSONResponse(content=_m)
+    return JSONResponse(status_code=404, content={
+        "error": "model_not_found",
+        "message": f"The model '{model_id}' does not exist or you do not have access to it.",
+        "code": "model_not_found"})
+
+
+@app.post("/v1/moderations", summary="Classify text against ZeroShield safety policies", tags=["Moderations"])
+async def create_moderations(request: Request):
+    """D4-P1: ``client.moderations.create()`` — expose the firewall's input detectors as a
+    first-class OpenAI surface. Returns the exact OpenAI moderation schema; the standard
+    OpenAI categories this firewall does not classify are reported ``False``, while the
+    ZeroShield signals (prompt_injection / jailbreak / pii / credential) carry the verdict."""
+    auth_ctx = getattr(request.state, "auth_context", None)
+    if auth_ctx is None:
+        return JSONResponse(status_code=401, content={
+            "error": "unauthorized", "message": "A valid API key is required.", "code": "unauthorized"})
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={
+            "error": "invalid_request", "message": "Invalid JSON body.", "code": "invalid_request"})
+    _inp = body.get("input") if isinstance(body, dict) else None
+    if _inp is None:
+        return JSONResponse(status_code=400, content={
+            "error": "invalid_request", "message": "Missing required parameter: 'input'.",
+            "code": "missing_required_parameter"})
+    texts = [_inp] if isinstance(_inp, str) else (_inp if isinstance(_inp, list) else [str(_inp)])
+    results = []
+    for _t in texts:
+        s = _t if isinstance(_t, str) else str(_t)
+        threat, conf, action = "", 0.0, "allow"
+        if INPUT_SCANNER is not None and s.strip():
+            try:
+                v = await INPUT_SCANNER.scan_prompt(s)
+                threat = str(getattr(v, "threat_type", "") or "")
+                conf = float(getattr(v, "confidence", 0.0) or 0.0)
+                action = str(getattr(v, "action", "allow") or "allow")
+            except Exception:
+                pass
+        zs = {
+            "prompt_injection": threat in ("prompt_injection", "indirect_injection", "injection"),
+            "jailbreak": threat == "jailbreak",
+            "pii": threat == "pii",
+            "credential": threat in ("secret", "credential"),
+        }
+        categories = {"hate": False, "hate/threatening": False, "harassment": False,
+                      "self-harm": False, "sexual": False, "violence": False, **zs}
+        flagged = action in ("block", "flag", "redact") or any(zs.values())
+        scores = {k: (round(conf, 4) if v else 0.0) for k, v in categories.items()}
+        results.append({"flagged": bool(flagged), "categories": categories, "category_scores": scores})
+    return JSONResponse(content={
+        "id": f"modr-{_uuid.uuid4().hex[:24]}",
+        "model": (body.get("model") if isinstance(body, dict) else None) or "zeroshield-moderation",
+        "results": results})
+
+
+# D4: surfaces a firewall gateway does not implement. Return a clean nested 404 (via the
+# compat shim) so the stock SDK raises NotFoundError instead of hanging or 500-ing.
+# (/v1/completions legacy + /v1/files + /v1/batches + /v1/images/* + /v1/audio/* are
+#  candidates for future thin implementations; today they fail fast and correctly.)
+async def _openai_surface_unimplemented(request: Request):
+    return JSONResponse(status_code=404, content={
+        "error": "not_found",
+        "message": f"The endpoint '{request.url.path}' is not implemented by the ZeroShield gateway.",
+        "code": "endpoint_not_found"})
+
+for _p, _methods in (
+    ("/v1/completions", ["POST"]),
+    ("/v1/files", ["POST", "GET"]),
+    ("/v1/files/{rest:path}", ["GET", "POST", "DELETE"]),
+    ("/v1/batches", ["POST", "GET"]),
+    ("/v1/batches/{rest:path}", ["GET", "POST"]),
+    ("/v1/images/{rest:path}", ["POST"]),
+    ("/v1/audio/{rest:path}", ["POST"]),
+    ("/v1/fine_tuning/{rest:path}", ["GET", "POST"]),
+):
+    app.add_api_route(_p, _openai_surface_unimplemented, methods=_methods, include_in_schema=False)
 
 
 class _HealthEndpointAccessFilter(logging.Filter):

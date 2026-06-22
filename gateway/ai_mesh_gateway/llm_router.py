@@ -41,6 +41,27 @@ from litellm.exceptions import (
     Timeout,
 )
 
+# C7: litellm's Router raises RouterRateLimitError / RouterRateLimitErrorBasic when
+# no healthy deployment is available (e.g. a model whose only upstream returns 404
+# triggers a cooldown). These subclass ONLY ValueError, so they bypass both the
+# litellm.exceptions catch and the exact-type _EXCEPTION_STATUS_MAP below, falling
+# through to the bare `except Exception` that returns a generic 502 internal_error.
+# A "no healthy deployment / throttle" condition is honestly a 503 — collect the
+# classes defensively (tolerating litellm version drift) so we can catch them
+# explicitly before the bare except. An empty tuple `except ()` simply matches
+# nothing, preserving the old behavior if the import path ever changes.
+_ROUTER_THROTTLE_EXCS: tuple = ()
+try:
+    from litellm.types.router import RouterRateLimitError as _RRLE
+    _ROUTER_THROTTLE_EXCS += (_RRLE,)
+except Exception:  # pragma: no cover - litellm version drift
+    pass
+try:
+    from litellm.types.router import RouterRateLimitErrorBasic as _RRLEB
+    _ROUTER_THROTTLE_EXCS += (_RRLEB,)
+except Exception:  # pragma: no cover - litellm version drift
+    pass
+
 LOG = logging.getLogger("gateway.llm_router")
 
 # Map LiteLLM exceptions to HTTP status codes
@@ -732,6 +753,16 @@ class LLMRouter:
                     "code": status,
                 }
             }
+        except _ROUTER_THROTTLE_EXCS as exc:
+            # C7: no healthy deployment / router throttle -> honest 503, not 502.
+            LOG.warning("LiteLLM no-deployment/throttle [503]: %s", _scrub_internal_topology(exc))
+            return 503, {
+                "error": {
+                    "message": _sanitize_exception_message(exc, 503),
+                    "type": "ServiceUnavailableError",
+                    "code": 503,
+                }
+            }
         except Exception as exc:
             LOG.exception("Unexpected LLM error")
             return 502, {
@@ -740,9 +771,15 @@ class LLMRouter:
                     "type": "internal_error",
                 }
             }
-    
-    async def _stream_chunks_from_response(self, response) -> AsyncGenerator[str, None]:
-        """Emit SSE chunks from an active LiteLLM streaming response."""
+
+    async def _stream_chunks_from_response(self, response, client_model: str = "") -> AsyncGenerator[str, None]:
+        """Emit SSE chunks from an active LiteLLM streaming response.
+
+        ``client_model`` is the client-facing model name (the requested/org-facing
+        alias). When set, each chunk's ``model`` field is rewritten to it so the
+        RAW upstream provider id (e.g. "anthropic/claude-3-5-haiku") never leaks in
+        the stream — matching the non-stream MODEL-ID LEAK fix in proxy_chat.
+        """
         async for chunk in response:
             chunk_dict = chunk.model_dump()
             # Defense-in-depth: a provider/litellm chunk must NEVER carry a raw
@@ -757,6 +794,38 @@ class LLMRouter:
                     "type": "upstream_error",
                     "code": 502,
                 }
+            if isinstance(chunk_dict, dict):
+                if client_model and chunk_dict.get("model"):
+                    chunk_dict["model"] = client_model
+                # TOPOLOGY LEAK FIX: litellm/OpenRouter stream chunks also carry the
+                # upstream `provider` (e.g. "Amazon Bedrock") and cost-basis fields;
+                # strip them the same way the non-stream path does (not OpenAI-schema,
+                # not consumed by clients).
+                chunk_dict.pop("provider", None)
+                _u = chunk_dict.get("usage")
+                if isinstance(_u, dict):
+                    for _k in ("cost", "cost_details", "is_byok"):
+                        _u.pop(_k, None)
+                # OAS-LEAK (class): strip upstream-internal passthrough from each chunk
+                # — normalized id (gen-… -> chatcmpl-…), top-level `citations`
+                # (OpenRouter/Perplexity), and provider_specific_fields (reasoning_details
+                # .format = provider family) + native_finish_reason at choice + delta level.
+                _cid = chunk_dict.get("id")
+                if isinstance(_cid, str) and _cid and not _cid.startswith("chatcmpl-"):
+                    _p = _cid.split("-", 1)
+                    chunk_dict["id"] = "chatcmpl-" + (_p[1] if len(_p) == 2 else _cid)
+                chunk_dict.pop("citations", None)
+                # OAS-LEAK-STREAM-ROOT-PSF: litellm also exposes provider_specific_fields
+                # at the CHUNK ROOT (not just choice/delta) — strip it here too.
+                chunk_dict.pop("provider_specific_fields", None)
+                for _ch in (chunk_dict.get("choices") or []):
+                    if not isinstance(_ch, dict):
+                        continue
+                    _ch.pop("provider_specific_fields", None)
+                    _ch.pop("native_finish_reason", None)
+                    _delta = _ch.get("delta")
+                    if isinstance(_delta, dict):
+                        _delta.pop("provider_specific_fields", None)
             yield f"data: {json.dumps(chunk_dict)}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -765,6 +834,7 @@ class LLMRouter:
             body: dict,
             redacted_content: str | None = None,
             metrics: "StreamRunMetrics | None" = None,
+            echo_model: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """Streaming completion. Yields SSE-formatted chunks.
 
@@ -784,6 +854,12 @@ class LLMRouter:
         compliant_chain = self._pop_compliant_fallback_chain(body)
         kwargs = self._build_kwargs(body, stream=True, inference_allowlist=allowlist)
         kwargs["fallbacks"] = []  # H2: see acompletion — gateway owns vetted failover, not LiteLLM's catalog-blind constructor map
+        # MODEL-ID LEAK FIX: the client-facing model name to echo in every streamed
+        # chunk, so the raw upstream id in kwargs["model"] never leaks. Prefer the
+        # caller-supplied echo_model (the ORIGINAL requested model, for parity with
+        # the non-stream path) and fall back to body["model"] (the resolved alias);
+        # strip any org-qualification ("org::model" -> "model").
+        _client_model = str(echo_model or body.get("model") or "").split("::")[-1]
 
         if not kwargs['model']:
             error_chunk = {
@@ -826,7 +902,7 @@ class LLMRouter:
 
         try:
             response = await self._execute_completion(kwargs)
-            async for chunk in self._stream_chunks_from_response(response):
+            async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
                 yield _track_chunk(chunk)
             local_metrics.completed = True
         except (BadRequestError, NotFoundError) as exc:
@@ -839,7 +915,7 @@ class LLMRouter:
                         retry_kwargs = {**kwargs, "model": self._qualify_like_primary(candidate, primary)}
                         local_metrics.fallback_before_first_token = True
                         response = await self._execute_completion(retry_kwargs)
-                        async for chunk in self._stream_chunks_from_response(response):
+                        async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
                             yield _track_chunk(chunk)
                         local_metrics.completed = True
                         return
@@ -879,7 +955,7 @@ class LLMRouter:
                 retry_kwargs = {**kwargs, "model": fallback_model}
                 try:
                     response = await self._execute_completion(retry_kwargs)
-                    async for chunk in self._stream_chunks_from_response(response):
+                    async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
                         yield _track_chunk(chunk)
                     local_metrics.completed = True
                     return
@@ -915,6 +991,13 @@ class LLMRouter:
             error_chunk = {
                 "error": {"message": _sanitize_exception_message(exc, status), "type": type(exc).__name__, "code": status}
             }
+            yield f"data: {json.dumps(error_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+            local_metrics.had_error = True
+        except _ROUTER_THROTTLE_EXCS as exc:
+            # C7: no healthy deployment / router throttle -> honest 503, not 502.
+            LOG.warning("LiteLLM stream no-deployment/throttle [503]: %s", _scrub_internal_topology(exc))
+            error_chunk = {"error": {"message": _sanitize_exception_message(exc, 503), "type": "ServiceUnavailableError", "code": 503}}
             yield f"data: {json.dumps(error_chunk)}\n\n"
             yield "data: [DONE]\n\n"
             local_metrics.had_error = True
@@ -1292,7 +1375,13 @@ class LLMRouter:
     @staticmethod
     def _normalize_weights(weights: dict[str, float] | None = None) -> dict[str, float]:
         resolved = {**_DEFAULT_ROUTING_WEIGHTS, **(weights or {})}
-        total = sum(resolved.values()) or 1.0
+        # R2-RT-3: guard a non-positive sum (not just zero). A negative total would
+        # INVERT every normalized component (caller-driven worst-model selection); the
+        # per-request weights are clamped to [0,1] upstream (_weight), but defend in
+        # depth here so an org-config or future caller path can't reintroduce it.
+        total = sum(resolved.values())
+        if total <= 0:
+            total = 1.0
         return {key: value / total for key, value in resolved.items()}
 
     def _score_routing_models(

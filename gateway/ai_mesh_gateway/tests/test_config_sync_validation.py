@@ -246,6 +246,38 @@ async def test_refresh_drops_only_mistyped_keys(fake_redis):
 
 
 @pytest.mark.asyncio
+async def test_org_refresh_does_not_bleed_into_global_or_other_orgs(fake_redis):
+    """Per-org pub/sub refresh must not overwrite global CONFIG or other tenants."""
+    config = {"enforcement_mode": "block", "firewall_enabled": True}
+    sync = ConfigSync("redis://unused", config)
+
+    await fake_redis.set("firewall:config", json.dumps({"enforcement_mode": "block"}))
+    await fake_redis.set(
+        "firewall:config:org-a", json.dumps({"enforcement_mode": "monitor"})
+    )
+    await fake_redis.set(
+        "firewall:config:org-b", json.dumps({"enforcement_mode": "flag"})
+    )
+
+    await sync._refresh(fake_redis)
+    await sync._refresh(fake_redis, org_slug="org-a")
+    await sync._refresh(fake_redis, org_slug="org-b")
+    assert config["enforcement_mode"] == "block"
+    assert sync.get_config("org-a")["enforcement_mode"] == "monitor"
+    assert sync.get_config("org-b")["enforcement_mode"] == "flag"
+
+    # Hot-reload org-b only — org-a and global must stay unchanged.
+    await fake_redis.set(
+        "firewall:config:org-b", json.dumps({"enforcement_mode": "block"})
+    )
+    await sync._refresh(fake_redis, org_slug="org-b")
+
+    assert config["enforcement_mode"] == "block"
+    assert sync.get_config("org-a")["enforcement_mode"] == "monitor"
+    assert sync.get_config("org-b")["enforcement_mode"] == "block"
+
+
+@pytest.mark.asyncio
 async def test_reload_llm_models_skips_malformed_keys(monkeypatch, fake_redis):
     stub_main = types.ModuleType("ai_mesh_gateway.main")
     stub_main.LLM_ROUTER = MagicMock()
@@ -276,7 +308,7 @@ async def test_reload_llm_models_skips_malformed_keys(monkeypatch, fake_redis):
     await sync._reload_llm_models(fake_redis)
 
     stub_main.LLM_ROUTER.reload_models.assert_called_once_with(
-        [{"model_name": "good-model"}]
+        [{"model_name": "good-model", "_zs_org": "org1"}]
     )
     assert sync.get_model_routing("org1") == [{"model_name": "good-model"}]
     assert sync.get_fallback_chains("org1") == {"good-model": []}

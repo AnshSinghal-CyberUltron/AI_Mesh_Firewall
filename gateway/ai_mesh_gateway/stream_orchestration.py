@@ -55,6 +55,14 @@ class StreamRunMetrics:
     chunks_emitted: int = 0
     usage: dict[str, int] | None = None
     usage_estimated: bool = False
+    # Reconstructed assistant text (capped) for the Scan Detail "Output" panel.
+    output_snippet: str = ""
+
+    def append_output(self, text: str, *, cap: int = 2000) -> None:
+        """Accumulate streamed assistant text up to ``cap`` chars."""
+        if not text or len(self.output_snippet) >= cap:
+            return
+        self.output_snippet = (self.output_snippet + text)[:cap]
     # M-51: strongest output-guard verdict observed mid-stream, consumed by the
     # terminal zeroshield trace frame (allow/redact/flag/block attribution).
     guard_action: str = ""
@@ -280,6 +288,7 @@ async def finalize_stream(
     hooks: StreamFinalizeHooks,
     *,
     decision: str = "allowed",
+    pipeline_trace: dict | None = None,
 ) -> None:
     """finalization_phase: circuit, TPM, metrics, optional telemetry."""
     model = ctx.model or ctx.body.get("model", "")
@@ -336,6 +345,43 @@ async def finalize_stream(
         except Exception as exc:
             LOG.warning("Stream metrics finalize failed: %s", exc)
 
+    # Prompt for the scan-detail input panel: prefer the already-redacted prompt;
+    # fall back to the last user message in the request body (clean prompts have no
+    # redacted copy). Truncated for the telemetry record.
+    _prompt_snip = ctx.redacted_prompt or ""
+    if not _prompt_snip:
+        for _m in reversed((ctx.body or {}).get("messages") or []):
+            if isinstance(_m, dict) and _m.get("role") == "user":
+                _c = _m.get("content")
+                if isinstance(_c, str):
+                    _prompt_snip = _c
+                elif isinstance(_c, list):
+                    _prompt_snip = " ".join(p.get("text", "") for p in _c if isinstance(p, dict))
+                if _prompt_snip:
+                    break
+
+    # ISSUE B/C FIX: promote the input-scan (and any more-severe output-guard) verdict
+    # to the stream_complete event's TOP-LEVEL action / risk_score / threat_type so the
+    # control drain derives the right verdict, security_risk_score, threat_category and
+    # pii_detected for STREAMED requests. The non-stream `request` emission already does
+    # this (main.py ~5799-5812); the streaming finalizer omitted it, so a streamed input
+    # redaction was stored as a clean allow / score 0 / threat NONE (scan 7686).
+    if ctx.redacted_prompt is not None:
+        _sv = ctx.scan_verdict
+        _sc_action = "redact"
+        _sc_threat = (getattr(_sv, "threat_type", "") or "pii") if _sv is not None else "pii"
+        _sc_risk = float(getattr(_sv, "confidence", 0.0) or 0.0) if _sv is not None else 0.0
+    else:
+        _sc_action, _sc_threat, _sc_risk = "allow", "", 0.0
+    # Output-guard outcome wins only when STRICTLY more severe (block > redact > flag >
+    # allow) so a mid-stream block/redact is never downgraded by a clean input scan.
+    _SEV = {"allow": 0, "flag": 1, "redact": 2, "block": 3}
+    _guard_action = "block" if metrics.output_blocked else (metrics.guard_action or "")
+    if _guard_action and _SEV.get(_guard_action, 0) > _SEV.get(_sc_action, 0):
+        _sc_action = _guard_action
+        if metrics.guard_threat_type:
+            _sc_threat = metrics.guard_threat_type
+
     if hooks.emit_telemetry is not None:
         try:
             hooks.emit_telemetry(
@@ -344,6 +390,9 @@ async def finalize_stream(
                 user_id=ctx.user_id,
                 project_id=ctx.project_id,
                 latency_ms=elapsed_ms,
+                action=_sc_action,
+                risk_score=_sc_risk,
+                threat_type=_sc_threat,
                 metadata={
                     "ttft_ms": round(metrics.ttft_ms, 2),
                     "chunks": metrics.chunks_emitted,
@@ -353,6 +402,21 @@ async def finalize_stream(
                     "usage_estimated": metrics.usage_estimated,
                     "output_blocked": metrics.output_blocked,
                     "request_id": ctx.request_id,
+                    # SCAN-DETAIL ENRICHMENT: include the full pipeline trace, the
+                    # (already-redacted) input, and the reconstructed assistant
+                    # output so the activity/scan-detail report shows the 9-stage
+                    # pipeline plus both sides of the conversation for STREAMED
+                    # requests, not just a thin summary.
+                    **({"pipeline_trace": pipeline_trace} if pipeline_trace else {}),
+                    "prompt_snippet": _prompt_snip[:2000],
+                    **(
+                        {
+                            "response_snippet": metrics.output_snippet[:2000],
+                            "sanitized_output": metrics.output_snippet[:2000],
+                        }
+                        if metrics.output_snippet
+                        else {}
+                    ),
                 },
             )
         except Exception as exc:
@@ -422,6 +486,7 @@ def build_stream_trace_frame(
     stream_id: str = "",
     stream_model: str = "",
     error: bool = False,
+    pipeline_trace_base: dict | None = None,
 ) -> str:
     """M-51: terminal SSE trace frame, emitted once before ``data: [DONE]``.
 
@@ -483,6 +548,27 @@ def build_stream_trace_frame(
     }
     if metrics.usage:
         frame["usage"] = metrics.usage
+    # FULL-PIPELINE-ON-STREAM: attach the same 9-stage pipeline_trace the
+    # non-stream path returns, so streaming clients render the complete pipeline
+    # (not just the routing summary). Overlay the terminal output-guard outcome
+    # onto the output_guardrail stage so a mid-stream block/redact/flag is reflected.
+    if pipeline_trace_base:
+        try:
+            pt = dict(pipeline_trace_base)
+            _final = str(zs.get("action") or "allow")
+            if _final in ("block", "redact", "flag"):
+                _stages = []
+                for s in (pt.get("stages") or []):
+                    s2 = dict(s) if isinstance(s, dict) else s
+                    if isinstance(s2, dict) and s2.get("name") == "output_guardrail":
+                        s2["action"] = _final
+                        if zs.get("detail"):
+                            s2["detail"] = zs["detail"]
+                    _stages.append(s2)
+                pt["stages"] = _stages
+            frame["pipeline_trace"] = pt
+        except Exception:
+            frame["pipeline_trace"] = pipeline_trace_base
     return f"data: {json.dumps(frame)}\n\n"
 
 
@@ -495,6 +581,7 @@ async def stream_with_finalize(
     metrics: StreamRunMetrics | None = None,
     finalize_timeout_ms: int | None = None,
     zeroshield_base: dict | None = None,
+    pipeline_trace_base: dict | None = None,
     emit_trace_frame: bool | None = None,
     request: Any = None,
 ) -> AsyncGenerator[str, None]:
@@ -570,6 +657,7 @@ async def stream_with_finalize(
                         stream_id=stream_id,
                         stream_model=stream_model,
                         error=saw_error_frame,
+                        pipeline_trace_base=pipeline_trace_base,
                     )
                 yield chunk
                 continue
@@ -610,6 +698,7 @@ async def stream_with_finalize(
                 stream_id=stream_id,
                 stream_model=stream_model,
                 error=saw_error_frame or run_metrics.had_error,
+                pipeline_trace_base=pipeline_trace_base,
             )
             yield _DONE_FRAME
     except (GeneratorExit, asyncio.CancelledError):
@@ -626,6 +715,7 @@ async def stream_with_finalize(
                 stream_id=stream_id,
                 stream_model=stream_model,
                 error=True,
+                pipeline_trace_base=pipeline_trace_base,
             )
             yield _DONE_FRAME
         raise
@@ -638,11 +728,11 @@ async def stream_with_finalize(
         try:
             if timeout_s is not None:
                 await asyncio.wait_for(
-                    finalize_stream(ctx, run_metrics, hooks, decision=effective_decision),
+                    finalize_stream(ctx, run_metrics, hooks, decision=effective_decision, pipeline_trace=pipeline_trace_base),
                     timeout=timeout_s,
                 )
             else:
-                await finalize_stream(ctx, run_metrics, hooks, decision=effective_decision)
+                await finalize_stream(ctx, run_metrics, hooks, decision=effective_decision, pipeline_trace=pipeline_trace_base)
         except asyncio.TimeoutError:
             LOG.error("Stream finalize timed out after %sms", finalize_timeout_ms)
             try:

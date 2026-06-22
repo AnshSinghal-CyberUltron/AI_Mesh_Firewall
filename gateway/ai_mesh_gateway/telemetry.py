@@ -168,6 +168,49 @@ def build_telemetry_event(
     Event types: request, block, redact, kill_switch, scan_hit, output_guard
     Pipeline stages: query, retriever, ranker, generator
     """
+    # ── AUDIT PII SCRUB (single choke point for every telemetry path) ──
+    # The dashboard governance log surfaces metadata free-text fields
+    # (raw_output / response_snippet / detail / reason / …) and prompt_snippet
+    # verbatim. Model output OR a guard advisory can carry RAW PII (e.g. an
+    # international phone the input-redactor or a "Detect"-only output action did
+    # not mask). Pass every free-text field through redact_all (a no-op on benign
+    # text) so the AUDIT LOG never persists raw PII — non-stream and streaming
+    # output-guard events both build their event here.
+    try:
+        from patterns import redact_all as _ra  # type: ignore
+    except ImportError:
+        try:
+            from .patterns import redact_all as _ra  # type: ignore
+        except Exception:
+            _ra = None  # type: ignore
+    _safe_snippet = prompt_snippet[:500] if prompt_snippet else ""
+    _safe_meta = dict(metadata) if isinstance(metadata, dict) else (metadata or {})
+    if _ra is not None:
+        try:
+            if _safe_snippet:
+                _safe_snippet = _ra(_safe_snippet)
+            _TEXT_KEYS = (
+                "raw_output", "response_snippet", "sanitized_output", "final_output",
+                "rewritten_output", "output", "detail", "guardrail_reasoning",
+                "reason", "evidence", "original_prompt", "prompt", "preview", "message",
+                # TEL-4: the non-stream lane copies the RAW prompt preview into these
+                # metadata keys (main.py: _tel_md["prompt_snippet"]/["prompt_submitted"]
+                # = _prompt_snippet[:2000], up to 2000 raw chars). The redacted
+                # ``prompt_snippet`` *parameter* above is separate from these metadata
+                # keys, which were NOT scrubbed — so unredacted PII persisted in the
+                # audit log. Fold every prompt-preview key through redact_all here.
+                "prompt_snippet", "prompt_submitted", "prompt_preview",
+                "prompt_in", "prompt_out", "user_prompt", "input_text", "input_preview",
+                "forwarded_prompt",
+            )
+            for _k in _TEXT_KEYS:
+                _v = _safe_meta.get(_k)
+                if isinstance(_v, str) and _v:
+                    _safe_meta[_k] = _ra(_v)
+                elif isinstance(_v, list):
+                    _safe_meta[_k] = [_ra(x) if isinstance(x, str) else x for x in _v]
+        except Exception:
+            pass
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "event_type": event_type,
@@ -176,7 +219,7 @@ def build_telemetry_event(
         "project_id": project_id,
         "key_prefix": key_prefix,
         "prompt_hash": prompt_hash,
-        "prompt_snippet": prompt_snippet[:500] if prompt_snippet else "",
+        "prompt_snippet": _safe_snippet,
         "endpoint_id": endpoint_id,
         "latency_ms": round(latency_ms, 2),
         "risk_score": risk_score,
@@ -191,5 +234,5 @@ def build_telemetry_event(
         "source_ip": source_ip,
         "user_agent": user_agent,
         "status_code": status_code,
-        "metadata": metadata or {},
+        "metadata": _safe_meta,
     }

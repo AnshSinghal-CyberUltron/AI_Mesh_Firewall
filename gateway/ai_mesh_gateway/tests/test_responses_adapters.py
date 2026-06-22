@@ -63,6 +63,20 @@ def test_responses_to_chat_prepends_prior_messages():
     assert roles == ["user", "assistant", "user"]
 
 
+def test_responses_to_chat_passthrough_mcp_and_routing():
+    body = {
+        "model": "auto",
+        "input": "hello",
+        "mcp_context": {"customer_id": "123"},
+        "routing_preferences": {"enable_routing": True},
+        "agent_data": {"ticket": "T-1"},
+    }
+    chat = responses_to_chat(body)
+    assert chat["mcp_context"] == {"customer_id": "123"}
+    assert chat["routing_preferences"] == {"enable_routing": True}
+    assert chat["agent_data"] == {"ticket": "T-1"}
+
+
 def test_chat_completion_to_responses_shape():
     completion = {"id": "chatcmpl-1", "created": 123, "model": "m",
                   "choices": [{"message": {"role": "assistant", "content": "hi there"},

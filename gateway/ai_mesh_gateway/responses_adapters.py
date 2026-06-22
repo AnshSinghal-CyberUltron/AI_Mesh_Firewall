@@ -101,9 +101,12 @@ def coerce_chat_error_to_openai(status: int, chat_error_body: dict) -> dict:
                or (err if isinstance(err, str) else None)
                or "The request failed.")
     code = chat_error_body.get("code") or (err if isinstance(err, str) else None)
+    # Phase-4 (P2-Dx): propagate a flat-body ``param`` into error.param so the stock
+    # SDK populates e.param on parameter-validation 400s (OpenAI parity).
+    param = chat_error_body.get("param")
     diagnostics = {k: v for k, v in chat_error_body.items()
-                   if k not in ("error", "message", "code")}
-    return build_openai_error(status, message, code=code, extra_top_level=diagnostics)
+                   if k not in ("error", "message", "code", "param")}
+    return build_openai_error(status, message, code=code, param=param, extra_top_level=diagnostics)
 
 
 # ── Responses request -> Chat request ────────────────────────────────────────
@@ -111,6 +114,11 @@ def coerce_chat_error_to_openai(status: int, chat_error_body: dict) -> dict:
 _RESP_DIRECT_PASSTHROUGH = (
     "temperature", "top_p", "tools", "tool_choice", "parallel_tool_calls",
     "stop", "seed", "user", "metadata", "stream_options", "logprobs",
+    # Phase-4 SEAM-B: chat params that were silently DROPPED on the responses->chat
+    # translation (the direct chat path forwards them) — now survive so /v1/responses
+    # has the same passthrough fidelity as /v1/chat/completions.
+    "response_format", "frequency_penalty", "presence_penalty", "top_logprobs",
+    "n", "logit_bias",
 )
 
 
@@ -204,6 +212,11 @@ def responses_to_chat(body: dict, prior_messages: list[dict] | None = None) -> d
     for k in _RESP_DIRECT_PASSTHROUGH:
         if body.get(k) is not None:
             chat[k] = body[k]
+    # ZeroShield gateway fields (extra_body from stock SDK) must survive the
+    # adapter so MCP context, routing prefs, and agent_data reach proxy_chat.
+    for k in ("mcp_context", "agent_data", "routing_preferences"):
+        if body.get(k) is not None:
+            chat[k] = body[k]
     if body.get("stream"):
         chat["stream"] = True
     # reasoning.effort -> chat reasoning_effort (best-effort; provider may ignore)
@@ -263,7 +276,10 @@ def chat_completion_to_responses(completion: dict, *, response_id: str, model: s
         "object": "response",
         "created_at": completion.get("created") or int(time.time()),
         "status": status,
-        "model": completion.get("model") or model,
+        # MODEL-ID LEAK FIX: prefer the client-requested `model` over
+        # completion["model"], which can be the raw upstream provider id
+        # (e.g. "anthropic/claude-3-5-haiku"). Never echo the upstream id back.
+        "model": model or completion.get("model"),
         "output": output,
         "output_text": text_content if isinstance(text_content, str) else "",
         "usage": usage,

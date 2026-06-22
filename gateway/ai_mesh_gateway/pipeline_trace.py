@@ -264,8 +264,16 @@ def build_guard_fields(
         lines.append(f"Threat category: {threat_type.replace('_', ' ')}")
     if confidence_f > 0:
         lines.append(f"Confidence: {confidence_f:.0%}")
+    # PII-LEAK FIX: the guard MODEL's advisory `detail` + `findings`/`evidence`
+    # are LLM-generated free text that can echo the RAW PII it detected (e.g. a
+    # full phone number) — even when the response itself was redacted. That raw
+    # value must never reach the client-facing trace. Scrub every guard-derived
+    # detail line through redact_all (a no-op on benign text) at this choke point.
+    def _scrub(s: str) -> str:
+        return _redact_all(s) if _redact_all else s
+
     if detail:
-        lines.append(str(detail).strip())
+        lines.append(_scrub(str(detail).strip()))
 
     findings: list[str] = []
     for item in scan_meta.get("findings") or []:
@@ -279,7 +287,7 @@ def build_guard_fields(
     if not findings and matched_patterns:
         findings = [str(p) for p in matched_patterns[:5]]
     if findings:
-        lines.append("Evidence: " + "; ".join(findings[:3]))
+        lines.append("Evidence: " + _scrub("; ".join(findings[:3])))
 
     policy_note = ""
     if enforcement_action == "allow" and recommended in ("block", "redact"):
@@ -325,6 +333,7 @@ def build_pipeline_trace(
     prompt: str = "",
     forwarded_prompt: str = "",
     policy_redacted_prompt: str = "",
+    policy_redacted_flag: bool | None = None,
     stage_metrics: dict | None = None,
     final_action: str = "allow",
     blocked_stage: str = "",
@@ -354,7 +363,20 @@ def build_pipeline_trace(
     # AFTER policy redaction but BEFORE Tier-2 — i.e. exactly what the input
     # scanner received. The input_scan stage therefore scans this, not the raw
     # prompt, and any further change at model_input is attributable to Tier-2.
-    policy_redacted = bool(policy_redacted_prompt) and policy_redacted_prompt != prompt
+    # Whether the POLICY stage actually redacted. The caller MUST pass the
+    # authoritative `policy_redacted_flag` (computed in main.py from the RAW
+    # original prompt). Re-deriving it here via `policy_redacted_prompt != prompt`
+    # is WRONG when the caller passes a trace-safe `prompt` (PII already masked by
+    # _redact_trace_text): the policy-redacted prompt and the trace-redacted prompt
+    # are then BOTH masked → comparison is False → the policy stage mislabels a real
+    # redaction as "allow" (while top-level zeroshield.action correctly says
+    # "redact"). The string compare is kept only as a fallback for callers that
+    # don't pass the flag.
+    policy_redacted = (
+        policy_redacted_flag
+        if policy_redacted_flag is not None
+        else (bool(policy_redacted_prompt) and policy_redacted_prompt != prompt)
+    )
     scan_input_prompt = policy_redacted_prompt or prompt
     scan_input_preview = _truncate(scan_input_prompt) if scan_input_prompt else prompt_preview
     policy_redacted_preview = _truncate(policy_redacted_prompt) if policy_redacted_prompt else ""
@@ -661,7 +683,13 @@ def build_pipeline_trace(
         },
         {
             "name": "output_guardrail",
-            "action": _action("output_guardrail"),
+            # Use the OUTPUT-enforcement-corrected action (already computed above:
+            # = final_action when the output guard actually redact/rewrite/flag'd),
+            # NOT the raw _action("output_guardrail") which only promotes input_scan
+            # and so reported "allow" for a stage that genuinely redacted the output
+            # — contradicting the stage's own "enforcement: REDACT" detail + masked
+            # bytes (and mislabeling the Scan-Detail per-stage view green/allow).
+            "action": output_stage_action,
             "latency_ms": _latency("output_guardrail"),
             "detail": (
                 output_guard.get("guard_reason")
