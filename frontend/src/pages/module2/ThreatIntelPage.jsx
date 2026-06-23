@@ -29,7 +29,7 @@ import {
   Module2PageSkeleton,
 } from "../../components/module2/PageStates";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
-import { module2TooltipProps } from "../../components/module2/module2Chart";
+import { module2TooltipPanelClass, module2TooltipProps } from "../../components/module2/module2Chart";
 import { ANALYST_BRIEF_TITLE, PAGE_BRIEFS } from "./pageCopy";
 import {
   buildIocFleetStats,
@@ -150,6 +150,25 @@ function IocEntryGuide({ onUseExample, iocMatchCount, entryCount, syncQueued }) 
   );
 }
 
+function TimelineTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  const total = payload.reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+  return (
+    <div className={module2TooltipPanelClass}>
+      <p className="font-semibold text-slate-100">{label}</p>
+      <p className="mt-1 text-slate-400">Category total: {total}</p>
+      <ul className="mt-2 space-y-1">
+        {payload.map((row) => (
+          <li key={row.dataKey} className="flex justify-between gap-4">
+            <span style={{ color: row.color }}>{row.name}</span>
+            <span className="font-mono">{row.value}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ThreatIntelSocPanel({ summary, iocLibrary, fleetStats, topVector, period }) {
   const matchRate = iocMatchRatePct(summary);
   const lib = iocLibrary || {};
@@ -257,8 +276,7 @@ function ThreatIntelTelemetryDashboard({ telemetry, period }) {
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
               <XAxis dataKey="label" fontSize={10} />
               <YAxis fontSize={11} allowDecimals={false} />
-              <Tooltip {...module2TooltipProps} />
-              <Legend />
+              <Tooltip content={<TimelineTooltip />} />
               {seriesKeys.map((key) => (
                 <Area
                   key={key}
@@ -285,8 +303,11 @@ function ThreatIntelTelemetryDashboard({ telemetry, period }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
                 <XAxis dataKey="name" fontSize={10} interval={0} angle={-15} textAnchor="end" height={55} />
                 <YAxis fontSize={11} allowDecimals={false} />
-                <Tooltip {...module2TooltipProps} />
-                <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Events" />
+                <Tooltip
+                  {...module2TooltipProps}
+                  formatter={(value) => [value, "Events"]}
+                  labelFormatter={(label) => `Label: ${label}`}
+                />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -308,8 +329,11 @@ function ThreatIntelTelemetryDashboard({ telemetry, period }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis type="number" fontSize={11} allowDecimals={false} />
                 <YAxis dataKey="stageLabel" type="category" fontSize={11} width={120} />
-                <Tooltip {...module2TooltipProps} />
-                <Bar dataKey="count" fill="#ef4444" radius={[0, 4, 4, 0]} name="IOC matches" />
+                <Tooltip
+                  {...module2TooltipProps}
+                  formatter={(value) => [value, "IOC matches"]}
+                  labelFormatter={(_, payload) => payload?.[0]?.payload?.stage || ""}
+                />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>

@@ -13,7 +13,7 @@ import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
-import { module2TooltipProps } from "../../components/module2/module2Chart";
+import { module2TooltipPanelClass, module2TooltipProps } from "../../components/module2/module2Chart";
 import { ChartCard } from "../../components/module2/ChartCard";
 import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
@@ -144,6 +144,24 @@ function RagPipelineGuide() {
   );
 }
 
+function RagStageTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  return (
+    <div className={module2TooltipPanelClass}>
+      <p className="font-semibold text-slate-100">{label}</p>
+      <p className="text-slate-300">Total checks: {row.total}</p>
+      <p className="text-red-400">Blocked: {row.blocked} ({row.block_rate}%)</p>
+      <p className="text-emerald-400">Allowed: {row.allowed}</p>
+      {row.flagged > 0 && <p className="text-amber-400">Flagged: {row.flagged}</p>}
+      {row.avg_latency_ms > 0 && (
+        <p className="text-slate-400">Avg latency: {row.avg_latency_ms}ms</p>
+      )}
+    </div>
+  );
+}
+
 function RagHealthTab({ ragData, loading, error, onRetry }) {
   if (loading && !ragData) return <Module2PageSkeleton />;
   if (error && !ragData) return <Module2ErrorState message={error} onRetry={onRetry} />;
@@ -190,7 +208,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis type="number" fontSize={11} allowDecimals={false} />
                 <YAxis dataKey="stage" type="category" fontSize={11} width={80} />
-                <Tooltip {...module2TooltipProps} />
+                <Tooltip content={<RagStageTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="allowed" stackId="a" fill="#10b981" name="Allowed" radius={[0, 0, 0, 0]} />
                 <Bar dataKey="flagged" stackId="a" fill="#f59e0b" name="Flagged" radius={[0, 0, 0, 0]} />
@@ -212,8 +230,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis dataKey="stage" fontSize={11} />
                 <YAxis fontSize={11} unit="%" domain={[0, 100]} />
-                <Tooltip {...module2TooltipProps} />
-                <Bar dataKey="block_rate" fill="#8b5cf6" name="Block %" radius={[4, 4, 0, 0]} />
+                <Tooltip content={<RagStageTooltip />} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -234,8 +251,15 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                   <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                   <XAxis dataKey="step" fontSize={10} interval={0} angle={-12} textAnchor="end" height={50} />
                   <YAxis fontSize={11} allowDecimals={false} />
-                  <Tooltip {...module2TooltipProps} />
-                  <Bar dataKey="value" name="Documents" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  <Tooltip
+                    {...module2TooltipProps}
+                    formatter={(value, name, props) => {
+                      if (name === "Documents") {
+                        return [`${value} (${props.payload.pct}% of retrieved)`, name];
+                      }
+                      return [value, name];
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
@@ -295,8 +319,11 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis type="number" unit="%" domain={[0, 100]} fontSize={11} />
                 <YAxis dataKey="name" type="category" fontSize={10} width={90} />
-                <Tooltip {...module2TooltipProps} />
-                <Bar dataKey="blockRate" fill="#ef4444" name="Block %" radius={[0, 4, 4, 0]} />
+                <Tooltip
+                  {...module2TooltipProps}
+                  formatter={(v, name) => (name === "Block %" ? `${v}%` : v)}
+                  labelFormatter={(label) => `Collection: ${label}`}
+                />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -316,8 +343,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis dataKey="stage" fontSize={11} />
                 <YAxis fontSize={11} unit="ms" />
-                <Tooltip {...module2TooltipProps} />
-                <Bar dataKey="avg_latency_ms" fill="#0ea5e9" name="Avg latency" radius={[4, 4, 0, 0]} />
+                <Tooltip {...module2TooltipProps} formatter={(v) => [`${v} ms`, "Avg latency"]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -531,7 +557,10 @@ function ModelExposurePageInner() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
                       <XAxis type="number" domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} fontSize={11} />
                       <YAxis type="category" dataKey="name" width={100} fontSize={11} />
-                      <Tooltip {...module2TooltipProps} />
+                      <Tooltip
+                        {...module2TooltipProps}
+                        formatter={(value) => [`${(value * 100).toFixed(1)}%`, "Exposure Score"]}
+                      />
                       <Bar dataKey="score" radius={[0, 4, 4, 0]}>
                         {chartData.map((entry) => (
                           <Cell key={entry.name} fill={entry.fill} />
