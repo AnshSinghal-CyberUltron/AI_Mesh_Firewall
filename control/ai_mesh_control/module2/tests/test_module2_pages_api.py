@@ -236,3 +236,31 @@ class Module2PagesApiTests(TestCase):
         self.assertIsNotNone(data.get("resolved_at"))
         incident.refresh_from_db()
         self.assertEqual(incident.status, "resolved")
+
+    def test_resolve_incident_succeeds_when_cache_invalidation_fails(self):
+        from unittest.mock import patch
+
+        incident = self._incident(self.org, "Cache failure case", severity="medium", status="open")
+        with patch("django.core.cache.cache.delete", side_effect=ConnectionError("redis down")):
+            resp = self.client.post(
+                f"/api/security/incidents/{incident.id}/resolve-incident/",
+                {},
+                format="json",
+            )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        incident.refresh_from_db()
+        self.assertEqual(incident.status, "resolved")
+
+    def test_resolve_incident_succeeds_when_cache_invalidation_fails(self):
+        from unittest.mock import patch
+
+        incident = self._incident(self.org, "Cache failure case", severity="medium", status="open")
+        with patch("django.core.cache.cache.delete", side_effect=ConnectionError("redis down")):
+            resp = self.client.post(
+                f"/api/security/incidents/{incident.id}/resolve-incident/",
+                {},
+                format="json",
+            )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        incident.refresh_from_db()
+        self.assertEqual(incident.status, "resolved")

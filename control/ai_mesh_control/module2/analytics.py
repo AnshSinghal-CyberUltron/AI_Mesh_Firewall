@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections import Counter, defaultdict
 from datetime import timedelta
 
@@ -9,6 +10,8 @@ from django.db.models import Q
 from django.utils import timezone
 
 from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
+
+logger = logging.getLogger(__name__)
 
 ROUTING_EVENT_Q = (
     Q(metadata__source="routing")
@@ -591,7 +594,14 @@ def invalidate_incident_summary_cache(org_id) -> None:
         return
     from django.core.cache import cache
 
-    cache.delete(f"module2:incident_summary:{org_id}")
+    try:
+        cache.delete(f"module2:incident_summary:{org_id}")
+    except Exception:
+        logger.warning(
+            "Failed to invalidate incident summary cache for org %s",
+            org_id,
+            exc_info=True,
+        )
 
 
 def serialize_incident_row(incident, serializer_data: dict) -> dict:
