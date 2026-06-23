@@ -1104,10 +1104,14 @@ An MSP runs AI workloads for 50 clients. One client's RAG assistant triggers vec
 | 📸 **MCP Scanner** | <img width="2880" height="1800" alt="image" src="https://github.com/user-attachments/assets/73f741c9-439e-4b91-bf31-7626c7e30cf5" /> |
 | 📸 **Kill Switch Management** | <img width="2880" height="1800" alt="image" src="https://github.com/user-attachments/assets/df91fade-509c-445d-9b79-19d4d13ed1d7" /> |
 | 📸 **Firewall Configuration** | <img width="2880" height="1800" alt="image" src="https://github.com/user-attachments/assets/b9d9e9b8-8ece-4eb5-ad17-bfee552dcb69" /> |
-| 📸 **SOC Dashboard (Module 2)** | Unified lane KPIs, live ticker, and incident pressure |![Uploading image.png…]()
+| 📸 **SOC Dashboard (Module 2)** |<img width="1892" height="948" alt="image" src="https://github.com/user-attachments/assets/2656cded-7afe-48a0-8390-033bba89b500" />
 
-| 📸 **UEBA API Keys (Module 2)** | Behavioral risk scoring and analyst containment actions |
-| 📸 **Incident Queue (Module 2)** | Triage, escalation, lane filters, and forensic drill-down |
+
+| 📸 **UEBA API Keys (Module 2)** | <img width="1867" height="934" alt="image" src="https://github.com/user-attachments/assets/9c589d4c-ded8-4158-9b47-81b935db861e" />
+                                         <img width="1872" height="947" alt="image" src="https://github.com/user-attachments/assets/006e8b0e-72e5-4c22-b191-e6b408bc3166" />
+
+| 📸 **Incident Queue (Module 2)** | <img width="1892" height="948" alt="image" src="https://github.com/user-attachments/assets/4a2aa5bf-27cf-4720-ba4f-6d68ffa36b03" />
+
 
 🎬 **Demo Video**
 
