@@ -1115,7 +1115,8 @@ An MSP runs AI workloads for 50 clients. One client's RAG assistant triggers vec
 | 📸 **Incident Queue (Module 2)** | <img width="1900" height="914" alt="image" src="https://github.com/user-attachments/assets/6281be43-b42c-4e35-be9f-1dcb6fc48eea" />
 
 
-🎬 **Demo Video**  ![Uploading image.png…]()
+🎬 **Demo Video**  <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/ff911678-1466-4a3d-a376-0e8ad8951d41" />
+
 
 
 
