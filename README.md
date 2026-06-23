@@ -1108,14 +1108,17 @@ An MSP runs AI workloads for 50 clients. One client's RAG assistant triggers vec
 
 
 | 📸 **UEBA API Keys (Module 2)** | <img width="1887" height="889" alt="image" src="https://github.com/user-attachments/assets/72f051a2-1f86-4994-b1fb-daf4188d7fb5" />
-                                     ![Uploading image.png…]()
+                                     <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/76d04f40-6d67-4c76-81b2-a3d1a83148d5" />
 
 
 
 | 📸 **Incident Queue (Module 2)** | <img width="1900" height="914" alt="image" src="https://github.com/user-attachments/assets/6281be43-b42c-4e35-be9f-1dcb6fc48eea" />
 
 
-🎬 **Demo Video**
+🎬 **Demo Video**  ![Uploading image.png…]()
+
+
+
 
 
 https://github.com/user-attachments/assets/bc2f38f6-7123-4b56-8b79-fa0621fa4ab2
