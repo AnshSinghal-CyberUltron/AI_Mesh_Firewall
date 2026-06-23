@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { createModule2Api } from "../../api/module2";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { ChartCard } from "../../components/module2/ChartCard";
+import { module2TooltipProps } from "../../components/module2/module2Chart";
 import { DataTable } from "../../components/module2/DataTable";
 
 export function AnomaliesPage() {
@@ -81,7 +82,7 @@ export function AnomaliesPage() {
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="timestamp" tickFormatter={(v) => v?.slice(5, 10)} fontSize={10} />
               <YAxis fontSize={11} />
-              <Tooltip />
+              <Tooltip {...module2TooltipProps} />
               <ReferenceLine y={baseline.mean_rate} stroke="#94a3b8" strokeDasharray="3 3" />
               <Line type="monotone" dataKey="event_rate" stroke="#14b8a6" dot={false} />
             </LineChart>

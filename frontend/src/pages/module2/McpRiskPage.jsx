@@ -8,6 +8,7 @@ import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
+import { module2TooltipProps } from "../../components/module2/module2Chart";
 import { ChartCard } from "../../components/module2/ChartCard";
 import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
@@ -125,10 +126,7 @@ function McpRiskDashboard({ data }) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis type="number" fontSize={11} allowDecimals={false} />
                 <YAxis dataKey="tool" type="category" fontSize={10} width={130} />
-                <Tooltip
-                  formatter={(value) => [value, "Policy hits (block + redact)"]}
-                  labelFormatter={(label) => `Tool: ${label}`}
-                />
+                <Tooltip {...module2TooltipProps} />
                 <Bar dataKey="violations" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Policy hits" />
               </BarChart>
             </ResponsiveContainer>

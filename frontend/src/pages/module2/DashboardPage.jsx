@@ -12,6 +12,7 @@ import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
+import { module2TooltipProps } from "../../components/module2/module2Chart";
 import { ChartCard } from "../../components/module2/ChartCard";
 import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
@@ -323,7 +324,7 @@ export function DashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
                 <XAxis dataKey="timestamp" tickFormatter={(v) => `${v?.slice(11, 16)} UTC`} fontSize={11} />
                 <YAxis fontSize={11} allowDecimals={false} />
-                <Tooltip labelFormatter={(v) => `${String(v).replace("T", " ").slice(0, 19)} UTC`} />
+                <Tooltip {...module2TooltipProps} />
                 <Area type="monotone" dataKey="total" stackId="1" fill="#0ea5e9" stroke="#0ea5e9" fillOpacity={0.35} name="Total" />
                 <Area type="monotone" dataKey="blocked" stackId="2" fill="#ef4444" stroke="#ef4444" fillOpacity={0.45} name="Blocked" />
                 <Area type="monotone" dataKey="redacted" stackId="2" fill="#f59e0b" stroke="#f59e0b" fillOpacity={0.45} name="Redacted" />
@@ -403,7 +404,7 @@ export function DashboardPage() {
                     <Cell key={entry.band} fill={RISK_COLORS[entry.band] || "#94a3b8"} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value, name) => [`${value} keys`, name]} />
+                <Tooltip {...module2TooltipProps} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
               </PieChart>
             </ResponsiveContainer>

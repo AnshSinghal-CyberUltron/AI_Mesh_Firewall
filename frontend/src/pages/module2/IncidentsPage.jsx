@@ -30,6 +30,7 @@ import {
   Module2PageSkeleton,
 } from "../../components/module2/PageStates";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
+import { module2TooltipProps } from "../../components/module2/module2Chart";
 import {
   applyIncidentListMutation,
   buildIncidentKpiItems,
@@ -253,6 +254,13 @@ function IncidentsPageInner() {
   const loadSeqRef = useRef(0);
   const refreshTimerRef = useRef(null);
   const filterKeyRef = useRef("");
+  const tableSectionRef = useRef(null);
+
+  const scrollToTable = useCallback(() => {
+    requestAnimationFrame(() => {
+      tableSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
 
   const replaceFilters = useCallback(
     (patch) => {
@@ -343,8 +351,9 @@ function IncidentsPageInner() {
         status: value,
         queue: value ? "" : current.queue,
       });
+      if (value) scrollToTable();
     },
-    [searchParams, replaceFilters],
+    [searchParams, replaceFilters, scrollToTable],
   );
 
   const handleQueueFilter = useCallback(
@@ -354,15 +363,17 @@ function IncidentsPageInner() {
         queue: value,
         status: value ? "" : current.status,
       });
+      if (value) scrollToTable();
     },
-    [searchParams, replaceFilters],
+    [searchParams, replaceFilters, scrollToTable],
   );
 
   const handleSeverityFilter = useCallback(
     (value) => {
       replaceFilters({ severity: value });
+      if (value) scrollToTable();
     },
-    [replaceFilters],
+    [replaceFilters, scrollToTable],
   );
 
   const handleSourceFilter = useCallback(
@@ -557,7 +568,7 @@ function IncidentsPageInner() {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
+                <Tooltip {...module2TooltipProps} />
                 <Bar dataKey="count" fill="#0d9488" radius={[4, 4, 0, 0]} name="Incidents" />
               </BarChart>
             </ResponsiveContainer>
@@ -565,7 +576,11 @@ function IncidentsPageInner() {
         </div>
       )}
 
-      <div className="mb-4 mt-6 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800/60">
+      <div
+        ref={tableSectionRef}
+        id="incident-cases-table"
+        className="mb-4 mt-6 scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800/60"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Incident cases</h2>

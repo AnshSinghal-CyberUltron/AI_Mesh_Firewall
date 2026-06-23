@@ -15,6 +15,7 @@ import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { TELEMETRY_ACTIVITY_EVENT, TELEMETRY_STORAGE_KEY } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
+import { module2TooltipProps } from "../../components/module2/module2Chart";
 import { ChartCard } from "../../components/module2/ChartCard";
 import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
@@ -295,7 +296,7 @@ function UebaApiKeysPageInner() {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis dataKey="timestamp" tickFormatter={(v) => `${v?.slice(11, 16)} UTC`} fontSize={10} />
                 <YAxis fontSize={11} allowDecimals={false} />
-                <Tooltip labelFormatter={(v) => `${String(v).replace("T", " ").slice(0, 19)} UTC`} />
+                <Tooltip {...module2TooltipProps} />
                 <Line type="monotone" dataKey="total_events" stroke="#0ea5e9" strokeWidth={2} dot={false} name="Total" />
                 <Line type="monotone" dataKey="blocked" stroke="#ef4444" strokeWidth={2} dot={false} name="Blocked" />
                 <Line type="monotone" dataKey="redacted" stroke="#f59e0b" strokeWidth={2} dot={false} name="Redacted" />

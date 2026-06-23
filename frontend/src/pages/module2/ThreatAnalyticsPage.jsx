@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { createModule2Api } from "../../api/module2";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { ChartCard } from "../../components/module2/ChartCard";
+import { module2TooltipProps } from "../../components/module2/module2Chart";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
 
 export function ThreatAnalyticsPage() {
@@ -48,7 +49,7 @@ export function ThreatAnalyticsPage() {
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="type" fontSize={10} angle={-20} textAnchor="end" height={60} />
               <YAxis fontSize={11} />
-              <Tooltip />
+              <Tooltip {...module2TooltipProps} />
               <Bar dataKey="count" fill="#14b8a6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -61,7 +62,7 @@ export function ThreatAnalyticsPage() {
               <PolarAngleAxis dataKey="code" fontSize={9} />
               <Radar name="Detected" dataKey="detected" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.4} />
               <Radar name="Blocked" dataKey="blocked" stroke="#ef4444" fill="#ef4444" fillOpacity={0.3} />
-              <Tooltip />
+              <Tooltip {...module2TooltipProps} />
             </RadarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -74,7 +75,7 @@ export function ThreatAnalyticsPage() {
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis type="number" fontSize={11} />
               <YAxis type="category" dataKey="model" fontSize={10} width={100} />
-              <Tooltip />
+              <Tooltip {...module2TooltipProps} />
               <Bar dataKey="count" fill="#0ea5e9" />
             </BarChart>
           </ResponsiveContainer>
