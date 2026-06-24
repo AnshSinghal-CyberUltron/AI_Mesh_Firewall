@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, TYPE_CHECKING
@@ -538,6 +539,29 @@ class LLMRouter:
             from patterns import redact_all
         except ImportError:
             from .patterns import redact_all
+
+        def _redact_msg_text(text: str) -> str:
+            # ``redact_all`` here is, by construction, WEAKER than the verdict-aware
+            # ``InputScanner.redact_pii`` that produced ``redacted_content`` (the
+            # authoritative display / pipeline-trace string): redact_all only masks a
+            # 10-digit phone when an adjacent label disambiguates it, whereas a
+            # Tier-2 / policy detector flags the same number from ANY phrasing
+            # ("call me at 8929554991", "8929554991 is my number"). That asymmetry
+            # forwarded the RAW value to the upstream LLM while the pipeline trace
+            # showed it masked — a silent PII leak. ``redacted_content`` is the source
+            # of truth for "what the firewall decided must never reach the model", so
+            # after redact_all we run a FAIL-CLOSED digit backstop: any run of 7+
+            # digits that ``redacted_content`` masked (i.e. it is absent there) but
+            # this message still carries raw is masked here too. Partial masks like
+            # ``***-***-4991`` keep only 4 digits, so they never re-trigger the rule,
+            # and a value left intact in ``redacted_content`` (a legitimate order id
+            # the firewall did NOT redact) stays intact here.
+            out = redact_all(text)
+            for run in set(re.findall(r"\d{7,}", text)):
+                if run not in redacted_content and run in out:
+                    out = out.replace(run, f"***-***-{run[-4:]}")
+            return out
+
         new_messages = []
         for m in body["messages"]:
             if not isinstance(m, dict) or m.get("role") == "system":
@@ -545,10 +569,10 @@ class LLMRouter:
                 continue
             c = m.get("content")
             if isinstance(c, str) and c:
-                new_messages.append({**m, "content": redact_all(c)})
+                new_messages.append({**m, "content": _redact_msg_text(c)})
             elif isinstance(c, list):
                 parts = [
-                    ({**p, "text": redact_all(p["text"])}
+                    ({**p, "text": _redact_msg_text(p["text"])}
                      if isinstance(p, dict) and isinstance(p.get("text"), str) and p["text"]
                      else p)
                     for p in c
@@ -556,20 +580,6 @@ class LLMRouter:
                 new_messages.append({**m, "content": parts})
             else:
                 new_messages.append(m)
-        # #region agent log
-        try:
-            import json as _json, time as _time
-            _sample = ""
-            for _m in new_messages:
-                _c = _m.get("content") if isinstance(_m, dict) else None
-                if isinstance(_c, str) and _c:
-                    _sample = _c[:120]
-                    break
-            with open("/Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/.cursor/debug-398189.log", "a") as _df:
-                _df.write(_json.dumps({"sessionId": "398189", "hypothesisId": "B", "location": "llm_router.py:_apply_redaction", "message": "upstream_messages", "data": {"msg_count": len(new_messages), "has_bare_10digit": bool(__import__("re").search(r"(?<=\d)\d{10}\b|(?:phone|mobile).*\d{10}", _sample) if _sample else False), "sample_has_mask": "***-***-" in _sample}, "timestamp": int(_time.time() * 1000)}) + "\n")
-        except Exception:
-            pass
-        # #endregion
         return {**body, "messages": new_messages}
 
     def _build_kwargs(
