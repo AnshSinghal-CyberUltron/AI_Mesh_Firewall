@@ -353,6 +353,35 @@ class KillSwitchCreateSerializer(serializers.ModelSerializer):
                 }
             )
         request = self.context.get("request")
+        # Duplicate guard: the DB has unique_together (organization, model_name,
+        # api_key_prefix), but `organization` is NOT a serializer field (it is
+        # injected in perform_create), so DRF cannot auto-apply
+        # UniqueTogetherValidator. Without this pre-check a second kill-switch for
+        # the same (org, model, prefix) reaches the DB and raises IntegrityError
+        # -> an unhandled 500 ("Internal server error"). Return a clean,
+        # actionable 400 instead. (The view ALSO catches IntegrityError to cover
+        # the create-create race.) Excludes self on update so an edit that keeps
+        # the same model_name is not flagged as a duplicate of itself.
+        if request and "model_name" in attrs and model_name and model_name != KillSwitch.SCOPE_GLOBAL:
+            org = getattr(getattr(request.user, "profile", None), "organization", None)
+            if org:
+                dup_qs = KillSwitch.objects.filter(
+                    organization=org,
+                    model_name=model_name,
+                    api_key_prefix=api_key_prefix,
+                )
+                if self.instance is not None:
+                    dup_qs = dup_qs.exclude(pk=self.instance.pk)
+                if dup_qs.exists():
+                    _scope = f' (key prefix "{api_key_prefix}")' if api_key_prefix else ""
+                    raise serializers.ValidationError(
+                        {
+                            "model_name": (
+                                f'A kill-switch already exists for "{model_name}"{_scope}. '
+                                "Edit or delete the existing kill-switch instead of creating a duplicate."
+                            )
+                        }
+                    )
         # Warning is advisory-only: keep it gated on a model_name actually
         # supplied in the payload (always true on create) so a PATCH that
         # does not touch model_name never injects the warning sentinel.

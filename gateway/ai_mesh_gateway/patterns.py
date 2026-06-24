@@ -85,6 +85,15 @@ PII_PATTERNS: Dict[str, str] = {
     # adjacent digits. Version strings ("1.2.3") and dotted-quad IPs do not fit
     # the exact 3.3.4 digit-count shape.
     "phone_dotted": r"\b\d{3}\.\d{3}\.\d{4}\b",
+    # Contextual bare 10-digit US phone. Tier-2 detects these semantically, but
+    # phone_us intentionally skips separatorless runs (order IDs, revenue figures).
+    # Only match when explicit phone/contact context immediately precedes the digits
+    # (e.g. "my phone number is 8929554991") so enforcement redaction and the
+    # upstream LLM never see raw PII the guard model already flagged.
+    "phone_us_bare_contextual": (
+        r"\b(?:phone|mobile|cell|tel(?:ephone)?)\s*(?:number|no\.?|#)?\s*(?:is|:)\s*"
+        r"\d{10}\b"
+    ),
     # N-CRED FIX: the original r"\bsk-[a-zA-Z0-9]{32,}\b" required an UNBROKEN
     # alphanumeric run, so it MISSED every modern hyphenated key format —
     # OpenAI project/service keys (sk-proj-…, sk-svcacct-…, sk-admin-…) and
@@ -278,6 +287,7 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "phone_us": ["PII", "GDPR"],
     "phone_intl": ["PII", "GDPR"],
     "phone_dotted": ["PII", "GDPR"],
+    "phone_us_bare_contextual": ["PII", "GDPR"],
     "api_key_openai": ["SECRET"],
     "aws_access_key": ["SECRET"],
     "aws_secret_access_key": ["SECRET"],
@@ -476,6 +486,18 @@ def _mask_secret_assignment(m: re.Match) -> str:
     return raw[:4] + "***"
 
 
+
+def _mask_phone_bare_contextual(m: re.Match) -> str:
+    """Mask only the trailing 10-digit run in a contextual phone phrase."""
+    s = m.group(0)
+    digits_match = re.search(r"\d{10}\b", s)
+    if not digits_match:
+        return s
+    digits = digits_match.group(0)
+    masked = f"***-***-{digits[-4:]}"
+    return s[: digits_match.start()] + masked + s[digits_match.end() :]
+
+
 _PII_MASKERS = {
     "email": _mask_email,
     "credit_card": _mask_credit_card,
@@ -485,6 +507,7 @@ _PII_MASKERS = {
     "phone_us": _mask_phone,
     "phone_intl": _mask_phone,
     "phone_dotted": _mask_phone,
+    "phone_us_bare_contextual": _mask_phone_bare_contextual,
     "api_key_openai": _mask_api_key,
     "aws_access_key": _mask_aws_key,
     "aws_secret_access_key": _mask_aws_secret,
@@ -505,6 +528,23 @@ _CREDENTIAL_MASKERS = {
     "connection_string": lambda m: "[CONNECTION_STRING_REDACTED]",
     "private_key_block": lambda m: "[PRIVATE_KEY_REDACTED]",
 }
+
+
+def redact_evidence_digit_spans(text: str, evidence_sources: List[str]) -> str:
+    """Mask digit runs echoed in Tier-2 guard evidence when regex patterns miss them."""
+    if not text or not evidence_sources:
+        return text
+    result = text
+    spans: set[str] = set()
+    for src in evidence_sources:
+        if not src:
+            continue
+        for match in re.finditer(r"\b\d{8,15}\b", str(src)):
+            spans.add(match.group(0))
+    for digits in sorted(spans, key=len, reverse=True):
+        if digits in result:
+            result = result.replace(digits, f"***-***-{digits[-4:]}")
+    return result
 
 
 def redact_all(text: str) -> str:

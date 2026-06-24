@@ -1,0 +1,66 @@
+:root {
+  --bg: #0f1419;
+  --panel: #1a2332;
+  --border: #2d3a4f;
+  --text: #e8eef7;
+  --muted: #8b9cb3;
+  --accent: #3b82f6;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --block: #ef4444;
+  font-family: "Inter", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; }
+.topbar { display: flex; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); }
+.brand span { color: var(--muted); margin-left: 0.75rem; font-size: 0.9rem; }
+.tabs { display: flex; gap: 0.25rem; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tab { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; }
+.tab.active { background: var(--accent); border-color: var(--accent); }
+.layout { display: grid; grid-template-columns: 1fr 340px; gap: 1rem; padding: 1rem; max-width: 1400px; margin: 0 auto; }
+@media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+.panel.hidden { display: none; }
+.viz { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; height: fit-content; position: sticky; top: 1rem; }
+h2, h3 { margin-top: 0; }
+.hint { color: var(--muted); font-size: 0.85rem; }
+label { display: block; margin: 0.5rem 0; font-size: 0.9rem; }
+input, textarea, select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 0.5rem; margin-top: 0.25rem; }
+button { background: var(--accent); color: white; border: none; padding: 0.6rem 1rem; border-radius: 6px; cursor: pointer; margin-top: 0.5rem; margin-right: 0.5rem; }
+button.secondary { background: var(--border); }
+.history { min-height: 120px; max-height: 280px; overflow-y: auto; margin: 0.75rem 0; padding: 0.5rem; background: var(--bg); border-radius: 6px; font-size: 0.9rem; }
+.history .msg { margin-bottom: 0.5rem; }
+.history .role { font-weight: 600; color: var(--accent); }
+.output, .raw { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; font-size: 0.8rem; overflow-x: auto; white-space: pre-wrap; max-height: 320px; }
+.pipeline .stage { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+.pipeline .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pipeline .dot.allow { background: var(--ok); }
+.pipeline .dot.block { background: var(--block); }
+.pipeline .dot.flag { background: var(--warn); }
+.routing-summary { font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--muted); }
+.muted { color: var(--muted); }
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+
+/* ── Superuser auth gate ── */
+.app-hidden { display: none !important; }
+.topbar-right { display: flex; align-items: center; gap: 0.75rem; }
+.topbar-right .meta { color: var(--muted); font-size: 0.85rem; }
+#user-meta { color: var(--text); }
+.login-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(1200px 600px at 50% -10%, #16203094, var(--bg)) , var(--bg);
+  padding: 1rem;
+}
+.login-card {
+  width: 100%; max-width: 380px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.5rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+}
+.login-card h2 { margin: 0.25rem 0 0.25rem; }
+.login-brand { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.5rem; }
+.login-brand strong { font-size: 1.1rem; }
+.login-brand span { color: var(--muted); font-size: 0.85rem; }
+.login-card button { width: 100%; margin-top: 1rem; }
+.login-error { color: var(--block); font-size: 0.85rem; margin-top: 0.75rem; min-height: 1rem; }

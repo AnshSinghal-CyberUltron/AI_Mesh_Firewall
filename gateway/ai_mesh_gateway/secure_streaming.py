@@ -204,6 +204,14 @@ class SecureStreamingResponse:
             if self._stream_metrics is not None:
                 self._stream_metrics.had_error = True
             if not self._stream_blocked:
+                # Phase-6 (P6-STREAM-error): the HTTP status is already 200 (the stream
+                # started), so a stock-SDK client would otherwise read a clean EMPTY
+                # success on an upstream failure. Emit an OpenAI-parseable error event
+                # in-band before [DONE] so the failure is visible to the client.
+                yield self._build_error_sse(
+                    "The inference provider failed before completing the response.",
+                    error_type="server_error", code="upstream_error",
+                )
                 yield "data: [DONE]\n\n"
 
     async def _flush_buffer(self, reason: FlushReason) -> AsyncGenerator[str, None]:
@@ -668,13 +676,14 @@ class SecureStreamingResponse:
         return f"data: {json.dumps(chunk_data)}\n\n"
 
     @staticmethod
-    def _build_error_sse(message: str) -> str:
-        """Build an SSE event indicating the stream was blocked."""
+    def _build_error_sse(message: str, error_type: str = "output_blocked",
+                         code: str = "output_blocked") -> str:
+        """Build an SSE event indicating the stream was blocked or failed."""
         error_data = {
             "error": {
                 "message": message,
-                "type": "output_blocked",
-                "code": "output_blocked",
+                "type": error_type,
+                "code": code,
             }
         }
         return f"data: {json.dumps(error_data)}\n\n"

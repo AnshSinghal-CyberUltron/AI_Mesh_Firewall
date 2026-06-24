@@ -138,7 +138,7 @@ class BedrockClient:
     Expects:
       - AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (standard AWS env vars)
       - BEDROCK_REGION: AWS region (e.g. ap-south-1, us-west-2)
-    - BEDROCK_MODEL: model ID (e.g. openai.gpt-oss-120b-1:0)
+    - BEDROCK_MODEL: model ID (e.g. global.anthropic.claude-haiku-4-5-20251001-v1:0)
     """
 
     def __init__(

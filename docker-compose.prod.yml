@@ -179,6 +179,27 @@ services:
   frontend:
     profiles: ["dev-frontend"]
 
+  # OpenAI-SDK reference demo, reachable only via nginx /demo/ (Basic Auth gated).
+  # Isolated by design: all env interpolation uses ":-" defaults (never ":?") so a
+  # missing DEMO_* var can NEVER abort `compose up` for the whole stack. nginx does
+  # NOT depend_on this service and resolves it lazily, so if demo is absent/down the
+  # platform is unaffected (only /demo/ 502s).
+  demo:
+    <<: *restart_unless_stopped
+    image: ${ECR_REGISTRY:?set ECR_REGISTRY}/ai-mesh-demo:${IMAGE_TAG:-latest}
+    pull_policy: always
+    build: !reset null
+    expose: ["8770"]
+    environment:
+      ZEROSHIELD_API_KEY: ${DEMO_GATEWAY_KEY:-}
+      ZEROSHIELD_BASE_URL: ${DEMO_GATEWAY_BASE_URL:-http://gateway:8300/v1}
+    depends_on:
+      gateway: { condition: service_started }
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
   nginx:
     <<: [*restart_unless_stopped, *ecr_nginx_image]
     ports: ["80:80", "443:443"]

@@ -13,6 +13,7 @@ Endpoints:
 
 import logging
 
+from django.db import IntegrityError
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -89,9 +90,23 @@ class KillSwitchViewSet(viewsets.ModelViewSet):
         # De-leak raw guard/upstream model ids on the kill-switch rows themselves.
         # KillSwitch actions are keyed on row id (not model_name), so canonicalizing
         # the DISPLAYED name is safe and keeps edit/activate/delete working.
+        # Defense-in-depth: NEVER canonicalize a name that is one of the org's OWN
+        # active connected models — a legitimate BYOK model (e.g. "Haiku" /
+        # "anthropic/claude-3.5-haiku", or any Anthropic model) must display with
+        # its real name so the edit dropdown can match it; only de-leak names that
+        # are NOT the org's models (raw/leaked upstream ids).
+        from core.models import LLMModelConfig
+
+        org_model_names = set(
+            LLMModelConfig.objects.filter(organization=org, is_active=True).values_list(
+                "model_name", flat=True
+            )
+        )
         for r in rows:
             if isinstance(r, dict) and r.get("model_name"):
-                r["model_name"] = canonicalize_model_name_safe(r["model_name"])
+                _nm = r["model_name"]
+                if _nm not in org_model_names:
+                    r["model_name"] = canonicalize_model_name_safe(_nm)
         guard = set(platform_guard_model_names())
         isolated = ModelState.objects.filter(
             organization=org, status="isolated"
@@ -129,7 +144,22 @@ class KillSwitchViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         warning = serializer.validated_data.pop("_model_name_warning", None)
-        self.perform_create(serializer)
+        # The serializer.validate() duplicate pre-check returns a clean 400 for the
+        # common case; this catch covers the create-create RACE (two requests pass
+        # validation before either commits) so a unique-constraint violation
+        # surfaces as a 409 Conflict, never an unhandled 500.
+        try:
+            self.perform_create(serializer)
+        except IntegrityError:
+            return Response(
+                {
+                    "detail": (
+                        "A kill-switch already exists for this model and key-prefix scope. "
+                        "Edit or delete the existing kill-switch instead of creating a duplicate."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
         payload = KillSwitchSerializer(serializer.instance).data
         if warning:
             payload["warning"] = warning

@@ -470,6 +470,11 @@ function getModuleResultsConfig(moduleId, socKpis) {
   const blocked = socKpis?.blocked ?? 0;
   const redacted = socKpis?.redacted ?? 0;
   const allowed = Math.max(0, total - blocked - redacted);
+  // Module 1.1 (ingress) reflects REQUESTS, not all enforcement events. With
+  // routing active each request also emits a model_routed event, so total_threats
+  // double-counts ingress. Use the request-scoped count for the 1.1 flow only.
+  const requestsInspected = socKpis?.requests_inspected ?? total;
+  const allowedReq = Math.max(0, requestsInspected - blocked - redacted);
   const lat = socKpis?.avg_latency_ms;
   const timings3 = lat ? [Math.round(lat * 0.3), Math.round(lat * 0.4), Math.round(lat * 0.3)] : [null, null, null];
   const timings2 = lat ? [Math.round(lat * 0.5), Math.round(lat * 0.5)] : [null, null];
@@ -479,10 +484,10 @@ function getModuleResultsConfig(moduleId, socKpis) {
       description: "Real-time ingress traffic decisions and authentication/rate-limit outcomes.",
       icon: Home,
       flowNodes: [
-        { label: "Client", value: total.toLocaleString(), color: "blue" },
-        { label: "Auth", value: total.toLocaleString(), color: "teal" },
+        { label: "Client", value: requestsInspected.toLocaleString(), color: "blue" },
+        { label: "Auth", value: requestsInspected.toLocaleString(), color: "teal" },
         { label: "Rate Limit", value: blocked.toLocaleString(), color: "purple" },
-        { label: "Gateway", value: allowed.toLocaleString(), color: "emerald" },
+        { label: "Gateway", value: allowedReq.toLocaleString(), color: "emerald" },
       ],
       arrowTimings: timings3,
       tableColumns: ["Timestamp", "Category", "Subcategory", "Action", "Severity", "Source", "Model"],

@@ -1,0 +1,8 @@
+HTTP/1.1 200 OK
+date: Wed, 24 Jun 2026 13:05:09 GMT
+server: uvicorn
+x-request-id: resp_9384250bf7e78b460af82e9403dda108187f9fa70d879a9f
+content-length: 1310
+content-type: application/json
+
+{"id":"resp_9384250bf7e78b460af82e9403dda108187f9fa70d879a9f","object":"response","created_at":1700000000,"status":"completed","model":"gpt-4o-mini","output":[{"type":"message","id":"msg_d67637d211f7046f05673e7518b53f679f24ba52f1b84abe","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hello from upstream.","annotations":[]}]}],"output_text":"Hello from upstream.","usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}},"metadata":{},"previous_response_id":null,"parallel_tool_calls":true,"store":false,"incomplete_details":null,"error":null,"zeroshield":{"request_id":"zs-600c91e3b12a","action":"allow","reason":"ZeroShield Model — enforcement: ALLOW","detail":"ZeroShield Model — enforcement: ALLOW\nAll security checks passed. No threats detected.","detection_tier":"none","threat_type":"clean","confidence":1.0,"matched_patterns":[],"processing_time_ms":2.77,"guard_model":"ZeroShield Model","guard_action":"allow","guard_reason":"ZeroShield Model — enforcement: ALLOW\nAll security checks passed. No threats detected.","reason_code":"","recommended_action":"","guard_findings":[],"enforcement_source":"zeroshield_guard_model","risk_score":0.0,"scan_outcome":"clean"}}

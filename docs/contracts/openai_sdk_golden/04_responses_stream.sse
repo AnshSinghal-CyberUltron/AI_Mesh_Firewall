@@ -1,0 +1,41 @@
+HTTP/1.1 200 OK
+date: Wed, 24 Jun 2026 13:05:09 GMT
+server: uvicorn
+x-request-id: resp_b43991e667dcb15c3dbe68fcb12cd37688b04e6e093eeda7
+content-type: text/event-stream
+cache-control: no-cache
+connection: keep-alive
+transfer-encoding: chunked
+
+event: response.created
+data: {"type": "response.created", "response": {"id": "resp_b43991e667dcb15c3dbe68fcb12cd37688b04e6e093eeda7", "object": "response", "created_at": 1782306310, "model": "gpt-4o-mini", "status": "in_progress", "output": []}}
+
+event: response.in_progress
+data: {"type": "response.in_progress", "response": {"id": "resp_b43991e667dcb15c3dbe68fcb12cd37688b04e6e093eeda7", "object": "response", "created_at": 1782306310, "model": "gpt-4o-mini", "status": "in_progress", "output": []}}
+
+event: response.output_item.added
+data: {"type": "response.output_item.added", "output_index": 0, "item": {"id": "msg_d28f7d91ea2821f27853d107dc87d1edbf45167e46d706b4", "type": "message", "status": "in_progress", "role": "assistant", "content": []}}
+
+event: response.content_part.added
+data: {"type": "response.content_part.added", "item_id": "msg_d28f7d91ea2821f27853d107dc87d1edbf45167e46d706b4", "output_index": 0, "content_index": 0, "part": {"type": "output_text", "text": "", "annotations": []}}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "item_id": "msg_d28f7d91ea2821f27853d107dc87d1edbf45167e46d706b4", "output_index": 0, "content_index": 0, "delta": "Hello", "sequence_number": 1}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "item_id": "msg_d28f7d91ea2821f27853d107dc87d1edbf45167e46d706b4", "output_index": 0, "content_index": 0, "delta": " streaming", "sequence_number": 2}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "item_id": "msg_d28f7d91ea2821f27853d107dc87d1edbf45167e46d706b4", "output_index": 0, "content_index": 0, "delta": " world.", "sequence_number": 3}
+
+event: response.output_text.done
+data: {"type": "response.output_text.done", "item_id": "msg_d28f7d91ea2821f27853d107dc87d1edbf45167e46d706b4", "output_index": 0, "content_index": 0, "text": "Hello streaming world."}
+
+event: response.output_item.done
+data: {"type": "response.output_item.done", "output_index": 0, "item": {"id": "msg_d28f7d91ea2821f27853d107dc87d1edbf45167e46d706b4", "type": "message", "status": "completed", "role": "assistant", "content": [{"type": "output_text", "text": "Hello streaming world.", "annotations": []}]}}
+
+event: response.completed
+data: {"type": "response.completed", "response": {"id": "resp_b43991e667dcb15c3dbe68fcb12cd37688b04e6e093eeda7", "object": "response", "created_at": 1782306310, "model": "gpt-4o-mini", "status": "completed", "output": [{"id": "msg_d28f7d91ea2821f27853d107dc87d1edbf45167e46d706b4", "type": "message", "status": "completed", "role": "assistant", "content": [{"type": "output_text", "text": "Hello streaming world.", "annotations": []}]}], "output_text": "Hello streaming world.", "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}, "zeroshield": {"request_id": "zs-a60964bc0712", "action": "allow", "reason": "ZeroShield Model \u2014 enforcement: ALLOW", "detail": "ZeroShield Model \u2014 enforcement: ALLOW\nAll security checks passed. No threats detected.", "detection_tier": "none", "threat_type": "clean", "confidence": 1.0, "matched_patterns": [], "processing_time_ms": 3.77, "guard_model": "ZeroShield Model", "guard_action": "allow", "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nAll security checks passed. No threats detected.", "reason_code": "", "recommended_action": "", "guard_findings": [], "enforcement_source": "zeroshield_guard_model", "risk_score": 0.0, "scan_outcome": "clean"}}}
+
+data: [DONE]
+

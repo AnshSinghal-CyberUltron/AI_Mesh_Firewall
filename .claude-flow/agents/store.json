@@ -1,0 +1,377 @@
+{
+  "agents": {
+    "harness-author": {
+      "agentId": "harness-author",
+      "agentType": "tester",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T06:17:55.026Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "surface-mapper": {
+      "agentId": "surface-mapper",
+      "agentType": "analyst",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T06:17:56.460Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "contract-owner": {
+      "agentId": "contract-owner",
+      "agentType": "architect",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T07:45:41.931Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "openai-surface": {
+      "agentId": "openai-surface",
+      "agentType": "researcher",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T07:45:43.319Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "flow-tracer": {
+      "agentId": "flow-tracer",
+      "agentType": "analyst",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T07:45:44.731Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "backlog": {
+      "agentId": "backlog",
+      "agentType": "planner",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T07:45:45.674Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "false-positive-hunter": {
+      "agentId": "false-positive-hunter",
+      "agentType": "analyst",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {},
+      "createdAt": "2026-06-22T08:34:43.599Z",
+      "model": "haiku",
+      "modelRoutedBy": "router"
+    },
+    "hidden-failure-hunter": {
+      "agentId": "hidden-failure-hunter",
+      "agentType": "analyst",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {},
+      "createdAt": "2026-06-22T08:34:45.040Z",
+      "model": "haiku",
+      "modelRoutedBy": "router"
+    },
+    "state-config-agent": {
+      "agentId": "state-config-agent",
+      "agentType": "reviewer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {},
+      "createdAt": "2026-06-22T08:34:45.850Z",
+      "model": "haiku",
+      "modelRoutedBy": "router"
+    },
+    "runtime-evidence-agent": {
+      "agentId": "runtime-evidence-agent",
+      "agentType": "reviewer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {},
+      "createdAt": "2026-06-22T08:34:46.834Z",
+      "model": "haiku",
+      "modelRoutedBy": "router"
+    },
+    "edge-case-agent": {
+      "agentId": "edge-case-agent",
+      "agentType": "tester",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {},
+      "createdAt": "2026-06-22T08:34:48.051Z",
+      "model": "haiku",
+      "modelRoutedBy": "router"
+    },
+    "devils-advocate": {
+      "agentId": "devils-advocate",
+      "agentType": "reviewer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T11:15:37.372Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "design-arbiter": {
+      "agentId": "design-arbiter",
+      "agentType": "architect",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T11:15:38.852Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "enforcement-guardian": {
+      "agentId": "enforcement-guardian",
+      "agentType": "security",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T11:15:39.661Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "fixW1-block-status": {
+      "agentId": "fixW1-block-status",
+      "agentType": "coder",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T11:52:05.868Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "fixW2-request-id": {
+      "agentId": "fixW2-request-id",
+      "agentType": "coder",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T11:52:07.265Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "fixW3-param-drops": {
+      "agentId": "fixW3-param-drops",
+      "agentType": "coder",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T11:52:08.694Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "fixW4-mct": {
+      "agentId": "fixW4-mct",
+      "agentType": "coder",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T11:52:09.625Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "fixW5-stream-toolcalls": {
+      "agentId": "fixW5-stream-toolcalls",
+      "agentType": "coder",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T11:52:11.129Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "regression-gate": {
+      "agentId": "regression-gate",
+      "agentType": "tester",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T11:52:12.437Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "enforcement-guard": {
+      "agentId": "enforcement-guard",
+      "agentType": "security",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-22T11:52:13.395Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "v1-error-breaker": {
+      "agentId": "v1-error-breaker",
+      "agentType": "reviewer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-24T12:52:34.022Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "v2-symptom-repro": {
+      "agentId": "v2-symptom-repro",
+      "agentType": "tester",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-24T12:52:34.948Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "v3-regression": {
+      "agentId": "v3-regression",
+      "agentType": "reviewer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-24T12:52:36.353Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "v4-state-divergence": {
+      "agentId": "v4-state-divergence",
+      "agentType": "analyst",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-24T12:52:37.300Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "v5-stream-breaker": {
+      "agentId": "v5-stream-breaker",
+      "agentType": "tester",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "inherit"
+      },
+      "createdAt": "2026-06-24T12:52:38.237Z",
+      "model": "inherit",
+      "modelRoutedBy": "explicit"
+    },
+    "readiness-lead": {
+      "agentId": "readiness-lead",
+      "agentType": "coordinator",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {},
+      "createdAt": "2026-06-23T05:24:13.800Z",
+      "model": "haiku",
+      "modelRoutedBy": "router"
+    },
+    "cross-sdk": {
+      "agentId": "cross-sdk",
+      "agentType": "tester",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {},
+      "createdAt": "2026-06-23T05:24:14.731Z",
+      "model": "haiku",
+      "modelRoutedBy": "router"
+    },
+    "framework-smoke": {
+      "agentId": "framework-smoke",
+      "agentType": "tester",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {},
+      "createdAt": "2026-06-23T05:24:15.646Z",
+      "model": "haiku",
+      "modelRoutedBy": "router"
+    },
+    "signoff": {
+      "agentId": "signoff",
+      "agentType": "reviewer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {},
+      "createdAt": "2026-06-23T05:24:16.595Z",
+      "model": "haiku",
+      "modelRoutedBy": "router"
+    }
+  },
+  "version": "3.0.0"
+}

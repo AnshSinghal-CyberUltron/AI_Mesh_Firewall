@@ -4,7 +4,7 @@
  */
 
 /** Default routed / simulator model id exposed to clients. Never surface the
- *  upstream size/provider (no "120b", "gpt-oss", "guard", or Bedrock). */
+ *  upstream size/provider (no "guard", "claude-haiku", or Bedrock). */
 export const ZEROSHIELD_GUARD_MODEL = "zeroshield-model";
 
 /** Human-readable product name for the platform ML model */
@@ -20,19 +20,13 @@ export const ZEROSHIELD_TIER2_LABEL = "ZeroShield Model";
 export const ZEROSHIELD_ADJUDICATOR_LABEL = "ZeroShield Policy Adjudicator";
 
 const ROUTING_REASON_REPLACEMENTS = [
-  ["Bedrock GPT OSS 120B adjudicator", ZEROSHIELD_ADJUDICATOR_LABEL],
-  ["Bedrock GPT OSS 120B", ZEROSHIELD_ADJUDICATOR_LABEL],
   ["bedrock adjudicator", ZEROSHIELD_ADJUDICATOR_LABEL],
   // Never surface the upstream platform model id/size/provider in operator copy.
-  // Match the platform model id by SHAPE (regex) so the exact deployable id is
-  // never embedded verbatim in the shipped bundle; only generic family tokens
-  // remain, which the gateway already scrubs server-side as the authoritative layer.
+  // The platform guard/adjudicator runs on Bedrock Claude Haiku; match it by SHAPE
+  // (regex) so the exact deployable id is never embedded verbatim in the shipped
+  // bundle (the gateway already scrubs server-side as the authoritative layer).
   [/(?:bedrock\/)?global\.anthropic\.claude-haiku[\w.:-]*/gi, ZEROSHIELD_GUARD_MODEL_LABEL],
   ["claude-haiku-4-5", ZEROSHIELD_GUARD_MODEL_LABEL],
-  [/(?:bedrock\/)?(?:openai\.)?gpt[\s_-]*oss[\s_-]*120b[\w.:-]*/gi, ZEROSHIELD_GUARD_MODEL_LABEL],
-  ["zeroshield-guard-120b", ZEROSHIELD_GUARD_MODEL_LABEL],
-  ["gpt-oss-120b", ZEROSHIELD_GUARD_MODEL_LABEL],
-  ["120b", ""],
 ];
 
 const DECISION_SOURCE_LABELS = {
@@ -118,14 +112,12 @@ export function formatDetectionTier(tier) {
   const t = String(tier).toLowerCase();
   if (t === "tier_1" || t === "tier1") return ZEROSHIELD_TIER1_LABEL;
   if (t === "tier_2" || t === "tier2" || t === "input_scan") return ZEROSHIELD_TIER2_LABEL;
-  if (t.includes("bedrock") || t.includes("gpt-oss")) return ZEROSHIELD_TIER2_LABEL;
+  if (t.includes("bedrock")) return ZEROSHIELD_TIER2_LABEL;
   return tier;
 }
 
 const PLATFORM_GUARD_MODEL_NAMES = new Set([
   ZEROSHIELD_GUARD_MODEL,
-  "bedrock-gpt-oss-120b",
-  "bedrock-gpt-oss-120b-long-context",
 ]);
 
 /** True for internal / ZeroShield guard entries (not shown in model governance UI). */
@@ -160,8 +152,6 @@ export function modelHasUsableKey(m) {
  *  and is collapsed to the single product label "ZeroShield Model". */
 const RESERVED_MODEL_SUBSTRINGS = [
   "bedrock",
-  "gpt-oss",
-  "120b",
   "claude-haiku",
   "haiku",
   "anthropic",
@@ -188,7 +178,7 @@ export function isReservedModelLabel(value) {
 
 /**
  * Sanitize any model id, name, or label for display. Maps ANY reserved
- * platform/guard/BYOK upstream id (bedrock, gpt-oss, 120b, claude-haiku, haiku,
+ * platform/guard/BYOK upstream id (bedrock, claude-haiku, haiku,
  * anthropic, zeroshield-guard, zeroshield-model) OR any guard-model branding
  * label ("Guard Model", "ZeroShield Guard Model", "ZeroShield Guard") to the
  * single client-facing product name "ZeroShield Model". Non-reserved org/BYOK

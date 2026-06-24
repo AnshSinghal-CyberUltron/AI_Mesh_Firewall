@@ -50,7 +50,7 @@ fi
 
 _ensure_ecr_repos() {
   local repo
-  for repo in ai-mesh-gateway ai-mesh-control ai-mesh-workers ai-mesh-nginx; do
+  for repo in ai-mesh-gateway ai-mesh-control ai-mesh-workers ai-mesh-nginx ai-mesh-demo; do
     if aws ecr describe-repositories --repository-names "${repo}" --region "${REGION}" >/dev/null 2>&1; then
       continue
     fi
@@ -84,7 +84,14 @@ docker build --platform "${PLATFORM}" -f workers/Dockerfile \
   -t "${ECR}/ai-mesh-workers:${TAG}" .
 docker push "${ECR}/ai-mesh-workers:${TAG}"
 
+docker build --platform "${PLATFORM}" -f examples/zeroshield-openai-demo/Dockerfile \
+  -t "${ECR}/ai-mesh-demo:${TAG}" examples/zeroshield-openai-demo
+docker push "${ECR}/ai-mesh-demo:${TAG}"
+
+# nginx bakes the /demo/ Basic Auth credential (apr1 hash) from these build args.
 docker build --platform "${PLATFORM}" -f deploy/Dockerfile.nginx \
+  --build-arg "DEMO_AUTH_USER=${DEMO_AUTH_USER:-superuser}" \
+  --build-arg "DEMO_AUTH_PASSWORD=${DEMO_AUTH_PASSWORD:-change-me}" \
   -t "${ECR}/ai-mesh-nginx:${TAG}" .
 docker push "${ECR}/ai-mesh-nginx:${TAG}"
 
@@ -96,6 +103,7 @@ echo "  ${ECR}/ai-mesh-gateway:${TAG}"
 echo "  ${ECR}/ai-mesh-control:${TAG}"
 echo "  ${ECR}/ai-mesh-workers:${TAG}"
 echo "  ${ECR}/ai-mesh-nginx:${TAG}"
+echo "  ${ECR}/ai-mesh-demo:${TAG}"
 echo ""
 echo "Updated .env (sync-to-ec2 copies this to EC2):"
 echo "  ECR_REGISTRY=${ECR}"

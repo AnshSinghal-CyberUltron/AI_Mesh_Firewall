@@ -175,7 +175,7 @@ services:
       # keys in env_file (.env) for local dev, or the EC2 instance role in prod.
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-${BEDROCK_REGION:-ap-south-1}}
       BEDROCK_REGION: ${BEDROCK_REGION:-ap-south-1}
-      BEDROCK_MODEL: ${BEDROCK_MODEL:-openai.gpt-oss-120b-1:0}
+      BEDROCK_MODEL: ${BEDROCK_MODEL:-global.anthropic.claude-haiku-4-5-20251001-v1:0}
       ENABLE_TIER2: ${ENABLE_TIER2:-true}
       GUARDRAILS_SERVICE_URL: http://guardrails:8310
       MCP_BROKER_URL: http://mcp-broker:8311

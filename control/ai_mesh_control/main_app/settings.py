@@ -412,7 +412,6 @@ CELERY_TASK_ROUTES = {
     "policy.compile_vector_policies": {"queue": "policy.compile"},
     "core.tasks.process_telemetry_batch": {"queue": "platform.batch"},
     "core.tasks.process_gateway_jobs_batch": {"queue": "platform.batch"},
-    "core.tasks.send_critical_alert_email": {"queue": "platform.batch"},
     "core.tasks.log_audit": {"queue": "platform.batch"},
     "core.tasks.cleanup_old_audit_logs": {"queue": "compute.heavy"},
     "core.tasks.update_risk_scores_from_telemetry": {"queue": "compute.heavy"},
@@ -464,6 +463,13 @@ CELERY_BEAT_SCHEDULE = {
     "resync-gateway-keys": {
         "task": "core.tasks.resync_gateway_keys",
         "schedule": float(os.environ.get("GATEWAY_KEY_RESYNC_INTERVAL_SEC", "300")),
+    },
+    # B2 DEFENSE: periodically re-push routing state (models/allowlist/isolation)
+    # so a bulk QuerySet.update() (which bypasses post_save signals) cannot leave
+    # the gateway routing on stale config indefinitely.
+    "reconcile-routing-state": {
+        "task": "core.tasks.reconcile_routing_state",
+        "schedule": float(os.environ.get("ROUTING_RECONCILE_INTERVAL_SEC", "120")),
     },
 }
 

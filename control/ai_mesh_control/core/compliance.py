@@ -26,7 +26,6 @@ COMPLIANCE_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "audit_logging_enabled": True,
         "log_level_minimum": "detailed",
         "pii_detection_enabled": True,
-        "alerting_enabled": True,
     },
     "HIPAA": {
         "audit_logging_enabled": True,
@@ -45,7 +44,6 @@ COMPLIANCE_REQUIREMENTS: dict[str, dict[str, Any]] = {
     "ISO27001": {
         "audit_logging_enabled": True,
         "threat_intel_enabled": True,
-        "alerting_enabled": True,
         "log_level_minimum": "standard",
     },
     "GDPR": {

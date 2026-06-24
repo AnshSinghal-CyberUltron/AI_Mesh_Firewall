@@ -21,7 +21,6 @@ import { ResponseGuardrailsCard } from "../components/firewall/ResponseGuardrail
 import { RagSecurityCard } from "../components/firewall/RagSecurityCard";
 import { ThreatIntelCard } from "../components/firewall/ThreatIntelCard";
 import { AuditComplianceCard } from "../components/firewall/AuditComplianceCard";
-import { AlertingCard } from "../components/firewall/AlertingCard";
 import { ImpactPanel } from "../components/firewall/ImpactPanel";
 import { VectorDbCard, ZeroShieldTestCard } from "../components/firewall/VectorDbCard";
 
@@ -177,10 +176,9 @@ export function AIMeshFirewallConfig() {
         <RagSecurityCard {...cardProps} index={8} />
         <ThreatIntelCard {...cardProps} index={9} />
         <AuditComplianceCard {...cardProps} index={10} />
-        <AlertingCard {...cardProps} index={11} />
-        <LlmConnectionsCard onModelsChanged={refreshConnectedModels} index={12} />
-        <VectorDbCard index={13} />
-        <ZeroShieldTestCard index={14} />
+        <LlmConnectionsCard onModelsChanged={refreshConnectedModels} index={11} />
+        <VectorDbCard index={12} />
+        <ZeroShieldTestCard index={13} />
 
         <div className="space-y-3">
           {!config.firewallEnabled && (

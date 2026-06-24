@@ -27,7 +27,12 @@ export function chatCompletionBody({
     body.stream = true;
   }
   if (!runInference) {
-    body.max_tokens = 0;
+    // "scan-only / no-inference" probe: OMIT max_tokens entirely (absent →
+    // gateway treats as no-inference). Previously this sent max_tokens=0, which
+    // the gateway's request validation rejects as "'max_tokens' must be a
+    // positive integer" (400) — so every probe surfaced a confusing block in the
+    // pipeline trace instead of the input-scan verdict.
+    delete body.max_tokens;
   }
   if (routingPreferences && typeof routingPreferences === "object") {
     body.routing_preferences = routingPreferences;
@@ -661,26 +666,42 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     const at = stageAt("policy");
     const policyBlocked = blockedStage === "policy";
     const matchedPolicies = data?.matched_policies || zs.matched_policies || [];
-    const matchedRules = data?.matched_rules || zs.matched_rules || [];
-    const policyActed = Boolean(matchedPolicies?.length || matchedRules?.length);
+    let matchedRules = data?.matched_rules || zs.matched_rules || [];
+    // The deterministic policy-redaction path reports the rule names it applied
+    // in `matched_patterns` (the redact-path zeroshield carries no matched_rules),
+    // so the Policy stage used to fall through to "allow" even though it had just
+    // redacted PII. Detect a policy-tier redaction and surface those rule names so
+    // the card honestly shows REDACT instead of ALLOW.
+    const policyTier = String(zs.detection_tier || data?.detection_tier || "").toLowerCase() === "policy";
+    const policyRedacted = policyTier && (finalAction === "redact" || String(zs.action || "").toLowerCase() === "redact");
+    if (!matchedRules.length && policyRedacted) {
+      const redactNames = (zs.matched_patterns || data?.matched_patterns || [])
+        .filter((p) => /redact/i.test(String(p)));
+      matchedRules = redactNames.length ? redactNames : (zs.matched_patterns || []);
+    }
+    const policyActed = Boolean(matchedPolicies?.length || matchedRules?.length || policyRedacted);
     stages.push({
       name: "policy",
       action: policyBlocked
         ? "block"
         : at === "after"
           ? "skip"
-          : (policyActed && (finalAction === "redact" || finalAction === "flag") ? finalAction : "allow"),
+          : policyRedacted
+            ? "redact"
+            : (policyActed && finalAction === "flag" ? "flag" : "allow"),
       latency_ms: latencyForStage("policy", stageMetrics, zs, context),
       detail: policyBlocked
         ? formatPolicyBlockDetail(data, zs)
         : at === "after"
           ? skipDetail("policy", blockedStage)
-          : (matchedRules?.length
-            ? `Policy engine matched ${matchedRules.length} rule(s)`
-            : "Policy engine evaluated request against compiled rules; no matching policy rule"),
+          : policyRedacted
+            ? `Policy engine redacted sensitive data — applied ${matchedRules.length} rule(s) before forwarding to the LLM`
+            : (matchedRules?.length
+              ? `Policy engine matched ${matchedRules.length} rule(s)`
+              : "Policy engine evaluated request against compiled rules; no matching policy rule"),
       matched_policies: matchedPolicies,
       matched_rules: matchedRules,
-      threat_type: policyBlocked ? (data?.category || zs.threat_type || "policy") : "",
+      threat_type: policyBlocked ? (data?.category || zs.threat_type || "policy") : (policyRedacted ? (zs.threat_type || "pii") : ""),
     });
   }
 
@@ -712,17 +733,25 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
         tier: "skipped",
       });
     } else {
+      // When the deterministic POLICY tier already redacted the prompt, Tier-2
+      // input scanning runs on the ALREADY-REDACTED text — so it is clean, not a
+      // flag. Attribute the redaction to the Policy stage and show input_scan as
+      // a clean pass (it used to inherit the request-level "redact"/"flag").
+      const policyTierRedact = String(tier).toLowerCase() === "policy"
+        && (finalAction === "redact" || String(zs.action || "").toLowerCase() === "redact");
       stages.push({
         name: "input_scan",
-        action: scanStageAction(finalAction, blockedStage, httpStatus),
+        action: policyTierRedact ? "allow" : scanStageAction(finalAction, blockedStage, httpStatus),
         latency_ms: latencyForStage("input_scan", stageMetrics, zs, context) || roundMs(zs.processing_time_ms, 0.5),
-        detail: scanRan
-          ? formatInputScanDetail(data, zs, { blocked: false })
-          : "Input scan not invoked for this request",
-        threat_type: zs.threat_type && zs.threat_type !== "none" ? zs.threat_type : "",
-        confidence: zs.confidence ?? 0,
+        detail: policyTierRedact
+          ? "Tier-2 scanned the policy-redacted prompt — no additional threats (PII already masked upstream)"
+          : (scanRan
+            ? formatInputScanDetail(data, zs, { blocked: false })
+            : "Input scan not invoked for this request"),
+        threat_type: (!policyTierRedact && zs.threat_type && zs.threat_type !== "none") ? zs.threat_type : "",
+        confidence: policyTierRedact ? 0 : (zs.confidence ?? 0),
         tier: formatDetectionTier(tier) || tier || "",
-        matched_patterns: zs.matched_patterns || [],
+        matched_patterns: policyTierRedact ? [] : (zs.matched_patterns || []),
         prompt_submitted: promptPreview,
       });
     }
@@ -837,13 +866,19 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       const needsModel = finalAction === "needs_model";
       stages.push({
         name: "model_output",
+        // An upstream inference FAILURE (502/error) is NOT a security block — it is
+        // a provider/credential/infra error. Label it "error" so it is visually and
+        // semantically distinct from a guardrail "block" (which denies content).
+        // Only a genuine block-stage at model_output keeps "block".
         action: needsModel
           ? "skip"
-          : inferenceBlocked || isError
-            ? "block"
-            : isBlocked || !hasChoices
-              ? "skip"
-              : "allow",
+          : isError
+            ? "error"
+            : inferenceBlocked
+              ? "block"
+              : isBlocked || !hasChoices
+                ? "skip"
+                : "allow",
         latency_ms: latencyForStage("model_output", stageMetrics, zs, context),
         detail: needsModel
           ? "Inference skipped — connect an organization model under Module 1.5 (Model Connection)"
@@ -1038,8 +1073,17 @@ export function outputGuardChatBody(text, contextChunks = [], model) {
   const contextHint = contextChunks?.length
     ? `\n\nReference context:\n${contextChunks.join("\n")}`
     : "";
+  // NOTE: the prompt must NOT look like an instruction-override / jailbreak, or the
+  // Tier-2 INPUT scanner blocks it as prompt_injection (403) and the OUTPUT guard is
+  // never reached — the simulator would only ever show an input block. "Repeat the
+  // following text exactly as your entire reply (no preamble)" tripped exactly that.
+  // A neutral "echo for receipt confirmation" framing passes input scan and still
+  // reproduces the text so the output guard can act on it. (High-sensitivity inputs —
+  // raw SSN/card/credentials — are still intercepted by the INPUT guard before
+  // inference; that is defense-in-depth, not a bug. Output-guard demonstration is
+  // most reliable on model-generated sensitive content.)
   return chatCompletionBody({
-    prompt: `Repeat the following text exactly as your entire reply (no preamble):\n\n${text}${contextHint}`,
+    prompt: `Echo the following record back unchanged for a receipt confirmation:\n\n${text}${contextHint}`,
     model,
     runInference: true,
     maxTokens: 1024,

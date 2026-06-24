@@ -207,6 +207,49 @@ def resync_all_gateway_keys() -> int:
     return synced
 
 
+def reconcile_all_routing_state() -> dict:
+    """Full reconcile of ALL routing-relevant config into Redis (idempotent).
+
+    B2 DEFENSE: a bulk ``QuerySet.update()`` emits no ``post_save`` signal, so the
+    gateway's routing/isolation/allowlist state in Redis goes STALE and the gateway
+    keeps routing on the old config (e.g. a model bulk-deactivated, bulk-isolated,
+    or whose priority/sensitivity was bulk-updated still receives traffic /
+    mis-routes). Run on worker startup + periodically via Celery beat. Mirrors
+    ``resync_all_gateway_keys``: re-push live state for LLMModelConfig (the per-org
+    bundle is rebuilt from ``is_active=True`` rows, so a bulk-deactivated model is
+    evicted), FirewallConfig (allowlist / routing flags), and ModelState (isolation).
+    """
+    counts = {"llm_models": 0, "firewall_configs": 0, "model_states": 0}
+    try:
+        _sync_all_llm_models(None)  # rebuilds every org's bundle from active rows
+        counts["llm_models"] = LLMModelConfig.objects.filter(is_active=True).count()
+    except Exception:  # noqa: BLE001
+        logger.exception("reconcile_all_routing_state: LLM model sync failed")
+    try:
+        client = _get_redis_client()
+    except redis.RedisError:
+        logger.exception("reconcile_all_routing_state: cannot connect to Redis")
+        return counts
+    for cfg in FirewallConfig.objects.all().iterator():
+        try:
+            client.set(cfg.build_redis_key(), json.dumps(cfg.build_gateway_payload()))
+            counts["firewall_configs"] += 1
+        except Exception:  # noqa: BLE001 - one bad row must not abort the reconcile
+            logger.exception("reconcile: firewall config failed org=%s", getattr(cfg, "organization_id", "?"))
+    for st in ModelState.objects.all().iterator():
+        try:
+            client.set(st.build_redis_key(), json.dumps(st.build_redis_payload()))
+            counts["model_states"] += 1
+        except Exception:  # noqa: BLE001
+            logger.exception("reconcile: model state failed %s", getattr(st, "model_name", "?"))
+    try:
+        client.publish(CONFIG_UPDATES_CHANNEL, json.dumps({"action": "reload"}))
+    except Exception:  # noqa: BLE001 - publish is best-effort
+        pass
+    logger.info("reconcile_all_routing_state: %s", counts)
+    return counts
+
+
 @receiver(post_delete, sender=GatewayAPIKey)
 def delete_gateway_api_key_from_redis(
     sender: type,

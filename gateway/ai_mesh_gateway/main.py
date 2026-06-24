@@ -676,6 +676,15 @@ def _resolve_content_block_status(status_code: int, threat_category: str) -> int
     return 400  # default + fail-safe for any unexpected value
 
 
+def _is_redactable_pii_threat(threat_type: str) -> bool:
+    """True when a scanner threat should trigger PII redaction before the upstream
+    LLM (grafted from the parallel session's redaction-gap fix: bare phone / phi / pci)."""
+    t = (threat_type or "").lower()
+    if t in ("pii", "secret", "phi", "pci", "sensitive_content"):
+        return True
+    return "pii" in t or "phone" in t or t.startswith("phi") or t.startswith("pci")
+
+
 def _build_safe_block_response(
     status_code: int,
     code: str,
@@ -6028,8 +6037,9 @@ async def proxy_chat(
             # PII redaction for that org. Secrets/credentials are ALWAYS redacted
             # regardless of this toggle.
             pii_detection_enabled = bool(org_config.get("scan_block_on_pii", True))
-            _redact_threat = verdict.threat_type in ("pii", "secret") and (
-                verdict.threat_type == "secret" or pii_detection_enabled
+            _redact_threat = (
+                verdict.threat_type == "secret"
+                or (pii_detection_enabled and _is_redactable_pii_threat(verdict.threat_type))
             )
 
             if verdict.action in ("block", "redact") and _redact_threat:

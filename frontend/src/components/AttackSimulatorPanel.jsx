@@ -22,14 +22,9 @@ import { formatZeroshieldScanSummary, formatRoutingReason, ZEROSHIELD_GUARD_MODE
 // phrases), then neutralize any remaining bare provider/size tokens.
 const PROVIDER_LITERAL_PATTERNS = [
   /\bglobal\.anthropic\.claude-haiku[\w.:-]*/gi,
-  /\bbedrock\/openai\.gpt-oss-120b[\w.:-]*/gi,
-  /\bopenai\.gpt-oss-120b[\w.:-]*/gi,
   /\bclaude-haiku[\w.-]*/gi,
-  /\bgpt[\s_-]*oss[\s_-]*120b\b/gi,
-  /\bgpt[\s_-]*oss\b/gi,
   /\bbedrock\b/gi,
   /\banthropic\b/gi,
-  /\b120b\b/gi,
 ];
 
 /** Strip/neutralize upstream provider/model literals from operator-facing text. */
@@ -851,6 +846,7 @@ export function AttackSimulatorPanel() {
                     <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5 capitalize">{(stage.name || "").replace(/_/g, " ")}</div>
                     <div className={`text-sm font-semibold ${
                       stage.action === "block" ? "text-red-600" :
+                      stage.action === "error" ? "text-red-600" :
                       stage.action === "needs_model" ? "text-violet-600" :
                       stage.action === "redact" ? "text-blue-600" :
                       stage.action === "flag" ? "text-amber-600" : "text-emerald-600"

@@ -51,6 +51,13 @@ app.conf.beat_schedule = {
         "task": "core.tasks.resync_gateway_keys",
         "schedule": float(os.environ.get("GATEWAY_KEY_RESYNC_INTERVAL_SEC", "300")),
     },
+    # B2 DEFENSE: re-push routing state (models/allowlist/isolation) so a bulk
+    # QuerySet.update() (no post_save signal) cannot leave the gateway routing on
+    # stale config. Same pattern as resync-gateway-keys, for the routing plane.
+    "reconcile-routing-state": {
+        "task": "core.tasks.reconcile_routing_state",
+        "schedule": float(os.environ.get("ROUTING_RECONCILE_INTERVAL_SEC", "120")),
+    },
 }
 
 

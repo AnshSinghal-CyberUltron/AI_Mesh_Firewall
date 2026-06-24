@@ -556,6 +556,20 @@ class LLMRouter:
                 new_messages.append({**m, "content": parts})
             else:
                 new_messages.append(m)
+        # #region agent log
+        try:
+            import json as _json, time as _time
+            _sample = ""
+            for _m in new_messages:
+                _c = _m.get("content") if isinstance(_m, dict) else None
+                if isinstance(_c, str) and _c:
+                    _sample = _c[:120]
+                    break
+            with open("/Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/.cursor/debug-398189.log", "a") as _df:
+                _df.write(_json.dumps({"sessionId": "398189", "hypothesisId": "B", "location": "llm_router.py:_apply_redaction", "message": "upstream_messages", "data": {"msg_count": len(new_messages), "has_bare_10digit": bool(__import__("re").search(r"(?<=\d)\d{10}\b|(?:phone|mobile).*\d{10}", _sample) if _sample else False), "sample_has_mask": "***-***-" in _sample}, "timestamp": int(_time.time() * 1000)}) + "\n")
+        except Exception:
+            pass
+        # #endregion
         return {**body, "messages": new_messages}
 
     def _build_kwargs(

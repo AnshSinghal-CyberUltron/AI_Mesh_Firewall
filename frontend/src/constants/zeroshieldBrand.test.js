@@ -37,11 +37,12 @@ test("formatZeroshieldScanSummary keeps confidence label for flagged threats", (
   assert.equal(summary.clean, false);
 });
 
-test("formatRoutingReason replaces Bedrock adjudicator branding", () => {
+test("formatRoutingReason scrubs the Bedrock Haiku platform model id + adjudicator branding", () => {
   const formatted = formatRoutingReason(
-    "Bedrock GPT OSS 120B adjudicator selected 'Haiku'",
+    "bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0 bedrock adjudicator selected 'gemini-flash-cheap'",
     { decisionSource: "policy_adjudicator" },
   );
   assert.match(formatted, /ZeroShield Policy Adjudicator/);
-  assert.doesNotMatch(formatted, /Bedrock/);
+  assert.doesNotMatch(formatted, /anthropic/i);
+  assert.doesNotMatch(formatted, /claude-haiku/i);
 });

@@ -250,7 +250,26 @@ export function filterEventsForModule(moduleId, threatFeed = []) {
 export function buildModulePageData(moduleId, threatFeed = [], extras = {}) {
   const config = MODULE_PAGE_CONFIG[moduleId] || MODULE_PAGE_CONFIG["1.1"];
   const events = filterEventsForModule(moduleId, threatFeed);
-  const summary = summarizeEvents(events);
+  let summary = summarizeEvents(events);
+  // Module 1.1 = the unified gateway lane. Its funnel ("Client requests → Auth →
+  // Rate Limiter → Gateway") and cards must both count ONE gateway request as +1,
+  // regardless of how many routing/guard events it emits (a kill-switch reroute
+  // alone adds a 2nd event per request, doubling the raw-event count). Override the
+  // raw-event summary with the server's DISTINCT-request partition so the funnel
+  // matches "Requests inspected" instead of the ~2× raw-event total.
+  if (moduleId === "1.1" && extras.socKpis) {
+    const d = deriveSocKpiSummary(extras.socKpis);
+    if (d) {
+      summary = {
+        ...summary,
+        total: d.total,
+        allowed: d.allowed,
+        blocked: d.blocked,
+        redacted: d.redacted,
+        critical: Number(extras.socKpis.requests_critical) || Math.min(summary.critical, d.total),
+      };
+    }
+  }
   const rows = buildRows(config.columns, events);
 
   return {
@@ -328,7 +347,30 @@ function buildLogDetailPayload(event) {
 
 function deriveSocKpiSummary(socKpis) {
   if (!socKpis) return null;
-  const total = Number(socKpis.total_threats) || 0;
+  // Module 1.1 = unified gateway lane. The server returns REQUEST-SCOPED counts:
+  // one count per distinct gateway request, partitioned block>redact>allow. A
+  // single request emits several enforcement rows (request + model_routed +
+  // output_guard, or input_blocked, or — when inference is unavailable — a
+  // request(block) marker), all sharing one request_id; these fields collapse them
+  // to one counted request and INCLUDE blocked/failed/streamed requests that never
+  // emit an event_type='request' row. Prefer them; fall back to the legacy
+  // row-based fields for older backends.
+  if (socKpis.requests_inspected != null && socKpis.requests_allowed != null) {
+    const total = Number(socKpis.requests_inspected) || 0;
+    const blocked = Number(socKpis.requests_blocked) || 0;
+    const redacted = Number(socKpis.requests_redacted) || 0;
+    const allowedRaw = Number(socKpis.requests_allowed);
+    return {
+      total,
+      blocked,
+      redacted,
+      allowed: Number.isFinite(allowedRaw) ? Math.max(0, allowedRaw) : Math.max(0, total - blocked - redacted),
+    };
+  }
+  const total =
+    socKpis.requests_inspected != null
+      ? Number(socKpis.requests_inspected) || 0
+      : Number(socKpis.total_threats) || 0;
   const blocked = Number(socKpis.blocked) || 0;
   const redacted = Number(socKpis.redacted) || 0;
   return {
@@ -360,7 +402,7 @@ function buildSummaryCards(moduleId, summary, events, extras) {
         {
           label: "Requests inspected",
           value: base.total,
-          detail: `All ingress events in the selected lens${periodLabel} — same source as overview Total events`,
+          detail: `Distinct requests that entered the gateway${periodLabel} — allowed + redacted + blocked (deduplicated across routing/guard events)`,
         },
         {
           label: "Allowed through gateway",

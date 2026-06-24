@@ -63,3 +63,39 @@ class SocKpisPeriodTests(TestCase):
         self.assertEqual(soc["total_threats"], 2)
         self.assertEqual(module["modules"]["1.1"]["total"], 2)
         self.assertEqual(module["modules"]["1.1"]["blocked"], soc["blocked"])
+
+    def _create_event_rid(self, hours_ago: float, action: str, event_type: str, request_id: str):
+        ev = EnforcementEvent.objects.create(
+            organization=self.org,
+            action=action,
+            metadata={"source": "gateway", "event_type": event_type, "request_id": request_id},
+        )
+        EnforcementEvent.objects.filter(pk=ev.pk).update(
+            created_at=timezone.now() - timedelta(hours=hours_ago)
+        )
+        return ev
+
+    def test_requests_inspected_is_distinct_per_request_not_per_row(self):
+        # Request A: completed+routed → request(allow) + model_routed(reroute) — 2
+        # rows, ONE request, allowed.
+        self._create_event_rid(1, "allow", "request", "zs-aaaaaaaaaaaa")
+        self._create_event_rid(1, "reroute", "model_routed", "zs-aaaaaaaaaaaa")
+        # Request B: model unavailable → model_routed(confirm) + request(block)
+        # marker — 2 rows, ONE request, blocked (NOT allowed).
+        self._create_event_rid(1, "confirm", "model_routed", "zs-bbbbbbbbbbbb")
+        self._create_event_rid(1, "block", "request", "zs-bbbbbbbbbbbb")
+        # Request C: blocked at input → input_blocked(block) only — 1 row, blocked.
+        self._create_event_rid(1, "block", "input_blocked", "zs-cccccccccccc")
+
+        soc = self.client.get("/api/security/soc-kpis/?period=6h").json()
+        # 5 raw rows, but 3 distinct requests.
+        self.assertEqual(soc["total_threats"], 5)
+        self.assertEqual(soc["requests_inspected"], 3)
+        self.assertEqual(soc["requests_allowed"], 1)
+        self.assertEqual(soc["requests_blocked"], 2)
+        self.assertEqual(soc["requests_redacted"], 0)
+        # Clean partition.
+        self.assertEqual(
+            soc["requests_inspected"],
+            soc["requests_allowed"] + soc["requests_blocked"] + soc["requests_redacted"],
+        )

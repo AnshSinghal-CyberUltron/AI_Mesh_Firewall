@@ -10,7 +10,6 @@ export const FIREWALL_SECTIONS = [
   { id: "rag-security", label: "RAG Security & Vector DB Protection" },
   { id: "threat-intel", label: "Threat Intelligence Integration" },
   { id: "audit-compliance", label: "Audit Logging & Compliance" },
-  { id: "alerting", label: "Security Alerting & Notifications" },
   { id: "llm-connections", label: "LLM Model Connections" },
   { id: "vector-db", label: "Vector Database Connection" },
   { id: "zeroshield-test", label: "ZeroShield Model Test" },
