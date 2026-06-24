@@ -1,6 +1,5 @@
 
 
-https://github.com/user-attachments/assets/534b71a5-f51d-4641-ab58-d01f18ae98e8
 ﻿<div align="center">
 
 # 🛡️ _ZeroShield — AI Mesh Firewall_
