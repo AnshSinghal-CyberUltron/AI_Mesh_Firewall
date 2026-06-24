@@ -168,9 +168,27 @@ async def _bad_input_handler(request: Request, exc: Exception) -> JSONResponse:
 
 @app.exception_handler(Exception)
 async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Catch-all: never leak a traceback / internals to the client. Log server-side,
-    return a generic 500."""
+    """Catch-all: never leak a traceback / internals to the client. Log server-side.
+
+    PHASE-6 fix (EMB-500 / RESP-STORE-500): an exception that ESCAPES a /v1 handler
+    (e.g. an unguarded ``await LLM_ROUTER.aembedding`` / ``store.save``) propagates
+    THROUGH and bypasses the BaseHTTPMiddleware ``_openai_compat_shim`` — the shim can
+    only post-process a response it received from ``call_next``. So this handler must
+    ITSELF emit the nested OpenAI envelope + ``x-request-id``; otherwise the stock SDK
+    sees a flat body / null e.code (or a transport error) with no request_id."""
     LOG.exception("Unhandled gateway error at %s", request.url.path)
+    if str(request.url.path).startswith("/v1/"):
+        try:
+            from .responses_adapters import build_openai_error as _boe
+        except ImportError:
+            from responses_adapters import build_openai_error as _boe
+        rid = (getattr(request.state, "gw_request_id", "")
+               or request.headers.get("x-request-id")
+               or f"zs-{_uuid.uuid4().hex[:12]}")
+        body = _boe(500, "An internal gateway error occurred.",
+                    code="gateway_internal_error", error_type="server_error")
+        body["request_id"] = rid
+        return JSONResponse(status_code=500, content=body, headers={"x-request-id": rid})
     return JSONResponse(
         status_code=500,
         content={"error": "internal_error", "message": "An internal gateway error occurred."},
@@ -8010,6 +8028,17 @@ async def _translate_chat_stream_to_responses(chat_stream, response_id: str, mod
                 continue
             if isinstance(obj.get("zeroshield"), dict):
                 zeroshield = obj["zeroshield"]
+                # PHASE-6 fix (D5-RESP-STREAM-UPSTREAM-ERROR): the chat choke point
+                # signals an UPSTREAM mid-stream failure via a terminal trace frame
+                # whose zeroshield.action == 'error' (choices:[] and NO top-level
+                # "error" key). Treat it as a stream error so we emit response.failed
+                # instead of a false response.completed.
+                if stream_error is None and str(zeroshield.get("action") or "").lower() == "error":
+                    stream_error = {
+                        "message": str(zeroshield.get("error") or zeroshield.get("reason")
+                                       or "The upstream model stream failed."),
+                        "code": "server_error", "type": "server_error",
+                    }
             err_obj = obj.get("error")
             if isinstance(err_obj, dict) and err_obj:
                 stream_error = err_obj
