@@ -1,3 +1,7 @@
+
+https://github.com/user-attachments/assets/41ab40cd-7b69-4f4e-b741-878f531592a3
+
+https://github.com/user-attachments/assets/534b71a5-f51d-4641-ab58-d01f18ae98e8
 ﻿<div align="center">
 
 # 🛡️ _ZeroShield — AI Mesh Firewall_
@@ -1108,14 +1112,18 @@ An MSP runs AI workloads for 50 clients. One client's RAG assistant triggers vec
 
 
 | 📸 **UEBA API Keys (Module 2)** | <img width="1887" height="889" alt="image" src="https://github.com/user-attachments/assets/72f051a2-1f86-4994-b1fb-daf4188d7fb5" />
-                                     <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/76d04f40-6d67-4c76-81b2-a3d1a83148d5" />
+                                     
 
 
 
 | 📸 **Incident Queue (Module 2)** | <img width="1900" height="914" alt="image" src="https://github.com/user-attachments/assets/6281be43-b42c-4e35-be9f-1dcb6fc48eea" />
 
 
-🎬 **Demo Video**  <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/ff911678-1466-4a3d-a376-0e8ad8951d41" />
+🎬 **Demo Video**  Uploading WhatsApp Video 2026-06-23 at 4.39.26 PM.mp4…
+
+
+
+
 
 
 
