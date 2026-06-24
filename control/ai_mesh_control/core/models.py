@@ -313,11 +313,46 @@ class GatewayAPIKey(models.Model):
     rate_limit_tokens_per_minute = models.PositiveIntegerField(
         default=DEFAULT_RATE_LIMIT_TPM, help_text="Rate limit in Tokens Per Minute (TPM)."
     )
+    KEY_PURPOSE_CHOICES = [
+        ("production", "Production"),
+        ("test", "Test"),
+        ("simulator", "Simulator"),
+        ("scanner", "Scanner"),
+    ]
+    UEBA_MODE_CHOICES = [
+        ("learning", "Learning"),
+        ("active", "Active"),
+    ]
+
     risk_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
-        help_text="Baseline risk score (0.0 = trusted, 1.0 = highest risk).",
+        help_text="Unified UEBA final risk score (0.0 = trusted, 1.0 = highest risk). Written by scoring engine.",
     )
+    key_purpose = models.CharField(
+        max_length=16,
+        choices=KEY_PURPOSE_CHOICES,
+        default="production",
+        db_index=True,
+    )
+    ueba_mode = models.CharField(
+        max_length=16,
+        choices=UEBA_MODE_CHOICES,
+        default="learning",
+        db_index=True,
+    )
+    ueba_graduation_requests = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Override org default minimum requests before active mode.",
+    )
+    ueba_graduation_days = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Override org default minimum days before active mode.",
+    )
+    ueba_lifetime_request_count = models.PositiveIntegerField(default=0)
+    ueba_baseline_locked_at = models.DateTimeField(null=True, blank=True)
     max_context_tokens = models.PositiveIntegerField(
         default=0,
         help_text="Max context tokens per request. 0 = unlimited.",

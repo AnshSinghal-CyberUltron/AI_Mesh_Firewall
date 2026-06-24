@@ -316,6 +316,117 @@ def execute_playbook(self, run_id):
     run.save(update_fields=["result", "status", "finished_at"])
 
 
+@shared_task(queue="compute.heavy")
+def refresh_api_key_baselines(org_id=None):
+    """Roll 7-day behavioral baselines for graduated (active) API keys."""
+    from auth.models import Organization
+    from core.models import GatewayAPIKey
+    from policy.models import EnforcementEvent
+
+    from module2.ueba_metrics import collect_key_metrics, empty_key_metric, reconcile_lifetime_request_counts
+    from module2.ueba_service import refresh_baseline_for_key
+
+    orgs = Organization.objects.filter(pk=org_id) if org_id else Organization.objects.filter(is_active=True)
+    refreshed = 0
+    for org in orgs:
+        all_keys = list(GatewayAPIKey.objects.filter(organization=org))
+        events = EnforcementEvent.objects.filter(organization=org)
+        if all_keys:
+            reconcile_lifetime_request_counts(all_keys, events)
+        keys = list(
+            GatewayAPIKey.objects.filter(organization=org, ueba_mode="active").select_related("ueba_baseline")
+        )
+        if not keys:
+            continue
+        for key in keys:
+            if refresh_baseline_for_key(key, events):
+                refreshed += 1
+    return {"refreshed": refreshed}
+
+
+@shared_task(queue="compute.heavy")
+def compute_ueba_risk_snapshots(org_id=None):
+    """
+    Unified UEBA scoring pipeline: metrics → traditional/active score → optional LLM → persist.
+    Replaces core.tasks.update_risk_scores_from_telemetry for risk_score writes.
+    """
+    from auth.models import Organization
+    from core.models import GatewayAPIKey, KillSwitch
+    from policy.models import EnforcementEvent
+
+    from module2.ueba_metrics import collect_key_metrics, empty_key_metric
+    from module2.ueba_scoring import is_graduated
+    from module2.ueba_service import (
+        SCORING_WINDOW_HOURS,
+        _load_baseline_for_key,
+        assess_api_key,
+        get_or_create_org_settings,
+        persist_assessment,
+        refresh_baseline_for_key,
+    )
+
+    orgs = Organization.objects.filter(pk=org_id) if org_id else Organization.objects.filter(is_active=True)
+    since_window = timezone.now() - timedelta(hours=SCORING_WINDOW_HOURS)
+    stats = {"orgs": 0, "assessed": 0, "graduated": 0, "errors": 0}
+
+    for org in orgs:
+        stats["orgs"] += 1
+        org_settings = get_or_create_org_settings(org)
+        keys = list(GatewayAPIKey.objects.filter(organization=org).select_related("ueba_baseline"))
+        if not keys:
+            continue
+
+        all_events = EnforcementEvent.objects.filter(organization=org)
+        window_events = all_events.filter(created_at__gte=since_window)
+        _key_by_prefix, metrics = collect_key_metrics(keys, window_events)
+
+        kill_by_prefix: dict[str, list] = {}
+        for ks in KillSwitch.objects.filter(organization=org, is_active=True):
+            prefix = str(ks.api_key_prefix or "").strip()
+            if prefix:
+                kill_by_prefix.setdefault(prefix, []).append(
+                    {"model_name": ks.model_name, "action": ks.action, "reason": ks.reason}
+                )
+
+        for key in keys:
+            try:
+                metric = metrics.get(key.prefix) or empty_key_metric()
+                graduated = is_graduated(key, org_settings)
+                just_graduated = False
+                if graduated and key.ueba_mode != "active":
+                    key.ueba_mode = "active"
+                    key.save(update_fields=["ueba_mode"])
+                    stats["graduated"] += 1
+                    just_graduated = True
+
+                baseline = None
+                if key.ueba_mode == "active":
+                    baseline = _load_baseline_for_key(key)
+                    if baseline is None and just_graduated:
+                        baseline = refresh_baseline_for_key(key, all_events)
+                        if baseline is None:
+                            baseline = _load_baseline_for_key(key)
+
+                assessment = assess_api_key(
+                    key,
+                    metric,
+                    org_settings,
+                    baseline=baseline,
+                    active_kill_switches=kill_by_prefix.get(key.prefix, []),
+                )
+                persist_assessment(key, assessment)
+                stats["assessed"] += 1
+            except Exception:
+                logger.exception(
+                    "UEBA snapshot failed for key %s (org %s)",
+                    key.pk,
+                    org.pk,
+                )
+                stats["errors"] += 1
+
+    return stats
+
+
 @shared_task(queue="default")
 def evaluate_ueba_auto_kill_switches():
     """
@@ -334,7 +445,7 @@ def evaluate_ueba_auto_kill_switches():
     from core.models import GatewayAPIKey, KillSwitch
     from policy.models import EnforcementEvent
 
-    from module2.views import _collect_key_metrics, _risk_payload
+    from module2.ueba_service import latest_assessment_for_key
 
     lookback_hours = int(getattr(settings, "MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS", 24))
     since = timezone.now() - timedelta(hours=lookback_hours)
@@ -343,24 +454,30 @@ def evaluate_ueba_auto_kill_switches():
     for org in Organization.objects.filter(is_active=True):
         keys_qs = GatewayAPIKey.objects.filter(organization=org, is_active=True)
         events = EnforcementEvent.objects.filter(organization=org, created_at__gte=since)
-        _key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
-        for prefix, metric in metrics.items():
+        from module2.ueba_metrics import collect_key_metrics
+
+        _key_by_prefix, metrics = collect_key_metrics(keys_qs, events)
+        for key_obj in keys_qs:
+            if key_obj.key_purpose in ("test", "simulator", "scanner"):
+                stats["skipped"] += 1
+                continue
             stats["examined"] += 1
-            key_obj = _key_by_prefix.get(prefix)
-            if not key_obj:
+            assessment = latest_assessment_for_key(key_obj)
+            if assessment is None or assessment.risk_band != "high":
                 stats["skipped"] += 1
                 continue
-            payload = _risk_payload(prefix, key_obj, metric)
-            if payload.get("risk_band") != "high":
-                stats["skipped"] += 1
-                continue
+            metric = metrics.get(key_obj.prefix) or {}
+            prefix = key_obj.prefix
             model_name = ""
             if metric.get("models"):
                 model_name = sorted(metric["models"])[0]
             if not model_name:
                 stats["skipped"] += 1
                 continue
-            reason = f"UEBA auto-response: score {payload.get('risk_score')} block {payload.get('block_rate_pct')}%"
+            reason = (
+                f"UEBA auto-response: final score {assessment.final_score:.2f} "
+                f"({assessment.ueba_mode} mode)"
+            )
             ks, created = KillSwitch.objects.update_or_create(
                 organization=org,
                 model_name=model_name,

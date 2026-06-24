@@ -12,6 +12,7 @@ const ROUTE_TO_TAB = {
 
 function resolveTab(pathname) {
   if (pathname.startsWith("/incidents/")) return "m2-incidents";
+  if (pathname.startsWith("/ueba/api-keys")) return "m2-ueba-api-keys";
   return ROUTE_TO_TAB[pathname] || "m2-dashboard";
 }
 

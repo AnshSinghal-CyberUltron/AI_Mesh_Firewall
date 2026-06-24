@@ -39,6 +39,15 @@ from module2.analytics import (
 from module2.models import ThreatIntelEntry
 from module2.serializers import ThreatIntelEntrySerializer
 from module2.tasks import sync_threat_intel_to_redis
+from module2.ueba_metrics import collect_key_metrics, empty_key_metric
+from module2.ueba_service import (
+    assessment_to_risk_payload,
+    assessments_map_for_keys,
+    get_or_create_org_settings,
+    reassess_api_key,
+    validate_org_ueba_settings,
+)
+from module2.ueba_scoring import graduation_progress, resolve_ueba_mode
 from policy.constants import ACTION_BLOCK, ACTION_REDACT
 from policy.models import EnforcementEvent, SecurityIncident
 from policy.review_views import SecurityIncidentSerializer
@@ -168,49 +177,28 @@ def _build_event_trend(events_qs, since, hours, bucket_hours):
     return timeline
 
 
-def _collect_key_metrics(keys_qs, events_qs):
-    keys = list(keys_qs)
-    key_by_prefix = {k.prefix: k for k in keys}
-    prefix_lookup = {k.prefix.lower(): k.prefix for k in keys}
-    metrics = defaultdict(
-        lambda: {
-            "total": 0,
-            "blocked": 0,
-            "redacted": 0,
-            "endpoint_ids": set(),
-            "models": set(),
-            "model_counts": defaultdict(int),
-            "threat_types": defaultdict(int),
-            "hourly": defaultdict(int),
-        }
-    )
+_collect_key_metrics = collect_key_metrics
 
-    for ev in events_qs.values("created_at", "action", "endpoint_id", "metadata"):
-        meta = ev.get("metadata") or {}
-        prefix = _key_prefix_from_meta(meta)
-        if not prefix:
-            continue
-        canonical = prefix_lookup.get(prefix.lower())
-        if not canonical:
-            continue
-        hour_bucket = ev["created_at"].replace(minute=0, second=0, microsecond=0).isoformat()
-        m = metrics[canonical]
-        m["total"] += 1
-        if ev["action"] == ACTION_BLOCK:
-            m["blocked"] += 1
-        if ev["action"] == ACTION_REDACT:
-            m["redacted"] += 1
-        if ev.get("endpoint_id"):
-            m["endpoint_ids"].add(ev["endpoint_id"])
-        if meta.get("model"):
-            model_name = str(meta["model"])
-            m["models"].add(model_name)
-            m["model_counts"][model_name] += 1
-        threat = str(meta.get("threat_type") or "unknown")
-        m["threat_types"][threat] += 1
-        m["hourly"][hour_bucket] += 1
 
-    return key_by_prefix, metrics
+def _risk_rows_for_keys(keys, metrics, key_by_prefix, assessments_map):
+    rows = []
+    for k in keys:
+        metric = metrics.get(k.prefix) or empty_key_metric()
+        assessment = assessments_map.get(k.pk)
+        rows.append(assessment_to_risk_payload(k, metric, assessment))
+    return rows
+
+
+def _counts_high_risk_kpi(rows, keys_by_id):
+    """Exclude test/simulator/scanner keys from org high-risk KPI."""
+    count = 0
+    for row in rows:
+        key = keys_by_id.get(row["key_id"])
+        if key and key.key_purpose in ("test", "simulator", "scanner"):
+            continue
+        if row.get("risk_band") == "high":
+            count += 1
+    return count
 
 
 def _build_key_containment_payload(org, keys_qs=None):
@@ -258,16 +246,7 @@ def _build_key_containment_payload(org, keys_qs=None):
 
 
 def _empty_key_metric():
-    return {
-        "total": 0,
-        "blocked": 0,
-        "redacted": 0,
-        "endpoint_ids": set(),
-        "models": set(),
-        "model_counts": defaultdict(int),
-        "threat_types": defaultdict(int),
-        "hourly": defaultdict(int),
-    }
+    return empty_key_metric()
 
 
 def _kill_switches_by_prefix(org):
@@ -291,16 +270,17 @@ def _kill_switches_by_prefix(org):
     return grouped
 
 
-def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix):
+def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix, assessments_map):
     """Merge gateway key registry rows with UEBA behavior metrics and kill-switch scope."""
     results = []
     for k in keys_qs[:200]:
         prefix = k.prefix
         metric = metrics.get(prefix) or _empty_key_metric()
-        risk = _risk_payload(prefix, k, metric)
+        assessment = assessments_map.get(k.pk)
+        risk = assessment_to_risk_payload(k, metric, assessment)
         active_ks = kill_by_prefix.get(prefix, [])
         top_threats = sorted(metric["threat_types"].items(), key=lambda x: -x[1])[:3]
-        top_models = sorted(metric["model_counts"].items(), key=lambda x: -x[1])[:3]
+        top_models = sorted(metric.get("model_counts", {}).items(), key=lambda x: -x[1])[:3]
 
         results.append(
             {
@@ -310,12 +290,22 @@ def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefi
                 "project_id": k.project_id,
                 "owner_email": getattr(k.owner, "email", ""),
                 "is_active": k.is_active,
+                "key_purpose": k.key_purpose,
+                "ueba_mode": risk.get("ueba_mode", k.ueba_mode),
                 "rate_limit_tpm": k.rate_limit_tokens_per_minute,
-                "risk_score_baseline": round(float(k.risk_score or 0), 3),
+                "current_risk_score": round(float(k.risk_score or 0), 3),
+                "llm_score": risk.get("llm_score"),
+                "computed_at": risk.get("computed_at"),
                 "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
                 "expires_at": k.expires_at.isoformat() if k.expires_at else None,
                 "risk_band": risk["risk_band"],
                 "risk_score": risk["risk_score"],
+                "final_score": risk.get("final_score", risk["risk_score"]),
+                "traditional_score": risk.get("traditional_score", risk["risk_score"]),
+                "llm_verdict": risk.get("llm_verdict", "skipped"),
+                "llm_reasoning": risk.get("llm_reasoning", ""),
+                "graduation_progress": risk.get("graduation_progress", {}),
+                "score_breakdown": risk.get("score_breakdown", {}),
                 "velocity_spike": risk["velocity_spike"],
                 "anomaly_flags": risk["anomaly_flags"],
                 "request_count": risk["request_count"],
@@ -343,58 +333,6 @@ def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefi
     return results
 
 
-def _risk_payload(prefix: str, key_obj, metric: dict):
-    total = metric["total"]
-    block_rate = (metric["blocked"] / total) if total else 0.0
-    redact_rate = (metric["redacted"] / total) if total else 0.0
-    hourly_values = list(metric["hourly"].values()) or [0]
-    baseline = sum(hourly_values) / len(hourly_values)
-    current = hourly_values[-1] if hourly_values else 0
-    if baseline:
-        velocity_spike = current / baseline
-    elif current:
-        velocity_spike = float(current)
-    else:
-        velocity_spike = 1.0
-    velocity_factor = min(max((velocity_spike - 1.0) / 3.0, 0.0), 1.0)
-    risk_score = min((0.55 * block_rate) + (0.2 * redact_rate) + (0.25 * velocity_factor), 1.0)
-    if risk_score >= 0.7:
-        band = "high"
-    elif risk_score >= 0.35:
-        band = "medium"
-    else:
-        band = "low"
-
-    anomalies = []
-    if block_rate >= 0.35:
-        anomalies.append("high_block_rate")
-    if velocity_spike >= 2.5:
-        anomalies.append("velocity_spike")
-    if len(metric["models"]) >= 4:
-        anomalies.append("model_spread")
-
-    top_threat = sorted(metric["threat_types"].items(), key=lambda x: -x[1])[0][0] if metric["threat_types"] else "none"
-    return {
-        "key_id": str(key_obj.id),
-        "prefix": prefix,
-        "name": key_obj.name,
-        "project_id": key_obj.project_id,
-        "is_active": key_obj.is_active,
-        "risk_band": band,
-        "risk_score": round(risk_score, 3),
-        "velocity_spike": round(velocity_spike, 2),
-        "anomaly_flags": anomalies,
-        "request_count": total,
-        "blocked_count": metric["blocked"],
-        "redacted_count": metric["redacted"],
-        "block_rate_pct": round(block_rate * 100, 1),
-        "redact_rate_pct": round(redact_rate * 100, 1),
-        "unique_endpoints": len(metric["endpoint_ids"]),
-        "unique_models": len(metric["models"]),
-        "top_threat_type": top_threat,
-    }
-
-
 class UebaApiKeySummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -409,12 +347,16 @@ class UebaApiKeySummaryView(APIView):
         elif not request.user.is_superuser:
             keys_qs = keys_qs.none()
 
+        keys_list = list(keys_qs)
         events = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
-        key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
-        rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
+        key_by_prefix, metrics = _collect_key_metrics(keys_list, events)
+        assessments_map = assessments_map_for_keys(keys_list)
+        rows = _risk_rows_for_keys(keys_list, metrics, key_by_prefix, assessments_map)
+        rows = [r for r in rows if r["request_count"] > 0]
         rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+        keys_by_id = {str(k.id): k for k in keys_list}
         total_events = sum(m["total"] for m in metrics.values())
         blocked_events = sum(m["blocked"] for m in metrics.values())
 
@@ -427,7 +369,7 @@ class UebaApiKeySummaryView(APIView):
                     "total_keys": keys_qs.count(),
                     "active_keys": keys_qs.filter(is_active=True).count(),
                     "keys_with_activity": len(rows),
-                    "high_risk_keys": sum(1 for r in rows if r["risk_band"] == "high"),
+                    "high_risk_keys": _counts_high_risk_kpi(rows, keys_by_id),
                     "total_events": total_events,
                     "blocked_events": blocked_events,
                     "disabled_keys": containment["disabled_keys"],
@@ -452,12 +394,14 @@ class UebaApiKeyRegistryView(APIView):
         elif not request.user.is_superuser:
             qs = qs.none()
 
+        keys_list = list(qs)
         events = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
-        key_by_prefix, metrics = _collect_key_metrics(qs, events)
+        key_by_prefix, metrics = _collect_key_metrics(keys_list, events)
+        assessments_map = assessments_map_for_keys(keys_list)
         kill_by_prefix = _kill_switches_by_prefix(org)
-        results = _build_fleet_registry_payload(qs, key_by_prefix, metrics, kill_by_prefix)
+        results = _build_fleet_registry_payload(qs, key_by_prefix, metrics, kill_by_prefix, assessments_map)
 
         return Response(
             {
@@ -484,11 +428,14 @@ class UebaApiKeyTimelineView(APIView):
         elif not request.user.is_superuser:
             keys_qs = keys_qs.none()
 
+        keys_list = list(keys_qs)
         events = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
-        key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
-        risky_rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
+        key_by_prefix, metrics = _collect_key_metrics(keys_list, events)
+        assessments_map = assessments_map_for_keys(keys_list)
+        risky_rows = _risk_rows_for_keys(keys_list, metrics, key_by_prefix, assessments_map)
+        risky_rows = [r for r in risky_rows if r["request_count"] > 0]
         risky_rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
         tracked_prefixes = {r["prefix"] for r in risky_rows[:5]}
 
@@ -577,20 +524,23 @@ class UebaApiKeyBehaviorView(APIView):
             model_counts[str(meta.get("model") or "unknown")] += 1
             threat_counts[str(meta.get("threat_type") or "unknown")] += 1
 
-        metric = {
+        metric = empty_key_metric()
+        metric.update({
             "total": len(events),
             "blocked": sum(1 for e in events if e["action"] == ACTION_BLOCK),
             "redacted": sum(1 for e in events if e["action"] == ACTION_REDACT),
             "endpoint_ids": set(endpoint_counts.keys()),
             "models": set(model_counts.keys()),
+            "model_counts": model_counts,
             "threat_types": threat_counts,
             "hourly": defaultdict(int),
-        }
+        })
         for ev in events:
             bucket = ev["created_at"].replace(minute=0, second=0, microsecond=0).isoformat()
             metric["hourly"][bucket] += 1
 
-        payload = _risk_payload(key.prefix, key, metric)
+        assessment = assessments_map_for_keys([key]).get(key.pk)
+        payload = assessment_to_risk_payload(key, metric, assessment)
         payload["top_endpoints"] = sorted(endpoint_counts.items(), key=lambda x: -x[1])[:10]
         payload["top_models"] = sorted(model_counts.items(), key=lambda x: -x[1])[:10]
         payload["top_threat_types"] = sorted(threat_counts.items(), key=lambda x: -x[1])[:10]
@@ -618,6 +568,188 @@ class UebaApiKeyBehaviorView(APIView):
         )[:5]
         payload["recent_requests"] = [build_recent_request_json(ev) for ev in recent]
         payload["recent_requests_json"] = payload["recent_requests"]
+        return Response(payload)
+
+
+class UebaOrgSettingsView(APIView):
+    permission_classes = [IsAuthenticated, _ReadOnlyOrAdminPermission]
+
+    def get(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+        settings_obj = get_or_create_org_settings(org)
+        return Response(
+            {
+                "graduation_min_requests": settings_obj.graduation_min_requests,
+                "graduation_min_days": settings_obj.graduation_min_days,
+                "scanner_graduation_min_requests": settings_obj.scanner_graduation_min_requests,
+                "scanner_graduation_min_days": settings_obj.scanner_graduation_min_days,
+                "llm_triage_enabled": settings_obj.llm_triage_enabled,
+                "llm_triage_min_traditional_score": settings_obj.llm_triage_min_traditional_score,
+                "high_risk_threshold": settings_obj.high_risk_threshold,
+                "medium_risk_threshold": settings_obj.medium_risk_threshold,
+                "updated_at": settings_obj.updated_at.isoformat() if settings_obj.updated_at else None,
+            }
+        )
+
+    def patch(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+        settings_obj = get_or_create_org_settings(org)
+        field_map = {
+            "graduation_min_requests": int,
+            "graduation_min_days": float,
+            "scanner_graduation_min_requests": int,
+            "scanner_graduation_min_days": float,
+            "llm_triage_enabled": bool,
+            "llm_triage_min_traditional_score": float,
+            "high_risk_threshold": float,
+            "medium_risk_threshold": float,
+        }
+        updated = []
+        for field, caster in field_map.items():
+            if field in request.data:
+                setattr(settings_obj, field, caster(request.data[field]))
+                updated.append(field)
+        if updated:
+            try:
+                validate_org_ueba_settings(settings_obj)
+            except ValueError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            settings_obj.save(update_fields=updated + ["updated_at"])
+        return self.get(request)
+
+
+class UebaApiKeySettingsView(APIView):
+    permission_classes = [IsAuthenticated, _ReadOnlyOrAdminPermission]
+
+    def patch(self, request, key_id):
+        org = _org_or_403(request)
+        try:
+            UUID(str(key_id))
+        except ValueError:
+            return Response({"detail": "Invalid key id."}, status=status.HTTP_400_BAD_REQUEST)
+
+        key_qs = GatewayAPIKey.objects.all()
+        if org:
+            key_qs = key_qs.filter(organization=org)
+        elif not request.user.is_superuser:
+            key_qs = key_qs.none()
+        key = key_qs.filter(pk=key_id).first()
+        if not key:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        updated = []
+        if "key_purpose" in request.data:
+            purpose = str(request.data["key_purpose"])
+            if purpose not in dict(GatewayAPIKey.KEY_PURPOSE_CHOICES):
+                return Response({"detail": "Invalid key_purpose."}, status=status.HTTP_400_BAD_REQUEST)
+            key.key_purpose = purpose
+            updated.append("key_purpose")
+        if "ueba_graduation_requests" in request.data:
+            val = request.data["ueba_graduation_requests"]
+            key.ueba_graduation_requests = int(val) if val is not None else None
+            updated.append("ueba_graduation_requests")
+        if "ueba_graduation_days" in request.data:
+            val = request.data["ueba_graduation_days"]
+            key.ueba_graduation_days = float(val) if val is not None else None
+            updated.append("ueba_graduation_days")
+        if updated:
+            key.save(update_fields=updated)
+
+        assessment = assessments_map_for_keys([key]).get(key.pk)
+        org_settings = get_or_create_org_settings(org) if org else None
+        return Response(
+            {
+                "key_id": str(key.id),
+                "prefix": key.prefix,
+                "key_purpose": key.key_purpose,
+                "ueba_mode": resolve_ueba_mode(key, org_settings) if org_settings else key.ueba_mode,
+                "ueba_graduation_requests": key.ueba_graduation_requests,
+                "ueba_graduation_days": key.ueba_graduation_days,
+                "graduation_progress": (assessment.graduation_progress if assessment else {}),
+            }
+        )
+
+
+class UebaLearningKeysView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        org = _org_or_403(request)
+        keys_qs = GatewayAPIKey.objects.select_related("owner")
+        if org:
+            keys_qs = keys_qs.filter(organization=org)
+        elif not request.user.is_superuser:
+            keys_qs = keys_qs.none()
+
+        org_settings = get_or_create_org_settings(org) if org else None
+        keys_list = [
+            k
+            for k in keys_qs.order_by("-created_at")[:500]
+            if resolve_ueba_mode(k, org_settings) == "learning"
+        ][:200]
+        since = timezone.now() - timedelta(hours=24)
+        events = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        key_by_prefix, metrics = _collect_key_metrics(keys_list, events)
+        assessments_map = assessments_map_for_keys(keys_list)
+
+        results = []
+        for key in keys_list:
+            metric = metrics.get(key.prefix) or _empty_key_metric()
+            assessment = assessments_map.get(key.pk)
+            risk = assessment_to_risk_payload(key, metric, assessment, org_settings)
+            progress = risk.get("graduation_progress") or {}
+            if not progress and org_settings:
+                progress = graduation_progress(key, org_settings)
+            if progress.get("graduated"):
+                continue
+            results.append(
+                {
+                    "key_id": str(key.id),
+                    "prefix": key.prefix,
+                    "name": key.name,
+                    "key_purpose": key.key_purpose,
+                    "ueba_graduation_requests": key.ueba_graduation_requests,
+                    "ueba_graduation_days": key.ueba_graduation_days,
+                    "lifetime_requests": key.ueba_lifetime_request_count,
+                    "days_since_created": round(
+                        (timezone.now() - key.created_at).total_seconds() / 86400.0, 2
+                    ),
+                    "graduation_progress": progress,
+                    "traditional_score": risk.get("traditional_score", risk["risk_score"]),
+                    "request_count": risk["request_count"],
+                }
+            )
+        return Response({"count": len(results), "results": results})
+
+
+class UebaApiKeyReassessView(APIView):
+    permission_classes = [IsAuthenticated, _ReadOnlyOrAdminPermission]
+
+    def post(self, request, key_id):
+        org = _org_or_403(request)
+        try:
+            UUID(str(key_id))
+        except ValueError:
+            return Response({"detail": "Invalid key id."}, status=status.HTTP_400_BAD_REQUEST)
+
+        key_qs = GatewayAPIKey.objects.select_related("organization")
+        if org:
+            key_qs = key_qs.filter(organization=org)
+        elif not request.user.is_superuser:
+            key_qs = key_qs.none()
+        key = key_qs.filter(pk=key_id).first()
+        if not key:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        run_llm = bool(request.data.get("run_llm", True))
+        snapshot, metric = reassess_api_key(key, run_llm=run_llm)
+        payload = assessment_to_risk_payload(key, metric, snapshot)
         return Response(payload)
 
 
@@ -699,13 +831,14 @@ class UnifiedDashboardView(APIView):
         elif not request.user.is_superuser:
             keys_qs = keys_qs.none()
 
-        key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
-        risky_rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
+        keys_list = list(keys_qs)
+        key_by_prefix, metrics = _collect_key_metrics(keys_list, events)
+        assessments_map = assessments_map_for_keys(keys_list)
+        risky_rows = _risk_rows_for_keys(keys_list, metrics, key_by_prefix, assessments_map)
+        risky_rows = [r for r in risky_rows if r["request_count"] > 0]
         risky_rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
-        fleet_risk_rows = [
-            _risk_payload(k.prefix, k, metrics.get(k.prefix) or _empty_key_metric())
-            for k in keys_qs
-        ]
+        fleet_risk_rows = _risk_rows_for_keys(keys_list, metrics, key_by_prefix, assessments_map)
+        keys_by_id = {str(k.id): k for k in keys_list}
 
         bucket_hours = 1 if hours <= 24 else 6
         trend = _build_event_trend(events, since, hours, bucket_hours)
@@ -740,7 +873,7 @@ class UnifiedDashboardView(APIView):
                     "monitored": monitored,
                     "rerouted": rerouted,
                     "open_incidents": open_incidents.count(),
-                    "risky_keys": sum(1 for r in fleet_risk_rows if r["risk_band"] == "high"),
+                    "risky_keys": _counts_high_risk_kpi(fleet_risk_rows, keys_by_id),
                     "block_rate": round((blocked / total) * 100, 1) if total else 0.0,
                     "disabled_keys": containment["disabled_keys"],
                     "active_kill_switches": containment["active_kill_switches"],

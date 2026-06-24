@@ -176,6 +176,9 @@ def ensure_simulator_default_gateway_key() -> bool:
             existing.is_active = True
             existing.save(update_fields=["is_active", "updated_at"])
             logger.info("Re-enabled simulator-default gateway key (prefix=%s)", existing.prefix)
+        if existing and existing.key_purpose != "simulator":
+            existing.key_purpose = "simulator"
+            existing.save(update_fields=["key_purpose"])
         user = (
             User.objects.filter(email="admin@zeroshield.io").first()
             or User.objects.first()
@@ -193,6 +196,9 @@ def ensure_simulator_default_gateway_key() -> bool:
         if org and inst.organization_id != org.id:
             inst.organization = org
             inst.save(update_fields=["organization"])
+        if inst.key_purpose != "simulator":
+            inst.key_purpose = "simulator"
+            inst.save(update_fields=["key_purpose"])
         client.set(SIMULATOR_DEFAULT_KEY_REDIS, raw)
         logger.info("Seeded simulator default gateway key (prefix=%s)", inst.prefix)
         return True

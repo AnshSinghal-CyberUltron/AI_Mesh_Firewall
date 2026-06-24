@@ -13,4 +13,7 @@ RUN pip install --no-cache-dir \
     django-cors-headers django-redis djangorestframework-simplejwt \
     channels channels-redis daphne drf-spectacular whitenoise httpx \
     boto3 cryptography pyyaml jsonschema msal python-dotenv regex dataclasses-json
+COPY workers/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["celery", "-A", "ai_mesh_workers.celery_app", "worker", "-Q", "policy.compile,platform.batch,compute.heavy,scan.tier2,vector.index,mcp.audit", "--loglevel=info", "--concurrency=4"]

@@ -19,6 +19,7 @@ const TAB_TO_ROUTE = {
 
 export function resolveActiveTab(pathname, searchParams) {
   if (pathname.startsWith("/incidents/")) return "m2-incidents";
+  if (pathname.startsWith("/ueba/api-keys")) return "m2-ueba-api-keys";
   if (MODULE2_ROUTE_TO_TAB[pathname]) return MODULE2_ROUTE_TO_TAB[pathname];
   return searchParams.get("tab") || "firewall";
 }

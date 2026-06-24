@@ -7,6 +7,8 @@ export const PAGE_BRIEFS = {
     "SOC command view across Chat, RAG, Vector, and MCP enforcement lanes. Scan live pressure, risky API keys, and open incidents—then open M2.3 (Model & RAG) or M2.4 (MCP) for lane-specific drill-down.",
   ueba:
     "Identity-centric UEBA for API keys. Baseline normal usage, surface anomaly flags, and correlate key activity to vector collections and MCP tools when investigating compromise or data harvesting.",
+  uebaLearning:
+    "Configure org-wide graduation thresholds and review API keys still in learning mode. Keys graduate when lifetime request count or key age crosses your org thresholds.",
   modelRag:
     "Assess LLM attack surface and RAG retrieval health. Tab A covers model exposure and block posture; Tab B covers pipeline-stage failures and vector collection risk.",
   mcp:
@@ -17,6 +19,35 @@ export const PAGE_BRIEFS = {
     "Incident triage queue with enforcement-lane attribution. KPIs reflect your full org queue; filters narrow the table. Open any row for chain-of-custody detail, evidence, and escalation.",
   incidentDetail:
     "Single-incident forensics: replay the enforcement timeline, inspect event metadata, and validate pipeline-stage actions before escalation or closure.",
+};
+
+/** M2.2 UEBA modes — analyst guide on the learning & settings sub-page. */
+export const UEBA_MODES_GUIDE = {
+  title: "Understanding UEBA modes",
+  intro:
+    "Every API key moves through two scoring phases. Learning mode scores absolute risk from live traffic; active mode scores deviation from a stored behavior baseline.",
+  learningMode: {
+    title: "Learning mode",
+    body:
+      "New or reset keys start in learning mode. Risk is computed from current-period signals only — block rate, threat severity, request velocity, and policy escalations — without comparing to historical norms. Scores can still flag obvious abuse (high block rate, velocity spikes, wide model spread), but the band may be capped when sample size is small. Keys tagged as Scanner use fast-track graduation (default 10 requests or 1 day) and their risk band is capped at medium during learning so steady high block rates from security scanners do not trigger false high-risk alerts before active deviation scoring kicks in.",
+  },
+  activeMode: {
+    title: "Active mode",
+    body:
+      "After graduation, the key switches to active mode. Risk is no longer judged on raw block rate alone; it measures how much today's 24-hour window diverges from the key's baseline. This reduces false positives for keys that normally run hot (e.g. security scanners) while surfacing sudden changes in volume, models used, or enforcement outcomes. Block deviation is suppressed until enough events are in the current window; model novelty is suppressed until the baseline has sufficient samples.",
+  },
+  behaviorBaseline: {
+    title: "Behavior baseline",
+    body:
+      "The baseline is a profile of normal activity built from the prior 7 days of events, excluding the most recent 24 hours (the same window used for live scoring). That separation keeps today's anomaly from diluting the reference profile. It includes average block and redact rates, typical requests per hour (with variance), and commonly used models. After graduation the baseline snapshot is locked once it has enough samples; hourly refresh updates only keys without a mature locked baseline.",
+  },
+  deviation: {
+    title: "Deviation scoring",
+    body:
+      "In active mode, deviation compares the current 24-hour window to the baseline. Block-rate deviation measures how far today's block share sits from the baseline average (with guards for near-zero baselines and small sample sizes). Volume z-score catches request bursts relative to typical hourly traffic. Model novelty flags models not seen in the baseline profile once the baseline is mature. These factors combine into the traditional UEBA score; optional LLM triage applies a weighted adjustment (final = traditional + 0.45 × LLM delta) before the risk band is assigned.",
+  },
+  graduationNote:
+    "Graduation is OR-based: meeting either the request count or the age threshold is enough. Org defaults are configured in Org UEBA Settings below; per-key overrides can be set from each key's risk profile on the main UEBA page.",
 };
 
 /** M2.6 analyst guide — shown in the incident queue info panel. */

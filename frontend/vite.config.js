@@ -18,7 +18,8 @@ export default defineConfig({
     // Docker Desktop on Windows bind-mounts need polling for reliable HMR.
     watch: {
       usePolling: true,
-      interval: 2000,
+      interval: 1000,
+      ignored: ["**/node_modules/**", "**/.git/**"],
     },
     proxy: {
       "/api": { target: process.env.VITE_CONTROL_PROXY || "http://127.0.0.1:8100", changeOrigin: true, ...noKeepAlive },

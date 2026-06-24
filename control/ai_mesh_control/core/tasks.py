@@ -771,6 +771,13 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
             )
 
             try:
+                from module2.ueba_metrics import increment_lifetime_request_counts
+
+                increment_lifetime_request_counts(events_to_create)
+            except Exception:
+                logger.warning("Failed to increment UEBA lifetime request counts", exc_info=True)
+
+            try:
                 from ws.notify import send_enforcement_notification
 
                 for ev in events_to_create:
@@ -1005,12 +1012,11 @@ def cleanup_old_audit_logs() -> dict:
 @shared_task
 def update_risk_scores_from_telemetry() -> dict:
     """
-    Scan recent EnforcementEvents for blocked threats and increment the
-    risk_score on the associated GatewayAPIKey. Runs periodically via
-    Celery Beat (every 5 minutes).
+    DEPRECATED: Superseded by module2.tasks.compute_ueba_risk_snapshots (UEBA v2).
+    Not scheduled in CELERY_BEAT_SCHEDULE — kept for manual/legacy invocation only.
 
-    Also applies natural decay to keys that have not triggered violations
-    recently, preventing permanent blacklisting.
+    Scan recent EnforcementEvents for blocked threats and increment the
+    risk_score on the associated GatewayAPIKey.
     """
     from core.models import GatewayAPIKey
     from policy.models import EnforcementEvent
