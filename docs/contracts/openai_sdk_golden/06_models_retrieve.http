@@ -1,0 +1,8 @@
+HTTP/1.1 200 OK
+date: Wed, 24 Jun 2026 13:05:09 GMT
+server: uvicorn
+content-length: 78
+content-type: application/json
+x-request-id: zs-19189c5b1dc6
+
+{"id":"gpt-4o-mini","object":"model","created":1704067200,"owned_by":"openai"}

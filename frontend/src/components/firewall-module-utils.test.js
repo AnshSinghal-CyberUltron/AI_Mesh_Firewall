@@ -114,3 +114,32 @@ test("module 1.1 summary cards use soc-kpis totals not capped threat-feed length
   assert.equal(byLabel["Rate-limited or blocked"], "408");
   assert.equal(byLabel["Identities observed"], "2");
 });
+
+test("module 1.1 prefers request-scoped soc-kpis (distinct count, includes blocked/failed)", () => {
+  const feed = Array.from({ length: 4 }, (_, index) => ({
+    id: `ev-${index}`,
+    action: "allow",
+    metadata: { organization_id: index % 2 === 0 ? "org-a" : "org-b" },
+    timestamp: new Date().toISOString(),
+  }));
+  // Raw rows (total_threats=40) >> distinct requests (22) because each request
+  // emits several enforcement rows. The 1.1 cards must use the request-scoped
+  // partition, NOT total_threats and NOT the legacy event_type='request' count.
+  const socKpis = {
+    period: "24h",
+    total_threats: 40,
+    requests_inspected: 22,
+    requests_allowed: 7,
+    requests_blocked: 8,
+    requests_redacted: 7,
+    blocked: 12, // row-based (higher than distinct) — must NOT leak into 1.1 cards
+    redacted: 9,
+  };
+
+  const page = buildModulePageData("1.1", feed, { socKpis });
+  const byLabel = Object.fromEntries(page.summaryCards.map((card) => [card.label, card.value]));
+
+  assert.equal(byLabel["Requests inspected"], "22");
+  assert.equal(byLabel["Allowed through gateway"], "7");
+  assert.equal(byLabel["Rate-limited or blocked"], "8");
+});

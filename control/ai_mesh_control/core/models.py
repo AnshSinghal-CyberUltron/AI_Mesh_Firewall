@@ -1248,22 +1248,6 @@ class FirewallConfig(models.Model):
         help_text="Active compliance frameworks (e.g. ['SOC2', 'ISO27001']).",
     )
 
-    # -- Alerting --
-    alerting_enabled = models.BooleanField(
-        default=True,
-        help_text="Send alerts for security events.",
-    )
-    critical_alert_threshold = models.PositiveIntegerField(
-        default=90,
-        validators=[MaxValueValidator(100)],
-        help_text="Risk score to trigger critical alerts (0-100).",
-    )
-    alert_recipients = models.TextField(
-        default="security-team@company.com",
-        blank=True,
-        help_text="Email addresses for security alerts.",
-    )
-
     # -- Routing Governance --
     routing_risk_weight = models.FloatField(
         default=0.30,
@@ -1405,9 +1389,6 @@ class FirewallConfig(models.Model):
             "telemetry_enabled": self.audit_logging_enabled,
             "retention_days": self.retention_days,
             "compliance_frameworks": self.compliance_frameworks or [],
-            "alerting_enabled": self.alerting_enabled,
-            "critical_alert_threshold": self.critical_alert_threshold,
-            "alert_recipients": self.alert_recipients,
             "routing_risk_weight": self.routing_risk_weight,
             "routing_cost_weight": self.routing_cost_weight,
             "routing_latency_weight": self.routing_latency_weight,
@@ -1653,9 +1634,31 @@ class LLMModelConfig(models.Model):
         try:
             return cipher.decrypt(self.encrypted_api_key.encode("utf-8")).decode("utf-8")
         except InvalidToken:
+            # A NON-EMPTY blob that fails to decrypt = the key was encrypted under a
+            # DIFFERENT cipher key (e.g. a prior DJANGO_SECRET_KEY rotation). This was
+            # silently swallowed → treated as "no key" → the gateway routed anyway and
+            # surfaced an opaque upstream 502 ("Missing credentials"). Log it so the
+            # broken credential is VISIBLE and the model can be reconnected.
+            logging.getLogger(__name__).warning(
+                "LLM model %r (org=%s) has an UNDECRYPTABLE api_key (InvalidToken) — "
+                "likely encrypted under a rotated key; treating as no key. Reconnect the model.",
+                self.model_name, getattr(self, "organization_id", None),
+            )
             return ""
         except Exception:
+            logging.getLogger(__name__).warning(
+                "LLM model %r (org=%s) api_key decrypt failed unexpectedly — treating as no key.",
+                self.model_name, getattr(self, "organization_id", None),
+            )
             return ""
+
+    def has_usable_api_key(self) -> bool:
+        """True only when a NON-EMPTY, DECRYPTABLE key is actually stored. The
+        ``api_key_set`` property is just ``bool(encrypted_api_key)`` and stays True
+        for a blob that no longer decrypts (rotated cipher key); routing-eligibility
+        must use USABILITY, not mere presence, so a broken credential produces a
+        clean 'no provider configured' error instead of an opaque upstream 502."""
+        return bool(self.encrypted_api_key and self.get_api_key())
 
     def build_litellm_entry(self) -> dict[str, Any]:
         """Build a LiteLLM model_list entry for organization-owned inference."""
@@ -1690,7 +1693,10 @@ class LLMModelConfig(models.Model):
             "routing_priority": self.routing_priority,
             "rate_limit_rpm": self.rate_limit_rpm,
             "is_active": self.is_active,
-            "api_key_set": self.api_key_set,
+            # Usability-aware (NOT bare self.api_key_set): an undecryptable stored
+            # blob must read as "no key" here so the gateway's routing-eligibility
+            # excludes it and returns a clean 422, never an opaque upstream 502.
+            "api_key_set": self.has_usable_api_key(),
             # BYOK-via-env: a model can carry its key by ENV-VAR REFERENCE
             # (api_key_env_var) instead of a stored encrypted key. The gateway
             # treats it as credentialed when that env var is present in its

@@ -711,6 +711,15 @@ def _build_safe_block_response(
     )
 
 
+
+
+def _is_redactable_pii_threat(threat_type: str) -> bool:
+    """True when a scanner threat should trigger PII redaction before upstream LLM."""
+    t = (threat_type or "").lower()
+    if t in ("pii", "secret", "phi", "pci", "sensitive_content"):
+        return True
+    return "pii" in t or "phone" in t or t.startswith("phi") or t.startswith("pci")
+
 def _redact_for_client_response(zeroshield_dict: dict | None) -> dict | None:
     """
     Take internal zeroshield metadata and produce a client-safe version.
@@ -5949,8 +5958,9 @@ async def proxy_chat(
             # PII redaction for that org. Secrets/credentials are ALWAYS redacted
             # regardless of this toggle.
             pii_detection_enabled = bool(org_config.get("scan_block_on_pii", True))
-            _redact_threat = verdict.threat_type in ("pii", "secret") and (
-                verdict.threat_type == "secret" or pii_detection_enabled
+            _redact_threat = (
+                verdict.threat_type == "secret"
+                or (pii_detection_enabled and _is_redactable_pii_threat(verdict.threat_type))
             )
 
             if verdict.action in ("block", "redact") and _redact_threat:
@@ -5966,8 +5976,18 @@ async def proxy_chat(
                     "PII/secret detected, redacting before LLM call (type=%s, patterns=%s, user=%s)",
                     verdict.threat_type, _safe_patterns, user_id,
                 )
-                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt)
-                redacted_prompt = effective_prompt
+                _pre_redact = effective_prompt
+                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
+                if effective_prompt != _pre_redact:
+                    redacted_prompt = effective_prompt
+                # #region agent log
+                try:
+                    import json as _json, time as _time
+                    with open("/Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/.cursor/debug-398189.log", "a") as _df:
+                        _df.write(_json.dumps({"sessionId": "398189", "hypothesisId": "C", "location": "main.py:redact_block", "message": "post_redact_pii", "data": {"threat_type": verdict.threat_type, "changed": _pre_redact != effective_prompt, "tier": getattr(verdict, "tier", "")}, "timestamp": int(_time.time() * 1000)}) + "\n")
+                except Exception:
+                    pass
+                # #endregion
             elif (
                 verdict.threat_type == "pii"
                 and not pii_detection_enabled
@@ -5980,8 +6000,18 @@ async def proxy_chat(
 
             if verdict.action == "flag" and _redact_threat:
                 LOG.info("PII/secret flagged in prompt, redacting before LLM call (user=%s)", user_id)
-                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt)
-                redacted_prompt = effective_prompt
+                _pre_redact = effective_prompt
+                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
+                if effective_prompt != _pre_redact:
+                    redacted_prompt = effective_prompt
+                # #region agent log
+                try:
+                    import json as _json, time as _time
+                    with open("/Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/.cursor/debug-398189.log", "a") as _df:
+                        _df.write(_json.dumps({"sessionId": "398189", "hypothesisId": "C", "location": "main.py:redact_flag", "message": "post_redact_pii", "data": {"threat_type": verdict.threat_type, "changed": _pre_redact != effective_prompt, "tier": getattr(verdict, "tier", "")}, "timestamp": int(_time.time() * 1000)}) + "\n")
+                except Exception:
+                    pass
+                # #endregion
 
         if not AGENT_ID or not CONFIG["backend_url"]:
             # No backend: forward to LLM (input scanning already done above).
@@ -6059,7 +6089,7 @@ async def proxy_chat(
                 stage_metrics["telemetry_enqueue_ms"] = round((time.perf_counter() - telemetry_start) * 1000, 2)
                 response_headers: dict[str, str] = {}
                 if isinstance(resp, dict):
-                    if redacted_prompt is not None:
+                    if redacted_prompt is not None and redacted_prompt != prompt:
                         # Attribute redaction to the stage that performed it: policy
                         # (deterministic, masks all matched rules) runs first; Tier-2
                         # scans the already-redacted text. Report policy when it did

@@ -58,6 +58,15 @@ const ACTION_THEME = {
     icon: "text-indigo-500",
     highlight: "ring-indigo-400/40 shadow-indigo-500/20",
   },
+  // Upstream/inference FAILURE (provider/credential/infra) — distinct from a
+  // security "block". Red to signal a problem, AlertTriangle (not the block X).
+  error: {
+    card: "border-rose-200 bg-rose-50/80 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-50",
+    badge: "bg-rose-500/15 text-rose-700 dark:text-rose-300",
+    dot: "bg-rose-500",
+    icon: "text-rose-500",
+    highlight: "ring-rose-400/40 shadow-rose-500/20",
+  },
 };
 
 const ACTION_ICONS = {
@@ -68,6 +77,7 @@ const ACTION_ICONS = {
   skip: Clock,
   needs_model: AlertTriangle,
   reroute: ArrowRightLeft,
+  error: AlertTriangle,
 };
 
 function formatStageLatency(stage) {
@@ -92,7 +102,7 @@ export function StageTimeline({ stages = [], className = "" }) {
   const stageRefs = useRef({});
   const [hoveredStage, setHoveredStage] = useState(null);
   const [expandedStage, setExpandedStage] = useState(null);
-  const [popoverPos, setPopoverPos] = useState({ left: 180, top: 160 });
+  const [popoverPos, setPopoverPos] = useState({ left: 180, top: 160, placement: "below" });
 
   if (!stages.length) return null;
 
@@ -108,9 +118,22 @@ export function StageTimeline({ stages = [], className = "" }) {
     const desiredLeft = stageRect.left - containerRect.left + stageRect.width / 2;
     const clampedLeft = Math.max(180, Math.min(desiredLeft, containerRect.width - 180));
 
+    // Viewport-aware vertical placement: the detail card can be tall (input_scan /
+    // output_guardrail carry guard reasoning + before/after blocks). If there is
+    // not enough room BELOW the stage before the viewport edge, flip it ABOVE so it
+    // never runs off-screen. translateY(-100%) (applied in JSX) shifts it up by its
+    // own rendered height, so no height measurement is needed.
+    const viewportH = typeof window !== "undefined" ? window.innerHeight : 900;
+    const POPOVER_EST = 360;
+    const spaceBelow = viewportH - stageRect.bottom;
+    const placeAbove = spaceBelow < POPOVER_EST && stageRect.top > spaceBelow;
+
     setPopoverPos({
       left: clampedLeft,
-      top: stageRect.bottom - containerRect.top + 16,
+      top: placeAbove
+        ? stageRect.top - containerRect.top - 16
+        : stageRect.bottom - containerRect.top + 16,
+      placement: placeAbove ? "above" : "below",
     });
   };
 
@@ -189,7 +212,9 @@ export function StageTimeline({ stages = [], className = "" }) {
 
       {visibleStageIndex !== null && stages[visibleStageIndex] && (
         <div
-          className="absolute z-40 w-[360px] max-w-[calc(100%-1rem)] -translate-x-1/2"
+          className={`absolute z-40 w-[360px] max-w-[calc(100%-1rem)] -translate-x-1/2 ${
+            popoverPos.placement === "above" ? "-translate-y-full" : ""
+          }`}
           style={{ left: `${popoverPos.left}px`, top: `${popoverPos.top}px` }}
           onMouseEnter={() => setHoveredStage(visibleStageIndex)}
           onMouseLeave={() => setHoveredStage(null)}
@@ -324,7 +349,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
         {showDetail && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">
-              {stage.action === "block" ? "Block reason:" : "Detail:"}
+              {stage.action === "block" ? "Block reason:" : stage.action === "error" ? "Failure reason:" : "Detail:"}
             </span>{" "}
             <span className="text-slate-700 dark:text-slate-200">{detailText}</span>
           </div>
@@ -456,7 +481,13 @@ function StageDetailCard({ stage, onClose, isPinned }) {
         )}
         {stage.matched_rules?.length > 0 && (
           <div className="col-span-2">
-            <span className="text-slate-500 dark:text-slate-400">Rules applied:</span>{" "}
+            {/* "Applied" only when the stage actually ENFORCED (block/redact/rewrite).
+                When the stage action is allow/monitor/flag the rules MATCHED their
+                condition but did not modify or stop the request — calling them
+                "applied" reads as a contradiction next to an "allow" verdict. */}
+            <span className="text-slate-500 dark:text-slate-400">
+              {["block", "redact", "rewrite"].includes(stage.action) ? "Rules applied:" : "Rules matched:"}
+            </span>{" "}
             <span className="text-sky-600 dark:text-sky-300">{stage.matched_rules.join(", ")}</span>
           </div>
         )}

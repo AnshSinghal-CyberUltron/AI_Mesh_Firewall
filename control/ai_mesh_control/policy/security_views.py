@@ -61,11 +61,17 @@ _RESERVED_MODEL_TOKENS = (
     "zeroshield-guard",
     "gpt-oss",
     "120b",
-    "bedrock",
-    "claude-haiku",
-    "claude-3-haiku",
-    "haiku",
-    "anthropic",
+    "bedrock",  # Bedrock is platform-reserved (clients are BYOK-only), so any bedrock id is the platform's.
+    # Platform Bedrock-Haiku id SHAPE + version — specific enough to de-leak the
+    # platform model id (bedrock/global.anthropic.claude-haiku-4-5-...) WITHOUT
+    # collapsing a client's OWN BYOK Anthropic/Claude/Haiku model. The bare
+    # "haiku" / "anthropic" / "claude-haiku" / "claude-3-haiku" tokens were
+    # REMOVED: they over-matched legitimate org-connected models (e.g. a model
+    # named "Haiku", id "anthropic/claude-3.5-haiku", or any Anthropic model) and
+    # mislabeled them as "zeroshield-model" across the UI (kill-switch list,
+    # model governance, threat feed) — breaking kill-switch management.
+    "global.anthropic.claude-haiku",
+    "claude-haiku-4-5",
 )
 
 
@@ -292,6 +298,14 @@ class AttackCatalogView(APIView):
         return Response(ATTACK_CATALOG)
 
 
+# Upper bound on rows materialized for the per-request collapse in the gateway
+# evidence feed. A gateway emits ~2-3 enforcement rows per request, so 4000 rows
+# covers ~1500-2000 recent gateway requests — far more than any feed page (limit
+# 500) needs, while bounding the per-poll Python work on the (CPU-capped) control
+# plane. Beyond this the response sets scan_truncated=true.
+_THREAT_FEED_DEDUP_SCAN_CAP = 4000
+
+
 class ThreatFeedView(APIView):
     """
     GET /api/security/threat-feed/
@@ -447,118 +461,57 @@ class ThreatFeedView(APIView):
         if model_filter:
             qs = qs.filter(metadata__model__icontains=model_filter)
         ordered = qs.order_by("-created_at")
+
+        # ── ONE ROW PER GATEWAY REQUEST (collapse by request_id) ──────────────
+        # A single gateway request emits MULTIPLE enforcement rows sharing one
+        # metadata.request_id (request + model_routed + output_guard + …). Showing
+        # every row makes the gateway-evidence feed look like each request was
+        # "counted twice". Collapse to ONE canonical representative per request_id
+        # (prefer the richest lifecycle event) so the feed + its count reflect
+        # DISTINCT gateway requests. The full per-stage breakdown stays available
+        # by opening the scan — ThreatFeedEventDetailView re-merges the siblings.
+        # Opt out with ?collapse=false (raw per-event feed).
+        collapse = str(request.query_params.get("collapse", "true")).lower() not in ("false", "0", "no")
+        if collapse:
+            _CANON_PRIORITY = {
+                "request": 0, "input_blocked": 1, "stream_complete": 2,
+                "output_guard": 3, "redact": 3, "block": 1,
+                "model_routed": 5, "kill_switch": 6, "scan_hit": 4,
+            }
+            scanned = list(ordered[:_THREAT_FEED_DEDUP_SCAN_CAP])
+            canon: dict = {}        # request_id -> chosen EnforcementEvent
+            deduped: list = []
+            for ev in scanned:
+                md = ev.metadata if isinstance(ev.metadata, dict) else {}
+                rid = md.get("request_id")
+                if not (isinstance(rid, str) and len(rid.strip()) >= 8):
+                    deduped.append(ev)   # no usable request_id → standalone row
+                    continue
+                pr = _CANON_PRIORITY.get(md.get("event_type"), 9)
+                cur = canon.get(rid)
+                if cur is None:
+                    canon[rid] = ev
+                    deduped.append(ev)
+                else:
+                    cur_md = cur.metadata if isinstance(cur.metadata, dict) else {}
+                    if pr < _CANON_PRIORITY.get(cur_md.get("event_type"), 9):
+                        # Replace the placeholder row in-place with the richer event.
+                        deduped[deduped.index(cur)] = ev
+                        canon[rid] = ev
+            deduped.sort(key=lambda e: e.created_at, reverse=True)
+            total_count = len(deduped)
+            page_qs = deduped[offset : offset + limit]
+            items = self._serialize_threat_feed_page(request, page_qs)
+            return Response({
+                "count": total_count,
+                "results": items,
+                "collapsed_by_request": True,
+                "scan_truncated": len(scanned) >= _THREAT_FEED_DEDUP_SCAN_CAP,
+            })
+
         total_count = ordered.count()
         page_qs = list(ordered[offset : offset + limit])
-
-        # Prefetch endpoints for name/identifier and endpoint_username (event's endpoint or agent's endpoint)
-        endpoint_ids = list(
-            {ev.endpoint_id for ev in page_qs if ev.endpoint_id is not None}
-            | {
-                ev.agent.endpoint_id
-                for ev in page_qs
-                if getattr(ev, "agent", None) and getattr(ev.agent, "endpoint_id", None)
-            }
-        )
-        endpoint_map = {}
-        if endpoint_ids:
-            for ep in Endpoint.objects.filter(pk__in=endpoint_ids):
-                endpoint_map[ep.pk] = ep
-
-        # Prefetch organizations for display name (resolved from FK or metadata.organization_id)
-        from auth.models import Organization
-        org_ids_from_fk = {ev.organization_id for ev in page_qs if ev.organization_id is not None}
-        org_ids_from_meta = {
-            ev.metadata.get("organization_id")
-            for ev in page_qs
-            if ev.metadata and ev.metadata.get("organization_id") is not None
-        }
-        all_org_ids = list({*org_ids_from_fk, *org_ids_from_meta} - {None})
-        org_map: dict[int, str] = {}
-        if all_org_ids:
-            for org in Organization.objects.filter(pk__in=all_org_ids).values("id", "name"):
-                org_map[org["id"]] = org["name"]
-
-        # Prefetch users so we can build friendly display names for user and assignee
-        user_ids = {ev.user_id for ev in page_qs if ev.user_id}
-        assignee_ids = {ev.escalated_by_id for ev in page_qs if ev.escalated_by_id}
-        all_user_ids = list({*(user_ids or []), *(assignee_ids or [])})
-        users_by_id = {}
-        if all_user_ids:
-            for u in User.objects.filter(id__in=all_user_ids):
-                users_by_id[u.id] = u
-
-        def _display_name(user_obj):
-            if not user_obj:
-                return None
-            full = getattr(user_obj, "get_full_name", lambda: "")() or ""
-            if full.strip():
-                return full
-            if getattr(user_obj, "username", ""):
-                return user_obj.username
-            if getattr(user_obj, "email", ""):
-                return user_obj.email
-            return f"User {user_obj.id}"
-
-        items = []
-        for ev in page_qs:
-            meta = ev.metadata or {}
-            category = meta.get("threat_category") or (ev.policy.name if ev.policy else None) or "Policy"
-            subcategory = (
-                meta.get("owasp_code") or meta.get("threat_subcategory") or (ev.rule.name if ev.rule else None) or ""
-            )
-            source = meta.get("source", "policy")
-            endpoint = (
-                endpoint_map.get(ev.endpoint_id)
-                if ev.endpoint_id
-                else (getattr(ev.agent, "endpoint", None) if getattr(ev, "agent", None) else None)
-            )
-            source_display = (endpoint.metadata or {}).get("endpoint_username") if endpoint else None
-            user_obj = users_by_id.get(ev.user_id) if ev.user_id else None
-            assignee_obj = users_by_id.get(ev.escalated_by_id) if ev.escalated_by_id else None
-
-            # Resolve organization display name from FK first, then from metadata
-            org_name = None
-            if ev.organization_id is not None:
-                org_name = org_map.get(ev.organization_id)
-            if not org_name:
-                meta_org_id = meta.get("organization_id")
-                if meta_org_id is not None:
-                    org_name = org_map.get(int(meta_org_id))
-
-            items.append(
-                {
-                    "id": str(ev.id),
-                    "record_type": "enforcement_event",
-                    "timestamp": ev.created_at.isoformat() if ev.created_at else None,
-                    "severity": meta.get("security_risk_score") or meta.get("severity") or "medium",
-                    "category": category,
-                    "subcategory": subcategory,
-                    "user_id": ev.user_id,
-                    "user_display": _display_name(user_obj),
-                    "endpoint_id": ev.endpoint_id,
-                    "endpoint_name": endpoint.name if endpoint else None,
-                    "endpoint_identifier": endpoint.identifier if endpoint else None,
-                    "organization_name": org_name,
-                    "agent_id": str(ev.agent_id) if ev.agent_id else None,
-                    "action": ev.action,
-                    "source": source,
-                    "source_display": source_display,
-                    "metadata": _sanitized_meta_for_client(meta),
-                    "incident_title": get_incident_title(category, subcategory, source),
-                    "enforcement_action_text": _enforcement_action_text(ev.action, source, meta),
-                    "prompt_lineage": meta.get("prompt_lineage") or [],
-                    "tools_invoked": _tools_invoked_with_model(meta),
-                    "data_accessed": meta.get("data_accessed") or [],
-                    # For now, treat the user who escalated the incident as the assignee (if any)
-                    "assignee": _display_name(assignee_obj),
-                    # Incident lifecycle fields
-                    "incident_status": ev.incident_status,
-                    "escalated_at": ev.escalated_at.isoformat() if ev.escalated_at else None,
-                    "escalated_by_id": ev.escalated_by_id,
-                    "resolved_at": ev.resolved_at.isoformat() if ev.resolved_at else None,
-                    "resolved_by_id": ev.resolved_by_id,
-                }
-            )
+        items = self._serialize_threat_feed_page(request, page_qs)
         return Response({"count": total_count, "results": items})
 
     def _get_module_16_threat_feed(
@@ -670,7 +623,7 @@ class ThreatFeedView(APIView):
 
         items = []
         for ev in page_qs:
-            meta = ev.metadata or {}
+            meta = _enrich_scan_detail_metadata(ev.metadata or {})
             category = meta.get("threat_category") or (ev.policy.name if ev.policy else None) or "Policy"
             subcategory = (
                 meta.get("owasp_code") or meta.get("threat_subcategory") or (ev.rule.name if ev.rule else None) or ""
@@ -712,6 +665,8 @@ class ThreatFeedView(APIView):
                     "source": source,
                     "source_display": source_display,
                     "metadata": _sanitized_meta_for_client(meta),
+                    "request_id": meta.get("request_id") or meta.get("pipeline_request_id") or "",
+                    "incident_id": meta.get("incident_id") or meta.get("request_id") or str(ev.pk),
                     "incident_title": get_incident_title(category, subcategory, source),
                     "enforcement_action_text": _enforcement_action_text(ev.action, source, meta),
                     "prompt_lineage": meta.get("prompt_lineage") or [],
@@ -726,6 +681,225 @@ class ThreatFeedView(APIView):
                 }
             )
         return items
+
+
+def _synthesize_pipeline_from_stage_metrics(stage_metrics: dict, meta: dict) -> dict | None:
+    """Best-effort pipeline for legacy events that only stored stage_metrics_ms."""
+    if not isinstance(stage_metrics, dict) or not stage_metrics:
+        return None
+    extra = meta.get("extra") if isinstance(meta.get("extra"), dict) else {}
+
+    stages: list[dict] = []
+
+    def _append(name: str, ms_key: str, detail: str, *, action: str = "allow") -> None:
+        raw = stage_metrics.get(ms_key)
+        if raw is None:
+            return
+        try:
+            latency = round(float(raw), 2)
+        except (TypeError, ValueError):
+            latency = 0.0
+        stages.append({"name": name, "action": action, "latency_ms": latency, "detail": detail})
+
+    _append("auth", "auth_ms", "Gateway API key accepted")
+    _append("policy", "policy_ms", "Policy engine evaluated request")
+    tier1 = stage_metrics.get("tier1_ms")
+    tier2 = stage_metrics.get("tier2_ms")
+    if tier1 is not None or tier2 is not None:
+        try:
+            scan_ms = round(float(tier1 or 0) + float(tier2 or 0), 2)
+        except (TypeError, ValueError):
+            scan_ms = 0.0
+        stages.append(
+            {
+                "name": "input_scan",
+                "action": "allow",
+                "latency_ms": scan_ms,
+                "detail": "Input scan completed (reconstructed from stored timings)",
+            }
+        )
+    if extra.get("rerouted") or meta.get("event_type") == "model_routed":
+        stages.append(
+            {
+                "name": "model_routing",
+                "action": "reroute",
+                "latency_ms": 0,
+                "detail": (
+                    extra.get("routing_reason")
+                    or extra.get("reroute_reason")
+                    or "Model routing reroute recorded"
+                ),
+            }
+        )
+    _append("model_output", "upstream_ms", "LLM inference complete")
+
+    if not stages:
+        return None
+
+    trace: dict = {"stages": stages, "synthesized": True}
+    if extra.get("original_model"):
+        trace["requested_model"] = extra.get("original_model")
+    if extra.get("selected_model") or extra.get("routed_model"):
+        trace["routed_model"] = extra.get("selected_model") or extra.get("routed_model")
+    if extra.get("routing_reason"):
+        trace["routing_reason"] = extra.get("routing_reason")
+    return trace
+
+
+def _enrich_scan_detail_metadata(meta: dict) -> dict:
+    """Normalize stored metadata so Scan Detail can render IDs, I/O, and pipeline."""
+    enriched = dict(meta or {})
+    extra = enriched.get("extra") if isinstance(enriched.get("extra"), dict) else {}
+
+    if not enriched.get("request_id"):
+        enriched["request_id"] = (
+            extra.get("request_id")
+            or enriched.get("pipeline_request_id")
+            or ""
+        )
+    if not enriched.get("incident_id"):
+        enriched["incident_id"] = enriched.get("request_id") or ""
+
+    if not enriched.get("prompt_submitted"):
+        lineage = enriched.get("prompt_lineage") or []
+        if lineage and isinstance(lineage[0], dict):
+            enriched["prompt_submitted"] = lineage[0].get("prompt") or ""
+
+    if not enriched.get("pipeline_trace"):
+        pt = enriched.get("pipeline_trace") or extra.get("pipeline_trace")
+        if pt:
+            enriched["pipeline_trace"] = pt
+        else:
+            synthesized = _synthesize_pipeline_from_stage_metrics(
+                extra.get("stage_metrics_ms") or {}, enriched
+            )
+            if synthesized:
+                enriched["pipeline_trace"] = synthesized
+            else:
+                routing_only = _synthesize_routing_only_pipeline(enriched)
+                if routing_only:
+                    enriched["pipeline_trace"] = routing_only
+
+    return enriched
+
+
+def _synthesize_routing_only_pipeline(meta: dict) -> dict | None:
+    """Minimal pipeline for stream/routing-only legacy events."""
+    extra = meta.get("extra") if isinstance(meta.get("extra"), dict) else {}
+    if not extra.get("rerouted") and meta.get("event_type") != "model_routed":
+        return None
+    detail = extra.get("routing_reason") or extra.get("reroute_reason") or "Model routing recorded"
+    trace: dict = {
+        "stages": [
+            {
+                "name": "model_routing",
+                "action": "reroute",
+                "latency_ms": 0,
+                "detail": detail,
+            }
+        ],
+        "synthesized": True,
+    }
+    if extra.get("original_model"):
+        trace["requested_model"] = extra.get("original_model")
+    if extra.get("selected_model") or extra.get("routed_model"):
+        trace["routed_model"] = extra.get("selected_model") or extra.get("routed_model")
+    return trace
+
+
+def _merge_related_scan_metadata(base_meta: dict, related: list) -> dict:
+    """Merge pipeline trace + I/O from sibling events sharing a request_id."""
+    merged = dict(base_meta or {})
+    for sm in (getattr(r, "metadata", None) or {} for r in related):
+        if not isinstance(sm, dict):
+            continue
+        if not merged.get("pipeline_trace") and sm.get("pipeline_trace"):
+            merged["pipeline_trace"] = sm["pipeline_trace"]
+        elif not merged.get("pipeline_trace"):
+            extra_pt = (sm.get("extra") or {}).get("pipeline_trace")
+            if extra_pt:
+                merged["pipeline_trace"] = extra_pt
+        if not merged.get("prompt_lineage") and sm.get("prompt_lineage"):
+            merged["prompt_lineage"] = sm.get("prompt_lineage")
+        # Merge routing fields from model_routed siblings for legacy synthesis.
+        if sm.get("event_type") == "model_routed":
+            merged_extra = dict(merged.get("extra") or {})
+            sib_extra = sm.get("extra") if isinstance(sm.get("extra"), dict) else {}
+            for key in (
+                "original_model",
+                "routed_model",
+                "selected_model",
+                "routing_reason",
+                "reroute_reason",
+                "rerouted",
+                "weights",
+            ):
+                if not merged_extra.get(key) and sib_extra.get(key):
+                    merged_extra[key] = sib_extra[key]
+            merged["extra"] = merged_extra
+        for key in (
+            "prompt_submitted",
+            "prompt_snippet",
+            "response_snippet",
+            "sanitized_output",
+            "raw_output",
+            "incident_id",
+            "request_id",
+            "pipeline_request_id",
+        ):
+            if not merged.get(key) and sm.get(key):
+                merged[key] = sm[key]
+    if not merged.get("incident_id"):
+        merged["incident_id"] = (
+            merged.get("request_id") or merged.get("pipeline_request_id") or ""
+        )
+    return _enrich_scan_detail_metadata(merged)
+
+
+class ThreatFeedEventDetailView(APIView):
+    """
+    GET /api/security/threat-feed/<pk>/
+    Full scan detail for Activity Preview — merges sibling events by request_id
+    so pipeline stages, input/output, and incident correlation are available.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Security"],
+        summary="Threat feed event detail",
+        description="Returns a single enforcement event with merged pipeline trace and I/O from related events.",
+    )
+    def get(self, request, pk):
+        base_qs = EnforcementEvent.objects.select_related(
+            "policy", "rule", "agent", "agent__endpoint"
+        )
+        qs = _enforcement_events_for_request(request, base_qs)
+        try:
+            ev = qs.get(pk=pk)
+        except EnforcementEvent.DoesNotExist:
+            return Response({"detail": "Event not found."}, status=404)
+
+        meta = ev.metadata or {}
+        rid = (
+            meta.get("request_id")
+            or meta.get("pipeline_request_id")
+            or (meta.get("extra") or {}).get("request_id")
+        )
+        related: list = []
+        if rid:
+            related = list(
+                qs.filter(metadata__request_id=rid)
+                .exclude(pk=ev.pk)
+                .order_by("-created_at")[:25]
+            )
+        enriched_meta = _merge_related_scan_metadata(meta, related)
+        item = ThreatFeedView()._serialize_threat_feed_page(request, [ev])[0]
+        item["metadata"] = _sanitized_meta_for_client(enriched_meta)
+        item["request_id"] = enriched_meta.get("request_id") or rid or ""
+        item["incident_id"] = enriched_meta.get("incident_id") or item["request_id"] or str(ev.pk)
+        item["related_event_ids"] = [str(r.pk) for r in related]
+        return Response(item)
 
 
 class AttackVectorTrendsView(APIView):
@@ -941,24 +1115,55 @@ class SocKpisView(APIView):
 
         rows = list(events.values("action", "metadata"))
         total = len(rows)
+        # ── Row-based metrics (UNCHANGED) ──
+        # blocked/redacted/critical/action_breakdown/latency are RAW enforcement-row
+        # counts. They are paired with total_threats (=row count) by the overview
+        # hero, the global action pie chart, the enterprise page and the health
+        # radar, so their semantics must NOT change here.
         blocked = redacted = critical_count = 0
         action_counts: Counter = Counter()
         latency_buckets = {"0-50ms": 0, "50-100ms": 0, "100-250ms": 0, "250-500ms": 0, "500ms-1s": 0, "1s+": 0}
         latency_sum = 0.0
-        for row in rows:
+        # ── Request-scoped partition (module 1.1 "Unified gateway lane") ──
+        # A single gateway request emits MULTIPLE enforcement rows that all share one
+        # metadata.request_id (e.g. request + model_routed + output_guard, or just
+        # input_blocked, or — for a model-unavailable/failed request — model_routed
+        # plus a request(block) marker). The old "requests_inspected = count(event_type
+        # =='request')" both (a) UNDER-counted: streamed / blocked / failed /
+        # no-inference requests never emit an event_type='request' row, and (b) made
+        # the overview "Total events" (row count) look like it double-counted every
+        # routed request. Collapse to ONE counted request per request_id, classified
+        # block > redact > allow. Rows without a usable request_id are counted as
+        # their own standalone request so we never under-count.
+        req_bucket: dict = {}
+        req_critical: set = set()  # distinct requests with any high-risk (>=80) event
+        for idx, row in enumerate(rows):
             action = row.get("action")
             action_counts[action] += 1
             if action == ACTION_BLOCK:
                 blocked += 1
             elif action == ACTION_REDACT:
                 redacted += 1
-            meta = row.get("metadata")
-            if isinstance(meta, dict):
+            meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else None
+            if meta is not None:
+                rid = meta.get("request_id")
                 if (meta.get("security_risk_score", 0) or 0) >= 80:
                     critical_count += 1
                 lat = meta.get("latency_ms", 0) or 0
             else:
+                rid = None
                 lat = 0
+            req_key = rid if (isinstance(rid, str) and len(rid.strip()) >= 8) else f"__row_{idx}"
+            if meta is not None and (meta.get("security_risk_score", 0) or 0) >= 80:
+                req_critical.add(req_key)
+            prev = req_bucket.get(req_key)
+            if action == ACTION_BLOCK:
+                req_bucket[req_key] = "block"
+            elif action == ACTION_REDACT:
+                if prev != "block":
+                    req_bucket[req_key] = "redact"
+            elif prev is None:
+                req_bucket[req_key] = "allow"
             latency_sum += lat
             if lat <= 50:
                 latency_buckets["0-50ms"] += 1
@@ -972,6 +1177,14 @@ class SocKpisView(APIView):
                 latency_buckets["500ms-1s"] += 1
             else:
                 latency_buckets["1s+"] += 1
+
+        # Request-scoped distinct counts (module 1.1). These form a clean partition:
+        # requests_inspected == requests_allowed + requests_redacted + requests_blocked.
+        requests_inspected = len(req_bucket)
+        requests_blocked = sum(1 for v in req_bucket.values() if v == "block")
+        requests_redacted = sum(1 for v in req_bucket.values() if v == "redact")
+        requests_allowed = requests_inspected - requests_blocked - requests_redacted
+        requests_critical = len(req_critical)
 
         block_rate = round(blocked / total * 100, 1) if total else 0
         redact_rate = round(redacted / total * 100, 1) if total else 0
@@ -1014,6 +1227,15 @@ class SocKpisView(APIView):
             {
                 "period": period,
                 "total_threats": total,
+                # Request-scoped (module 1.1 gateway lane): one count per distinct
+                # request, partitioned allowed/redacted/blocked. requests_inspected
+                # == requests_allowed + requests_redacted + requests_blocked.
+                "requests_inspected": requests_inspected,
+                "requests_allowed": requests_allowed,
+                "requests_blocked": requests_blocked,
+                "requests_redacted": requests_redacted,
+                "requests_critical": requests_critical,
+                # Row-based (overview / pie / enterprise / health) — unchanged.
                 "blocked": blocked,
                 "redacted": redacted,
                 "block_rate": block_rate,

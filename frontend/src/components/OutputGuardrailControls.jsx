@@ -23,7 +23,7 @@ import { cn } from "../lib/utils";
 const ACTION_OPTIONS = [
   { value: "block", label: "Block", hint: "Reject the response (HTTP 403) — nothing is delivered." },
   { value: "redact", label: "Redact", hint: "Mask the offending spans, deliver the sanitized text." },
-  { value: "rewrite", label: "Rewrite", hint: "Replace the response with a canned safe message." },
+  { value: "rewrite", label: "Rewrite", hint: "Re-generate a corrected response via the model, re-scanned before delivery; falls back to a safe message if the rewrite is unavailable or still unsafe." },
   { value: "flag", label: "Flag", hint: "Deliver as-is but mark for review / log an incident." },
   { value: "allow", label: "Allow", hint: "Take no action (monitoring only)." },
 ];

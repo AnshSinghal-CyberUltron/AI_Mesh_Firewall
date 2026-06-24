@@ -119,6 +119,10 @@ def _get_graph_token() -> str:
 
 
 def _send_graph_email(data: dict, s3_key: str) -> None:
+    # MAIL REMOVED (2026-06-17): outbound email is COMPLETELY DISABLED in ALL
+    # environments (local + prod). The POC questionnaire email is not sent. Do
+    # NOT re-enable without explicit product sign-off.
+    return
     meta = data.get("meta", {})
     company = meta.get("company", "Unknown")
     contact = meta.get("contact", "Unknown")

@@ -849,8 +849,20 @@ class InputScanner:
         return ScanVerdict()
     
 
-    def redact_pii(self, text: str) -> str:
-        return redact_all(text)
+    def redact_pii(self, text: str, verdict: ScanVerdict | None = None) -> str:
+        result = redact_all(text)
+        if verdict is None:
+            return result
+        sources: list[str] = [str(p) for p in (verdict.matched_patterns or [])]
+        scan_meta = verdict.scan_meta if isinstance(getattr(verdict, "scan_meta", None), dict) else {}
+        for finding in scan_meta.get("findings") or []:
+            if isinstance(finding, dict) and finding.get("evidence"):
+                sources.append(str(finding["evidence"]))
+        try:
+            from patterns import redact_evidence_digit_spans
+        except ImportError:
+            from .patterns import redact_evidence_digit_spans
+        return redact_evidence_digit_spans(result, sources)
 
     @staticmethod
     def _is_explanatory_mention(text: str, match: re.Match) -> bool:

@@ -8,6 +8,15 @@ RUN apk add --no-cache openssl \
 COPY deploy/nginx.conf /etc/nginx/conf.d/01-http.conf
 COPY deploy/nginx-ssl.conf /etc/nginx/conf.d/02-ssl.conf
 
+# Superuser gate for the /demo/ reference app (HTTP Basic Auth). Credentials are
+# baked from build args sourced from .env at build time; the htpasswd stores only
+# the apr1 hash, never the plaintext password.
+ARG DEMO_AUTH_USER=superuser
+ARG DEMO_AUTH_PASSWORD=change-me
+RUN printf '%s:%s\n' "${DEMO_AUTH_USER}" "$(openssl passwd -apr1 "${DEMO_AUTH_PASSWORD}")" \
+        > /etc/nginx/demo.htpasswd \
+    && chmod 644 /etc/nginx/demo.htpasswd
+
 # Frontend production bundle (built before docker build on laptop/CI).
 COPY frontend/dist/ /usr/share/nginx/html/
 

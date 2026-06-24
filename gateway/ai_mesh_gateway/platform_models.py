@@ -39,11 +39,6 @@ def guard_model_names() -> frozenset[str]:
         # form ("ZeroShield Model"). Both fold to 'zeroshield-model'.
         "zeroshield-model",
         "ZeroShield Model",
-        # Legacy aliases kept so older requests/registrations are still detected
-        # as reserved platform models (never served as org inference).
-        "zeroshield-guard-120b",
-        "bedrock-gpt-oss-120b",
-        "bedrock-gpt-oss-120b-long-context",
     }
     return frozenset(c for n in raw if (c := _canonical_model_name(n)))
 

@@ -1,0 +1,9 @@
+HTTP/1.1 401 Unauthorized
+date: Wed, 24 Jun 2026 13:05:09 GMT
+server: uvicorn
+www-authenticate: Bearer resource_metadata="http://127.0.0.1:8399/.well-known/oauth-protected-resource"
+content-type: application/json
+x-request-id: zs-7c126fb12429
+content-length: 143
+
+{"error":{"message":"Invalid API key format.","type":"authentication_error","param":null,"code":"unauthorized"},"request_id":"zs-7c126fb12429"}

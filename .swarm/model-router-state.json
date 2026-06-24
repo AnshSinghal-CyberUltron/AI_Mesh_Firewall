@@ -1,0 +1,32 @@
+{
+  "totalDecisions": 18,
+  "modelDistribution": {
+    "haiku": 2,
+    "sonnet": 7,
+    "opus": 9,
+    "inherit": 0
+  },
+  "avgComplexity": 0.23748492063492066,
+  "avgConfidence": 0.6387387130323702,
+  "circuitBreakerTrips": 0,
+  "lastUpdated": "2026-06-23T05:24:16.594Z",
+  "learningHistory": [],
+  "priors": {
+    "haiku": {
+      "alpha": 1,
+      "beta": 1
+    },
+    "sonnet": {
+      "alpha": 1,
+      "beta": 1
+    },
+    "opus": {
+      "alpha": 1,
+      "beta": 1
+    },
+    "inherit": {
+      "alpha": 1,
+      "beta": 1
+    }
+  }
+}

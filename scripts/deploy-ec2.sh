@@ -154,6 +154,10 @@ fi
 
 echo "==> Pull application images from ECR"
 "${COMPOSE[@]}" pull gateway control workers workers-beat nginx
+# Demo is OPTIONAL and isolated: a missing/failed demo image must never abort the
+# platform deploy. Pull tolerantly (it 502s behind nginx if absent — never crashes it).
+"${COMPOSE[@]}" pull demo 2>/dev/null \
+  || echo "    (ai-mesh-demo image absent for this tag — /demo/ will be unavailable; platform unaffected)"
 
 echo "==> Start infrastructure"
 "${COMPOSE[@]}" up -d --no-build postgres redis rabbitmq
@@ -185,6 +189,11 @@ fi
 
 echo "==> Gateway, workers, nginx (restart: unless-stopped)"
 "${COMPOSE[@]}" --profile workers up -d --no-build gateway workers workers-beat nginx
+
+# Optional demo app (before nginx reload so the /demo/ upstream is resolvable).
+# Tolerant: failure here never blocks the platform deploy.
+"${COMPOSE[@]}" up -d --no-build demo 2>/dev/null \
+  || echo "    (demo service not started — /demo/ unavailable; platform unaffected)"
 
 for _ in $(seq 1 30); do
   curl -sf "http://127.0.0.1:8300/health" >/dev/null 2>&1 && break

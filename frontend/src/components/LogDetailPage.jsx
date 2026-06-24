@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, Eye, Clock, Activity, Download, Share2, Copy,
   Shield, Server, CheckCircle, TrendingUp, ChevronDown,
@@ -8,26 +8,162 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
+import { StageTimeline } from "./simulator/StageTimeline";
 import { copyToClipboard } from "../lib/clipboard";
 import { getModuleLogCharts } from "./module-specific-log-charts";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
+
+function normalizeLogDetail(logData) {
+  const raw = logData?.raw || logData || {};
+  const meta = logData?.metadata || raw?.metadata || logData?.event_metadata || {};
+  const extra = meta?.extra || {};
+  const lineage = Array.isArray(meta?.prompt_lineage)
+    ? meta.prompt_lineage
+    : (Array.isArray(logData?.prompt_lineage) ? logData.prompt_lineage : []);
+
+  const requestId =
+    logData?.request_id
+    || meta?.request_id
+    || meta?.pipeline_request_id
+    || extra?.request_id
+    || raw?.metadata?.request_id
+    || "n/a";
+
+  const scanId = logData?.id || raw?.id || "n/a";
+  const incidentId =
+    logData?.incident_id
+    || meta?.incident_id
+    || extra?.incident_id
+    || raw?.incident_id
+    || (String(requestId).startsWith("zs-") ? requestId : null)
+    || (scanId !== "n/a" ? String(scanId) : null);
+
+  const promptText =
+    meta?.prompt_submitted
+    || meta?.prompt_snippet
+    || extra?.prompt_submitted
+    || extra?.prompt_snippet
+    || extra?.prompt
+    || logData?.prompt
+    || (lineage[0]?.prompt ?? "");
+
+  const responseText =
+    meta?.sanitized_output
+    || meta?.response_snippet
+    || extra?.sanitized_output
+    || extra?.response_snippet
+    || extra?.raw_output
+    || meta?.response_snippet
+    || logData?.response
+    || "";
+
+  const pipelineTrace =
+    logData?.pipeline_trace
+    || meta?.pipeline_trace
+    || extra?.pipeline_trace
+    || {};
+
+  const pipelineStages = Array.isArray(pipelineTrace?.stages) ? pipelineTrace.stages : [];
+
+  return {
+    raw,
+    meta,
+    scanId,
+    requestId,
+    incidentId,
+    promptText,
+    responseText,
+    pipelineTrace,
+    pipelineStages,
+    timestamp: logData?.timestamp || raw?.timestamp || new Date().toISOString(),
+    duration: meta?.latency_ms ? `${meta.latency_ms}ms` : (logData?.duration || formatDuration(meta?.latency_ms)),
+    status: logData?.status || logData?.action || raw?.action || "allowed",
+    action: logData?.action || raw?.action || "ALLOWED",
+  };
+}
+
+// Pipeline-derived verdict. An event's own top-level action/score can UNDER-report
+// what the pipeline actually did: a STREAMED request whose input_scan redacted PII is
+// stored as action='allow' / security_risk_score=0 (the redaction lives only in the
+// stage trace, not the stream_complete summary). Lift the displayed verdict to the
+// most-severe pipeline stage so the Scan Detail is honest regardless of which
+// telemetry path (stream vs non-stream) produced the event.
+const _STAGE_SEVERITY = { block: 3, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
+const _STAGE_SCORE = { block: 90, error: 90, redact: 75, rewrite: 75, flag: 60, reroute: 40 };
+const ACTION_TONE = { allow: "emerald", monitor: "emerald", pass: "emerald", redact: "blue", rewrite: "blue", flag: "amber", reroute: "amber", block: "red", error: "red" };
+
+function deriveStageVerdict(stages) {
+  let action = null, score = 0, severity = -1;
+  for (const s of Array.isArray(stages) ? stages : []) {
+    const a = String(s?.action || "").toLowerCase();
+    const sev = _STAGE_SEVERITY[a] ?? 0;
+    if (a && sev > severity) { severity = sev; action = a; }
+    if (_STAGE_SCORE[a]) score = Math.max(score, _STAGE_SCORE[a]);
+  }
+  return { action, score, severity };
+}
 
 export function LogDetailPage({ logData, onBack }) {
+  const { fetchWithAuth } = useAuth();
+  const [detail, setDetail] = useState(logData);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  useEffect(() => {
+    setDetail(logData);
+  }, [logData]);
+
+  useEffect(() => {
+    const id = logData?.id || logData?.raw?.id;
+    if (!id || !fetchWithAuth) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingDetail(true);
+      try {
+        const res = await fetchWithAuth(`/api/security/threat-feed/${id}/`);
+        if (!res.ok || cancelled) return;
+        const item = await res.json();
+        if (cancelled) return;
+        setDetail((prev) => ({
+          ...(prev || {}),
+          ...item,
+          id: item.id || id,
+          metadata: item.metadata || prev?.metadata,
+          request_id: item.request_id,
+          incident_id: item.incident_id,
+        }));
+      } catch {
+        // Keep list-row payload if detail fetch fails.
+      } finally {
+        if (!cancelled) setLoadingDetail(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [logData?.id, logData?.raw?.id, fetchWithAuth]);
+
+  const normalized = useMemo(() => normalizeLogDetail(detail || logData || {}), [detail, logData]);
+
   const [expandedSections, setExpandedSections] = useState({
-    request: true, response: true, security: false, metadata: false,
+    pipeline: true, content: true, request: true, response: false, security: false, metadata: false,
   });
   const [copiedField, setCopiedField] = useState(null);
   const { resolvedTheme } = (typeof useTheme === "function" ? useTheme() : {}) || {};
   const isDark = resolvedTheme === "dark";
 
-  const moduleLogCharts = getModuleLogCharts(logData || {});
-  const meta = logData?.metadata || logData?.raw?.metadata || logData?.event_metadata || {};
+  const moduleLogCharts = getModuleLogCharts(detail || logData || {});
+  const meta = normalized.meta;
 
-  const timestamp = logData?.timestamp || new Date().toISOString();
-  const duration = meta?.latency_ms ? `${meta.latency_ms}ms` : (logData?.duration || formatDuration(meta?.latency_ms));
-  const status = logData?.status || logData?.action || "allowed";
-  const action = logData?.action || "ALLOWED";
-  const scanId = logData?.id || "n/a";
+  const timestamp = normalized.timestamp;
+  const duration = normalized.duration;
+  const status = normalized.status;
+  const action = normalized.action;
+  const scanId = normalized.scanId;
+  const requestId = normalized.requestId;
+  const incidentId = normalized.incidentId;
+  const promptText = normalized.promptText;
+  const responseText = normalized.responseText;
+  const pipelineStages = normalized.pipelineStages;
+  const pipelineTrace = normalized.pipelineTrace;
 
   const handleCopy = async (text, field) => {
     await copyToClipboard(text);
@@ -40,8 +176,21 @@ export function LogDetailPage({ logData, onBack }) {
   };
 
   const timelineData = [{ time: "Event", latency: parseNumeric(duration) }];
-  const securityScore = parseNumeric(logData?.severity || meta?.security_risk_score) || 0;
-  const threatLevel = mapThreatLevel(logData?.severity || meta?.security_risk_score);
+  // Promote the displayed verdict / score / threat to the most-severe pipeline stage
+  // when the event's own top-level fields under-report it (see deriveStageVerdict).
+  const stageVerdict = deriveStageVerdict(pipelineStages);
+  const baseScore = parseNumeric(logData?.severity || meta?.security_risk_score) || 0;
+  const securityScore = Math.max(baseScore, stageVerdict.score);
+  const threatLevel = securityScore > 0
+    ? mapThreatLevel(securityScore)
+    : mapThreatLevel(logData?.severity || meta?.security_risk_score);
+  const _baseSeverity = _STAGE_SEVERITY[String(action || "").toLowerCase()] ?? 0;
+  const _promote = stageVerdict.action && stageVerdict.severity > _baseSeverity;
+  const effectiveAction = _promote ? stageVerdict.action : action;
+  const effectiveStatus = _promote ? stageVerdict.action : status;
+  // Incident ID is a backend alias of Request ID (no separate incident-grouping exists);
+  // showing two guaranteed-identical IDs is noise. Only surface it when it truly differs.
+  const showIncidentId = Boolean(incidentId) && incidentId !== requestId && incidentId !== String(scanId);
   const logChartTheme = isDark
     ? {
         grid: "#334155",
@@ -61,7 +210,7 @@ export function LogDetailPage({ logData, onBack }) {
       };
 
   const handleExport = () => {
-    const payload = JSON.stringify(logData || {}, null, 2);
+    const payload = JSON.stringify(detail || logData || {}, null, 2);
     const blob = new Blob([payload], { type: "application/json;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -104,14 +253,29 @@ export function LogDetailPage({ logData, onBack }) {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Scan Detail Report</h1>
-              <StatusBadge status={status} action={action} />
+              <StatusBadge status={effectiveStatus} action={effectiveAction} />
             </div>
-            <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
               <div className="flex items-center gap-2"><Eye className="w-4 h-4" /><span>Scan ID: {scanId}</span></div>
               <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
               <div className="flex items-center gap-2"><Clock className="w-4 h-4" /><span>{new Date(timestamp).toLocaleString()}</span></div>
               <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
               <div className="flex items-center gap-2"><Activity className="w-4 h-4" /><span>Duration: {duration}</span></div>
+              <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
+              <button onClick={() => handleCopy(requestId, "Request ID")} className="flex items-center gap-2 font-mono hover:text-teal-600 transition-colors" title="Copy request ID">
+                <Server className="w-4 h-4" /><span>Request ID: {requestId}</span>{copiedField === "Request ID" && <span className="text-teal-600">✓</span>}
+              </button>
+              {showIncidentId && (
+                <>
+                  <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
+                  <button onClick={() => handleCopy(incidentId, "Incident ID")} className="flex items-center gap-2 font-mono hover:text-teal-600 transition-colors" title="Copy incident ID">
+                    <Shield className="w-4 h-4" /><span>Incident ID: {incidentId}</span>{copiedField === "Incident ID" && <span className="text-teal-600">✓</span>}
+                  </button>
+                </>
+              )}
+              {loadingDetail && (
+                <span className="text-xs text-slate-400">Loading full trace…</span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -135,7 +299,7 @@ export function LogDetailPage({ logData, onBack }) {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <MetricCard icon={CheckCircle} label="Overall Status" value={status.toUpperCase()} color="emerald" />
+        <MetricCard icon={CheckCircle} label="Overall Status" value={(effectiveAction || status).toUpperCase()} color={ACTION_TONE[String(effectiveAction || status).toLowerCase()] || "emerald"} />
         <MetricCard icon={Clock} label="Total Duration" value={duration} color="blue" />
         <MetricCard icon={Shield} label="Security Score" value={`${securityScore}/100`} color="purple" />
         <MetricCard icon={Activity} label="Threat Level" value={threatLevel} color="teal" />
@@ -196,6 +360,58 @@ export function LogDetailPage({ logData, onBack }) {
 
       {/* Detailed Scan Data - Collapsible Sections */}
       <div className="space-y-4">
+        {/* Full pipeline view — per-stage action + result + latency. */}
+        <CollapsibleSection
+          title={`Pipeline Stages${pipelineStages.length ? ` (${pipelineStages.length})` : ""}`}
+          icon={Activity}
+          isExpanded={expandedSections.pipeline}
+          onToggle={() => toggleSection("pipeline")}
+          allowOverflow
+        >
+          {pipelineStages.length > 0 ? (
+            <>
+              {(pipelineTrace?.routing || pipelineTrace?.requested_model) && (
+                <div className="mb-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3 text-xs text-slate-700 dark:text-slate-300">
+                  {pipelineTrace.requested_model && (
+                    <div><strong>Requested model:</strong> {pipelineTrace.requested_model}</div>
+                  )}
+                  {pipelineTrace.routed_model && (
+                    <div><strong>Routed model:</strong> {pipelineTrace.routed_model}</div>
+                  )}
+                  {pipelineTrace.routing_reason && (
+                    <div><strong>Routing:</strong> {pipelineTrace.routing_reason}</div>
+                  )}
+                </div>
+              )}
+              <StageTimeline stages={pipelineStages} />
+            </>
+          ) : (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              No per-stage pipeline trace was recorded for this event
+              {meta?.event_type ? ` (event type: ${meta.event_type})` : ""}. Stage timings appear on full request/output-guard events.
+            </p>
+          )}
+        </CollapsibleSection>
+
+        {/* Input / Output content. */}
+        <CollapsibleSection
+          title="Input / Output"
+          icon={Server}
+          isExpanded={expandedSections.content}
+          onToggle={() => toggleSection("content")}
+        >
+          {(promptText || responseText) ? (
+            <div className="space-y-4">
+              <ContentBlock label="Input (prompt)" text={promptText} onCopy={() => handleCopy(promptText, "Prompt")} copied={copiedField === "Prompt"} />
+              <ContentBlock label="Output (response)" text={responseText} onCopy={() => handleCopy(responseText, "Response")} copied={copiedField === "Response"} />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              No prompt/response content was captured on this event. Look up other events sharing Request <span className="font-mono">{requestId}</span> for the full conversation.
+            </p>
+          )}
+        </CollapsibleSection>
+
         <CollapsibleSection
           title="Request Details" icon={Server}
           isExpanded={expandedSections.request}
@@ -203,7 +419,9 @@ export function LogDetailPage({ logData, onBack }) {
         >
           <table className="w-full text-sm">
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-              <DataRow label="Request ID" value={logData?.id || "n/a"} />
+              <DataRow label="Request ID" value={requestId} />
+              {showIncidentId && <DataRow label="Incident ID" value={incidentId} />}
+              <DataRow label="Scan (row) ID" value={String(scanId)} />
               <DataRow label="Timestamp" value={new Date(timestamp).toLocaleString()} />
               <DataRow label="Method" value={logData?.method || meta?.method || "POST"} />
               <DataRow label="Endpoint" value={logData?.endpoint || meta?.endpoint || "/v1/chat/completions"} />
@@ -224,7 +442,7 @@ export function LogDetailPage({ logData, onBack }) {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
               <DataRow label="Status Code" value={logData?.statusCode || meta?.status_code || "--"} />
               <DataRow label="Response Time" value={duration} />
-              <DataRow label="Action" value={action} />
+              <DataRow label="Action" value={effectiveAction || action} />
               <DataRow label="Input Tokens" value={meta?.input_tokens ?? meta?.extra?.input_tokens ?? logData?.tokensPrompt ?? "--"} />
               <DataRow label="Output Tokens" value={meta?.output_tokens ?? meta?.extra?.output_tokens ?? logData?.tokensCompletion ?? "--"} />
               <DataRow label="Total Tokens" value={meta?.total_tokens ?? meta?.extra?.total_tokens ?? logData?.tokensUsed ?? "--"} />
@@ -328,13 +546,19 @@ function mapThreatLevel(value) {
 }
 
 function StatusBadge({ status, action }) {
+  const allow = { bg: "bg-emerald-100 dark:bg-emerald-800/30", text: "text-emerald-700", dot: "bg-emerald-500" };
+  const block = { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700", dot: "bg-red-500" };
+  const flag = { bg: "bg-amber-100 dark:bg-amber-800/30", text: "text-amber-700", dot: "bg-amber-500" };
+  const redact = { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700", dot: "bg-blue-500" };
+  // Accept both present- and past-tense verdicts (event action is present-tense:
+  // allow/redact/block/flag/reroute; legacy rows used allowed/redacted/…).
   const statusConfig = {
-    allowed: { bg: "bg-emerald-100 dark:bg-emerald-800/30", text: "text-emerald-700", dot: "bg-emerald-500" },
-    blocked: { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700", dot: "bg-red-500" },
-    flagged: { bg: "bg-amber-100 dark:bg-amber-800/30", text: "text-amber-700", dot: "bg-amber-500" },
-    redacted: { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700", dot: "bg-blue-500" },
+    allow, allowed: allow, monitor: allow, pass: allow,
+    block, blocked: block, error: block,
+    flag, flagged: flag, reroute: flag,
+    redact, redacted: redact, rewrite: redact,
   };
-  const config = statusConfig[status?.toLowerCase()] || statusConfig.allowed;
+  const config = statusConfig[status?.toLowerCase()] || statusConfig.allow;
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 ${config.bg} ${config.text} rounded-full text-xs font-semibold`}>
       <div className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></div>
@@ -344,8 +568,8 @@ function StatusBadge({ status, action }) {
 }
 
 function MetricCard({ icon: Icon, label, value, color }) {
-  const colorMap = { blue: "#3b82f6", teal: "#14b8a6", purple: "#8b5cf6", emerald: "#10b981", amber: "#f59e0b" };
-  const bgMap = { blue: "bg-blue-50 dark:bg-blue-900/20", teal: "bg-teal-50 dark:bg-teal-900/20", purple: "bg-purple-50 dark:bg-purple-900/20", emerald: "bg-emerald-50 dark:bg-emerald-900/20", amber: "bg-amber-50 dark:bg-amber-900/20" };
+  const colorMap = { blue: "#3b82f6", teal: "#14b8a6", purple: "#8b5cf6", emerald: "#10b981", amber: "#f59e0b", red: "#ef4444" };
+  const bgMap = { blue: "bg-blue-50 dark:bg-blue-900/20", teal: "bg-teal-50 dark:bg-teal-900/20", purple: "bg-purple-50 dark:bg-purple-900/20", emerald: "bg-emerald-50 dark:bg-emerald-900/20", amber: "bg-amber-50 dark:bg-amber-900/20", red: "bg-red-50 dark:bg-red-900/20" };
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm p-4">
       <div className={`inline-flex items-center justify-center w-10 h-10 ${bgMap[color] || bgMap.teal} rounded-lg mb-3`}>
@@ -357,12 +581,18 @@ function MetricCard({ icon: Icon, label, value, color }) {
   );
 }
 
-function CollapsibleSection({ title, icon: Icon, isExpanded, onToggle, children }) {
+function CollapsibleSection({ title, icon: Icon, isExpanded, onToggle, children, allowOverflow = false }) {
+  // allowOverflow: opt OUT of the card's overflow clipping for sections whose
+  // content renders floating popovers/tooltips that must escape the card bounds
+  // (e.g. the Pipeline Stages hover-detail card). `overflow-hidden` on the card
+  // AND `overflow-x-auto` on the content wrapper (which forces overflow-y to clip)
+  // would otherwise cut the popover off at the section's edge. The pipeline's
+  // StageTimeline scrolls horizontally on its own, so the wrapper is redundant here.
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+    <div className={`bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm ${allowOverflow ? "" : "overflow-hidden"}`}>
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+        className="w-full flex items-center justify-between rounded-t-[10px] p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
       >
         <div className="flex items-center gap-3">
           <Icon className="w-5 h-5 text-teal-600" />
@@ -372,7 +602,7 @@ function CollapsibleSection({ title, icon: Icon, isExpanded, onToggle, children 
       </button>
       {isExpanded && (
         <div className="px-6 pb-6 border-t border-slate-200 dark:border-slate-700 pt-4">
-          <div className="overflow-x-auto">{children}</div>
+          {allowOverflow ? children : <div className="overflow-x-auto">{children}</div>}
         </div>
       )}
     </div>
@@ -385,5 +615,21 @@ function DataRow({ label, value }) {
       <td className="py-2.5 pr-4 text-xs font-medium text-slate-600 dark:text-slate-400 w-1/3">{label}</td>
       <td className="py-2.5 text-sm text-slate-900 dark:text-slate-100 font-mono">{value}</td>
     </tr>
+  );
+}
+
+function ContentBlock({ label, text, onCopy, copied }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">{label}</span>
+        {text ? (
+          <button onClick={onCopy} className="text-xs text-teal-600 hover:text-teal-700">{copied ? "Copied!" : "Copy"}</button>
+        ) : null}
+      </div>
+      <pre className="whitespace-pre-wrap break-words rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-3 text-xs font-mono text-slate-800 dark:text-slate-200 max-h-72 overflow-auto">
+        {text || "—"}
+      </pre>
+    </div>
   );
 }

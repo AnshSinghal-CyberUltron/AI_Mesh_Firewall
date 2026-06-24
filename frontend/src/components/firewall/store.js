@@ -35,9 +35,6 @@ export const DEFAULT_FIREWALL_CONFIG = {
   auditLoggingEnabled: true,
   retentionDays: 90,
   complianceFrameworks: ["SOC2", "ISO27001"],
-  alertingEnabled: true,
-  criticalAlertThreshold: 90,
-  alertRecipients: "security-team@company.com",
   updatedAt: null,
 };
 
@@ -106,9 +103,6 @@ export function apiToFrontend(data) {
     auditLoggingEnabled: data.audit_logging_enabled ?? DEFAULT_FIREWALL_CONFIG.auditLoggingEnabled,
     retentionDays: data.retention_days ?? DEFAULT_FIREWALL_CONFIG.retentionDays,
     complianceFrameworks: data.compliance_frameworks ?? DEFAULT_FIREWALL_CONFIG.complianceFrameworks,
-    alertingEnabled: data.alerting_enabled ?? DEFAULT_FIREWALL_CONFIG.alertingEnabled,
-    criticalAlertThreshold: data.critical_alert_threshold ?? DEFAULT_FIREWALL_CONFIG.criticalAlertThreshold,
-    alertRecipients: data.alert_recipients ?? DEFAULT_FIREWALL_CONFIG.alertRecipients,
     updatedAt: data.updated_at || null,
   };
 }
@@ -149,8 +143,5 @@ export function frontendToApi(config) {
     audit_logging_enabled: config.auditLoggingEnabled,
     retention_days: config.retentionDays,
     compliance_frameworks: config.complianceFrameworks,
-    alerting_enabled: config.alertingEnabled,
-    critical_alert_threshold: config.criticalAlertThreshold,
-    alert_recipients: config.alertRecipients,
   };
 }
