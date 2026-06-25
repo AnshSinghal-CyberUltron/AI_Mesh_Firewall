@@ -775,13 +775,13 @@ The standard end-to-end SOC playbook connecting all Module 2 pages:
 ## Technology Stack
 
 | Tier | Runtime | Role |
-|---|---|---|---|
-| **Data plane**  | FastAPI | Module 1 hot-path enforcement |
+|---|---|---|
+| **Data plane** | FastAPI | Module 1 hot-path enforcement |
 | **Control plane** | Django | Policy, keys, Module 2 APIs |
-| **Async plane**  | Celery | Telemetry drain, alerts, anomaly detection |
-| **UI**  | Vite + React 19 | Module 1 + Module 2 operator console |
-| **State** |  Postgres · Redis · RabbitMQ | OLTP, policy cache, task broker |
-| **Contracts**  | Python + JSON Schema | Cross-service API stability |
+| **Async plane** | Celery | Telemetry drain, alerts, anomaly detection |
+| **UI** | Vite + React 19 | Module 1 + Module 2 operator console |
+| **State** | Postgres · Redis · RabbitMQ | OLTP, policy cache, task broker |
+| **Contracts** | Python + JSON Schema | Cross-service API stability |
 
 
 ---
