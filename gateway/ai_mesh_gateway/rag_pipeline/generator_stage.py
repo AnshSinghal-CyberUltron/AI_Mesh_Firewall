@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json as _json
 import logging
+import re
 import time
 import uuid
 from typing import Any, TYPE_CHECKING
@@ -16,6 +17,87 @@ if TYPE_CHECKING:
     from canary_tokens import CanaryTokenManager
 
 LOG = logging.getLogger("gateway.rag_pipeline.generator_stage")
+
+# E11: bare-digit fail-closed backstop. ``detect_and_redact_typed`` (the typed
+# placeholder redactor the ingest path uses) intentionally skips separatorless
+# digit runs for ``phone_us`` (order IDs / revenue figures are not PII), so a
+# bare 10-digit phone like ``8929554991`` survives it. This is the SAME
+# ``***-***-####`` shape + 7+-digit rule used in
+# ``main._scan_redact_embedding_inputs`` so a bare phone in retrieved-context
+# plain text is masked before egress.
+_BARE_DIGIT_RUN_RE = re.compile(r"\d{7,}")
+# A phone/contact cue immediately preceding a bare digit run. Used to mask a bare
+# phone in an otherwise-clean retrieved chunk WITHOUT over-redacting context-less
+# numerics (order IDs / SKUs / revenue / epochs) — i.e. it preserves the F12 concern
+# while still failing safe on a clearly-labelled phone like "contact number is …".
+_PHONE_CONTEXT_RE = re.compile(
+    r"(?i)(?:phone|telephone|tel|mobile|cell|fax|call|dial|contact|reach|number|no\.)"
+    r"[^\d]{0,20}?(\d{7,})"
+)
+
+
+def _redact_retrieved_pii(content: str) -> str:
+    """E11 generation-time PII backstop for retrieved-context plain text.
+
+    Applies the typed-placeholder redactor (``[SSN]``/``[EMAIL]``/``[API_KEY]``…)
+    that the INGEST path uses, then a fail-closed 7+-digit backstop for bare
+    phones the typed redactor does not catch. Applied UNCONDITIONALLY — regardless
+    of ``rag_redaction_enabled`` — so documents ingested while redaction was OFF
+    (the default for existing orgs) cannot leak raw PII at generation. This is a
+    GATE fail-safe, not a configurable feature.
+
+    Pure-string, no I/O, deterministic. Returns ``content`` unchanged on empty
+    input or when nothing matches (no over-redaction of benign content).
+    """
+    if not content or not isinstance(content, str):
+        return content
+
+    try:
+        from typed_placeholder_redactor import detect_and_redact_typed
+    except ImportError:  # pragma: no cover - packaging fallback
+        from ..typed_placeholder_redactor import detect_and_redact_typed  # type: ignore[no-redef]
+
+    redacted = detect_and_redact_typed(content).text
+
+    # Contextual phone backstop — UNCONDITIONAL (fail-safe): a bare digit run with a
+    # phone/contact cue in front of it (e.g. "contact number is 8929554991") is a
+    # phone the typed redactor skips. Scoped to cue-preceded runs so context-less
+    # numerics (order IDs / SKUs / revenue / epochs) are NOT over-redacted (keeps the
+    # F12 concern). Proven LIVE (E11): a clean retrieved chunk "...office contact
+    # number is 8929554991..." was returned RAW to the RAG client before this.
+    def _mask_ctx(m: "re.Match") -> str:
+        run = m.group(1)
+        return m.group(0).replace(run, f"***-***-{run[-4:]}")
+
+    redacted = _PHONE_CONTEXT_RE.sub(_mask_ctx, redacted)
+
+    # Co-occurring-PII backstop: when the chunk ALREADY carries other PII, mask any
+    # remaining 7+ digit run (a bare value beside an email/SSN is near-certainly PII).
+    if redacted != content:
+        for run in set(_BARE_DIGIT_RUN_RE.findall(redacted)):
+            if run in redacted:
+                redacted = redacted.replace(run, f"***-***-{run[-4:]}")
+
+    return redacted
+
+
+def _redact_metadata_values(value):
+    """Recursively mask PII in retrieved-document METADATA values before egress.
+
+    Applies the same GATED ``_redact_retrieved_pii`` to every string value in a
+    metadata dict/list, so PII hidden in an UNDECLARED metadata field is not
+    returned raw to the client. Ingest-side metadata redaction (G2b) is gated on
+    ``rag_redaction_enabled`` (default OFF) and the ranker only scrubs explicitly
+    declared ``sensitive_fields``, so arbitrary metadata PII otherwise egresses
+    unmasked. Non-string scalars are left untouched.
+    """
+    if isinstance(value, str):
+        return _redact_retrieved_pii(value) if value else value
+    if isinstance(value, dict):
+        return {k: _redact_metadata_values(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_redact_metadata_values(v) for v in value]
+    return value
 
 
 class GeneratorStage:
@@ -131,7 +213,17 @@ class GeneratorStage:
         for doc in documents:
             content = doc.get("content", "")
             if content:
-                doc["content"] = redact_structured_fields(content, max_sensitivity)
+                # 1a. Field-level sensitivity redaction (JSON-block fields only).
+                content = redact_structured_fields(content, max_sensitivity)
+                # 1b. E11 generation-time PII backstop: redact PLAIN-TEXT PII
+                #     (SSN/email/API-key/bare phone) that redact_structured_fields
+                #     leaves untouched. Applied UNCONDITIONALLY so a document
+                #     ingested while rag_redaction_enabled was OFF (and thus stored
+                #     raw PII) is still redacted before it reaches the generator,
+                #     the output-guard grounding context, and the client. GATE
+                #     fail-safe — closes the recon-confirmed core-1.2 leak.
+                content = _redact_retrieved_pii(content)
+                doc["content"] = content
                 context_chunks.append(doc["content"])
 
         # ── 1.5. Canary token injection ──

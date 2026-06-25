@@ -3,7 +3,7 @@ Per-(org_slug, scanning_model_id) circuit breaker for the Tier-2 Bedrock
 scanner (Phase 0 D-G3-v3).
 
 Why per-(org, model)?
-    The Bedrock scanning model (e.g. ``openai.gpt-oss-120b-1:0``) is the
+    The Bedrock scanning model (e.g. ``global.anthropic.claude-haiku-4-5-20251001-v1:0``) is the
     *platform* guard model. Orgs each run different *inference* models, but
     they all share the platform scanner. We key on ``(org_slug, model_id)``
     so a misbehaving platform-scan model for one org (rate-limit, region
