@@ -493,7 +493,7 @@ Inspects the model's streaming response before it is delivered to the client. Ou
 
 ## Module 2 — SOC Intelligence & Response
 
-Module 2 is the analyst operations layer of ZeroShield. It consumes enforcement telemetry from Module 1 and provides the workflows security teams need to monitor posture, investigate risk, contain threats, and close incidents with evidence.
+Module 2 is the analyst operations layer of aimeshfirewall. It consumes enforcement telemetry from Module 1 and provides the workflows security teams need to monitor posture, investigate risk, contain threats, and close incidents with evidence.
 
 **Connected but independent:** Module 2 does not replace Module 1 runtime controls. It operationalizes them — turning blocks, redactions, monitors, reroutes, and IOC matches into actionable SOC work.
 
