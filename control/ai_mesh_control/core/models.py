@@ -1242,7 +1242,7 @@ class FirewallConfig(models.Model):
         help_text="Minimum similarity score for retrieval (0-1).",
     )
     rag_redaction_enabled = models.BooleanField(
-        default=False,
+        default=True,
         help_text=(
             "Redact sensitive values with vector-safe typed placeholders "
             "([EMAIL], [SSN], [CREDIT_CARD], ...) before embedding RAG "

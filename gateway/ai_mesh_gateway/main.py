@@ -3074,6 +3074,124 @@ def _output_guard_telemetry_meta(verdict, *, raw_output: str, sanitized_output: 
     return output_guard_telemetry_meta(verdict, raw_output=raw_output, sanitized_output=sanitized_output)
 
 
+async def _scan_redact_embedding_inputs(
+    texts: list[str],
+    org_config: dict,
+) -> tuple[list[str], dict | None]:
+    """G1/G3/G4: scan + redact PII/secrets in embedding inputs before they leave
+    the gateway, mirroring the chat path's pre-LLM input redaction.
+
+    Both ``/v1/embeddings`` (proxy_embeddings) and RAG-ingest send raw text to an
+    upstream embedding provider. Unlike ``/v1/chat``, that text was NEVER scanned
+    or redacted, so a customer email/SSN/API-key was embedded verbatim by the
+    third-party provider. This helper closes that gap with the SAME tier-1 input
+    scanner + verdict-aware redactor the chat path uses, gated by the SAME
+    ``input_scan_enabled`` config so there is no behavior change when input
+    scanning is disabled.
+
+    Tier-1 only (``scan_prompt`` — NOT ``scan_prompt_with_tier2``): embeddings are
+    batched/large, so the per-item ML round-trip of Tier-2 is intentionally NOT run
+    here (parity with the moderations surface).
+
+    Returns ``(redacted_texts, None)`` on success. When an input carries PII/secret
+    that genuinely CANNOT be masked (redaction was a no-op AND the fail-closed digit
+    backstop also can't mask it), returns ``(partial_texts, block_meta)`` where
+    ``block_meta`` is ``{"blocked": True, "reason": ..., "index": i}`` so the caller
+    fails closed rather than embedding the raw value (G4).
+    """
+    # No-op (and therefore NO behavior change) when scanning is disabled or the
+    # scanner is unavailable. This is REQUIRED for the no-regression guarantee.
+    if INPUT_SCANNER is None or not org_config.get("input_scan_enabled", True):
+        return texts, None
+
+    try:
+        from patterns import redact_evidence_digit_spans  # type: ignore[no-redef]
+    except ImportError:  # pragma: no cover - packaging fallback
+        from .patterns import redact_evidence_digit_spans  # type: ignore[no-redef]
+
+    redacted_texts: list[str] = []
+    for i, text in enumerate(texts):
+        if not isinstance(text, str) or not text.strip():
+            redacted_texts.append(text)
+            continue
+
+        verdict = await INPUT_SCANNER.scan_prompt(text)
+        redacted = INPUT_SCANNER.redact_pii(text, verdict=verdict)
+
+        _detected = (
+            getattr(verdict, "threat_type", "") in ("pii", "secret")
+            or bool(getattr(verdict, "matched_patterns", None))
+            or bool(getattr(verdict, "matched_values", None))
+        )
+        # Fail-closed digit backstop (mirrors llm_router._apply_redaction): the
+        # verdict-aware ``redact_pii`` is the source of truth for "what must not
+        # reach the provider", but a bare value in a phrasing it misses can survive
+        # it. Run whenever PII was detected (``_detected``) OR redaction was a total
+        # no-op — NOT only on a total no-op: a LIVE test proved a mixed
+        # "SSN+email+phone" input leaked the bare phone, because the SSN/email
+        # redaction made ``redacted != text`` and the old gate skipped the backstop.
+        # Mask any run of 7+ digits still present, ``***-***-####`` shape. Partial
+        # masks (already ``***-***-1234``) keep only 4 digits so they never
+        # re-trigger.
+        if _detected or redacted == text:
+            backstopped = redacted
+            for run in set(re.findall(r"\d{7,}", text)):
+                if run in backstopped:
+                    backstopped = backstopped.replace(run, f"***-***-{run[-4:]}")
+            # Also honor any Tier-2-style evidence digit spans the verdict carried.
+            sources = [str(p) for p in (getattr(verdict, "matched_patterns", None) or [])]
+            scan_meta = getattr(verdict, "scan_meta", None)
+            if isinstance(scan_meta, dict):
+                for finding in scan_meta.get("findings") or []:
+                    if isinstance(finding, dict) and finding.get("evidence"):
+                        sources.append(str(finding["evidence"]))
+            backstopped = redact_evidence_digit_spans(backstopped, sources)
+            redacted = backstopped
+
+        # BYTE-VERIFY FAIL-CLOSED (G4): the scanner detected PII/secret but the
+        # redaction (incl. the digit backstop above) could not change the input.
+        # Masking is genuinely impossible (e.g. a detected value with no
+        # deterministic mask, like a bare name), so this input cannot be safely
+        # embedded — fail closed instead of leaking the raw value to the provider.
+        if _detected and redacted == text:
+            return redacted_texts, {
+                "blocked": True,
+                "reason": "PII detected in embedding input could not be redacted",
+                "index": i,
+            }
+
+        redacted_texts.append(redacted)
+
+    return redacted_texts, None
+
+
+async def _scan_redact_metadata(meta: dict, org_config: dict) -> dict:
+    """Redact PII/secrets in metadata string VALUES at ingest, at PARITY with the
+    document content — gated by the SAME ``input_scan_enabled`` config. Caller
+    metadata was previously only redacted under ``rag_redaction_enabled`` (off by
+    default), so PII in a metadata field was stored RAW in the vector store (proven
+    live on Pinecone: author_email/owner_phone/owner_ssn persisted verbatim).
+    Recurses into nested dict/list so a value can't hide one level deep; uses the
+    same INPUT_SCANNER redactor + digit backstop as ``_scan_redact_embedding_inputs``.
+    """
+    if not isinstance(meta, dict) or INPUT_SCANNER is None or not org_config.get("input_scan_enabled", True):
+        return meta
+
+    async def _r(v):
+        if isinstance(v, str) and v.strip():
+            red, _blk = await _scan_redact_embedding_inputs([v], org_config)
+            # ``red`` is non-empty for clean/maskable values; it is empty only when
+            # the value carried PII that could not be masked -> never persist raw.
+            return red[0] if red else "[REDACTED]"
+        if isinstance(v, dict):
+            return {k: await _r(vv) for k, vv in v.items()}
+        if isinstance(v, (list, tuple)):
+            return [await _r(item) for item in v]
+        return v
+
+    return {k: await _r(v) for k, v in meta.items()}
+
+
 def _merge_output_enforcement_state(existing: dict | None, candidate: dict | None) -> dict | None:
     if candidate is None:
         return existing
@@ -3742,7 +3860,7 @@ async def startup():
         _llm_judge = None
         if CONFIG.get("llm_judge_enabled", True):
             from llm_judge import LLMJudge
-            _bedrock_model = CONFIG.get("llm_judge_model") or os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0")
+            _bedrock_model = CONFIG.get("llm_judge_model") or os.getenv("BEDROCK_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
             _llm_judge = LLMJudge(model=_bedrock_model)
             LOG.info("LLM Judge initialized (bedrock_model=%s)", _bedrock_model)
 
@@ -8749,6 +8867,53 @@ async def proxy_embeddings(request: Request):
         # ({org}::{model}) and uses THIS org's BYOK key — never a same-named peer.
         body["_zs_org_slug"] = org_slug
 
+        # G1/G3/G4: scan + redact PII/secrets in the embedding inputs BEFORE they
+        # leave the gateway, with the SAME tier-1 scanner + verdict-aware redactor
+        # the chat path uses (gated by the SAME input_scan_enabled config). Without
+        # this, a raw email/SSN/API-key was embedded verbatim by the upstream
+        # provider — the chat path never had that gap. ``input`` was already shape-
+        # validated above to a non-empty str or list[str].
+        _emb_input_raw = body.get("input")
+        _emb_was_str = isinstance(_emb_input_raw, str)
+        _emb_texts = [_emb_input_raw] if _emb_was_str else list(_emb_input_raw)
+        _emb_redacted, _emb_block = await _scan_redact_embedding_inputs(_emb_texts, org_config)
+        if _emb_block is not None:
+            METRICS["blocked"] += 1
+            _emit_telemetry(
+                status_code=403,
+                event_type="embedding_blocked",
+                model=requested_model,
+                user_id=user_id,
+                project_id=str(project_id or ""),
+                key_prefix=auth_ctx.prefix if auth_ctx else "",
+                organization_id=getattr(auth_ctx, "organization_id", None) if auth_ctx else None,
+                action="block",
+                risk_score=0.85,
+                threat_type="pii",
+                compliance_tags=org_config.get("compliance_frameworks", []),
+                pipeline_stage="query",
+                metadata={
+                    "reason": _emb_block.get("reason"),
+                    "module": "1.3",
+                    "module_id": "1.3",
+                },
+            )
+            return _build_block_response(
+                403,
+                "tier_1_pii",
+                _build_zeroshield_metadata(
+                    action="block",
+                    reason="Embedding input blocked: PII detected could not be redacted.",
+                    detection_tier="tier_1",
+                    threat_type="pii",
+                    confidence=0.85,
+                    detail=_emb_block.get("reason"),
+                ),
+                requested_model=requested_model,
+            )
+        # Write the redacted texts back, preserving the original str-vs-list shape.
+        body["input"] = _emb_redacted[0] if _emb_was_str else _emb_redacted
+
         status, result = await LLM_ROUTER.aembedding(body)
 
         # Never reflect raw LiteLLM exception text (fallback topology + OpenRouter
@@ -9564,12 +9729,129 @@ async def rag_query(request: Request):
                     _detail = _detail.replace(str(result.model_downgrade), "zeroshield-safe")
                 _client_scan_verdict["detail"] = _detail
 
+        # ── E11: client-egress retrieved-context PII backstop ──
+        # The generation-time PII backstop (``_redact_retrieved_pii``) lives in the
+        # GeneratorStage, which is gated by ``rag_generator_enabled`` (default OFF).
+        # On the DEFAULT guardrails-only / ranker-only paths the generator never
+        # runs, so a document whose PII the ranker did not drop — especially a
+        # scanner-missed bare phone — would reach the client RAW. Re-run the SAME
+        # GATED helper here, at the single client-egress choke point, over every
+        # returned document's content (and any returned context_chunks). This
+        # covers ALL pipeline paths uniformly and is idempotent: the helper only
+        # fires its bare-digit backstop when the typed redactor already found PII
+        # in the chunk, so legitimate document/order numbers in clean citations are
+        # NOT mangled, and a chunk the generator already redacted is left unchanged.
+        from rag_pipeline.generator_stage import (
+            _redact_retrieved_pii as _egress_redact_pii,
+            _redact_metadata_values as _egress_redact_meta,
+        )
+
+        # ── E11b: UNCONDITIONAL client-egress indirect-injection backstop ──
+        # Retrieved-document injection ("ignore all previous instructions",
+        # hidden HTML/ChatML directives, persona-reassignment) is otherwise only
+        # scanned in the RANKER stage (context_guard.scan_documents), which is OFF
+        # by default (rag_ranker_enabled=False) and only forced on by certain
+        # policies. So a pre-poisoned vector in a collection WITHOUT that policy is
+        # returned to the client UNSCANNED. Run the SAME detector the ranker uses
+        # (CONTEXT_GUARD.scan_single_document → INDIRECT_INJECTION_PATTERNS +
+        # HIDDEN_INSTRUCTION_PATTERNS) here, at the single client-egress choke
+        # point, over EVERY returned document — regardless of rag_ranker_enabled /
+        # policy. A document the detector flags as injection / hidden-instruction
+        # is DROPPED (never served); secret/PII/toxicity stay the responsibility of
+        # the PII-redaction backstop below (toxicity is a flag, not a drop). The
+        # scan is sync (ThreadPoolExecutor-backed); call it via asyncio.to_thread to
+        # keep the async handler non-blocking. Fail-safe: if CONTEXT_GUARD is None,
+        # skip entirely (no crash, no behaviour change).
+        _egress_dropped_injection: list[dict] = []
+        _egress_documents = result.documents
+        if CONTEXT_GUARD is not None and isinstance(_egress_documents, list):
+            _kept_after_injection: list = []
+            for _doc in _egress_documents:
+                if not isinstance(_doc, dict):
+                    _kept_after_injection.append(_doc)
+                    continue
+                _scan_text = _doc.get("content")
+                if isinstance(_scan_text, str) and _scan_text:
+                    try:
+                        _inj_verdict = await asyncio.to_thread(
+                            CONTEXT_GUARD._scan_single_document_sync, _scan_text
+                        )
+                    except Exception:  # noqa: BLE001 — a scanner error must not 500 the egress
+                        LOG.warning(
+                            "Egress injection scan failed (fail-safe: doc kept) doc_id=%s",
+                            _doc.get("_doc_id") or _doc.get("id") or "",
+                        )
+                        _inj_verdict = None
+                    if (
+                        _inj_verdict is not None
+                        and getattr(_inj_verdict, "action", "allow") == "block"
+                        and getattr(_inj_verdict, "threat_type", "")
+                        in ("indirect_injection", "hidden_instruction")
+                    ):
+                        _did = _doc.get("_doc_id") or _doc.get("id") or ""
+                        _egress_dropped_injection.append({
+                            "id": _did,
+                            "threat_type": getattr(_inj_verdict, "threat_type", ""),
+                            "detail": getattr(_inj_verdict, "detail", ""),
+                        })
+                        LOG.warning(
+                            "Egress backstop DROPPED retrieved doc for %s (id=%s)",
+                            getattr(_inj_verdict, "threat_type", ""), _did,
+                        )
+                        continue  # do NOT serve this document
+                _kept_after_injection.append(_doc)
+            _egress_documents = _kept_after_injection
+            result.documents = _egress_documents
+
+        if isinstance(_egress_documents, list):
+            for _doc in _egress_documents:
+                if not isinstance(_doc, dict):
+                    continue
+                _content = _doc.get("content")
+                if isinstance(_content, str) and _content:
+                    _doc["content"] = _egress_redact_pii(_content)
+                # E11 fail-open fix: also mask PII in metadata VALUES (not just the
+                # ranker's declared sensitive_fields) before client egress — PII in
+                # an undeclared metadata field otherwise returns raw to the client.
+                _meta = _doc.get("metadata")
+                if isinstance(_meta, (dict, list)):
+                    _doc["metadata"] = _egress_redact_meta(_meta)
+                # Redact any per-document context_chunks (list[str]) if a path
+                # surfaces them on the document object.
+                _doc_chunks = _doc.get("context_chunks")
+                if isinstance(_doc_chunks, list):
+                    _doc["context_chunks"] = [
+                        _egress_redact_pii(_c) if isinstance(_c, str) and _c else _c
+                        for _c in _doc_chunks
+                    ]
+
+        _egress_context_chunks = getattr(result, "context_chunks", None)
+        if isinstance(_egress_context_chunks, list):
+            _egress_context_chunks = [
+                _egress_redact_pii(_c) if isinstance(_c, str) and _c else _c
+                for _c in _egress_context_chunks
+            ]
+
+        # When the egress backstop dropped injection-bearing documents, reflect the
+        # drop in the response: bump filtered_count and surface the dropped set in
+        # the client-facing scan_verdict (matching the existing partial-success
+        # shape: a flagged/filtered list alongside the documents/ids that survived).
+        _egress_filtered_count = result.filtered_count
+        if _egress_dropped_injection:
+            _egress_filtered_count = (result.filtered_count or 0) + len(_egress_dropped_injection)
+            if isinstance(_client_scan_verdict, dict):
+                _client_scan_verdict.setdefault("flagged_documents", [])
+                _client_scan_verdict["egress_filtered"] = _egress_dropped_injection
+                _client_scan_verdict["egress_filtered_count"] = len(_egress_dropped_injection)
+                if not _client_scan_verdict.get("threat_type"):
+                    _client_scan_verdict["threat_type"] = _egress_dropped_injection[0]["threat_type"]
+
         response_content = {
             "collection": collection_name,
             "query": query_text,
-            "documents": result.documents,
+            "documents": _egress_documents,
             "total_retrieved": result.total_retrieved,
-            "filtered_count": result.filtered_count,
+            "filtered_count": _egress_filtered_count,
             "scan_verdict": _client_scan_verdict,
             "pipeline_audit": result.pipeline_audit,
             "context_binding_id": result.context_binding_id or "",
@@ -9955,7 +10237,76 @@ async def rag_ingest(request: Request):
                 # signals and must be server-stamped, never honored from inbound
                 # metadata.
                 meta = {k: v for k, v in meta.items() if k not in ("verified_source", "created_by")}
+                # G2b: document CONTENT is typed-redacted above, but caller-supplied
+                # METADATA VALUES were NOT — a PII/secret hidden in a metadata field
+                # (e.g. {"author": "ssn 123-45-6789"}) was stored verbatim AND
+                # round-trips back to RAG-query callers and into downstream prompts.
+                # When the org enabled rag_redaction, mask string metadata values
+                # with the SAME deterministic typed redactor, recursing into nested
+                # dict/list values so a secret can't hide one level deep.
+                if rag_redaction_enabled:
+                    def _redact_meta_value(_v):
+                        if isinstance(_v, str):
+                            _mr = detect_and_redact_typed(_v)
+                            if _mr.redacted:
+                                nonlocal redacted_count
+                                redacted_count += 1
+                            return _mr.text
+                        if isinstance(_v, dict):
+                            return {_k: _redact_meta_value(_vv) for _k, _vv in _v.items()}
+                        if isinstance(_v, (list, tuple)):
+                            return [_redact_meta_value(_item) for _item in _v]
+                        return _v
+                    meta = {k: _redact_meta_value(v) for k, v in meta.items()}
             normalized_metas.append(meta if meta else {"source": "gateway"})
+
+        # G3: UNIFY the embedding-input redaction with /v1/embeddings. The docs
+        # above were scanned by CONTEXT_GUARD (+ optional Tier-2) and optionally
+        # typed-placeholder-redacted, but those run only when their toggles are on
+        # and do NOT use the SAME deterministic INPUT_SCANNER redactor that the
+        # /v1/embeddings path now applies — so a PII/secret value could still be
+        # embedded verbatim by the upstream provider on ingest. Run the IDENTICAL
+        # helper here (same input_scan_enabled gate, same byte-verified fail-closed)
+        # so both surfaces redact identically. A doc whose PII genuinely cannot be
+        # masked is SKIPPED (not embedded) — matching the existing partial-success
+        # contract (parallel ids/metas/strings stay aligned).
+        _emb_redacted_docs: list[str] = []
+        _emb_kept_ids: list = []
+        _emb_kept_metas: list = []
+        _emb_blocked_count = 0
+        for _di, _dtext in enumerate(doc_strings):
+            _red, _blk = await _scan_redact_embedding_inputs([_dtext], org_config)
+            if _blk is not None:
+                _emb_blocked_count += 1
+                _bidx = allowed_indices[_di] if _di < len(allowed_indices) else _di
+                blocked_indices.add(_bidx)
+                scan_results.append({
+                    "index": _bidx,
+                    "action": "block",
+                    "threats": ["pii"],
+                    "reason": _blk.get("reason"),
+                })
+                continue
+            _emb_redacted_docs.append(_red[0])
+            _emb_kept_ids.append(normalized_ids[_di])
+            # G2-metadata: redact metadata VALUES at the same input_scan_enabled gate
+            # as the content above (not only under the off-by-default rag_redaction).
+            _emb_kept_metas.append(await _scan_redact_metadata(normalized_metas[_di], org_config))
+        doc_strings = _emb_redacted_docs
+        normalized_ids = _emb_kept_ids
+        normalized_metas = _emb_kept_metas
+        allowed_indices = [i for i in allowed_indices if i not in blocked_indices]
+        if not allowed_indices:
+            METRICS["blocked"] += 1
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": "all_documents_blocked",
+                    "message": "All document(s) were blocked by content scanning.",
+                    "code": "rag_content_blocked",
+                    "scan_results": scan_results,
+                },
+            )
 
         # ── Async upsert (decision: implement the worker) ──
         # The documents are ALREADY scanned + redacted above, so guardrails ran

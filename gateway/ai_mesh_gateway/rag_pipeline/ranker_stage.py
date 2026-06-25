@@ -135,6 +135,7 @@ class RankerStage:
             if threshold_override is None:
                 # No explicit policy threshold: keep filtering conservative and rely on
                 # statistical outliers only (2-sigma path in detect_embedding_anomaly).
+                # anomaly_distance_threshold None is an INTENTIONAL per-collection calibration knob (NOT dead config): absolute-distance filtering stays off (inf) to avoid FP drops; the 2-sigma relative path + E11 upsert-time embedding-validity guard (vector_client.filter_valid_embedding_batch) cover poisoning.
                 adjusted_threshold = float("inf")
             else:
                 adjusted_threshold = float(threshold_override) * escalation.anomaly_threshold_multiplier
@@ -147,8 +148,14 @@ class RankerStage:
                 if filtered_documents:
                     documents = filtered_documents
                 else:
-                    # Do not hard-block purely on anomaly heuristics when every document is
-                    # flagged. Preserve retrieval continuity and surface a downstream flag.
+                    # FAIL-CLOSED: when EVERY retrieved document is flagged as anomalous
+                    # (embedding-poisoning / degenerate retrieval), do NOT serve the
+                    # anomalous set. The previous behaviour returned them as-is with a
+                    # downstream "flag" (fail-OPEN) — poisoned vectors reached the client.
+                    # Drop the entire set and let the verdict below resolve to "block"
+                    # (empty document set). Retrieval continuity is sacrificed in favour
+                    # of not serving content the anomaly detector flagged wholesale.
+                    documents = []
                     anomaly_removed_all = True
 
         # ── 2. Trust scoring and re-ranking ──
@@ -280,15 +287,17 @@ class RankerStage:
                     approved_by=["retriever", "ranker"],
                 ))
 
+        # FAIL-CLOSED: anomaly_removed_all now means every doc was DROPPED, so
+        # ``removed`` legitimately reflects the full initial_count (no override).
         removed = initial_count - len(documents)
-        if anomaly_removed_all:
-            removed = 0
 
         verdict_action = "allow"
         if escalation.block_on_any_flag and (anomalous_indices or flagged_indices):
             verdict_action = "block" if not documents else "flag"
         elif anomaly_removed_all:
-            verdict_action = "flag"
+            # Every retrieved document was anomalous and has been dropped: BLOCK
+            # (fail-closed) rather than serving flagged content.
+            verdict_action = "block"
         elif sensitive_redactions and verdict_action == "allow":
             verdict_action = "redact"
 
@@ -296,8 +305,8 @@ class RankerStage:
             verdict_threat = "sensitive_field"
             verdict_detail = f"Redacted {sensitive_redactions} sensitive metadata field(s) per policy"
         elif anomaly_removed_all:
-            verdict_threat = "anomaly" if anomalous_indices else ""
-            verdict_detail = "All retrieved documents matched anomaly heuristics; returning flagged results without drop"
+            verdict_threat = "anomaly"
+            verdict_detail = "All retrieved documents matched anomaly heuristics; dropped (fail-closed), none served"
         else:
             verdict_threat = "anomaly" if anomalous_indices else ""
             verdict_detail = ""

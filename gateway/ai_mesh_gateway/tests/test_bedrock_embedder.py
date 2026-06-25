@@ -178,3 +178,52 @@ async def test_oversize_input_is_truncated(embedder, fake_boto_client):
     payload = json.loads(body_arg)
     sent_text = payload.get("inputText", "")
     assert len(sent_text) <= BedrockEmbedder.MAX_INPUT_CHARS
+
+
+# --------------------------------------------------------------------------- #
+# G4 — assume_redacted is BYTE-VERIFIED (fail-closed on a no-op scrub)         #
+# --------------------------------------------------------------------------- #
+from ai_mesh_gateway.rag_pipeline.bedrock_embedder import assert_no_residual_pii
+
+
+@pytest.mark.asyncio
+async def test_residual_bare_phone_fails_closed_even_when_attested(embedder, fake_boto_client):
+    """redact_all misses a bare 10-digit phone; embed() must fail closed DESPITE
+    assume_redacted=True and must NOT call Bedrock (G4 byte-verification)."""
+    with pytest.raises(PIIRedactionRequiredError):
+        await embedder.embed("call me at 8929554991", org_slug="acme", assume_redacted=True)
+    fake_boto_client.invoke_model.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_residual_email_ssn_card_creds_fail_closed(embedder, fake_boto_client):
+    for raw in (
+        "contact a@b.com",
+        "ssn 123-45-6789",
+        "card 4111 1111 1111 1111",
+        "key sk-proj-ABCD1234efgh",
+        "AKIAIOSFODNN7EXAMPLE",
+    ):
+        fake_boto_client.invoke_model.reset_mock()
+        with pytest.raises(PIIRedactionRequiredError):
+            await embedder.embed(raw, org_slug="acme", assume_redacted=True)
+        fake_boto_client.invoke_model.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_properly_redacted_text_still_embeds(embedder, fake_boto_client):
+    """Masked/placeholder text (the scrubber DID its job) passes verification."""
+    vec = await embedder.embed(
+        "call me at ***-***-**** email e***@m***.com",
+        org_slug="acme",
+        assume_redacted=True,
+    )
+    assert len(vec) == 256
+    assert fake_boto_client.invoke_model.call_count == 1
+
+
+def test_assert_no_residual_pii_helper_unit():
+    assert_no_residual_pii("perfectly clean text with no pii")   # no raise
+    assert_no_residual_pii("masked ***-**-**** and [EMAIL]")      # placeholders ok
+    with pytest.raises(PIIRedactionRequiredError):
+        assert_no_residual_pii("residual 8929554991")

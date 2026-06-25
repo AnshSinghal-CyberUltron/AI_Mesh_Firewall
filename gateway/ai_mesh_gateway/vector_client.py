@@ -19,6 +19,111 @@ LOG = logging.getLogger("gateway.vector_client")
 
 DEFAULT_THREAD_POOL_SIZE = 4
 
+# Upsert-time embedding-validity band (E11 poisoning guard). A legitimate dense
+# embedding has a finite L2 norm in a sane range — typical models emit either
+# unit-normalized vectors (norm ~= 1.0) or unnormalized vectors with norms of a
+# few tens. A vector whose magnitude lands far outside this band, or that is
+# all-zero / near-zero / non-finite, is a poisoning or corruption signal, not a
+# real document embedding. The band is deliberately WIDE (and absolute) so it
+# fires only on unambiguous garbage — zero false positives on legitimate
+# embeddings — unlike per-collection distance calibration (the F12 lesson).
+_EMBEDDING_MIN_L2_NORM = 1e-3
+_EMBEDDING_MAX_L2_NORM = 1e4
+_INF = float("inf")
+
+
+def _embedding_validity_reason(vector: Any) -> str | None:
+    """Return a rejection reason if ``vector`` is a degenerate/adversarial
+    embedding that must NOT be written to the vector store, else ``None``.
+
+    Rejects (clear poisoning / corruption signals, ~zero false positives on
+    legitimate embeddings):
+      * empty / non-sequence
+      * any NaN or +/-inf component
+      * any non-numeric component
+      * all-zero or near-zero L2 norm (norm < ``_EMBEDDING_MIN_L2_NORM``)
+      * abnormal L2 magnitude (non-finite, or outside the sane absolute band)
+
+    Pure-Python L2 + ``isfinite``-style checks (no numpy/math dependency, to
+    match ``byok_embedder``). The L2 sum is accumulated as we validate each
+    component so a single pass both finds garbage components and the norm.
+    """
+    if vector is None:
+        return "empty/non-sequence"
+    try:
+        n = len(vector)
+    except TypeError:
+        return "empty/non-sequence"
+    if n == 0:
+        return "empty"
+    sq_sum = 0.0
+    for x in vector:
+        try:
+            xf = float(x)
+        except (TypeError, ValueError, OverflowError):
+            return "non-numeric component"
+        if xf != xf:
+            return "NaN component"
+        if xf == _INF or xf == -_INF:
+            return "inf component"
+        sq_sum += xf * xf
+    # sq_sum can overflow to inf for very large (poisoned) magnitudes.
+    if sq_sum != sq_sum or sq_sum == _INF:
+        return "non-finite L2 norm"
+    norm = sq_sum ** 0.5
+    if norm < _EMBEDDING_MIN_L2_NORM:
+        return f"near-zero L2 norm ({norm:.3g})"
+    if norm > _EMBEDDING_MAX_L2_NORM:
+        return f"abnormal L2 norm ({norm:.3g})"
+    return None
+
+
+def filter_valid_embedding_batch(
+    documents: list[str],
+    ids: list[str],
+    embeddings: list[Any],
+    metadatas: list[dict[str, Any]] | None,
+    *,
+    context: str = "",
+) -> tuple[list[str], list[str], list[Any], list[dict[str, Any]] | None, int]:
+    """Drop any embedding that fails the upsert-time validity guard, dropping
+    its paired id / document / metadata IN LOCKSTEP so the remaining batch stays
+    index-aligned. Returns the filtered ``(documents, ids, embeddings,
+    metadatas, rejected_count)``.
+
+    This is the vector-write poisoning/anomaly guard (E11 part b): rag_ingest
+    embeds and upserts with no validity check, so a corrupt/adversarial vector
+    (NaN/inf, all-zero, or wildly-scaled magnitude) would be written and later
+    surface as a "real" nearest neighbour. We refuse to persist such vectors.
+    Logs a count of rejected vectors; never raises (a single poisoned row must
+    not fail the whole legitimate batch).
+    """
+    keep_docs: list[str] = []
+    keep_ids: list[str] = []
+    keep_emb: list[Any] = []
+    keep_meta: list[dict[str, Any]] | None = [] if metadatas is not None else None
+    rejected = 0
+    for i, emb in enumerate(embeddings):
+        reason = _embedding_validity_reason(emb)
+        if reason is not None:
+            rejected += 1
+            _id = ids[i] if i < len(ids) else "?"
+            LOG.warning(
+                "E11 upsert guard: rejecting poisoned/degenerate embedding "
+                "(id=%s, reason=%s, context=%s) — vector + its doc/metadata "
+                "dropped, NOT written.",
+                _id, reason, context or "upsert",
+            )
+            continue
+        keep_emb.append(emb)
+        if i < len(ids):
+            keep_ids.append(ids[i])
+        if i < len(documents):
+            keep_docs.append(documents[i])
+        if keep_meta is not None and metadatas is not None and i < len(metadatas):
+            keep_meta.append(metadatas[i])
+    return keep_docs, keep_ids, keep_emb, keep_meta, rejected
+
 
 @runtime_checkable
 class VectorDBClient(Protocol):
@@ -176,6 +281,13 @@ class ChromaDBClient:
         project_id: str,
     ) -> int:
         """Synchronous add documents to a ChromaDB collection."""
+        # NOTE (E11 upsert guard): Chroma embeds documents SERVER-SIDE inside
+        # ``collection.add`` — the gateway never sees the resulting vectors here,
+        # so the embedding-validity guard (filter_valid_embedding_batch) has no
+        # vector to inspect at this choke point. The guard applies where the
+        # gateway itself produces the vectors before writing (PineconeClient.
+        # _upsert_sync). Text-level content scanning still gates Chroma ingest
+        # upstream in the RAG pipeline.
         client = self._get_client()
         namespaced = self._build_collection_name(project_id, collection_name)
         collection = client.get_or_create_collection(name=namespaced)
@@ -535,12 +647,31 @@ class PineconeClient:
         # 'passage' input_type for documents (asymmetric models like e5 embed
         # queries and passages differently).
         embeddings = self._embed(documents, input_type="passage")
+
+        # E11 (b) upsert-time poisoning/anomaly guard: refuse to WRITE any
+        # degenerate/adversarial embedding (NaN/inf, all-zero/near-zero norm, or
+        # an abnormal L2 magnitude). Drop the vector AND its paired id/doc/
+        # metadata in lockstep so the persisted batch stays index-aligned.
+        documents, ids, embeddings, metadatas, rejected = filter_valid_embedding_batch(
+            documents, ids, embeddings, metadatas,
+            context=f"pinecone:{namespace}",
+        )
+        if rejected:
+            LOG.warning(
+                "E11 upsert guard: dropped %d poisoned embedding(s) before "
+                "Pinecone upsert (namespace=%s); %d valid vector(s) remain.",
+                rejected, namespace, len(embeddings),
+            )
+
         vectors = []
         for i, doc_id in enumerate(ids):
             emb = embeddings[i]
             meta = dict(metadatas[i]) if metadatas and i < len(metadatas) else {}
             meta["content"] = documents[i]
             vectors.append({"id": doc_id, "values": emb, "metadata": meta})
+        if not vectors:
+            # Entire batch was poisoned/degenerate — nothing legitimate to write.
+            return 0
         index.upsert(vectors=vectors, namespace=namespace)
         return len(vectors)
 

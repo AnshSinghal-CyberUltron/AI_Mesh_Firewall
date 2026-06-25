@@ -525,6 +525,162 @@ def _effective_scan_action(tool_name: str, enabled_info: dict | None) -> str:
     )
 
 
+def _mcp_block_on_credential_enabled() -> bool:
+    """E12 FIX 1: whether a credential in tool ARGS force-blocks the call.
+
+    Prefers the live gateway CONFIG (populated from ``load_config``); falls back
+    to reading the env var directly so the gate still resolves in unit tests /
+    early startup before ``main.CONFIG`` is set. Default ON.
+    """
+    try:
+        import main as gateway_main
+
+        cfg = getattr(gateway_main, "CONFIG", None)
+        if isinstance(cfg, dict) and "mcp_block_on_credential" in cfg:
+            return bool(cfg.get("mcp_block_on_credential"))
+    except Exception:
+        pass
+    return os.environ.get("GATEWAY_MCP_BLOCK_ON_CREDENTIAL", "true").lower() in (
+        "true", "1", "yes",
+    )
+
+
+def _findings_have_credential(
+    findings: list[dict] | None,
+    tags: list[str] | None = None,
+) -> bool:
+    """E12 FIX 1: True if a scan finding/tag indicates a secret/credential.
+
+    A credential is identified by ANY of:
+      * a finding with ``threat_type == "secret"`` (clean secret-only match), OR
+      * the ``SECRET`` compliance tag (credential types map to it via
+        ``COMPLIANCE_TAG_MAP``; generic PII maps to PII/GDPR/HIPAA, never
+        SECRET), OR
+      * a finding whose ``entity_type`` is a known ``SECRET_PATTERNS`` kind
+        (covers a credential that the orchestrator collapsed under a combined
+        pii+secret finding tagged ``"pii"``, e.g. github_token, or a kind with
+        no compliance-tag mapping such as slack_token).
+
+    Generic PII alone is intentionally NOT treated as a credential, so the
+    default arg-redaction still applies to PII without a hard block.
+    """
+    if tags and "SECRET" in tags:
+        return True
+    if not findings:
+        return False
+    try:
+        from patterns import SECRET_PATTERNS as _SECRET_KINDS
+    except Exception:
+        _SECRET_KINDS = {}
+    for f in findings:
+        if not isinstance(f, dict):
+            continue
+        if f.get("threat_type") == "secret":
+            return True
+        ent = f.get("entity_type") or ""
+        if ent in _SECRET_KINDS:
+            return True
+        # The combined-finding ``detail`` is "Matched: <kind>, <kind>".
+        detail = str(f.get("detail") or "")
+        if detail.startswith("Matched:"):
+            kinds = [k.strip() for k in detail[len("Matched:"):].split(",")]
+            if any(k in _SECRET_KINDS for k in kinds):
+                return True
+    return False
+
+
+def _mcp_redact_result_on_detect_enabled() -> bool:
+    """E12: whether a secret/PII detected in a tool RESULT force-redacts the
+    result even when the resolved scan_action defaults to "tag"/"monitor".
+
+    Prefers the live gateway CONFIG (populated from ``load_config``); falls back
+    to reading the env var directly so the gate still resolves in unit tests /
+    early startup before ``main.CONFIG`` is set. Default ON. Mirrors
+    ``_mcp_block_on_credential_enabled`` exactly.
+    """
+    try:
+        import main as gateway_main
+
+        cfg = getattr(gateway_main, "CONFIG", None)
+        if isinstance(cfg, dict) and "mcp_redact_result_on_detect" in cfg:
+            return bool(cfg.get("mcp_redact_result_on_detect"))
+    except Exception:
+        pass
+    return os.environ.get("GATEWAY_MCP_REDACT_RESULT_ON_DETECT", "true").lower() in (
+        "true", "1", "yes",
+    )
+
+
+def _findings_have_secret_or_pii(findings: list[dict] | None) -> bool:
+    """E12: True if an OUTPUT scan finding indicates a secret/credential OR PII.
+
+    The result-redaction floor applies whenever sensitive data is detected, not
+    just credentials (symmetric arg-block is credential-only to limit FPs, but a
+    raw PII tool RESULT reaching the LLM/client is the same fail-open class).
+    A finding's ``threat_type`` is ``"pii"`` or ``"secret"`` for the tier-1
+    detectors; ``_findings_have_credential`` additionally catches a credential
+    collapsed under a combined ``"pii"``-tagged finding via SECRET_PATTERNS.
+    """
+    if not findings:
+        return False
+    for f in findings:
+        if isinstance(f, dict) and f.get("threat_type") in ("pii", "secret"):
+            return True
+    return _findings_have_credential(findings)
+
+
+def _tool_allowed_by_key(tool_name: str, auth) -> bool:
+    """E12 FIX 3: enforce per-key ``mcp_allowed_tools`` allowlist.
+
+    EMPTY list = all tools allowed (must NOT block). A non-empty list blocks any
+    tool not present in it.
+    """
+    allowed = list(getattr(auth, "mcp_allowed_tools", None) or []) if auth else []
+    if not allowed:
+        return True
+    return tool_name in allowed
+
+
+# Tool-call counter window (seconds). A "turn" is approximated as a sliding
+# per-key window so the cap survives across the separate JSON-RPC requests of a
+# single conversation turn (one tool/call per request in Streamable HTTP).
+_MCP_TOOL_CALL_WINDOW_SEC = 60
+
+
+def _tool_call_cap_exceeded(count: int, cap: int) -> bool:
+    """E12 FIX 3: pure decision for ``mcp_max_tool_calls``.
+
+    ``cap`` of 0 (or negative) = unlimited (never blocks). Otherwise the call is
+    blocked once the post-increment ``count`` exceeds ``cap``.
+    """
+    if cap is None or cap <= 0:
+        return False
+    return count > cap
+
+
+async def _incr_tool_call_count(auth) -> int:
+    """Increment + return this key's tool-call count in the current window.
+
+    Redis-backed so the cap holds across the per-request JSON-RPC calls of one
+    turn and across gateway workers. Fail-open (returns 0 = "no cap pressure")
+    when Redis is unavailable so availability is preserved.
+    """
+    key_id = getattr(auth, "key_hash", None) or getattr(auth, "key_id", None) if auth else None
+    if not key_id:
+        return 0
+    try:
+        client = _get_scan_ver_redis()
+        rk = f"mcp:toolcalls:{key_id}"
+        count = await client.incr(rk)
+        if count == 1:
+            await client.expire(rk, _MCP_TOOL_CALL_WINDOW_SEC)
+        return int(count)
+    except Exception as exc:
+        LOG.warning("mcp_proxy.tool_call_count_unavailable key=%s: %s",
+                    str(key_id)[:12], exc)
+        return 0
+
+
 def _effective_scan_controls_for_tool(
     enabled_info: dict | None,
     tool_name: str,
@@ -546,9 +702,17 @@ async def _mcp_security_scan(
     org_slug: str = "",
     server_slug: str = "",
     actor: dict | None = None,
+    enforcement_override: str | None = None,
 ) -> tuple[object, bool, list[str], list[dict], dict]:
-    """Scan MCP payload via two-tier orchestrator. Returns (payload, blocked, tags, findings, metadata)."""
-    action = _effective_scan_action(tool_name, enabled_info)
+    """Scan MCP payload via two-tier orchestrator. Returns (payload, blocked, tags, findings, metadata).
+
+    ``enforcement_override`` (E12 result-redaction floor): when set, it replaces
+    the resolved per-tool ``scan_action`` as the enforcement passed to the
+    orchestrator, so a re-scan can apply a ``"redact"`` floor to a tool RESULT
+    whose default action would only tag. Per-tier ``inherit`` rows then resolve
+    to the override; rows with an explicit per-tier action are unaffected.
+    """
+    action = enforcement_override or _effective_scan_action(tool_name, enabled_info)
     mcp_direction = "inbound" if scan_direction == "input" else "outbound"
     effective = _effective_scan_controls_for_tool(enabled_info, tool_name)
     if not effective:
@@ -1400,6 +1564,76 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
         arguments = params.get("arguments", {})
         call_t0 = time.time()
 
+        # ── E12 FIX 3: least-privilege key controls (mcp_allowed_tools /
+        # mcp_max_tool_calls). These sync to Redis from the GatewayAPIKey but
+        # were never enforced. Run BEFORE forwarding so a disallowed tool /
+        # over-cap call never reaches the MCP server. EMPTY allowlist = all
+        # tools; cap of 0 = unlimited. ──
+        _mcp_key = _get_auth_context(request)
+        if not _tool_allowed_by_key(tool_name, _mcp_key):
+            await _record_gateway_event(
+                org_slug=org_slug,
+                server_slug=server_slug,
+                tool_name=tool_name,
+                decision="block",
+                reason="tool_not_allowed_for_key",
+                latency_ms=int((time.time() - call_t0) * 1000),
+                metadata={"transport": transport, "enforced_at": "gateway"},
+            )
+            return JSONResponse(
+                content={
+                    "jsonrpc": jsonrpc,
+                    "id": msg_id,
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "[BLOCKED] tool not allowed for this key",
+                            }
+                        ],
+                        "isError": True,
+                    },
+                },
+                status_code=200,
+            )
+        _mcp_cap = int(getattr(_mcp_key, "mcp_max_tool_calls", 0) or 0)
+        if _mcp_cap > 0:
+            _call_n = await _incr_tool_call_count(_mcp_key)
+            if _tool_call_cap_exceeded(_call_n, _mcp_cap):
+                await _record_gateway_event(
+                    org_slug=org_slug,
+                    server_slug=server_slug,
+                    tool_name=tool_name,
+                    decision="block",
+                    reason="tool_call_cap_exceeded",
+                    latency_ms=int((time.time() - call_t0) * 1000),
+                    metadata={
+                        "transport": transport,
+                        "enforced_at": "gateway",
+                        "tool_call_count": _call_n,
+                        "tool_call_cap": _mcp_cap,
+                    },
+                )
+                return JSONResponse(
+                    content={
+                        "jsonrpc": jsonrpc,
+                        "id": msg_id,
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "[BLOCKED] tool-call limit exceeded for this key "
+                                        f"({_mcp_cap} per turn)."
+                                    ),
+                                }
+                            ],
+                            "isError": True,
+                        },
+                    },
+                    status_code=200,
+                )
+
         # Enforce per-tool enable/disable for ALL transports BEFORE forwarding.
         # Backend's MCPToolCallView enforces too for HTTP, but for stdio/websocket
         # the adapter path bypasses it entirely — this is the security gap.
@@ -1448,6 +1682,20 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
             server_slug=server_slug,
             actor=mcp_actor,
         )
+        # ── E12 FIX 1: hard-block a credential/secret in tool ARGUMENTS even when
+        # the resolved scan_action defaults to "tag" (detect-but-allow). Without
+        # this, an AWS key / sk- / github / bearer token in args egresses to the
+        # MCP server. Only credentials force-block here (not generic PII). A
+        # per-tool MCPScanControl set to "monitor" is an explicit operator
+        # observe-only override and still wins. ──
+        if (
+            not _in_blocked
+            and _mcp_block_on_credential_enabled()
+            and _scan_action != "monitor"
+            and _findings_have_credential(_in_findings, _in_tags)
+        ):
+            _in_blocked = True
+            _scan_meta_in = {**_scan_meta_in, "credential_force_block": True}
         if _in_tags or _in_findings:
             _inbound_tags = list(_in_tags)
             _inbound_findings = list(_in_findings)
@@ -1494,19 +1742,17 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                 _in_redacted = True
 
         if is_adapter_transport and server_config:
-            # ── KNOWN GAP (D5, security review 2025-Q1): the adapter
-            # transport path (stdio / websocket) calls the MCP server
-            # directly and bypasses the backend MCPToolCallView, so
-            # G7 response-field redaction and G8 per-user/role policy
-            # filtering ARE NOT APPLIED here. Production deployments
-            # should prefer streamable-http MCP servers for security
-            # parity. Routing adapter calls through the backend (so
-            # the same policy engine fires) is tracked as follow-up.
-            # TODO(G7+G8): apply field-based redaction to adapter_resp
-            # by calling /internal/policy-eval/ on the backend before
-            # returning. For now, log a warning so the gap is visible.
-            LOG.warning(
-                "mcp_proxy.adapter_transport_bypasses_policy org=%s server=%s tool=%s transport=%s",
+            # ── D5 (E12 FIX 2): the adapter transport path (stdio / websocket)
+            # calls the MCP server directly and bypasses the backend
+            # MCPToolCallView. Inbound arg-scanning already ran above; the
+            # OUTBOUND tool-result scan + redaction (the same two-tier pipeline
+            # the streamable-http path uses) now runs below before returning, so
+            # secrets/PII in stdio/ws tool RESULTS are redacted (or blocked) and
+            # never returned raw. Residual limitation: G8 per-user/role
+            # field-level policy filtering (MCPToolCallView's RBAC field masks)
+            # still only fires on the backend HTTP path — tracked as follow-up.
+            LOG.info(
+                "mcp_proxy.adapter_transport_gateway_scan org=%s server=%s tool=%s transport=%s",
                 org_slug, server_slug, tool_name, transport,
             )
             adapter_resp = await _adapter_forward(
@@ -1571,6 +1817,38 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         decision = "redact"
                         payload["result"] = _scanned_out
                         adapter_resp = JSONResponse(content=payload, status_code=200)
+                    elif (
+                        "result" in payload
+                        and _mcp_redact_result_on_detect_enabled()
+                        and _scan_action != "monitor"
+                        and _findings_have_secret_or_pii(_out_find_new)
+                    ):
+                        # ── E12: result-REDACTION floor. The output scan DETECTED a
+                        # secret/PII but the resolved scan_action ("tag") did not
+                        # redact, so the result would egress RAW. Re-run the output
+                        # scan with a "redact" enforcement floor and swap in the
+                        # masked result (mask, never block). Symmetric to the arg
+                        # credential force-block; a per-tool "monitor" still wins. ──
+                        (
+                            _scanned_floor, _floor_blocked, _floor_tags, _floor_find, _scan_meta_floor
+                        ) = await _mcp_security_scan(
+                            _scan_target,
+                            scan_direction="output",
+                            tool_name=tool_name,
+                            enabled_info=enabled_info,
+                            org_slug=org_slug,
+                            server_slug=server_slug,
+                            actor=mcp_actor,
+                            enforcement_override="redact",
+                        )
+                        if _scanned_floor is not _scan_target:
+                            decision = "redact"
+                            payload["result"] = _scanned_floor
+                            adapter_resp = JSONResponse(content=payload, status_code=200)
+                            _scan_meta_out = {
+                                **_scan_meta_out,
+                                "result_redaction_floor": True,
+                            }
             # Monitor: findings under a 'monitor' action are allowed but audited.
             if decision == "allow" and bool(
                 (_scan_meta_in or {}).get("monitored")
@@ -1736,6 +2014,33 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                             },
                             status_code=200,
                         )
+                    # ── E12: result-REDACTION floor. The output scan DETECTED a
+                    # secret/PII but the resolved scan_action ("tag") did not
+                    # redact, so the result would egress RAW to the LLM/client.
+                    # Re-run the output scan with a "redact" enforcement floor and
+                    # swap in the masked content (mask, never block). Symmetric to
+                    # the arg credential force-block; a per-tool "monitor" wins. ──
+                    if (
+                        _scanned_content is result_content
+                        and _mcp_redact_result_on_detect_enabled()
+                        and _scan_action != "monitor"
+                        and _findings_have_secret_or_pii(_out_find_new2)
+                    ):
+                        (
+                            _floor_content, _floor_blocked2, _floor_tags2, _floor_find2, _scan_meta_floor2
+                        ) = await _mcp_security_scan(
+                            result_content,
+                            scan_direction="output",
+                            tool_name=tool_name,
+                            enabled_info=enabled_info,
+                            org_slug=org_slug,
+                            server_slug=server_slug,
+                            actor=mcp_actor,
+                            enforcement_override="redact",
+                        )
+                        if _floor_content is not result_content:
+                            _scanned_content = _floor_content
+                            _merged_meta["result_redaction_floor"] = True
                     # The orchestrator already applied any per-tier redaction and
                     # returns the mutated content; swap it in whenever it changed.
                     # The backend signals its own output redaction via the

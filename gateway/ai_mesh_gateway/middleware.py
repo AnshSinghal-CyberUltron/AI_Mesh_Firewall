@@ -76,6 +76,8 @@ class AuthContext:
         "rate_limit_tpm",
         "risk_score",
         "max_context_tokens",
+        "mcp_allowed_tools",
+        "mcp_max_tool_calls",
         "roles",
         "is_active",
         "expires_at",
@@ -94,6 +96,12 @@ class AuthContext:
         self.rate_limit_tpm: int = payload.get("rate_limit_tpm", 100_000)
         self.risk_score: float = payload.get("risk_score", 0.0)
         self.max_context_tokens: int = payload.get("max_context_tokens", 0)
+        # E12 least-privilege MCP controls (control GatewayAPIKey.build_redis_payload):
+        #   mcp_allowed_tools — tool allowlist; EMPTY list = all tools allowed.
+        #   mcp_max_tool_calls — per-request tool-call cap; 0 = unlimited.
+        # These sync to Redis but were never extracted, so they were unenforced.
+        self.mcp_allowed_tools: list = payload.get("mcp_allowed_tools", []) or []
+        self.mcp_max_tool_calls: int = payload.get("mcp_max_tool_calls", 0) or 0
         # G8: role names (RBAC labels) used by mcp_connector policy filtering.
         # Populated by GatewayAPIKey.build_redis_payload from owner.profile.roles.
         self.roles: list = payload.get("roles", []) or []
