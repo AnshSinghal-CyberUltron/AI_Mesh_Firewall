@@ -774,26 +774,15 @@ The standard end-to-end SOC playbook connecting all Module 2 pages:
 
 ## Technology Stack
 
-| Tier | Component | Runtime | Role |
+| Tier | Runtime | Role |
 |---|---|---|---|
-| **Data plane** | `gateway/` | FastAPI | Module 1 hot-path enforcement |
-| **Control plane** | `control/` | Django | Policy, keys, Module 2 APIs |
-| **Async plane** | `workers/` | Celery | Telemetry drain, alerts, anomaly detection |
-| **UI** | `frontend/` | Vite + React 19 | Module 1 + Module 2 operator console |
-| **State** | Postgres · Redis · RabbitMQ | — | OLTP, policy cache, task broker |
-| **Contracts** | `shared/` + `docs/contracts/` | Python + JSON Schema | Cross-service API stability |
+| **Data plane**  | FastAPI | Module 1 hot-path enforcement |
+| **Control plane** | Django | Policy, keys, Module 2 APIs |
+| **Async plane**  | Celery | Telemetry drain, alerts, anomaly detection |
+| **UI**  | Vite + React 19 | Module 1 + Module 2 operator console |
+| **State** |  Postgres · Redis · RabbitMQ | OLTP, policy cache, task broker |
+| **Contracts**  | Python + JSON Schema | Cross-service API stability |
 
-**Module 2 frontend routes:**
-
-| Route | Page |
-|---|---|
-| `/dashboard` | Unified SOC Dashboard (2.1) |
-| `/ueba/api-keys` | UEBA API Keys (2.2) |
-| `/models/exposure` | Model Exposure & RAG Health (2.3) |
-| `/mcp/risk` | MCP Risk Analytics (2.4) |
-| `/threat-intel` | Threat Intelligence (2.5) |
-| `/incidents` | Incident Queue (2.6) |
-| `/incidents/:id` | Incident Detail & Forensics |
 
 ---
 
@@ -965,7 +954,7 @@ A software company provides AI coding assistants to 800 engineers. Source code, 
 
 ---
 
-### Retail — API Key Compromise Response (Module 2)
+### Retail — API Key Compromise Response
 
 A retailer's production API key begins showing abnormal burst patterns — 400% volume spike, new IP ranges, and repeated injection attempts against a customer-facing chatbot.
 
@@ -980,7 +969,7 @@ A retailer's production API key begins showing abnormal burst patterns — 400% 
 
 ---
 
-### Government Agency — Threat Intel Campaign (Module 2)
+### Government Agency — Threat Intel Campaign 
 
 A government AI portal sees coordinated jailbreak probes using known attack phrases across multiple tenants.
 
@@ -995,7 +984,7 @@ A government AI portal sees coordinated jailbreak probes using known attack phra
 
 ---
 
-### Managed Service Provider — Multi-Tenant SOC Operations (Module 2)
+### Managed Service Provider — Multi-Tenant SOC Operations 
 
 An MSP runs AI workloads for 50 clients. One client's RAG assistant triggers vector-lane blocks due to cross-collection access attempts.
 
@@ -1085,13 +1074,13 @@ An MSP runs AI workloads for 50 clients. One client's RAG assistant triggers vec
 
 ### Module 2 (SOC Intelligence & Response)
 
-- [Module 2 Docs Index](docs/MODULE2_DOCS_INDEX.md)
-- [Module 2 Architecture](docs/MODULE2_ARCHITECTURE.md)
-- [Module 2 Product Manual (Client)](docs/MODULE2_PRODUCT_MANUAL_CLIENT.md)
-- [Module 2 Technical Manual (Developers)](docs/MODULE2_TECHNICAL_MANUAL_DEVELOPERS.md)
-- [Module 2 Operations Runbook](docs/MODULE2_OPERATIONS_RUNBOOK.md)
-- [Module 2 GitHub Guide](docs/MODULE2_GITHUB_GUIDE.md)
-- [Module 2 Release Readiness Checklist](docs/MODULE2_RELEASE_READINESS_CHECKLIST.md)
+- [Docs Index](docs/MODULE2_DOCS_INDEX.md)
+- [Architecture](docs/MODULE2_ARCHITECTURE.md)
+- [Product Manual (Client)](docs/MODULE2_PRODUCT_MANUAL_CLIENT.md)
+- [Technical Manual (Developers)](docs/MODULE2_TECHNICAL_MANUAL_DEVELOPERS.md)
+- [Operations Runbook](docs/MODULE2_OPERATIONS_RUNBOOK.md)
+- [GitHub Guide](docs/MODULE2_GITHUB_GUIDE.md)
+- [Release Readiness Checklist](docs/MODULE2_RELEASE_READINESS_CHECKLIST.md)
 
 ---
 
