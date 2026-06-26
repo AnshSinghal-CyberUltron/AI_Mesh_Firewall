@@ -274,6 +274,33 @@ async def test_chat_egress_tools_untouched_without_redaction_signal(capture_chat
     )
 
 
+@pytest.mark.asyncio
+async def test_chat_egress_real_scanner_masks_cooccurring_bare_phone(capture_chat):
+    """Regression for a leak caught by REAL-FLEET wire capture (not the hermetic
+    tests above). When the scanner detects SOME PII (an SSN) but a bare phone with an
+    imperative lead-in ("call me at 8929554991") rides along, the phone was forwarded
+    RAW to the upstream provider: detect_pii missed it, so redacted_content kept it
+    raw, and _apply_redaction's digit backstop (preserves runs already present in
+    redacted_content) let it ride. The other tests passed FALSELY because they
+    hand-crafted redacted_content to exclude the phone. This drives the REAL
+    InputScanner so a phone the scanner would miss is genuinely exercised end-to-end."""
+    from scanner import InputScanner
+
+    scanner = InputScanner()
+    prompt = "my ssn is 123-45-6789 and call me at 8929554991, summarize my record"
+    verdict = await scanner.scan_prompt(prompt)
+    redacted = scanner.redact_pii(prompt, verdict=verdict)
+
+    router = _router()
+    body = {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}]}
+    status, _ = await router.acompletion(body, redacted_content=redacted)
+
+    assert status == 200
+    wire = _wire(capture_chat["kwargs"])
+    assert "8929554991" not in wire, f"bare phone reached the wire: {wire!r}"
+    assert "123-45-6789" not in wire, f"SSN reached the wire: {wire!r}"
+
+
 @pytest.fixture
 def capture_responses(monkeypatch):
     captured: dict = {}
