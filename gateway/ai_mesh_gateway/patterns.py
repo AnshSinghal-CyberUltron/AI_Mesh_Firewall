@@ -577,6 +577,28 @@ def redact_all(text: str) -> str:
             result = compiled.sub(masker, result)
         else:
             result = compiled.sub(f"[{cred_type.upper()}_REDACTED]", result)
+    # E15: internal infrastructure leakage — surgically mask a REAL internal
+    # NETWORK address (private IPv4 / internal hostname / internal URL) so it can
+    # never egress raw on the client channel, matching PII's always-redact-when-
+    # detected behaviour. Canonical example/gateway addresses (the textbook
+    # 192.168.0.1) are exempt so benign educational answers aren't degraded. File
+    # paths are intentionally NOT masked here — they are far too false-positive-
+    # prone (legitimate in code answers) and stay at the softer 'flag' tier.
+    for _infra_type in ("internal_ipv4", "internal_hostname", "internal_url"):
+        _infra_pat = IP_LEAKAGE_PATTERNS.get(_infra_type)
+        if not _infra_pat:
+            continue
+        _infra_compiled = compile_pattern(_infra_pat)
+
+        def _infra_sub(m, lt=_infra_type):
+            val = m.group(0)
+            if lt == "internal_ipv4" and val in _IP_LEAKAGE_EXAMPLE_ADDRS:
+                return val
+            if lt == "internal_url" and _ip_url_host(val) in _IP_LEAKAGE_EXAMPLE_ADDRS:
+                return val
+            return f"[{lt.upper()}_REDACTED]"
+
+        result = _infra_compiled.sub(_infra_sub, result)
     return result
 
 
