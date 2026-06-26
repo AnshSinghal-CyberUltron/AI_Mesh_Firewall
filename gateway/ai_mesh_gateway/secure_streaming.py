@@ -28,6 +28,50 @@ SENTENCE_BOUNDARIES = frozenset(".!?\n")
 # completion before any part of it is released to the client. Must exceed the
 # longest single PII/secret token (email/phone/SSN/credit-card/API-key < 512B).
 STREAM_LOOKAHEAD_BYTES = 512
+# E14 long-secret split fix: characters that can appear inside a high-entropy
+# secret/API-key/JWT body. A trailing run of these abutting a just-redacted
+# secret is treated as a "secret in progress" and carried across the flush so
+# the un-anchored continuation cannot egress verbatim.
+_SECRET_CHARSET = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-."
+)
+# Minimum trailing-run length to treat as a secret-in-progress anchor. Bounded
+# tokens (email/SSN/phone/credit-card — all < 32 chars) are NOT carried, so the
+# 18 bounded-token streaming cases that already reassemble correctly are
+# unaffected; only a LONG high-entropy run that abuts the buffer edge (an
+# unbounded API key/JWT body truncated mid-token) arms the anchor.
+_SECRET_ANCHOR_MIN = 32
+
+
+def _trailing_secret_run(text: str) -> str:
+    """Return the trailing contiguous ``_SECRET_CHARSET`` run of ``text`` (after
+    ignoring a trailing run of sentence-boundary/whitespace flush-trigger chars)
+    if it is long enough to be a secret-in-progress, capped at
+    ``STREAM_LOOKAHEAD_BYTES`` chars; else ``""``. Used to carry a secret anchor
+    across a redact boundary so a >lookahead key that sheds its prefix anchor on
+    the redacted-prefix flush cannot release its un-anchored tail raw."""
+    # Strip trailing flush-trigger chars (e.g. the '\n'/'.' that fired this flush)
+    # so a secret that runs right up to the boundary char is still recognised as
+    # abutting the edge.
+    end = len(text)
+    while end > 0 and text[end - 1] in SENTENCE_BOUNDARIES:
+        end -= 1
+    i = end
+    while i > 0 and text[i - 1] in _SECRET_CHARSET:
+        i -= 1
+    run = text[i:end]
+    if len(run) < _SECRET_ANCHOR_MIN:
+        return ""
+    return run[-STREAM_LOOKAHEAD_BYTES:]
+
+
+class _ContinuationVerdict:
+    """Minimal verdict-shaped object for metrics when masking a carried-over
+    secret continuation (no real OutputGuard verdict exists for the tail)."""
+
+    threat_type = "secret"
+    detail = "secret continuation masked across flush boundary"
+    matched_patterns = ["secret_continuation"]
 
 
 class FlushReason(str, Enum):
@@ -104,6 +148,18 @@ class SecureStreamingResponse:
         self._chunk_queue: list[tuple[str, str]] = []
         self._stream_blocked: bool = False
         self._last_flush_reason: FlushReason | None = None
+        # E14 long-secret split fix: a "secret-in-progress" anchor carried across
+        # flushes. When a non-final redact flush masks a secret that abuts the END
+        # of the buffer (its match runs to the buffer edge), the trailing high-
+        # entropy run is retained here and PREPENDED to the next flush's scan text
+        # so the continuation re-anchors and re-detects as ONE secret span — even
+        # if the continuation, on its own, has shed the prefix anchor (e.g. an
+        # OpenAI key longer than STREAM_LOOKAHEAD_BYTES split so a boundary flush
+        # ships the 'sk-' prefix and a later flush carries only the un-anchored
+        # body). The anchor is SCAN-ONLY: it is never re-emitted to the client (it
+        # was already delivered masked on the redact flush that set it), so the
+        # continuation is masked while no raw bytes are duplicated.
+        self._secret_anchor: str = ""
         # streaming #4: optional FastAPI/Starlette request for client-disconnect
         # detection. Optional + backward-compatible: when None (or it has no
         # is_disconnected) the loop never polls and behavior is unchanged. When
@@ -221,6 +277,20 @@ class SecureStreamingResponse:
 
         full_text = "".join(self._content_buffer)
 
+        # E14 long-secret split fix (fix_hint option 2): if the PREVIOUS flush
+        # redacted a secret that ran to the buffer edge, a "secret-in-progress"
+        # anchor is pending. The deterministic secret regexes are PREFIX-anchored
+        # (e.g. sk-…), so the un-anchored continuation of a >lookahead key matches
+        # NO pattern and would egress verbatim. Mask the leading contiguous
+        # secret-charset continuation here, anchor-independently, BEFORE it can be
+        # released — so a long key split across a redact boundary cannot shed its
+        # anchor and release its tail raw. Consuming the continuation may re-arm
+        # the anchor if the secret-charset run still runs to the buffer edge.
+        if self._secret_anchor and full_text:
+            async for masked_sse in self._consume_secret_continuation(full_text, reason):
+                yield masked_sse
+            return
+
         if self._output_guard is not None:
             # M-05: thread request context (RAG chunks + org_config + org_slug) into
             # the guard so streaming output gets the same tri-state tier-2 gating and
@@ -288,16 +358,35 @@ class SecureStreamingResponse:
 
             if verdict.action == "redact":
                 redacted_text = self._scanner.redact_pii(full_text)
+                # Telemetry honesty (mirror of non-stream main.py:1566 / 7289):
+                # only claim action="redact" when the bytes actually changed. A
+                # tier-2 (semantic) verdict can target content the deterministic
+                # regex redactor has no pattern for (e.g. a free-text person
+                # name), leaving the streamed output verbatim — that is a "flag",
+                # not a redaction, so the §1.7 dashboard, the guard-metric
+                # counter, and the StreamRunMetrics terminal trace frame must not
+                # record a phantom redaction for a response delivered unchanged.
+                _redact_noop = redacted_text == full_text
+                _emit_action = "flag" if _redact_noop else "redact"
                 self._record_output(redacted_text)
                 LOG.info(
-                    "Output guard redacted streaming content (type=%s, patterns=%s, flush=%s)",
+                    "Output guard %s streaming content (type=%s, patterns=%s, flush=%s)",
+                    "flagged (redact no-op)" if _redact_noop else "redacted",
                     verdict.threat_type,
                     verdict.matched_patterns,
                     reason.value,
                 )
-                self._record_guard_metrics("redact", verdict)
-                self._emit_guard_telemetry(verdict, action="redact", flush_reason=reason)
-                self._record_metric("redact")
+                self._record_guard_metrics(_emit_action, verdict)
+                self._emit_guard_telemetry(
+                    verdict, action=_emit_action, flush_reason=reason, redact_noop=_redact_noop
+                )
+                self._audit_output_guard(verdict, action=_emit_action)
+                self._record_metric(_emit_action)
+                # E14: a real redaction on a NON-final flush whose secret runs to
+                # the buffer edge arms the secret-in-progress anchor so the next
+                # flush masks the un-anchored continuation (long-key split).
+                if not _redact_noop and reason != FlushReason.DONE:
+                    self._secret_anchor = _trailing_secret_run(full_text)
                 for redacted_chunk in self._yield_redacted(redacted_text):
                     yield redacted_chunk
                 self._clear_buffers()
@@ -326,15 +415,27 @@ class SecureStreamingResponse:
 
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
             redacted_text = self._scanner.redact_pii(full_text)
+            # Telemetry honesty (mirror of non-stream main.py:1566 / 7289): a
+            # matched-pattern verdict whose redactor leaves the bytes verbatim is
+            # a "flag", not a redaction — never claim "redact" on a verbatim
+            # delivery so the §1.7 dashboard / StreamRunMetrics stay honest.
+            _redact_noop = redacted_text == full_text
+            _emit_action = "flag" if _redact_noop else "redact"
             self._record_output(redacted_text)
             LOG.info(
-                "PII redacted in streaming output (type=%s, patterns=%s, flush=%s)",
+                "PII %s in streaming output (type=%s, patterns=%s, flush=%s)",
+                "flagged (redact no-op)" if _redact_noop else "redacted",
                 verdict.threat_type,
                 verdict.matched_patterns,
                 reason.value,
             )
-            self._record_guard_metrics("redact", verdict)
-            self._record_metric("redact")
+            self._record_guard_metrics(_emit_action, verdict)
+            self._record_metric(_emit_action)
+            # E14: arm the secret-in-progress anchor on a non-final real redaction
+            # whose secret runs to the buffer edge (long-key split), same as the
+            # guard path above.
+            if not _redact_noop and reason != FlushReason.DONE:
+                self._secret_anchor = _trailing_secret_run(full_text)
             for redacted_chunk in self._yield_redacted(redacted_text):
                 yield redacted_chunk
             self._clear_buffers()
@@ -431,11 +532,32 @@ class SecureStreamingResponse:
         except Exception:
             pass
 
-    def _emit_guard_telemetry(self, verdict, *, action: str, flush_reason: FlushReason) -> None:
+    def _emit_guard_telemetry(
+        self,
+        verdict,
+        *,
+        action: str,
+        flush_reason: FlushReason,
+        redact_noop: bool = False,
+    ) -> None:
         if self._telemetry is None:
             return
         try:
             from telemetry import build_telemetry_event
+
+            metadata = {
+                "detail": (verdict.detail or "")[:256],
+                "streaming": True,
+                "request_id": self._request_id,
+                "flush_reason": flush_reason.value,
+                "module": "1.7",
+                "module_id": "1.7",
+            }
+            # Mirror non-stream main.py:1574 — record when a redact verdict left
+            # the bytes verbatim (downgraded to "flag") so the dashboard can
+            # distinguish a real masking from a no-op tier-2 flag.
+            if redact_noop:
+                metadata["redact_noop"] = True
 
             self._telemetry.emit(build_telemetry_event(
                 event_type="output_guard",
@@ -447,14 +569,7 @@ class SecureStreamingResponse:
                 model=self._model,
                 project_id=self._project_id,
                 source_ip=self._source_ip,
-                metadata={
-                    "detail": (verdict.detail or "")[:256],
-                    "streaming": True,
-                    "request_id": self._request_id,
-                    "flush_reason": flush_reason.value,
-                    "module": "1.7",
-                    "module_id": "1.7",
-                },
+                metadata=metadata,
             ))
         except Exception:
             pass
@@ -489,6 +604,64 @@ class SecureStreamingResponse:
             ))
         except Exception:
             pass
+
+    async def _consume_secret_continuation(
+        self, full_text: str, reason: FlushReason
+    ) -> AsyncGenerator[str, None]:
+        """Mask the leading secret-charset continuation of a secret that the
+        PREVIOUS flush began redacting (``self._secret_anchor`` is set).
+
+        The deterministic secret regexes are prefix-anchored, so once a redact
+        flush ships a long key's ``sk-`` prefix and clears the buffer, the trailing
+        key body matches no pattern and would egress verbatim. Here we mask that
+        un-anchored leading run anchor-INDEPENDENTLY (fix_hint option 2). If the
+        run reaches the buffer edge the secret is still in progress, so the anchor
+        is re-armed and the remainder (if any, after the run) is re-scanned through
+        the normal flush path for fresh secrets in the clean tail."""
+        # Length of the leading contiguous secret-charset run = the continuation.
+        i = 0
+        n = len(full_text)
+        while i < n and full_text[i] in _SECRET_CHARSET:
+            i += 1
+        continuation = full_text[:i]
+        remainder = full_text[i:]
+
+        run_to_edge = i == n  # the secret-charset run still runs to the buffer end
+
+        if continuation:
+            # Emit a masked frame for the consumed continuation. Nothing raw of the
+            # continuation reaches the client. The remainder (clean, non-secret-
+            # charset prefix char onward) is re-scanned below, so its own secrets
+            # are still caught.
+            self._record_output("[REDACTED]")
+            self._record_guard_metrics("redact", _ContinuationVerdict())
+            self._record_metric("redact")
+            # Use the first queued frame as the carrier for the redaction marker.
+            first_sse, _ = self._chunk_queue[0]
+            yield self._rebuild_sse_content(first_sse, "[REDACTED]")
+
+        if run_to_edge:
+            # Still mid-secret: keep the anchor armed and drop the buffer (the
+            # continuation was masked, nothing to release).
+            self._secret_anchor = _trailing_secret_run(continuation) or self._secret_anchor
+            self._clear_buffers()
+            return
+
+        # The secret ended inside this buffer. Anchor consumed. Re-scan ONLY the
+        # clean remainder through the normal flush machinery so any new secret in
+        # the tail is still caught (and nothing already-emitted is re-released).
+        self._secret_anchor = ""
+        self._content_buffer = [remainder]
+        self._content_buffer_len = len(remainder.encode("utf-8"))
+        # Rebuild a single synthetic chunk carrying the remainder so the release
+        # path has a frame to rebuild; reuse the last original frame as carrier.
+        last_sse, _ = self._chunk_queue[-1]
+        self._chunk_queue = [(last_sse, remainder)]
+        if remainder:
+            async for sse in self._flush_buffer(reason):
+                yield sse
+        else:
+            self._clear_buffers()
 
     def _yield_redacted(self, redacted_text: str):
         """Yield redacted content: first chunk gets all text, rest get empty."""

@@ -12,7 +12,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, TYPE_CHECKING
+from typing import Any, AsyncGenerator, Awaitable, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from stream_orchestration import StreamRunMetrics
@@ -69,6 +69,32 @@ except Exception:  # pragma: no cover - litellm version drift
     pass
 
 LOG = logging.getLogger("gateway.llm_router")
+
+# E13 mid-stream kill-switch re-check throttle. Once a stream is live there is no
+# per-chunk policy gate, so an operator who trips the kill-switch (or model-state
+# isolation) DURING an active stream would otherwise keep getting the remainder
+# from a disabled model. We re-check the ACTIVE model's live kill/isolate state
+# inside the chunk loop, but THROTTLED so the Redis read does not run on every
+# token: at most once per ``_MIDSTREAM_KS_CHECK_EVERY_CHUNKS`` chunks AND no more
+# often than every ``_MIDSTREAM_KS_CHECK_INTERVAL_S`` seconds of wall-clock. The
+# check FAILS OPEN — a Redis hiccup / callback exception never terminates a live,
+# legitimate stream; only a DEFINITIVE kill/isolate verdict ends the stream.
+_MIDSTREAM_KS_CHECK_EVERY_CHUNKS = 16
+_MIDSTREAM_KS_CHECK_INTERVAL_S = 1.0
+
+
+class _MidStreamKillSwitch(Exception):
+    """Internal sentinel: the ACTIVE model was kill-switched / isolated mid-stream.
+
+    Raised from the throttled state-check wrapper so the prefix already emitted to
+    the client stays, the upstream generator is aclose()'d (so upstream generation
+    halts too), and ``acompletion_stream`` ends the stream with a terminal error
+    SSE rather than streaming the remainder from a now-disabled model.
+    """
+
+    def __init__(self, reason: str = "") -> None:
+        super().__init__(reason or "model disabled by operator mid-stream")
+        self.reason = reason
 
 # Map LiteLLM exceptions to HTTP status codes
 _EXCEPTION_STATUS_MAP = {
@@ -828,6 +854,86 @@ class LLMRouter:
                 }
             }
 
+    async def _stream_with_state_check(
+        self,
+        response,
+        client_model: str = "",
+        state_check: "Callable[[], Awaitable[bool]] | None" = None,
+    ) -> AsyncGenerator[str, None]:
+        """Wrap ``_stream_chunks_from_response`` with a THROTTLED mid-stream
+        kill-switch / model-state re-check (E13).
+
+        ``state_check`` is an async callback that returns ``True`` ONLY on a
+        DEFINITIVE kill/isolate verdict for the active model, and ``False``
+        otherwise — including on any Redis/exception error (the caller fails open).
+        It is called at most once every ``_MIDSTREAM_KS_CHECK_EVERY_CHUNKS`` chunks
+        AND no more than once per ``_MIDSTREAM_KS_CHECK_INTERVAL_S`` seconds, so the
+        per-token streaming hot path stays cheap.
+
+        On a ``True`` verdict we STOP yielding, aclose() the upstream chunk
+        generator (so upstream generation halts) and raise ``_MidStreamKillSwitch``
+        — ``acompletion_stream`` catches it and emits the terminal error SSE. The
+        prefix already yielded to the client is preserved; the remainder is not
+        emitted. When ``state_check`` is None this is a transparent passthrough.
+        """
+        inner = self._stream_chunks_from_response(response, client_model=client_model)
+        if state_check is None:
+            async for chunk in inner:
+                yield chunk
+            return
+
+        chunks_since_check = 0
+        last_check_ts = time.perf_counter()
+        try:
+            async for chunk in inner:
+                yield chunk
+                chunks_since_check += 1
+                now = time.perf_counter()
+                if (
+                    chunks_since_check >= _MIDSTREAM_KS_CHECK_EVERY_CHUNKS
+                    or (now - last_check_ts) >= _MIDSTREAM_KS_CHECK_INTERVAL_S
+                ):
+                    chunks_since_check = 0
+                    last_check_ts = now
+                    killed = False
+                    try:
+                        killed = bool(await state_check())
+                    except Exception:
+                        # FAIL-OPEN: never terminate a legitimate live stream
+                        # because the re-check (Redis/callback) hiccuped. Only a
+                        # definitive kill/isolate verdict ends the stream.
+                        killed = False
+                    if killed:
+                        # Halt upstream generation, then signal the terminal-SSE
+                        # path. The remainder is NOT yielded. Close BOTH the
+                        # wrapper generator AND the raw upstream response: throwing
+                        # GeneratorExit into the wrapper does not reliably finalize
+                        # a hand-rolled async-iterator upstream, so close it
+                        # directly too (if it exposes aclose()) so upstream token
+                        # generation actually stops.
+                        await self._aclose_quietly(inner)
+                        await self._aclose_quietly(response)
+                        raise _MidStreamKillSwitch()
+        finally:
+            # Ensure the upstream is closed on ANY exit (normal completion, early
+            # return, client disconnect, or the kill-switch raise) so we never
+            # leak an open upstream stream.
+            await self._aclose_quietly(inner)
+            await self._aclose_quietly(response)
+
+    @staticmethod
+    async def _aclose_quietly(obj) -> None:
+        """Best-effort aclose() of an async generator / streaming response. A
+        finalization failure must never propagate (it would mask the real
+        terminal verdict / completion path)."""
+        aclose = getattr(obj, "aclose", None)
+        if aclose is None:
+            return
+        try:
+            await aclose()
+        except Exception:
+            pass
+
     async def _stream_chunks_from_response(self, response, client_model: str = "") -> AsyncGenerator[str, None]:
         """Emit SSE chunks from an active LiteLLM streaming response.
 
@@ -891,11 +997,20 @@ class LLMRouter:
             redacted_content: str | None = None,
             metrics: "StreamRunMetrics | None" = None,
             echo_model: str | None = None,
+            state_check: "Callable[[], Awaitable[bool]] | None" = None,
     ) -> AsyncGenerator[str, None]:
         """Streaming completion. Yields SSE-formatted chunks.
 
         Optional ``metrics`` (from stream_orchestration) records provider start,
         first-token time, and fallback-before-first-token (no mid-stream switch).
+
+        E13: optional ``state_check`` is an async callback returning ``True`` ONLY
+        on a DEFINITIVE kill-switch / model-state-isolation verdict for the ACTIVE
+        model. When provided it is invoked THROTTLED inside the chunk loop (see
+        ``_stream_with_state_check``); on a kill verdict the stream STOPS emitting
+        the remainder, the upstream generator is aclose()'d, and a terminal error
+        SSE is emitted. It FAILS OPEN on any error, so a Redis hiccup never
+        terminates a legitimate stream.
         """
         try:
             from stream_orchestration import StreamRunMetrics
@@ -958,9 +1073,25 @@ class LLMRouter:
 
         try:
             response = await self._execute_completion(kwargs)
-            async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
+            async for chunk in self._stream_with_state_check(response, client_model=_client_model, state_check=state_check):
                 yield _track_chunk(chunk)
             local_metrics.completed = True
+        except _MidStreamKillSwitch as ks_exc:
+            # E13: the ACTIVE model was kill-switched / model-state-isolated mid-
+            # stream. The prefix already emitted stays; we stop here and end the
+            # stream with a terminal error SSE (the upstream gen was aclose()'d).
+            LOG.warning("Mid-stream kill-switch: halting active stream (%s)", ks_exc.reason or "model disabled")
+            error_chunk = {
+                "error": {
+                    "message": "Model disabled by operator kill-switch; stream terminated.",
+                    "type": "ServiceUnavailableError",
+                    "code": 503,
+                }
+            }
+            yield f"data: {json.dumps(error_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+            local_metrics.had_error = True
+            return
         except (BadRequestError, NotFoundError) as exc:
             if allowlist and compliant_chain and not emitted:
                 primary = kwargs.get("model")
@@ -971,9 +1102,16 @@ class LLMRouter:
                         retry_kwargs = {**kwargs, "model": self._qualify_like_primary(candidate, primary)}
                         local_metrics.fallback_before_first_token = True
                         response = await self._execute_completion(retry_kwargs)
-                        async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
+                        async for chunk in self._stream_with_state_check(response, client_model=_client_model, state_check=state_check):
                             yield _track_chunk(chunk)
                         local_metrics.completed = True
+                        return
+                    except _MidStreamKillSwitch as ks_exc:
+                        # E13: fallback model killed mid-stream — terminate cleanly.
+                        LOG.warning("Mid-stream kill-switch on compliant fallback: halting (%s)", ks_exc.reason or "model disabled")
+                        yield f"data: {json.dumps({'error': {'message': 'Model disabled by operator kill-switch; stream terminated.', 'type': 'ServiceUnavailableError', 'code': 503}})}\n\n"
+                        yield "data: [DONE]\n\n"
+                        local_metrics.had_error = True
                         return
                     except ValueError as resolve_exc:
                         LOG.warning(
@@ -1011,9 +1149,18 @@ class LLMRouter:
                 retry_kwargs = {**kwargs, "model": fallback_model}
                 try:
                     response = await self._execute_completion(retry_kwargs)
-                    async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
+                    async for chunk in self._stream_with_state_check(response, client_model=_client_model, state_check=state_check):
                         yield _track_chunk(chunk)
                     local_metrics.completed = True
+                    return
+                except _MidStreamKillSwitch as ks_exc:
+                    # E13: fallback model killed mid-stream — terminate cleanly
+                    # (must precede the generic `except Exception` below, which a
+                    # _MidStreamKillSwitch would otherwise be swallowed by).
+                    LOG.warning("Mid-stream kill-switch on default fallback: halting (%s)", ks_exc.reason or "model disabled")
+                    yield f"data: {json.dumps({'error': {'message': 'Model disabled by operator kill-switch; stream terminated.', 'type': 'ServiceUnavailableError', 'code': 503}})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    local_metrics.had_error = True
                     return
                 except tuple(_EXCEPTION_STATUS_MAP.keys()) as retry_exc:
                     status = _EXCEPTION_STATUS_MAP.get(type(retry_exc), 502)

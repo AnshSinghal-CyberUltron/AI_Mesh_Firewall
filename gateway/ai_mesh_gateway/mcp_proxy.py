@@ -629,6 +629,144 @@ def _findings_have_secret_or_pii(findings: list[dict] | None) -> bool:
     return _findings_have_credential(findings)
 
 
+async def _scan_tool_args_block(
+    arguments,
+    *,
+    tool_name: str,
+    enabled_info: dict | None,
+    org_slug: str = "",
+    server_slug: str = "",
+    actor: dict | None = None,
+) -> tuple[object, bool, list[str], list[dict], dict]:
+    """Inbound tool-ARG scan + credential hard-block, mirroring the main path.
+
+    Reused by the bare REST / internal / external proxy paths so they reach
+    PARITY with ``org_mcp_jsonrpc``'s inbound enforcement (mcp_proxy.py ~1676).
+
+    Returns ``(scanned_args, blocked, tags, findings, meta)``:
+      * ``scanned_args`` — arguments after any per-tier inbound redaction the
+        orchestrator applied (``is arguments`` when untouched).
+      * ``blocked`` — True if the call MUST NOT be forwarded. This is the
+        orchestrator's own block OR the E12 credential force-block (a credential
+        in args even when the resolved action only "tags"). A per-tool
+        ``"monitor"`` action is an explicit observe-only override and wins
+        (never force-blocks), exactly like the main path.
+
+    Fail-safe: if the scan helper itself errors, do NOT raise (callers must not
+    500). We return ``blocked=True`` with a synthetic credential-detect meta so
+    an arg-scan failure prefers blocking over silently egressing raw arguments.
+    """
+    scan_action = _effective_scan_action(tool_name, enabled_info)
+    try:
+        scanned, blocked, tags, findings, meta = await _mcp_security_scan(
+            arguments,
+            scan_direction="input",
+            tool_name=tool_name,
+            enabled_info=enabled_info,
+            org_slug=org_slug,
+            server_slug=server_slug,
+            actor=actor,
+        )
+    except Exception as exc:  # pragma: no cover - defensive; scan never 500s
+        LOG.warning(
+            "mcp_proxy.arg_scan_failed org=%s server=%s tool=%s: %s (fail-closed: blocking)",
+            org_slug, server_slug, tool_name, exc,
+        )
+        # Prefer blocking on an arg-scan failure: a credential in args that we
+        # could not inspect must not egress to the backend / upstream MCP server.
+        return arguments, True, [], [], {"arg_scan_error": True, "credential_force_block": True}
+
+    if (
+        not blocked
+        and _mcp_block_on_credential_enabled()
+        and scan_action != "monitor"
+        and _findings_have_credential(findings, tags)
+    ):
+        blocked = True
+        meta = {**meta, "credential_force_block": True}
+    return scanned, blocked, tags, findings, meta
+
+
+async def _scan_tool_result_floor(
+    result_content,
+    *,
+    tool_name: str,
+    enabled_info: dict | None,
+    org_slug: str = "",
+    server_slug: str = "",
+    actor: dict | None = None,
+) -> tuple[object, bool, list[str], list[dict], dict]:
+    """Outbound tool-RESULT scan + redaction FLOOR, mirroring the main path.
+
+    Reused by the bare REST / internal / external proxy paths so they reach
+    PARITY with ``org_mcp_jsonrpc``'s outbound enforcement (mcp_proxy.py ~1941).
+
+    Returns ``(scanned_content, blocked, tags, findings, meta)``:
+      * ``scanned_content`` — result content after per-tier output redaction
+        AND, when the resolved action would otherwise only "tag" a detected
+        secret/PII, the E12 ``"redact"`` floor re-scan (mask, never block).
+        ``is result_content`` when nothing changed.
+      * ``blocked`` — orchestrator output block (a hard ``"block"`` action on a
+        detected result). Callers map this to their own block response shape.
+      * ``meta`` carries ``result_redaction_floor=True`` when the floor masked.
+
+    A per-tool ``"monitor"`` action wins (no floor), exactly like the main path.
+
+    Fail-safe: if the scan helper errors, do NOT raise and do NOT block — return
+    the RAW result unscanned with ``result_scan_error`` in meta so the caller can
+    log/flag while preserving availability (results never 500 the request).
+    """
+    scan_action = _effective_scan_action(tool_name, enabled_info)
+    try:
+        scanned, blocked, tags, findings, meta = await _mcp_security_scan(
+            result_content,
+            scan_direction="output",
+            tool_name=tool_name,
+            enabled_info=enabled_info,
+            org_slug=org_slug,
+            server_slug=server_slug,
+            actor=actor,
+        )
+    except Exception as exc:  # pragma: no cover - defensive; scan never 500s
+        LOG.warning(
+            "mcp_proxy.result_scan_failed org=%s server=%s tool=%s: %s (returning raw)",
+            org_slug, server_slug, tool_name, exc,
+        )
+        return result_content, False, [], [], {"result_scan_error": True}
+
+    if blocked:
+        return scanned, True, tags, findings, meta
+
+    # E12 result-REDACTION floor: detected secret/PII but the resolved action did
+    # not redact, so the result would egress RAW. Re-scan with a "redact" floor.
+    if (
+        scanned is result_content
+        and _mcp_redact_result_on_detect_enabled()
+        and scan_action != "monitor"
+        and _findings_have_secret_or_pii(findings)
+    ):
+        try:
+            floor_content, _fb, _ft, _ff, _fmeta = await _mcp_security_scan(
+                result_content,
+                scan_direction="output",
+                tool_name=tool_name,
+                enabled_info=enabled_info,
+                org_slug=org_slug,
+                server_slug=server_slug,
+                actor=actor,
+                enforcement_override="redact",
+            )
+            if floor_content is not result_content:
+                scanned = floor_content
+                meta = {**meta, "result_redaction_floor": True}
+        except Exception as exc:  # pragma: no cover - defensive
+            LOG.warning(
+                "mcp_proxy.result_floor_failed org=%s server=%s tool=%s: %s",
+                org_slug, server_slug, tool_name, exc,
+            )
+    return scanned, False, tags, findings, meta
+
+
 def _tool_allowed_by_key(tool_name: str, auth) -> bool:
     """E12 FIX 3: enforce per-key ``mcp_allowed_tools`` allowlist.
 
@@ -813,6 +951,58 @@ async def ext_mcp_proxy(path: str, request: Request):
     }
     body = await request.body()
 
+    # ── Inbound credential hard-block on the transparent external proxy.
+    # This path is transport-level (no org/server/tool scoping), so the
+    # resolved scan_action defaults to "tag" (enabled_info=None) and the E12
+    # credential force-block still fires: a credential in tools/call arguments
+    # is blocked before it egresses to the external MCP server. Best-effort —
+    # if the body is not a tools/call JSON-RPC, this is a no-op. ──
+    _ext_tool_name = ""
+    if body:
+        try:
+            _ext_req = json.loads(body)
+        except Exception:
+            _ext_req = None
+        if isinstance(_ext_req, dict) and _ext_req.get("method") == "tools/call":
+            _ext_params = _ext_req.get("params") or {}
+            if isinstance(_ext_params, dict):
+                _ext_tool_name = str(_ext_params.get("name") or "")
+                _ext_args = _ext_params.get("arguments")
+                if _ext_args is not None:
+                    _scanned_args, _in_blocked, _in_tags, _in_findings, _scan_meta_in = (
+                        await _scan_tool_args_block(
+                            _ext_args,
+                            tool_name=_ext_tool_name,
+                            enabled_info=None,
+                            org_slug="",
+                            server_slug="",
+                            actor=None,
+                        )
+                    )
+                    if _in_blocked:
+                        LOG.warning(
+                            "ext_mcp_proxy.credential_blocked host=%s tool=%s tags=%s",
+                            hostname, _ext_tool_name, _in_tags,
+                        )
+                        return JSONResponse(
+                            content={
+                                "jsonrpc": _ext_req.get("jsonrpc", "2.0"),
+                                "id": _ext_req.get("id"),
+                                "error": {
+                                    "code": -32000,
+                                    "message": (
+                                        f"Tool '{_ext_tool_name or 'call'}' arguments matched "
+                                        f"compliance tags: {', '.join(_in_tags) or 'credential/PII'}."
+                                    ),
+                                },
+                            },
+                            status_code=200,
+                        )
+                    # Forward any per-tier inbound redaction the orchestrator applied.
+                    if _scanned_args is not _ext_args:
+                        _ext_params["arguments"] = _scanned_args
+                        body = json.dumps(_ext_req).encode()
+
     client = httpx.AsyncClient(timeout=httpx.Timeout(max(_TIMEOUT, 120)), verify=True)
     try:
         resp = await client.send(
@@ -829,6 +1019,17 @@ async def ext_mcp_proxy(path: str, request: Request):
 
         # For SSE / streaming responses, stream through
         if "text/event-stream" in content_type:
+            # TODO(mcp-egress-scan): streaming (SSE) egress on the transparent
+            # external proxy is NOT scanned — buffering the stream to scan it
+            # would break MCP Streamable HTTP semantics (progressive delivery,
+            # long-lived connections). Inbound request args ARE credential-scanned
+            # above; outbound stream content is passed through verbatim. A future
+            # streaming-aware scanner (chunk-boundary tolerant) should close this.
+            LOG.warning(
+                "ext_mcp_proxy.streaming_egress_unscanned host=%s tool=%s — SSE "
+                "response passed through without outbound result scan",
+                hostname, _ext_tool_name or "?",
+            )
             async def stream_gen():
                 try:
                     async for chunk in resp.aiter_bytes():
@@ -861,7 +1062,6 @@ async def ext_mcp_proxy(path: str, request: Request):
 
         try:
             data = resp.json()
-            return JSONResponse(content=data, status_code=resp.status_code, headers=resp_headers)
         except Exception:
             from starlette.responses import Response
             return Response(
@@ -870,6 +1070,54 @@ async def ext_mcp_proxy(path: str, request: Request):
                 media_type=content_type,
                 headers=resp_headers,
             )
+
+        # ── Outbound result scan + redaction floor on NON-streaming JSON
+        # responses (parity with org_mcp_jsonrpc). Scans result.content; on an
+        # output block returns a JSON-RPC error, otherwise swaps masked content
+        # in. enabled_info=None → action defaults to "tag", so the floor applies
+        # (never "monitor"). Best-effort — only when a tools/call result is
+        # present; never raises (the scan helper is fail-safe). ──
+        if (
+            resp.status_code == 200
+            and isinstance(data, dict)
+            and isinstance(data.get("result"), dict)
+            and data["result"].get("content") is not None
+        ):
+            _ext_result_content = data["result"]["content"]
+            (
+                _scanned_content, _out_blocked, _out_tags, _out_findings, _scan_meta_out
+            ) = await _scan_tool_result_floor(
+                _ext_result_content,
+                tool_name=_ext_tool_name,
+                enabled_info=None,
+                org_slug="",
+                server_slug="",
+                actor=None,
+            )
+            if _out_blocked:
+                LOG.warning(
+                    "ext_mcp_proxy.result_blocked host=%s tool=%s tags=%s",
+                    hostname, _ext_tool_name or "?", _out_tags,
+                )
+                return JSONResponse(
+                    content={
+                        "jsonrpc": data.get("jsonrpc", "2.0"),
+                        "id": data.get("id"),
+                        "error": {
+                            "code": -32000,
+                            "message": (
+                                f"Response from '{_ext_tool_name or 'call'}' matched "
+                                f"compliance tags: {', '.join(_out_tags) or 'PII'}."
+                            ),
+                        },
+                    },
+                    status_code=200,
+                    headers=resp_headers,
+                )
+            if _scanned_content is not _ext_result_content:
+                data["result"]["content"] = _scanned_content
+
+        return JSONResponse(content=data, status_code=resp.status_code, headers=resp_headers)
     except httpx.RequestError as exc:
         await client.aclose()
         exc_name = type(exc).__name__
@@ -1088,6 +1336,48 @@ async def internal_tools_call(request: Request):
             status_code=200,
         )
 
+    # ── Defense-in-depth scan parity (this internal route previously forwarded
+    # arguments RAW). Run the SAME inbound arg scan + credential hard-block as
+    # org_mcp_jsonrpc before forwarding, even though the caller is internal. ──
+    _internal_call_t0 = time.time()
+    _scanned_args, _in_blocked, _in_tags, _in_findings, _scan_meta_in = await _scan_tool_args_block(
+        arguments,
+        tool_name=tool_name,
+        enabled_info=enabled_info,
+        org_slug=org_slug,
+        server_slug=server_slug,
+        actor=None,
+    )
+    if _in_blocked:
+        await _record_gateway_event(
+            org_slug=org_slug,
+            server_slug=server_slug,
+            tool_name=tool_name,
+            decision="block",
+            reason="pii_blocked_inbound",
+            latency_ms=int((time.time() - _internal_call_t0) * 1000),
+            metadata={"transport": "internal", "enforced_at": "gateway", **_scan_meta_in},
+            compliance_tags=list(_in_tags),
+            scan_findings=list(_in_findings),
+        )
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "error": {
+                    "code": -32000,
+                    "message": (
+                        f"Tool '{tool_name}' arguments matched compliance tags: "
+                        f"{', '.join(_in_tags) or 'credential/PII'}."
+                    ),
+                },
+            },
+            status_code=200,
+        )
+    # Forward any per-tier inbound redaction the orchestrator applied.
+    if _scanned_args is not arguments:
+        arguments = _scanned_args
+
     call_body = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -1134,6 +1424,60 @@ async def internal_tools_call(request: Request):
     elif req_auth_type == "authheaders" and body.get("auth_header_key"):
         upstream_auth_headers[body["auth_header_key"]] = body.get("auth_header_value", "")
 
+    async def _scan_internal_result(resp_obj):
+        """Outbound result scan + redaction floor on an upstream JSON-RPC reply.
+
+        Mirrors org_mcp_jsonrpc's outbound enforcement for this internal route.
+        Scans ``result.content`` (the MCP tool-output carrier); on an output
+        block returns a JSON-RPC error, otherwise swaps in masked content. Never
+        raises (fail-safe inside the scan helper) so the response still flows.
+        """
+        if not isinstance(resp_obj, dict):
+            return JSONResponse(content=resp_obj, status_code=200)
+        result_obj = resp_obj.get("result")
+        result_content = result_obj.get("content") if isinstance(result_obj, dict) else None
+        if result_content is None:
+            return JSONResponse(content=resp_obj, status_code=200)
+        (
+            scanned_content, out_blocked, out_tags, out_findings, scan_meta_out
+        ) = await _scan_tool_result_floor(
+            result_content,
+            tool_name=tool_name,
+            enabled_info=enabled_info,
+            org_slug=org_slug,
+            server_slug=server_slug,
+            actor=None,
+        )
+        if out_blocked:
+            await _record_gateway_event(
+                org_slug=org_slug,
+                server_slug=server_slug,
+                tool_name=tool_name,
+                decision="block",
+                reason="pii_blocked_outbound",
+                latency_ms=int((time.time() - _internal_call_t0) * 1000),
+                metadata={"transport": "internal", "enforced_at": "gateway", **scan_meta_out},
+                compliance_tags=list(out_tags),
+                scan_findings=list(out_findings),
+            )
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "id": resp_obj.get("id", 1),
+                    "error": {
+                        "code": -32000,
+                        "message": (
+                            f"Response from '{tool_name}' matched compliance tags: "
+                            f"{', '.join(out_tags) or 'PII'}."
+                        ),
+                    },
+                },
+                status_code=200,
+            )
+        if scanned_content is not result_content and isinstance(result_obj, dict):
+            result_obj["content"] = scanned_content
+        return JSONResponse(content=resp_obj, status_code=200)
+
     try:
         async with httpx.AsyncClient(timeout=max(_TIMEOUT, 60)) as client:
             headers = {
@@ -1174,7 +1518,7 @@ async def internal_tools_call(request: Request):
                         data_str = line[5:].strip()
                         if data_str:
                             try:
-                                return JSONResponse(content=json.loads(data_str), status_code=200)
+                                return await _scan_internal_result(json.loads(data_str))
                             except json.JSONDecodeError:
                                 pass
                 return JSONResponse(
@@ -1186,7 +1530,7 @@ async def internal_tools_call(request: Request):
                     status_code=200,
                 )
 
-            return JSONResponse(content=call_resp.json(), status_code=200)
+            return await _scan_internal_result(call_resp.json())
     except Exception as exc:
         LOG.error("Internal tools-call upstream error: %s", exc)
         return JSONResponse(
@@ -2183,6 +2527,72 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
         return err
 
     body = await request.body()
+
+    # ── Scan parity with org_mcp_jsonrpc (the bare REST route previously
+    # forwarded verbatim with NO scan). Extract the tool args from the JSON body
+    # and run the SAME inbound arg scan + credential hard-block before forwarding;
+    # on the response run the SAME outbound result scan + redaction floor. ──
+    _mcp_auth = _get_auth_context(request)
+    mcp_actor = None
+    if _mcp_auth is not None:
+        mcp_actor = {
+            "user_id": getattr(_mcp_auth, "user_id", None),
+            "agent_id": getattr(_mcp_auth, "prefix", None) or "",
+            "roles": list(getattr(_mcp_auth, "roles", None) or []),
+        }
+    try:
+        parsed = json.loads(body) if body else {}
+    except Exception:
+        parsed = {}
+    tool_name = ""
+    arguments = {}
+    if isinstance(parsed, dict):
+        tool_name = str(parsed.get("name") or parsed.get("tool_name") or "")
+        arguments = parsed.get("arguments")
+        if arguments is None:
+            arguments = {}
+
+    enabled_info = await _get_enabled_tools(org_slug, server_slug)
+    call_t0 = time.time()
+    if tool_name:
+        scanned_args, in_blocked, in_tags, in_findings, scan_meta_in = await _scan_tool_args_block(
+            arguments,
+            tool_name=tool_name,
+            enabled_info=enabled_info,
+            org_slug=org_slug,
+            server_slug=server_slug,
+            actor=mcp_actor,
+        )
+        if in_blocked:
+            await _record_gateway_event(
+                org_slug=org_slug,
+                server_slug=server_slug,
+                tool_name=tool_name,
+                decision="block",
+                reason="pii_blocked_inbound",
+                latency_ms=int((time.time() - call_t0) * 1000),
+                metadata={"transport": "rest", "enforced_at": "gateway", **scan_meta_in},
+                compliance_tags=list(in_tags),
+                scan_findings=list(in_findings),
+            )
+            return JSONResponse(
+                content={
+                    "blocked": True,
+                    "error": "blocked",
+                    "detail": (
+                        f"Tool '{tool_name}' arguments matched compliance tags: "
+                        f"{', '.join(in_tags) or 'credential/PII'}."
+                    ),
+                    "compliance_tags": list(in_tags),
+                },
+                status_code=403,
+            )
+        # Forward any per-tier inbound redaction the orchestrator applied.
+        if scanned_args is not arguments and isinstance(parsed, dict):
+            parsed["arguments"] = scanned_args
+            arguments = scanned_args
+            body = json.dumps(parsed).encode()
+
     async with httpx.AsyncClient(timeout=max(_TIMEOUT, 60)) as client:
         try:
             resp = await client.post(
@@ -2191,6 +2601,59 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
                 headers=_backend_proxy_headers(request, org_slug, server_slug),
             )
             data = resp.json()
+            # ── Outbound result scan + redaction floor (parity with main path).
+            # Only when we know the tool name, the call succeeded, and the
+            # backend did not itself block; otherwise pass through unchanged. ──
+            if (
+                tool_name
+                and resp.status_code == 200
+                and isinstance(data, dict)
+                and not data.get("blocked")
+            ):
+                result_content = data.get("result")
+                if result_content is None:
+                    result_content = data.get("content")
+                if result_content is not None:
+                    (
+                        scanned_content, out_blocked, out_tags, out_findings, scan_meta_out
+                    ) = await _scan_tool_result_floor(
+                        result_content,
+                        tool_name=tool_name,
+                        enabled_info=enabled_info,
+                        org_slug=org_slug,
+                        server_slug=server_slug,
+                        actor=mcp_actor,
+                    )
+                    if out_blocked:
+                        await _record_gateway_event(
+                            org_slug=org_slug,
+                            server_slug=server_slug,
+                            tool_name=tool_name,
+                            decision="block",
+                            reason="pii_blocked_outbound",
+                            latency_ms=int((time.time() - call_t0) * 1000),
+                            metadata={"transport": "rest", "enforced_at": "gateway", **scan_meta_out},
+                            compliance_tags=list(out_tags),
+                            scan_findings=list(out_findings),
+                        )
+                        return JSONResponse(
+                            content={
+                                "blocked": True,
+                                "error": "blocked",
+                                "detail": (
+                                    f"Response from '{tool_name}' matched compliance "
+                                    f"tags: {', '.join(out_tags) or 'PII'}."
+                                ),
+                                "compliance_tags": list(out_tags),
+                            },
+                            status_code=403,
+                        )
+                    if scanned_content is not result_content:
+                        # Swap the masked content back under whichever key carried it.
+                        if data.get("result") is not None:
+                            data["result"] = scanned_content
+                        else:
+                            data["content"] = scanned_content
             return JSONResponse(content=data, status_code=resp.status_code)
         except httpx.TimeoutException as exc:
             LOG.error("Org MCP tool call timeout: %s", exc)
