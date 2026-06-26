@@ -68,6 +68,12 @@ services:
     build:
       context: .
       dockerfile: control/Dockerfile
+    # The image WORKDIR is /app/control, but the Django project (manage.py +
+    # main_app/) lives one level deeper at /app/control/ai_mesh_control. Pin
+    # working_dir there so the image Cmd `daphne main_app.asgi:application`
+    # (and `docker exec ... manage.py`) can import main_app. Without this the
+    # container exits with ModuleNotFoundError: No module named 'main_app'.
+    working_dir: /app/control/ai_mesh_control
     ports: ["8100:8000"]
     env_file:
       - .env
