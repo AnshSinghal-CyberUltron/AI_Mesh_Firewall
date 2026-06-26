@@ -84,16 +84,22 @@ def test_egress_masks_ssn_email_bare_phone_in_returned_document():
     assert _EMAIL not in out, f"email leaked at egress: {out!r}"
     assert _PHONE not in out, f"bare phone leaked at egress: {out!r}"
 
-    # Typed placeholders / masked phone shape are present.
+    # Typed placeholders are present. The bare phone "call back on 8929554991" is
+    # now caught by the contextual phone pattern (wire-capture leak fix) → [PHONE],
+    # the same typed-placeholder class as [SSN]/[EMAIL] (previously it fell through
+    # to the gated digit-backstop's ***-***-4991 shape).
     assert "[SSN]" in out
     assert "[EMAIL]" in out
-    assert "***-***-4991" in out
+    assert "[PHONE]" in out
 
 
 def test_egress_masks_bare_phone_only_when_other_pii_cooccurs():
-    """The bare-digit backstop is GATED: a bare phone is masked precisely
-    because real PII (SSN/email) co-occurs in the same chunk."""
-    documents = [{"content": f"SSN {_SSN}; reach me at {_PHONE}."}]
+    """The bare-digit backstop is GATED: an AMBIGUOUS bare phone (no contextual
+    lead-in, so the phone pattern does NOT match it) is masked precisely because
+    real PII (SSN/email) co-occurs in the same chunk. Uses a lead-in-less phrasing
+    on purpose — "reach me at 8929554991" is now caught by the contextual pattern
+    directly, so it would no longer exercise the gated path."""
+    documents = [{"content": f"SSN {_SSN}; {_PHONE} is on file."}]
     redacted_docs, _ = _apply_egress_redaction(documents)
     out = redacted_docs[0]["content"]
     assert _PHONE not in out

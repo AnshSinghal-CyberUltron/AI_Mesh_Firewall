@@ -87,12 +87,27 @@ PII_PATTERNS: Dict[str, str] = {
     "phone_dotted": r"\b\d{3}\.\d{3}\.\d{4}\b",
     # Contextual bare 10-digit US phone. Tier-2 detects these semantically, but
     # phone_us intentionally skips separatorless runs (order IDs, revenue figures).
-    # Only match when explicit phone/contact context immediately precedes the digits
-    # (e.g. "my phone number is 8929554991") so enforcement redaction and the
-    # upstream LLM never see raw PII the guard model already flagged.
+    # Only match when an explicit phone/contact lead-in immediately precedes the
+    # digits so enforcement redaction and the upstream LLM never see raw PII the
+    # guard model already flagged — while order ids ("order 8929554991") never match.
+    #
+    # WIRE-CAPTURE LEAK FIX: the original branch covered only "phone/mobile/cell/tel
+    # [number] is/:" and MISSED the most common phrasing — an imperative contact verb
+    # ("call/text/reach me at 8929554991"). A real-fleet mitmproxy capture caught the
+    # bare phone forwarded RAW to OpenRouter: detect_pii saw only a co-occurring SSN,
+    # so redacted_content kept the phone raw, and _apply_redaction's digit backstop
+    # (which preserves any run already present in redacted_content as a value the
+    # firewall chose to keep) let it ride. Detecting it HERE masks it everywhere
+    # downstream — verdict, redact_pii/redacted_content, redact_all, and the backstop.
     "phone_us_bare_contextual": (
+        r"(?:"
+        # "phone/mobile/cell/tel [number] is/:" 8929554991
         r"\b(?:phone|mobile|cell|tel(?:ephone)?)\s*(?:number|no\.?|#)?\s*(?:is|:)\s*"
-        r"\d{10}\b"
+        # imperative contact: "call/text/dial/ring/sms/reach/contact (me/us) (back) at/on" 8929554991
+        r"|\b(?:call|text|dial|ring|sms|reach|contact|phone)\s+(?:me\s+|us\s+)?(?:back\s+)?(?:at|on)\s+"
+        # possessive: "my/the [phone/mobile/cell] number/no/# [is]" 8929554991
+        r"|\b(?:my|the)\s+(?:phone\s+|mobile\s+|cell\s+)?(?:number|no\.?|#)\s+(?:is\s+)?"
+        r")\d{10}\b"
     ),
     # N-CRED FIX: the original r"\bsk-[a-zA-Z0-9]{32,}\b" required an UNBROKEN
     # alphanumeric run, so it MISSED every modern hyphenated key format —
