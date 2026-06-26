@@ -15,7 +15,13 @@ import { ResponsiveContainer } from "recharts";
  */
 export function SafeResponsiveChart({ className, children, minSize = 24 }) {
   const containerRef = useRef(null);
-  const [isReady, setIsReady] = useState(false);
+  // Track the MEASURED pixel size of the wrapper, not just a ready flag. We hand
+  // those explicit px dimensions to <ResponsiveContainer> below (instead of
+  // width/height="100%"), so recharts never runs its own parent measurement —
+  // which initialises to -1 and logs "The width(-1) and height(-1) of chart
+  // should be greater than 0" on the first mount render, once per chart. The
+  // ResizeObserver keeps the chart responsive by re-measuring on layout changes.
+  const [size, setSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const element = containerRef.current;
@@ -24,7 +30,11 @@ export function SafeResponsiveChart({ className, children, minSize = 24 }) {
     let rafId = 0;
     const update = () => {
       const rect = element.getBoundingClientRect();
-      setIsReady(rect.width > minSize && rect.height > minSize);
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+      setSize((prev) =>
+        prev.width === width && prev.height === height ? prev : { width, height }
+      );
     };
 
     update();
@@ -40,10 +50,12 @@ export function SafeResponsiveChart({ className, children, minSize = 24 }) {
     };
   }, [minSize]);
 
+  const isReady = size.width > minSize && size.height > minSize;
+
   return (
     <div ref={containerRef} className={className}>
       {isReady ? (
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width={size.width} height={size.height}>
           {children}
         </ResponsiveContainer>
       ) : (
