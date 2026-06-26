@@ -1,0 +1,21 @@
+# Leak-hunt OPT-IN egress-capture overlay. Apply ON TOP of the base + override
+# ONLY while host mitmproxy is running on :8081, otherwise the gateway's outbound
+# calls fail (proxy points at nothing):
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml \
+#                  -f docker-compose.capture.yml up -d gateway
+# Revert to direct egress:  docker compose up -d gateway   (no -f capture)
+services:
+  gateway:
+    environment:
+      # litellm's aiohttp transport sends a CONNECT mitmproxy rejects (400); force
+      # the httpx transport which handles the HTTP proxy + custom CA cleanly.
+      DISABLE_AIOHTTP_TRANSPORT: "True"
+      HTTP_PROXY: http://host.docker.internal:8081
+      HTTPS_PROXY: http://host.docker.internal:8081
+      NO_PROXY: localhost,127.0.0.1,control,gateway,redis,postgres,chromadb,rabbitmq,vector-retrieval,.svc,.local
+      SSL_CERT_FILE: /certs/mitmproxy-ca-cert.pem
+      REQUESTS_CA_BUNDLE: /certs/mitmproxy-ca-cert.pem
+      AWS_CA_BUNDLE: /certs/mitmproxy-ca-cert.pem
+      CURL_CA_BUNDLE: /certs/mitmproxy-ca-cert.pem
+    volumes:
+      - ${HOME}/.mitmproxy:/certs:ro
