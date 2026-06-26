@@ -1309,6 +1309,30 @@ class InputScanner:
                 if conf > max_confidence:
                     max_confidence = conf
 
+        # ── Tier-1 deterministic redact is AUTHORITATIVE; Tier-2 may only ESCALATE
+        # it to a block, never DOWNGRADE it. A deterministic Tier-1 PII/secret
+        # ``redact`` verdict was being DISCARDED here whenever Tier-2 ran and
+        # returned anything other than a block (allow / monitor / flag / risk-score
+        # / parse-failed-degraded): every branch below returns a fresh Tier-2
+        # verdict, so the combined result lost Tier-1's ``redact`` and main.py never
+        # applied the redaction — forwarding RAW PII upstream. Caught by a
+        # real-fleet mitmproxy capture: a 4-PII prompt overflowed the guard model's
+        # JSON findings (max_tokens) -> parse-fail -> degraded fail-open -> raw
+        # SSN/email/phone/card egressed to OpenRouter while Tier-1 had said redact.
+        # Preserve the Tier-1 redact unless Tier-2 genuinely escalates to a block
+        # (e.g. PII prompt that ALSO carries a high-confidence injection).
+        if tier1.action == "redact":
+            _t2_escalates_to_block = recommended == "block" or score >= 0.70
+            if not _t2_escalates_to_block:
+                if not isinstance(getattr(tier1, "scan_meta", None), dict):
+                    tier1.scan_meta = {}
+                tier1.scan_meta["tier2_advisory"] = {
+                    "recommended_action": recommended,
+                    "score": score,
+                    "degraded": bool(meta.get("parse_failed") or meta.get("error")),
+                }
+                return tier1
+
         def _bedrock_verdict(**kwargs: Any) -> ScanVerdict:
             verdict = ScanVerdict(**kwargs)
             findings: list[dict[str, Any]] = []
