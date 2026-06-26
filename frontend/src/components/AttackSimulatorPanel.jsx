@@ -957,6 +957,24 @@ export function AttackSimulatorPanel() {
               </div>
             )}
 
+            {/* Model response: on a clean ALLOW the model's actual answer was only
+                reachable by hovering the model_output pipeline stage — a customer
+                running a prompt saw the verdict but never the response. Surface it
+                directly (delivered completion, already output-guard-processed by the
+                gateway). When the guard rewrote/redacted, the blocks below show that
+                transformed delivery instead, so this is suppressed to avoid dupes. */}
+            {!result.zeroshield?.rewritten_response && !result.zeroshield?.redacted_response &&
+              (result.choices?.[0]?.message?.content ||
+                result.stages?.find((s) => s.name === "model_output")?.content) && (
+              <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-800/70 dark:bg-emerald-900/20">
+                <div className="text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Model Response</div>
+                <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-emerald-900 dark:text-emerald-100">
+                  {result.choices?.[0]?.message?.content ||
+                    result.stages?.find((s) => s.name === "model_output")?.content}
+                </p>
+              </div>
+            )}
+
             {(result.zeroshield?.rewritten_response || result.zeroshield?.redacted_response) && (
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
                 {result.zeroshield?.rewritten_response && (
