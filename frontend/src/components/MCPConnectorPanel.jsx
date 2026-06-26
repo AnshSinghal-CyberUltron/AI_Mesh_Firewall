@@ -734,9 +734,14 @@ function MCPConnectorPanelInner() {
         throw new Error("Gateway URL is not configured.");
       }
 
+      // oauth/start now requires a gateway key whose org matches the URL (it used
+      // to be unauthenticated — a cross-org breach). Send the org gateway key.
       const res = await fetch(`${gwBase}/gateway/${orgSlug}/mcp/${srv.server_slug}/oauth/start`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(orgGatewayKey?.key ? { Authorization: `Bearer ${orgGatewayKey.key}` } : {}),
+        },
         body: JSON.stringify({ server_url: serverUrl }),
       });
       const data = await res.clone().json().catch(async () => ({

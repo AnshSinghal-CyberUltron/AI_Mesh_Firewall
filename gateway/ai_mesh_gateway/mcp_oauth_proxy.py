@@ -396,6 +396,34 @@ def _write_mcp_remote_tokens(
 
 # ── Routes ──────────────────────────────────────────────────────────
 
+def _require_org_scope(request: Request, org_slug: str):
+    """Auth + org-scope gate for OAuth start/status.
+
+    These routes used to bypass auth entirely (a substring match in the gateway
+    middleware), letting any caller probe/initiate OAuth under an arbitrary org's
+    token namespace (cross-org breach). They now require a valid gateway key whose
+    org matches the URL ``org_slug``. The provider→gateway ``/gateway/oauth/callback``
+    redirect is the ONLY OAuth route that stays unauthenticated (no key to send;
+    validated by its signed flow ``state``). Returns an error JSONResponse on
+    missing auth / org mismatch, else ``None``.
+    """
+    auth = getattr(getattr(request, "state", None), "auth_context", None)
+    if auth is None:
+        return JSONResponse(
+            {"error": "unauthorized", "message": "Missing authentication."}, 401
+        )
+    if getattr(auth, "org_slug", None) != org_slug:
+        LOG.warning(
+            "MCP OAuth org scope mismatch: auth org=%s url org=%s",
+            getattr(auth, "org_slug", None), org_slug,
+        )
+        return JSONResponse(
+            {"error": "org_scope_violation",
+             "message": "API key organization does not match URL."}, 403
+        )
+    return None
+
+
 @router.post("/gateway/{org_slug}/mcp/{server_slug}/oauth/start")
 async def oauth_start(org_slug: str, server_slug: str, request: Request):
     """Initiate upstream OAuth flow for a registered MCP server.
@@ -404,6 +432,9 @@ async def oauth_start(org_slug: str, server_slug: str, request: Request):
 
     Returns: ``{ "authorize_url": "…", "state": "…" }``
     """
+    _scope_err = _require_org_scope(request, org_slug)
+    if _scope_err is not None:
+        return _scope_err
     try:
         body = await request.json()
     except Exception:
@@ -678,6 +709,9 @@ async def oauth_callback(request: Request):
 @router.get("/gateway/{org_slug}/mcp/{server_slug}/oauth/status")
 async def oauth_status(org_slug: str, server_slug: str, request: Request):
     """Check whether OAuth tokens exist for a server."""
+    _scope_err = _require_org_scope(request, org_slug)
+    if _scope_err is not None:
+        return _scope_err
     server_url = request.query_params.get("server_url", "")
     if not server_url:
         return JSONResponse({"authorized": False, "reason": "no server_url"})
