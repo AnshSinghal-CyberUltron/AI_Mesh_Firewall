@@ -237,6 +237,51 @@ class ModelSelection:
     decision_factors: list[str] = field(default_factory=list)
     candidate_count: int = 0
 
+def _redact_text_with_backstop(text, redacted_content):
+    """Deterministic redactor shared by the chat (_apply_redaction) and Responses
+    (aresponses) paths so a value is masked identically wherever it appears.
+
+    ``redact_all`` is, by construction, WEAKER than the verdict-aware
+    ``InputScanner.redact_pii`` that produced ``redacted_content`` (the authoritative
+    redacted display / input — what the firewall decided must never reach the model):
+    redact_all only masks a 10-digit phone when an adjacent label disambiguates it,
+    whereas a Tier-2 / policy detector flags the same number from ANY phrasing. That
+    asymmetry once forwarded the RAW value upstream while the trace showed it masked —
+    a silent PII leak. So after redact_all we run a FAIL-CLOSED digit backstop: any run
+    of 7+ digits that ``redacted_content`` masked (absent there) but this text still
+    carries raw is masked too. Partial masks like ``***-***-4991`` keep only 4 digits
+    so they never re-trigger; a value left intact in ``redacted_content`` (a legit
+    order id the firewall did NOT redact) stays intact here."""
+    try:
+        from patterns import redact_all
+    except ImportError:
+        from .patterns import redact_all
+    out = redact_all(text)
+    for run in set(re.findall(r"\d{7,}", text)):
+        if run not in redacted_content and run in out:
+            out = out.replace(run, f"***-***-{run[-4:]}")
+    return out
+
+
+def _redact_tool_descriptions(obj, redactor):
+    """Recursively mask free-text ``description`` strings in a tool definition,
+    leaving every structural schema key (name, type, enum, required, properties …)
+    intact so the function-calling contract still resolves. ``redactor`` is the same
+    deterministic redactor ``LLMRouter._apply_redaction`` applies to message content,
+    so a PII value masked in a message is masked identically in a tool description."""
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if k == "description" and isinstance(v, str) and v:
+                out[k] = redactor(v)
+            else:
+                out[k] = _redact_tool_descriptions(v, redactor)
+        return out
+    if isinstance(obj, list):
+        return [_redact_tool_descriptions(x, redactor) for x in obj]
+    return obj
+
+
 class LLMRouter:
     """Async LLM router backed by LiteLLM."""
 
@@ -531,6 +576,17 @@ class LLMRouter:
         for p in _RESPONSES_PASSTHROUGH_PARAMS:
             if p in body and body[p] is not None:
                 kwargs[p] = body[p]
+        # Tools are a passthrough param here too — mask their free-text descriptions
+        # when redaction fired, mirroring the chat path (_apply_redaction). Without
+        # this, PII smuggled in a Responses tool definition reaches the model raw
+        # while the trace shows the input masked (same silent-leak class).
+        if redacted_content is not None and isinstance(kwargs.get("tools"), list):
+            kwargs["tools"] = [
+                _redact_tool_descriptions(
+                    t, lambda s: _redact_text_with_backstop(s, redacted_content)
+                )
+                for t in kwargs["tools"]
+            ]
         try:
             resp = await litellm.aresponses(**kwargs)
             return 200, (resp.model_dump() if hasattr(resp, "model_dump") else dict(resp))
@@ -561,32 +617,12 @@ class LLMRouter:
         """
         if redacted_content is None or not body.get("messages"):
             return body
-        try:
-            from patterns import redact_all
-        except ImportError:
-            from .patterns import redact_all
 
         def _redact_msg_text(text: str) -> str:
-            # ``redact_all`` here is, by construction, WEAKER than the verdict-aware
-            # ``InputScanner.redact_pii`` that produced ``redacted_content`` (the
-            # authoritative display / pipeline-trace string): redact_all only masks a
-            # 10-digit phone when an adjacent label disambiguates it, whereas a
-            # Tier-2 / policy detector flags the same number from ANY phrasing
-            # ("call me at 8929554991", "8929554991 is my number"). That asymmetry
-            # forwarded the RAW value to the upstream LLM while the pipeline trace
-            # showed it masked — a silent PII leak. ``redacted_content`` is the source
-            # of truth for "what the firewall decided must never reach the model", so
-            # after redact_all we run a FAIL-CLOSED digit backstop: any run of 7+
-            # digits that ``redacted_content`` masked (i.e. it is absent there) but
-            # this message still carries raw is masked here too. Partial masks like
-            # ``***-***-4991`` keep only 4 digits, so they never re-trigger the rule,
-            # and a value left intact in ``redacted_content`` (a legitimate order id
-            # the firewall did NOT redact) stays intact here.
-            out = redact_all(text)
-            for run in set(re.findall(r"\d{7,}", text)):
-                if run not in redacted_content and run in out:
-                    out = out.replace(run, f"***-***-{run[-4:]}")
-            return out
+            # Shared chat/Responses redactor: redact_all + a fail-closed digit backstop
+            # keyed off ``redacted_content`` (the firewall's "what must never reach the
+            # model"). See _redact_text_with_backstop for the full rationale.
+            return _redact_text_with_backstop(text, redacted_content)
 
         new_messages = []
         for m in body["messages"]:
@@ -606,7 +642,23 @@ class LLMRouter:
                 new_messages.append({**m, "content": parts})
             else:
                 new_messages.append(m)
-        return {**body, "messages": new_messages}
+        result = {**body, "messages": new_messages}
+
+        # Tool-definition free text reaches the upstream LLM too. ``_extract_tool_definitions_text``
+        # (G7) already FOLDS tools[].function.{name,description} into the scanned prompt,
+        # so PII/secrets smuggled in a tool definition trigger the same verdict — but
+        # redaction historically masked only ``messages``, forwarding the tool-def text
+        # RAW on a redact-and-forward path (the verdict said "mask it", the wire showed
+        # it raw — the exact leak class this method was created to close for messages).
+        # Mask every free-text ``description`` string at any depth (function.description
+        # + nested JSON-Schema parameter descriptions) with the SAME redactor. Structural
+        # identifiers (name, type, enum, required, …) are intentionally left intact so the
+        # function-calling contract still resolves; a description is pure natural language
+        # where PII realistically hides and masking it never breaks a tool call.
+        tools = body.get("tools")
+        if isinstance(tools, list):
+            result["tools"] = [_redact_tool_descriptions(t, _redact_msg_text) for t in tools]
+        return result
 
     def _build_kwargs(
         self,

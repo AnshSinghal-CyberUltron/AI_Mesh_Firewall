@@ -204,6 +204,129 @@ async def test_chat_egress_no_signal_forwards_clean_prompt(capture_chat):
     assert "summarize the quarterly report" in wire
 
 
+# ── TOOL DEFINITIONS: a request's tools[].function.description is folded into the
+#    G7 input scan, but redaction (_apply_redaction) historically masked only
+#    `messages`, forwarding tool-def PII RAW on a redact-and-forward path — the same
+#    "trace shows masked, wire shows raw" class as the phone-redaction fix. ──
+
+
+@pytest.mark.asyncio
+async def test_chat_egress_redacts_pii_in_tool_description(capture_chat):
+    router = _router()
+    body = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "book it"}],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "notify_customer",
+                    "description": f"Call the customer back at {_PHONE} or email {_EMAIL}.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "msg": {
+                                "type": "string",
+                                "description": f"Message; cc {_EMAIL} on send.",
+                            }
+                        },
+                    },
+                },
+            }
+        ],
+    }
+    # Redaction fired for the request (signal present) — the firewall decided PII
+    # must not reach the model. The tool-def free text must be masked on the wire too.
+    redacted_display = "book it"
+    status, _ = await router.acompletion(body, redacted_content=redacted_display)
+
+    assert status == 200
+    wire = _wire(capture_chat["kwargs"])
+    assert _PHONE not in wire, f"tool-def phone reached the wire: {wire!r}"
+    assert _EMAIL not in wire, f"tool-def email reached the wire: {wire!r}"
+    # Structural identifiers are preserved so function-calling still works.
+    sent_tools = capture_chat["kwargs"].get("tools") or []
+    assert sent_tools and sent_tools[0]["function"]["name"] == "notify_customer"
+    assert sent_tools[0]["function"]["parameters"]["properties"]["msg"]["type"] == "string"
+
+
+@pytest.mark.asyncio
+async def test_chat_egress_tools_untouched_without_redaction_signal(capture_chat):
+    """No redaction signal → tools are forwarded verbatim (no over-redaction)."""
+    router = _router()
+    body = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "hi"}],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get the weather for a city.",
+                },
+            }
+        ],
+    }
+    status, _ = await router.acompletion(body, redacted_content=None)
+    assert status == 200
+    assert capture_chat["kwargs"]["tools"][0]["function"]["description"] == (
+        "Get the weather for a city."
+    )
+
+
+@pytest.fixture
+def capture_responses(monkeypatch):
+    captured: dict = {}
+
+    async def _fake_aresponses(**kwargs):
+        captured["kwargs"] = kwargs
+        return _StubResp({"id": "resp_x", "object": "response", "output": []})
+
+    monkeypatch.setattr(litellm, "aresponses", _fake_aresponses)
+    return captured
+
+
+@pytest.mark.asyncio
+async def test_responses_egress_redacts_pii_in_tool_description(capture_responses):
+    """Responses API path (aresponses) forwards `tools` as a passthrough param too —
+    its free-text descriptions must be masked on the wire when redaction fired."""
+    router = _router()
+    # Register a deployment so _resolve_responses_deployment routes instead of 404.
+    router._deployment_params = {"gpt-4o-mini": {"model": "openai/gpt-4o-mini"}}
+    body = {
+        "model": "gpt-4o-mini",
+        "input": "book it",
+        "tools": [
+            {
+                "type": "function",
+                "name": "notify",
+                "description": f"Reach the customer at {_PHONE} / {_EMAIL}.",
+            }
+        ],
+    }
+    status, _ = await router.aresponses(body, redacted_content="book it")
+
+    assert status == 200
+    wire = _wire(capture_responses["kwargs"])
+    assert _PHONE not in wire, f"responses tool-def phone reached the wire: {wire!r}"
+    assert _EMAIL not in wire, f"responses tool-def email reached the wire: {wire!r}"
+    assert capture_responses["kwargs"]["tools"][0]["name"] == "notify"
+
+
+@pytest.mark.asyncio
+async def test_responses_egress_tools_untouched_without_redaction(capture_responses):
+    router = _router()
+    router._deployment_params = {"gpt-4o-mini": {"model": "openai/gpt-4o-mini"}}
+    body = {
+        "model": "gpt-4o-mini",
+        "input": "hi",
+        "tools": [{"type": "function", "name": "wx", "description": "Get weather."}],
+    }
+    status, _ = await router.aresponses(body, redacted_content=None)
+    assert status == 200
+    assert capture_responses["kwargs"]["tools"][0]["description"] == "Get weather."
+
+
 # ── EMBEDDING egress: redaction is UPSTREAM (main._scan_redact_embedding_inputs);
 #    aembedding must forward the masked input VERBATIM. Chain both real halves so
 #    the proof is end-to-end, not just "the forwarder forwards". ──
