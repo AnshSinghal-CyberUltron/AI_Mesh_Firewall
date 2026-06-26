@@ -72,6 +72,25 @@ _RESIDUAL_PII_PATTERNS: Dict[str, "re.Pattern[str]"] = {
     "phone10": re.compile(r"(?<!\d)\d{10}(?!\d)"),
     "openai_key": re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"),
     "aws_key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    # E14 grounding fix: the byte-verify backstop was NARROWER than the
+    # gateway's own secret/credential inventory (patterns.SECRET_PATTERNS /
+    # CREDENTIAL_EXPOSURE_PATTERNS). A secret class the gateway redacts from the
+    # CLIENT response (e.g. a JWT) still sailed past assert_no_residual_pii and
+    # was embedded RAW to AWS Bedrock during semantic grounding. Unify the two
+    # inventories so every category the gateway treats as a leak fail-closes
+    # here too (assert_no_residual_pii runs BEFORE the boto3 call, so a covered
+    # pattern blocks egress and grounding falls back to lexical). Regexes are
+    # the verbatim gateway forms (patterns.py:160-162, 268, 272-278).
+    "jwt": re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
+    "slack_token": re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{10,}\b"),
+    "github_token": re.compile(r"\bghp_[a-zA-Z0-9]{36}\b"),
+    "github_fine_grained_pat": re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}\b"),
+    "stripe_key": re.compile(r"\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b"),
+    "sendgrid_key": re.compile(r"\bSG\.[\w-]{22}\.[\w-]{43}\b"),
+    "bearer_token": re.compile(r"Bearer\s+[A-Za-z0-9_\-\.]{20,}"),
+    "private_key_block": re.compile(
+        r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"
+    ),
 }
 
 

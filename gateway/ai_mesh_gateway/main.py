@@ -2506,8 +2506,25 @@ def _launch_chat_stream_response(
     # the original requested name; fall back to the resolved body model.
     _stream_echo_model = (getattr(route_selection, "requested_model", "") or model or "")
 
+    # E13: re-check the ACTIVE model's live kill-switch / model-state DURING the
+    # stream (throttled inside the router chunk loop) so an operator who trips the
+    # kill-switch mid-stream stops the remainder, not just future requests. The
+    # active model is body["model"] (post-reroute) and key_prefix is the caller's
+    # credential prefix — the same inputs the request-gate kill-switch check uses.
+    _midstream_state_check = _build_midstream_state_check(
+        str(body.get("model", "") or ""),
+        org_slug or "default",
+        getattr(auth_ctx, "prefix", "") if auth_ctx else "",
+    )
+
     async def _provider_stream():
-        async for chunk in LLM_ROUTER.acompletion_stream(body, redacted_prompt, metrics=stream_metrics, echo_model=_stream_echo_model):
+        async for chunk in LLM_ROUTER.acompletion_stream(
+            body,
+            redacted_prompt,
+            metrics=stream_metrics,
+            echo_model=_stream_echo_model,
+            state_check=_midstream_state_check,
+        ):
             yield chunk
 
     inner = _provider_stream()
@@ -2780,6 +2797,64 @@ async def _drop_isolated_or_killed_candidates(models, org_slug: str, key_prefix:
             excluded, org_slug,
         )
     return kept, excluded
+
+
+def _build_midstream_state_check(model: str, org_slug: str, key_prefix: str):
+    """E13: build the async state-check callback handed to
+    ``LLM_ROUTER.acompletion_stream``.
+
+    A stream that has STARTED has no per-chunk policy gate, so if an operator
+    trips the kill-switch (or model-state isolation) for the ACTIVE model DURING
+    an active stream, the gateway would keep streaming the remainder from the
+    now-disabled model. The router calls this callback THROTTLED inside the chunk
+    loop; we return ``True`` ONLY on a DEFINITIVE kill/isolate verdict so the
+    router halts the stream with a terminal error SSE.
+
+    FAIL-OPEN: any error (Redis down, import failure, REDIS unavailable, missing
+    model) returns ``False`` — a transient hiccup must never terminate a
+    legitimate live stream. Only a concrete ``is_killed`` / ``isolated`` /
+    ``suspended`` verdict ends the stream. Mirrors the dual-check the
+    kill-switch reroute path performs at the request gate (check_kill_switch +
+    check_model_state) so mid-stream and pre-stream enforcement agree.
+    """
+    if not model or REDIS_CLIENT is None:
+        return None
+
+    async def _check() -> bool:
+        try:
+            try:
+                from model_state import check_model_state as _cms
+                from kill_switch import check_kill_switch as _cks
+            except ImportError:
+                from .model_state import check_model_state as _cms
+                from .kill_switch import check_kill_switch as _cks
+            ks = await _cks(REDIS_CLIENT, model, org_slug or "", key_prefix or "")
+            # FAIL-OPEN mid-stream: check_kill_switch fails CLOSED on a Redis error
+            # by RETURNING is_killed=True with scope='redis_unavailable' (correct for
+            # the request gate). But a transient Redis blip must NOT tear down an
+            # ALREADY-ADMITTED live stream, so the redis-unavailable artifact is NOT
+            # treated as a kill here. A REAL operator kill (scope credential/org_model)
+            # still halts the stream.
+            if getattr(ks, "is_killed", False) and \
+                    str(getattr(ks, "scope", "")) != "redis_unavailable":
+                return True
+            ms = await _cms(REDIS_CLIENT, model, org_slug or "default")
+            # Mirror _drop_isolated_or_killed_candidates: an 'alert'-only degraded
+            # model is NOT disabled, so do not terminate on it. Also fail-OPEN on the
+            # model-state Redis-error/malformed artifact (status 'suspended' with a
+            # 'Redis unavailable' / 'Malformed state data' reason) — only a REAL
+            # isolate/suspend halts the stream.
+            _ms_reason = str(getattr(ms, "reason", "") or "")
+            if str(getattr(ms, "status", "active")) in ("isolated", "suspended") and \
+                    str(getattr(ms, "action", "")) != "alert" and \
+                    not _ms_reason.startswith(("Redis unavailable", "Malformed state data")):
+                return True
+        except Exception:
+            # FAIL-OPEN: never kill a legitimate stream on a check error.
+            return False
+        return False
+
+    return _check
 
 
 def _filter_embedding_eligible_models(routing_models: list[dict] | None) -> list[dict]:
