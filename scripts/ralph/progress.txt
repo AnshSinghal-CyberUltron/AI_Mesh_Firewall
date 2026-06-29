@@ -654,3 +654,25 @@
   NOT sufficient — also drive the stock SDK over httpx.ASGITransport so the SDK's own event
   decoder is exercised; override LLM_ROUTER.acompletion_stream via monkeypatch to inject
   mid-stream upstream/guard failures, then assert the PARSED terminal typed event, not a string.
+- rigor-verified: C4-thin-endpoints 2026-06-29 — re-proved all four D4 thin surfaces through
+  the stock openai SDK and closed the gate's HOLLOW spots. The pre-existing gate covered only
+  legacy /v1/completions + images-404; /v1/moderations had ZERO SDK cell, and audio-404 +
+  models.retrieve-404 were never asserted (only the retrieve SUCCESS path, as xfail). Added 5
+  DURABLE cells to test_openai_sdk_compat.py (test_c4_*): (1) moderations benign -> parsed
+  ModerationCreateResponse, flagged False, STANDARD OpenAI Categories bools populate (schema
+  fidelity, not just extras), and m._request_id == m.id (SEAM-C x-request-id<->body-id JOIN);
+  (2) moderations injection -> flagged True + categories.model_extra['prompt_injection']==True
+  (proves it reuses INPUT_SCANNER, not a stub); (3) moderations missing 'input' -> NESTED
+  OpenAI envelope (error is a dict w/ type+code 'missing_required_parameter', NOT flat) +
+  x-request-id — proving the moderations error path flows through the same C1 compat-shim
+  choke point; (4) client.audio.speech.create -> openai.NotFoundError 404 (audio was untested,
+  only images); (5) client.models.retrieve(unknown) -> NotFoundError 404 with populated
+  request_id. All 5 GREEN. Gate: `env -u PYTHONPATH ./.venv/bin/python -m pytest
+  ai_mesh_gateway/tests/test_openai_sdk_compat.py -q` -> 46 passed/2 xpassed (was 41/2; +5).
+  NO real gap (every surface already correct in main.py: retrieve_model 12187, create_moderations
+  12203, create_legacy_completion 12258, _openai_surface_unimplemented 12367); C4 stays passes:true.
+  PATTERN (C4-class SDK surface stories): a surface is NOT rigor-proven until the stock SDK's OWN
+  typed accessor for it is driven — moderations via client.moderations.create() (asserting the
+  parsed Categories bools + request_id join), audio/images/files via their SDK namespace methods
+  (assert NotFoundError 404), retrieve via models.retrieve() on BOTH a hit and a miss. A handler
+  existing in main.py + a raw-httpx 200 is necessary but NOT sufficient; the SDK decoder is the oracle.
