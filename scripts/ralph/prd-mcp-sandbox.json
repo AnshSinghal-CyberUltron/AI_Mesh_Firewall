@@ -137,7 +137,7 @@
       "id": "S11-stdio-adapter-branch",
       "title": "Branch mcp_stdio_adapter on MCP_STDIO_IN_PROCESS",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S10-sandbox-client"],
       "userStory": "As dev I need in-process fallback; as prod I need broker delegation.",
       "acceptanceCriteria": [

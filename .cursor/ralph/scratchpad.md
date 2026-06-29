@@ -63,7 +63,7 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 ## Iteration 10 complete
 
 - **S10-sandbox-client** — `gateway/ai_mesh_gateway/mcp_sandbox_client.py` (`ensure_sandbox`, `broker_send_jsonrpc`); `X-MCP-Broker-Key` from `MCP_BROKER_INTERNAL_KEY`; 503 exponential backoff; 502 → safe `RuntimeError`; timeouts from `MCP_STDIO_*`; 7 tests in `test_mcp_sandbox_client.py` (httpx mock); gate 7 passed.
-- **Next:** S11-stdio-adapter-branch (`MCP_STDIO_IN_PROCESS` routing in `mcp_stdio_adapter.send_jsonrpc`).
+- **Next:** S12-rate-limit-mcp (`org_mcp_jsonrpc` TPM + burst/RPM enforcement).
 
 ## Iteration 9 complete
 
