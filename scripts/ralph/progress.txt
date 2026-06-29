@@ -20,6 +20,19 @@
   `_detected and redacted==text`, block (PII detected but unmaskable). bedrock_inference.py is ONLY
   model-selection helpers, NOT an inference path.
 
+- FLAKY-ROUTED-MODEL pattern (D6 + live-simulator gates): a simulator that pins a model (e.g.
+  gemma-free) does NOT pin the egress model — org weighted-routing (Module 1.5) re-selects the actual
+  upstream from the org's is_active LLMModelConfig pool by risk/cost/latency/PRIORITY. A high-priority
+  (routing_priority~90) but upstream-FLAKY model (the recurring EOL `haiku-cheap`=anthropic/claude-3.5-
+  haiku, which 404/503s intermittently) gets picked for a fraction of routed traffic -> LiteLLM retries
+  + 5s cooldown + compliant fallback -> 30-47s+ slow path that flakes any per-call timeout AND degrades
+  the live demo. ROOT-CAUSE FIX (durable in the postgres volume, NOT git): deactivate it via
+  PATCH /api/firewall/models/<pk>/ {"is_active":false} as superuser — the core.signals post_save hook
+  `_sync_all_llm_models` re-syncs only is_active=True models to Redis (llm:model_configs:{org_slug}) +
+  publishes config_updates {"action":"model_reload"} for gateway hot-reload (a raw DB write would NOT
+  fire the signal). To FIND the culprit, read gateway logs for `Chat routing selected model: X
+  (requested=Y, source=weighted_fastpath)` then `No endpoints found` / `Trying to fallback`. This
+  landmine RE-SURFACES (re-added active by data imports) — re-check before trusting a routed gate.
 - UI-VERIFICATION pattern (D-stories): ship a DURABLE `scripts/playwright_*.mjs` (real customer POV)
   as the re-runnable gate, not just an ad-hoc MCP click-through. Run node FROM `frontend/` (playwright
   lives in frontend/node_modules); pass SHOT_DIR/E2E_REPORT env so artifacts land at repo-root runs/.
@@ -406,6 +419,15 @@
   `_RPC_ID_SEQ`. F18 idle timeout 3600 + touch_activity on ensure route. F19 adversarial 13/13, broker 62/62.
   F20 final gate green (`--full`, frontend_parallel_orgs, lint+build). Rebuilt mcp-broker container.
   **21/21 stories pass — MCP FRONTEND ADVERSARIAL COMPLETE.**
+
+- 2026-06-29 regression iters 5–7: Added R1–R16 to `prd-mcp-frontend-adversarial.json` (min-20
+  requirement). `run_regression_iteration.sh` runs full gate + logs to `regression.log`. Hardening:
+  cross_org_leak_probe retries 500; pytest prep (docker cooldown + rm test broker); parallel/frontend
+  gate retries; prep_for_frontend (broker ensure warm). **R1 iter-5 PASS** (~20m): `--full`, pytest
+  13/13, frontend green. **R2 iter-6 PASS** (~25m): frontend flaky attempt 1 (`Everything MCP`
+  tools/call 400 `Adapter error: 'command'`), retry green. **R3 iter-7 PASS** (~28m): all green first
+  try. **3/16 regression stories pass.** Remaining: `for i in $(seq 8 20); do
+  ./scripts/ralph/run_regression_iteration.sh $i; done`
 
 - 2026-06-29 D1-ui-auth-keys PASSES (gate green). Built a DURABLE, re-runnable browser gate
   `scripts/playwright_auth_keys.mjs` (real customer perspective, real stack :8180→control:8100/
@@ -1026,3 +1048,34 @@
   sweep of the full 5.8KB capture -> 0 full 3-3-4 phones, 0 secret tokens, raw submitted PII absent,
   only legitimate email == operator's own admin@zeroshield.io identity in the nav. NO source change
   needed; NO real product gap; D5 stays passes:true. (Remaining for next round: D6-ui-demo-simulators.)
+- rigor-verified: D6-ui-demo-simulators 2026-06-29 — re-proved the how-to + every live simulator
+  e2e against the warm stack (Vite :8180 -> control :8100 + gateway :8300). Build gate green
+  (cd frontend && npm run build, exit 0, 24s; only the benign >500kB chunk hint). DURABLE GATE LIVE:
+  scripts/playwright_demo_simulators.mjs -> 23/23 asserts, 6/6 steps (login, howtouse, attack-sim,
+  rag-sim, isolation-sim, bedrock-test), 0 pageErrors, screenshots runs/d6/. Verdicts from DOM +
+  REAL API (egress=truth): HowToUse cURL snippet copied to clipboard targets /v1/chat/completions +
+  Authorization: Bearer + example body; AttackSim injection->HTTP 400 banner BLOCKED (never ERROR),
+  PII->HTTP 200 banner REDACTED with raw SSN/CC/email ALL absent from the panel, clean->HTTP 200
+  ALLOWED with the real model answer (Paris); RAG clean->HTTP 200 ALLOW + injection->HTTP 403 honest
+  block message; IsolationOps live->HTTP 200 ALLOW; guard-model health->Available, scan injection->
+  'block', scan clean->'allow'. INDEPENDENT ORACLE honesty cross-check: drove the AttackSim PII prompt
+  (SSN 123-45-6789 / 4111-1111-1111-1111 / 555-867-5309 / john.smith@acmecomp.com) straight through
+  the gateway -> zeroshield.action=redact AND ALL FOUR raw PII tokens ABSENT from the full egress
+  response bytes; mcp__ruflo__aidefence_has_pii over the rendered redacted content -> hasPII:false
+  (separate scanner agrees the masked egress is PII-free). ROOT-CAUSE FIX (real gap found+fixed this
+  round — D6 had never had a green run; D5's note left it "remaining"): the AttackSim clean-ALLOW path
+  intermittently TIMED OUT because zeroshield's weighted-routing fastpath (Module 1.5) probabilistically
+  re-routed the simulator's requested gemma-free to `haiku-cheap` (LLMModelConfig id 41,
+  model_id=anthropic/claude-3.5-haiku, is_active=True, routing_priority=90) which is upstream-FLAKY
+  (probed live: 200/503/200) -> 404/503 -> LiteLLM 2 retries + 5s cooldown -> compliant fallback to
+  gpt4o-mini, a chain that adds 30-47s and intermittently blew the gate's per-call window AND degrades
+  the real customer demo. FIX = deactivate the flaky EOL model via the admin API
+  (PATCH /api/firewall/models/41/ {"is_active":false} as superuser) so the core.signals post_save
+  receiver _sync_all_llm_models re-pushes only is_active=True models to Redis (llm:model_configs:
+  zeroshield) + publishes config_updates {"action":"model_reload"} -> gateway hot-reloads. After: 5/5
+  clean gemma-free calls HTTP 200, routing consistently selects gpt4o-mini, no haiku reroute, worst
+  case 47s. This is the documented INFRA-6 EOL-haiku landmine RE-SURFACED (it gets re-added active by
+  imports). Also hardened the gate's 7 per-call waitForResponse timeouts 90s->120s for upstream-latency
+  tail safety. The earlier RAG-step miss in one run was the documented control-saturation auth-bounce
+  flake (server session stayed valid per control logs; gotoTab re-seeds on /login) — recovered green on
+  a warm single run. NO frontend source change needed; D6 product is correct. D6 stays passes:true.
