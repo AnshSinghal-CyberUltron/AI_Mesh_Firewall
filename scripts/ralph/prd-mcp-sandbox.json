@@ -85,7 +85,7 @@
       "id": "S7-broker-auth",
       "title": "Broker internal auth middleware",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S6-broker-routes"],
       "userStory": "As security I need MCP_BROKER_INTERNAL_KEY on all sandbox API calls.",
       "acceptanceCriteria": [

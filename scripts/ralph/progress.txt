@@ -114,6 +114,10 @@
   destroy) + `src/auth.py` (X-MCP-Broker-Key fail closed); wired in main.py; stdio/rpc httpx-forwards
   to agent POST /rpc with touch_activity; 10 tests in test_sandbox_routes.py (mock docker + httpx);
   gate: `pytest services/mcp-broker/tests -q` → 45 passed.
+- 2026-06-29 iteration 7: S7-broker-auth DONE — dedicated `test_broker_auth.py` (9 tests): missing header,
+  wrong key, unset/blank `MCP_BROKER_INTERNAL_KEY` fail-closed, valid key → 200 on protected DELETE route;
+  `auth.py` unchanged (already correct); gate: `pytest services/mcp-broker/tests/test_broker_auth.py -q`
+  → 9 passed; full broker suite → 54 passed.
 - 2026-06-29 C1-error-envelope PASSES (gate green). The choke point ALREADY EXISTED from
   prior phase work: `_openai_compat_shim` BaseHTTPMiddleware (main.py:254) is registered
   OUTSIDE auth, rewrites flat {error,message,code} bodies via
