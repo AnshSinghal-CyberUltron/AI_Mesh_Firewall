@@ -577,3 +577,24 @@
   Run: cd frontend && BASE_URL=http://127.0.0.1:8180 SHOT_DIR=../runs/d6 \
        E2E_REPORT=../runs/playwright_demo_simulators.json node ../scripts/playwright_demo_simulators.mjs
   ALL D1-D6 UI stories pass. Every prd.json story now passes:true.
+
+## Rigor round 2026-06-29
+- rigor-verified: C1-error-envelope 2026-06-29 — re-proved the single /v1 choke point
+  (_openai_compat_shim main.py:254 + StarletteHTTPException handler :198 + outer
+  _unhandled_handler :170) as a UNIVERSAL invariant, not just the block path. Added 5 durable
+  adversarial cells to test_openai_sdk_compat.py (test_c1_*): (1) 200 chat carries
+  x-request-id; (2) streaming/SSE carries x-request-id (shim stamps header BEFORE the
+  text/event-stream short-circuit); (3) UNMATCHED /v1 route (router 404, never hits a handler)
+  returns the NESTED OpenAI envelope (error is a dict w/ message+type, NOT flat {"detail"})
+  + x-request-id, and stock-SDK NotFoundError.request_id is populated; (4) malformed-JSON body
+  -> nested envelope + x-request-id; (5) exception that ESCAPES a handler (bypasses the
+  BaseHTTPMiddleware shim, caught by the OUTER _unhandled_handler) -> nested 500 + x-request-id
+  + NO traceback/internal-text leak. All 5 GREEN. Full harness 35 passed/2 xpassed (was 30/2).
+  Oracle for an SDK story = the parsed pydantic exception + e.request_id (asserted directly).
+  NO real gap found; C1 stays passes:true.
+- GATE GOTCHA (record as pattern): the documented gate `cd gateway && ./.venv/bin/python -m
+  pytest ai_mesh_gateway/tests/...` FALSE-FAILS with 30 ERRORS `ModuleNotFoundError: No module
+  named 'ai_mesh_shared'` (main.py->jobs.py imports ai_mesh_shared in ../shared, NOT on sys.path;
+  pytest only auto-adds gateway/ai_mesh_gateway via conftest). Correct invocation:
+  `cd gateway && PYTHONPATH="$PWD/../shared" ./.venv/bin/python -m pytest ai_mesh_gateway/tests/<suite> -q`.
+  Env-only, NOT a code regression.

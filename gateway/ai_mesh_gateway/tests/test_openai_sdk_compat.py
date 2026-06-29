@@ -823,3 +823,122 @@ async def test_legacy_completions_block_routes_through_firewall_D4(sdk_client):
         )
     assert excinfo.value.status_code in (400, 403)
     assert excinfo.value.request_id
+
+
+# ───────────── C1 rigor: x-request-id + nested envelope as a UNIVERSAL /v1 invariant ─────────────
+# These adversarially probe the single /v1 choke point (_openai_compat_shim +
+# _openai_shaped_http_exc + _unhandled_handler) on paths the happy-path harness cells
+# do NOT assert: SUCCESS responses, an UNMATCHED /v1 route (router 404), and a malformed
+# request body. The C1 invariant is "every /v1 response carries x-request-id, and every
+# /v1 ERROR body is the nested OpenAI envelope" — not just the block path.
+
+
+def _raw_http(app):
+    """Bare httpx client over the in-process app (lets us read response HEADERS and the
+    exact wire BODY — the stock SDK hides the success-path request id)."""
+    transport = httpx.ASGITransport(app=app)
+    return httpx.AsyncClient(transport=transport, base_url="http://testserver",
+                             headers={"authorization": f"Bearer {API_KEY}"})
+
+
+@pytest.mark.asyncio
+async def test_c1_success_chat_carries_request_id_header(sdk_app):
+    """C1: a SUCCESSFUL (200) chat completion still carries x-request-id (the shim stamps
+    the header on EVERY /v1 response, not only errors)."""
+    client = _raw_http(sdk_app)
+    try:
+        r = await client.post("/v1/chat/completions", json={
+            "model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}]})
+        assert r.status_code == 200, r.text
+        assert r.headers.get("x-request-id"), "x-request-id missing on a 200 chat response"
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_c1_success_streaming_carries_request_id_header(sdk_app):
+    """C1: a STREAMING (SSE, 200) response carries x-request-id — the shim adds the header
+    before short-circuiting on text/event-stream (so streams are not request-id orphans)."""
+    client = _raw_http(sdk_app)
+    try:
+        r = await client.post("/v1/chat/completions", json={
+            "model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}],
+            "stream": True})
+        assert r.status_code == 200, r.text
+        assert "text/event-stream" in r.headers.get("content-type", "")
+        assert r.headers.get("x-request-id"), "x-request-id missing on a streaming response"
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_c1_unmatched_v1_route_is_nested_envelope_with_request_id(sdk_app):
+    """C1+D4: an UNMATCHED /v1 path (router-level 404, never reaches a handler) returns the
+    NESTED OpenAI envelope (error is a dict with message+type — NOT FastAPI's flat
+    {"detail":...}) and carries x-request-id. The stock SDK must parse e.message/e.code."""
+    client = _raw_http(sdk_app)
+    try:
+        r = await client.post("/v1/frobnicate", json={"x": 1})
+        assert r.status_code == 404, r.text
+        assert r.headers.get("x-request-id"), "x-request-id missing on unmatched-route 404"
+        body = r.json()
+        assert isinstance(body.get("error"), dict), f"flat envelope on 404: {body!r}"
+        assert body["error"].get("message"), "error.message empty on 404"
+        assert body["error"].get("type"), "error.type empty on 404"
+        # FastAPI's default flat {"detail": "..."} must NOT be the only surface
+        assert "detail" not in body or isinstance(body.get("error"), dict)
+    finally:
+        await client.aclose()
+
+    # And via the stock SDK on a guaranteed-unimplemented surface: NotFoundError with a
+    # populated request_id (proves the nested-envelope 404 round-trips to e.request_id).
+    sdk = _stock_client(sdk_app)
+    try:
+        with pytest.raises(openai.NotFoundError) as exc:
+            await sdk.images.generate(model="dall-e-3", prompt="hi")
+        assert exc.value.request_id, "e.request_id empty on unimplemented-surface 404"
+    finally:
+        await sdk.close()
+
+
+@pytest.mark.asyncio
+async def test_c1_malformed_json_body_is_nested_envelope_with_request_id(sdk_app):
+    """C1: a malformed (non-JSON) request body on a /v1 endpoint yields a 4xx whose body is
+    the nested OpenAI envelope + x-request-id — never a flat string or a 500 traceback."""
+    client = _raw_http(sdk_app)
+    try:
+        r = await client.post("/v1/chat/completions",
+                              content=b"{not valid json",
+                              headers={"content-type": "application/json"})
+        assert r.status_code in (400, 422), r.text
+        assert r.headers.get("x-request-id"), "x-request-id missing on malformed-body error"
+        body = r.json()
+        assert isinstance(body.get("error"), dict), f"flat envelope on bad body: {body!r}"
+        assert body["error"].get("type"), "error.type empty on bad body"
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_c1_unhandled_exception_is_nested_500_with_request_id_no_traceback(sdk_app, monkeypatch):
+    """C1: an exception that ESCAPES a /v1 handler (bypassing the shim, caught by the
+    OUTER _unhandled_handler) must STILL be a nested 500 envelope + x-request-id, and must
+    NOT leak a traceback / internal detail to the client."""
+    import ai_mesh_gateway.main as gm
+
+    # Force the upstream stub to raise AFTER auth+scan dispatch into the handler body.
+    boom = AsyncMock(side_effect=RuntimeError("upstream exploded: secret-internal-trace"))
+    monkeypatch.setattr(gm.LLM_ROUTER, "acompletion", boom)
+    client = _raw_http(sdk_app)
+    try:
+        r = await client.post("/v1/chat/completions", json={
+            "model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}]})
+        assert r.status_code in (500, 502, 503), r.text
+        assert r.headers.get("x-request-id"), "x-request-id missing on 500"
+        body = r.json()
+        assert isinstance(body.get("error"), dict), f"flat envelope on 500: {body!r}"
+        assert body["error"].get("type"), "error.type empty on 500"
+        # No internal traceback / raised message leaked to the customer.
+        assert "secret-internal-trace" not in json.dumps(body), "internal error text leaked to client"
+    finally:
+        await client.aclose()
