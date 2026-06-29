@@ -33,7 +33,7 @@
       "id": "S3-shared-stdio-common",
       "title": "Shared env denylist and OAuth heuristics",
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S2-sandbox-agent"],
       "userStory": "As security I need identical denylist/OAuth rules in gateway and sandbox-agent.",
       "acceptanceCriteria": [
