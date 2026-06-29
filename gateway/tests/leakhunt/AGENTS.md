@@ -34,8 +34,13 @@ live-fleet capture — it is NOT part of this pytest suite.
   the client response (those are pre-redaction / model output).
 - Mark a documented-but-unfixed leak `@pytest.mark.xfail(strict=False)` so the gate
   stays green and the fix shows up as an XPASS when a B-story lands.
-- The fail-closed digit backstop (`_redact_text_with_backstop`) and `redact_all`'s
-  phone patterns are BOTH contiguous-digit only (`\d{7,}` / `\d{10}`), so any
-  separator-split phone format (5+5 spaced) slips both — this is the G0 root cause.
+- The fail-closed digit backstop (`_redact_text_with_backstop`) NOW also catches
+  separator-split digit runs (`\d[\d .()\-]{5,}\d`) on top of contiguous `\d{7,}`
+  (B1). It is the EGRESS = TRUTH choke for chat / chat-stream / Responses-tools: it
+  masks any run the firewall's `redacted_content` REMOVED that `redact_all` left raw.
+  It is gated on `run not in redacted_content`, so it only enforces what the firewall
+  already decided — it does NOT improve detection coverage (that's B2). Through the
+  real scanner the firewall itself still leaves a 5+5 phone raw, so G0 stays xfail
+  until B2 broadens `patterns.py`.
 - Add a new leaking format by appending a `PiiItem` to `corpus.py`; the existing
   `assert_no_pii_egressed` gate picks it up automatically.
