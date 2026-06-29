@@ -204,7 +204,7 @@
       "id": "D4-ui-mcp",
       "title": "Verify MCP panels in browser (1.4)",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": [],
       "userStory": "As a user, I can manage MCP connectors and run scans, with results shown correctly.",
       "acceptanceCriteria": [
