@@ -39,8 +39,11 @@ live-fleet capture — it is NOT part of this pytest suite.
   (B1). It is the EGRESS = TRUTH choke for chat / chat-stream / Responses-tools: it
   masks any run the firewall's `redacted_content` REMOVED that `redact_all` left raw.
   It is gated on `run not in redacted_content`, so it only enforces what the firewall
-  already decided — it does NOT improve detection coverage (that's B2). Through the
-  real scanner the firewall itself still leaves a 5+5 phone raw, so G0 stays xfail
-  until B2 broadens `patterns.py`.
+  already decided — it does NOT improve detection coverage (that's B2).
+- B2 LANDED: `patterns.py` `phone_us_bare_contextual` now masks separator-split
+  10-digit phones behind a phone cue (`_BARE_PHONE_10_SPLIT`), so the 5+5 G0 case is
+  CLOSED. `corpus.us_5_5_spaced` is `covered=True` and `KNOWN_LEAKS` is now empty;
+  `test_repro_g0.py` is a GREEN closure regression (no longer xfail). When you add a
+  NEW documented-but-unfixed leak, set `covered=False` and xfail its repro as before.
 - Add a new leaking format by appending a `PiiItem` to `corpus.py`; the existing
   `assert_no_pii_egressed` gate picks it up automatically.
