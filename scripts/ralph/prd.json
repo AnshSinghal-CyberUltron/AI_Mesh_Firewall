@@ -26,7 +26,7 @@
       "acceptanceCriteria": [
         "Create tests/leakhunt/recording_provider.py (fake OpenAI/embedding/vector upstream recording exact request bytes) + assert_no_pii_egressed(corpus).",
         "Create tests/leakhunt/corpus.py covering PII classes and formats incl. bare-10-digit, 5+5 spaced, +CC-10-digit phones.",
-        "Add test_repro_g0.py reproducing the known leak (redact verdict, raw phone in egress) — RED is acceptable here; it documents the gap the B-stories fix.",
+        "Add test_repro_g0.py reproducing the known leak (redact verdict, raw phone in egress) \u2014 RED is acceptable here; it documents the gap the B-stories fix.",
         "Gate green: cd gateway && python -m pytest tests/leakhunt -q runs (repro tests may be xfail until fixed)."
       ]
     },
@@ -110,7 +110,7 @@
       "id": "C1-error-envelope",
       "title": "Unify error envelope + x-request-id via one /v1 shim (D2/D3)",
       "priority": 0,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "A1-sdk-harness"
       ],
@@ -184,7 +184,7 @@
       "dependencies": [],
       "userStory": "As a user, I can connect/route models and disable/isolate/reroute, and the UI reflects state.",
       "acceptanceCriteria": [
-        "Verify in browser using dev-browser skill: ModelConnection/Governance, RoutingGovernance/Audit, KillSwitch/ModelState — click every control, assert state badges and results.",
+        "Verify in browser using dev-browser skill: ModelConnection/Governance, RoutingGovernance/Audit, KillSwitch/ModelState \u2014 click every control, assert state badges and results.",
         "Gate green: lint+build; browser-verified with screenshots; no console errors."
       ]
     },
@@ -208,7 +208,7 @@
       "dependencies": [],
       "userStory": "As a user, I can manage MCP connectors and run scans, with results shown correctly.",
       "acceptanceCriteria": [
-        "Verify in browser using dev-browser skill: MCPConnector/Manager/Scanner/ScanControlMatrix — click every control, assert results.",
+        "Verify in browser using dev-browser skill: MCPConnector/Manager/Scanner/ScanControlMatrix \u2014 click every control, assert results.",
         "Gate green: lint+build; browser-verified with screenshots; no console errors."
       ]
     },
