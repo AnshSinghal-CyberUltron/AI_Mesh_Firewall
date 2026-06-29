@@ -111,3 +111,22 @@ live-fleet capture — it is NOT part of this pytest suite.
   typed-placeholder pass as defense-in-depth on top of the input_scan-forced unified
   redaction — but the at-rest PII guarantee is already policy-forced by
   `input_scan_enabled` (default True) regardless of that toggle.
+
+## B4 — multi-engine redaction parity (typed redactor span-narrowing)
+This repo has TWO redaction engines that MUST stay byte-structurally identical, or a
+leak slips through one while the other reports clean:
+- `patterns.redact_all` — partial `***` mask, per-pattern sequential `re.sub`. For
+  `phone_us_bare_contextual` the masker (`_mask_phone_bare_contextual`) rewrites ONLY
+  the trailing digit run and PRESERVES the cue/gap prefix.
+- `typed_placeholder_redactor.detect_and_redact_typed` — bare `[TYPE]` label
+  (RAG-ingest / at-rest / e11 returned-document). It collects ALL matches then MERGES
+  overlapping spans (longest span wins the placeholder) and WHOLE-SPAN replaces.
+GOTCHA: when you BROADEN a context-gated pattern whose match span includes a cue/gap
+(e.g. `phone_us_bare_contextual`'s `[^\d\n]{0,40}?` gap between the contact verb and
+`at/on`), the typed engine's whole-span replace + longest-span-wins merge will SWALLOW
+any nested PII match sitting in that gap — e.g. `contact <email>, call back on <phone>`
+collapses to `[PHONE]`, dropping `[EMAIL]`. Fix = narrow the typed engine's collected
+span for that type to the VALUE sub-match (re-search `_BARE_PHONE_10_SPLIT` inside the
+match), mirroring `_mask_phone_bare_contextual`. After ANY patterns.py span change run
+BOTH `test_e11_egress_default_path` (typed/at-rest) AND `tests/leakhunt/test_b4_*`
+(chat-vs-embed differential) — e10/leakhunt alone won't catch a typed-engine swallow.

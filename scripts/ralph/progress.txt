@@ -751,3 +751,40 @@
   passes:false; next iteration (deps B3 already pass) should unify QueryStage's redactor
   with _scan_redact_embedding_inputs and re-run test_e10_query_redaction. Root cause is
   a DETECTION asymmetry (ingest scan misses the bare phone), NOT the B1 verdict-drop.
+
+- 2026-06-29 B4-unify-redaction-paths LANDED (gate green) — picked up prior WIP
+  (uncommitted patterns.py phone broadening + B4 leakhunt/e10 tests) and found it
+  REGRESSED test_e11_egress_default_path (deterministic, isolation-confirmed). ROOT
+  CAUSE: TWO redaction engines diverged on the bare-contextual phone SPAN. The
+  broadened phone_us_bare_contextual (gap [^\d\n]{0,40}? between cue verb and at/on)
+  now matches a span that crosses a nested email ("contact <email>, call back on
+  <phone>"). patterns.redact_all is safe — _mask_phone_bare_contextual rewrites ONLY
+  the trailing digit run, preserving the cue/gap (so the email survives + is masked by
+  its own pass). But typed_placeholder_redactor.detect_and_redact_typed (the RAG-ingest
+  / at-rest + e11 returned-document engine) replaces the WHOLE match with [PHONE]; in
+  its overlap-MERGE step the longer phone span swallowed the nested email span
+  (dominant=longest) -> [EMAIL] dropped. FIX (the B4 thesis = identical redaction across
+  paths): narrow the typed redactor's phone_us_bare_contextual span to the trailing
+  phone value (re-search _BARE_PHONE_10_SPLIT within the match, mirroring
+  _mask_phone_bare_contextual) so the cue/gap — and any nested PII in it — is NOT
+  consumed. Now both engines redact structurally identically: chat/embed -> "...call
+  back on ***-***-4991", typed/at-rest -> "...call back on [PHONE]", email preserved as
+  [EMAIL] in both. Added regression cell
+  test_typed_placeholder_redactor::test_bare_contextual_phone_does_not_swallow_nested_email.
+  Gates green: leakhunt 93/1, e10+e11+b4 differential 61/1, typed 14, leakhunt+typed+rag
+  122/1. Independent oracle (aidefence_has_pii) over typed egress = hasPII:false; over RAW
+  = hasPII:true (true-negative, egress=truth). FP-safe (order-id/revenue/"call N
+  customers" untouched) + ReDoS-safe (200k input 3ms, bounded negated class). The 33
+  other broad-run failures (bedrock_logger/routing, context_guard, mcp_sandbox[Docker],
+  live_uvicorn, phase5/6 correlation, org_tpm, policy_check, stream_governance) are
+  PRE-EXISTING combined-run global-mutation artifacts — IDENTICAL count with my source
+  changes stashed (proven via git-stash) — pass individually, NOT caused by B4.
+  PATTERN (multi-engine redaction parity): this repo has TWO redaction engines that must
+  stay byte-structurally identical — patterns.redact_all (partial *** mask, per-pattern
+  sequential re.sub, prefix-preserving for contextual phone) AND typed_placeholder_redactor
+  (bare [TYPE] label, collect-all-matches + overlap-MERGE, whole-span replace). When you
+  BROADEN a context-gated pattern whose match span includes a cue/gap (contextual phone,
+  secret-assignment), the typed engine's whole-span replace + longest-span-wins merge will
+  SWALLOW any nested PII match in the gap. Mirror the partial-masker's value-narrowing in
+  the typed engine so a broadened span can't drop a nested placeholder. Always run BOTH
+  e11 (typed/at-rest) AND the leakhunt differential after a patterns.py span change.

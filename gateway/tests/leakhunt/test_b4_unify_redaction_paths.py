@@ -123,6 +123,48 @@ async def test_b4_intentional_passthrough_kept_identically(item, real_scanner, m
     assert chat_out == embed_out
 
 
+# ── Cued-phone path-divergence regression (the B4 leak the rigor round flagged):
+#    a bare 10-digit phone behind a contact cue that is SPLIT from the number by
+#    object words ("call THE CUSTOMER BACK at 8929554991") or by other PII ("reach
+#    me at <email> OR ON 8929554991") was masked by the RAG-QUERY path's blanket
+#    digit backstop but rode RAW on the embeddings / RAG-ingest path (whose backstop
+#    only masks runs the firewall already removed) — a redaction DIVERGENCE = leak.
+#    The fix broadened patterns.py ``phone_us_bare_contextual`` so redact_all itself
+#    masks these (detection symmetry), so both paths now scrub identically. Driven
+#    against the captured wire bytes, cross-checked with the independent oracle. ──
+@pytest.mark.parametrize(
+    "prompt, raw_phone",
+    [
+        ("call the customer back at 8929554991 today", "8929554991"),
+        ("call back the customer at 8929554991 about the ticket", "8929554991"),
+        ("reach me at bob@corp.example or on 8929554991 for the report", "8929554991"),
+    ],
+    ids=["verb-object-back-at", "verb-back-object-at", "cue-split-by-email-or-on"],
+)
+@pytest.mark.asyncio
+async def test_b4_cued_phone_no_path_divergence(prompt, raw_phone, real_scanner, monkeypatch):
+    chat_provider = RecordingProvider().install(monkeypatch)
+    chat_out = await _chat_egress_text(prompt, real_scanner, chat_provider)
+    embed_provider = RecordingProvider().install(monkeypatch)
+    embed_out = await _embed_egress_text(prompt, embed_provider)
+
+    assert embed_out is not None, "cued phone unexpectedly fail-closed on embedding"
+    # Egress = truth: the raw phone is on NEITHER wire (the leak the flag described).
+    assert raw_phone not in chat_out, (
+        f"chat egress leaked raw cued phone; oracle="
+        f"{independent_pii_scan(chat_provider.wire_blob)!r}"
+    )
+    assert raw_phone not in embed_out, (
+        f"embedding/RAG-ingest egress leaked raw cued phone (path divergence); oracle="
+        f"{independent_pii_scan(embed_provider.wire_blob)!r}"
+    )
+    # No divergence: both paths scrub byte-identically (the B4 unification invariant).
+    assert chat_out == embed_out, (
+        f"cued-phone redaction DIVERGED across paths:\n"
+        f"  chat : {chat_out!r}\n  embed: {embed_out!r}"
+    )
+
+
 # ── Embeddings and RAG-ingest share the SAME redaction helper (no divergent copy):
 #    the RAG write path resolves ``_scan_redact_embedding_inputs`` via getattr on the
 #    gateway ``main`` module, so /v1/embeddings and RAG-ingest content redact through

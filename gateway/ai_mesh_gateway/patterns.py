@@ -124,12 +124,25 @@ PII_PATTERNS: Dict[str, str] = {
     # cue ("please call me at 89295 54991" — the G0 5+5 leak) are also masked.
     # Context-gating is unchanged, so order-id / revenue runs (no phone cue) are
     # still untouched.
+    # B4 (path-divergence leak): the imperative branch required the contact verb to
+    # IMMEDIATELY precede "at/on" (optionally "me/us back"), so natural object words
+    # ("call THE CUSTOMER BACK at 8929554991", "call BACK THE CUSTOMER at ...") and a
+    # cue split across the sentence ("reach me at bob@corp.example OR ON 8929554991")
+    # slipped through — the bare phone then egressed RAW at the RAG-ingest / embeddings
+    # path (whose backstop only masks runs the firewall already removed) while the
+    # QUERY path's blanket digit backstop masked it, a redaction DIVERGENCE between the
+    # two embedding paths. The gap is now a BOUNDED, DIGIT-FREE, single-line lazy run
+    # (``[^\d\n]{0,40}?``): still gated on a contact verb + "at/on" + a 10-digit value,
+    # so order-id / revenue runs (no contact verb) stay untouched, and because the gap
+    # contains no digits the trailing phone is the only maskable run in the span. The
+    # quantifier is bounded over a negated char class (no nested repeat) — LINEAR-time.
     "phone_us_bare_contextual": (
         r"(?:"
         # "phone/mobile/cell/tel [number] is/:" 8929554991
         r"\b(?:phone|mobile|cell|tel(?:ephone)?)\s*(?:number|no\.?|#)?\s*(?:is|:)\s*"
-        # imperative contact: "call/text/dial/ring/sms/reach/contact (me/us) (back) at/on" 8929554991
-        r"|\b(?:call|text|dial|ring|sms|reach|contact|phone)\s+(?:me\s+|us\s+)?(?:back\s+)?(?:at|on)\s+"
+        # imperative contact: "call/text/dial/ring/sms/reach/contact ...<=40 non-digit
+        # chars, same line...> at/on" 8929554991
+        r"|\b(?:call|text|dial|ring|sms|reach|contact|phone)\b[^\d\n]{0,40}?\b(?:at|on)\s+"
         # possessive: "my/the [phone/mobile/cell] number/no/# [is]" 8929554991
         r"|\b(?:my|the)\s+(?:phone\s+|mobile\s+|cell\s+)?(?:number|no\.?|#)\s+(?:is\s+)?"
         r")" + _BARE_PHONE_10_SPLIT + r"\b"
