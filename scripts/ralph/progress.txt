@@ -699,3 +699,44 @@
   oracle (aidefence_has_pii) agrees on the captured bytes AND fires on the raw control. Three oracles
   (patterns.py under test, rig's independent_pii_scan, aidefence) converging on the SAME captured
   egress is the standard for "egress=truth proven".
+- rigor-verified: B1-attestation-byte-verify 2026-06-29 — re-proved egress=truth and
+  found a REAL gap the router-level cells miss. The 7 existing B1 cells hand-feed an
+  already-correct redacted_content to LLMRouter.acompletion, so they prove the ROUTER
+  honors a good verdict but NOT that main.py PRODUCES one. main.py's chat path called
+  INPUT_SCANNER.redact_pii(effective_prompt) WITHOUT the verdict (main.py:6250 redact
+  branch + 6264 flag branch). redact_pii degrades to plain redact_all when verdict is
+  None (scanner.py:854), dropping redact_evidence_digit_spans — so a Tier-2-flagged
+  bare digit run the deterministic regexes miss (e.g. an account number "4480293185")
+  rode RAW to the provider while verdict.action=="redact" (phantom redaction). The
+  embeddings egress path (main.py:3203) already passed verdict=verdict; chat now
+  matches. FIX: redact_pii(effective_prompt, verdict=verdict) at both call sites.
+  Added DURABLE end-to-end cell test_b1_chat_endpoint_honors_tier2_evidence_digit_span:
+  reuses the SDK harness _make_sdk_app (real ASGI app + auth), stubs scan_prompt to
+  return a Tier-2-evidence verdict, captures the redacted_prompt main.py forwards to
+  acompletion, asserts the raw bare-digit span is absent. Verified RED→GREEN (reverting
+  the fix → raw 4480293185 egresses → assertion fails). Gate: leakhunt 90 passed/1
+  skipped (was 89/1); SDK harness 46/2 unchanged. Independent oracle (aidefence-style
+  separate-regex independent_pii_scan) over the captured wire = clean post-fix.
+  PATTERN (verdict-scrub honesty stories): a router-unit cell that hand-feeds
+  redacted_content proves the router honors it but NOT that the CALLER produces it.
+  Always add an end-to-end cell driving the REAL endpoint (reuse test_openai_sdk_compat
+  _make_sdk_app — import it as `from ai_mesh_gateway import main as gateway_main`, the
+  SAME module identity the harness patches; flat `import main` is a DIFFERENT object so
+  monkeypatching it is invisible to the app). redact_pii(text) WITHOUT verdict ==
+  redact_all only (no Tier-2 evidence spans) — any egress redaction call must pass the
+  verdict or it silently under-redacts.
+- FLAG (real leak, B4 — set passes:false for next iteration): the broad gate
+  `ai_mesh_gateway/tests -q` surfaced a PRE-EXISTING B4 path-divergence leak (confirmed
+  failing on HEAD before my B1 change via git-stash, so NOT caused by B1). Tests:
+  test_e10_query_redaction.py::test_query_redaction_matches_embeddings_ingest_path
+  [call the customer back at 8929554991 today] and [reach me at bob@corp.example or on
+  8929554991 ...], plus test_e10_embeddings_scan.py::test_scan_redact_helper_blocks_
+  unmaskable_pii. Within ONE process the QUERY path (QueryStage) masks the bare
+  contiguous phone 8929554991 -> ***-***-4991, but the INGEST path
+  (main._scan_redact_embedding_inputs) forwards it RAW — the ingest scan doesn't flag
+  the bare phone (weaker than QueryStage), so redacted_content==redact_all(text) and the
+  digit backstop no-ops. This violates B4's "byte-identical redaction across paths" /
+  "nothing raw at rest" acceptance, so B4's passes:true is not rigor-true. Flipped B4
+  passes:false; next iteration (deps B3 already pass) should unify QueryStage's redactor
+  with _scan_redact_embedding_inputs and re-run test_e10_query_redaction. Root cause is
+  a DETECTION asymmetry (ingest scan misses the bare phone), NOT the B1 verdict-drop.
