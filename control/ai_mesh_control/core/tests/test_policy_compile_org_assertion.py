@@ -77,7 +77,14 @@ class PolicyCompileOrgAssertionTests(TestCase):
         compiler.push_to_redis.assert_not_called()
 
     def test_superuser_may_compile_explicit_other_org(self):
+        from auth.models import UserProfile
+
         compiler = self._mock_compiler()
+        profile, _ = UserProfile.objects.get_or_create(user=self.superuser)
+        profile.is_platform_operator = True
+        profile.save(update_fields=["is_platform_operator"])
+        self.superuser.is_staff = True
+        self.superuser.save(update_fields=["is_staff"])
         client = APIClient()
         client.force_authenticate(user=self.superuser)
         resp = client.post(f"/api/policies/compile/?organization_id={self.org_b.id}")

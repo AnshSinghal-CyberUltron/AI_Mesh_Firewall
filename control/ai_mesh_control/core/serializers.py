@@ -352,6 +352,22 @@ class KillSwitchCreateSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+        if model_name == KillSwitch.SCOPE_CREDENTIAL and not api_key_prefix:
+            raise serializers.ValidationError(
+                {
+                    "api_key_prefix": (
+                        "API key prefix is required when model_name is '__credential__'."
+                    )
+                }
+            )
+        if model_name == KillSwitch.SCOPE_CREDENTIAL and action == "reroute":
+            raise serializers.ValidationError(
+                {
+                    "action": (
+                        "Credential-wide kill-switches cannot use reroute; use disable."
+                    )
+                }
+            )
         request = self.context.get("request")
         # Duplicate guard: the DB has unique_together (organization, model_name,
         # api_key_prefix), but `organization` is NOT a serializer field (it is

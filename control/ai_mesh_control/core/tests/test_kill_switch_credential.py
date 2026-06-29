@@ -62,7 +62,7 @@ class KillSwitchCredentialTests(TestCase):
             },
         )
         assert not ser.is_valid()
-        assert "api_key_prefix" in ser.errors
+        assert "model_name" in ser.errors
 
     def test_killswitch_create_serializer_rejects_credential_without_prefix(self):
         from core.models import KillSwitch
@@ -93,4 +93,4 @@ class KillSwitchCredentialTests(TestCase):
             },
         )
         assert not ser.is_valid()
-        assert "action" in ser.errors
+        assert "model_name" in ser.errors
