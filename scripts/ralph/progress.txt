@@ -8,6 +8,18 @@
 - RAG ingest stores documents + metadata in the vector store and metadata flows into generator prompts; rag_redaction_enabled defaults False (story B5). RAG embed/grounding are fail-closed via assume_redacted=True — but that checks the FLAG not the bytes (story B1/B4).
 - DETECTOR-COVERAGE pattern (B2): to broaden a CONTEXT-GATED patterns.py detector without new FPs, swap ONLY the trailing VALUE sub-pattern and keep the cue/prefix alternation intact; FP-safety is then preserved by construction (no cue ⇒ no match). Factor the value into a module const (e.g. `_BARE_PHONE_10_SPLIT`), reference it in BOTH the PII_PATTERNS entry and its masker, and have the masker `re.sub(r"\\D","",...)` before formatting so split separators don't break last-4 extraction. Bound the total digit count + trailing `\b` so a longer numeric id can't be partially masked.
 
+- UNIFIED-EGRESS-REDACTOR pattern (B4): there is ONE deterministic egress redactor —
+  `llm_router._redact_text_with_backstop(text, redacted_content)` — and the chat, operator-simulator
+  (Module-1.1 IS the chat path), responses, /v1/embeddings, RAG-ingest, AND _scan_redact_metadata
+  paths ALL funnel through it. `redacted_content` MUST be the firewall-authoritative `InputScanner.redact_pii`
+  output (== `patterns.redact_all` + Tier-2 evidence-digit-spans). The backstop masks ONLY digit runs the
+  firewall REMOVED (run absent from redacted_content but present on the wire) — so order-ids the firewall
+  KEPT are never over-redacted and a separator-split phone the firewall masked can never ride raw
+  (egress=truth). To add a new egress surface, call this helper with red_pii as the reference; never
+  re-implement a blanket "mask all \d{7,}" backstop (it diverges + over-redacts). Fail-closed: if
+  `_detected and redacted==text`, block (PII detected but unmaskable). bedrock_inference.py is ONLY
+  model-selection helpers, NOT an inference path.
+
 ## Environment / harness gotchas (discovered this repo)
 - Gateway tests run with the gateway venv: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q` (PYTHONPATH may need the shared/ + ai_mesh_gateway dirs). Plain `python` may not have deps.
 - control container: WorkingDir is /app/control/ai_mesh_control (so daphne can import main_app); manage.py lives one level up, so exec it with `-w /app/control -e PYTHONPATH=/app/control/ai_mesh_control`. Recreate control with explicit `-f docker-compose.yml -f docker-compose.override.yml` (default discovery drops the working_dir override).
@@ -282,3 +294,22 @@
   PATTERN (recorded at top): broaden a context-gated detector by swapping ONLY the trailing value
   sub-pattern (keep the cue alternation) so FP-safety is preserved by construction; mask via the SAME
   sub-pattern + \D strip. Unblocks B5 (depends on A2+B2).
+
+- 2026-06-29 B4-unify-redaction-paths PASSES (gate green). ROOT-CAUSE unification:
+  `_scan_redact_embedding_inputs` (main.py:~3152 — the SINGLE redactor for /v1/embeddings,
+  RAG-ingest content, AND _scan_redact_metadata) now delegates to the chat/simulator egress
+  redactor `llm_router._redact_text_with_backstop(text, red_pii)` instead of its own blanket
+  "mask every \d{7,} run on a redaction no-op" backstop. WHY: the old blanket backstop
+  over-redacted order-id-shaped bare-10-digit numbers (no phone cue) that the chat path
+  deliberately KEEPS (egress=truth: mask only runs the firewall removed) — so embeddings and
+  chat DIVERGED on the corpus's `bare10_no_cue` intentional pass-through. redact_pii ==
+  redact_all + Tier-2 evidence-digit-spans, so using red_pii as the egress-truth reference is
+  strictly safe (Tier-2 spans honored transitively; fail-closed block preserved). Differential
+  gate: gateway/tests/leakhunt/test_b4_unify_redaction_paths.py drives REAL egress (RecordingProvider
+  captures wire bytes) and asserts chat==embed byte-identical over the whole corpus + intentional
+  passthrough kept identically + ingest-metadata==embedding + clean-text not over-redacted +
+  fail-closed parity. Gate: `cd gateway && ./.venv/bin/python -m pytest tests/leakhunt -q` ->
+  84 passed, 1 skipped. The simulator IS the chat path (operator Module-1.1 -> LLM_ROUTER.acompletion);
+  there is no separate simulator inference handler — bedrock_inference.py is only model-SELECTION
+  helpers. Pre-existing full-suite failures (live_uvicorn/phase5/phase6/policy_check/stream_governance/
+  org_tpm/mcp_sandbox) PROVEN independent: identical failure set with the main.py edit git-stashed.
