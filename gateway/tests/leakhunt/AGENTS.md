@@ -72,6 +72,20 @@ live-fleet capture — it is NOT part of this pytest suite.
   simulator handler. Identity-of-callable across `import main` vs
   `from ai_mesh_gateway import main` is UNRELIABLE in this env (two module instances) —
   assert functional equivalence (`__qualname__` + byte-identical output), not `is`.
+- B1 END-TO-END cell (`test_b1_chat_endpoint_honors_tier2_evidence_digit_span`): the
+  router-level B1 cells hand-feed an already-correct `redacted_content` to
+  `acompletion`, so they prove the ROUTER honors a good verdict but NOT that main.py
+  PRODUCES one. To test the CALLER, reuse the SDK harness
+  (`from ai_mesh_gateway.tests import test_openai_sdk_compat as H`; call
+  `H._make_sdk_app(monkeypatch, redis_client=None)` for a real ASGI app + auth), stub
+  `INPUT_SCANNER.scan_prompt` (+ `scan_prompt_with_tier2`) to return a Tier-2-evidence
+  `ScanVerdict`, and patch `LLM_ROUTER.acompletion` to CAPTURE the `redacted_prompt`
+  main.py forwards. CRITICAL: patch on the SAME module object the harness patches —
+  `from ai_mesh_gateway import main as gateway_main` (flat `import main` is a different
+  instance; its `INPUT_SCANNER` is None and the patch is invisible). Root invariant the
+  cell guards: ANY egress redaction call must pass `verdict=` — `redact_pii(text)`
+  without it == plain `redact_all` (scanner.py:854), silently dropping
+  `redact_evidence_digit_spans` for Tier-2-flagged bare digit runs.
 - B5 LANDED: `test_b5_rag_at_rest.py` is the AT-REST gate (G2) — nothing raw is
   embedded/stored in the vector store (documents OR metadata). It drives the EXACT
   redaction rag_ingest funnels every doc+metadata through before `client.add()`
