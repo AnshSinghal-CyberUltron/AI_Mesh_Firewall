@@ -67,6 +67,28 @@ def test_redact_all_masks_5plus5_behind_cue():
     assert "89295" not in out and "54991" not in out
 
 
+def test_redact_all_masks_intl_5_5_grouping():
+    """B2 rigor: a 5+5 grouped international mobile ("+91 98765 43210", India/EU) is
+    masked by phone_intl. The grouped branch previously capped groups at 4 digits, so
+    this common format leaked raw even though the docstring claimed coverage."""
+    out = redact_all("my mobile is +91 98765 43210 today")
+    assert "98765 43210" not in out
+    assert "98765" not in out and "43210" not in out
+    # documented sibling (2-2-4-4) must still mask
+    assert "7946 0958" not in redact_all("+44 20 7946 0958 office")
+
+
+@pytest.mark.parametrize("text", [
+    "order 98765 43210 shipped",          # spaced groups, NO '+' => order id
+    "Q3 revenue 91 98765 43210 in local", # leading country-ish digit but NO '+'
+    "sku 12345 67890 reconciled",         # 5+5 with no '+' => part id
+])
+def test_intl_widening_does_not_over_redact(text):
+    """The phone_intl widening is gated on a leading '+', so spaced numeric runs that
+    are NOT international phone numbers (order ids / revenue / sku) are untouched."""
+    assert redact_all(text) == text
+
+
 @pytest.mark.parametrize("text", _FALSE_POSITIVE_SAMPLES)
 def test_order_id_revenue_untouched(text):
     """No phone cue => the ambiguous numeric run survives redaction verbatim."""

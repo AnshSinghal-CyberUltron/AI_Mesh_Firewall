@@ -68,6 +68,13 @@ _PHONES: List[PiiItem] = [
     PiiItem("phone", "cc_space_10", "+1 8929554991",
             cue="text me on ", covered=True,
             note="phone_intl \\d{1,4}[\\s-]?\\d{6,12} branch"),
+    # ── CLOSED by B2 rigor (was a silent gap): the grouped phone_intl branch capped
+    #    each group at 4 digits, so a 5+5 international mobile escaped raw even behind a
+    #    strong cue. Widened to {1,5}; the leading '+' keeps FP near-zero. ──
+    PiiItem("phone", "intl_cc_spaced_5_5", "+91 98765 43210",
+            cue="my mobile is ", covered=True,
+            note="5-digit international grouping (India/EU): phone_intl grouped "
+                 "branch widened from \\d{1,4} to \\d{1,5}"),
     # ── Ambiguous BY DESIGN — kept raw to avoid order-id false positives (NOT a bug) ──
     PiiItem("phone", "bare10_no_cue", "8929554991",
             cue="ref number ", covered=False, intentional=True,
