@@ -532,3 +532,48 @@
   frontend/: `BASE_URL=http://127.0.0.1:8180 SHOT_DIR=../runs/d5
   E2E_REPORT=../runs/playwright_output_logs.json node ../scripts/playwright_output_logs.mjs`.
   Shots+report under runs/d5 + runs/playwright_output_logs.json.
+
+- 2026-06-29 D6-ui-demo-simulators PASSES (gate green). Durable verifier
+  scripts/playwright_demo_simulators.mjs drives every live "demo" surface real-customer POV
+  -> 23/23 asserts, 6 steps, 0 pageErrors; build + 26 unit tests green. Covers HowToUse(1.1
+  expand + cURL Copy -> clipboard carries the runnable snippet), AttackSimulator(1.1
+  injection->BLOCKED / PII->REDACTED no-raw-PII / clean->ALLOWED+Paris), RAGAttackTrust(1.3
+  clean->ALLOW HTTP200 / injection->BLOCK HTTP403 + firewall block message), IsolationOps(1.6
+  Live gateway test benign->ALLOW, side-effect-free), Bedrock/guard-model(firewall-config
+  health->Available / scan injection->block / scan clean->allow). Each verdict double-checked:
+  waitForResponse captures the REAL API status, the rendered label is asserted against it,
+  raw PII never rendered.
+  TWO REAL FRONTEND HONESTY BUGS found by the real-customer browser test (NOT visible from the
+  passes flag) + root-cause fixed:
+   1. AttackSimulator mislabeled a policy BLOCK as "ERROR": the gateway returns a policy/content
+      block as HTTP 400 code=content_filter (OpenAI-compat, C1), but liveGateway.inferFinalAction
+      mapped any httpStatus>=400 (except 403/429/422) to "error", AND AttackSimulatorPanel
+      getStatusConfig returned ERROR for any 4xx regardless of the verdict. Fix:
+      (a) liveGateway.inferFinalAction -> new isContentPolicyBlock() (gated on the gateway's own
+          markers: code/err.code in {content_blocked,content_filter,blocked}, blocked_by!=rate_limit,
+          category includes policy/violation) returns "block" before the generic 4xx->error
+          fallthrough; a genuine validation 400 (missing model param) still -> error.
+      (b) AttackSimulatorPanel.getStatusConfig: exclude action in {block,redact,flag} from the
+          4xx->ERROR branch so a verdict wins. Proven live: injection now reads BLOCKED (was ERROR).
+   2. RAGAttackTrust CRASHED the result subtree on a real injection BLOCK: the gateway's RAG 403
+      body carries `error` as a nested OpenAI envelope OBJECT ({message,type,param,code}); the panel
+      rendered `{result.body.error}` (and trust-tab `body?.error`) directly -> React "Objects are not
+      valid as a React child" -> no HTTP-403 badge, no honest block shown. Fix: errorToText() coercer
+      (string->as-is, object->.message||JSON.stringify) at the Attack render site + the Trust handler.
+      The flagship "RAG Query Injection" attack now honestly shows HTTP 403 + the firewall block msg.
+  GOTCHAS (added to frontend/AGENTS.md):
+   * Module simulators auto-provision a per-org gateway key via POST /api/gateways/simulator-default/
+     (AttackSim/Isolation = useSimulatorEngine, RAG = useGatewayCredential -> "Auto key" chip). To
+     drive deterministically, pre-seed localStorage in the page: zeroshield_gateway_key:{orgId}=key +
+     zeroshield_simulator_model=<eligible model>; AttackSim/Isolation also need >=1 eligible model
+     (active + usable key) from /api/firewall/models/ or Run shows "Connect a model".
+   * Gateway policy/content blocks are HTTP 400 code=content_filter on THIS gateway (content-block
+     status is enabled), NOT 403 — any UI that maps "block" off 403-only is wrong; gate off the body
+     markers. RAG-query blocks ARE 403 (different handler).
+   * Bedrock/guard-model test panel (ZeroShieldGuardModelTestPanel) lives on ?tab=firewall-config
+     (ZeroShieldTestCard), POSTs /api/admin/gateway/bedrock-test/ {check_health:true} | {prompt}.
+   * Real-customer browser tests must run when the parallel mcp-frontend campaign is quiet — it
+     saturates the single control process and bounces sessions to /login; gotoTab() re-seeds+retries.
+  Run: cd frontend && BASE_URL=http://127.0.0.1:8180 SHOT_DIR=../runs/d6 \
+       E2E_REPORT=../runs/playwright_demo_simulators.json node ../scripts/playwright_demo_simulators.mjs
+  ALL D1-D6 UI stories pass. Every prd.json story now passes:true.

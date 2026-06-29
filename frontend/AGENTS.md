@@ -46,3 +46,26 @@
 - Register CRUD in tests: prefer transport=**stdio** (command `npx` + args). streamable-http register
   is gated by an SSRF guard that requires DNS resolution to succeed → public hosts 400 from inside the
   control container. tool-call request body is `{name, arguments, server_slug}` (NOT `tool_name`).
+
+## Module-1 live simulators (D6) — verdict honesty
+- A gateway policy/CONTENT block is **HTTP 400 `code=content_filter`** on this gateway (OpenAI-compat
+  content-block status is on), NOT 403. Any verdict mapping that keys "block" off 403-only mislabels it.
+  `liveGateway.inferFinalAction` now treats a 4xx with the gateway's block markers (code/err.code in
+  {content_blocked,content_filter,blocked}, `blocked_by`!=rate_limit, category includes policy/violation)
+  as `block` before the generic 4xx→error fallthrough; a plain validation 400 still → error. Keep that
+  invariant: a firewall verdict must win over "it's a 4xx so it's an error". `/v1/rag/query` blocks ARE
+  403 (separate handler).
+- Gateway error bodies carry `error` as a STRING **or** a nested OpenAI object `{message,type,param,code}`.
+  Never render `{body.error}` directly — React throws "Objects are not valid as a React child" and crashes
+  the result subtree (a real block then shows NOTHING). Coerce with a helper (string→as-is,
+  object→`.message||JSON.stringify`). See `errorToText` in RAGAttackTrustSimulator.jsx.
+- Simulators auto-provision a per-org gateway key: AttackSim/Isolation via `useSimulatorEngine`
+  (`POST /api/gateways/simulator-default/`, localStorage `zeroshield_gateway_key:{orgId}`), RAG via
+  `useGatewayCredential` (shows an "Auto key" chip when ready). AttackSim/Isolation also require ≥1
+  *eligible* model (active + usable key) from `/api/firewall/models/`. For a deterministic browser gate,
+  pre-seed `zeroshield_gateway_key:{orgId}` + `zeroshield_simulator_model` in localStorage before nav.
+- Bedrock/guard-model test panel = `ZeroShieldGuardModelTestPanel` on `?tab=firewall-config`
+  (`ZeroShieldTestCard`), POSTs `/api/admin/gateway/bedrock-test/` with `{check_health:true}` or `{prompt}`.
+  Buttons: "Check Health" / "Send Test"; result cell "Recommended Action" = block|flag|allow.
+- Durable gate: `scripts/playwright_demo_simulators.mjs` (run from frontend/). Double-checks each verdict:
+  `waitForResponse` captures the real API status AND asserts the on-screen label; raw PII never rendered.

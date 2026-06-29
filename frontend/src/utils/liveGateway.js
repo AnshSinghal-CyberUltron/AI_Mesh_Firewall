@@ -302,6 +302,34 @@ const INFERENCE_SETUP_CODES = new Set([
   "bedrock_model_not_configured",
 ]);
 
+// Codes the gateway returns when a firewall POLICY/CONTENT decision (not a system
+// fault) stops the request. OpenAI-SDK-compat maps a policy block to HTTP 400 with
+// code "content_filter"/"content_blocked" (see C1 error-envelope work), so a naive
+// `httpStatus >= 400 -> error` would mislabel a real BLOCK as a system ERROR.
+const POLICY_BLOCK_CODES = new Set(["content_blocked", "content_filter", "blocked"]);
+
+/**
+ * True when a 4xx body is a deliberate firewall content/policy block rather than a
+ * malformed-request / system error. Gated on the gateway's own block markers
+ * (code, nested error.code, blocked_by, policy-violation category) so a genuine
+ * validation 400 (e.g. missing model param) still resolves to "error".
+ */
+function isContentPolicyBlock(data, httpStatus) {
+  if (!data || httpStatus < 400 || httpStatus >= 500) return false;
+  const err = extractErrorPayload(data);
+  const code = String(data?.code || "").toLowerCase();
+  const errCode = String(err.code || "").toLowerCase();
+  const category = String(data?.category || "").toLowerCase();
+  const blockedBy = String(data?.blocked_by || "").toLowerCase();
+  return (
+    POLICY_BLOCK_CODES.has(code)
+    || POLICY_BLOCK_CODES.has(errCode)
+    || (blockedBy && blockedBy !== "rate_limit")
+    || category.includes("policy")
+    || category.includes("violation")
+  );
+}
+
 function inferFinalAction(data, httpStatus, zs) {
   if (data?.final_action) return data.final_action;
   const code = String(data?.code || "").toLowerCase();
@@ -312,6 +340,9 @@ function inferFinalAction(data, httpStatus, zs) {
   if (httpStatus === 429) {
     return isUpstreamProviderRateLimit(data, httpStatus) ? "error" : "block";
   }
+  // A firewall content/policy block surfaced as a 4xx (OpenAI content_filter) is a
+  // BLOCK verdict, not a system error — honor it before the generic 4xx fallthrough.
+  if (isContentPolicyBlock(data, httpStatus)) return "block";
   if (httpStatus >= 400) return "error";
   return "allow";
 }

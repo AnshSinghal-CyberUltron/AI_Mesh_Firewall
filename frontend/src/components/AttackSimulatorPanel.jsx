@@ -145,7 +145,14 @@ function getStatusConfig(httpStatus, action) {
       text: "text-violet-700 dark:text-violet-300",
     };
   }
-  if (action === "error" || (httpStatus >= 400 && httpStatus !== 403 && httpStatus !== 429 && httpStatus !== 422)) {
+  // A firewall verdict (block/redact/flag) must win over the generic 4xx->ERROR
+  // mapping: an OpenAI content_filter block returns HTTP 400 but is a real BLOCK,
+  // not a system error. Only treat a 4xx as ERROR when no verdict claims it.
+  if (
+    action === "error"
+    || (httpStatus >= 400 && httpStatus !== 403 && httpStatus !== 429 && httpStatus !== 422
+        && !["block", "redact", "flag"].includes(action))
+  ) {
     return { color: "amber", label: "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700" };
   }
   if (httpStatus === 403 || action === "block") {
