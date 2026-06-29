@@ -912,3 +912,33 @@
   warms); a warm re-run is deterministically green. If the D1 gate fails on panel-visibility,
   re-run once before treating it as a regression — direct nav to /?tab=firewall-1-1 with a
   seeded token renders the panel + "Create API Key" button in ~3s when warm.
+- rigor-verified: D2-ui-model-routing 2026-06-29 — re-proved the model/routing/kill-switch UI
+  (modules 1.5/1.6) for REAL against the live stack (Vite :8180 -> control :8100 + gateway :8300)
+  via the durable customer-POV gate scripts/playwright_model_routing.mjs. Build gate green
+  (cd frontend && npm run build, 28s). Browser run: 19/19 asserts, 0 pageErrors, screenshots
+  runs/d2/. EVERY criterion proven from the DOM + REAL API responses, not flags: 1.5 renders
+  ModelConnections+ModelGovernance+RoutingGovernance+RoutingAudit; backend GET /api/firewall/models/
+  reports 4 connected models and the first (gemma-free) is shown in the panel; Routing Governance
+  toggle FLIP -> PUT /api/firewall/config/ 2xx with savedCfg.routing_enabled==expected AND the
+  on-screen Enabled/Disabled label mirrors it, then RESTORED (side-effect free). 1.6 renders
+  ModelState+KillSwitch; create-kill-switch modal POST /api/kill-switches/ 2xx, the new row's badge
+  MATCHES the create-response is_active (honesty: badge asserted against backend truth, not
+  independently); activate/deactivate each re-checked vs live GET /api/kill-switches/ (is_active
+  true<->false both directions); DELETE -> row detached AND final GET shows it gone (cleanup).
+  Manually drove the modal via Playwright MCP to confirm ground truth: combobox "Search connected
+  models…" renders + filters to gemma-free (option selectable) — so the only failures observed were
+  ENVIRONMENTAL flakes (run-1 false-failed at the modal combobox while `npm run build` ran
+  concurrently and starved CPU; a separate run timed out on the LOGIN POST during a transient
+  control-plane slow spell). Backend was healthy throughout (curl: 4 models, 0 kill-switches,
+  token 200). DURABLE HARDENING (1-line, scoped): bumped the modal-combobox waitFor 15s->30s to
+  match the rest of the lane (the combobox only renders after the modal's connected-models GET, which
+  can exceed 15s under load) — gate green twice more after the edit (19/19). NO real product gap; D2
+  stays passes:true.
+  PATTERN (UI gate rigor / flake triage): never run `npm run build` (or any CPU-heavy job)
+  CONCURRENTLY with a playwright UI gate on this box — it starves the dev stack and false-fails the
+  tightest per-panel waitFor. If a UI gate fails at DIFFERENT points across consecutive runs (modal
+  here, login there), suspect environmental contention, NOT a deterministic regression: confirm the
+  backend is responsive (curl the API directly) + drive the failing control manually via Playwright
+  MCP before treating it as a product defect. The honesty oracle for D2 is the live GET
+  /api/kill-switches/ + PUT-response config echo — the badge/toggle label is valid ONLY if it equals
+  that backend truth.

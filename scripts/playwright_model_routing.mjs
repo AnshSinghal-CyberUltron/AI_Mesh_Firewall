@@ -169,7 +169,9 @@ async function main() {
     // target-model picker is the KillSwitchModelCombobox inside the modal (placeholder is unique to it);
     // a bare getByRole("combobox") would match a native <select> on the page behind the modal backdrop.
     const combo = page.getByPlaceholder(/search connected models/i).first();
-    await combo.waitFor({ state: "visible", timeout: 15000 });
+    // modal renders the combobox only after its connected-models GET resolves; under a loaded
+    // stack that can exceed 15s, so match the 30s used elsewhere in this lane (avoids false-fail).
+    await combo.waitFor({ state: "visible", timeout: 30000 });
     await combo.click();
     await combo.fill(firstModel);
     // scope to the combobox's own listbox (<ul role=listbox>); native <select> options also expose role=option.
