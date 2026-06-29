@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import socket
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -85,6 +86,11 @@ class DockerManager:
         safe = re.sub(r"[^a-zA-Z0-9_.-]", "_", org_slug).strip("_") or "default"
         return f"mcp_sandbox_{safe}_auth"
 
+    def org_network_name(self, org_slug: str) -> str:
+        """Per-org Docker network — sandboxes cannot reach sibling agent ports."""
+        safe = re.sub(r"[^a-zA-Z0-9_.-]", "-", org_slug).strip("-") or "default"
+        return f"mcp_sandbox_net_{safe}"
+
     def labels(self, org_slug: str) -> dict[str, str]:
         return {
             LABEL_ROLE: ROLE_VALUE,
@@ -111,14 +117,40 @@ class DockerManager:
             state = container.attrs.get("State", {}).get("Status", "stopped")
         return "running" if state == "running" else "stopped"
 
-    def agent_url(self, container: Any) -> str:
+    def agent_url(self, container: Any, org_slug: str) -> str:
         networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
-        net = networks.get(self.config.network, {})
-        ip = net.get("IPAddress") or container.attrs.get("NetworkSettings", {}).get(
-            "IPAddress", ""
-        )
+        org_net = networks.get(self.org_network_name(org_slug), {})
+        ip = org_net.get("IPAddress")
+        if not ip:
+            legacy = networks.get(self.config.network, {})
+            ip = legacy.get("IPAddress") or container.attrs.get(
+                "NetworkSettings", {}
+            ).get("IPAddress", "")
         host = ip or "127.0.0.1"
         return f"http://{host}:{self.config.agent_port}"
+
+    def _broker_container_ref(self) -> Any | None:
+        explicit = os.environ.get("MCP_BROKER_CONTAINER_NAME", "").strip()
+        if explicit:
+            try:
+                return self.client.containers.get(explicit)
+            except Exception:
+                pass
+        try:
+            return self.client.containers.get(socket.gethostname())
+        except Exception:
+            return None
+
+    def _connect_broker_to_network(self, network: Any) -> None:
+        broker = self._broker_container_ref()
+        if broker is None:
+            return
+        try:
+            network.connect(broker)
+        except Exception as exc:
+            if "already" in str(exc).lower():
+                return
+            raise
 
     def _sync_registry(self, info: SandboxContainerInfo) -> None:
         if self._registry is None:
@@ -154,12 +186,13 @@ class DockerManager:
             org_slug=org_slug,
             container_id=container.id,
             status=status,
-            agent_url=self.agent_url(container) if status == "running" else "",
+            agent_url=self.agent_url(container, org_slug) if status == "running" else "",
             name=container.name,
             created_at=created_at,
         )
 
     def ensure_network(self) -> None:
+        """Ensure the legacy shared bridge exists (broker compose attachment)."""
         try:
             self.client.networks.get(self.config.network)
         except Exception:
@@ -169,7 +202,23 @@ class DockerManager:
                 check_duplicate=True,
             )
 
+    def ensure_org_network(self, org_slug: str) -> str:
+        """Create per-org network and attach the broker so it can reach the sandbox agent."""
+        self.ensure_network()
+        name = self.org_network_name(org_slug)
+        try:
+            network = self.client.networks.get(name)
+        except Exception:
+            network = self.client.networks.create(
+                name,
+                driver="bridge",
+                check_duplicate=True,
+            )
+        self._connect_broker_to_network(network)
+        return name
+
     def _run_kwargs(self, org_slug: str) -> dict[str, Any]:
+        org_net = self.ensure_org_network(org_slug)
         volume = self.volume_name(org_slug)
         kwargs: dict[str, Any] = {
             "image": self.config.image,
@@ -185,7 +234,7 @@ class DockerManager:
                 "XDG_CACHE_HOME": "/tmp/.cache",
             },
             "volumes": {volume: {"bind": "/data/mcp-auth", "mode": "rw"}},
-            "network": self.config.network,
+            "network": org_net,
             "mem_limit": f"{self.config.memory_mb}m",
             "nano_cpus": int(self.config.cpus * 1_000_000_000),
             "pids_limit": self.config.pids_limit,
@@ -195,14 +244,16 @@ class DockerManager:
                 "/root/.npm": "rw,size=1g",
                 "/root/.cache/uv": "rw,size=512m",
             },
-            "ports": {f"{self.config.agent_port}/tcp": None},
         }
+        # Host-run broker (no container ref) needs published agent port on shared bridge.
+        if self._broker_container_ref() is None:
+            kwargs["ports"] = {f"{self.config.agent_port}/tcp": None}
+            kwargs["network"] = self.config.network
         if self.config.runtime:
             kwargs["runtime"] = self.config.runtime
         return kwargs
 
     def create_container(self, org_slug: str) -> Any:
-        self.ensure_network()
         return self.client.containers.run(**self._run_kwargs(org_slug))
 
     def ensure(self, org_slug: str) -> SandboxContainerInfo:

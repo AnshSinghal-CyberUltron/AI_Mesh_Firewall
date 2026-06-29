@@ -33,7 +33,10 @@ def _mock_container(
         "Created": "2026-06-29T12:00:00.000000000Z",
         "State": {"Status": status},
         "NetworkSettings": {
-            "Networks": {"mcp_sandbox_bridge": {"IPAddress": ip}},
+            "Networks": {
+                f"mcp_sandbox_net_{org_slug}": {"IPAddress": ip},
+                "mcp_sandbox_bridge": {"IPAddress": ip},
+            },
         },
     }
     return container
@@ -43,6 +46,7 @@ def _mock_client() -> MagicMock:
     client = MagicMock()
     client.ping.return_value = True
     client.containers.list.return_value = []
+    client.containers.get.side_effect = Exception("not found")
     client.networks.get.side_effect = Exception("not found")
     client.networks.create.return_value = MagicMock()
     client.volumes.get.side_effect = Exception("not found")

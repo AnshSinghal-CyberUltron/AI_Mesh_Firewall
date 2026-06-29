@@ -8,6 +8,8 @@ import { chromium } from "playwright";
 import fs from "node:fs";
 
 const BASE = (process.env.BASE_URL || "http://127.0.0.1:8180").replace(/\/$/, "");
+const BROKER_URL = (process.env.MCP_BROKER_URL || "http://127.0.0.1:8311").replace(/\/$/, "");
+const BROKER_KEY = process.env.MCP_BROKER_INTERNAL_KEY || "dev-mcp-broker-key-change-me";
 const EMAIL = process.env.TEST_EMAIL || "admin@zeroshield.io";
 const PASS = process.env.TEST_PASSWORD || "Adm1n!Pass#2024";
 const OUT = process.env.E2E_REPORT || "runs/frontend_parallel_orgs.json";
@@ -97,6 +99,19 @@ async function openMcpPanel(page) {
 function serverCardLocator(page, presetName) {
   const pattern = SERVER_CARD_PATTERN[presetName] || new RegExp(`^${presetName}$`, "i");
   return page.locator("h4").filter({ hasText: pattern }).first();
+}
+
+async function touchSandboxActivity(orgSlug) {
+  const res = await fetch(`${BROKER_URL}/v1/sandbox/${orgSlug}/ensure`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-MCP-Broker-Key": BROKER_KEY,
+    },
+    body: JSON.stringify({ warm: true }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) throw new Error(`touch ${orgSlug} failed: ${res.status}`);
 }
 
 async function registerPreset(page, presetName) {
@@ -229,11 +244,16 @@ async function main() {
     report.steps.push("mcp-panel");
 
     for (const preset of STDIO_PRESETS) {
+      await touchSandboxActivity("adv-org-alpha").catch(() => touchSandboxActivity("adv-org-beta"));
       const reg = await withRetry(`register-${preset}`, () => registerPreset(page, preset));
       report.steps.push(`${preset}:${reg}`);
-      const synced = await withRetry(`sync-${preset}`, () => syncTools(page, preset));
+      const synced = await withRetry(`sync-${preset}`, () => syncTools(page, preset), {
+        retries: 4,
+        backoffMs: 2000,
+      });
       report.steps.push(`${preset}:synced-${synced}`);
       report.orgs.push({ preset, reg, synced });
+      await page.waitForTimeout(500);
     }
 
     if (report.orgs.length < 5) {

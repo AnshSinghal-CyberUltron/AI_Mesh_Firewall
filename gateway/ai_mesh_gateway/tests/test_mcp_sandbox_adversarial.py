@@ -9,6 +9,7 @@ Requires Docker for full gate. Unit-style denylist tests run without Docker.
 from __future__ import annotations
 
 import asyncio
+import re
 import shutil
 import socket
 import subprocess
@@ -257,6 +258,8 @@ def broker_url(
             "-e",
             f"MCP_SANDBOX_NETWORK={SANDBOX_NETWORK}",
             "-e",
+            f"MCP_BROKER_CONTAINER_NAME={BROKER_CONTAINER_NAME}",
+            "-e",
             "MCP_SANDBOX_IDLE_TIMEOUT=3600",
             "-p",
             f"127.0.0.1:{port}:8311",
@@ -316,16 +319,25 @@ async def _prepare_org(org_slug: str) -> str:
     return container_id
 
 
-async def _rpc_get_env(org_slug: str, cfg: dict, key: str) -> str:
+async def _rpc_get_env(
+    org_slug: str,
+    cfg: dict,
+    key: str,
+    *,
+    msg_id: int | str | None = None,
+) -> str:
     from ai_mesh_gateway import mcp_sandbox_client as client
 
+    rid = msg_id if msg_id is not None else hash((org_slug, key, time.time_ns())) % 10_000_000
     rpc = await client.broker_send_jsonrpc(
         org_slug,
         cfg,
         "tools/call",
         {"name": "get_env", "arguments": {"key": key}},
-        msg_id=hash((org_slug, key)) % 10_000_000,
+        msg_id=rid,
     )
+    if "error" in rpc and "result" not in rpc:
+        raise AssertionError(f"RPC error for {org_slug}/{key}: {rpc['error']}")
     return rpc["result"]["content"][0]["text"]
 
 
@@ -613,3 +625,81 @@ async def test_parallel_2_orgs_5_servers_tools_list(broker_url: str):
             assert {"echo", "get_env"}.issubset(names)
 
     await asyncio.gather(_list_all(ORG_ALPHA), _list_all(ORG_BETA))
+
+
+def _container_ip(container_id: str, network_name: str) -> str:
+    proc = subprocess.run(
+        [
+            "docker",
+            "inspect",
+            "-f",
+            f"{{{{(index .NetworkSettings.Networks \"{network_name}\").IPAddress}}}}",
+            container_id,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert proc.returncode == 0, proc.stderr
+    ip = (proc.stdout or "").strip()
+    assert ip, f"no IP on network {network_name} for {container_id[:12]}"
+    return ip
+
+
+# --- Network isolation (Docker) ---
+
+
+def _org_network_name(org_slug: str) -> str:
+    safe = re.sub(r"[^a-zA-Z0-9_.-]", "-", org_slug).strip("-") or "default"
+    return f"mcp_sandbox_net_{safe}"
+
+
+@pytest.mark.docker
+@pytest.mark.asyncio
+async def test_network_sibling_sandbox_agent_port_not_reachable(broker_url: str):
+    """Sandboxes on per-org networks must not reach sibling :9320 agent ports."""
+    alpha_id = await _prepare_org(ORG_ALPHA)
+    beta_id = await _prepare_org(ORG_BETA)
+    beta_ip = _container_ip(beta_id, _org_network_name(ORG_BETA))
+
+    probe = (
+        "import urllib.request\n"
+        f"urllib.request.urlopen('http://{beta_ip}:9320/health', timeout=3)"
+    )
+    proc = subprocess.run(
+        [
+            "docker",
+            "exec",
+            alpha_id,
+            "python",
+            "-c",
+            probe,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert proc.returncode != 0, (
+        f"{ORG_ALPHA} reached {ORG_BETA} agent at {beta_ip}:9320: {proc.stdout}"
+    )
+
+
+@pytest.mark.docker
+@pytest.mark.asyncio
+async def test_network_concurrent_cross_org_rpc_hammer(broker_url: str):
+    """Concurrent tools/call across 2 orgs must not cross-leak env markers."""
+    for org in ORGS:
+        await _prepare_org(org)
+
+    async def _hammer(org: str, idx: int) -> str:
+        cfg = _org_server_configs(org)[idx % SERVERS_PER_ORG]
+        return await _rpc_get_env(org, cfg, "ORG_ONLY_MARKER", msg_id=f"hammer-{org}-{idx}")
+
+    markers = await asyncio.gather(
+        *[_hammer(ORG_ALPHA, i) for i in range(10)],
+        *[_hammer(ORG_BETA, i) for i in range(10)],
+    )
+    alpha_markers = markers[:10]
+    beta_markers = markers[10:]
+    assert all(m == f"marker-{ORG_ALPHA}" for m in alpha_markers)
+    assert all(m == f"marker-{ORG_BETA}" for m in beta_markers)

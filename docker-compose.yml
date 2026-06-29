@@ -248,7 +248,9 @@ services:
       MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-dev-mcp-broker-key-change-me}
       MCP_SANDBOX_IMAGE: ai-mesh/mcp-sandbox:latest
       MCP_SANDBOX_NETWORK: mcp_sandbox_bridge
-      MCP_SANDBOX_IDLE_TIMEOUT: ${MCP_SANDBOX_IDLE_TIMEOUT:-600}
+      MCP_SANDBOX_IDLE_TIMEOUT: ${MCP_SANDBOX_IDLE_TIMEOUT:-3600}
+      MCP_BROKER_CONTAINER_NAME: ai_mesh_mcp_broker
+    container_name: ai_mesh_mcp_broker
     networks:
       - default
       - mcp_sandbox_bridge

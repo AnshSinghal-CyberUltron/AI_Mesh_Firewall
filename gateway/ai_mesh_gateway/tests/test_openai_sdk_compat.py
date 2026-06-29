@@ -454,6 +454,59 @@ async def test_responses_streaming_events_and_text(sdk_client):
 
 
 @pytest.mark.asyncio
+async def test_responses_mid_stream_failure_surfaces_typed_response_failed(monkeypatch):
+    """C3 rigor: an upstream failure that occurs AFTER the stream has started must
+    surface to the STOCK ``openai`` SDK as a terminal, parsed ``response.failed``
+    typed event (status=failed, .response.error populated) — never a false
+    ``response.completed`` and never a parse error in the SDK. The unit-level
+    translator tests assert the raw bytes; this drives the real SDK over ASGI to
+    prove the SDK actually decodes ``response.failed`` into a typed event."""
+    from ai_mesh_gateway import main as gateway_main
+
+    app, auth_redis = await _make_sdk_app(monkeypatch, redis_client=None)
+
+    async def _failing_stream(body, redacted_prompt=None, metrics=None, **kwargs):
+        # First a legitimate content delta, then a mid-stream output block.
+        yield (
+            'data: {"id":"chatcmpl-x","object":"chat.completion.chunk","created":1,'
+            '"model":"gpt-4o-mini","choices":[{"index":0,'
+            '"delta":{"role":"assistant","content":"partial "},"finish_reason":null}]}\n\n'
+        )
+        yield (
+            'data: {"error":{"message":"Output blocked by guardrail.",'
+            '"type":"output_blocked","code":"output_blocked"}}\n\n'
+        )
+        if metrics is not None:
+            metrics.completed = True
+        yield "data: [DONE]\n\n"
+
+    monkeypatch.setattr(gateway_main.LLM_ROUTER, "acompletion_stream", _failing_stream)
+
+    client = _stock_client(app)
+    try:
+        stream = await client.responses.create(
+            model="gpt-4o-mini", input="Stream me something.", stream=True,
+        )
+        events = []
+        async for event in stream:  # must iterate cleanly, no SDK decode error
+            events.append(event)
+    finally:
+        await client.close()
+        await auth_redis.aclose()
+
+    types = [getattr(e, "type", None) for e in events]
+    assert "response.completed" not in types, f"phantom completion on block: {types}"
+    assert types[-1] == "response.failed", f"terminal event must be response.failed: {types}"
+    failed = events[-1]
+    # The SDK parsed it into a typed ResponseFailedEvent with a populated error.
+    assert failed.response.status == "failed"
+    err = failed.response.error
+    assert err is not None
+    # output_text must be empty — never leak the partial content as the result.
+    assert (failed.response.output_text or "") == ""
+
+
+@pytest.mark.asyncio
 async def test_responses_blocked_non_stream_raises_bad_request_error(sdk_client):
     """Responses path coerces chat content-blocks into nested OpenAI errors for the
     SDK. D-a: content-category blocks are 400/content_filter -> BadRequestError."""

@@ -23,6 +23,7 @@ def _mock_container(
     ip: str = "172.28.0.42",
     created: str = "2026-06-29T12:00:00.000000000Z",
 ) -> MagicMock:
+    org_net = f"mcp_sandbox_net_{org_slug}"
     container = MagicMock()
     container.id = container_id
     container.name = f"mcp-sandbox-{org_slug}"
@@ -32,6 +33,7 @@ def _mock_container(
         "State": {"Status": status},
         "NetworkSettings": {
             "Networks": {
+                org_net: {"IPAddress": ip},
                 "mcp_sandbox_bridge": {"IPAddress": ip},
             },
         },
@@ -43,6 +45,7 @@ def _mock_client() -> MagicMock:
     client = MagicMock()
     client.ping.return_value = True
     client.containers.list.return_value = []
+    client.containers.get.side_effect = Exception("not found")
     client.networks.get.side_effect = Exception("not found")
     client.networks.create.return_value = MagicMock()
     client.volumes.get.side_effect = Exception("not found")
@@ -83,6 +86,7 @@ def test_ensure_creates_container_when_missing(manager: DockerManager):
     assert run_kwargs["nano_cpus"] == 500_000_000
     assert run_kwargs["pids_limit"] == 128
     assert run_kwargs["ports"] == {"9320/tcp": None}
+    assert run_kwargs["network"] == "mcp_sandbox_bridge"
     assert run_kwargs["environment"]["ORG_SLUG"] == "acme"
     assert info.status == "running"
     assert info.container_id == created.id
@@ -178,11 +182,13 @@ def test_ensure_network_created_once(manager: DockerManager):
 
     manager.ensure("acme")
 
-    manager.client.networks.create.assert_called_once_with(
-        "mcp_sandbox_bridge",
-        driver="bridge",
-        check_duplicate=True,
-    )
+    manager.client.networks.create.assert_called()
+    created_names = [c.args[0] for c in manager.client.networks.create.call_args_list]
+    assert "mcp_sandbox_net_acme" in created_names
+
+
+def test_per_org_network_name(manager: DockerManager):
+    assert manager.org_network_name("adv-org-alpha") == "mcp_sandbox_net_adv-org-alpha"
 
 
 def test_config_from_env(monkeypatch: pytest.MonkeyPatch):

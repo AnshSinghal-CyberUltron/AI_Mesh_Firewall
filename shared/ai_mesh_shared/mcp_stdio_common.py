@@ -18,6 +18,8 @@ LOG = logging.getLogger("ai_mesh_shared.mcp_stdio_common")
 # shared key and impersonate the backend for OTHER orgs.
 _SECRET_ENV_DENYLIST = {
     "GATEWAY_INTERNAL_API_KEY",
+    "MCP_BROKER_INTERNAL_KEY",
+    "MCP_BROKER_URL",
     "AGENT_API_KEY",
     "BACKEND_URL",
     "AIGUARDX_BACKEND_URL",
