@@ -47,3 +47,15 @@ live-fleet capture — it is NOT part of this pytest suite.
   NEW documented-but-unfixed leak, set `covered=False` and xfail its repro as before.
 - Add a new leaking format by appending a `PiiItem` to `corpus.py`; the existing
   `assert_no_pii_egressed` gate picks it up automatically.
+- B3 LANDED: `test_b3_embeddings_scan.py` is the egress-truth gate for /v1/embeddings
+  input redaction (G1). It drives the FULL path `main._scan_redact_embedding_inputs`
+  -> `LLMRouter.aembedding` and asserts no `corpus.REDACTABLE` value reached the
+  captured EMBEDDING wire. EMBEDDING ROUTER GOTCHA: `aembedding` validates `model`
+  against `_allowed_embedding_model_names()`; with an empty (org_only_inference)
+  router that set is ONLY `_DEFAULT_EMBEDDING_MODEL` ("text-embedding-3-small") — use
+  it, or you get a clean 404 BEFORE any egress and capture nothing. Fail-closed proof:
+  on an unmaskable input the helper returns a block and the handler never dispatches,
+  so assert `provider.embed == []` (nothing egressed), not just "raw absent".
+- conftest now also puts repo-root `shared/` on sys.path (`_HERE.parents[2]/"shared"`)
+  so `import main` resolves `ai_mesh_shared` and the CLAUDE.md gate
+  (`cd gateway && pytest tests/leakhunt -q`) runs with NO manual PYTHONPATH.

@@ -268,3 +268,27 @@
   PATTERN (recorded at top): broaden a context-gated detector by swapping ONLY the trailing value
   sub-pattern (keep the cue alternation) so FP-safety is preserved by construction; mask via the SAME
   sub-pattern + \D strip. Unblocks B5 (depends on A2+B2).
+
+- 2026-06-29 B3-embeddings-scan PASSES (gate green). The G1 input scan+redaction on
+  /v1/embeddings was already IMPLEMENTED (commit 5c4968ec: main._scan_redact_embedding_inputs
+  — tier-1 InputScanner + verdict-aware redact_pii + fail-closed digit backstop + byte-verify
+  block when masking impossible; wired at main.py:8954 in proxy_embeddings, with the redacted
+  texts written back to body["input"] BEFORE LLM_ROUTER.aembedding). In-tree unit suite
+  ai_mesh_gateway/tests/test_embedding_input_redaction.py already proved the helper. B3's
+  REMAINING job was the egress-truth GATE: a leakhunt test that drives the FULL path
+  (_scan_redact_embedding_inputs -> LLM_ROUTER.aembedding) through the RecordingProvider and
+  asserts no raw corpus value reached the captured EMBEDDING wire. Built
+  gateway/tests/leakhunt/test_b3_embeddings_scan.py: parametrized over corpus.REDACTABLE
+  (email/ssn/phone/secret) — each absent from provider.wire_blob; batch parity (clean text
+  survives, PII masked); fail-closed (unmaskable name -> block, provider.embed == [] so NOTHING
+  egresses); scan-disabled honesty (value forwarded raw, no false redaction claim).
+  ROUTER GOTCHA: with org_only_inference=True the router is empty, so aembedding dispatches via
+  _execute_embedding -> module-level litellm.aembedding (the RecordingProvider patch point). Model
+  MUST be _DEFAULT_EMBEDDING_MODEL ("text-embedding-3-small") — it is the only name in
+  _allowed_embedding_model_names() when router is None; any other -> clean 404 before egress.
+  Gate: `cd gateway && ./.venv/bin/python -m pytest tests/leakhunt -q` -> 50 passed;
+  `PYTHONPATH=../shared ... test_embedding_input_redaction.py test_openai_sdk_compat.py -q`
+  -> 40 passed/2 xpassed. ALSO fixed the leakhunt conftest to add repo-root `shared/` to sys.path
+  (_HERE.parents[2]/"shared") so `import main` resolves ai_mesh_shared and the CLAUDE.md gate
+  (`cd gateway && pytest tests/leakhunt -q`) is SELF-CONTAINED — no manual PYTHONPATH. Prior
+  B1/B2 leakhunt runs only worked with PYTHONPATH=../shared set; this removes that footgun.
