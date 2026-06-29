@@ -1,5 +1,5 @@
 ---
-iteration: 8
+iteration: 9
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 ---
@@ -60,10 +60,15 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 4. Use gateway venv for gateway tests: `cd gateway && ./.venv/bin/python -m pytest ...`
 5. Security: never inject gateway secrets into sandboxes; egress bytes remain source of truth for scan/audit (unchanged in `mcp_proxy.py`).
 
+## Iteration 9 complete
+
+- **S9-docker-compose** — `services/mcp-broker/Dockerfile` + `pyproject.toml` (docker SDK, uvicorn); compose adds `mcp_sandbox_bridge`, `mcp-sandbox-image` build, mcp-broker with docker.sock (broker only), `MCP_BROKER_INTERNAL_KEY` + `MCP_STDIO_IN_PROCESS=false` on gateway; `test_docker_compose.py` (2 tests); gate `docker compose --profile services config` exit 0; broker suite 59 passed.
+- **Next:** S10-sandbox-client (gateway `mcp_sandbox_client.py` HTTP client).
+
 ## Iteration 8 complete
 
 - **S8-broker-wire** — `main.py` GET /health returns `docker_ok` from `docker_manager.ping()`; sandbox router, registry, reaper lifespan already wired; `test_main_health.py` (3 tests); gate 57 passed.
-- **Next:** S9-docker-compose (broker Dockerfile + compose sandbox wiring).
+- **Next:** S10-sandbox-client (gateway `mcp_sandbox_client.py`).
 
 ## Iteration 7 complete
 

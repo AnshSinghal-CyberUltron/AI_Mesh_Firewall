@@ -1,5 +1,10 @@
 # AI Mesh Firewall — standalone product (dev)
 # UI :8180  Control :8100  Gateway :8300  RabbitMQ UI :15772
+#
+# MCP per-org Docker sandboxes (broker + sandbox image): enable with
+#   docker compose --profile services up -d
+# That starts mcp-broker (Docker socket mounted on broker ONLY), builds
+# ai-mesh/mcp-sandbox:latest, and sets gateway MCP_STDIO_IN_PROCESS=false.
 
 name: ai_mesh_firewall
 
@@ -185,6 +190,10 @@ services:
       ENABLE_TIER2: ${ENABLE_TIER2:-true}
       GUARDRAILS_SERVICE_URL: http://guardrails:8310
       MCP_BROKER_URL: http://mcp-broker:8311
+      MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-dev-mcp-broker-key-change-me}
+      # Sandbox path: broker delegates stdio MCP to per-org containers (S9+).
+      # Override MCP_STDIO_IN_PROCESS=true in .env for in-gateway dev fallback.
+      MCP_STDIO_IN_PROCESS: ${MCP_STDIO_IN_PROCESS:-false}
       VECTOR_SERVICE_URL: http://vector-retrieval:8312
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:8180}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-http://127.0.0.1:8180}
@@ -218,13 +227,40 @@ services:
     ports: ["8310:8310"]
     profiles: ["services"]
 
-  mcp-broker:
-    image: python:3.12-slim
-    working_dir: /app
-    command: pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8311
-    volumes: ["./services/mcp-broker/src:/app"]
-    ports: ["8311:8311"]
+  mcp-sandbox-image:
     profiles: ["services"]
+    image: ai-mesh/mcp-sandbox:latest
+    build:
+      context: .
+      dockerfile: services/mcp-broker/sandbox-image/Dockerfile
+    command: ["true"]
+    restart: "no"
+
+  mcp-broker:
+    profiles: ["services"]
+    build:
+      context: .
+      dockerfile: services/mcp-broker/Dockerfile
+    ports: ["8311:8311"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-dev-mcp-broker-key-change-me}
+      MCP_SANDBOX_IMAGE: ai-mesh/mcp-sandbox:latest
+      MCP_SANDBOX_NETWORK: mcp_sandbox_bridge
+      MCP_SANDBOX_IDLE_TIMEOUT: ${MCP_SANDBOX_IDLE_TIMEOUT:-600}
+    networks:
+      - default
+      - mcp_sandbox_bridge
+    depends_on:
+      mcp-sandbox-image:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8311/health', timeout=5)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # Submodule 1.4 hermetic MCP stub — deterministic target for live UI tests.
   # Implements streamable-http MCP at http://mcp-stub:9999/mcp .
@@ -271,3 +307,8 @@ volumes:
   chroma_data:
   npm_cache:
   uv_cache:
+
+networks:
+  mcp_sandbox_bridge:
+    name: mcp_sandbox_bridge
+    driver: bridge
