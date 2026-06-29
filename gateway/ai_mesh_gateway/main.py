@@ -12246,10 +12246,115 @@ async def create_moderations(request: Request):
         "results": results})
 
 
+@app.post("/v1/completions", summary="Legacy text completions (OpenAI-compatible)", tags=["Completions"])
+async def create_legacy_completion(
+    request: Request,
+    x_user_id: str | None = Header(None),
+    x_endpoint_id: str | None = Header(None),
+    x_agent_data: str | None = Header(None),
+):
+    """C4 (D4): ``client.completions.create(prompt=...)``. The legacy text-completion surface
+    is a FORMAT ADAPTER over ``proxy_chat`` — exactly like /v1/responses — so the prompt is
+    routed prompt->messages through the UNCHANGED firewall chain (auth, kill-switch, Tier-1/2
+    scan, output guard, redaction, telemetry) and the chat result is translated back into a
+    ``text_completion`` object. The firewall is inherited, never forked."""
+    auth_ctx = getattr(request.state, "auth_context", None)
+    if auth_ctx is None:
+        return JSONResponse(status_code=401, content=_build_oai_error(
+            401, "A valid API key is required.", error_type="authentication_error"))
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "Invalid JSON body.", code="invalid_request"))
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "Request body must be a JSON object.", code="invalid_request"))
+    model = body.get("model")
+    if not model or not isinstance(model, str):
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "Missing required parameter: 'model'.", code="missing_required_parameter", param="model"))
+    if body.get("stream"):
+        # Streaming legacy text_completion chunks are not yet implemented; fail fast with a
+        # clean, SDK-parseable error rather than a silent hang. (Chat + Responses stream.)
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "Streaming is not supported on /v1/completions; use /v1/chat/completions.",
+            code="invalid_request", param="stream"))
+    prompt = body.get("prompt")
+    if prompt is None:
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "Missing required parameter: 'prompt'.", code="missing_required_parameter", param="prompt"))
+    # OpenAI accepts str | list[str] | token-id arrays. We can only firewall-scan TEXT, so a
+    # str -> one prompt, a list[str] -> a batch (one indexed choice each). Token-id arrays are
+    # rejected (cannot be scanned) rather than silently forwarded raw.
+    if isinstance(prompt, str):
+        prompts = [prompt]
+    elif isinstance(prompt, list) and prompt and all(isinstance(p, str) for p in prompt):
+        prompts = prompt
+    else:
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "'prompt' must be a string or a non-empty list of strings.", code="invalid_request", param="prompt"))
+
+    # Sampling params that are valid on BOTH surfaces flow through to chat unchanged.
+    _passthrough = {k: body[k] for k in (
+        "max_tokens", "temperature", "top_p", "stop", "seed", "user",
+        "presence_penalty", "frequency_penalty", "logit_bias",
+    ) if k in body}
+
+    cmpl_id = f"cmpl-{_uuid.uuid4().hex[:24]}"
+    request.state.gw_request_id = cmpl_id
+    created = int(time.time())
+    choices: list[dict] = []
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    resolved_model = model
+    zeroshield = None
+
+    for idx, text_prompt in enumerate(prompts):
+        chat_body = {"model": model, "messages": [{"role": "user", "content": text_prompt}], **_passthrough}
+        chat_response = await _dispatch_chat_internally(
+            request, chat_body, x_user_id, x_endpoint_id, x_agent_data)
+        status = getattr(chat_response, "status_code", 500)
+        try:
+            chat_json = json.loads(bytes(getattr(chat_response, "body", b"") or b"{}"))
+        except (TypeError, ValueError):
+            chat_json = {}
+        if status >= 400:
+            # Any sub-prompt block/error aborts the whole completion (the firewall fired) —
+            # surface the inner OpenAI error envelope verbatim so e.code/e.type/request_id hold.
+            return JSONResponse(status_code=status, content=_coerce_chat_error(status, chat_json))
+        _choice = (chat_json.get("choices") or [{}])[0]
+        _msg = _choice.get("message") or {}
+        choices.append({
+            "text": _msg.get("content") or "",
+            "index": idx,
+            "logprobs": None,
+            "finish_reason": _choice.get("finish_reason") or "stop",
+        })
+        _u = chat_json.get("usage") or {}
+        for _k in usage:
+            usage[_k] += int(_u.get(_k) or 0)
+        resolved_model = chat_json.get("model") or resolved_model
+        if zeroshield is None and isinstance(chat_json.get("zeroshield"), dict):
+            zeroshield = chat_json["zeroshield"]
+
+    result = {
+        "id": cmpl_id,
+        "object": "text_completion",
+        "created": created,
+        "model": resolved_model,
+        "choices": choices,
+        "usage": usage,
+    }
+    if zeroshield is not None:
+        # Mirror the ZeroShield trace top-level (parity with chat/responses; SDK extra=allow).
+        result["zeroshield"] = zeroshield
+    return JSONResponse(status_code=200, content=result, headers={"x-request-id": cmpl_id})
+
+
 # D4: surfaces a firewall gateway does not implement. Return a clean nested 404 (via the
 # compat shim) so the stock SDK raises NotFoundError instead of hanging or 500-ing.
-# (/v1/completions legacy + /v1/files + /v1/batches + /v1/images/* + /v1/audio/* are
-#  candidates for future thin implementations; today they fail fast and correctly.)
+# (/v1/files + /v1/batches + /v1/images/* + /v1/audio/* are candidates for future thin
+#  implementations; today they fail fast and correctly. /v1/completions is now implemented.)
 async def _openai_surface_unimplemented(request: Request):
     return JSONResponse(status_code=404, content={
         "error": "not_found",
@@ -12257,7 +12362,6 @@ async def _openai_surface_unimplemented(request: Request):
         "code": "endpoint_not_found"})
 
 for _p, _methods in (
-    ("/v1/completions", ["POST"]),
     ("/v1/files", ["POST", "GET"]),
     ("/v1/files/{rest:path}", ["GET", "POST", "DELETE"]),
     ("/v1/batches", ["POST", "GET"]),

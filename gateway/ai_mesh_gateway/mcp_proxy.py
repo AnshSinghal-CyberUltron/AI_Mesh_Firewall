@@ -1702,6 +1702,9 @@ async def _adapter_forward(
             args = list(server_config.get("args", []))
             await _maybe_inject_oauth_header(args, org_slug, server_slug)
 
+            stdio_cfg = dict(server_config)
+            stdio_cfg["org_slug"] = org_slug
+            stdio_cfg["server_slug"] = server_slug
             result = await stdio_send(
                 org_slug=org_slug,
                 server_slug=server_slug,
@@ -1711,6 +1714,7 @@ async def _adapter_forward(
                 method=method,
                 params=params if params else None,
                 msg_id=msg_id,
+                server_config=stdio_cfg,
             )
         elif transport == "websocket":
             from mcp_ws_adapter import send_jsonrpc as ws_send
