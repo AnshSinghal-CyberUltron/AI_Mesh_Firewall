@@ -80,7 +80,7 @@
       "id": "B4-unify-redaction-paths",
       "title": "Unify embedding + simulator/SDK egress redaction (G3/G0c)",
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "dependencies": [
         "B3-embeddings-scan"
       ],
