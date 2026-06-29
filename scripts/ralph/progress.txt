@@ -92,6 +92,7 @@
 - Shared stdio security: `shared/ai_mesh_shared/mcp_stdio_common.py` — denylist, OAuth heuristics, `_build_child_env`; imported by gateway `mcp_stdio_adapter` and sandbox `stdio_manager`.
 - Docker lifecycle: `services/mcp-broker/src/sandbox/docker_manager.py` — injectable Docker client for tests; labels `ai_mesh.role=mcp-sandbox`, `ai_mesh.org_slug`; resource limits from `MCP_SANDBOX_*` env.
 - Sandbox registry + reaper: `registry.py` (thread-safe org→container map, `last_activity`), `reaper.py` (`MCP_SANDBOX_IDLE_TIMEOUT` default 600s, interval 60s); `reap_idle_sandboxes()` testable with mock clock; wired via FastAPI lifespan in `main.py`.
+- Broker sandbox routes: `src/sandbox/routes.py` + `src/auth.py` (`X-MCP-Broker-Key` / `MCP_BROKER_INTERNAL_KEY`, fail closed); POST ensure/stdio/rpc, GET status, DELETE destroy; stdio/rpc forwards httpx to sandbox-agent `/rpc` and `touch_activity`; quota via `MCP_SANDBOX_MAX_ORGS`.
 
 ### Iteration log
 - 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
@@ -109,3 +110,7 @@
 - 2026-06-29 iteration 5: S5-registry-reaper DONE — `registry.py` + `reaper.py`; DockerManager syncs
   registry on ensure/stop/destroy; FastAPI lifespan starts background reaper; 6 tests in
   test_sandbox_reaper.py (mock clock); gate: `pytest services/mcp-broker/tests -q` → 35 passed.
+- 2026-06-29 iteration 6: S6-broker-routes DONE — `src/sandbox/routes.py` (ensure, stdio/rpc, status,
+  destroy) + `src/auth.py` (X-MCP-Broker-Key fail closed); wired in main.py; stdio/rpc httpx-forwards
+  to agent POST /rpc with touch_activity; 10 tests in test_sandbox_routes.py (mock docker + httpx);
+  gate: `pytest services/mcp-broker/tests -q` → 45 passed.

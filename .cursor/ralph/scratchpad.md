@@ -1,5 +1,5 @@
 ---
-iteration: 5
+iteration: 6
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 ---
@@ -59,6 +59,11 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 3. Append learnings to `scripts/ralph/progress.txt` under `## MCP Sandbox Ralph Loop`.
 4. Use gateway venv for gateway tests: `cd gateway && ./.venv/bin/python -m pytest ...`
 5. Security: never inject gateway secrets into sandboxes; egress bytes remain source of truth for scan/audit (unchanged in `mcp_proxy.py`).
+
+## Iteration 6 complete
+
+- **S6-broker-routes** — `routes.py` (POST ensure, POST stdio/rpc → agent /rpc, GET status, DELETE destroy) + `auth.py` (`X-MCP-Broker-Key` / `MCP_BROKER_INTERNAL_KEY`, fail closed); `touch_activity` on rpc; org quota `MCP_SANDBOX_MAX_ORGS`; 10 route tests (mock docker + httpx); gate 45 passed.
+- **Next:** S7-broker-auth (dedicated auth test file) or S8-broker-wire (health docker_ok + full wire).
 
 ## Iteration 5 complete
 
