@@ -788,3 +788,20 @@
   SWALLOW any nested PII match in the gap. Mirror the partial-masker's value-narrowing in
   the typed engine so a broadened span can't drop a nested placeholder. Always run BOTH
   e11 (typed/at-rest) AND the leakhunt differential after a patterns.py span change.
+- rigor-verified: B2-redactor-coverage 2026-06-29 — adversarially re-proved the phone
+  redactor against a battery of NEW formats NOT in the corpus, driving the REAL
+  InputScanner + LLMRouter egress path (RecordingProvider captures the wire bytes;
+  aidefence oracle confirmed it does NOT classify phones as PII, so the corpus phone_sep
+  regex is the relevant independent oracle). KEY RESULT: every leaking format was
+  NON-PHANTOM — the scanner never claimed to redact it (raw still in redacted_content),
+  so egress=truth / B1 fail-closed honesty held in all cases. Found + FIXED ONE real
+  low-FP gap: phone_intl's grouped branch capped each group at \d{1,4}, so the common
+  5+5 international grouping "+91 98765 43210" (India/EU mobiles) leaked raw behind a
+  strong cue ("my mobile is") even though the docstring claimed to cover separated intl
+  numbers. Widened to \d{1,5}; FP-safe (leading '+' required — non-+ order-id/revenue/
+  sku runs verified untouched). Remaining leaks (2+4+4, slash/underscore separators,
+  "whatsapp" cue, 00-intl prefix) are by-design ambiguous pass-throughs: non-phantom +
+  high-FP + not PII per oracle = correct per B2's conservative FP-protection contract.
+  Gate: leakhunt 101 passed/1 skipped (was 93); broader -k pii/redact/scan suite 314
+  passed, the 2 test_policy_check_input_scan tier1_injection failures are PRE-EXISTING
+  (fail on clean stashed tree + in isolation — injection domain, not phones). commit 7f53d41c.

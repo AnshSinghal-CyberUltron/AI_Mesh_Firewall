@@ -130,3 +130,20 @@ span for that type to the VALUE sub-match (re-search `_BARE_PHONE_10_SPLIT` insi
 match), mirroring `_mask_phone_bare_contextual`. After ANY patterns.py span change run
 BOTH `test_e11_egress_default_path` (typed/at-rest) AND `tests/leakhunt/test_b4_*`
 (chat-vs-embed differential) — e10/leakhunt alone won't catch a typed-engine swallow.
+
+## B2 — phone coverage rigor (egress-byte adversarial method + FP boundary)
+When re-proving a redactor-coverage story, drive the REAL InputScanner + LLMRouter
+egress path with formats NOT in the corpus (the corpus is the spec UNDER test) and
+classify each leak: is it PHANTOM (scanner removed it from redacted_content but it still
+rode the wire — an egress=truth/B1 honesty violation, ALWAYS a real gap) or a pure
+COVERAGE gap (scanner never flagged it, raw stayed in redacted_content, no redact claim
+— judged against B2's conservative FP contract)? In this repo every phone leak found was
+COVERAGE-only, never phantom. ORACLE NOTE: `aidefence_has_pii` does NOT classify phone
+numbers as PII (its set = email/SSN/keys/passwords), so for PHONE leaks the relevant
+independent oracle is the corpus `phone_sep` regex / `independent_pii_scan`, not aidefence.
+REAL GAP FIXED: `phone_intl`'s grouped branch `\d{1,3}(?:[\s\-]\d{1,4}){2,6}` capped each
+group at 4 digits, missing the very common 5+5 international grouping (+91 98765 43210).
+Widened to `\d{1,5}`; FP-safe because the whole pattern is `+`-anchored (E.164 marker —
+order-ids/revenue never carry it). BY-DESIGN pass-throughs to LEAVE (non-phantom + high-FP
++ not-PII-per-oracle): bare 2+4+4 grouping, slash/underscore separators, "whatsapp" cue
+(common word, not a contact verb), and `00`-prefix intl (ambiguous with long account nums).
