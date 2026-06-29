@@ -1,5 +1,5 @@
 ---
-iteration: 2
+iteration: 3
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 ---
@@ -59,6 +59,11 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 3. Append learnings to `scripts/ralph/progress.txt` under `## MCP Sandbox Ralph Loop`.
 4. Use gateway venv for gateway tests: `cd gateway && ./.venv/bin/python -m pytest ...`
 5. Security: never inject gateway secrets into sandboxes; egress bytes remain source of truth for scan/audit (unchanged in `mcp_proxy.py`).
+
+## Iteration 3 complete
+
+- **S3-shared-stdio-common** — `shared/ai_mesh_shared/mcp_stdio_common.py`; denylist blocks `GATEWAY_INTERNAL_API_KEY`; gateway + sandbox-agent import shared module; commit `2217825f`.
+- **Next:** S4-docker-manager (priority 2, unblocked) or S5/S6 depending on dependency order — S4 has no deps beyond S1 (done).
 
 ## Completion
 

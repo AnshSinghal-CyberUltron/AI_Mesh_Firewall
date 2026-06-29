@@ -52,6 +52,7 @@
 - Docker socket ONLY on mcp-broker, never gateway.
 - Final gate: 5 orgs × 5 MCP servers parallel (`E1-parallel-load`), no cross-tenant leakage.
 - Broker tests: `pytest services/mcp-broker/tests -q`; gateway venv for gateway tests.
+- Shared stdio security: `shared/ai_mesh_shared/mcp_stdio_common.py` — denylist, OAuth heuristics, `_build_child_env`; imported by gateway `mcp_stdio_adapter` and sandbox `stdio_manager`.
 
 ### Iteration log
 - 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
@@ -59,3 +60,7 @@
 - 2026-06-29 iteration 2: S2-sandbox-agent DONE — agent/stdio_manager.py (spawn, JSON-RPC line protocol,
   env denylist, OAuth hang detection, 8MiB line limit, reaper); POST /rpc wired; 8 tests in test_agent_rpc.py;
   gate: `gateway/.venv/bin/pytest services/mcp-broker/tests -q` → 12 passed.
+- 2026-06-29 iteration 3: S3-shared-stdio-common DONE — `shared/ai_mesh_shared/mcp_stdio_common.py`
+  with `_SECRET_ENV_DENYLIST`, `_OAUTH_HINT_SUBSTRINGS`, `_build_child_env`; gateway adapter +
+  sandbox stdio_manager import shared module; Dockerfile copies module into image; 6 tests in
+  test_stdio_common.py; gate: broker 18 passed, gateway mcp tests 51 passed.
