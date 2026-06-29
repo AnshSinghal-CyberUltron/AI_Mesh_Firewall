@@ -93,6 +93,7 @@
 - Docker lifecycle: `services/mcp-broker/src/sandbox/docker_manager.py` — injectable Docker client for tests; labels `ai_mesh.role=mcp-sandbox`, `ai_mesh.org_slug`; resource limits from `MCP_SANDBOX_*` env.
 - Sandbox registry + reaper: `registry.py` (thread-safe org→container map, `last_activity`), `reaper.py` (`MCP_SANDBOX_IDLE_TIMEOUT` default 600s, interval 60s); `reap_idle_sandboxes()` testable with mock clock; wired via FastAPI lifespan in `main.py`.
 - Broker sandbox routes: `src/sandbox/routes.py` + `src/auth.py` (`X-MCP-Broker-Key` / `MCP_BROKER_INTERNAL_KEY`, fail closed); POST ensure/stdio/rpc, GET status, DELETE destroy; stdio/rpc forwards httpx to sandbox-agent `/rpc` and `touch_activity`; quota via `MCP_SANDBOX_MAX_ORGS`.
+- Broker health: `GET /health` returns `docker_ok` (true when `DockerManager.ping()` succeeds); full wire in `main.py` (sandbox router, registry, reaper lifespan).
 
 ### Iteration log
 - 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
@@ -118,6 +119,10 @@
   wrong key, unset/blank `MCP_BROKER_INTERNAL_KEY` fail-closed, valid key → 200 on protected DELETE route;
   `auth.py` unchanged (already correct); gate: `pytest services/mcp-broker/tests/test_broker_auth.py -q`
   → 9 passed; full broker suite → 54 passed.
+- 2026-06-29 iteration 8: S8-broker-wire DONE — `main.py` GET /health returns `docker_ok` from
+  `docker_manager.ping()`; sandbox router + reaper lifespan + registry already wired; 3 tests in
+  `test_main_health.py` (docker_ok true/false, router mounted); gate: `pytest services/mcp-broker/tests -q`
+  → 57 passed.
 - 2026-06-29 C1-error-envelope PASSES (gate green). The choke point ALREADY EXISTED from
   prior phase work: `_openai_compat_shim` BaseHTTPMiddleware (main.py:254) is registered
   OUTSIDE auth, rewrites flat {error,message,code} bodies via

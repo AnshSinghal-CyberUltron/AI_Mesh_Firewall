@@ -1,5 +1,5 @@
 ---
-iteration: 7
+iteration: 8
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 ---
@@ -59,6 +59,11 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 3. Append learnings to `scripts/ralph/progress.txt` under `## MCP Sandbox Ralph Loop`.
 4. Use gateway venv for gateway tests: `cd gateway && ./.venv/bin/python -m pytest ...`
 5. Security: never inject gateway secrets into sandboxes; egress bytes remain source of truth for scan/audit (unchanged in `mcp_proxy.py`).
+
+## Iteration 8 complete
+
+- **S8-broker-wire** — `main.py` GET /health returns `docker_ok` from `docker_manager.ping()`; sandbox router, registry, reaper lifespan already wired; `test_main_health.py` (3 tests); gate 57 passed.
+- **Next:** S9-docker-compose (broker Dockerfile + compose sandbox wiring).
 
 ## Iteration 7 complete
 
