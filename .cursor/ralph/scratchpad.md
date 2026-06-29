@@ -1,5 +1,5 @@
 ---
-iteration: 4
+iteration: 5
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 ---
@@ -59,6 +59,11 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 3. Append learnings to `scripts/ralph/progress.txt` under `## MCP Sandbox Ralph Loop`.
 4. Use gateway venv for gateway tests: `cd gateway && ./.venv/bin/python -m pytest ...`
 5. Security: never inject gateway secrets into sandboxes; egress bytes remain source of truth for scan/audit (unchanged in `mcp_proxy.py`).
+
+## Iteration 5 complete
+
+- **S5-registry-reaper** — `registry.py` (thread-safe in-memory map: org_slug, container_id, agent_url, last_activity); `reaper.py` stops idle sandboxes after `MCP_SANDBOX_IDLE_TIMEOUT` (default 600s); `DockerManager` syncs registry; `main.py` lifespan starts/stops reaper; 6 tests with mock clock.
+- **Next:** S6-broker-routes (depends on S4 + S2) or S7-broker-auth (depends on S6).
 
 ## Iteration 4 complete
 
