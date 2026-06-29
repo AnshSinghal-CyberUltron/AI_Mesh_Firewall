@@ -150,7 +150,7 @@
       "id": "S12-rate-limit-mcp",
       "title": "MCP path rate limiting (TPM + burst/RPM)",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S11-stdio-adapter-branch"],
       "userStory": "As operator I need MCP JSON-RPC rate limited like chat paths.",
       "acceptanceCriteria": [

@@ -1579,6 +1579,96 @@ def _validate_org_scope(request: Request, org_slug: str):
     return None
 
 
+# JSON-RPC server-error band; MCP Streamable HTTP returns HTTP 200 + error object.
+_JSONRPC_RATE_LIMIT_CODE = -32000
+
+
+def _rate_limit_response_to_jsonrpc(
+    rl_resp: JSONResponse,
+    *,
+    jsonrpc: str,
+    msg_id,
+) -> JSONResponse:
+    """Map a plain HTTP 429 rate-limit response to the MCP JSON-RPC envelope."""
+    try:
+        content = rl_resp.body.decode("utf-8") if rl_resp.body else "{}"
+        payload = json.loads(content) if content else {}
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    message = str(
+        payload.get("message")
+        or payload.get("error")
+        or "Rate limit exceeded"
+    )
+    error_data = {
+        k: payload[k]
+        for k in ("error", "code", "scope")
+        if payload.get(k) is not None
+    }
+    headers = {}
+    retry_after = rl_resp.headers.get("Retry-After")
+    if retry_after:
+        headers["Retry-After"] = retry_after
+    return JSONResponse(
+        content={
+            "jsonrpc": jsonrpc,
+            "id": msg_id,
+            "error": {
+                "code": _JSONRPC_RATE_LIMIT_CODE,
+                "message": message,
+                **({"data": error_data} if error_data else {}),
+            },
+        },
+        status_code=200,
+        headers=headers or None,
+    )
+
+
+async def _enforce_mcp_org_rate_limits(
+    auth_ctx,
+    *,
+    jsonrpc: str = "2.0",
+    msg_id,
+) -> JSONResponse | None:
+    """Apply per-org TPM + burst/RPM ceilings (parity with chat/embeddings paths).
+
+    Returns a JSON-RPC error envelope (HTTP 200) when limited, else None.
+    """
+    if auth_ctx is None:
+        return None
+    try:
+        import main as gateway_main
+    except Exception:
+        return None
+
+    user_id = getattr(auth_ctx, "user_id", None)
+    project_id = str(getattr(auth_ctx, "project_id", "") or "")
+
+    rl_resp = await gateway_main._enforce_org_tpm_rate_limit(
+        auth_ctx,
+        event_type="mcp_blocked",
+        user_id=user_id,
+        project_id=project_id,
+        estimated_tokens=20,
+    )
+    if rl_resp is not None:
+        return _rate_limit_response_to_jsonrpc(rl_resp, jsonrpc=jsonrpc, msg_id=msg_id)
+
+    burst_resp = await gateway_main._enforce_org_burst_rpm(
+        auth_ctx,
+        event_type="mcp_blocked",
+        user_id=user_id,
+        project_id=project_id,
+    )
+    if burst_resp is not None:
+        return _rate_limit_response_to_jsonrpc(
+            burst_resp, jsonrpc=jsonrpc, msg_id=msg_id,
+        )
+    return None
+
+
 def _backend_proxy_headers(request: Request, org_slug: str, server_slug: str = "") -> dict:
     """Headers for trusted gateway->backend MCP proxy requests."""
     extra: dict[str, str] = {}
@@ -1793,6 +1883,13 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
     params = body.get("params", {})
     msg_id = body.get("id")
     jsonrpc = body.get("jsonrpc", "2.0")
+
+    # S12: per-org TPM + burst/RPM (parity with chat/embeddings hot paths).
+    _rl_block = await _enforce_mcp_org_rate_limits(
+        _mcp_auth, jsonrpc=jsonrpc, msg_id=msg_id,
+    )
+    if _rl_block is not None:
+        return _rl_block
 
     LOG.info("MCP JSON-RPC method=%s org=%s server=%s id=%s", method, org_slug, server_slug, msg_id)
 
