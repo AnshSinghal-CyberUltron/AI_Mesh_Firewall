@@ -139,3 +139,17 @@
   — verify the in-tree fix with the harness and flip the matching xfail cell instead of
   re-implementing. C2 next-easiest: route-introspection test (test_only_one_post_v1_responses_route
   already exists at line 457) — confirm exactly one POST /v1/responses route + delete the dead dup.
+
+- 2026-06-29 C2-dead-route PASSES (gate green). The shadowed second @app.post("/v1/responses")
+  was ALREADY removed by a prior commit (0ea7d9f7 introduced the route; later consolidation left
+  exactly ONE). Runtime introspection confirms: POST /v1/responses route count == 1, endpoint ==
+  proxy_responses (the full-featured streaming+store handler). C2's remaining deliverable was the
+  DURABLE regression gate: new gateway/ai_mesh_gateway/tests/test_route_introspection.py asserts
+  (a) exactly one POST /v1/responses, (b) NO duplicate (path, method) across the whole app (catches
+  the dead-route class generally under Starlette first-match-wins). Gate:
+  PYTHONPATH="../shared:$PWD:$PWD/ai_mesh_gateway" ./.venv/bin/python -m pytest
+  ai_mesh_gateway/tests/test_route_introspection.py ai_mesh_gateway/tests/test_openai_sdk_compat.py -q
+  -> 29 passed, 2 xpassed. NO production code changed (pure additive test) so zero regression risk.
+  GOTCHA: importing the app needs ai_mesh_shared on PYTHONPATH (../shared) — it is NOT pip-installed
+  in gateway/.venv; the ralph gate env must export PYTHONPATH (shared + gateway + ai_mesh_gateway).
+  Unblocks C3-responses-stream.

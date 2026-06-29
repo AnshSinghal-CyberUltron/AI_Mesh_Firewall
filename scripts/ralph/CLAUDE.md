@@ -32,8 +32,9 @@ Backend stories (USE THE GATEWAY VENV — plain `python` lacks the deps and will
   #       gateway/tests/leakhunt so this gate path resolves; repo-root tests/leakhunt/capture_addon.py
   #       is a separate mitmproxy addon, NOT this pytest suite)
   ./.venv/bin/ruff check ai_mesh_gateway 2>/dev/null || ruff check ai_mesh_gateway || true
-Frontend stories:
-  cd frontend && npm run lint && npm run build
+Frontend stories (there is NO `npm run lint` script in package.json — do NOT call it; it exits 1):
+  cd frontend && npm run build          # compile gate (must succeed)
+  npm run test:unit -- --run || true    # vitest unit signal (optional; never blocks the gate)
   # UI behavior: "Verify in browser using the dev-browser skill" against the running Vite app —
   # click the relevant controls, assert the result, screenshot.
 

@@ -1,0 +1,270 @@
+{
+  "base": "http://127.0.0.1:8180",
+  "when": "2026-06-26T13:40:37.666Z",
+  "pages": [
+    {
+      "label": "firewall",
+      "url": "http://127.0.0.1:8180/?tab=firewall",
+      "bodyLen": 7166,
+      "controls": 42,
+      "fatal": null,
+      "console": [
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        }
+      ],
+      "pageerrors": [],
+      "netfail": [
+        {
+          "url": "http://127.0.0.1:8180/api/security/module-kpis/?period=24h",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/policies/top-violators/?days=14&limit=10",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/policies/analytics/?days=14",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/security/owasp-stats/?hours=168",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/security/soc-kpis/?period=24h",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/security/attack-vector-trends/?period=24h",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/policy/top-rules/?days=14&limit=10",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/policies/top-violators/?days=14&limit=10",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/notifications/?limit=30",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/policy/top-rules/?days=14&limit=10",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/security/owasp-stats/?hours=168",
+          "err": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/policies/analytics/?days=14",
+          "err": "net::ERR_ABORTED"
+        }
+      ],
+      "http": []
+    },
+    {
+      "label": "firewall-1-1",
+      "url": "http://127.0.0.1:8180/?tab=firewall-1-1",
+      "bodyLen": 4176,
+      "controls": 53,
+      "fatal": null,
+      "console": [],
+      "pageerrors": [],
+      "netfail": [],
+      "http": []
+    },
+    {
+      "label": "firewall-1-2",
+      "url": "http://127.0.0.1:8180/?tab=firewall-1-2",
+      "bodyLen": 2985,
+      "controls": 115,
+      "fatal": null,
+      "console": [],
+      "pageerrors": [],
+      "netfail": [],
+      "http": []
+    },
+    {
+      "label": "firewall-1-3",
+      "url": "http://127.0.0.1:8180/?tab=firewall-1-3",
+      "bodyLen": 10922,
+      "controls": 128,
+      "fatal": null,
+      "console": [
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        },
+        {
+          "type": "warning",
+          "text": "The width(-1) and height(-1) of chart should be greater than 0,\n       please check the style of container, or the props width(100%) and height(100%),\n       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the\n       height and width."
+        }
+      ],
+      "pageerrors": [],
+      "netfail": [],
+      "http": []
+    },
+    {
+      "label": "firewall-1-4",
+      "url": "http://127.0.0.1:8180/?tab=firewall-1-4",
+      "bodyLen": 3027,
+      "controls": 40,
+      "fatal": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+        }
+      ],
+      "pageerrors": [],
+      "netfail": [],
+      "http": [
+        {
+          "url": "http://127.0.0.1:8180/api/mcp-connector/org-gateway-key/",
+          "status": 400
+        },
+        {
+          "url": "http://127.0.0.1:8180/api/mcp-connector/org-gateway-key/",
+          "status": 400
+        }
+      ]
+    },
+    {
+      "label": "firewall-1-5",
+      "url": "http://127.0.0.1:8180/?tab=firewall-1-5",
+      "bodyLen": 32996,
+      "controls": 379,
+      "fatal": null,
+      "console": [],
+      "pageerrors": [],
+      "netfail": [],
+      "http": []
+    },
+    {
+      "label": "firewall-1-6",
+      "url": "http://127.0.0.1:8180/?tab=firewall-1-6",
+      "bodyLen": 3949,
+      "controls": 43,
+      "fatal": null,
+      "console": [],
+      "pageerrors": [],
+      "netfail": [],
+      "http": []
+    },
+    {
+      "label": "firewall-1-7",
+      "url": "http://127.0.0.1:8180/?tab=firewall-1-7",
+      "bodyLen": 9906,
+      "controls": 83,
+      "fatal": null,
+      "console": [],
+      "pageerrors": [],
+      "netfail": [],
+      "http": []
+    },
+    {
+      "label": "firewall-config",
+      "url": "http://127.0.0.1:8180/?tab=firewall-config",
+      "bodyLen": 7731,
+      "controls": 145,
+      "fatal": null,
+      "console": [],
+      "pageerrors": [],
+      "netfail": [],
+      "http": []
+    },
+    {
+      "label": "route_",
+      "url": "http://127.0.0.1:8180/",
+      "bodyLen": 7166,
+      "controls": 42,
+      "fatal": null,
+      "console": [],
+      "pageerrors": [],
+      "netfail": [],
+      "http": []
+    },
+    {
+      "label": "route_settings",
+      "url": "http://127.0.0.1:8180/settings",
+      "bodyLen": 7166,
+      "controls": 42,
+      "fatal": null,
+      "console": [],
+      "pageerrors": [],
+      "netfail": [],
+      "http": []
+    },
+    {
+      "label": "route_profile",
+      "url": "http://127.0.0.1:8180/profile",
+      "bodyLen": 7146,
+      "controls": 42,
+      "fatal": null,
+      "console": [],
+      "pageerrors": [],
+      "netfail": [],
+      "http": []
+    }
+  ],
+  "summary": {
+    "pages": 12,
+    "pagesWithIssues": 3,
+    "totalConsole": 16,
+    "totalPageErrors": 0,
+    "totalHttp": 2
+  }
+}
