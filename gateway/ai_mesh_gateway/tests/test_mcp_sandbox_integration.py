@@ -38,10 +38,12 @@ LABEL_ROLE = "ai_mesh.role"
 LABEL_ORG_SLUG = "ai_mesh.org_slug"
 ROLE_VALUE = "mcp-sandbox"
 
+STUB_CONTAINER_PATH = "/data/mcp-auth/stdio_mcp_stub.py"
+
 SERVER_CONFIG = {
     "server_slug": "stub-server",
     "command": "python3",
-    "args": ["/tmp/stdio_mcp_stub.py"],
+    "args": [STUB_CONTAINER_PATH],
     "env_vars": {"INTEGRATION_MARKER": "org-visible"},
 }
 
@@ -223,7 +225,7 @@ def _gateway_broker_env(broker_url: str, monkeypatch: pytest.MonkeyPatch):
 
 def _copy_stub_into_container(container_id: str) -> None:
     proc = subprocess.run(
-        ["docker", "cp", str(STDIO_STUB), f"{container_id}:/tmp/stdio_mcp_stub.py"],
+        ["docker", "cp", str(STDIO_STUB), f"{container_id}:{STUB_CONTAINER_PATH}"],
         capture_output=True,
         text=True,
         timeout=30,

@@ -221,3 +221,25 @@
   context_guard, live_uvicorn, phase5/phase6, org_tpm, policy_check_input_scan, stream_governance —
   all fail in isolation, none touch /v1/completions, NO new regression). Route-introspection: exactly
   one POST /v1/completions -> create_legacy_completion.
+
+- 2026-06-29 B1-attestation-byte-verify PASSES (gate green). EGRESS = TRUTH enforced at the ONE
+  choke point `llm_router._redact_text_with_backstop(text, redacted_content)` — the function chat
+  (_apply_redaction), chat-stream (acompletion_stream), AND Responses tools (aresponses) all funnel
+  through. Generalized the fail-closed digit backstop from contiguous `\d{7,}` to ALSO catch
+  separator-split digit runs (`\d[\d .()\-]{5,}\d` → 5+5 phones, spaced SSN/card): any sensitive run
+  this text carries that the firewall's AUTHORITATIVE `redacted_content` REMOVED but the weaker
+  per-message `redact_all` left RAW is masked before egress (mask = stronger scrub = fail closed). So
+  the wire always reflects the verdict — no phantom redaction. FP-SAFETY IS STRUCTURAL: gate on
+  `run not in redacted_content` (mask ONLY what the firewall already removed) so a run it KEPT (legit
+  order id) survives; mask derived from `text` not the masked `out` so it never re-triggers. Responses
+  STRING input is clean-by-construction (aresponses sets input=redacted_content at llm_router.py:561)
+  — only its tools needed the backstop. NEW GATE: tests/leakhunt/test_b1_attestation_byte_verify.py
+  (7 tests, chat non-stream + multiturn + responses string + responses tools + FP-safety + contiguous
+  + no-signal). Gate: `cd gateway && PYTHONPATH=... ./.venv/bin/python -m pytest tests/leakhunt -q`
+  → 13 passed, 1 xfailed. test_repro_g0 STAYS xfail (correct): through the REAL scanner the firewall
+  itself leaves the 5+5 raw, so `run in redacted_content` is true and B1 (correctly) won't mask it —
+  that's B2's COVERAGE job. Full suite 956 passed / 17 failed == SAME documented pre-existing baseline
+  (verified by stashing the llm_router edit: context_guard + policy_check_input_scan fail identically
+  without it). SDK harness 30 passed/2 xpassed (no regression). ruff not installed (gate skips).
+  PATTERN: B1=egress byte-verify (wire reflects firewall decision); B2=detector coverage; G0 needs
+  BOTH. Unblocks B2 + B3 (both depend on B1).

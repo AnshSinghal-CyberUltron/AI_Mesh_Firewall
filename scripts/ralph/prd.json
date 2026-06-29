@@ -34,7 +34,7 @@
       "id": "B1-attestation-byte-verify",
       "title": "Verdict-scrub honesty invariant on the input/egress path (G0b/G4)",
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "A2-egress-rig"
       ],
