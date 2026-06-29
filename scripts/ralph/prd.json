@@ -49,7 +49,7 @@
       "id": "B2-redactor-coverage",
       "title": "Phone/intl redactor coverage for leaking formats, context-gated (G0)",
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "A2-egress-rig",
         "B1-attestation-byte-verify"

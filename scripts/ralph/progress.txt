@@ -6,6 +6,7 @@
 - The OUTPUT guard already downgrades "redact"->"flag" when the bytes didn't change (main.py ~1330). The INPUT/egress path lacks this honesty check — add it (story B1).
 - /v1/embeddings currently does NOT scan/redact input — it only gates model/kill-switch (story B3).
 - RAG ingest stores documents + metadata in the vector store and metadata flows into generator prompts; rag_redaction_enabled defaults False (story B5). RAG embed/grounding are fail-closed via assume_redacted=True — but that checks the FLAG not the bytes (story B1/B4).
+- DETECTOR-COVERAGE pattern (B2): to broaden a CONTEXT-GATED patterns.py detector without new FPs, swap ONLY the trailing VALUE sub-pattern and keep the cue/prefix alternation intact; FP-safety is then preserved by construction (no cue ⇒ no match). Factor the value into a module const (e.g. `_BARE_PHONE_10_SPLIT`), reference it in BOTH the PII_PATTERNS entry and its masker, and have the masker `re.sub(r"\\D","",...)` before formatting so split separators don't break last-4 extraction. Bound the total digit count + trailing `\b` so a longer numeric id can't be partially masked.
 
 ## Environment / harness gotchas (discovered this repo)
 - Gateway tests run with the gateway venv: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q` (PYTHONPATH may need the shared/ + ai_mesh_gateway dirs). Plain `python` may not have deps.
@@ -243,3 +244,27 @@
   without it). SDK harness 30 passed/2 xpassed (no regression). ruff not installed (gate skips).
   PATTERN: B1=egress byte-verify (wire reflects firewall decision); B2=detector coverage; G0 needs
   BOTH. Unblocks B2 + B3 (both depend on B1).
+- 2026-06-29 B2-redactor-coverage PASSES (gate green). Closed the G0 detector gap: the 5+5 spaced
+  phone behind a phone cue ("please call me at 89295 54991") egressed RAW because redact_all's
+  phone_us_bare_contextual only masked a CONTIGUOUS \d{10}. FIX (patterns.py, single choke point):
+  added module const _BARE_PHONE_10_SPLIT = (\d{10}|\d{5}[sep]\d{5}|\d{4}[sep]\d{6}|\d{3}[sep]\d{3}[sep]\d{4}|
+  \d{3}[sep]\d{7}) [sep=[\s.\-]] and swapped the pattern's trailing `\d{10}\b` for it; updated
+  _mask_phone_bare_contextual to find via the same const + strip non-digits before masking. FP-SAFETY
+  IS STRUCTURAL & UNCHANGED: coverage stays CONTEXT-GATED on the existing phone-cue alternation
+  (phone/mobile/cell "is/:", imperative call/text/reach...at/on, possessive my/the...number) — an
+  order-id/revenue run with NO phone cue ("order 8929554991", "ref number 8929554991", "invoice
+  89295 54991") matches no cue → untouched. Bounded total of exactly 10 digits + trailing \b means an
+  11+ digit id fails \b after 10 contiguous and has no split branch → left raw (no partial-mask).
+  +CC ("+1 8929554991") was already covered by phone_intl; bare10_no_cue stays intentional pass-through.
+  GATE: corpus us_5_5_spaced flipped covered=True; test_repro_g0 converted from xfail RED to GREEN
+  closure regression (KNOWN_LEAKS now empty — _g0_item pulls from CORPUS by fmt, not KNOWN_LEAKS); new
+  tests/leakhunt/test_b2_redactor_coverage.py (parametrized: every covered phone format absent from the
+  egress wire via RecordingProvider + redact_all FP suite for order-id/revenue + e2e order-id-on-wire).
+  `cd gateway && PYTHONPATH="../shared:$PWD:$PWD/ai_mesh_gateway" ./.venv/bin/python -m pytest tests/leakhunt -q`
+  → 30 passed (was 13 passed/1 xfailed). REGRESSION PROOF: full ai_mesh_gateway/tests run = 20 failed
+  identical to a stash-the-change baseline run (same 20 node ids incl. 3 test_mcp_sandbox_integration
+  which are a PARALLEL-SESSION working-tree mod + docker-needing integration tests, NOT mine; the other
+  17 are the documented pre-existing baseline) → ZERO new failures. ruff not installed (gate skips).
+  PATTERN (recorded at top): broaden a context-gated detector by swapping ONLY the trailing value
+  sub-pattern (keep the cue alternation) so FP-safety is preserved by construction; mask via the SAME
+  sub-pattern + \D strip. Unblocks B5 (depends on A2+B2).
