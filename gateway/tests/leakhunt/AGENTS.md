@@ -72,3 +72,28 @@ live-fleet capture — it is NOT part of this pytest suite.
   simulator handler. Identity-of-callable across `import main` vs
   `from ai_mesh_gateway import main` is UNRELIABLE in this env (two module instances) —
   assert functional equivalence (`__qualname__` + byte-identical output), not `is`.
+- B5 LANDED: `test_b5_rag_at_rest.py` is the AT-REST gate (G2) — nothing raw is
+  embedded/stored in the vector store (documents OR metadata). It drives the EXACT
+  redaction rag_ingest funnels every doc+metadata through before `client.add()`
+  (`main._scan_redact_embedding_inputs` for content + `main._scan_redact_metadata`
+  for metadata — the unified B4 helpers, gated by `input_scan_enabled` default True),
+  PERSISTS the result into a REAL chromadb collection, and QUERIES the store directly
+  (`col.get(include=['documents','metadatas'])`). Backend: prefers the live :8001
+  server when a full create/add/get round-trip works, else an in-process chromadb
+  engine (EphemeralClient) — both real stores. CHROMA GOTCHAS: (1) create the client
+  ONCE per module via a `scope="module"` fixture handing out freshly-named
+  collections; a 2nd `EphemeralClient(...)` raises "instance already exists for
+  ephemeral with different settings". (2) chromadb metadata values must be SCALAR —
+  serialize the (nested) redacted metadata to one JSON string field for storage, then
+  scan that blob. (3) pass explicit per-doc embeddings to avoid an ONNX model
+  download. METADATA CUE GOTCHA: a context-gated PII value (bare-10-digit
+  `8929554991`, 5+5 split, no-sep SSN `123456789`) stored in metadata WITHOUT a
+  surrounding phone/ssn cue is order-id-shaped and intentionally KEPT (FP protection,
+  the corpus `intentional` pass-through). Build metadata values in their natural cued
+  phrasing (`item.prompt()` == cue+raw), NOT bare `item.raw`, or the at-rest assertion
+  forces over-redaction of order-ids. Closing the bare-value-in-metadata edge would be
+  a separate metadata-key-aware-redaction story, not B5. SAFE-BY-DEFAULT: B5 flipped
+  the rag_ingest `rag_redaction_enabled` default to True (main.py ~10182), adding the
+  typed-placeholder pass as defense-in-depth on top of the input_scan-forced unified
+  redaction — but the at-rest PII guarantee is already policy-forced by
+  `input_scan_enabled` (default True) regardless of that toggle.

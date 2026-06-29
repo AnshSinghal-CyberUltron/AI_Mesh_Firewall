@@ -10179,7 +10179,14 @@ async def rag_ingest(request: Request):
             if (CONFIG_SYNC is not None and org_slug)
             else {}
         ) or {}
-        rag_redaction_enabled = bool(org_config.get("rag_redaction_enabled", False))
+        # B5 (RAG redaction default / nothing raw at rest): the typed-placeholder
+        # pass is SAFE-BY-DEFAULT. The PII-safety guarantee at rest is already
+        # policy-forced by ``input_scan_enabled`` (default True) via the unified
+        # ``_scan_redact_embedding_inputs`` / ``_scan_redact_metadata`` pass below,
+        # but defaulting this toggle ON adds structure-preserving typed redaction
+        # ([EMAIL]/[SSN]) as defense-in-depth so an org that never set the flag
+        # still never embeds/stores raw PII. An org may still explicitly disable it.
+        rag_redaction_enabled = bool(org_config.get("rag_redaction_enabled", True))
         rag_tier2_enabled = bool(org_config.get("rag_tier2_enabled", False))
 
         # R12 (#2/#6): gate the RAG ingest embedding model on operator kill-switch

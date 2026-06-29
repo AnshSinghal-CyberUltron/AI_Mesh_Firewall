@@ -313,3 +313,32 @@
   there is no separate simulator inference handler — bedrock_inference.py is only model-SELECTION
   helpers. Pre-existing full-suite failures (live_uvicorn/phase5/phase6/policy_check/stream_governance/
   org_tpm/mcp_sandbox) PROVEN independent: identical failure set with the main.py edit git-stashed.
+
+- 2026-06-29 B5-rag-at-rest PASSES (gate green). Built the AT-REST gate
+  `gateway/tests/leakhunt/test_b5_rag_at_rest.py` (5 tests): drives the EXACT
+  redaction rag_ingest funnels every doc+metadata through before `client.add()`
+  (`main._scan_redact_embedding_inputs` content + `main._scan_redact_metadata`
+  metadata — unified B4 helpers, gated by `input_scan_enabled` default True), then
+  PERSISTS into a REAL chromadb collection and QUERIES the store directly
+  (`col.get(include=['documents','metadatas'])`). Backend: live :8001 server when a
+  full round-trip works, else in-process chromadb (EphemeralClient) — both real.
+  Covers: whole REDACTABLE corpus (content + nested metadata), a poisoned-doc
+  (injection + PII in content & nested metadata → PII scrubbed, doc still stored),
+  fail-closed (unmaskable PII never stored), RecordingVectorStore hermetic mirror,
+  and an explicit boundary test that the by-design intentional pass-through is NOT in
+  the must-be-absent set. ALSO: flipped rag_ingest `rag_redaction_enabled` default
+  False→True (main.py ~10182) = safe-by-default typed-placeholder defense-in-depth;
+  the at-rest PII guarantee was ALREADY policy-forced by `input_scan_enabled` (default
+  True) via the B4 unified pass, independent of that toggle, so the flip adds depth
+  not the core guarantee. Gate: `cd gateway && ./.venv/bin/python -m pytest
+  tests/leakhunt -q` → 89 passed, 1 skipped. SDK harness unaffected (30 passed/2
+  xpassed with PYTHONPATH=shared:ai_mesh_gateway). No new failures: the single
+  test_e10 `test_scan_redact_helper_blocks_unmaskable_pii` failure is PRE-EXISTING
+  (reproduces with my main.py change stashed) — a test-ordering/env artifact in the
+  documented 17-pre-existing bucket. GOTCHAS (now in tests/leakhunt/AGENTS.md):
+  create the EphemeralClient ONCE per module (2nd call → "instance already exists for
+  ephemeral"); chromadb metadata must be SCALAR (JSON-serialize nested metadata to one
+  field); pass explicit per-doc embeddings (no ONNX download); a context-gated PII
+  value in metadata WITHOUT a cue is order-id-shaped + intentionally kept — build
+  metadata in natural cued phrasing (`item.prompt()`), not bare `item.raw`.
+  REMAINING backlog: only the D1–D6 UI/browser stories (priority 3) are passes:false.
