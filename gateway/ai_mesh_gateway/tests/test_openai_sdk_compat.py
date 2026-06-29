@@ -411,9 +411,40 @@ async def test_responses_streaming_events_and_text(sdk_client):
         events.append(event)
 
     assert events, "expected at least one Responses stream event"
-    event_types = {getattr(e, "type", None) for e in events}
-    assert "response.created" in event_types
-    assert "response.completed" in event_types
+    ordered = [getattr(e, "type", None) for e in events]
+    event_types = set(ordered)
+
+    # C3: assert the FULL typed-event lifecycle is present, not just endpoints.
+    required = {
+        "response.created", "response.output_item.added",
+        "response.content_part.added", "response.output_text.delta",
+        "response.output_text.done", "response.output_item.done",
+        "response.completed",
+    }
+    missing = required - event_types
+    assert not missing, f"responses stream missing typed events: {sorted(missing)}"
+
+    # C3: the events must arrive in the canonical Responses order. Compare the
+    # first-occurrence index of each lifecycle event; deltas repeat so we anchor
+    # on first occurrence of each phase boundary.
+    def _first(t):
+        return ordered.index(t)
+
+    seq = [
+        "response.created", "response.output_item.added",
+        "response.content_part.added", "response.output_text.delta",
+        "response.output_text.done", "response.output_item.done",
+        "response.completed",
+    ]
+    indices = [_first(t) for t in seq]
+    assert indices == sorted(indices), (
+        f"typed events out of order: {[(t, _first(t)) for t in seq]}"
+    )
+    # All deltas precede output_text.done; output_text.done precedes item.done.
+    last_delta = max(i for i, t in enumerate(ordered) if t == "response.output_text.delta")
+    assert last_delta < _first("response.output_text.done")
+    # response.completed is the terminal lifecycle event.
+    assert ordered[-1] == "response.completed"
 
     completed = next(e for e in events if getattr(e, "type", None) == "response.completed")
     assert completed.response.output_text == "Hello streaming world."
