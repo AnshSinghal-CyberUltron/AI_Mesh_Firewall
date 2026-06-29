@@ -59,10 +59,12 @@ _PHONES: List[PiiItem] = [
             cue="my mobile is ", covered=True),
     PiiItem("phone", "intl_cc_dash", "+91-8088054321",
             cue="ping ", covered=True),
-    # ── KNOWN LEAKS the B-stories close ──
+    # ── CLOSED by B2-redactor-coverage (was a KNOWN LEAK): 5+5 spaced phone behind a
+    #    phone cue now masked by the broadened context-gated phone_us_bare_contextual. ──
     PiiItem("phone", "us_5_5_spaced", "89295 54991",
-            cue="please call me at ", covered=False,
-            note="5+5 spaced: no pattern matches, space breaks the digit backstop (B2)"),
+            cue="please call me at ", covered=True,
+            note="5+5 spaced behind a phone cue: B2 broadened phone_us_bare_contextual "
+                 "(_BARE_PHONE_10_SPLIT) so the split run is masked"),
     PiiItem("phone", "cc_space_10", "+1 8929554991",
             cue="text me on ", covered=True,
             note="phone_intl \\d{1,4}[\\s-]?\\d{6,12} branch"),
