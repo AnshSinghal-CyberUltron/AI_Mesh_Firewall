@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { setModule2CacheScope } from '../api/module2';
+import { setModule3CacheScope } from '../api/module3';
 
 const AuthContext = createContext(null);
 
@@ -187,6 +188,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     setModule2CacheScope(authCacheScopeKey(user));
+    setModule3CacheScope(authCacheScopeKey(user));
   }, [user]);
 
   const login = useCallback(async (email, password) => {
@@ -240,6 +242,7 @@ export function AuthProvider({ children }) {
     // Always clear tokens locally, regardless of server response
     clearStoredTokens();
     setModule2CacheScope('anon');
+    setModule3CacheScope('anon');
     setUser(null);
   }, []);
 

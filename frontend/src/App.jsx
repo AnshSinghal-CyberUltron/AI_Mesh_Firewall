@@ -29,6 +29,12 @@ const IncidentDetailPage = lazy(() =>
 const McpRiskPage = lazy(() =>
   import("./pages/module2/McpRiskPage").then((m) => ({ default: m.McpRiskPage }))
 );
+const LlmopsPipelinePage = lazy(() =>
+  import("./pages/module3/LlmopsPipelinePage").then((m) => ({ default: m.LlmopsPipelinePage }))
+);
+const K8sFirewallPage = lazy(() =>
+  import("./pages/module3/K8sFirewallPage").then((m) => ({ default: m.K8sFirewallPage }))
+);
 
 function AppShell() {
   const location = useLocation();
@@ -67,6 +73,8 @@ function AppShell() {
           <Route path="/threats/intelligence" element={<ThreatIntelPage />} />
           <Route path="/incidents" element={<IncidentsPage />} />
           <Route path="/incidents/:id" element={<IncidentDetailPage />} />
+          <Route path="/infrastructure/llmops" element={<LlmopsPipelinePage />} />
+          <Route path="/infrastructure/k8s-firewall" element={<K8sFirewallPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

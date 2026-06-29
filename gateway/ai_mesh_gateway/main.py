@@ -6380,6 +6380,33 @@ async def admin_logs(request: Request, service: str = "all", level: str = "DEBUG
     )
 
 
+# ── Module 3: LLMOps Admission Controller ─────────────────────────────────────
+
+@app.post(
+    "/v1/admin/admission/verify",
+    summary="Verify container admission (Cosign / integrity)",
+    tags=["Admin", "Module3"],
+)
+async def admin_admission_verify(request: Request):
+    """FastAPI gatekeeper — verify Cosign signature and SHA-256 fingerprints."""
+    admin_block = _require_admin_role(request)
+    if admin_block is not None:
+        return admin_block
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON body"})
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content={"error": "Body must be a JSON object"})
+    try:
+        from admission_controller import verify_admission_payload
+    except ImportError:
+        from .admission_controller import verify_admission_payload
+    result = verify_admission_payload(body)
+    status_code = 200 if result.get("allowed") else 403
+    return JSONResponse(status_code=status_code, content=result)
+
+
 # ── Bedrock Dedicated Log Endpoints ──────────────────────────────────────────
 
 @app.get(

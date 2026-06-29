@@ -4,6 +4,7 @@ import {
   Shield,
   ShieldAlert,
   LayoutDashboard,
+  Server,
   ChevronLeft,
   ChevronRight,
   User,
@@ -49,6 +50,17 @@ const menuItems = [
       { id: "m2-incidents", label: "M2.6 Incidents & Forensics", route: "/incidents" },
     ],
   },
+  {
+    id: "module3",
+    label: "AI Infrastructure Security",
+    icon: Server,
+    section: "Module 3",
+    offering: "platform",
+    subItems: [
+      { id: "m3-llmops", label: "M3.1 LLMOps Pipeline Security", route: "/infrastructure/llmops" },
+      { id: "m3-k8s-firewall", label: "M3.2 K8s-Native AI Firewall", route: "/infrastructure/k8s-firewall" },
+    ],
+  },
 ];
 
 function useOfferingVisibility(user) {
@@ -88,6 +100,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
               activeTab === item.id
               || activeTab.startsWith(item.id)
               || (item.id === "module2" && activeTab.startsWith("m2-"))
+              || (item.id === "module3" && activeTab.startsWith("m3-"))
             ))
             .map((item) => item.id),
         ])

@@ -8,6 +8,11 @@ const MODULE2_ROUTE_TO_TAB = {
   "/incidents": "m2-incidents",
 };
 
+const MODULE3_ROUTE_TO_TAB = {
+  "/infrastructure/llmops": "m3-llmops",
+  "/infrastructure/k8s-firewall": "m3-k8s-firewall",
+};
+
 const TAB_TO_ROUTE = {
   "m2-dashboard": "/dashboard",
   "m2-ueba-api-keys": "/ueba/api-keys",
@@ -15,10 +20,13 @@ const TAB_TO_ROUTE = {
   "m2-mcp-risk": "/mcp/risk",
   "m2-threat-intel": "/threat-intel",
   "m2-incidents": "/incidents",
+  "m3-llmops": "/infrastructure/llmops",
+  "m3-k8s-firewall": "/infrastructure/k8s-firewall",
 };
 
 export function resolveActiveTab(pathname, searchParams) {
   if (pathname.startsWith("/incidents/")) return "m2-incidents";
+  if (MODULE3_ROUTE_TO_TAB[pathname]) return MODULE3_ROUTE_TO_TAB[pathname];
   if (MODULE2_ROUTE_TO_TAB[pathname]) return MODULE2_ROUTE_TO_TAB[pathname];
   return searchParams.get("tab") || "firewall";
 }

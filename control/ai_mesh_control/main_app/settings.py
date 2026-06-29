@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "security_engines.apps.SecurityEnginesConfig",
     "mcp_connector.apps.McpConnectorConfig",
     "module2.apps.Module2Config",
+    "module3.apps.Module3Config",
     # "console.apps.ConsoleConfig",
 ]
 
