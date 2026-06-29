@@ -17,9 +17,11 @@ http.createServer((_, res) => {
 EOF
 PLACEHOLDER_PID=$!
 
-if [ ! -x node_modules/.bin/vite ]; then
-  echo "[frontend] Installing npm dependencies (first run only)..."
+STAMP_FILE=node_modules/.install-stamp
+if [ ! -x node_modules/.bin/vite ] || [ ! -f "$STAMP_FILE" ] || [ package-lock.json -nt "$STAMP_FILE" ]; then
+  echo "[frontend] Installing npm dependencies..."
   npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+  touch "$STAMP_FILE"
 fi
 
 kill "$PLACEHOLDER_PID" 2>/dev/null || true
