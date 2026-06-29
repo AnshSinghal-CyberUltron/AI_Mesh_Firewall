@@ -99,6 +99,7 @@
 - Gateway sandbox client: `gateway/ai_mesh_gateway/mcp_sandbox_client.py` — `ensure_sandbox`, `broker_send_jsonrpc`; `X-MCP-Broker-Key` from `MCP_BROKER_INTERNAL_KEY`; 503 exponential backoff (`MCP_SANDBOX_RETRY_*`); 502/503 → safe `RuntimeError` (no agent IP/BYOK in client message); timeouts from `MCP_STDIO_*` forwarded in RPC body.
 - MCP rate limits: `org_mcp_jsonrpc` calls `main._enforce_org_tpm_rate_limit` + `_enforce_org_burst_rpm` via `_enforce_mcp_org_rate_limits`; HTTP 429 mapped to JSON-RPC error envelope (HTTP 200, code -32000) with `Retry-After` preserved.
 - Docker integration gate: `gateway/ai_mesh_gateway/tests/test_mcp_sandbox_integration.py` — `@pytest.mark.docker`; broker runs in Docker on `mcp_sandbox_bridge` (host uvicorn cannot reach sandbox bridge IPs); stdio stub via `docker cp` to `/data/mcp-auth/` (read-only rootfs); wait for sandbox-agent health before RPC; asserts labels + cross-org volume/env isolation.
+- E1 parallel load gate: `test_mcp_sandbox_parallel_load.py` — 5 orgs × 5 servers; single hermetic Python stub with per-server env identity; `asyncio.gather` for ensure + 75 concurrent RPCs; volume file + env marker cross-tenant checks.
 
 ### Iteration log
 - 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
@@ -158,6 +159,12 @@
   asserts `ai_mesh.role`/`ai_mesh.org_slug` labels; cross-org volume file + env isolation via stdio stub
   `get_env`; gate: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_integration.py -q`
   → 3 passed (~92s with Docker).
+- 2026-06-29 iteration 14: E1-parallel-load DONE — `test_mcp_sandbox_parallel_load.py` (2 tests,
+  `@pytest.mark.docker`): sandbox-org-1..5 × 5 stdio servers (hermetic Python stub, distinct env per
+  server); 75 concurrent RPCs (tools/list + tools/call) across 25 endpoints; cross-org volume secret
+  files + ORG_ONLY_MARKER env isolation; broker-in-Docker pattern reused from T1; gate:
+  `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_parallel_load.py -q`
+  → 2 passed (~234s with Docker builds).
 - 2026-06-29 C1-error-envelope PASSES (gate green). The choke point ALREADY EXISTED from
   prior phase work: `_openai_compat_shim` BaseHTTPMiddleware (main.py:254) is registered
   OUTSIDE auth, rewrites flat {error,message,code} bodies via

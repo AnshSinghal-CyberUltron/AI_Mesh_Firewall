@@ -176,7 +176,7 @@
       "id": "E1-parallel-load",
       "title": "5x5 parallel sandbox load test",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependencies": ["T1-integration-docker"],
       "userStory": "As platform I need proof that 5 orgs x 5 MCP servers run concurrently without leakage.",
       "acceptanceCriteria": [

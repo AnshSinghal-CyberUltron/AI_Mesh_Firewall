@@ -1,5 +1,5 @@
 ---
-iteration: 13
+iteration: 14
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 ---
@@ -59,6 +59,11 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 3. Append learnings to `scripts/ralph/progress.txt` under `## MCP Sandbox Ralph Loop`.
 4. Use gateway venv for gateway tests: `cd gateway && ./.venv/bin/python -m pytest ...`
 5. Security: never inject gateway secrets into sandboxes; egress bytes remain source of truth for scan/audit (unchanged in `mcp_proxy.py`).
+
+## Iteration 14 complete
+
+- **E1-parallel-load** — `test_mcp_sandbox_parallel_load.py` (2 tests, `@pytest.mark.docker`): 5 orgs (`sandbox-org-1`..`5`) × 5 distinct stdio stubs each (unique `SERVER_TOKEN`/`ORG_ONLY_MARKER` env per server); 75 concurrent RPCs (tools/list + tools/call echo + tools/call get_env) across 25 endpoints; cross-org volume secret files + env marker isolation; gate 2 passed (~234s total, ~116s RPC phase).
+- **Next:** E2-frontend-mcp-sandbox (MCPConnectorPanel + Playwright/browser verification).
 
 ## Iteration 13 complete
 
