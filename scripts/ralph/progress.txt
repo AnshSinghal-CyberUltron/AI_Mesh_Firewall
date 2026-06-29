@@ -422,3 +422,38 @@
       by a button[aria-label*="kill switch for <model>" i] filter, not bare hasText.
   Run: cd frontend && BASE_URL=http://127.0.0.1:8180 SHOT_DIR=<repo>/runs/d2 \
        E2E_REPORT=<repo>/runs/playwright_model_routing.json node <repo>/scripts/playwright_model_routing.mjs
+
+- 2026-06-29 D3-ui-rag-vector PASSES (gate green). Backend root-cause + browser verification.
+  ROOT CAUSE (found via real-customer browser test, not the passes flag): the Collection
+  Manager panel (tab firewall-1-3) showed "Gateway unreachable". `list_collections_for_clients`
+  (gateway/ai_mesh_gateway/rag_collections.py) enumerated org vector providers SEQUENTIALLY with
+  NO per-provider timeout, so one stale/unreachable BYOK provider (org3 zeroshield has a pinecone
+  provider pointing at https://example.com) blocked the whole listing ~18s — past the control
+  admin-proxy's 10s read timeout (gateway_admin_proxy_views.py:_proxy timeout=10) → the panel
+  errored for EVERY provider. FIX: each provider bounded by RAG_LIST_COLLECTIONS_TIMEOUT (default
+  4s) and run CONCURRENTLY via asyncio.gather → total ~= slowest single (capped), dead provider
+  degrades to []. Proxy 18.1s -> ~5s. +2 unit tests (one-slow-provider-no-stall + concurrency) in
+  test_rag_collections_byok.py (9 passed). Gateway is NOT bind-mounted (src at /app/gateway in the
+  committed container `<hash>_ai_mesh_firewall-gateway-1`) → `docker cp` the file + `docker restart`
+  to deploy; this iteration's fix is deployed live but the change must be BAKED into the gateway
+  image for durability (next rebuild). Durable gate: scripts/playwright_rag_vector.mjs (14/14, 0
+  pageerrors). Screenshots+report under runs/d3.
+  FLAGGED (out of scope for D3, separate follow-up): collection CREATE on chroma 500s with
+  KeyError('_type') — chromadb python-client vs chromadb-server VERSION MISMATCH (server up at
+  :8001). The D3 test asserts UI HONESTY on this failure (panel shows "Create failed", no phantom
+  row/success, no backend leak) rather than blocking on the infra mismatch.
+  ENV CONTENTION GOTCHA: control plane is a SINGLE daphne process and parallel `claude --print`
+  ralph campaigns (mcp-frontend-adversarial: repeated POST /api/mcp-connector/.../tools/ scans +
+  slow /api/policy/top-rules|top-violators|analytics dashboard queries) saturate its event loop →
+  /api/auth/token/ hangs (http=000), control flaps healthy<->unhealthy. Browser gates flake under
+  this. Recovery: `docker restart ai_mesh_firewall-control-1` (preserves baked working_dir; the
+  compose-recreate gotcha does NOT apply to plain restart), poll auth until 200, run immediately.
+
+## Codebase Patterns (append)
+- MULTI-PROVIDER FAN-OUT pattern (D3): any gateway path that fans out to N org-configured external
+  backends (vector providers, embedders, MCP servers) MUST bound EACH call (asyncio.wait_for) AND
+  run them concurrently (asyncio.gather), so one stale/unreachable backend can't exceed the
+  caller's timeout (the control admin proxy reads the gateway with a 10s budget — exceed it and the
+  whole panel shows "gateway_unreachable"). Degrade a failed/slow backend to empty, never fail the
+  whole aggregate. Tunable via env (RAG_LIST_COLLECTIONS_TIMEOUT default 4s). Bogus e2e fixture
+  providers (pinecone->example.com) are a permanent landmine for sequential enumeration.
