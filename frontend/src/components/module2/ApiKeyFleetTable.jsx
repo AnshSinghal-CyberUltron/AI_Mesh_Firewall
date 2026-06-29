@@ -153,7 +153,6 @@ export function ApiKeyFleetTable({
   onActionComplete,
   loading = false,
   liveConnected = false,
-  canReassess = false,
 }) {
   const module2Api = useMemo(() => createModule2Api(fetchWithAuth), [fetchWithAuth]);
   const killApi = useMemo(() => createKillSwitchApi(fetchWithAuth), [fetchWithAuth]);
@@ -215,9 +214,6 @@ export function ApiKeyFleetTable({
       && prev.redacted_count === next.redacted_count
       && prev.risk_score === next.risk_score
       && prev.risk_band === next.risk_band
-      && prev.final_score === next.final_score
-      && prev.ueba_mode === next.ueba_mode
-      && prev.llm_verdict === next.llm_verdict
       && JSON.stringify(prev.recent_requests) === JSON.stringify(next.recent_requests)
     );
   }, []);
@@ -423,13 +419,11 @@ export function ApiKeyFleetTable({
                   { label: "", help: "Expand row for full behavior drilldown" },
                   { label: "Key", help: "Truncated credential prefix" },
                   { label: "Name / Owner", help: "Human label and owning user" },
-                  { label: "Purpose", help: "production, test, or simulator — simulator keys excluded from high-risk KPIs" },
-                  { label: "UEBA mode", help: "Learning builds baseline; active scores deviation from baseline" },
                   { label: "Status", help: "Active keys pass auth; disabled keys are rejected at ingress" },
                   { label: "Risk", help: "UEBA band from block rate, velocity, and anomaly signals" },
                   { label: "Block %", help: "Hard-block rate for this key in the selected period" },
                   { label: "Requests", help: "Enforcement events attributed to this key" },
-                  { label: "Velocity", help: "Learning: burst vs hourly mean. Active: volume z-score vs baseline." },
+                  { label: "Velocity", help: "Burst multiplier vs hourly baseline" },
                   { label: "Kill Switches", help: "Active credential-scoped model blocks" },
                   { label: "Actions", help: "Apply containment without leaving the fleet view" },
                 ].map((col) => (
@@ -476,18 +470,6 @@ export function ApiKeyFleetTable({
                         <p className="font-medium text-slate-800 dark:text-slate-200">{row.name || "—"}</p>
                         <p className="text-[11px] text-slate-500">{row.owner_email || row.project_id || "—"}</p>
                       </td>
-                      <td className="px-3 py-2 text-xs capitalize text-slate-600 dark:text-slate-300">
-                        {row.key_purpose || "production"}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
-                          row.ueba_mode === "active"
-                            ? "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300"
-                            : "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300"
-                        }`}>
-                          {row.ueba_mode || "learning"}
-                        </span>
-                      </td>
                       <td className="px-3 py-2">
                         <span className={`rounded px-2 py-0.5 text-xs font-medium ${
                           row.is_active !== false
@@ -507,16 +489,7 @@ export function ApiKeyFleetTable({
                       </td>
                       <td className="px-3 py-2">{row.request_count ?? 0}</td>
                       <td className="px-3 py-2">
-                        {row.ueba_mode === "active" ? (
-                          (row.velocity_spike ?? 0) >= 3 ? (
-                            <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600">
-                              <AlertTriangle className="h-3 w-3" />
-                              z {(row.velocity_spike ?? 0).toFixed(1)}
-                            </span>
-                          ) : (
-                            `z ${(row.velocity_spike ?? 0).toFixed(1)}`
-                          )
-                        ) : (row.velocity_spike ?? 1) >= 2.5 ? (
+                        {(row.velocity_spike ?? 1) >= 2.5 ? (
                           <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600">
                             <AlertTriangle className="h-3 w-3" />
                             {row.velocity_spike}x
@@ -547,7 +520,7 @@ export function ApiKeyFleetTable({
                     </tr>
                     {isExpanded && (
                       <tr key={`${row.key_id}-detail`} className="border-b border-slate-100 bg-slate-50/60 dark:border-slate-700/50 dark:bg-slate-900/30">
-                        <td colSpan={12} className="px-4 py-4">
+                        <td colSpan={10} className="px-4 py-4">
                           {expandLoading ? (
                             <div className="flex justify-center py-8">
                               <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
@@ -558,8 +531,6 @@ export function ApiKeyFleetTable({
                               fetchWithAuth={fetchWithAuth}
                               onActionComplete={onActionComplete}
                               showActions={false}
-                              canReassess={canReassess}
-                              onReassessComplete={(payload) => setExpandedBehavior(payload)}
                               simulatorKeyPrefix={simulatorKeyPrefix}
                             />
                           ) : (

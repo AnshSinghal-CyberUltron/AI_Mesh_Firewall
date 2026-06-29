@@ -1012,11 +1012,12 @@ def cleanup_old_audit_logs() -> dict:
 @shared_task
 def update_risk_scores_from_telemetry() -> dict:
     """
-    DEPRECATED: Superseded by module2.tasks.compute_ueba_risk_snapshots (UEBA v2).
-    Not scheduled in CELERY_BEAT_SCHEDULE — kept for manual/legacy invocation only.
-
     Scan recent EnforcementEvents for blocked threats and increment the
-    risk_score on the associated GatewayAPIKey.
+    risk_score on the associated GatewayAPIKey. Runs periodically via
+    Celery Beat (every 5 minutes).
+
+    Also applies natural decay to keys that have not triggered violations
+    recently, preventing permanent blacklisting.
     """
     from core.models import GatewayAPIKey
     from policy.models import EnforcementEvent

@@ -11,13 +11,9 @@ from module2.views import (
     ThreatIntelTelemetryView,
     ThreatIntelViewSet,
     UebaApiKeyBehaviorView,
-    UebaApiKeyReassessView,
     UebaApiKeyRegistryView,
-    UebaApiKeySettingsView,
     UebaApiKeySummaryView,
     UebaApiKeyTimelineView,
-    UebaLearningKeysView,
-    UebaOrgSettingsView,
     UnifiedDashboardView,
 )
 
@@ -26,10 +22,6 @@ router.register(r"threat-intel", ThreatIntelViewSet, basename="module2-threat-in
 
 urlpatterns = [
     path("dashboard/", UnifiedDashboardView.as_view(), name="module2-dashboard"),
-    path("ueba/settings/", UebaOrgSettingsView.as_view(), name="module2-ueba-settings"),
-    path("ueba/api-keys/learning/", UebaLearningKeysView.as_view(), name="module2-ueba-learning"),
-    path("ueba/api-keys/<uuid:key_id>/settings/", UebaApiKeySettingsView.as_view(), name="module2-ueba-key-settings"),
-    path("ueba/api-keys/<uuid:key_id>/reassess/", UebaApiKeyReassessView.as_view(), name="module2-ueba-reassess"),
     path("ueba/api-keys/summary/", UebaApiKeySummaryView.as_view(), name="module2-ueba-summary"),
     path("ueba/api-keys/timeline/", UebaApiKeyTimelineView.as_view(), name="module2-ueba-timeline"),
     path("ueba/api-keys/registry/", UebaApiKeyRegistryView.as_view(), name="module2-ueba-registry"),

@@ -339,8 +339,6 @@ CELERY_TASK_ROUTES = {
     "core.tasks.log_audit": {"queue": "platform.batch"},
     "core.tasks.cleanup_old_audit_logs": {"queue": "compute.heavy"},
     "core.tasks.update_risk_scores_from_telemetry": {"queue": "compute.heavy"},
-    "module2.tasks.compute_ueba_risk_snapshots": {"queue": "compute.heavy"},
-    "module2.tasks.refresh_api_key_baselines": {"queue": "compute.heavy"},
     "core.tasks.generate_compliance_report": {"queue": "compute.heavy"},
     "security_engines.tasks.tier2_post_scan_task": {"queue": "scan.tier2"},
     "security_engines.tasks.chat_postprocess_task": {"queue": "scan.tier2"},
@@ -371,9 +369,6 @@ MODULE2_UEBA_AUTO_KILL_ENABLED = os.environ.get("MODULE2_UEBA_AUTO_KILL_ENABLED"
     "on",
 )
 MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS = int(os.environ.get("MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS", "24"))
-MODULE2_UEBA_LLM_TIMEOUT_SEC = float(os.environ.get("MODULE2_UEBA_LLM_TIMEOUT_SEC", "30"))
-# Keep latest N assessment snapshots per key (~48 ≈ 4h at 5min cadence).
-MODULE2_UEBA_ASSESSMENT_RETENTION_COUNT = int(os.environ.get("MODULE2_UEBA_ASSESSMENT_RETENTION_COUNT", "48"))
 
 CELERY_BEAT_SCHEDULE = {
     "process-telemetry-batch": {
@@ -390,13 +385,9 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.tasks.cleanup_old_audit_logs",
         "schedule": crontab(hour=3, minute=0),
     },
-    "compute-ueba-risk-snapshots": {
-        "task": "module2.tasks.compute_ueba_risk_snapshots",
+    "update-risk-scores": {
+        "task": "core.tasks.update_risk_scores_from_telemetry",
         "schedule": 300.0,
-    },
-    "refresh-api-key-baselines": {
-        "task": "module2.tasks.refresh_api_key_baselines",
-        "schedule": 3600.0,
     },
     "generate-compliance-report": {
         "task": "core.tasks.generate_compliance_report",

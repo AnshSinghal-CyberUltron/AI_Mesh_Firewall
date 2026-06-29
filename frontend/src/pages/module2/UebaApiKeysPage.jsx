@@ -22,7 +22,6 @@ import { PeriodSelector } from "../../components/module2/PeriodSelector";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import { ApiKeyFleetTable } from "../../components/module2/ApiKeyFleetTable";
 import { ApiKeyContainmentDetailPanel } from "../../components/module2/ApiKeyContainmentDetailPanel";
-import { UebaLearningNavCard } from "../../components/module2/UebaLearningNavCard";
 import { RiskBandBadge } from "../../components/module2/RiskBandBadge";
 import { Module2EmptyState, Module2ErrorState, Module2PageErrorBoundary, Module2PageSkeleton } from "../../components/module2/PageStates";
 import { buildUebaKpiItems } from "./pageData";
@@ -41,7 +40,7 @@ export function UebaApiKeysPage() {
 }
 
 function UebaApiKeysPageInner() {
-  const { fetchWithAuth, user } = useAuth();
+  const { fetchWithAuth } = useAuth();
   const [searchParams] = useSearchParams();
   const api = useMemo(() => createModule2Api(fetchWithAuth), [fetchWithAuth]);
   const [period, setPeriod] = useState("24h");
@@ -54,12 +53,7 @@ function UebaApiKeysPageInner() {
   const [loadError, setLoadError] = useState(null);
   const [refreshError, setRefreshError] = useState(null);
   const [containmentPanel, setContainmentPanel] = useState(null);
-  const [learningKeys, setLearningKeys] = useState(null);
   const [refreshSignal, setRefreshSignal] = useState(0);
-  const isAdmin =
-    !!user?.is_superuser
-    || !!user?.is_staff
-    || (user?.roles || []).includes("platform_admin");
   const initialSelectDone = useRef(false);
   const refreshTimerRef = useRef(null);
   const loadSeqRef = useRef(0);
@@ -77,17 +71,15 @@ function UebaApiKeysPageInner() {
     }
     try {
       clearModule2Cache();
-      const [sum, tl, reg, learning] = await Promise.all([
+      const [sum, tl, reg] = await Promise.all([
         api.getUebaSummary(period),
         api.getUebaTimeline(period),
         api.getUebaRegistry(period),
-        api.getUebaLearningKeys(),
       ]);
       if (seq !== loadSeqRef.current) return;
       setSummary(sum);
       setTimeline(tl);
       setRegistry(reg);
-      setLearningKeys(learning);
       setRefreshError(null);
       setRefreshSignal((n) => n + 1);
     } catch (err) {
@@ -365,11 +357,8 @@ function UebaApiKeysPageInner() {
           onActionComplete={handleActionComplete}
           loading={loading}
           liveConnected={wsConnected}
-          canReassess={isAdmin}
         />
       </div>
-
-      <UebaLearningNavCard learningCount={learningKeys?.results?.length ?? 0} />
     </div>
   );
 }

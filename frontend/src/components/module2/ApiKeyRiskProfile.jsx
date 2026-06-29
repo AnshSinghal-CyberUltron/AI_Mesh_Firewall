@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Loader2, Power, PowerOff, RefreshCw, ShieldAlert, ExternalLink } from "lucide-react";
-import { createModule2Api } from "../../api/module2";
+import { AlertTriangle, Loader2, Power, PowerOff, ShieldAlert, ExternalLink } from "lucide-react";
 import {
   buildCredentialKillSwitchPayload,
   buildAnalystKillSwitchReason,
@@ -8,7 +7,6 @@ import {
   filterKillSwitchesForPrefix,
 } from "../../api/killSwitch";
 import { RiskBandBadge } from "./RiskBandBadge";
-import { UebaKeyOverridePanel } from "./UebaKeyOverridePanel";
 
 const BAND_STYLES = {
   low: {
@@ -32,21 +30,6 @@ const ANOMALY_LABELS = {
   high_block_rate: "High block rate",
   velocity_spike: "Velocity spike",
   model_spread: "Model spread",
-  block_rate_deviation: "Block deviation",
-  volume_anomaly: "Volume anomaly",
-  model_novelty: "Model novelty",
-};
-
-const MODE_STYLES = {
-  learning: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
-  active: "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300",
-};
-
-const LLM_VERDICT_STYLES = {
-  benign: "text-emerald-700 dark:text-emerald-300",
-  suspicious: "text-amber-700 dark:text-amber-300",
-  malicious: "text-red-700 dark:text-red-300",
-  skipped: "text-slate-500 dark:text-slate-400",
 };
 
 function RiskGauge({ score, band }) {
@@ -270,17 +253,8 @@ function RecentRequestsSection({ requests, requestCount }) {
   );
 }
 
-export function ApiKeyRiskProfile({
-  behavior,
-  fetchWithAuth,
-  onActionComplete,
-  showActions = true,
-  simulatorKeyPrefix = "",
-  canReassess = false,
-  onReassessComplete,
-}) {
+export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, showActions = true, simulatorKeyPrefix = "" }) {
   const api = useMemo(() => createKillSwitchApi(fetchWithAuth), [fetchWithAuth]);
-  const module2Api = useMemo(() => createModule2Api(fetchWithAuth), [fetchWithAuth]);
   const [killSwitches, setKillSwitches] = useState([]);
   const [ksLoading, setKsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
@@ -325,31 +299,6 @@ export function ApiKeyRiskProfile({
 
   const band = behavior.risk_band || "low";
   const styles = BAND_STYLES[band] || BAND_STYLES.low;
-  const displayScore = behavior.final_score ?? behavior.risk_score;
-  const breakdown = behavior.score_breakdown || {};
-  const uebaMode = behavior.ueba_mode || "learning";
-  const isActiveScoring = uebaMode === "active" || breakdown.mode === "active";
-  const volumeMetric = breakdown.volume_z ?? behavior.velocity_spike;
-  const volumeLabel = isActiveScoring
-    ? `Volume z ${Number(volumeMetric ?? 0).toFixed(2)}`
-    : `Velocity ${Number(behavior.velocity_spike ?? 1).toFixed(1)}x`;
-
-  const breakdownChips = [];
-  if (breakdown.block_rate != null) breakdownChips.push({ label: "Block", value: breakdown.block_rate });
-  if (breakdown.block_deviation != null) breakdownChips.push({ label: "Block dev", value: breakdown.block_deviation });
-  if (breakdown.volume_z != null) breakdownChips.push({ label: "Volume z", value: breakdown.volume_z });
-  if (breakdown.model_novelty != null) breakdownChips.push({ label: "Model novelty", value: breakdown.model_novelty });
-  if (breakdown.llm_weighted_delta != null) {
-    breakdownChips.push({
-      label: "LLM delta",
-      value: `${breakdown.llm_weighted_delta >= 0 ? "+" : ""}${Number(breakdown.llm_weighted_delta).toFixed(3)}`,
-    });
-  } else if (behavior.traditional_score != null && behavior.final_score != null && behavior.traditional_score !== behavior.final_score) {
-    breakdownChips.push({
-      label: "LLM blend",
-      value: `${behavior.traditional_score} → ${behavior.final_score}`,
-    });
-  }
 
   const handleApplyKillSwitch = async () => {
     const confirmed = window.confirm(
@@ -411,22 +360,6 @@ export function ApiKeyRiskProfile({
     }
   };
 
-  const handleReassess = async () => {
-    setActionLoading("reassess");
-    setActionError(null);
-    setActionSuccess(null);
-    try {
-      const updated = await module2Api.reassessUebaKey(behavior.key_id, { run_llm: true });
-      onReassessComplete?.(updated);
-      setActionSuccess(`Risk snapshot refreshed for ${behavior.prefix}.`);
-      onActionComplete?.();
-    } catch (err) {
-      setActionError(err.message || "Failed to reassess key.");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   return (
     <div className="space-y-4">
       {simulatorKeyPrefix && behavior.prefix && behavior.prefix !== simulatorKeyPrefix && (
@@ -438,13 +371,10 @@ export function ApiKeyRiskProfile({
         </div>
       )}
       <div className="flex flex-wrap items-start gap-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-600 dark:bg-slate-800/40">
-        <RiskGauge score={displayScore} band={band} />
+        <RiskGauge score={behavior.risk_score} band={band} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <RiskBandBadge type="behavioral" band={band} score={displayScore} />
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${MODE_STYLES[uebaMode] || MODE_STYLES.learning}`}>
-              {uebaMode}
-            </span>
+            <RiskBandBadge type="behavioral" band={band} score={behavior.risk_score} />
             {!behavior.is_active && (
               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                 Key disabled
@@ -456,61 +386,11 @@ export function ApiKeyRiskProfile({
             {behavior.name || "—"} · {behavior.project_id || "no project"}
             {behavior.owner_email ? ` · ${behavior.owner_email}` : ""}
           </p>
-          <p className="mt-2 text-xs text-slate-600 dark:text-slate-300" title="Final score blends traditional UEBA math with optional LLM analyst adjustment (55/45).">
-            Final {displayScore}
-            {behavior.traditional_score != null ? ` · Traditional ${behavior.traditional_score}` : ""}
-            {behavior.llm_score != null ? ` · LLM ${behavior.llm_score}` : ""}
-            {" · "}{volumeLabel} · {behavior.request_count} requests
+          <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+            Score {behavior.risk_score} · Velocity {behavior.velocity_spike}x · {behavior.request_count} requests
           </p>
-          {behavior.computed_at && (
-            <p className="mt-1 text-[10px] text-slate-400">
-              Snapshot computed {String(behavior.computed_at).replace("T", " ").slice(0, 19)} UTC
-            </p>
-          )}
-          {breakdown.scoring_deferred === "awaiting_baseline" && (
-            <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">
-              Graduated to active mode — deviation scoring starts once the behavior baseline is ready.
-            </p>
-          )}
         </div>
       </div>
-
-      {breakdownChips.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {breakdownChips.map((chip) => (
-            <span
-              key={chip.label}
-              className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-            >
-              {chip.label}: {typeof chip.value === "number" ? chip.value.toFixed(3) : chip.value}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {behavior.llm_verdict === "skipped" && (behavior.traditional_score ?? 0) >= 0.45 && (
-        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-          LLM triage skipped (disabled, below threshold, or Bedrock unavailable). Use Reassess to retry.
-        </p>
-      )}
-
-      {behavior.llm_verdict && behavior.llm_verdict !== "skipped" && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50/80 p-3 dark:border-indigo-800 dark:bg-indigo-950/30">
-          <p className="text-xs font-semibold uppercase text-indigo-600 dark:text-indigo-300">LLM SOC Analyst</p>
-          <p className={`mt-1 text-sm font-semibold capitalize ${LLM_VERDICT_STYLES[behavior.llm_verdict] || ""}`}>
-            {behavior.llm_verdict}
-            {behavior.llm_confidence != null ? ` · ${(behavior.llm_confidence * 100).toFixed(0)}% confidence` : ""}
-          </p>
-          {behavior.llm_reasoning && (
-            <p className="mt-2 text-xs text-slate-700 dark:text-slate-300">{behavior.llm_reasoning}</p>
-          )}
-          {behavior.llm_recommended_action && (
-            <p className="mt-2 text-[11px] font-medium text-slate-600 dark:text-slate-400">
-              Recommended: {behavior.llm_recommended_action} (analyst confirmation required for containment)
-            </p>
-          )}
-        </div>
-      )}
 
       <div className="space-y-2">
         <MetricBar label="Blocked" value={behavior.block_rate_pct} colorClass="bg-red-500" />
@@ -545,31 +425,7 @@ export function ApiKeyRiskProfile({
             {(behavior.top_models || []).slice(0, 3).map(([m, c]) => `${m} (${c})`).join(", ") || "—"}
           </p>
         </div>
-        {((behavior.top_collections || []).length > 0 || (behavior.top_mcp_tools || []).length > 0) && (
-          <>
-            <div className="rounded-lg border border-slate-200 p-2 dark:border-slate-600">
-              <p className="mb-1 font-semibold uppercase text-slate-500">Vector collections</p>
-              <p className="text-slate-700 dark:text-slate-300">
-                {(behavior.top_collections || []).slice(0, 3).map(([c, n]) => `${c} (${n})`).join(", ") || "—"}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-2 dark:border-slate-600">
-              <p className="mb-1 font-semibold uppercase text-slate-500">MCP tools</p>
-              <p className="text-slate-700 dark:text-slate-300">
-                {(behavior.top_mcp_tools || []).slice(0, 3).map(([t, n]) => `${t} (${n})`).join(", ") || "—"}
-              </p>
-            </div>
-          </>
-        )}
       </div>
-
-      {canReassess && (
-        <UebaKeyOverridePanel
-          behavior={behavior}
-          api={module2Api}
-          onSaved={onActionComplete}
-        />
-      )}
 
       <RecentRequestsSection
         requests={behavior.recent_requests}
@@ -631,24 +487,6 @@ export function ApiKeyRiskProfile({
         <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
           {actionSuccess}
         </p>
-      )}
-
-      {canReassess && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={!!actionLoading}
-            onClick={handleReassess}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-700 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
-          >
-            {actionLoading === "reassess" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
-            )}
-            Reassess now
-          </button>
-        </div>
       )}
 
       {showActions && (

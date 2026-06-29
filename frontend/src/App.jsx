@@ -14,9 +14,6 @@ const DashboardPage = lazy(() =>
 const UebaApiKeysPage = lazy(() =>
   import("./pages/module2/UebaApiKeysPage").then((m) => ({ default: m.UebaApiKeysPage }))
 );
-const UebaLearningSettingsPage = lazy(() =>
-  import("./pages/module2/UebaLearningSettingsPage").then((m) => ({ default: m.UebaLearningSettingsPage }))
-);
 const ModelExposurePage = lazy(() =>
   import("./pages/module2/ModelAnalyticsPage").then((m) => ({ default: m.ModelExposurePage }))
 );
@@ -64,7 +61,6 @@ function AppShell() {
           <Route path="/" element={<FirewallHome onTabChange={handleTabChange} />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/ueba/api-keys" element={<UebaApiKeysPage />} />
-          <Route path="/ueba/api-keys/learning" element={<UebaLearningSettingsPage />} />
           <Route path="/models/exposure" element={<ModelExposurePage />} />
           <Route path="/mcp/risk" element={<McpRiskPage />} />
           <Route path="/threat-intel" element={<ThreatIntelPage />} />
