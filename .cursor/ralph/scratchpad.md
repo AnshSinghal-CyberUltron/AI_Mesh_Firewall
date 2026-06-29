@@ -1,5 +1,5 @@
 ---
-iteration: 11
+iteration: 12
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 ---
@@ -59,6 +59,11 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 3. Append learnings to `scripts/ralph/progress.txt` under `## MCP Sandbox Ralph Loop`.
 4. Use gateway venv for gateway tests: `cd gateway && ./.venv/bin/python -m pytest ...`
 5. Security: never inject gateway secrets into sandboxes; egress bytes remain source of truth for scan/audit (unchanged in `mcp_proxy.py`).
+
+## Iteration 12 complete
+
+- **S12-rate-limit-mcp** — `org_mcp_jsonrpc` enforces TPM + burst/RPM via `_enforce_mcp_org_rate_limits`; 429 → JSON-RPC error envelope (HTTP 200); 4 tests in `test_mcp_rate_limit.py`; MCP gate 37 passed.
+- **Next:** T1-integration-docker (`@pytest.mark.docker` single-org integration test).
 
 ## Iteration 11 complete
 

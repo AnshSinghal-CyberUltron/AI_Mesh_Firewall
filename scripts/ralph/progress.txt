@@ -96,6 +96,7 @@
 - Broker health: `GET /health` returns `docker_ok` (true when `DockerManager.ping()` succeeds); full wire in `main.py` (sandbox router, registry, reaper lifespan).
 - Compose sandbox stack: `docker compose --profile services up` builds `services/mcp-broker/Dockerfile` + `sandbox-image/Dockerfile`; Docker socket on mcp-broker only; `mcp_sandbox_bridge` network; gateway `MCP_STDIO_IN_PROCESS=false` + shared `MCP_BROKER_INTERNAL_KEY`.
 - Gateway sandbox client: `gateway/ai_mesh_gateway/mcp_sandbox_client.py` — `ensure_sandbox`, `broker_send_jsonrpc`; `X-MCP-Broker-Key` from `MCP_BROKER_INTERNAL_KEY`; 503 exponential backoff (`MCP_SANDBOX_RETRY_*`); 502/503 → safe `RuntimeError` (no agent IP/BYOK in client message); timeouts from `MCP_STDIO_*` forwarded in RPC body.
+- MCP rate limits: `org_mcp_jsonrpc` calls `main._enforce_org_tpm_rate_limit` + `_enforce_org_burst_rpm` via `_enforce_mcp_org_rate_limits`; HTTP 429 mapped to JSON-RPC error envelope (HTTP 200, code -32000) with `Retry-After` preserved.
 
 ### Iteration log
 - 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
@@ -144,6 +145,11 @@
   `server_config` for broker path; in-process logic extracted to `_send_jsonrpc_in_process`; 4 tests in
   `test_mcp_stdio_adapter_branch.py` (broker mock + in-process mock); MCP-focused gate 37 passed;
   full suite 952 passed / 17 failed (pre-existing, unrelated to MCP).
+- 2026-06-29 iteration 12: S12-rate-limit-mcp DONE — `org_mcp_jsonrpc` calls `_enforce_mcp_org_rate_limits`
+  (TPM via `main._enforce_org_tpm_rate_limit` + burst/RPM via `_enforce_org_burst_rpm`, event_type
+  `mcp_blocked`); `_rate_limit_response_to_jsonrpc` maps HTTP 429 → JSON-RPC error (HTTP 200, code
+  -32000, `Retry-After` preserved); 4 tests in `test_mcp_rate_limit.py`; gate: rate-limit 4 passed,
+  MCP-focused gate 37 passed.
 - 2026-06-29 C1-error-envelope PASSES (gate green). The choke point ALREADY EXISTED from
   prior phase work: `_openai_compat_shim` BaseHTTPMiddleware (main.py:254) is registered
   OUTSIDE auth, rewrites flat {error,message,code} bodies via
