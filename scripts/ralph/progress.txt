@@ -384,6 +384,18 @@
   5 stdio presets (Playwright, Semgrep, Memory, Everything, Vibe Check) sync + tools/call green.
   Added Memory/Everything/Vibe Check MCP presets to MCPConnectorPanel. **8/21 stories pass (F0–F7).**
 
+- 2026-06-29 iter-3: F8 `--full` gate fixed — `run_parallel_org_agents.mjs` pytestLeakage() now
+  `cwd=gateway/` (was repo root → pytest path not found). F9 REAL BUG: sandbox read_only rootfs +
+  non-root USER → npx wrote `/home/sandbox/.npm` (ENOENT); tmpfs was only on `/root/.npm`. Fix in
+  `docker_manager.py`: container env `NPM_CONFIG_CACHE=/tmp/.npm`, `UV_CACHE_DIR=/tmp/.cache/uv`,
+  `XDG_CACHE_HOME=/tmp/.cache`. Expanded adversarial coverage: `cross_org_leak_probe.mjs` runs
+  concurrently with 2 org workers (12 hammer rounds + cross-org marker + secret denylist); broker
+  fetch backoff on 429/503/502 in org_worker + leak probe. Frontend e2e: `waitForControlPlane()`
+  polls `/api/health/` (NOT `/health/` — 404) + gateway /health; register/sync `withRetry()`.
+  MCPConnectorPanel: Filesystem MCP + Fetch MCP (`mcp-server-fetch`) presets added. Gates green:
+  `--full` (workers + leak probe + pytest 4/4), adversarial pytest 11/11, frontend_parallel_orgs,
+  broker tests 59/59. **13/21 stories pass (F0–F12).**
+
 - 2026-06-29 D1-ui-auth-keys PASSES (gate green). Built a DURABLE, re-runnable browser gate
   `scripts/playwright_auth_keys.mjs` (real customer perspective, real stack :8180→control:8100/
   gateway:8300). 10 phases / 19 asserts, 0 pageerrors: login EMPTY (HTML5 `#email:invalid`, no

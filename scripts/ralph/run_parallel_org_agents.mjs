@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../..");
 const WORKER = path.join(REPO_ROOT, "tests/e2e/mcp_sandbox_adversarial/org_worker.mjs");
+const LEAK_PROBE = path.join(REPO_ROOT, "tests/e2e/mcp_sandbox_adversarial/cross_org_leak_probe.mjs");
 const STUB_HOST = path.join(
   REPO_ROOT,
   "services/mcp-broker/tests/fixtures/stdio_mcp_stub.py"
@@ -30,10 +31,10 @@ const args = new Set(process.argv.slice(2));
 const bootstrapOnly = args.has("--bootstrap-only");
 const full = args.has("--full");
 
-function run(cmd, cmdArgs, env = {}) {
+function run(cmd, cmdArgs, env = {}, cwd = REPO_ROOT) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, cmdArgs, {
-      cwd: REPO_ROOT,
+      cwd,
       env: { ...process.env, ...env },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -134,7 +135,7 @@ async function bootstrap() {
 }
 
 async function parallelWorkers() {
-  console.log("=== parallel org workers (2 × 6 servers) ===");
+  console.log("=== parallel org workers (2 × 6 servers) + cross-org leak probe ===");
   const workers = ORGS.map((org) =>
     run("node", [WORKER], {
       ORG_SLUG: org,
@@ -143,23 +144,34 @@ async function parallelWorkers() {
       WORKER_REPORT: `runs/org_worker_${org}.json`,
     })
   );
-  await Promise.all(workers);
+  const leakProbe = run("node", [LEAK_PROBE], {
+    MCP_BROKER_URL: BROKER_URL,
+    MCP_BROKER_INTERNAL_KEY: BROKER_KEY,
+    LEAK_PROBE_REPORT: "runs/cross_org_leak_probe.json",
+  });
+  await Promise.all([...workers, leakProbe]);
   console.log("=== parallel workers OK ===");
 }
 
 async function pytestLeakage() {
   console.log("=== pytest adversarial leakage subset ===");
-  const venvPy = path.join(REPO_ROOT, "gateway/.venv/bin/python");
+  const gatewayDir = path.join(REPO_ROOT, "gateway");
+  const venvPy = path.join(gatewayDir, ".venv/bin/python");
   const py = fs.existsSync(venvPy) ? venvPy : "python3";
-  await run(py, [
-    "-m",
-    "pytest",
-    "ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py",
-    "-q",
-    "-k",
-    "volume or foreign_org or npm_cache or denylist_secrets",
-    "--tb=short",
-  ], { MCP_BROKER_URL: BROKER_URL, MCP_BROKER_INTERNAL_KEY: BROKER_KEY });
+  await run(
+    py,
+    [
+      "-m",
+      "pytest",
+      "ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py",
+      "-q",
+      "-k",
+      "volume or foreign_org or npm_cache or denylist_secrets",
+      "--tb=short",
+    ],
+    { MCP_BROKER_URL: BROKER_URL, MCP_BROKER_INTERNAL_KEY: BROKER_KEY },
+    gatewayDir
+  );
 }
 
 async function main() {
