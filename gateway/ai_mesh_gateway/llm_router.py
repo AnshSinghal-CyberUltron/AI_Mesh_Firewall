@@ -242,6 +242,13 @@ class ModelSelection:
     decision_factors: list[str] = field(default_factory=list)
     candidate_count: int = 0
 
+# B1 (egress = truth): a digit-bearing sensitive run, possibly split by separators
+# (spaces / dots / dashes / parens) — a 5+5 spaced phone ("89295 54991"), a spaced
+# SSN, a grouped card. A contiguous ``\d{7,}`` match misses any separator-split
+# format, so the byte-verify below considers these wider runs too.
+_DIGIT_RUN_RE = re.compile(r"\d[\d .()\-]{5,}\d")
+
+
 def _redact_text_with_backstop(text, redacted_content):
     """Deterministic redactor shared by the chat (_apply_redaction) and Responses
     (aresponses) paths so a value is masked identically wherever it appears.
@@ -249,22 +256,37 @@ def _redact_text_with_backstop(text, redacted_content):
     ``redact_all`` is, by construction, WEAKER than the verdict-aware
     ``InputScanner.redact_pii`` that produced ``redacted_content`` (the authoritative
     redacted display / input — what the firewall decided must never reach the model):
-    redact_all only masks a 10-digit phone when an adjacent label disambiguates it,
-    whereas a Tier-2 / policy detector flags the same number from ANY phrasing. That
-    asymmetry once forwarded the RAW value upstream while the trace showed it masked —
-    a silent PII leak. So after redact_all we run a FAIL-CLOSED digit backstop: any run
-    of 7+ digits that ``redacted_content`` masked (absent there) but this text still
-    carries raw is masked too. Partial masks like ``***-***-4991`` keep only 4 digits
-    so they never re-trigger; a value left intact in ``redacted_content`` (a legit
-    order id the firewall did NOT redact) stays intact here."""
+    redact_all only masks a 10-digit phone when an adjacent label disambiguates it
+    and only as a CONTIGUOUS run, whereas a Tier-2 / policy detector flags the same
+    number from ANY phrasing. That asymmetry once forwarded the RAW value upstream
+    while the trace showed it masked — a silent PII leak.
+
+    B1 closes it with a FAIL-CLOSED egress byte-verify: any digit-bearing run this
+    text carries that the firewall's authoritative ``redacted_content`` REMOVED
+    (absent there) but ``redact_all`` left raw is masked too — so the bytes on the
+    wire always reflect the verdict (egress = truth), never a phantom redaction.
+    FP-safety is structural: we mask ONLY runs the firewall already removed, so a run
+    it deliberately KEPT (a legit order id, still present in ``redacted_content``)
+    stays intact. Partial masks like ``***-***-4991`` keep only 4 digits and are
+    derived from ``text`` (not the masked ``out``), so they never re-trigger."""
     try:
         from patterns import redact_all
     except ImportError:
         from .patterns import redact_all
     out = redact_all(text)
-    for run in set(re.findall(r"\d{7,}", text)):
+    if not text or redacted_content is None:
+        return out
+    # Candidate runs: contiguous 7+ digit runs AND separator-split digit groups.
+    candidates = set(re.findall(r"\d{7,}", text))
+    candidates.update(m.group(0) for m in _DIGIT_RUN_RE.finditer(text))
+    # Longest first so a full split run is masked before any contiguous sub-run.
+    for run in sorted(candidates, key=len, reverse=True):
+        digits = re.sub(r"\D", "", run)
+        if len(digits) < 7:
+            continue
+        # Egress = truth: mask iff the firewall removed this run yet it still rides raw.
         if run not in redacted_content and run in out:
-            out = out.replace(run, f"***-***-{run[-4:]}")
+            out = out.replace(run, f"***-***-{digits[-4:]}")
     return out
 
 
