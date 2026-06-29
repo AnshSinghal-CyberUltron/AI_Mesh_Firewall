@@ -8,28 +8,25 @@ socket access). Run:
 
 from __future__ import annotations
 
-import importlib
-import os
 import shutil
 import socket
 import subprocess
-import sys
-import threading
 import time
 from pathlib import Path
 from typing import Iterator
 
 import pytest
-import uvicorn
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-BROKER_SRC = REPO_ROOT / "services" / "mcp-broker" / "src"
-SHARED = REPO_ROOT / "shared"
 DOCKERFILE = REPO_ROOT / "services/mcp-broker/sandbox-image/Dockerfile"
 STDIO_STUB = REPO_ROOT / "services/mcp-broker/tests/fixtures/stdio_mcp_stub.py"
 
 BROKER_KEY = "integration-test-broker-key"
 IMAGE_TAG = "ai-mesh/mcp-sandbox:integration-test"
+BROKER_IMAGE_TAG = "ai-mesh/mcp-broker:integration-test"
+BROKER_DOCKERFILE = REPO_ROOT / "services/mcp-broker/Dockerfile"
+BROKER_CONTAINER_NAME = "mcp-broker-integration-test"
+SANDBOX_NETWORK = "mcp_sandbox_bridge"
 TEST_PREFIX = "t1-integ"
 ORG_ALPHA = f"{TEST_PREFIX}-alpha"
 ORG_BETA = f"{TEST_PREFIX}-beta"
@@ -145,72 +142,111 @@ def sandbox_image(docker_available: None) -> str:
 
 
 @pytest.fixture(scope="module")
-def broker_url(docker_available: None, sandbox_image: str) -> Iterator[str]:
-    """Start mcp-broker on loopback with real Docker socket access."""
-    try:
-        import docker  # noqa: F401 — gate requires docker SDK when daemon present
-    except ImportError:
-        pytest.skip("docker Python SDK not installed (pip install docker)")
+def broker_image(docker_available: None) -> str:
+    proc = subprocess.run(
+        [
+            "docker",
+            "build",
+            "-t",
+            BROKER_IMAGE_TAG,
+            "-f",
+            str(BROKER_DOCKERFILE),
+            str(REPO_ROOT),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    assert proc.returncode == 0, proc.stderr[-4000:]
+    return BROKER_IMAGE_TAG
 
+
+def _ensure_sandbox_network() -> None:
+    subprocess.run(
+        ["docker", "network", "create", SANDBOX_NETWORK],
+        capture_output=True,
+        timeout=30,
+    )
+
+
+@pytest.fixture(scope="module")
+def broker_url(
+    docker_available: None,
+    sandbox_image: str,
+    broker_image: str,
+) -> Iterator[str]:
+    """Run mcp-broker in Docker on the sandbox bridge (matches compose topology)."""
     _cleanup_test_containers()
-
-    for path in (SHARED, BROKER_SRC):
-        path_str = str(path)
-        if path_str not in sys.path:
-            sys.path.insert(0, path_str)
+    subprocess.run(
+        ["docker", "rm", "-f", BROKER_CONTAINER_NAME],
+        capture_output=True,
+        timeout=30,
+    )
+    _ensure_sandbox_network()
 
     port = _free_port()
-    broker_env = {
-        "MCP_BROKER_INTERNAL_KEY": BROKER_KEY,
-        "MCP_SANDBOX_IMAGE": sandbox_image,
-        "MCP_SANDBOX_NETWORK": "mcp_sandbox_bridge",
-        "MCP_SANDBOX_IDLE_TIMEOUT": "3600",
-    }
-    for key, value in broker_env.items():
-        os.environ[key] = value
-
-    for mod in ("main", "sandbox.docker_manager", "sandbox.routes", "auth"):
-        sys.modules.pop(mod, None)
-    broker_main = importlib.import_module("main")
-
-    config = uvicorn.Config(
-        broker_main.app,
-        host="127.0.0.1",
-        port=port,
-        log_level="error",
+    run = subprocess.run(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            BROKER_CONTAINER_NAME,
+            "--network",
+            SANDBOX_NETWORK,
+            "-v",
+            "/var/run/docker.sock:/var/run/docker.sock",
+            "-e",
+            f"MCP_BROKER_INTERNAL_KEY={BROKER_KEY}",
+            "-e",
+            f"MCP_SANDBOX_IMAGE={sandbox_image}",
+            "-e",
+            f"MCP_SANDBOX_NETWORK={SANDBOX_NETWORK}",
+            "-e",
+            "MCP_SANDBOX_IDLE_TIMEOUT=3600",
+            "-p",
+            f"127.0.0.1:{port}:8311",
+            broker_image,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
-    server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    url = f"http://127.0.0.1:{port}"
-
-    for _ in range(200):
-        if getattr(server, "started", False):
-            break
-        time.sleep(0.05)
-    if not getattr(server, "started", False):
-        pytest.fail("mcp-broker uvicorn server did not start")
+    assert run.returncode == 0, run.stderr
 
     import httpx
 
-    for _ in range(40):
+    url = f"http://127.0.0.1:{port}"
+    for _ in range(60):
         try:
             health = httpx.get(f"{url}/health", timeout=2.0)
             if health.status_code == 200 and health.json().get("docker_ok"):
                 break
         except httpx.HTTPError:
             pass
-        time.sleep(0.25)
+        time.sleep(0.5)
     else:
-        pytest.fail("mcp-broker /health did not report docker_ok=true")
+        logs = subprocess.run(
+            ["docker", "logs", BROKER_CONTAINER_NAME],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        pytest.fail(
+            "mcp-broker /health did not report docker_ok=true\n"
+            f"{logs.stdout}\n{logs.stderr}"
+        )
 
     yield url
 
-    server.should_exit = True
-    thread.join(timeout=10)
     _destroy_org_sandbox(ORG_ALPHA, url)
     _destroy_org_sandbox(ORG_BETA, url)
     _cleanup_test_containers()
+    subprocess.run(
+        ["docker", "rm", "-f", BROKER_CONTAINER_NAME],
+        capture_output=True,
+        timeout=60,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -221,6 +257,54 @@ def _gateway_broker_env(broker_url: str, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("MCP_SANDBOX_RETRY_MAX", "5")
     monkeypatch.setenv("MCP_SANDBOX_RETRY_BASE_DELAY", "0.05")
     monkeypatch.setenv("MCP_SANDBOX_RETRY_MAX_DELAY", "0.2")
+
+
+def _wait_for_sandbox_agent(container_id: str, timeout: float = 150.0) -> None:
+    """Wait until sandbox-agent /health responds inside the container."""
+    deadline = time.time() + timeout
+    probe = (
+        "import urllib.request; "
+        "urllib.request.urlopen('http://127.0.0.1:9320/health', timeout=3)"
+    )
+    while time.time() < deadline:
+        state = subprocess.run(
+            ["docker", "inspect", container_id, "--format", "{{.State.Status}}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if state.stdout.strip() not in ("running", ""):
+            break
+        proc = subprocess.run(
+            ["docker", "exec", container_id, "python", "-c", probe],
+            capture_output=True,
+            timeout=15,
+        )
+        if proc.returncode == 0:
+            return
+        time.sleep(2)
+    logs = subprocess.run(
+        ["docker", "logs", "--tail", "40", container_id],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    pytest.fail(
+        f"sandbox-agent did not become healthy in container {container_id[:12]}\n"
+        f"{logs.stdout}\n{logs.stderr}"
+    )
+
+
+async def _prepare_org_sandbox(org_slug: str) -> str:
+    """Ensure org sandbox, wait for agent, seed stdio stub; return container_id."""
+    from ai_mesh_gateway import mcp_sandbox_client as client
+
+    ensure = await client.ensure_sandbox(org_slug)
+    assert ensure["status"] == "running"
+    container_id = ensure["container_id"]
+    _wait_for_sandbox_agent(container_id)
+    _copy_stub_into_container(container_id)
+    return container_id
 
 
 def _copy_stub_into_container(container_id: str) -> None:
@@ -242,17 +326,13 @@ def _container_for_org(org_slug: str) -> dict:
 async def test_ensure_sandbox_labels_and_broker_rpc(broker_url: str):
     from ai_mesh_gateway import mcp_sandbox_client as client
 
-    ensure = await client.ensure_sandbox(ORG_ALPHA)
-    assert ensure["status"] == "running"
-    container_id = ensure["container_id"]
-    assert container_id
+    container_id = await _prepare_org_sandbox(ORG_ALPHA)
 
     container = _container_for_org(ORG_ALPHA)
     labels = container.get("Config", {}).get("Labels", {})
     assert labels.get(LABEL_ROLE) == ROLE_VALUE
     assert labels.get(LABEL_ORG_SLUG) == ORG_ALPHA
-
-    _copy_stub_into_container(container_id)
+    assert container_id
 
     rpc = await client.broker_send_jsonrpc(
         ORG_ALPHA,
@@ -283,8 +363,7 @@ async def test_send_jsonrpc_full_path_via_adapter(broker_url: str):
     from ai_mesh_gateway import mcp_sandbox_client as client
     from mcp_stdio_adapter import send_jsonrpc
 
-    ensure_resp = await client.ensure_sandbox(ORG_ALPHA)
-    _copy_stub_into_container(ensure_resp["container_id"])
+    await _prepare_org_sandbox(ORG_ALPHA)
 
     result = await send_jsonrpc(
         org_slug=ORG_ALPHA,
@@ -306,17 +385,16 @@ async def test_send_jsonrpc_full_path_via_adapter(broker_url: str):
 async def test_cross_org_volume_and_env_isolation(broker_url: str):
     from ai_mesh_gateway import mcp_sandbox_client as client
 
-    alpha = await client.ensure_sandbox(ORG_ALPHA)
-    beta = await client.ensure_sandbox(ORG_BETA)
-    _copy_stub_into_container(alpha["container_id"])
-    _copy_stub_into_container(beta["container_id"])
+    # Prepare beta first so both sandboxes are warm before isolation assertions.
+    beta_id = await _prepare_org_sandbox(ORG_BETA)
+    alpha_id = await _prepare_org_sandbox(ORG_ALPHA)
 
     secret = "ORG_ALPHA_ONLY_SECRET"
     write = subprocess.run(
         [
             "docker",
             "exec",
-            alpha["container_id"],
+            alpha_id,
             "sh",
             "-c",
             f"printf '%s' '{secret}' > /data/mcp-auth/leak-marker.txt",
@@ -331,7 +409,7 @@ async def test_cross_org_volume_and_env_isolation(broker_url: str):
         [
             "docker",
             "exec",
-            beta["container_id"],
+            beta_id,
             "sh",
             "-c",
             "test ! -f /data/mcp-auth/leak-marker.txt",

@@ -98,6 +98,7 @@
 - Compose sandbox stack: `docker compose --profile services up` builds `services/mcp-broker/Dockerfile` + `sandbox-image/Dockerfile`; Docker socket on mcp-broker only; `mcp_sandbox_bridge` network; gateway `MCP_STDIO_IN_PROCESS=false` + shared `MCP_BROKER_INTERNAL_KEY`.
 - Gateway sandbox client: `gateway/ai_mesh_gateway/mcp_sandbox_client.py` — `ensure_sandbox`, `broker_send_jsonrpc`; `X-MCP-Broker-Key` from `MCP_BROKER_INTERNAL_KEY`; 503 exponential backoff (`MCP_SANDBOX_RETRY_*`); 502/503 → safe `RuntimeError` (no agent IP/BYOK in client message); timeouts from `MCP_STDIO_*` forwarded in RPC body.
 - MCP rate limits: `org_mcp_jsonrpc` calls `main._enforce_org_tpm_rate_limit` + `_enforce_org_burst_rpm` via `_enforce_mcp_org_rate_limits`; HTTP 429 mapped to JSON-RPC error envelope (HTTP 200, code -32000) with `Retry-After` preserved.
+- Docker integration gate: `gateway/ai_mesh_gateway/tests/test_mcp_sandbox_integration.py` — `@pytest.mark.docker`; broker runs in Docker on `mcp_sandbox_bridge` (host uvicorn cannot reach sandbox bridge IPs); stdio stub via `docker cp` to `/data/mcp-auth/` (read-only rootfs); wait for sandbox-agent health before RPC; asserts labels + cross-org volume/env isolation.
 
 ### Iteration log
 - 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
@@ -151,6 +152,12 @@
   `mcp_blocked`); `_rate_limit_response_to_jsonrpc` maps HTTP 429 → JSON-RPC error (HTTP 200, code
   -32000, `Retry-After` preserved); 4 tests in `test_mcp_rate_limit.py`; gate: rate-limit 4 passed,
   MCP-focused gate 37 passed.
+- 2026-06-29 iteration 13: T1-integration-docker DONE — `test_mcp_sandbox_integration.py` (3 tests,
+  `@pytest.mark.docker`): mcp-broker container on `mcp_sandbox_bridge` + docker.sock; builds sandbox
+  + broker images; `ensure_sandbox` + `broker_send_jsonrpc` + `send_jsonrpc` (`MCP_STDIO_IN_PROCESS=false`);
+  asserts `ai_mesh.role`/`ai_mesh.org_slug` labels; cross-org volume file + env isolation via stdio stub
+  `get_env`; gate: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_integration.py -q`
+  → 3 passed (~92s with Docker).
 - 2026-06-29 C1-error-envelope PASSES (gate green). The choke point ALREADY EXISTED from
   prior phase work: `_openai_compat_shim` BaseHTTPMiddleware (main.py:254) is registered
   OUTSIDE auth, rewrites flat {error,message,code} bodies via
@@ -268,27 +275,3 @@
   PATTERN (recorded at top): broaden a context-gated detector by swapping ONLY the trailing value
   sub-pattern (keep the cue alternation) so FP-safety is preserved by construction; mask via the SAME
   sub-pattern + \D strip. Unblocks B5 (depends on A2+B2).
-
-- 2026-06-29 B3-embeddings-scan PASSES (gate green). The G1 input scan+redaction on
-  /v1/embeddings was already IMPLEMENTED (commit 5c4968ec: main._scan_redact_embedding_inputs
-  — tier-1 InputScanner + verdict-aware redact_pii + fail-closed digit backstop + byte-verify
-  block when masking impossible; wired at main.py:8954 in proxy_embeddings, with the redacted
-  texts written back to body["input"] BEFORE LLM_ROUTER.aembedding). In-tree unit suite
-  ai_mesh_gateway/tests/test_embedding_input_redaction.py already proved the helper. B3's
-  REMAINING job was the egress-truth GATE: a leakhunt test that drives the FULL path
-  (_scan_redact_embedding_inputs -> LLM_ROUTER.aembedding) through the RecordingProvider and
-  asserts no raw corpus value reached the captured EMBEDDING wire. Built
-  gateway/tests/leakhunt/test_b3_embeddings_scan.py: parametrized over corpus.REDACTABLE
-  (email/ssn/phone/secret) — each absent from provider.wire_blob; batch parity (clean text
-  survives, PII masked); fail-closed (unmaskable name -> block, provider.embed == [] so NOTHING
-  egresses); scan-disabled honesty (value forwarded raw, no false redaction claim).
-  ROUTER GOTCHA: with org_only_inference=True the router is empty, so aembedding dispatches via
-  _execute_embedding -> module-level litellm.aembedding (the RecordingProvider patch point). Model
-  MUST be _DEFAULT_EMBEDDING_MODEL ("text-embedding-3-small") — it is the only name in
-  _allowed_embedding_model_names() when router is None; any other -> clean 404 before egress.
-  Gate: `cd gateway && ./.venv/bin/python -m pytest tests/leakhunt -q` -> 50 passed;
-  `PYTHONPATH=../shared ... test_embedding_input_redaction.py test_openai_sdk_compat.py -q`
-  -> 40 passed/2 xpassed. ALSO fixed the leakhunt conftest to add repo-root `shared/` to sys.path
-  (_HERE.parents[2]/"shared") so `import main` resolves ai_mesh_shared and the CLAUDE.md gate
-  (`cd gateway && pytest tests/leakhunt -q`) is SELF-CONTAINED — no manual PYTHONPATH. Prior
-  B1/B2 leakhunt runs only worked with PYTHONPATH=../shared set; this removes that footgun.

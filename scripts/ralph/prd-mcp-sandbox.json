@@ -163,7 +163,7 @@
       "id": "T1-integration-docker",
       "title": "Docker integration test (single org, single server)",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S9-docker-compose", "S11-stdio-adapter-branch"],
       "userStory": "As CI I need one real Docker integration test before load gate.",
       "acceptanceCriteria": [

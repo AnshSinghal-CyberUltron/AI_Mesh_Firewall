@@ -1,5 +1,5 @@
 ---
-iteration: 12
+iteration: 13
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 ---
@@ -60,10 +60,15 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 4. Use gateway venv for gateway tests: `cd gateway && ./.venv/bin/python -m pytest ...`
 5. Security: never inject gateway secrets into sandboxes; egress bytes remain source of truth for scan/audit (unchanged in `mcp_proxy.py`).
 
+## Iteration 13 complete
+
+- **T1-integration-docker** — `test_mcp_sandbox_integration.py` (3 tests, `@pytest.mark.docker`): broker in Docker on `mcp_sandbox_bridge`; labels `ai_mesh.role`/`ai_mesh.org_slug`; `broker_send_jsonrpc` + `send_jsonrpc` with `MCP_STDIO_IN_PROCESS=false`; cross-org volume + env isolation; gate 3 passed (~92s).
+- **Next:** E1-parallel-load (5 orgs × 5 MCP servers concurrent).
+
 ## Iteration 12 complete
 
 - **S12-rate-limit-mcp** — `org_mcp_jsonrpc` enforces TPM + burst/RPM via `_enforce_mcp_org_rate_limits`; 429 → JSON-RPC error envelope (HTTP 200); 4 tests in `test_mcp_rate_limit.py`; MCP gate 37 passed.
-- **Next:** T1-integration-docker (`@pytest.mark.docker` single-org integration test).
+- **Next:** E1-parallel-load (`test_mcp_sandbox_parallel_load.py` 5×5 concurrent gate).
 
 ## Iteration 11 complete
 
