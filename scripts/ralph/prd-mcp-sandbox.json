@@ -46,7 +46,7 @@
       "id": "S4-docker-manager",
       "title": "Broker Docker SDK lifecycle manager",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S1-sandbox-dockerfile"],
       "userStory": "As broker I need to create/stop/destroy per-org sandbox containers.",
       "acceptanceCriteria": [
