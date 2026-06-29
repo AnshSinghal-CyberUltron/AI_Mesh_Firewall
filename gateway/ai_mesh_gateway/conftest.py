@@ -13,6 +13,20 @@ from pathlib import Path
 from typing import Any, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
+# Keep the documented gate self-contained. main.py imports ``ai_mesh_shared`` (which
+# lives at repo-root/shared), and the gateway source modules (``scanner``, ``main`` …)
+# are imported flat by the test fixtures. Without these on sys.path the documented gate
+# ``cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`` errors at
+# FIXTURE SETUP with ``ModuleNotFoundError: No module named 'ai_mesh_shared'`` unless a
+# manual PYTHONPATH is supplied (module-level collection passes because the fixtures
+# import main lazily). Mirror tests/leakhunt/conftest.py so the gate runs from a clean
+# shell. conftest is imported before any fixture/test module runs.
+_CONFTEST_DIR = Path(__file__).resolve().parent  # gateway/ai_mesh_gateway
+_SHARED_SRC = _CONFTEST_DIR.parents[1] / "shared"  # repo-root/shared (ai_mesh_shared pkg)
+for _p in (str(_CONFTEST_DIR), str(_SHARED_SRC)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import fakeredis
 import fakeredis.aioredis
 import pytest
