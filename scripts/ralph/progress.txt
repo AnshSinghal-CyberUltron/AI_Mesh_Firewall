@@ -377,6 +377,13 @@
   frontend F7 needs gateway recreate with services profile.
 - Next: F5 cross-org leakage (docker pytest), F7 frontend Playwright, fix compose network story.
 
+- 2026-06-29 iter-2: Compose `mcp_sandbox_bridge` → `external: true` + `scripts/ensure_mcp_sandbox_network.sh`
+  (avoids label conflict when pytest/manual runs created the network first). Gateway recreated with
+  `MCP_STDIO_IN_PROCESS=false`. F5 leakage 4/4, F6 escape 4/4 (pytest filters: volume|foreign_org|
+  npm_cache|denylist_secrets; traversal|proc_self|docker_sock|sibling). F7 frontend_parallel_orgs:
+  5 stdio presets (Playwright, Semgrep, Memory, Everything, Vibe Check) sync + tools/call green.
+  Added Memory/Everything/Vibe Check MCP presets to MCPConnectorPanel. **8/21 stories pass (F0–F7).**
+
 - 2026-06-29 D1-ui-auth-keys PASSES (gate green). Built a DURABLE, re-runnable browser gate
   `scripts/playwright_auth_keys.mjs` (real customer perspective, real stack :8180→control:8100/
   gateway:8300). 10 phases / 19 asserts, 0 pageerrors: login EMPTY (HTML5 `#email:invalid`, no
@@ -457,3 +464,30 @@
   whole panel shows "gateway_unreachable"). Degrade a failed/slow backend to empty, never fail the
   whole aggregate. Tunable via env (RAG_LIST_COLLECTIONS_TIMEOUT default 4s). Bogus e2e fixture
   providers (pinecone->example.com) are a permanent landmine for sequential enumeration.
+
+- 2026-06-29 D4-ui-mcp PASSES (gate green). Durable verifier scripts/playwright_mcp_panels.mjs
+  drives Module 1.4 (?tab=firewall-1-4) real-customer POV → 27/27 asserts, 0 pageErrors, build OK.
+  KEY FINDING: the customer-reachable 1.4 control surface is ONLY MCPConnectorPanel (mounts the
+  registry + Tool Discovery + Tool Execution + MCPScanControlMatrix + MCP Security Policies +
+  Observability as 6 internal Tabs). MCPManagerPanel + MCPScannerPanel exist in the tree but are
+  NOT wired into any live route (referenced only in comments) → NOT customer-reachable; the honest
+  verification drives what actually renders. Asserts: (1) panel + 6 tabs render; (2) UI HONESTY —
+  rendered server-card count (== count of `Delete server` aria-buttons) == GET
+  /api/mcp-connector/servers/ length, AND on-screen per-card "Connected" badges == backend connected
+  count; (3) Register CRUD side-effect-free (POST server → card+backend appear → DELETE via card →
+  card+backend gone); (4) server Default-scan-enforcement Select PATCH + RESTORE (backend-verified
+  both ways); (5) Tool Discovery renders backend tools; (6) Tool Execution: live echo call on
+  everything-mcp → POST /tools/call/ decision=="allow" AND on-screen badge "Allow" + echoed preview
+  mirror it (verdict honesty); (7) Scan Controls/Policies/Observability render.
+  GOTCHAS (reusable):
+    * MCP register via streamable-http is gated by an SSRF guard that REQUIRES DNS resolution to
+      succeed; public hosts (example.com) do NOT resolve from inside the control container →
+      400 "URL rejected by SSRF guard". For a hermetic register-CRUD test use transport=stdio
+      (command "npx" + args) — no URL, allow-listed interpreter, 201 even if sandbox sync later fails.
+    * tool-call API body is {name, arguments, server_slug} (NOT tool_name) → decision/request_id/result.
+    * connection badges: page-HEADER status pill is `span.rounded-full border`; per-card badges are
+      `span.rounded-md`. Count `span.rounded-md` with direct text "Connected" to avoid an off-by-one
+      from the header pill (a getByText("Connected") global count is BRITTLE here).
+    * MCPConnectorPanel.jsx had a pre-existing +3-line diff (Memory/Everything/Vibe-Check quick-add
+      presets) — benign, build-clean, matches the seeded servers; verified + committed with this story.
+  Connection labels live in frontend/src/lib/mcpColors.js (DECISION.allow→"Allow", connected→"Connected").

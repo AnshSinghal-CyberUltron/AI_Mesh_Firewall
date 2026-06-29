@@ -1,5 +1,5 @@
 ---
-iteration: 1
+iteration: 2
 min_iterations: 20
 max_iterations: 50
 completion_promise: "MCP FRONTEND ADVERSARIAL COMPLETE"
@@ -48,6 +48,7 @@ status: IN_PROGRESS
 
 ### Stack up
 ```bash
+./scripts/ensure_mcp_sandbox_network.sh   # once, if network missing
 docker compose --profile services up -d
 curl -sf http://127.0.0.1:8311/health | jq -e '.docker_ok==true'
 ```
@@ -86,3 +87,13 @@ chmod +x scripts/ralph/ralph-mcp-frontend-adversarial.sh
 - **Fix applied:** `run_parallel_org_agents.mjs` — ensure body `{warm:true}`, agent health wait,
   correct stdio/rpc payload shape.
 - **Next:** F5 leakage pytest, F7 frontend Playwright, gateway `MCP_STDIO_IN_PROCESS=false`.
+
+### Iteration 2 (complete)
+- **Compose fix:** `mcp_sandbox_bridge` declared `external: true`; added `scripts/ensure_mcp_sandbox_network.sh`.
+- **Gateway:** recreated via compose with `MCP_STDIO_IN_PROCESS=false` + matching `MCP_BROKER_INTERNAL_KEY`.
+- **F5 PASS:** leakage pytest 4/4 (`volume|foreign_org|npm_cache|denylist_secrets`).
+- **F6 PASS:** escape pytest 4/4 (`traversal|proc_self|docker_sock|sibling`).
+- **F7 PASS:** frontend_parallel_orgs.mjs — 5 stdio presets sync + tools/call (Playwright, Semgrep, Memory, Everything, Vibe Check).
+- **MCP presets:** added Memory, Everything, Vibe Check stdio quick-register buttons.
+- **Gate:** `node scripts/ralph/run_parallel_org_agents.mjs` green each iteration.
+- **Stories:** 8/21 passing (F0–F7). Next: F8 `--full` runner, fix placeholders.

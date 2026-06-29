@@ -105,6 +105,9 @@ const MCP_PRESETS = [
 
   { name: "Playwright MCP", transport: "stdio", description: "Browser automation via Playwright MCP", command: "npx", args: ["-y", "@playwright/mcp@latest"] },
   { name: "Semgrep MCP", transport: "stdio", description: "Code security scanning via Semgrep MCP", command: "npx", args: ["-y", "mcp-server-semgrep"] },
+  { name: "Memory MCP", transport: "stdio", description: "Knowledge graph memory via official MCP memory server", command: "npx", args: ["-y", "@modelcontextprotocol/server-memory"] },
+  { name: "Everything MCP", transport: "stdio", description: "Official MCP reference/test server (tools echo, add, etc.)", command: "npx", args: ["-y", "@modelcontextprotocol/server-everything"] },
+  { name: "Vibe Check MCP", transport: "stdio", description: "Vibe Check MCP for plan/goal alignment", command: "npx", args: ["-y", "@pv-bhat/vibe-check-mcp", "start", "--stdio"] },
 ];
 
 const makeEmptyAddForm = () => ({
