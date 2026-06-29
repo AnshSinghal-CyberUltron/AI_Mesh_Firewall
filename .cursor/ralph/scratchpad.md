@@ -1,5 +1,5 @@
 ---
-iteration: 2
+iteration: 3
 min_iterations: 20
 max_iterations: 50
 completion_promise: "MCP FRONTEND ADVERSARIAL COMPLETE"
@@ -97,3 +97,15 @@ chmod +x scripts/ralph/ralph-mcp-frontend-adversarial.sh
 - **MCP presets:** added Memory, Everything, Vibe Check stdio quick-register buttons.
 - **Gate:** `node scripts/ralph/run_parallel_org_agents.mjs` green each iteration.
 - **Stories:** 8/21 passing (F0–F7). Next: F8 `--full` runner, fix placeholders.
+
+### Iteration 3 (complete)
+- **F8 PASS:** `--full` gate fixed — pytest leakage subset now runs with `cwd=gateway/` (was repo root).
+- **F9 PASS (real bug):** Sandbox read-only rootfs + non-root USER → npx failed writing `/home/sandbox/.npm`.
+  Fix: `docker_manager.py` sets `NPM_CONFIG_CACHE=/tmp/.npm`, `UV_CACHE_DIR`, `XDG_CACHE_HOME` on container env.
+- **Coverage expanded:** `cross_org_leak_probe.mjs` runs concurrently with 2 org workers (12 hammer rounds +
+  cross-org marker + secret denylist probes). Broker/org_worker get 429/503 backoff-retry.
+- **Frontend:** control-plane health wait (`/api/health/` not `/health/`), register/sync retry wrapper.
+  Added Filesystem MCP + Fetch MCP presets to MCPConnectorPanel (Fetch uses `mcp-server-fetch`).
+- **F10–F12 PASS:** full adversarial pytest 11/11, frontend_parallel_orgs green, broker tests 59/59.
+- **Gate:** `node scripts/ralph/run_parallel_org_agents.mjs --full` → workers + leak probe + pytest 4/4.
+- **Stories:** 13/21 passing (F0–F12). Next: F13–F19 fix placeholders, F20 final gate.

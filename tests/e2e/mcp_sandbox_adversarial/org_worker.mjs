@@ -31,16 +31,31 @@ const SERVERS = [
 
 const STUB_PATH = "/data/mcp-auth/stdio_mcp_stub.py";
 
-async function brokerFetch(pathname, opts = {}) {
-  const res = await fetch(`${BROKER_URL}${pathname}`, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      "X-MCP-Broker-Key": BROKER_KEY,
-      ...(opts.headers || {}),
-    },
-  });
-  return res;
+async function brokerFetch(pathname, opts = {}, attempt = 0) {
+  const maxAttempts = 4;
+  const backoffMs = 1000 * (attempt + 1);
+  try {
+    const res = await fetch(`${BROKER_URL}${pathname}`, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        "X-MCP-Broker-Key": BROKER_KEY,
+        ...(opts.headers || {}),
+      },
+      signal: AbortSignal.timeout(60000),
+    });
+    if ((res.status === 429 || res.status === 503 || res.status === 502) && attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, backoffMs));
+      return brokerFetch(pathname, opts, attempt + 1);
+    }
+    return res;
+  } catch (e) {
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, backoffMs));
+      return brokerFetch(pathname, opts, attempt + 1);
+    }
+    throw e;
+  }
 }
 
 async function ensureSandbox() {

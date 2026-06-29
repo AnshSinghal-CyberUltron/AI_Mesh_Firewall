@@ -30,6 +30,46 @@ const SERVER_CARD_PATTERN = {
   "Vibe Check MCP": /Vibe Check/i,
 };
 
+async function withRetry(label, fn, { retries = 3, backoffMs = 1500 } = {}) {
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (i < retries && /429|503|502|timeout|ETIMEDOUT|ECONNRESET/i.test(String(e.message))) {
+        await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
+async function waitForControlPlane(maxWaitMs = 180000) {
+  const deadline = Date.now() + maxWaitMs;
+  const urls = [
+    `${BASE.replace(":8180", ":8100")}/api/health/`,
+    `${BASE.replace(":8180", ":8300")}/health`,
+  ];
+  while (Date.now() < deadline) {
+    const results = await Promise.all(
+      urls.map(async (url) => {
+        try {
+          const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      })
+    );
+    if (results.every(Boolean)) return;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  throw new Error("Control plane not healthy (control :8100 / gateway :8300)");
+}
+
 async function login(page) {
   await page.goto(`${BASE}/login`, { waitUntil: "networkidle", timeout: 120000 });
   await page.locator("#email").fill(EMAIL);
@@ -181,15 +221,17 @@ async function main() {
   const page = await browser.newPage();
 
   try {
+    await waitForControlPlane();
+    report.steps.push("control-plane-ready");
     await login(page);
     report.steps.push("login");
     await openMcpPanel(page);
     report.steps.push("mcp-panel");
 
     for (const preset of STDIO_PRESETS) {
-      const reg = await registerPreset(page, preset);
+      const reg = await withRetry(`register-${preset}`, () => registerPreset(page, preset));
       report.steps.push(`${preset}:${reg}`);
-      const synced = await syncTools(page, preset);
+      const synced = await withRetry(`sync-${preset}`, () => syncTools(page, preset));
       report.steps.push(`${preset}:synced-${synced}`);
       report.orgs.push({ preset, reg, synced });
     }

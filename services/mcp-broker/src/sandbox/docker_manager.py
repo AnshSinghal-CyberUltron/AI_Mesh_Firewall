@@ -179,6 +179,10 @@ class DockerManager:
             "environment": {
                 "ORG_SLUG": org_slug,
                 "MCP_REMOTE_CONFIG_DIR": "/data/mcp-auth",
+                # Sandbox USER is non-root; npm/uv must cache under writable /tmp (read_only rootfs).
+                "NPM_CONFIG_CACHE": "/tmp/.npm",
+                "UV_CACHE_DIR": "/tmp/.cache/uv",
+                "XDG_CACHE_HOME": "/tmp/.cache",
             },
             "volumes": {volume: {"bind": "/data/mcp-auth", "mode": "rw"}},
             "network": self.config.network,
