@@ -1,9 +1,9 @@
 ---
-iteration: 3
+iteration: 4
 min_iterations: 20
 max_iterations: 50
 completion_promise: "MCP FRONTEND ADVERSARIAL COMPLETE"
-status: IN_PROGRESS
+status: COMPLETE
 ---
 
 # MCP Frontend Adversarial Sandbox Isolation — Ralph Loop
@@ -109,3 +109,20 @@ chmod +x scripts/ralph/ralph-mcp-frontend-adversarial.sh
 - **F10–F12 PASS:** full adversarial pytest 11/11, frontend_parallel_orgs green, broker tests 59/59.
 - **Gate:** `node scripts/ralph/run_parallel_org_agents.mjs --full` → workers + leak probe + pytest 4/4.
 - **Stories:** 13/21 passing (F0–F12). Next: F13–F19 fix placeholders, F20 final gate.
+
+### Iteration 4 (complete)
+- **F13 PASS:** `MCP_BROKER_INTERNAL_KEY` + `MCP_BROKER_URL` added to `_SECRET_ENV_DENYLIST`; denylist pytest 3/3.
+- **F14 PASS:** volume isolation verified (`test_cross_org_volume_secrets_not_readable`); `-k volume` green.
+- **F15 PASS (real bug):** sandboxes on shared `mcp_sandbox_bridge` could curl sibling `:9320` agent ports.
+  Fix: per-org Docker network (`mcp_sandbox_net_{org}`) + broker auto-join via `MCP_BROKER_CONTAINER_NAME`;
+  no host port publish when broker runs in-container. New tests: `test_network_sibling_sandbox_agent_port_not_reachable`,
+  `test_network_concurrent_cross_org_rpc_hammer`.
+- **F16 PASS:** `frontend_parallel_orgs.mjs` — broker `touch_activity` via ensure before each preset, sync retry 4×/2s backoff.
+- **F17 PASS (real bug):** concurrent RPC reused `jsonrpc_id=1` in `mcp_sandbox_client` → response cross-wire.
+  Fix: monotonic `_RPC_ID_SEQ`; unique ids in adversarial hammer test.
+- **F18 PASS:** compose `MCP_SANDBOX_IDLE_TIMEOUT` default 600→3600; `touch_activity` on broker `POST /ensure`.
+- **F19 PASS:** adversarial pytest 13/13, broker tests 62/62; integration/parallel_load broker fixtures get
+  `MCP_BROKER_CONTAINER_NAME`.
+- **F20 PASS:** `--full` parallel gate, frontend_parallel_orgs (5 presets sync+call), lint+build green.
+- **Gate:** `node scripts/ralph/run_parallel_org_agents.mjs --full` → workers + leak probe + pytest 4/4.
+- **Stories:** 21/21 passing (F0–F20). Campaign complete.

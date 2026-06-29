@@ -244,6 +244,8 @@ def broker_url(
             "-e",
             f"MCP_SANDBOX_NETWORK={SANDBOX_NETWORK}",
             "-e",
+            f"MCP_BROKER_CONTAINER_NAME={BROKER_CONTAINER_NAME}",
+            "-e",
             "MCP_SANDBOX_IDLE_TIMEOUT=3600",
             "-p",
             f"127.0.0.1:{port}:8311",
