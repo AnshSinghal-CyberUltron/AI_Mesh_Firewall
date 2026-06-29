@@ -503,3 +503,32 @@
     * MCPConnectorPanel.jsx had a pre-existing +3-line diff (Memory/Everything/Vibe-Check quick-add
       presets) — benign, build-clean, matches the seeded servers; verified + committed with this story.
   Connection labels live in frontend/src/lib/mcpColors.js (DECISION.allow→"Allow", connected→"Connected").
+
+- 2026-06-29 D5-ui-output-logs PASSES (gate green). Durable verifier
+  scripts/playwright_output_logs.mjs drives Module 1.7 (?tab=firewall-1-7) real-customer POV →
+  29/29 asserts, 0 pageErrors, build OK. The prior run's ok:false was TRANSIENT control-saturation
+  flakiness (the documented single-daphne-event-loop contention under parallel ralph campaigns); the
+  PUT /api/firewall/config/ never fired within 30s, browser closed mid-wait. Re-ran clean → green.
+  Asserts: (1) login; (2) mint short-lived gateway key → ONE live /v1/chat/completions carrying
+  known raw PII (555-867-5309 / alex.rivera@acmecomp.com) → verdict=redact, live response already
+  masked (egress=truth), key deleted; (3) 1.7 renders Controls+Engine+Analytics+Governance;
+  (4) OutputGuardrailControls round-trip: flip "Security incident logging" ConfigSwitch
+  (role=switch, aria-label) [+ best-effort IP-leakage ActionPill] → Save guardrails → PUT 2xx →
+  backend output_incident_logging_enabled flipped → RESTORE (side-effect free); (5) Output
+  Governance Log HONESTY: on-screen "N blocked / N redacted / N flagged" chips == backend
+  threat-feed output_guard/output_scan counts (8/9/1), Redact filter narrows, expand redact event →
+  OutputPipelineTimeline (Ingestion Pipeline / Guardrail Action / Final Output to User) shows ***
+  masking and NO raw email/phone; (6) Analytics recharts svg renders; (7) LogViewer "Detailed
+  Records (N)" == backend 24h security_scan feed (6), Redacted filter → every row Action==redact,
+  drill row → LogDetailPage Scan Detail Report + Request ID, body shows *** and NEITHER raw phone
+  NOR raw email NOR raw secret; (8) 0 pageErrors. INDEPENDENT-ORACLE cross-check (leak invariant):
+  aidefence_has_pii over the captured governanceText + logDetailText both returned hasPII=false —
+  honesty doesn't rely on the regexes under test. GOTCHAS (reusable): the guardrail switch is a
+  custom ConfigSwitch (button role=switch + aria-label=label) NOT an <input>; the Save button is
+  disabled until `dirty` (MANAGED_KEYS diff) so flip a managed field BEFORE clicking; governance
+  summary chips live in the card header's right column → scope the locator to the ai-mesh-card ROOT
+  (not the heading div); event-row toggles live in `div.overflow-y-auto button[aria-expanded]`
+  (the header InfoTooltip also carries aria-expanded with empty text — exclude it). Run FROM
+  frontend/: `BASE_URL=http://127.0.0.1:8180 SHOT_DIR=../runs/d5
+  E2E_REPORT=../runs/playwright_output_logs.json node ../scripts/playwright_output_logs.mjs`.
+  Shots+report under runs/d5 + runs/playwright_output_logs.json.
