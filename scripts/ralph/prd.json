@@ -64,7 +64,7 @@
       "id": "B3-embeddings-scan",
       "title": "Scan + redact /v1/embeddings input (G1)",
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "A1-sdk-harness",
         "A2-egress-rig",
