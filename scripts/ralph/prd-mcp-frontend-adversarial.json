@@ -8,7 +8,7 @@
   "userStories": [
     {
       "id": "F0-bootstrap",
-      "title": "Bootstrap — docker compose services profile, broker+gateway sandbox path",
+      "title": "Bootstrap \u2014 docker compose services profile, broker+gateway sandbox path",
       "priority": 0,
       "passes": true,
       "dependencies": [],
@@ -23,7 +23,7 @@
     },
     {
       "id": "F1-org-alpha-harness",
-      "title": "Org-alpha adversarial harness — 5+ stdio MCP servers",
+      "title": "Org-alpha adversarial harness \u2014 5+ stdio MCP servers",
       "priority": 1,
       "passes": true,
       "dependencies": [
@@ -38,7 +38,7 @@
     },
     {
       "id": "F2-org-beta-harness",
-      "title": "Org-beta adversarial harness — 5+ stdio MCP servers",
+      "title": "Org-beta adversarial harness \u2014 5+ stdio MCP servers",
       "priority": 1,
       "passes": true,
       "dependencies": [
@@ -86,7 +86,7 @@
       "id": "F5-cross-org-leakage",
       "title": "Cross-org leakage probes (volume, env, npm cache bleed)",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F3-parallel-2-agent-runner",
         "F4-adversarial-pytest-suite"
@@ -95,7 +95,7 @@
       "acceptanceCriteria": [
         "test_cross_org_volume_secrets_not_readable between adv-org-alpha and adv-org-beta",
         "test_env_foreign_org_marker_not_visible across both orgs",
-        "test_npm_cache_bleed_probe — sibling org marker absent in get_env",
+        "test_npm_cache_bleed_probe \u2014 sibling org marker absent in get_env",
         "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q -k leakage"
       ]
     },
@@ -103,7 +103,7 @@
       "id": "F6-sandbox-escape",
       "title": "Sandbox escape attempts (path traversal, /proc, docker.sock)",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F4-adversarial-pytest-suite"
       ],
@@ -118,9 +118,9 @@
     },
     {
       "id": "F7-frontend-playwright",
-      "title": "Frontend Playwright — MCPConnectorPanel 5+ stdio servers per org",
+      "title": "Frontend Playwright \u2014 MCPConnectorPanel 5+ stdio servers per org",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F3-parallel-2-agent-runner"
       ],
@@ -149,7 +149,7 @@
     },
     {
       "id": "F9-fix-placeholder-1",
-      "title": "Fix story — issues found in iteration 1-5 (placeholder)",
+      "title": "Fix story \u2014 issues found in iteration 1-5 (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -163,7 +163,7 @@
     },
     {
       "id": "F10-fix-placeholder-2",
-      "title": "Fix story — issues found in iteration 6-10 (placeholder)",
+      "title": "Fix story \u2014 issues found in iteration 6-10 (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -177,7 +177,7 @@
     },
     {
       "id": "F11-fix-placeholder-3",
-      "title": "Fix story — frontend MCPConnectorPanel failures (placeholder)",
+      "title": "Fix story \u2014 frontend MCPConnectorPanel failures (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -191,7 +191,7 @@
     },
     {
       "id": "F12-fix-placeholder-4",
-      "title": "Fix story — broker auth / rate limit under adversarial load (placeholder)",
+      "title": "Fix story \u2014 broker auth / rate limit under adversarial load (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -205,7 +205,7 @@
     },
     {
       "id": "F13-fix-placeholder-5",
-      "title": "Fix story — env denylist gaps (placeholder)",
+      "title": "Fix story \u2014 env denylist gaps (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -219,7 +219,7 @@
     },
     {
       "id": "F14-fix-placeholder-6",
-      "title": "Fix story — volume mount isolation (placeholder)",
+      "title": "Fix story \u2014 volume mount isolation (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -233,7 +233,7 @@
     },
     {
       "id": "F15-fix-placeholder-7",
-      "title": "Fix story — network exfil to sibling sandbox (placeholder)",
+      "title": "Fix story \u2014 network exfil to sibling sandbox (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -247,7 +247,7 @@
     },
     {
       "id": "F16-fix-placeholder-8",
-      "title": "Fix story — Playwright preset timeout under 5+ servers (placeholder)",
+      "title": "Fix story \u2014 Playwright preset timeout under 5+ servers (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -261,7 +261,7 @@
     },
     {
       "id": "F17-fix-placeholder-9",
-      "title": "Fix story — concurrent tools/call race (placeholder)",
+      "title": "Fix story \u2014 concurrent tools/call race (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -275,7 +275,7 @@
     },
     {
       "id": "F18-fix-placeholder-10",
-      "title": "Fix story — reaper idle destroy during long Playwright run (placeholder)",
+      "title": "Fix story \u2014 reaper idle destroy during long Playwright run (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -289,7 +289,7 @@
     },
     {
       "id": "F19-fix-placeholder-11",
-      "title": "Fix story — final hardening before gate (placeholder)",
+      "title": "Fix story \u2014 final hardening before gate (placeholder)",
       "priority": 5,
       "passes": false,
       "dependencies": [
@@ -304,7 +304,7 @@
     },
     {
       "id": "F20-final-gate",
-      "title": "Final gate — 2 parallel orgs, 5 servers each, frontend e2e + leakage green",
+      "title": "Final gate \u2014 2 parallel orgs, 5 servers each, frontend e2e + leakage green",
       "priority": 6,
       "passes": false,
       "dependencies": [

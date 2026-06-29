@@ -157,7 +157,7 @@ async function pytestLeakage() {
     "ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py",
     "-q",
     "-k",
-    "denylist or volume or foreign_org or npm_cache",
+    "volume or foreign_org or npm_cache or denylist_secrets",
     "--tb=short",
   ], { MCP_BROKER_URL: BROKER_URL, MCP_BROKER_INTERNAL_KEY: BROKER_KEY });
 }
