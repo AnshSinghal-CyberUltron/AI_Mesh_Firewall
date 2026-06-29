@@ -228,7 +228,7 @@
       "id": "D6-ui-demo-simulators",
       "title": "Verify how-to + live simulators run end-to-end in browser (demo app)",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": [],
       "userStory": "As a new customer, the how-to is correct and every simulator runs to a clear, honest result.",
       "acceptanceCriteria": [
