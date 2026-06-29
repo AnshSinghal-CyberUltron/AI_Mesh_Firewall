@@ -72,7 +72,7 @@
       "id": "S6-broker-routes",
       "title": "Sandbox Controller REST API routes",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S4-docker-manager", "S2-sandbox-agent"],
       "userStory": "As gateway I need broker endpoints for ensure, stdio/rpc, status, destroy.",
       "acceptanceCriteria": [

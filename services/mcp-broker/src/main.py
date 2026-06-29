@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from sandbox.docker_manager import DockerManager
 from sandbox.registry import SandboxRegistry
 from sandbox.reaper import start_reaper, stop_reaper
+from sandbox.routes import build_sandbox_router
 
 sandbox_registry = SandboxRegistry()
 docker_manager = DockerManager(registry=sandbox_registry)
@@ -20,6 +21,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="AI Mesh MCP Broker", version="0.1.0", lifespan=lifespan)
+app.include_router(build_sandbox_router(docker_manager))
 
 
 @app.get("/health")
