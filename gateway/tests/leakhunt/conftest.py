@@ -13,7 +13,13 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 # gateway/tests/leakhunt -> gateway/ai_mesh_gateway
 _GATEWAY_SRC = _HERE.parents[1] / "ai_mesh_gateway"
+# gateway/tests/leakhunt -> repo-root/shared (holds the ``ai_mesh_shared`` package
+# that main.py imports). Without this, ``import main`` fails at collection with
+# ``ModuleNotFoundError: ai_mesh_shared`` and the CLAUDE.md gate
+# (``cd gateway && pytest tests/leakhunt -q``) cannot run without a manual
+# PYTHONPATH — so add it here to keep the gate self-contained.
+_SHARED_SRC = _HERE.parents[2] / "shared"
 
-for p in (str(_GATEWAY_SRC), str(_HERE)):
+for p in (str(_GATEWAY_SRC), str(_HERE), str(_SHARED_SRC)):
     if p not in sys.path:
         sys.path.insert(0, p)
