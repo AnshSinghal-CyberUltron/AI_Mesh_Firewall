@@ -91,7 +91,21 @@ _OAUTH_HINT_SUBSTRINGS = (
     # detection and caused the full-init-timeout hang (linear-mcp).
     "please authorize", "by visiting", "authentication required",
     "waiting for authorization", "browser opened automatically",
-    "oauth callback server running", "authorization server",
+    "oauth callback server running",
+)
+
+# mcp-remote stderr when a Bearer token is already injected — informational only.
+_MCP_REMOTE_HEADLESS_OAUTH_INFO = (
+    "discovering oauth server configuration",
+    "discovered authorization server",
+    "using custom headers",
+    "connecting to remote server",
+    "connected to remote server",
+    "proxy established successfully",
+    "local stdio server running",
+    "using transport strategy",
+    "using automatically selected callback port",
+    "press ctrl+c to exit",
 )
 
 # Init concurrency limiter (lazily bound to the running loop).
@@ -190,9 +204,19 @@ def _is_pinned(spec: str) -> bool:
     return False
 
 
-def _looks_like_oauth_prompt(text: str) -> bool:
+def _args_have_oauth_header(args: list[str]) -> bool:
+    for idx, arg in enumerate(args):
+        if arg == "--header" and idx + 1 < len(args):
+            if args[idx + 1].lower().startswith("authorization:"):
+                return True
+    return False
+
+
+def _looks_like_oauth_prompt(text: str, *, oauth_header_injected: bool = False) -> bool:
     """Heuristic: does this child output indicate an interactive login flow?"""
     t = text.lower()
+    if oauth_header_injected and any(info in t for info in _MCP_REMOTE_HEADLESS_OAUTH_INFO):
+        return False
     if not any(h in t for h in _OAUTH_HINT_SUBSTRINGS):
         return False
     return ("http://" in t or "https://" in t
@@ -251,6 +275,7 @@ class StdioProcess:
     # logs when a process dies — it is NEVER placed in a client/DB-facing
     # error message because stderr can contain BYOK tokens / npm credentials.
     stderr_tail: deque = field(default_factory=lambda: deque(maxlen=50))
+    oauth_header_injected: bool = False
 
     def next_id(self) -> int:
         self._msg_id_counter += 1
@@ -318,7 +343,9 @@ async def _start_reader(proc: StdioProcess):
             except json.JSONDecodeError:
                 text = line.decode(errors="replace") if isinstance(line, bytes) else str(line)
                 LOG.debug("Stdio %s non-JSON line: %s", proc.key, text[:200])
-                if not proc.initialized and _looks_like_oauth_prompt(text):
+                if not proc.initialized and _looks_like_oauth_prompt(
+                    text, oauth_header_injected=proc.oauth_header_injected
+                ):
                     _flag_needs_reauth(proc, text)
                     break
                 continue
@@ -478,6 +505,7 @@ async def _ensure_process(key: str, command: str, args: list[str],
             args=args,
             env=env or {},
             process=process,
+            oauth_header_injected=_args_have_oauth_header(args),
         )
         proc._reader_task = asyncio.create_task(_start_reader(proc))
         _processes[key] = proc
@@ -499,7 +527,9 @@ async def _log_stderr(proc: StdioProcess):
             decoded = line.decode(errors="replace").strip()
             if decoded:
                 proc.stderr_tail.append(decoded)
-                if not proc.initialized and _looks_like_oauth_prompt(decoded):
+                if not proc.initialized and _looks_like_oauth_prompt(
+                    decoded, oauth_header_injected=proc.oauth_header_injected
+                ):
                     _flag_needs_reauth(proc, decoded)
             LOG.debug("Stdio %s stderr: %s", proc.key, decoded)
     except asyncio.CancelledError:

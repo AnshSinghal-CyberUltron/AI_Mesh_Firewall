@@ -1,29 +1,13 @@
 import { useState } from "react";
 import {
-  Database, CheckCircle, AlertTriangle, Loader2, Zap, RefreshCw, List, Play, ChevronDown, ChevronRight,
+  Database, CheckCircle, AlertTriangle, Loader2, Zap, RefreshCw, List, Play, ChevronDown, ChevronRight, KeyRound,
 } from "lucide-react";
 import { InfoTooltip } from "./InfoTooltip";
-import {
-  getGatewayApiKey,
-  getGatewayUrl,
-  setGatewayApiKey,
-  setGatewayUrl as persistGatewayUrl,
-} from "../utils/gatewayStorage";
+import { useGatewayCredential } from "../hooks/useGatewayCredential";
+import { useAuth } from "../context/AuthContext";
+import { gatewayFetch } from "../lib/gatewayFetch";
 
 const DB_PROVIDERS = [
-  {
-    value: "chromadb",
-    label: "ChromaDB",
-    description: "Open-source, self-hosted embedding database",
-    fields: [
-      { key: "connection_url", label: "ChromaDB URL", placeholder: "http://localhost:8000", required: true },
-    ],
-    simulationFields: [
-      { key: "collection", label: "Collection Name", placeholder: "docs", required: true },
-      { key: "query", label: "Test Query", placeholder: "What is the refund policy?", required: true },
-      { key: "n_results", label: "Max Results", placeholder: "5", type: "number" },
-    ],
-  },
   {
     value: "pinecone",
     label: "Pinecone",
@@ -71,18 +55,15 @@ function ConnectionStatusBadge({ status }) {
   );
 }
 
-export function DatabaseConnectionPanel() {
-  const [gatewayUrl, setGatewayUrlState] = useState(() => getGatewayUrl());
-  const [apiKey, setApiKeyState] = useState(() => getGatewayApiKey());
-  const setGatewayUrl = (url) => {
-    setGatewayUrlState(url);
-    persistGatewayUrl(url);
-  };
-  const setApiKey = (key) => {
-    setApiKeyState(key);
-    setGatewayApiKey(key);
-  };
-  const [selectedProvider, setSelectedProvider] = useState("chromadb");
+export function DatabaseConnectionPanel({ embedded = false }) {
+  // Gateway URL + per-org "simulator" key are resolved/auto-provisioned by the
+  // shared hook (prod = aimeshgateway.zeroshield.ai, local = local gateway port).
+  // No manual entry — the simulator key is created server-side per organization.
+  const { gatewayUrl, gatewayKey, reprovision, ready, provisioning, error: credentialError } = useGatewayCredential();
+  // Admin-gated gateway ops (db-test) go through the Control proxy, authenticated
+  // by the admin JWT — never with the low-priv simulator key.
+  const { fetchWithAuth } = useAuth();
+  const [selectedProvider, setSelectedProvider] = useState("pinecone");
   const [fieldValues, setFieldValues] = useState({});
   const [simFieldValues, setSimFieldValues] = useState({});
   const [testing, setTesting] = useState(false);
@@ -112,35 +93,30 @@ export function DatabaseConnectionPanel() {
   };
 
   const handleTestConnection = async () => {
-    if (!apiKey.trim()) {
-      setError("Gateway API key is required.");
-      return;
-    }
-
-    persistGatewayUrl(gatewayUrl);
-    setGatewayApiKey(apiKey);
-
+    // /v1/admin/db-test is admin-gated on the gateway. Route through the Control
+    // proxy (/api/admin/gateway/db-test/): Django enforces admin RBAC and
+    // forwards with the internal key, so the low-priv simulator key is not used
+    // here. Response is the {status, data} envelope; unwrap data.
     setTesting(true);
     setResult(null);
     setError(null);
 
     try {
-      const url = `${gatewayUrl.replace(/\/+$/, "")}/v1/admin/db-test`;
       const startTime = performance.now();
-
       const payload = { provider: selectedProvider, ...fieldValues };
-      const res = await fetch(url, {
+      const res = await fetchWithAuth("/api/admin/gateway/db-test/", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const elapsed = Math.round(performance.now() - startTime);
-      let body = {};
-      try { body = await res.json(); } catch { body = { detail: await res.text() }; }
+      let envelope = {};
+      try { envelope = await res.json(); } catch { envelope = {}; }
+      const body = envelope?.data || envelope || {};
 
       if (res.status === 401 || res.status === 403) {
-        setError("Authentication failed. Your Gateway API Key is invalid or expired.");
+        setError("Admin access is required to test database connections.");
       } else if (res.ok && body.status !== "error") {
         setResult({
           success: true,
@@ -161,7 +137,7 @@ export function DatabaseConnectionPanel() {
     } catch (err) {
       setError(
         err.message === "Failed to fetch"
-          ? `Cannot reach gateway at ${gatewayUrl}. Ensure the gateway is running.`
+          ? "Cannot reach the control API. Ensure the backend is running."
           : err.message
       );
     } finally {
@@ -170,14 +146,11 @@ export function DatabaseConnectionPanel() {
   };
 
   const handleSimulate = async () => {
-    if (!apiKey.trim()) { setError("Gateway API key is required."); return; }
+    if (!ready) { setError(provisioning ? "Provisioning the simulator gateway key…" : "Simulator gateway key is not ready yet."); return; }
 
     const collection = simFieldValues.collection || simFieldValues.index_name;
     const query = simFieldValues.query;
     if (!collection || !query) { setError("Collection/Index name and query are required for simulation."); return; }
-
-    persistGatewayUrl(gatewayUrl);
-    setGatewayApiKey(apiKey);
 
     setSimulating(true);
     setSimResult(null);
@@ -191,15 +164,15 @@ export function DatabaseConnectionPanel() {
         collection: collection,
         query: query,
         n_results: parseInt(simFieldValues.n_results) || 5,
-        vector_db_type: selectedProvider === "chromadb" ? "chroma" : selectedProvider,
+        vector_db_type: selectedProvider,
       };
       if (simFieldValues.namespace) payload.namespace = simFieldValues.namespace;
 
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify(payload),
-      });
+      const res = await gatewayFetch(
+        url,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+        { key: gatewayKey, reprovision },
+      );
 
       const elapsed = Math.round(performance.now() - startTime);
       let body = null;
@@ -228,8 +201,8 @@ export function DatabaseConnectionPanel() {
     : [];
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6 space-y-4">
-      {/* Header */}
+    <div className={embedded ? "space-y-4 p-5" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6 space-y-4"}>
+      {!embedded && (
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -240,31 +213,38 @@ export function DatabaseConnectionPanel() {
             Connect, test, and simulate queries against vector databases
           </p>
         </div>
-        <InfoTooltip text="Test connectivity to ChromaDB, Pinecone, or Milvus through the gateway. After connecting, run simulation queries through the RAG pipeline to verify end-to-end data flow." />
+        <InfoTooltip text="Test connectivity to your Pinecone or Milvus vector DB through the gateway. After connecting, run simulation queries through the guardrails-only RAG path (scan + policy enforcement) to verify end-to-end data flow." />
       </div>
+      )}
 
-      {/* Gateway config row */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Gateway URL</label>
-          <input
-            type="text"
-            value={gatewayUrl}
-            onChange={(e) => setGatewayUrl(e.target.value)}
-            placeholder="http://127.0.0.1:8300"
-            className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-          />
+      {/* Gateway connection — automatic, no manual entry. The per-org "simulator"
+          key is provisioned server-side and the URL is resolved per environment. */}
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-3 py-2.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <KeyRound className={`h-4 w-4 shrink-0 ${ready ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`} />
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
+              Gateway connection
+              <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">automatic · org-scoped simulator key</span>
+            </p>
+            <p className="truncate text-[11px] font-mono text-slate-500 dark:text-slate-400">{gatewayUrl || "resolving…"}</p>
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Gateway API Key *</label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Paste your gateway API key"
-            className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-          />
-        </div>
+        <span className="shrink-0">
+          {provisioning ? (
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 dark:bg-blue-900/20 px-2 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-300">
+              <Loader2 className="h-3 w-3 animate-spin" /> Provisioning…
+            </span>
+          ) : ready ? (
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+              <CheckCircle className="h-3 w-3" /> Key ready
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 dark:bg-amber-900/20 px-2 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-3 w-3" /> {credentialError ? "Key error" : "Not ready"}
+            </span>
+          )}
+        </span>
       </div>
 
       {/* Provider selection */}
@@ -310,6 +290,7 @@ export function DatabaseConnectionPanel() {
                 value={fieldValues[field.key] || ""}
                 onChange={(e) => handleFieldChange(field.key, e.target.value)}
                 placeholder={field.placeholder}
+                aria-label={field.label}
                 className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
             </div>
@@ -417,6 +398,7 @@ export function DatabaseConnectionPanel() {
                     value={simFieldValues[field.key] || ""}
                     onChange={(e) => handleSimFieldChange(field.key, e.target.value)}
                     placeholder={field.placeholder}
+                    aria-label={field.label}
                     className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   />
                   {field.helpText && <p className="text-[10px] text-slate-400 mt-0.5">{field.helpText}</p>}
@@ -487,10 +469,10 @@ export function DatabaseConnectionPanel() {
                             <div key={i} className="flex items-center gap-1">
                               <div className="text-center">
                                 <div className={`w-8 h-8 rounded-full ${actionColor} flex items-center justify-center`}>
-                                  <span className="text-[9px] text-white font-bold">{(stage.name || "?").charAt(0).toUpperCase()}</span>
+                                  <span className="text-[10px] text-white font-bold">{(stage.name || "?").charAt(0).toUpperCase()}</span>
                                 </div>
-                                <div className="text-[8px] text-slate-500 mt-0.5">{stage.name}</div>
-                                <div className="text-[8px] text-slate-400">{stage.latency_ms?.toFixed(0) || 0}ms</div>
+                                <div className="text-[10px] text-slate-500 mt-0.5">{stage.name}</div>
+                                <div className="text-[10px] text-slate-400">{stage.latency_ms?.toFixed(0) || 0}ms</div>
                               </div>
                               {i < simResult.pipelineAudit.stages.length - 1 && (
                                 <div className="w-3 h-px bg-slate-300 dark:bg-slate-600" />

@@ -1,4 +1,4 @@
-"""Dev-only bootstrap for simulator default gateway API key in Redis."""
+"""Dev bootstrap helpers for Module 1 simulators (LLM model + firewall defaults)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,22 @@ import os
 
 logger = logging.getLogger(__name__)
 
-SIMULATOR_DEFAULT_KEY_REDIS = "simulator:default_gateway_key"
-ZEROSHIELD_GUARD_MODEL_NAME = "zeroshield-guard-120b"
+# User-facing platform model name: "ZeroShield Model" only — never expose the
+# upstream size/provider (no "120b"/"gpt-oss"/Bedrock). The backing Bedrock model
+# is Haiku (platform model for all internal ML).
+ZEROSHIELD_GUARD_MODEL_NAME = os.getenv("ZEROSHIELD_GUARD_MODEL_NAME", "zeroshield-model").strip().lower() or "zeroshield-model"
+SIMULATOR_ORG_SLUG = os.getenv("SIMULATOR_ORG_SLUG", "zeroshield").strip().lower()
+
+
+def _resolve_simulator_org():
+    """Prefer the zeroshield tenant (or SIMULATOR_ORG_SLUG) for dev bootstrap."""
+    from auth.models import Organization
+
+    slug = SIMULATOR_ORG_SLUG or "zeroshield"
+    org = Organization.objects.filter(slug=slug).first()
+    if org is not None:
+        return org
+    return Organization.objects.first()
 
 
 def ensure_default_llm_model(org) -> None:
@@ -17,9 +31,11 @@ def ensure_default_llm_model(org) -> None:
         return
     from core.models import LLMModelConfig
 
-    model_id = os.getenv("ZEROSHIELD_GUARD_MODEL_ID", "bedrock/openai.gpt-oss-120b-1:0").strip()
+    # Platform model = Bedrock Haiku (internal ML, not org inference).
+    _haiku = "bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0"
+    model_id = os.getenv("ZEROSHIELD_GUARD_MODEL_ID", _haiku).strip()
     if not model_id:
-        model_id = "bedrock/openai.gpt-oss-120b-1:0"
+        model_id = _haiku
 
     LLMModelConfig.objects.update_or_create(
         organization=org,
@@ -66,9 +82,7 @@ def ensure_firewall_excludes_guard_model(org) -> None:
 
     The guard model is a platform-internal (``provider=internal``) tier-2 scanning
     model invoked out-of-band; it is never a client inference model and must not
-    live in the user-facing ``allowed_models`` governance list. Leaving it there
-    makes the governance validator reject saves (it is excluded from the
-    user-managed connected set), so this bootstrap removes any stale guard entry.
+    live in the user-facing ``allowed_models`` governance list.
     """
     from core.models import FirewallConfig, platform_guard_model_names
 
@@ -88,40 +102,12 @@ def ensure_firewall_excludes_guard_model(org) -> None:
             config.save(update_fields=["allowed_models"])
 
 
-def _resolve_bootstrap_org():
-    """Pick the tenant org used for simulator defaults and dev bootstrap."""
-    from django.contrib.auth import get_user_model
-
-    from auth.models import Organization
-
-    slug = os.getenv("SIMULATOR_ORG_SLUG", "").strip()
-    if slug:
-        org = Organization.objects.filter(slug=slug, is_active=True).first()
-        if org:
-            return org
-
-    org = Organization.objects.filter(slug="zeroshield", is_active=True).first()
-    if org:
-        return org
-
-    User = get_user_model()
-    for email in ("admin@zeroshield.io",):
-        user = User.objects.filter(email=email).first()
-        if user:
-            try:
-                if user.profile.organization_id:
-                    return user.profile.organization
-            except Exception:
-                pass
-
-    return Organization.objects.filter(is_active=True).order_by("id").first()
-
-
-def ensure_simulator_default_gateway_key() -> bool:
+def ensure_simulator_dev_bootstrap(org=None) -> bool:
     """
-    Seed ``simulator:default_gateway_key`` when missing (DEBUG + enabled).
+    Apply dev-only simulator bootstrap (LLM model + firewall helpers).
 
-    Returns True if a key exists or was created, False when skipped/disabled.
+    Gateway API keys are provisioned lazily via ``SimulatorDefaultGatewayKeyView``
+    POST — plaintext is never stored in Redis.
     """
     from django.conf import settings
 
@@ -132,76 +118,21 @@ def ensure_simulator_default_gateway_key() -> bool:
     if not enabled:
         return False
 
-    import redis
-
-    redis_url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
+    if org is None:
+        org = _resolve_simulator_org()
+    if org is None:
+        return False
 
     try:
-        from core.models import GatewayAPIKey
-
-        org = _resolve_bootstrap_org()
-        sim_key = GatewayAPIKey.objects.filter(name="simulator-default").first()
-        if sim_key and sim_key.organization_id:
-            org = sim_key.organization
-        elif org and sim_key and sim_key.organization_id != org.id:
-            sim_key.organization = org
-            sim_key.save(update_fields=["organization"])
         ensure_default_llm_model(org)
         ensure_firewall_excludes_guard_model(org)
         ensure_simulator_firewall_keywords_cleared(org)
-    except Exception:
-        logger.warning("Simulator LLM model seed failed", exc_info=True)
-
-    try:
-        client = redis.Redis.from_url(
-            redis_url, decode_responses=True, socket_timeout=5, socket_connect_timeout=3
-        )
-        if client.get(SIMULATOR_DEFAULT_KEY_REDIS):
-            return True
-    except redis.RedisError as exc:
-        logger.warning("Simulator key seed skipped (Redis): %s", exc)
-        return False
-
-    try:
-        from django.contrib.auth import get_user_model
-
-        from core.models import GatewayAPIKey
-
-        User = get_user_model()
-        org = _resolve_bootstrap_org()
-        existing = GatewayAPIKey.objects.filter(name="simulator-default").first()
-        if existing and existing.organization_id:
-            org = existing.organization
-        if existing and not existing.is_active:
-            existing.is_active = True
-            existing.save(update_fields=["is_active", "updated_at"])
-            logger.info("Re-enabled simulator-default gateway key (prefix=%s)", existing.prefix)
-        if existing and existing.key_purpose != "simulator":
-            existing.key_purpose = "simulator"
-            existing.save(update_fields=["key_purpose"])
-        user = (
-            User.objects.filter(email="admin@zeroshield.io").first()
-            or User.objects.first()
-        )
-        if not user:
-            logger.warning("Simulator key seed skipped: no users in database")
-            return False
-
-        inst, raw = GatewayAPIKey.generate_key(
-            name="simulator-default",
-            owner=user,
-            project_id="simulator-default",
-            allowed_models=[],
-        )
-        if org and inst.organization_id != org.id:
-            inst.organization = org
-            inst.save(update_fields=["organization"])
-        if inst.key_purpose != "simulator":
-            inst.key_purpose = "simulator"
-            inst.save(update_fields=["key_purpose"])
-        client.set(SIMULATOR_DEFAULT_KEY_REDIS, raw)
-        logger.info("Seeded simulator default gateway key (prefix=%s)", inst.prefix)
         return True
     except Exception:
-        logger.warning("Simulator key seed failed", exc_info=True)
+        logger.warning("Simulator dev bootstrap failed for org=%s", getattr(org, "slug", org), exc_info=True)
         return False
+
+
+def ensure_simulator_default_gateway_key() -> bool:
+    """Backward-compatible alias for startup scripts — dev bootstrap only."""
+    return ensure_simulator_dev_bootstrap()

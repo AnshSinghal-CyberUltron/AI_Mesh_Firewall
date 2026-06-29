@@ -76,10 +76,19 @@ class CanaryTokenManager:
         hex_token = canary_word.replace(CANARY_PREFIX, "").replace(CANARY_SUFFIX, "")
         if hex_token and hex_token in response_text:
             LOG.warning("Canary token hex portion leaked in LLM response")
+            # SECURITY: never embed the FULL canary hex in `detail`. Verdict
+            # `detail` strings in this codebase flow into client-facing
+            # surfaces (zeroshield metadata / pipeline traces on 200 + 403
+            # responses), and disclosing the full canary lets an attacker
+            # confirm the marker and strip it from future exfiltration —
+            # defeating its purpose. Only a 6-char prefix is shown for
+            # operator correlation; the full token stays in `canary_word`,
+            # which is for INTERNAL verification only and must never be
+            # serialized into a client response.
             return CanaryResult(
                 leaked=True,
                 canary_word=canary_word,
-                detail=f"Canary hex token '{hex_token}' found in LLM output — context leakage detected",
+                detail=f"Canary hex token '{hex_token[:6]}…' found in LLM output — context leakage detected",
             )
 
         # Check for zero-width character clusters (potential obfuscated leak)

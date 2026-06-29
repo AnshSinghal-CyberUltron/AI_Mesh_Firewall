@@ -67,6 +67,19 @@ def is_openrouter_api_base(api_base: str) -> bool:
     return host == "openrouter.ai" or host.endswith(".openrouter.ai")
 
 
+def sanitize_api_base(api_base: str) -> str:
+    """
+    Normalize operator-entered bases (e.g. OpenRouter .../v1/chat/completions → .../v1).
+    """
+    base = (api_base or "").strip().rstrip("/")
+    if not base:
+        return ""
+    for suffix in ("/chat/completions", "/completions"):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)].rstrip("/")
+    return base
+
+
 def needs_openai_compatible_client(*, provider: str, api_base: str) -> bool:
     """
     Decide whether LiteLLM needs ``custom_llm_provider=openai``.
@@ -96,7 +109,9 @@ def normalize_litellm_params(params: dict, *, provider: str = "") -> dict:
     Idempotent: leaves an existing ``custom_llm_provider`` untouched.
     """
     out = dict(params or {})
-    api_base = str(out.get("api_base") or "").strip()
+    api_base = sanitize_api_base(str(out.get("api_base") or ""))
+    if api_base:
+        out["api_base"] = api_base
     if not needs_openai_compatible_client(provider=provider, api_base=api_base):
         return out
     if out.get("custom_llm_provider"):

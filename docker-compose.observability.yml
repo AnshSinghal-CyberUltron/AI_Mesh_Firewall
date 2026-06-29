@@ -1,0 +1,59 @@
+# Optional overlay — ship app logs to CloudWatch (EC2 instance profile creds).
+# Apply AWS side once: infra/terraform/envs/ec2-demo (log groups, SNS, alarms).
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     -f docker-compose.observability.yml up -d
+
+name: ai_mesh_firewall
+
+x-ec2-cloudwatch-logging: &ec2_cloudwatch_logging
+  driver: awslogs
+  options:
+    awslogs-region: ${AWS_REGION:-ap-south-1}
+    awslogs-create-group: "true"
+    tag: "{{.Name}}"
+
+services:
+  control:
+    logging:
+      <<: *ec2_cloudwatch_logging
+      options:
+        awslogs-region: ${AWS_REGION:-ap-south-1}
+        awslogs-group: ${CLOUDWATCH_LOG_GROUP_CONTROL:-/ai-mesh-firewall/ec2/control}
+        awslogs-create-group: "true"
+        tag: "{{.Name}}"
+    environment:
+      DJANGO_LOG_JSON: ${DJANGO_LOG_JSON:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+  gateway:
+    logging:
+      <<: *ec2_cloudwatch_logging
+      options:
+        awslogs-region: ${AWS_REGION:-ap-south-1}
+        awslogs-group: ${CLOUDWATCH_LOG_GROUP_GATEWAY:-/ai-mesh-firewall/ec2/gateway}
+        awslogs-create-group: "true"
+        tag: "{{.Name}}"
+    environment:
+      GATEWAY_LOG_JSON: ${GATEWAY_LOG_JSON:-true}
+      GATEWAY_LOG_LEVEL: ${GATEWAY_LOG_LEVEL:-INFO}
+      BEDROCK_LOG_LEVEL: ${BEDROCK_LOG_LEVEL:-INFO}
+      BEDROCK_LOG_PROMPT_PREVIEW: ${BEDROCK_LOG_PROMPT_PREVIEW:-false}
+
+  workers:
+    logging:
+      <<: *ec2_cloudwatch_logging
+      options:
+        awslogs-region: ${AWS_REGION:-ap-south-1}
+        awslogs-group: ${CLOUDWATCH_LOG_GROUP_WORKERS:-/ai-mesh-firewall/ec2/workers}
+        awslogs-create-group: "true"
+        tag: "{{.Name}}"
+
+  nginx:
+    logging:
+      <<: *ec2_cloudwatch_logging
+      options:
+        awslogs-region: ${AWS_REGION:-ap-south-1}
+        awslogs-group: ${CLOUDWATCH_LOG_GROUP_NGINX:-/ai-mesh-firewall/ec2/nginx}
+        awslogs-create-group: "true"
+        tag: "{{.Name}}"

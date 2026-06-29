@@ -22,6 +22,7 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { useFirewallData } from "../hooks/useFirewallData";
 import { useAuth } from "../context/AuthContext";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
@@ -84,10 +85,10 @@ function ChartCard({ title, children }) {
 export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, children }) {
   void onViewLogDetail;
   const [timeRange, setTimeRange] = useState("24h");
-  const [activeSection, setActiveSection] = useState("global");
+  const [activeSection, setActiveSection] = useState("pipeline");
   const [externalCreateSignal, setExternalCreateSignal] = useState(0);
   const [vectorCreateSignal, setVectorCreateSignal] = useState(0);
-  const [externalCreateScope, setExternalCreateScope] = useState("global");
+  const [externalCreateScope, setExternalCreateScope] = useState("pipeline");
   const [externalCreateScopeLocked, setExternalCreateScopeLocked] = useState(false);
   const { fetchWithAuth } = useAuth();
   const firewallData = useFirewallData("1.2", timeRange);
@@ -118,7 +119,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
   const fetchPolicies = useCallback(async () => {
     setPolicyLoading(true);
     try {
-      const domains = ["global", "pipeline", "rag", "mcp"];
+      const domains = ["pipeline", "rag", "mcp"];
       const all = [];
       for (const domain of domains) {
         const res = await fetchWithAuth(`/api/policies/?policy_domain=${domain}`);
@@ -137,7 +138,6 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
   }, [fetchPolicies]);
 
   const sections = [
-    { key: "global", label: "Global" },
     { key: "pipeline", label: "Pipeline" },
     { key: "rag", label: "RAG" },
     { key: "mcp", label: "MCP" },
@@ -146,10 +146,11 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
   ];
 
   const exportCandidates = useMemo(() => {
-    const section = activeSection === "analytics" || activeSection === "vector" ? "global" : activeSection;
+    const section = activeSection === "analytics" || activeSection === "vector" ? "pipeline" : activeSection;
     return policies.filter((p) => {
-      const domain = String(p.policy_domain || "").toLowerCase();
-      return section === "global" ? (domain === "global" || domain === "") : domain === section;
+      const domain = String(p.policy_domain || "pipeline").toLowerCase();
+      const normalized = domain === "global" || domain === "" ? "pipeline" : domain;
+      return normalized === section;
     });
   }, [policies, activeSection]);
 
@@ -178,6 +179,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
           title="Vector DB Policies"
           description="Collection-level policy controls for vector retrieval paths."
           externalCreateSignal={vectorCreateSignal}
+          onRequestGenericCreate={handleRequestGenericCreate}
         />
       );
     }
@@ -185,17 +187,35 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
   };
 
   const handleNewPolicy = () => {
-    if (activeSection === "vector") {
-      // Vector tab uses the dedicated vector policy CRUD model/API.
+    const behavior = resolvePolicyCreateBehavior(activeSection, "header");
+    if (behavior.usesVectorModal) {
       setVectorCreateSignal((n) => n + 1);
       return;
     }
-    const behavior = resolvePolicyCreateBehavior(activeSection, "header");
     if (behavior.shouldSwitchSection) {
       setActiveSection(behavior.targetSection);
     }
     setExternalCreateScope(behavior.scope);
-    // Header-level create should allow choosing any policy domain.
+    // Open UNLOCKED so the in-panel domain switcher (Global / Pipeline / RAG /
+    // MCP / Vector) is interactive. The active tab still preselects the domain,
+    // but the user can now morph the panel to another domain without closing it.
+    setExternalCreateScopeLocked(false);
+    setExternalCreateSignal((n) => n + 1);
+  };
+
+  // In-panel domain switcher hand-offs. Vector is a separate resource, so when
+  // the user switches to/from it we swap modals (and the active tab) to keep the
+  // tab and the switcher in sync — one source of truth, not two competing ones.
+  const handleRequestVectorCreate = () => {
+    setActiveSection("vector");
+    setVectorCreateSignal((n) => n + 1);
+  };
+
+  const handleRequestGenericCreate = (domain) => {
+    const normalized = domain === "global" ? "pipeline" : domain;
+    const safe = ["pipeline", "rag", "mcp"].includes(normalized) ? normalized : "pipeline";
+    setActiveSection(safe);
+    setExternalCreateScope(safe);
     setExternalCreateScopeLocked(false);
     setExternalCreateSignal((n) => n + 1);
   };
@@ -257,7 +277,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
       <section className="grid gap-4 xl:grid-cols-3">
         <ChartCard title="Event Trend">
           {firewallData.loading && trendData.length === 0 ? sectionSkeleton() : (
-            <ResponsiveContainer width="100%" height={210}>
+            <SafeResponsiveChart className="h-[210px] w-full">
               <LineChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
                 <XAxis dataKey="time" tick={{ fontSize: 11 }} />
@@ -265,7 +285,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
                 <Tooltip />
                 <Line type="monotone" dataKey="primary" stroke="#6b7280" strokeWidth={2} dot={false} />
               </LineChart>
-            </ResponsiveContainer>
+            </SafeResponsiveChart>
           )}
         </ChartCard>
 
@@ -298,7 +318,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
 
         <ChartCard title="Top Categories">
           {firewallData.loading && categoryData.length === 0 ? sectionSkeleton() : (
-            <ResponsiveContainer width="100%" height={210}>
+            <SafeResponsiveChart className="h-[210px] w-full">
               <BarChart data={categoryData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
                 <XAxis dataKey="name" hide />
@@ -306,7 +326,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
                 <Tooltip />
                 <Bar dataKey="value" fill="#6b7280" radius={[0, 6, 6, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </SafeResponsiveChart>
           )}
         </ChartCard>
       </section>
@@ -329,18 +349,23 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
         </div>
       </section>
 
-      {(activeSection !== "analytics" && activeSection !== "vector") ? (
+      {activeSection !== "analytics" ? (
         <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
-          {policyLoading ? sectionSkeleton() : (
+          {activeSection === "vector" ? (
+            renderInspectionPanel()
+          ) : policyLoading ? (
+            sectionSkeleton()
+          ) : (
             <PolicyManagementPanel
               title="Advanced Policy Workspace"
               description="Full CRUD, compile and rule operations."
               scope={activeSection}
-              showCompileButton={activeSection === "global"}
+              showCompileButton={true}
               showFilters={true}
               externalCreateSignal={externalCreateSignal}
               externalCreateScope={externalCreateScope}
               externalCreateScopeLocked={externalCreateScopeLocked}
+              onRequestVectorCreate={handleRequestVectorCreate}
             />
           )}
         </section>

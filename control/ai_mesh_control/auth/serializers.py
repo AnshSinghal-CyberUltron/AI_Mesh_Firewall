@@ -1,11 +1,17 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import check_password, make_password
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import Role, UserProfile
+from .models import Role, TerminatedSession, UserProfile
 
 User = get_user_model()
+
+# Pre-computed dummy hash used to equalise login timing for non-existent emails
+# (computed once at import). Verifying against it costs the same as a real
+# user's check_password, so an attacker cannot enumerate valid emails by timing.
+_DUMMY_PASSWORD_HASH = make_password("zs-constant-time-dummy-password")
 
 OFFERING_ROLES = {
     "platform": ("platform_admin", "platform_user"),
@@ -26,9 +32,20 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         email = attrs.get("email")
         password = attrs.get("password")
         user = User.objects.filter(email__iexact=email).first()
-        if not user or not user.check_password(password):
+        if user is None:
+            # Run a dummy verification so a non-existent email takes the same
+            # time as an existing one (prevents timing-based email enumeration).
+            check_password(password, _DUMMY_PASSWORD_HASH)
+            raise serializers.ValidationError("Invalid email or password.")
+        if not user.check_password(password):
             raise serializers.ValidationError("Invalid email or password.")
         if not user.is_active:
+            raise serializers.ValidationError("User account is disabled.")
+        # Reject login outright for an actively-terminated (uncleared) user so we
+        # never mint tokens for an identity that every subsequent request would
+        # reject anyway (JWTAuthenticationWithTermination). Cleared/reinstated
+        # terminations keep their audit row but no longer block login.
+        if TerminatedSession.objects.filter(user=user, cleared_at__isnull=True).exists():
             raise serializers.ValidationError("User account is disabled.")
         # Update last_login so User Management Last Login column is correct
         user.last_login = timezone.now()

@@ -1,12 +1,10 @@
 import json
 import logging
+import math
 import os
+import socket
 import time
-from base64 import b64encode
 from datetime import timedelta
-from html import escape
-from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import redis
 from celery import shared_task
@@ -29,6 +27,61 @@ logger = logging.getLogger(__name__)
 
 REDIS_TELEMETRY_KEY = "telemetry:events"
 REDIS_GATEWAY_JOBS_KEY = "gateway:jobs"
+
+# EnforcementEvent.action is a CharField(max_length=16); a longer ``action``
+# from a malformed/poison telemetry event raises StringDataRightTruncation on
+# the atomic bulk_create, dropping the whole batch. Truncate defensively.
+_MAX_ENFORCEMENT_ACTION_LEN = 16
+
+
+def _strip_nul(value):
+    """Recursively sanitize values that Postgres jsonb/text columns reject.
+
+    Two poison classes are scrubbed so a single malformed/malicious telemetry
+    event can't abort the atomic ``bulk_create`` and silently drop a whole batch
+    (and, on older builds, re-queue forever):
+
+    * NUL (``\\x00``) in any string — psycopg raises ``UntranslatableCharacter``
+      → ``DataError``.
+    * Non-finite floats (``inf`` / ``-inf`` / ``nan``) anywhere — jsonb has no
+      representation for them, so the insert fails (e.g. a client-supplied
+      ``risk_score``/``latency_ms`` of ``Infinity`` stored raw in metadata).
+      These coerce to ``0.0`` so the event persists (sanitized) instead.
+    """
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, float):
+        return value if math.isfinite(value) else 0.0
+    if isinstance(value, dict):
+        return {_strip_nul(k): _strip_nul(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_strip_nul(v) for v in value]
+    return value
+
+
+def _coerce_risk(value) -> float:
+    """Coerce an untrusted ``risk_score`` into a clean, bounded float.
+
+    The gateway-supplied ``risk_score`` is client-influenceable telemetry. A
+    non-numeric value (e.g. ``"high"``, ``{"x": 1}``, ``None``) raises on the
+    ``int()``/``float()`` coercion in ``_build_enforcement_metadata``, crashing
+    the metadata build and silently DROPPING the security event. A ``NaN`` /
+    ``inf`` poisons downstream ``int(... * 100)`` math (``ValueError`` /
+    nonsense risk). Total + defensive: anything that isn't a finite number maps
+    to ``0.0`` so the event always degrades gracefully instead of being lost.
+    """
+    try:
+        risk = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if math.isinf(risk) or math.isnan(risk):
+        return 0.0
+    if risk < 0.0:
+        return 0.0
+    if risk > 1.0:
+        return 1.0
+    return risk
+
 
 _EVENT_TYPE_TO_SOURCE: dict[str, str] = {
     "input_blocked": "security_scan",
@@ -72,80 +125,6 @@ RISK_INCREMENT_MAP: dict[str, float] = {
 }
 RISK_SCORE_CAP: float = 1.0
 RISK_SCORE_DECAY_PER_DAY: float = 0.01
-_EMAIL_LOGO_PATH = Path(__file__).resolve().parent / "email_assets" / "zeroshield-logo.png"
-
-_TELEMETRY_CANONICAL_PRIORITY: dict[str, int] = {
-    "request": 100,
-    "stream_complete": 95,
-    "rag_pipeline": 90,
-    "input_blocked": 90,
-    "output_scan": 85,
-    "output_guard": 85,
-    "kill_switch": 80,
-    "model_routed": 20,
-    "critical_alert": 10,
-}
-
-
-def _telemetry_request_id(event: dict) -> str:
-    """Stable per-request id used for drain dedupe (matches gateway emit)."""
-    event_metadata = event.get("metadata") or {}
-    return (
-        str(event.get("request_id") or "").strip()
-        or str(event_metadata.get("request_id") or "").strip()
-        or str(event.get("pipeline_request_id") or "").strip()
-        or str(event.get("prompt_hash") or "").strip()
-        or f"evt-{int(time.time() * 1000)}"
-    )
-
-
-def _merge_telemetry_group(group: list[dict]) -> dict:
-    """Keep one canonical event per request_id, preserving prompt and key attribution."""
-    best = max(
-        group,
-        key=lambda e: _TELEMETRY_CANONICAL_PRIORITY.get(str(e.get("event_type") or ""), 50),
-    )
-    merged = dict(best)
-    if not str(merged.get("prompt_snippet") or "").strip():
-        for event in group:
-            snippet = str(event.get("prompt_snippet") or "").strip()
-            if snippet:
-                merged["prompt_snippet"] = snippet
-                break
-    if not str(merged.get("key_prefix") or "").strip():
-        for event in group:
-            prefix = str(event.get("key_prefix") or "").strip()
-            if prefix:
-                merged["key_prefix"] = prefix
-                break
-    return merged
-
-
-def _collapse_telemetry_batch(events: list[dict]) -> list[dict]:
-    """Keep one canonical EnforcementEvent candidate per shared request_id."""
-    groups: dict[str, list[dict]] = {}
-    orphans: list[dict] = []
-    for event in events:
-        rid = _telemetry_request_id(event)
-        if rid.startswith("evt-"):
-            orphans.append(event)
-            continue
-        groups.setdefault(rid, []).append(event)
-
-    collapsed = [_merge_telemetry_group(group) for group in groups.values() if group]
-    collapsed.extend(orphans)
-    return collapsed
-
-
-def _resolve_logo_src() -> str:
-    explicit_url = os.environ.get("ZEROSHIELD_LOGO_URL", "").strip()
-    if explicit_url:
-        return explicit_url
-    try:
-        encoded = b64encode(_EMAIL_LOGO_PATH.read_bytes()).decode("ascii")
-        return f"data:image/png;base64,{encoded}"
-    except Exception:
-        return "https://zeroshield.ai/assets/zeroshield-logo.png"
 
 
 def _build_enforcement_metadata(event: dict) -> dict:
@@ -159,7 +138,17 @@ def _build_enforcement_metadata(event: dict) -> dict:
     threat_type = event.get("threat_type", "")
     raw_risk = event.get("risk_score", 0)
 
-    event_metadata = event.get("metadata") or {}
+    # ``metadata`` is client-influenceable. A non-dict value (list/str/number
+    # from a malformed or malicious event) would raise on every ``.get()``
+    # below, crashing the build and silently DROPPING the security event.
+    # Guard to an empty dict so the event always degrades gracefully.
+    event_metadata = event.get("metadata")
+    if not isinstance(event_metadata, dict):
+        event_metadata = {}
+    # Same for ``tokens_used`` — read once, isinstance-guarded.
+    tokens_used = event.get("tokens_used")
+    if not isinstance(tokens_used, dict):
+        tokens_used = {}
     source = event_metadata.get("source") or _EVENT_TYPE_TO_SOURCE.get(event_type, "security_scan")
     module_id = (
         event_metadata.get("module")
@@ -168,11 +157,36 @@ def _build_enforcement_metadata(event: dict) -> dict:
         or _EVENT_TYPE_TO_MODULE.get(event_type)
         or "1.1"
     )
-    request_id = _telemetry_request_id(event)
+    request_id = (
+        event_metadata.get("request_id")
+        or event.get("request_id")
+        or event.get("prompt_hash")
+        or f"evt-{int(time.time() * 1000)}"
+    )
     extra_payload = dict(event_metadata)
     owasp_codes = resolve_owasp_codes(threat_type, extra_payload, event_type=event_type)
     owasp_code = primary_owasp_code(owasp_codes) or _THREAT_TYPE_TO_OWASP.get(threat_type, "")
-    security_risk_score = int(raw_risk * 100) if isinstance(raw_risk, float) else int(raw_risk)
+    # ``raw_risk`` is client-influenceable telemetry. A non-numeric or NaN/inf
+    # value would crash the build here (the original int()/float() coercion
+    # raises) and silently DROP the security event. Coerce defensively while
+    # preserving legacy semantics: a float is a 0..1 fraction (scaled to a
+    # 0..100 score); an int is already a 0..100 score. Anything non-finite or
+    # non-numeric degrades to 0 — the event must persist, never be lost.
+    # (``bool`` is an int subclass and keeps its legacy int() path.)
+    if isinstance(raw_risk, float):
+        security_risk_score = int(_coerce_risk(raw_risk) * 100)
+    elif isinstance(raw_risk, int):
+        security_risk_score = int(raw_risk)
+    else:
+        try:
+            coerced = float(raw_risk)
+        except (TypeError, ValueError):
+            coerced = 0.0
+        if math.isinf(coerced) or math.isnan(coerced):
+            coerced = 0.0
+        # A fractional string ("0.85") is a 0..1 fraction; an integral string
+        # ("85") is already a 0..100 score.
+        security_risk_score = int(coerced * 100) if 0.0 <= coerced <= 1.0 else int(coerced)
 
     is_isolation = event_type in ("kill_switch", "model_isolation", "circuit_breaker")
     if is_isolation:
@@ -187,7 +201,7 @@ def _build_enforcement_metadata(event: dict) -> dict:
         "latency_ms": event.get("latency_ms", 0),
         "risk_score": raw_risk,
         "threat_type": threat_type,
-        "tokens_used": event.get("tokens_used", {}),
+        "tokens_used": tokens_used,
         "compliance_tags": event.get("compliance_tags", []),
         "source": source,
         "owasp_code": owasp_code,
@@ -202,19 +216,29 @@ def _build_enforcement_metadata(event: dict) -> dict:
         "is_isolation_event": is_isolation,
         "event_timestamp": event.get("timestamp"),
         "intent": event.get("intent", ""),
-        "extra": event.get("metadata", {}),
+        "extra": event_metadata,
         # Enriched request-level fields for LogDetailPage
         "method": event.get("method", "POST"),
         "endpoint": "/v1/rag/query" if event_type == "rag_pipeline" else "/v1/chat/completions",
         "source_ip": event.get("source_ip", ""),
         "user_agent": event.get("user_agent", ""),
         "status_code": event.get("status_code", 200),
-        "input_tokens": (event.get("tokens_used") or {}).get("prompt_tokens", 0),
-        "output_tokens": (event.get("tokens_used") or {}).get("completion_tokens", 0),
-        "total_tokens": (event.get("tokens_used") or {}).get("total_tokens", 0),
+        "input_tokens": tokens_used.get("prompt_tokens", 0),
+        "output_tokens": tokens_used.get("completion_tokens", 0),
+        "total_tokens": tokens_used.get("total_tokens", 0),
         "organization_id": event.get("organization_id"),
-        # Policy violations: derived from matched policies in extra metadata
-        "policy_violations": (event.get("metadata") or {}).get("matched_policies") or [],
+        # Policy linkage: promote gateway match fields for analytics + FK resolution
+        "policy_violations": event_metadata.get("matched_policies") or [],
+        "matched_policies": event_metadata.get("matched_policies") or [],
+        "matched_policy_codes": event_metadata.get("matched_policy_codes")
+        or event_metadata.get("matched_policies")
+        or [],
+        "matched_rules": event_metadata.get("matched_rules") or [],
+        "matched_rule_names": event_metadata.get("matched_rule_names")
+        or event_metadata.get("matched_rules")
+        or [],
+        "matched_policy_ids": event_metadata.get("matched_policy_ids") or [],
+        "matched_rule_ids": event_metadata.get("matched_rule_ids") or [],
         # Derived security analysis flags for LogDetailPage
         "pii_detected": threat_type in ("pii", "secret", "data_leakage", "credential"),
         "prompt_injection_detected": threat_type in ("prompt_injection", "injection"),
@@ -227,10 +251,33 @@ def _build_enforcement_metadata(event: dict) -> dict:
     }
 
     # Build prompt_lineage from gateway prompt_snippet so forensics page shows the prompt
-    prompt_snippet = str(event.get("prompt_snippet") or "").strip()
+    prompt_snippet = event.get("prompt_snippet", "")
     if prompt_snippet:
-        result["prompt_snippet"] = prompt_snippet[:500]
         result["prompt_lineage"] = [{"prompt": prompt_snippet, "risk_score": security_risk_score}]
+
+    # Scan Detail Report / Activity Preview: hoist gateway enrichments to metadata top-level
+    # so LogDetailPage can render pipeline stages, I/O, and incident correlation without
+    # digging only into metadata.extra (which threat-feed rows also mirror here).
+    if event_metadata.get("pipeline_trace"):
+        result["pipeline_trace"] = event_metadata["pipeline_trace"]
+    result["incident_id"] = (
+        event_metadata.get("incident_id")
+        or event_metadata.get("request_id")
+        or request_id
+    )
+    result["prompt_submitted"] = (
+        event_metadata.get("prompt_submitted")
+        or event_metadata.get("prompt_snippet")
+        or prompt_snippet
+        or ""
+    )
+    if not result["prompt_submitted"] and result.get("prompt_lineage"):
+        first = result["prompt_lineage"][0] if result["prompt_lineage"] else {}
+        if isinstance(first, dict):
+            result["prompt_submitted"] = first.get("prompt") or ""
+    for _resp_key in ("response_snippet", "sanitized_output", "raw_output"):
+        if event_metadata.get(_resp_key):
+            result[_resp_key] = event_metadata[_resp_key]
 
     if event_type == "model_routed":
         extra = result.get("extra") or {}
@@ -254,10 +301,10 @@ def _build_enforcement_metadata(event: dict) -> dict:
         result["module"] = "1.5"
         result["module_id"] = "1.5"
 
-    from module2.telemetry_health import normalize_enforcement_metadata
-
-    normalized, _ = normalize_enforcement_metadata(result)
-    return normalized
+    # Scrub NUL bytes from every nested string before this metadata reaches the
+    # jsonb EnforcementEvent.metadata column (Postgres rejects \x00). This is the
+    # single funnel for ALL drained telemetry, so one scrub covers every event.
+    return _strip_nul(result)
 
 
 def _build_notification_payload(ev) -> dict:
@@ -316,259 +363,6 @@ def log_audit(user_id, action, resource="", details="", ip=None, organization_id
     )
 
 
-def deliver_critical_alert_email(
-    recipients_str: str,
-    threat_type: str,
-    risk_score: float,
-    detail: str,
-    event_type: str,
-    organization_id: int | None = None,
-    user_id: int | None = None,
-    key_prefix: str = "",
-    source: str = "",
-    request_id: str = "",
-    endpoint: str = "",
-    model: str = "",
-    pipeline_stage: str = "",
-) -> bool:
-    """
-    Send critical security alert email to configured recipients.
-
-    Prefers Microsoft Graph (application permissions) when TENANT_ID/CLIENT_ID/
-    CLIENT_SECRET are set; otherwise uses Django SMTP (EMAIL_* settings).
-    """
-    if not recipients_str:
-        logger.debug("No alert recipients configured, skipping email")
-        return False
-
-    recipients = [r.strip() for r in recipients_str.split(",") if r.strip() and "@" in r]
-    if not recipients:
-        logger.warning("No valid email addresses in alert_recipients: %s", recipients_str)
-        return False
-
-    risk_pct = int(risk_score * 100) if isinstance(risk_score, float) else risk_score
-    org_name = "Unknown Organization"
-    if organization_id:
-        org_name = (
-            Organization.objects.filter(id=organization_id)
-            .values_list("name", flat=True)
-            .first()
-            or org_name
-        )
-    subject = f"AIMesh-Firewall Security Alert - {org_name}"
-    ist_now = timezone.now().astimezone(ZoneInfo("Asia/Kolkata"))
-    formatted_ts = ist_now.strftime("%d %b %Y, %I:%M:%S %p IST")
-    threat_label = (threat_type or "unknown").replace("_", " ").title()
-    event_type_label = (event_type or "unknown").replace("_", " ").title()
-    source_label = (source or "gateway").replace("_", " ").title()
-    pipeline_label = (pipeline_stage or "query").replace("_", " ").title()
-    endpoint_label = endpoint or "/v1/chat/completions"
-    request_id_label = request_id or "N/A"
-    user_label = str(user_id) if user_id is not None else "N/A"
-    key_prefix_label = key_prefix or "N/A"
-    model_label = model or "N/A"
-    detail_safe = escape(detail or "No additional threat description provided.")
-    threat_link = (
-        f"{os.environ.get('BACKEND_PUBLIC_URL', '').strip().rstrip('/')}/security-events"
-        if os.environ.get("BACKEND_PUBLIC_URL", "").strip()
-        else "https://app.zeroshield.ai/security-events"
-    )
-    logo_path = _resolve_logo_src()
-    body = (
-        f"ZeroShield Critical Security Alert\n"
-        f"{'=' * 40}\n\n"
-        f"Organization: {org_name}\n"
-        f"Threat Type: {threat_type}\n"
-        f"Risk Score: {risk_pct}%\n"
-        f"Event Type: {event_type}\n"
-        f"Detail: {detail}\n"
-        f"Timestamp: {formatted_ts}\n\n"
-        f"This alert was generated by the ZeroShield AI Mesh Firewall.\n"
-        f"Threat Link: {threat_link}\n"
-        f"Review the SOC dashboard for full details and forensic data."
-    )
-    body_html = f"""
-<html>
-  <body style="margin:0;background:#f2f6ff;font-family:Arial,sans-serif;color:#112147;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 0;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="680" cellspacing="0" cellpadding="0" style="background:#ffffff;border:1px solid #dbe4ff;border-radius:12px;overflow:hidden;">
-            <tr>
-              <td style="background:#0d3f9e;padding:18px 24px;">
-                <div style="display:inline-block;background:#ffffff;border-radius:6px;padding:8px;margin-bottom:10px;">
-                  <img src="{escape(logo_path)}" alt="ZeroShield Logo" style="height:44px;display:block;" />
-                </div>
-                <div style="font-size:20px;font-weight:700;color:#ffffff;">AIMesh-Firewall Security Alert</div>
-                <div style="font-size:13px;color:#dce8ff;margin-top:4px;">Organization - {escape(org_name)}</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:24px;">
-                <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;">
-                  A high risk security event was detected and requires immediate investigation.
-                </p>
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #e6ecff;">
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;width:180px;">Threat Type</td><td style="padding:10px 12px;">{escape(threat_label)}</td></tr>
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Risk Score</td><td style="padding:10px 12px;">{risk_pct}%</td></tr>
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Event Type</td><td style="padding:10px 12px;">{escape(event_type_label)}</td></tr>
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Service</td><td style="padding:10px 12px;">{escape(source_label)}</td></tr>
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Pipeline Stage</td><td style="padding:10px 12px;">{escape(pipeline_label)}</td></tr>
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Endpoint</td><td style="padding:10px 12px;">{escape(endpoint_label)}</td></tr>
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">User ID</td><td style="padding:10px 12px;">{escape(user_label)}</td></tr>
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Gateway API Key Prefix</td><td style="padding:10px 12px;">{escape(key_prefix_label)}</td></tr>
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Model</td><td style="padding:10px 12px;">{escape(model_label)}</td></tr>
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Request ID</td><td style="padding:10px 12px;">{escape(request_id_label)}</td></tr>
-                  <tr><td style="padding:10px 12px;background:#f7f9ff;font-weight:700;">Timestamp</td><td style="padding:10px 12px;">{escape(formatted_ts)}</td></tr>
-                </table>
-                <h3 style="margin:18px 0 8px 0;font-size:16px;">Threat Description</h3>
-                <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#243a6b;">{detail_safe}</p>
-                <a href="{escape(threat_link)}" style="display:inline-block;padding:10px 16px;background:#0d3f9e;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;">
-                  Open Security Investigation
-                </a>
-                <p style="margin:20px 0 0 0;font-size:12px;color:#5f6f95;">
-                  This is an automated message from ZeroShield AIMesh-Firewall.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
-""".strip()
-
-    from core.graph_mail import graph_mail_configured, send_graph_mail
-
-    if graph_mail_configured():
-        sent = send_graph_mail(
-            recipients=recipients,
-            subject=subject,
-            body_text=body,
-            body_html=body_html,
-        )
-        logger.info(
-            "Critical alert email sent via Graph - org=%s user=%s key=%s source=%s event=%s request_id=%s recipients=%d",
-            organization_id,
-            user_label,
-            key_prefix_label,
-            source_label,
-            event_type_label,
-            request_id_label,
-            len(recipients),
-        )
-        return sent
-
-    from django.core.mail import send_mail
-
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=recipients,
-        fail_silently=False,
-    )
-    logger.info(
-        "Critical alert email (SMTP) sent to %d recipients for %s",
-        len(recipients),
-        threat_type,
-    )
-    return True
-
-
-def _dispatch_critical_alert_email(
-    *,
-    recipients_str: str,
-    threat_type: str,
-    risk_score: float,
-    detail: str,
-    event_type: str,
-    organization_id: int | None = None,
-    user_id: int | None = None,
-    key_prefix: str = "",
-    source: str = "",
-    request_id: str = "",
-    endpoint: str = "",
-    model: str = "",
-    pipeline_stage: str = "",
-) -> None:
-    """
-    Deliver alert email without blocking telemetry drain.
-
-    Default: synchronous delivery (standalone compose has no Celery worker).
-    Set ALERT_EMAIL_USE_CELERY=true when workers consume platform.batch.
-    """
-    kwargs = {
-        "recipients_str": recipients_str,
-        "threat_type": threat_type,
-        "risk_score": risk_score,
-        "detail": detail,
-        "event_type": event_type,
-        "organization_id": organization_id,
-        "user_id": user_id,
-        "key_prefix": key_prefix,
-        "source": source,
-        "request_id": request_id,
-        "endpoint": endpoint,
-        "model": model,
-        "pipeline_stage": pipeline_stage,
-    }
-    use_celery = str(getattr(settings, "ALERT_EMAIL_USE_CELERY", "false")).lower() in (
-        "true",
-        "1",
-        "yes",
-    )
-    if use_celery:
-        send_critical_alert_email.delay(**kwargs)
-        return
-    try:
-        deliver_critical_alert_email(**kwargs)
-    except Exception:
-        logger.warning("Critical alert email delivery failed", exc_info=True)
-
-
-@shared_task(bind=True, max_retries=3, default_retry_delay=30)
-def send_critical_alert_email(
-    self,
-    recipients_str: str,
-    threat_type: str,
-    risk_score: float,
-    detail: str,
-    event_type: str,
-    organization_id: int | None = None,
-    user_id: int | None = None,
-    key_prefix: str = "",
-    source: str = "",
-    request_id: str = "",
-    endpoint: str = "",
-    model: str = "",
-    pipeline_stage: str = "",
-) -> bool:
-    """
-    Celery wrapper for deliver_critical_alert_email (retries on failure).
-    """
-    try:
-        return deliver_critical_alert_email(
-            recipients_str=recipients_str,
-            threat_type=threat_type,
-            risk_score=risk_score,
-            detail=detail,
-            event_type=event_type,
-            organization_id=organization_id,
-            user_id=user_id,
-            key_prefix=key_prefix,
-            source=source,
-            request_id=request_id,
-            endpoint=endpoint,
-            model=model,
-            pipeline_stage=pipeline_stage,
-        )
-    except Exception as exc:
-        logger.error("Failed to send critical alert email: %s", exc)
-        raise self.retry(exc=exc) from exc
-
-
 _GATEWAY_THREAT_TO_INCIDENT_TITLE: dict[str, str] = {
     "prompt_injection": "Prompt Injection Attack Blocked",
     "injection": "Prompt Injection Attack Blocked",
@@ -595,16 +389,51 @@ _GATEWAY_THREAT_TO_INCIDENT_TITLE: dict[str, str] = {
 }
 
 
+def _output_incident_logging_enabled(org_id, _cache: dict) -> bool:
+    """
+    Best-effort per-org check of FirewallConfig.output_incident_logging_enabled.
+
+    Honors per-org suppression of incident/review logging. Results are cached
+    per drain batch to avoid an extra query per event. Fail-open (default True)
+    if the config can't be read so auditing is never silently disabled by an error.
+    """
+    if org_id in _cache:
+        return _cache[org_id]
+    enabled = True
+    try:
+        from core.models import FirewallConfig
+
+        val = (
+            FirewallConfig.objects.filter(organization_id=org_id)
+            .values_list("output_incident_logging_enabled", flat=True)
+            .first()
+        )
+        if val is not None:
+            enabled = bool(val)
+    except Exception:
+        logger.warning(
+            "Failed to read output_incident_logging_enabled for org=%s; defaulting to enabled",
+            org_id,
+            exc_info=True,
+        )
+    _cache[org_id] = enabled
+    return enabled
+
+
 def _auto_create_review_items_and_incidents(events: list) -> None:
     """
     After bulk-creating EnforcementEvents, auto-create:
     - HumanReviewItem for 'flag' actions (populates ReviewQueuePanel)
     - SecurityIncident for 'block' actions (populates SecurityIncidentPanel)
+    - HumanReviewItem for 'redact'/'rewrite' actions so post-generation
+      sanitization is auditable in the SOC/HITL surface (gated per-org by
+      FirewallConfig.output_incident_logging_enabled).
     """
     from policy.models import HumanReviewItem, SecurityIncident
 
     review_items = []
     incidents = []
+    _logging_cache: dict = {}
 
     for event in events:
         org_id = event.organization_id
@@ -621,6 +450,16 @@ def _auto_create_review_items_and_incidents(events: list) -> None:
                 organization_id=org_id,
                 status="pending",
             ))
+
+        elif event.action in ("redact", "rewrite"):
+            # Post-generation sanitization: surface it for human review so the
+            # action is auditable. Honor per-org suppression of incident logging.
+            if _output_incident_logging_enabled(org_id, _logging_cache):
+                review_items.append(HumanReviewItem(
+                    enforcement_event=event,
+                    organization_id=org_id,
+                    status="pending",
+                ))
 
         elif event.action == "block":
             if risk_score >= 80:
@@ -658,6 +497,50 @@ def _auto_create_review_items_and_incidents(events: list) -> None:
             logger.warning("Failed to bulk-create SecurityIncidents", exc_info=True)
 
 
+def _safe_bulk_create_enforcement_events(events_to_create: list) -> list:
+    """
+    Insert EnforcementEvents with per-row isolation so a single poison-pill row
+    cannot drop the entire batch.
+
+    A single malformed telemetry event (e.g. an ``action`` longer than the
+    column, or any value the DB rejects) makes one atomic ``bulk_create`` raise
+    and roll back EVERY row in the batch — including healthy events for other
+    tenants. Those events are then permanently lost because their dedupe keys
+    were already written. We first try the fast bulk path; only if it fails do
+    we fall back to per-row inserts, logging and skipping the offender(s) and
+    persisting the rest. Returns the list of rows that were actually persisted.
+    """
+    from policy.models import EnforcementEvent
+
+    if not events_to_create:
+        return []
+    try:
+        EnforcementEvent.objects.bulk_create(events_to_create)
+        return events_to_create
+    except Exception:
+        logger.warning(
+            "drain_telemetry_from_redis: bulk insert failed for %d events; "
+            "falling back to per-row inserts to isolate poison pills",
+            len(events_to_create),
+            exc_info=True,
+        )
+
+    persisted: list = []
+    for ev in events_to_create:
+        try:
+            ev.save()
+            persisted.append(ev)
+        except Exception:
+            logger.warning(
+                "drain_telemetry_from_redis: skipped poison-pill telemetry event "
+                "(org=%s action=%r) — persisting the rest of the batch",
+                getattr(ev, "organization_id", None),
+                getattr(ev, "action", None),
+                exc_info=True,
+            )
+    return persisted
+
+
 def drain_telemetry_from_redis(batch_size: int = 50) -> int:
     """
     Drain telemetry events from Redis list and batch-insert
@@ -679,7 +562,13 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
 
     events_to_create: list[EnforcementEvent] = []
     processed = 0
-    key_org_by_prefix = None
+    # R9 FIX: in-batch idempotency guard. Even with the per-consumer processing
+    # key and the Redis dedupe set, a single drain pass must never write two
+    # EnforcementEvents for the same (organization_id, request_id) — e.g. when
+    # the same request_id appears twice in one dequeued batch. Track the pairs
+    # already accepted in THIS pass and skip duplicates before constructing the
+    # row.
+    seen_in_batch: set[tuple[int, str, str, str]] = set()
 
     # DATA-01 FIX: Atomic dequeue using Lua script to prevent event loss
     ATOMIC_DEQUEUE_LUA = """
@@ -692,9 +581,32 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
     end
     return events
     """
-    
-    PROCESSING_KEY = f"{REDIS_TELEMETRY_KEY}:processing"
-    
+
+    # R9 FIX: the control-web background-thread drain and the Celery worker drain
+    # both run drain_telemetry_from_redis concurrently. A single shared
+    # PROCESSING_KEY let each drainer's recovery path "recover" the OTHER
+    # drainer's in-flight batch and re-process it (2x-4x EnforcementEvent
+    # duplication). Scope the processing queue PER-CONSUMER (stable per
+    # container via gethostname) so each drainer only ever recovers its OWN
+    # crashed batch and never steals another consumer's in-flight events.
+    try:
+        _consumer_id = socket.gethostname() or "unknown"
+    except Exception:
+        _consumer_id = "unknown"
+    PROCESSING_KEY = f"{REDIS_TELEMETRY_KEY}:processing:{_consumer_id}"
+
+    # M5: single-runner lock per consumer (see the workers copy). Prevents two
+    # concurrent drains on the same hostname from each "recovering" the other's
+    # in-flight batch (the "recovered N pending" churn). Fail-open; TTL releases a
+    # crashed holder; released in the finally below.
+    DRAIN_LOCK_KEY = f"{REDIS_TELEMETRY_KEY}:drain_lock:{_consumer_id}"
+    try:
+        _got_drain_lock = bool(client.set(DRAIN_LOCK_KEY, "1", nx=True, ex=60))
+    except redis.RedisError:
+        _got_drain_lock = True  # fail-open
+    if not _got_drain_lock:
+        return 0
+
     DEDUPE_KEY_PREFIX = "telemetry:dedupe:"
     try:
         # Recovery path: if a previous run crashed after moving events to
@@ -710,35 +622,80 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
 
         # Use Lua script for atomic move to processing queue
         raw_events = client.eval(ATOMIC_DEQUEUE_LUA, 2, REDIS_TELEMETRY_KEY, PROCESSING_KEY, batch_size)
-
-        parsed_events: list[dict] = []
+        
         for raw in raw_events:
             try:
-                parsed_events.append(json.loads(raw))
+                event = json.loads(raw)
             except (json.JSONDecodeError, TypeError):
                 logger.warning("Malformed telemetry event: %s", raw[:200] if raw else "None")
+                continue
 
-        for event in _collapse_telemetry_batch(parsed_events):
-            request_id = _telemetry_request_id(event)
-            if request_id and not request_id.startswith("evt-"):
-                dedupe_key = f"{DEDUPE_KEY_PREFIX}{request_id}"
+            # ``metadata`` is client-influenceable and may be a non-dict poison
+            # value; guard before any ``.get()`` so the dedupe/scope reads here
+            # cannot crash the drain loop.
+            _event_meta = event.get("metadata")
+            if not isinstance(_event_meta, dict):
+                _event_meta = {}
+
+            request_id = (
+                event.get("request_id")
+                or _event_meta.get("request_id")
+                or event.get("pipeline_request_id")
+            )
+
+            # Set organization from telemetry event (injected by gateway).
+            # Resolved BEFORE the dedupe check so the dedupe key can be scoped
+            # by org + event identity (FIX-B, below).
+            org_id = event.get("organization_id") or _event_meta.get("organization_id")
+            try:
+                org_id = int(org_id) if org_id is not None else None
+            except (TypeError, ValueError):
+                org_id = None
+
+            # B1 (regression fix): these two were previously assigned ONLY inside
+            # the `len(request_id) >= 8` Redis-dedupe block, but the in-batch
+            # guard below runs under `if request_id:` and references them. A
+            # truthy-but-short request_id (1-7 chars, e.g. a malformed
+            # X-Request-ID) skipped the assignment and then hit an
+            # UnboundLocalError at the in-batch guard — which propagated to the
+            # except handler and SKIPPED the processing-key ack-delete, wedging
+            # the same batch into a ~1s "recovered N pending" crash-loop
+            # (remotely triggerable, permanent security-event loss). Assign
+            # unconditionally — matching the workers copy (telemetry.py) so the
+            # two drain implementations stay at parity.
+            _dedupe_event_type = str(event.get("event_type") or "request")
+            _dedupe_action = str(event.get("action") or "allow")
+
+            # FIX-B: the dedupe key was derived purely from the
+            # client-influenceable ``request_id`` (X-Request-ID → telemetry
+            # request_id). An attacker could pin one request_id so a later BLOCK
+            # event collides with an earlier ALLOW and is dropped — a silent
+            # security UNDER-COUNT. Scope the key by org + event identity
+            # (event_type, action) so distinct security events for the same
+            # request_id never collide cross-type, while genuine retries of the
+            # SAME event still dedupe.
+            # A DEGENERATE request_id (e.g. a single char "h" from a malformed
+            # X-Request-ID) would build a dedupe key that collapses ALL future
+            # events sharing it for the 24h TTL — a sticky sink that silently
+            # under-counts security events. Require a minimum length so a
+            # malformed id falls through to no-request_id dedupe (in-batch guard
+            # still applies) instead of poisoning the keyspace.
+            if request_id and len(str(request_id).strip()) >= 8:
+                dedupe_key = (
+                    f"{DEDUPE_KEY_PREFIX}{org_id}:{_dedupe_event_type}:"
+                    f"{_dedupe_action}:{request_id}"
+                )
                 is_new = client.set(dedupe_key, "1", nx=True, ex=86400)
                 if not is_new:
                     logger.debug(
-                        "drain_telemetry_from_redis: skipped duplicate telemetry request_id=%s",
+                        "drain_telemetry_from_redis: skipped duplicate telemetry "
+                        "(org=%s event_type=%s action=%s request_id=%s)",
+                        org_id,
+                        _dedupe_event_type,
+                        _dedupe_action,
                         request_id,
                     )
                     continue
-
-            metadata = _build_enforcement_metadata(event)
-            if key_org_by_prefix is None:
-                from module2.telemetry_health import build_key_org_map
-
-                key_org_by_prefix = build_key_org_map()
-
-            from module2.telemetry_health import resolve_organization_id
-
-            org_id = resolve_organization_id(event, metadata, key_org_by_prefix)
 
             if not org_id or org_id <= 0:
                 logger.warning(
@@ -747,35 +704,99 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
                 )
                 continue
 
-            metadata["organization_id"] = org_id
-            enforcement_event = EnforcementEvent(
-                policy=None,
-                rule=None,
-                action=event.get("action", "allow"),
-                user_id=event.get("user_id"),
-                endpoint_id=event.get("endpoint_id"),
-                agent=None,
-                metadata=metadata,
-                organization_id=org_id,
-            )
+            # R9 FIX: idempotency guard — never write two EnforcementEvents for
+            # the same event identity within one drain pass.
+            # FIX-B: scope by (org, event_type, action, request_id) — same as
+            # the Redis dedupe key — so distinct security events (e.g. an ALLOW
+            # and a later BLOCK that share a pinned request_id) never collide
+            # cross-type and get under-counted, while genuine in-batch retries
+            # of the SAME event still dedupe.
+            if request_id:
+                batch_key = (org_id, _dedupe_event_type, _dedupe_action, str(request_id))
+                if batch_key in seen_in_batch:
+                    logger.debug(
+                        "drain_telemetry_from_redis: skipped in-batch duplicate "
+                        "(org=%s event_type=%s action=%s request_id=%s)",
+                        org_id,
+                        _dedupe_event_type,
+                        _dedupe_action,
+                        request_id,
+                    )
+                    continue
+                seen_in_batch.add(batch_key)
+
+            # Build + construct the row inside a per-event guard so a single
+            # malformed event (poison pill) is skipped + logged rather than
+            # raising and aborting the whole batch loop.
+            try:
+                built_metadata = _build_enforcement_metadata(event)
+                action = event.get("action", "allow")
+                # ``action`` is a CharField(max_length=16). An oversized value
+                # (poison pill) raises StringDataRightTruncation on the atomic
+                # bulk_create and drops the whole batch — coerce + truncate.
+                if not isinstance(action, str):
+                    action = str(action)
+                # Strip NUL bytes (poison pill) before this CharField is inserted.
+                action = action.replace("\x00", "")
+                if len(action) > _MAX_ENFORCEMENT_ACTION_LEN:
+                    action = action[:_MAX_ENFORCEMENT_ACTION_LEN]
+                from policy.telemetry_resolution import resolve_policy_rule_from_event
+
+                policy, rule = resolve_policy_rule_from_event(
+                    action=action,
+                    organization_id=org_id,
+                    raw_metadata=event.get("metadata"),
+                    built_metadata=built_metadata,
+                )
+                # Coerce numeric fields defensively. ``user_id`` / ``endpoint_id``
+                # are IntegerFields; a malformed telemetry event (e.g.
+                # user_id={'x': 1} from a client sending a non-scalar "user") is a
+                # poison pill — it fails the ENTIRE atomic bulk_create below,
+                # dropping every event in the batch and wedging the telemetry
+                # drain for ALL orgs until the bad event is manually purged from
+                # Redis. Null any non-integer value.
+                _raw_uid = event.get("user_id")
+                _raw_eid = event.get("endpoint_id")
+                try:
+                    _uid = int(_raw_uid) if _raw_uid is not None else None
+                except (TypeError, ValueError):
+                    _uid = None
+                try:
+                    _eid = int(_raw_eid) if _raw_eid is not None else None
+                except (TypeError, ValueError):
+                    _eid = None
+                enforcement_event = EnforcementEvent(
+                    policy=policy,
+                    rule=rule,
+                    action=action,
+                    user_id=_uid,
+                    endpoint_id=_eid,
+                    agent=None,
+                    metadata=built_metadata,
+                    organization_id=org_id,
+                )
+            except Exception:
+                logger.warning(
+                    "drain_telemetry_from_redis: skipped unbuildable telemetry "
+                    "event (org=%s event_type=%s)",
+                    org_id,
+                    event.get("event_type", "unknown"),
+                    exc_info=True,
+                )
+                continue
             events_to_create.append(enforcement_event)
             processed += 1
 
         if events_to_create:
-            EnforcementEvent.objects.bulk_create(events_to_create)
-            # Clear processing queue after successful commit
-            client.delete(PROCESSING_KEY)
+            # Per-row isolated insert: a single poison-pill row that slips past
+            # the build-time coercion above cannot drop healthy rows for other
+            # tenants. Downstream notifications / incident creation / critical
+            # alerts act only on the rows that were actually persisted.
+            events_to_create = _safe_bulk_create_enforcement_events(events_to_create)
             logger.info(
                 "drain_telemetry_from_redis: inserted %d events",
                 len(events_to_create),
             )
-
-            try:
-                from module2.ueba_metrics import increment_lifetime_request_counts
-
-                increment_lifetime_request_counts(events_to_create)
-            except Exception:
-                logger.warning("Failed to increment UEBA lifetime request counts", exc_info=True)
 
             try:
                 from ws.notify import send_enforcement_notification
@@ -788,63 +809,46 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
             # Auto-create HumanReviewItems for flagged events and
             # SecurityIncidents for blocked events so the frontend
             # ReviewQueuePanel and SecurityIncidentPanel have data.
-            _auto_create_review_items_and_incidents(events_to_create)
+            # M5: wrap this POST-insert side-effect so a failure here cannot jump
+            # to the except handlers and SKIP the processing-key ack (delete)
+            # below. The events are already persisted (and dedupe-marked), so a
+            # skipped ack would make the next run "recover" an already-committed
+            # batch — spurious churn (the ~727 "recovered N pending" warnings) and
+            # a re-run of review/incident creation. Side-effect failures must not
+            # block the ack.
+            try:
+                _auto_create_review_items_and_incidents(events_to_create)
+            except Exception:
+                logger.warning(
+                    "drain_telemetry_from_redis: review/incident creation failed for drained batch",
+                    exc_info=True,
+                )
 
-        try:
-            from module2.telemetry_health import maybe_repair_stale_telemetry
-
-            maybe_repair_stale_telemetry()
-        except Exception:
-            logger.warning("Background Module 2 telemetry repair failed", exc_info=True)
+        # Clear the processing queue after a clean iteration — even when
+        # events_to_create is empty. A batch of all-skipped events (unscoped /
+        # duplicate) is intentionally discarded, not retried; leaving the delete
+        # inside `if events_to_create` meant an all-skipped batch never cleared
+        # the processing queue, so the recovery path re-appended the same events
+        # to the main list on every run and an unscoped telemetry flood could
+        # never drain (the queue grew without bound, starving real events behind
+        # it). A bulk_create exception above jumps to the handlers below and skips
+        # this delete, so genuine commit failures are still recovered and retried.
+        client.delete(PROCESSING_KEY)
 
     except redis.RedisError:
         logger.exception("drain_telemetry_from_redis: Redis error during drain")
     except Exception:
         logger.exception("drain_telemetry_from_redis: unexpected error")
+    finally:
+        # M5: release the single-runner lock so the next scheduled drain can run.
+        try:
+            client.delete(DRAIN_LOCK_KEY)
+        except redis.RedisError:
+            pass  # TTL will expire it
 
-    for event_data in events_to_create:
-        meta = event_data.metadata or {}
-        extra = meta.get("extra", {})
-        if extra.get("alert_level") == "critical":
-            try:
-                from ws.notify import send_enforcement_notification
-
-                send_enforcement_notification(
-                    {
-                        "type": "critical_alert",
-                        "event_type": meta.get("event_type", ""),
-                        "threat_type": meta.get("threat_type", ""),
-                        "risk_score": meta.get("risk_score", 0),
-                        "alert_level": "critical",
-                        "detail": extra.get("detail", ""),
-                        "recipients": extra.get("alert_recipients", ""),
-                        "organization_id": event_data.organization_id,
-                    }
-                )
-                logger.info(
-                    "Critical alert dispatched via WebSocket: threat_type=%s, risk_score=%s",
-                    meta.get("threat_type"),
-                    meta.get("risk_score"),
-                )
-            except Exception:
-                logger.warning("Failed to dispatch critical alert via WebSocket", exc_info=True)
-
-            _dispatch_critical_alert_email(
-                recipients_str=extra.get("alert_recipients", ""),
-                threat_type=meta.get("threat_type", "unknown"),
-                risk_score=meta.get("risk_score", 0),
-                detail=extra.get("detail", ""),
-                event_type=meta.get("event_type", ""),
-                organization_id=event_data.organization_id,
-                user_id=event_data.user_id,
-                key_prefix=meta.get("key_prefix", ""),
-                source=meta.get("source", ""),
-                request_id=meta.get("request_id", ""),
-                endpoint=meta.get("endpoint", ""),
-                model=meta.get("model", ""),
-                pipeline_stage=meta.get("pipeline_stage", ""),
-            )
-
+    # Security Alerting & Notifications feature REMOVED: critical events are still
+    # persisted and surfaced in the dashboard, but no WebSocket/email alert is
+    # dispatched (the alerting config + email path were removed system-wide).
     return processed
 
 
@@ -926,23 +930,142 @@ def process_gateway_jobs_batch(batch_size: int = 200) -> int:
     return drain_gateway_jobs_from_redis(batch_size=batch_size)
 
 
-@shared_task
-def vector_ingest_task(payload: dict) -> dict:
+def _build_vector_client_for_org(org_id, vector_db_type: str):
+    """Resolve the org's active VectorProviderConfig and build a vendored
+    gateway vector client (PineconeClient / MilvusClient). Returns (client, used)
+    or (None, "").
+
+    Vector deps (pinecone/litellm/pymilvus) and the vendored gateway modules
+    (vector_client, byok_embedder) are present in the WORKER image only, so the
+    imports are LAZY — ``core.tasks`` must still import cleanly in the control
+    web container, which does not run this task and does not ship those modules.
     """
-    Placeholder async ingest task.
-    A follow-up worker can extend this to perform full embedding and upsert.
-    """
+    from policy.vector_provider_models import VectorProviderConfig
+
+    # Match ONLY the requested provider type — NOT "any active provider". An
+    # untyped fallback could upsert into a DIFFERENT provider/namespace than the
+    # request targeted (the gateway sync path resolves by exact type).
+    cfg = VectorProviderConfig.objects.filter(
+        organization_id=org_id, provider_type=vector_db_type, is_active=True
+    ).first()
+    if cfg is None:
+        return None, ""
+
+    ptype = (cfg.provider_type or "").strip()
+    if ptype != "pinecone":
+        # MilvusClient (milvus/custom) has no add()/upsert() yet — building one
+        # would raise AttributeError mid-ingest and burn the task's retries.
+        # Reject upfront with a clear log until Milvus async ingest is built.
+        logger.error(
+            "vector_ingest_task: provider '%s' does not support async ingest yet (org=%s); "
+            "documents NOT stored", ptype, org_id,
+        )
+        return None, ""
+
+    from vector_client import PineconeClient  # vendored from gateway
+
+    # api_key is an EncryptedCharField — attribute access auto-decrypts (Fernet).
+    api_key = cfg.api_key or ""
+    if not api_key:
+        return None, ""
+    try:
+        return PineconeClient(
+            api_key=api_key,
+            environment=cfg.environment or "",
+            embedding_model=cfg.embedding_model or "text-embedding-3-small",
+        ), "pinecone"
+    except Exception:  # noqa: BLE001 - never crash the task on client construction
+        logger.exception("vector_ingest_task: failed to build pinecone client for org=%s", org_id)
+    return None, ""
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=20)
+def vector_ingest_task(self, payload: dict) -> dict:
+    """Async RAG ingest: embed + upsert the ALREADY-scanned-and-redacted docs
+    into the org's BYOK vector DB.
+
+    The gateway runs the ingest-time ContextGuard / PII / Tier-2 scan AND the
+    typed-placeholder redaction INLINE before enqueuing, so by the time this
+    worker runs the documents are guardrail-clean; this task only performs the
+    slow per-org embed + upsert (reusing the vendored gateway vector_client +
+    byok_embedder so the fail-closed embedding contract is identical)."""
+    import asyncio
+
+    job_id = payload.get("job_id", "")
+    collection = payload.get("collection", "")
+    org_id = payload.get("organization_id")
+    project_id = payload.get("project_id", "") or ""
+    vector_db_type = (payload.get("vector_db_type") or "pinecone").strip() or "pinecone"
+    documents = payload.get("documents") or []
+    ids = payload.get("ids") or []
+    metadatas = payload.get("metadatas") or []
+
+    if not documents:
+        return {"status": "empty", "job_id": job_id, "collection": collection}
+
+    client, used = _build_vector_client_for_org(org_id, vector_db_type)
+    if client is None:
+        logger.error(
+            "vector_ingest_task: no resolvable vector client (org=%s vdb=%s job=%s) — "
+            "documents NOT stored", org_id, vector_db_type, job_id,
+        )
+        return {"status": "error", "reason": "no_provider_configured", "job_id": job_id}
+
+    try:
+        count = asyncio.run(
+            client.add(
+                collection_name=collection,
+                documents=documents,
+                ids=ids,
+                metadatas=metadatas,
+                project_id=project_id,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(
+            "vector_ingest_task: upsert failed (org=%s collection=%s provider=%s job=%s)",
+            org_id, collection, used, job_id,
+        )
+        # Retry transient provider/embedding errors; after max_retries the job is
+        # dropped (the gateway already returned 202 with the scan verdict).
+        raise self.retry(exc=exc)
+
     logger.info(
-        "vector_ingest_task accepted job_id=%s collection=%s docs=%s",
-        payload.get("job_id", ""),
-        payload.get("collection", ""),
-        len(payload.get("documents") or []),
+        "vector_ingest_task upserted job=%s collection=%s docs=%d provider=%s org=%s",
+        job_id, collection, count, used, org_id,
     )
     return {
-        "status": "accepted",
-        "job_id": payload.get("job_id", ""),
-        "collection": payload.get("collection", ""),
+        "status": "ingested",
+        "job_id": job_id,
+        "collection": collection,
+        "doc_count": count,
+        "provider": used,
     }
+
+
+@shared_task
+def resync_gateway_keys() -> int:
+    """Reconcile all active gateway API keys into Redis (startup + periodic).
+
+    Recovers the gateway auth keyspace after a Redis flush/eviction or container
+    recycle, which otherwise 401s every /v1/* request until keys are re-saved.
+    """
+    from core.signals import resync_all_gateway_keys
+
+    return resync_all_gateway_keys()
+
+
+@shared_task
+def reconcile_routing_state() -> dict:
+    """Periodic full reconcile of routing state (models/allowlist/isolation) into
+    Redis. B2 DEFENSE: a bulk ``QuerySet.update()`` bypasses the per-instance
+    ``post_save`` signal and leaves Redis stale, so the gateway routes on old
+    config (deactivated/isolated/re-prioritised models keep serving). This task
+    re-pushes ground-truth on a short interval so any signal-bypass self-heals.
+    """
+    from core.signals import reconcile_all_routing_state
+
+    return reconcile_all_routing_state()
 
 
 @shared_task

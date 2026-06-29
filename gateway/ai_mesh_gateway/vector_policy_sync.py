@@ -61,10 +61,69 @@ class VectorPolicySync:
             return 0
         return self._cache.get("policy_count", 0)
 
-    def get_policy(self, project_id: str, collection_name: str) -> dict[str, Any] | None:
-        """O(1) lookup of a vector collection policy by project and collection name."""
-        key = f"{project_id}::{collection_name}"
-        return self.policies.get(key)
+    @staticmethod
+    def _normalize_collection(collection_name: Any) -> str:
+        """Case-fold a collection name so case-variants resolve to one policy.
+
+        Vector-DB collection names are treated case-insensitively for policy
+        enforcement: ``Docs``, ``docs`` and ``DOCS`` must all map to the same
+        compiled policy. Without this, a caller could request ``Docs`` against
+        a policy stored for ``docs`` and miss the ``deny`` / ``block_sensitive``
+        rule entirely, falling back to the permissive default (PII bypass).
+        """
+        return str(collection_name or "").strip().casefold()
+
+    def _lookup(self, tenant: Any, normalized_collection: str) -> dict[str, Any] | None:
+        """Match ``{tenant}::{collection}`` case-insensitively on the collection part.
+
+        The compiled bundle is keyed by the collection name as stored on the
+        control side (which is NOT normalized). To make the lookup case-insensitive
+        without assuming the stored case, compare the normalized collection of each
+        candidate key under the same tenant prefix.
+        """
+        prefix = f"{tenant}::"
+        for key, policy in self.policies.items():
+            if not key.startswith(prefix):
+                continue
+            stored_collection = key[len(prefix):]
+            if self._normalize_collection(stored_collection) == normalized_collection:
+                return policy
+        return None
+
+    def get_policy(
+        self,
+        project_id: str,
+        collection_name: str,
+        organization_id: Any = None,
+    ) -> dict[str, Any] | None:
+        """Lookup a vector collection policy for the calling tenant.
+
+        The compiler now keys every policy by ``{organization_id}::{collection}``
+        — the only collision-free tenant identifier. The gateway always knows the
+        caller's ``organization_id`` from the resolved gateway key, so look that
+        up first.
+
+        The legacy ``{project_id}::{collection}`` / ``simulator-{slug}`` lookups
+        are retained purely as a transition fallback for any pre-migration bundle
+        still keyed by project_id; they return None against an org-keyed bundle,
+        which is harmless.
+
+        Collection names are matched case-insensitively so that ``Docs`` and
+        ``docs`` resolve to the same compiled policy and cannot be used to evade
+        a ``deny`` / ``block_sensitive`` rule via case-variation.
+        """
+        normalized_collection = self._normalize_collection(collection_name)
+        if organization_id is not None:
+            policy = self._lookup(organization_id, normalized_collection)
+            if policy is not None:
+                return policy
+        policy = self._lookup(project_id, normalized_collection)
+        if policy is not None:
+            return policy
+        if project_id and str(project_id).startswith("simulator-"):
+            slug = str(project_id)[len("simulator-"):]
+            return self._lookup(slug, normalized_collection)
+        return None
 
     def get_project_collections(self, project_id: str) -> list[str]:
         """Return all collection names accessible to a project."""
@@ -164,10 +223,14 @@ class VectorPolicySync:
                         continue
 
                     incoming_version = notification.get("version", 0)
-                    if incoming_version <= self._version:
+                    # Reload whenever the version DIFFERS — not only when it is
+                    # strictly greater. A Redis flush/AOF loss resets the version
+                    # key to a low number; the old "<= current → skip" logic then
+                    # dropped every notification forever and silently fell back to
+                    # the permissive monitor default. Treat any mismatch as a reload.
+                    if incoming_version == self._version:
                         LOG.debug(
-                            "Skipping stale vector policy notification (incoming=%d, current=%d)",
-                            incoming_version,
+                            "Vector policy notification matches cached version (%d); no reload",
                             self._version,
                         )
                         continue

@@ -6,6 +6,8 @@ When AGENT_API_KEY is empty, all requests are allowed (dev).
 Also supports per-organization OrganizationAgentKey; when used, sets request.agent_organization_id.
 """
 
+import secrets
+
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from rest_framework import authentication
@@ -35,7 +37,18 @@ def _resolve_agent_auth(request):
         raise AuthenticationFailed(
             "Invalid or missing agent API key. Use Authorization: Bearer <key> or X-Agent-Key: <key>."
         )
-    if configured and key == configured:
+    # M-07 FIX: use constant-time comparison to avoid leaking the global key via
+    # timing side-channels. Both operands are guaranteed non-empty here (key checked
+    # above, configured guarded by the `configured and` short-circuit).
+    # Compare as bytes: compare_digest raises TypeError on str operands containing
+    # non-ASCII, and `key` is attacker-controlled (Django decodes headers latin-1,
+    # so bytes >0x7F reach us as U+0080-U+00FF). surrogateescape also covers lone
+    # surrogates in `configured` (os.environ decodes with surrogateescape), so this
+    # encoding cannot raise on any reachable input.
+    if configured and secrets.compare_digest(
+        key.encode("utf-8", "surrogateescape"),
+        configured.encode("utf-8", "surrogateescape"),
+    ):
         return True
     from core.models import OrganizationAgentKey
     key_hash = OrganizationAgentKey.hash_raw_key(key)
@@ -61,7 +74,18 @@ class AgentKeyAuthentication(authentication.BaseAuthentication):
         if not key:
             return None  # No key; permission layer will allow or deny (e.g. dev mode)
         configured = (getattr(settings, "AGENT_API_KEY", None) or "").strip()
-        if configured and key == configured:
+        # M-07 FIX: constant-time comparison to prevent timing-attack key recovery.
+        # `key` is non-empty (early return above) and `configured` is guarded by the
+        # `configured and` short-circuit, so compare_digest never sees an empty arg.
+        # Compare as bytes: compare_digest raises TypeError on str operands containing
+        # non-ASCII, and `key` is attacker-controlled (Django decodes headers latin-1,
+        # so bytes >0x7F reach us as U+0080-U+00FF). surrogateescape also covers lone
+        # surrogates in `configured` (os.environ decodes with surrogateescape), so this
+        # encoding cannot raise on any reachable input.
+        if configured and secrets.compare_digest(
+            key.encode("utf-8", "surrogateescape"),
+            configured.encode("utf-8", "surrogateescape"),
+        ):
             return (AnonymousUser(), key)
         from core.models import OrganizationAgentKey
 
@@ -71,6 +95,12 @@ class AgentKeyAuthentication(authentication.BaseAuthentication):
         ).select_related("organization").first()
         if org_key:
             request.agent_organization_id = org_key.organization_id
+            # P9b: stamp org into the log context at auth time for agent-key requests.
+            try:
+                from main_app.log_extras import set_org_id
+                set_org_id(org_key.organization_id)
+            except Exception:  # noqa: BLE001
+                pass
             return (AnonymousUser(), key)
         raise AuthenticationFailed(
             "Invalid or missing agent API key. Use Authorization: Bearer <key> or X-Agent-Key: <key>."

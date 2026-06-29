@@ -1,6 +1,12 @@
 import { useRef, useState } from "react";
-import { Clock, Shield, AlertTriangle, XCircle, CheckCircle, Pin, X } from "lucide-react";
-import { formatDetectionTier, ZEROSHIELD_GUARD_MODEL_LABEL } from "../../constants/zeroshieldBrand";
+import { Clock, Shield, AlertTriangle, XCircle, CheckCircle, Pin, X, ArrowRightLeft } from "lucide-react";
+import {
+  formatDecisionSource,
+  formatDetectionTier,
+  formatRoutingReason,
+  formatZeroshieldScanSummary,
+  ZEROSHIELD_GUARD_MODEL_LABEL,
+} from "../../constants/zeroshieldBrand";
 
 const ACTION_THEME = {
   allow: {
@@ -45,6 +51,22 @@ const ACTION_THEME = {
     icon: "text-violet-500",
     highlight: "ring-violet-400/40 shadow-violet-500/20",
   },
+  reroute: {
+    card: "border-indigo-200 bg-indigo-50/80 text-indigo-900 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-50",
+    badge: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300",
+    dot: "bg-indigo-500",
+    icon: "text-indigo-500",
+    highlight: "ring-indigo-400/40 shadow-indigo-500/20",
+  },
+  // Upstream/inference FAILURE (provider/credential/infra) — distinct from a
+  // security "block". Red to signal a problem, AlertTriangle (not the block X).
+  error: {
+    card: "border-rose-200 bg-rose-50/80 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-50",
+    badge: "bg-rose-500/15 text-rose-700 dark:text-rose-300",
+    dot: "bg-rose-500",
+    icon: "text-rose-500",
+    highlight: "ring-rose-400/40 shadow-rose-500/20",
+  },
 };
 
 const ACTION_ICONS = {
@@ -54,6 +76,8 @@ const ACTION_ICONS = {
   redact: Shield,
   skip: Clock,
   needs_model: AlertTriangle,
+  reroute: ArrowRightLeft,
+  error: AlertTriangle,
 };
 
 function formatStageLatency(stage) {
@@ -61,7 +85,11 @@ function formatStageLatency(stage) {
   if (Number.isFinite(ms) && ms >= 0) {
     return `${ms < 1 ? "<1" : Math.round(ms * 10) / 10}ms latency`;
   }
-  return "0.1ms latency";
+  // Honest placeholder: never fabricate a latency number when the gateway did
+  // not report one for this stage. Both render sites cope with the dash — the
+  // stage card shows "—" and the detail card's `.replace(" latency", "")`
+  // leaves it untouched.
+  return "—";
 }
 
 /**
@@ -74,7 +102,7 @@ export function StageTimeline({ stages = [], className = "" }) {
   const stageRefs = useRef({});
   const [hoveredStage, setHoveredStage] = useState(null);
   const [expandedStage, setExpandedStage] = useState(null);
-  const [popoverPos, setPopoverPos] = useState({ left: 180, top: 160 });
+  const [popoverPos, setPopoverPos] = useState({ left: 180, top: 160, placement: "below" });
 
   if (!stages.length) return null;
 
@@ -90,9 +118,22 @@ export function StageTimeline({ stages = [], className = "" }) {
     const desiredLeft = stageRect.left - containerRect.left + stageRect.width / 2;
     const clampedLeft = Math.max(180, Math.min(desiredLeft, containerRect.width - 180));
 
+    // Viewport-aware vertical placement: the detail card can be tall (input_scan /
+    // output_guardrail carry guard reasoning + before/after blocks). If there is
+    // not enough room BELOW the stage before the viewport edge, flip it ABOVE so it
+    // never runs off-screen. translateY(-100%) (applied in JSX) shifts it up by its
+    // own rendered height, so no height measurement is needed.
+    const viewportH = typeof window !== "undefined" ? window.innerHeight : 900;
+    const POPOVER_EST = 360;
+    const spaceBelow = viewportH - stageRect.bottom;
+    const placeAbove = spaceBelow < POPOVER_EST && stageRect.top > spaceBelow;
+
     setPopoverPos({
       left: clampedLeft,
-      top: stageRect.bottom - containerRect.top + 16,
+      top: placeAbove
+        ? stageRect.top - containerRect.top - 16
+        : stageRect.bottom - containerRect.top + 16,
+      placement: placeAbove ? "above" : "below",
     });
   };
 
@@ -171,7 +212,9 @@ export function StageTimeline({ stages = [], className = "" }) {
 
       {visibleStageIndex !== null && stages[visibleStageIndex] && (
         <div
-          className="absolute z-40 w-[360px] max-w-[calc(100%-1rem)] -translate-x-1/2"
+          className={`absolute z-40 w-[360px] max-w-[calc(100%-1rem)] -translate-x-1/2 ${
+            popoverPos.placement === "above" ? "-translate-y-full" : ""
+          }`}
           style={{ left: `${popoverPos.left}px`, top: `${popoverPos.top}px` }}
           onMouseEnter={() => setHoveredStage(visibleStageIndex)}
           onMouseLeave={() => setHoveredStage(null)}
@@ -194,10 +237,70 @@ export function StageTimeline({ stages = [], className = "" }) {
   );
 }
 
+function BeforeAfterBlock({ beforeLabel, beforeText, afterLabel, afterText }) {
+  return (
+    <div className="col-span-2 mt-1 space-y-2">
+      <div>
+        <span className="mb-1 block text-slate-500 dark:text-slate-400">{beforeLabel}:</span>
+        <pre className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-100/80 p-2 font-mono text-[11px] whitespace-pre-wrap text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200">
+          {beforeText}
+        </pre>
+      </div>
+      <div>
+        <span className="mb-1 block text-slate-500 dark:text-slate-400">{afterLabel}:</span>
+        <pre className="max-h-40 overflow-y-auto rounded-lg border border-emerald-200 bg-emerald-50/70 p-2 font-mono text-[11px] whitespace-pre-wrap text-slate-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-slate-100">
+          {afterText}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+const BEFORE_AFTER_LABELS = {
+  policy: { before: "Before", after: "After policy redaction" },
+  input_scan: { before: "Scanned input", after: "Forwarded to model" },
+  model_input: { before: "Scanned input", after: "Forwarded to model" },
+  output_guardrail: { before: "Model output", after: "After output guard" },
+  default: { before: "Input", after: "Output" },
+};
+
 function StageDetailCard({ stage, onClose, isPinned }) {
   const theme = ACTION_THEME[stage.action] || ACTION_THEME.skip;
   const hasWeights = stage.weights && typeof stage.weights === "object" && Object.keys(stage.weights).length > 0;
   const hasDecisionFactors = Array.isArray(stage.decision_factors) && stage.decision_factors.length > 0;
+
+  // Before/after (Input -> Output) detection: render only when both sides are
+  // present AND actually differ. Otherwise fall back to the legacy single block.
+  const promptIn = typeof stage.prompt_in === "string" ? stage.prompt_in : "";
+  const promptOut = typeof stage.prompt_out === "string" ? stage.prompt_out : "";
+  const hasBeforeAfter = promptIn.length > 0 && promptOut.length > 0 && promptIn !== promptOut;
+  const baLabels = BEFORE_AFTER_LABELS[stage.name] || BEFORE_AFTER_LABELS.default;
+
+  // Evidence de-duplication. The guard_reason violet block is the canonical
+  // "why" — anything already contained in it must not be echoed again.
+  const guardReason = typeof stage.guard_reason === "string" ? stage.guard_reason : "";
+  const guardReasonLc = guardReason.toLowerCase();
+  const inGuardReason = (value) => {
+    const v = String(value ?? "").trim().toLowerCase();
+    return v.length > 0 && guardReasonLc.includes(v);
+  };
+
+  // Suppress the standalone detail line when it is empty or already a substring
+  // of guard_reason (the most common duplication the user complained about).
+  const detailText = typeof stage.detail === "string" ? stage.detail.trim() : stage.detail;
+  const showDetail = Boolean(detailText) && !(guardReason && inGuardReason(detailText));
+
+  // Only surface patterns / findings whose text is NOT already in guard_reason.
+  const dedupedPatterns = Array.isArray(stage.matched_patterns)
+    ? stage.matched_patterns.filter((p) => !inGuardReason(p))
+    : [];
+  const dedupedFindings = Array.isArray(stage.guard_findings)
+    ? stage.guard_findings.filter((f) => !inGuardReason(f))
+    : [];
+
+  // When we render the before/after block, suppress the legacy prompt_submitted
+  // block for the same stage to avoid showing the same text twice.
+  const showPromptSubmitted = Boolean(stage.prompt_submitted) && !hasBeforeAfter;
 
   return (
     <div className={`rounded-2xl border bg-white/95 p-4 shadow-2xl backdrop-blur-sm dark:bg-slate-900/95 ${theme.card}`}>
@@ -235,12 +338,20 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             )}
           </div>
         )}
-        {stage.detail && (
+        {hasBeforeAfter && (
+          <BeforeAfterBlock
+            beforeLabel={baLabels.before}
+            beforeText={promptIn}
+            afterLabel={baLabels.after}
+            afterText={promptOut}
+          />
+        )}
+        {showDetail && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">
-              {stage.action === "block" ? "Block reason:" : "Detail:"}
+              {stage.action === "block" ? "Block reason:" : stage.action === "error" ? "Failure reason:" : "Detail:"}
             </span>{" "}
-            <span className="text-slate-700 dark:text-slate-200">{stage.detail}</span>
+            <span className="text-slate-700 dark:text-slate-200">{detailText}</span>
           </div>
         )}
         {stage.action === "allow" && stage.name === "input_scan" && stage.tier && (
@@ -248,23 +359,41 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             Scan ran ({stage.tier}) — request was not blocked; later stages executed normally.
           </div>
         )}
-        {stage.threat_type && (
+        {stage.name === "input_scan" && (() => {
+          const scan = formatZeroshieldScanSummary({
+            detection_tier: stage.tier,
+            threat_type: stage.threat_type,
+            confidence: stage.confidence,
+            risk_score: stage.risk_score,
+            scan_outcome: stage.scan_outcome,
+            action: stage.action,
+          });
+          return (
+            <>
+              <div>
+                <span className="text-slate-500 dark:text-slate-400">Threat:</span>{" "}
+                <span className={scan.clean ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600 dark:text-rose-300"}>
+                  {scan.threatLabel}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-slate-400">{scan.scoreLabel}:</span>{" "}
+                <span className="text-slate-700 dark:text-slate-200">{scan.scoreValue}</span>
+              </div>
+            </>
+          );
+        })()}
+        {stage.name !== "input_scan" && stage.threat_type && !["none", "clean"].includes(String(stage.threat_type).toLowerCase()) && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Threat:</span>{" "}
             <span className="text-rose-600 dark:text-rose-300">{stage.threat_type}</span>
-          </div>
-        )}
-        {stage.confidence !== undefined && (
-          <div>
-            <span className="text-slate-500 dark:text-slate-400">Confidence:</span>{" "}
-            <span className="text-slate-700 dark:text-slate-200">{(stage.confidence * 100).toFixed(0)}%</span>
           </div>
         )}
         <div>
           <span className="text-slate-500 dark:text-slate-400">Latency:</span>{" "}
           <span className="text-slate-700 dark:text-slate-200">{formatStageLatency(stage).replace(" latency", "")}</span>
         </div>
-        {stage.prompt_submitted && (
+        {showPromptSubmitted && (
           <div className="col-span-2 mt-1">
             <span className="mb-1 block text-slate-500 dark:text-slate-400">Prompt submitted:</span>
             <pre className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-100/80 p-2 font-mono text-[11px] whitespace-pre-wrap text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200">
@@ -287,13 +416,17 @@ function StageDetailCard({ stage, onClose, isPinned }) {
         {stage.decision_source && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Decision source:</span>{" "}
-            <span className="text-slate-700 dark:text-slate-200">{stage.decision_source}</span>
+            <span className="text-slate-700 dark:text-slate-200">
+              {stage.decision_source_label || formatDecisionSource(stage.decision_source)}
+            </span>
           </div>
         )}
         {stage.routing_reason && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Routing reason:</span>{" "}
-            <span className="text-slate-700 dark:text-slate-200">{stage.routing_reason}</span>
+            <span className="text-slate-700 dark:text-slate-200">
+              {formatRoutingReason(stage.routing_reason, { decisionSource: stage.decision_source })}
+            </span>
           </div>
         )}
         {stage.policy_summary && (
@@ -328,16 +461,34 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="text-slate-700 dark:text-slate-200">{formatDetectionTier(stage.tier)}</span>
           </div>
         )}
-        {stage.matched_patterns?.length > 0 && (
+        {dedupedPatterns.length > 0 && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Patterns:</span>{" "}
-            <span className="text-amber-600 dark:text-amber-300">{stage.matched_patterns.join(", ")}</span>
+            <span className="text-amber-600 dark:text-amber-300">{dedupedPatterns.join(", ")}</span>
+          </div>
+        )}
+        {dedupedFindings.length > 0 && (
+          <div className="col-span-2">
+            <span className="text-slate-500 dark:text-slate-400">Evidence:</span>{" "}
+            <span className="text-amber-600 dark:text-amber-300">{dedupedFindings.join(", ")}</span>
           </div>
         )}
         {stage.matched_policies?.length > 0 && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Policies:</span>{" "}
-            <span className="text-sky-600 dark:text-sky-300">{JSON.stringify(stage.matched_policies)}</span>
+            <span className="text-sky-600 dark:text-sky-300">{stage.matched_policies.join(", ")}</span>
+          </div>
+        )}
+        {stage.matched_rules?.length > 0 && (
+          <div className="col-span-2">
+            {/* "Applied" only when the stage actually ENFORCED (block/redact/rewrite).
+                When the stage action is allow/monitor/flag the rules MATCHED their
+                condition but did not modify or stop the request — calling them
+                "applied" reads as a contradiction next to an "allow" verdict. */}
+            <span className="text-slate-500 dark:text-slate-400">
+              {["block", "redact", "rewrite"].includes(stage.action) ? "Rules applied:" : "Rules matched:"}
+            </span>{" "}
+            <span className="text-sky-600 dark:text-sky-300">{stage.matched_rules.join(", ")}</span>
           </div>
         )}
         {stage.docs_in !== undefined && (
@@ -348,7 +499,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             </span>
           </div>
         )}
-        {stage.content && (
+        {stage.content && !hasBeforeAfter && (
           <div className="col-span-2 mt-1">
             <span className="mb-1 block text-slate-500 dark:text-slate-400">Content:</span>
             <pre className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-100/80 p-2 font-mono text-[11px] whitespace-pre-wrap text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200">

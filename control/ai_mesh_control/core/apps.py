@@ -38,6 +38,7 @@ class CoreConfig(AppConfig):
 
         if not self._is_management_or_test():
             self._start_telemetry_drain()
+            self._start_gateway_key_resync()
             self._seed_simulator_default_key()
 
     @staticmethod
@@ -64,8 +65,8 @@ class CoreConfig(AppConfig):
                 _run_with_db_lock_retry(
                     lambda: __import__(
                         "core.simulator_seed", fromlist=["ensure_simulator_default_gateway_key"]
-                    ).ensure_simulator_default_gateway_key(),
-                    "Simulator default gateway key seed",
+                    ).ensure_simulator_dev_bootstrap(),
+                    "Simulator dev bootstrap",
                     attempts=8,
                     base_sleep_s=1.5,
                 )
@@ -75,6 +76,44 @@ class CoreConfig(AppConfig):
         threading.Thread(
             target=_run, daemon=True, name="simulator-key-seed"
         ).start()
+
+    @staticmethod
+    def _start_gateway_key_resync() -> None:
+        """Reconcile active gateway API keys into Redis on boot and periodically.
+
+        A Redis flush / container recycle drops the ``auth:apikey:{hash}`` cache
+        the data plane reads on every ``/v1/*`` request, which then 401s for every
+        request until each key is re-saved. Control owns the keys and is always
+        running, so it runs the reconcile in a daemon thread — no workers profile
+        / Celery beat required (the worker boot hook remains a secondary path for
+        the workers-profile deployment).
+        """
+        import threading
+
+        interval_seconds = float(os.environ.get("GATEWAY_KEY_RESYNC_INTERVAL_SEC", "300"))
+
+        def _resync_loop() -> None:
+            from core.signals import resync_all_gateway_keys
+
+            # Boot reconcile shortly after startup so a recycle recovers fast,
+            # then reconcile periodically as a safety net against Redis eviction.
+            time.sleep(5.0)
+            while True:
+                try:
+                    count = resync_all_gateway_keys()
+                    logger.info(
+                        "Gateway-key resync reconciled %d active keys into Redis", count
+                    )
+                except Exception:
+                    logger.warning("Gateway-key resync iteration failed", exc_info=True)
+                time.sleep(interval_seconds)
+
+        threading.Thread(
+            target=_resync_loop, daemon=True, name="gateway-key-resync"
+        ).start()
+        logger.info(
+            "Gateway-key resync thread started (interval=%ss)", interval_seconds
+        )
 
     @staticmethod
     def _start_telemetry_drain() -> None:

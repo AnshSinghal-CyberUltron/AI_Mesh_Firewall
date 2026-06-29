@@ -128,17 +128,9 @@ class Command(BaseCommand):
         FirewallConfig.load(organization=org)
 
         try:
-            from core.simulator_seed import (
-                ensure_default_llm_model,
-                ensure_firewall_excludes_guard_model,
-                ensure_simulator_firewall_keywords_cleared,
-                ensure_simulator_default_gateway_key,
-            )
+            from core.simulator_seed import ensure_simulator_dev_bootstrap
 
-            ensure_default_llm_model(org)
-            ensure_firewall_excludes_guard_model(org)
-            ensure_simulator_firewall_keywords_cleared(org)
-            ensure_simulator_default_gateway_key()
+            ensure_simulator_dev_bootstrap(org)
         except Exception as exc:
             self.stdout.write(self.style.WARNING(f"Simulator bootstrap skipped: {exc}"))
 

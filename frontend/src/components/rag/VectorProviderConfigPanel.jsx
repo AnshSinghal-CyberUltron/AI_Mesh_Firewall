@@ -2,20 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { Key, Database, CheckCircle, AlertTriangle, Loader2, Save, Trash2, RefreshCw } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { useAuth } from "../../context/AuthContext";
+import { VECTOR_PROVIDER_CONFIG_FIELDS } from "../../constants/vectorProviders";
 
 const PROVIDERS = [
-  { value: "chroma", label: "ChromaDB", description: "Open-source embedding database", fields: [
-    { key: "connection_url", label: "ChromaDB URL", placeholder: "http://localhost:8000", required: true },
-    { key: "api_key", label: "Auth Token (optional)", placeholder: "", type: "password" },
-  ]},
-  { value: "pinecone", label: "Pinecone", description: "Managed serverless vector DB", fields: [
-    { key: "api_key", label: "API Key", placeholder: "pcsk_...", required: true, type: "password" },
-    { key: "environment", label: "Environment", placeholder: "us-east-1" },
-  ]},
-  { value: "milvus", label: "Milvus", description: "High-performance vector database", fields: [
-    { key: "connection_url", label: "Milvus URI", placeholder: "http://localhost:19530", required: true },
-    { key: "api_key", label: "Token (optional)", placeholder: "", type: "password" },
-  ]},
+  { value: "pinecone", label: "Pinecone", description: "Managed serverless vector DB", fields: VECTOR_PROVIDER_CONFIG_FIELDS.pinecone },
+  { value: "milvus", label: "Milvus", description: "High-performance vector database", fields: VECTOR_PROVIDER_CONFIG_FIELDS.milvus },
+  { value: "chroma", label: "Chroma", description: "BYOK ChromaDB server (your own host)", fields: VECTOR_PROVIDER_CONFIG_FIELDS.chroma },
+  { value: "custom", label: "Custom", description: "BYOK endpoint (Milvus-compatible URI)", fields: VECTOR_PROVIDER_CONFIG_FIELDS.custom },
 ];
 
 // Use relative URLs so the Vite dev-server proxy forwards /api → backend correctly
@@ -60,9 +53,9 @@ export function VectorProviderConfigPanel() {
       PROVIDERS.forEach((p) => {
         const existing = data.find((c) => c.provider_type === p.value);
         if (existing) {
-          forms[p.value] = { id: existing.id, connection_url: existing.connection_url || "", api_key: "", environment: existing.environment || "", embedding_model: existing.embedding_model || "text-embedding-3-small", is_active: existing.is_active, api_key_set: existing.api_key_set, display_name: existing.display_name || "" };
+          forms[p.value] = { id: existing.id, connection_url: existing.connection_url || "", api_key: "", environment: existing.environment || "", embedding_model: existing.embedding_model || "text-embedding-3-small", embedding_api_key: "", reranker_model: existing.reranker_model || "", is_active: existing.is_active, api_key_set: existing.api_key_set, embedding_api_key_set: existing.embedding_api_key_set, display_name: existing.display_name || "" };
         } else {
-          forms[p.value] = { id: null, connection_url: "", api_key: "", environment: "", embedding_model: "text-embedding-3-small", is_active: true, api_key_set: false, display_name: "" };
+          forms[p.value] = { id: null, connection_url: "", api_key: "", environment: "", embedding_model: "text-embedding-3-small", embedding_api_key: "", reranker_model: "", is_active: true, api_key_set: false, embedding_api_key_set: false, display_name: "" };
         }
       });
       setEditForms(forms);
@@ -92,9 +85,13 @@ export function VectorProviderConfigPanel() {
         connection_url: form.connection_url,
         environment: form.environment,
         embedding_model: form.embedding_model,
+        reranker_model: form.reranker_model || "",
         is_active: form.is_active,
       };
+      // Write-only keys: only send when the user typed a new value, so we never
+      // clobber an existing encrypted key with a blank on PATCH.
       if (form.api_key) payload.api_key = form.api_key;
+      if (form.embedding_api_key) payload.embedding_api_key = form.embedding_api_key;
 
       let res;
       if (form.id) {
@@ -147,11 +144,11 @@ export function VectorProviderConfigPanel() {
             Organisation Provider Keys
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Set org-level API keys for vector providers. The gateway uses these automatically when users don't supply their own.
+            Set org-level BYOK credentials for your vector provider (Pinecone, Milvus, Chroma, or Custom), plus an optional BYOK embedding key and per-org reranker. The gateway uses these automatically when users don't supply their own.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={fetchConfigs} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="Refresh">
+          <button onClick={fetchConfigs} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Refresh" title="Refresh">
             <RefreshCw className={`w-4 h-4 text-slate-400 ${loading ? "animate-spin" : ""}`} />
           </button>
           <InfoTooltip text="Configure provider API keys at the org level. Gateway resolves credentials: user-supplied → org config → env defaults." />
@@ -196,6 +193,11 @@ export function VectorProviderConfigPanel() {
                         <Key className="w-3 h-3" /> Key Set
                       </span>
                     )}
+                    {form.embedding_api_key_set && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-100 dark:bg-violet-800/30 text-violet-700 dark:text-violet-300">
+                        <Key className="w-3 h-3" /> Embed Key
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -210,19 +212,47 @@ export function VectorProviderConfigPanel() {
                         value={form[field.key] || ""}
                         onChange={(e) => handleFieldChange(provider.value, field.key, e.target.value)}
                         placeholder={field.key === "api_key" && form.api_key_set ? "••••••• (key set, enter new to update)" : field.placeholder}
+                        aria-label={`${provider.label} ${field.label}`}
                         className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                       />
                     </div>
                   ))}
                   <div>
-                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Embedding Model</label>
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Embedding Model (BYOK)</label>
                     <input
                       type="text"
                       value={form.embedding_model || ""}
                       onChange={(e) => handleFieldChange(provider.value, "embedding_model", e.target.value)}
                       placeholder="text-embedding-3-small"
+                      aria-label={`${provider.label} embedding model (BYOK)`}
                       className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                     />
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Your own embedding model — the gateway scans (and optionally redacts) documents, then embeds with this model before storing. No system embedding vault.</p>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Reranker Model</label>
+                    <input
+                      type="text"
+                      value={form.reranker_model || ""}
+                      onChange={(e) => handleFieldChange(provider.value, "reranker_model", e.target.value)}
+                      placeholder="bge-reranker-v2-m3"
+                      aria-label={`${provider.label} reranker model`}
+                      className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Per-org reranker (e.g. the provider's hosted bge-reranker-v2-m3). Retrieved docs are reordered by relevance before guardrail scoring. Leave blank to disable reranking.</p>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">BYOK Embedding Key <span className="text-slate-400">(write-only)</span></label>
+                    <input
+                      type="password"
+                      value={form.embedding_api_key || ""}
+                      onChange={(e) => handleFieldChange(provider.value, "embedding_api_key", e.target.value)}
+                      placeholder={form.embedding_api_key_set ? "••••••• (key set, enter new to update)" : "sk-... (optional)"}
+                      autoComplete="new-password"
+                      aria-label={`${provider.label} BYOK embedding key (write-only)`}
+                      className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Key for an external embedding provider (OpenRouter / OpenAI-compatible) when the embedding model routes through litellm rather than the vector DB&apos;s own inference. Encrypted at rest; never returned. Falls back to gateway env credentials when empty.</p>
                   </div>
                 </div>
 

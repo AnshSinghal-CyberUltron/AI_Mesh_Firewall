@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from ._url_guard import is_safe_outbound_url
 from .models import MCPEvent, MCPServerRegistration, MCPScanControl, MCPToolRegistration
 
 
@@ -141,8 +142,24 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"command": "command is required for stdio transport."})
         else:
             # websocket, streamable-http, sse all require url
-            if not _val("url"):
+            url_value = _val("url")
+            if not url_value:
                 raise serializers.ValidationError({"url": "url is required for this transport."})
+
+            # SSRF guard (finding mcp#1): reject internal / loopback /
+            # link-local / cloud-metadata targets at the registration boundary.
+            # This is best-effort — the gateway/control fetch-time guards remain
+            # the authoritative check because DNS can change post-registration
+            # (TOCTOU). websocket allows ws/wss in addition to http/https.
+            if transport == "websocket":
+                allowed_schemes = ("ws", "wss", "http", "https")
+            else:
+                allowed_schemes = ("http", "https")
+            ok, reason = is_safe_outbound_url(url_value, allowed_schemes=allowed_schemes)
+            if not ok:
+                raise serializers.ValidationError(
+                    {"url": f"URL rejected by SSRF guard: {reason}"}
+                )
 
         auth_type = (_val("auth_type", "none") or "none").strip().lower()
         attrs["auth_type"] = auth_type

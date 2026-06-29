@@ -28,6 +28,12 @@ dependencies = [
     "requests>=2.31.0",
     "uvicorn[standard]>=0.24.0",
     "whitenoise[brotli]>=6.6",
+    # Async RAG vector-ingest worker (vector_ingest_task): per-org BYOK embed +
+    # vector upsert reuse the gateway's vector_client/byok_embedder, which need
+    # these (matched to gateway/pyproject.toml pins).
+    "litellm>=1.30.0",
+    "pinecone>=5.0.0",
+    "pymilvus>=2.3.0",
 ]
 
 [project.optional-dependencies]

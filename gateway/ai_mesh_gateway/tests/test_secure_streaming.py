@@ -54,7 +54,13 @@ async def test_secure_stream_block_emits_done():
 
 @pytest.mark.asyncio
 async def test_secure_stream_block_mid_stream_after_prior_chunks_were_yielded():
-    """Block must occur after at least one safe chunk reached the client."""
+    """Fail-closed contract (boundary-split-PII hardening, STREAM_LOOKAHEAD_BYTES):
+    when a block fires, the buffered/held content of the blocked response is
+    DROPPED — the client receives only the block frame + [DONE], never a partial
+    prefix of a response that was ultimately flagged unsafe. (Previously the safe
+    prefix was streamed incrementally, which let a PII token split across a chunk
+    boundary leak before the next scan; the lookahead now holds a trailing window
+    and releases nothing of a blocked response.)"""
 
     class _BlockOnSecondInspect:
         def __init__(self):
@@ -91,7 +97,8 @@ async def test_secure_stream_block_mid_stream_after_prior_chunks_were_yielded():
     async for c in secure:
         chunks.append(c)
     body = "".join(chunks)
-    assert "Hi. " in body
+    # Fail-closed: the buffered prefix of a blocked response is NOT delivered.
+    assert "Hi. " not in body
     assert "output_blocked" in body
     assert any("[DONE]" in c for c in chunks)
 

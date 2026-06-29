@@ -1,45 +1,38 @@
 # Build from AI_Mesh_Firewall repo root
-FROM python:3.12-slim-bookworm
+# syntax=docker/dockerfile:1
 
-WORKDIR /app
-COPY shared /app/shared
-COPY gateway/pyproject.toml /app/gateway/pyproject.toml
-COPY gateway/ai_mesh_gateway /app/gateway/ai_mesh_gateway
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_HTTP_TIMEOUT=300
 
 WORKDIR /app/gateway
-RUN pip install --no-cache-dir \
-    boto3 cryptography fastapi "uvicorn[standard]" gunicorn httpx jsonschema litellm \
-    numpy pinecone psutil "psycopg[binary,pool]" pymilvus python-dotenv pyyaml \
-    redis requests motor websockets \
-    "chromadb==0.5.20" \
-    "prometheus-client>=0.20.0" \
-    opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp
+COPY gateway/pyproject.toml gateway/uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
-ENV PYTHONPATH=/app/shared:/app/gateway:/app/gateway/ai_mesh_gateway
+# Runtime: slim Python + prebuilt .venv + uvx/npx for MCP stdio (no shell-free distroless).
+FROM python:3.12-slim-bookworm AS runtime
 
-# uv/uvx RUNTIME only (not any server package). uvx is the Python equivalent of
-# `npx`: it fetches + caches a published package on first run, so Python-based
-# stdio MCP servers (e.g. `uvx semgrep-mcp`) are pulled ON-DEMAND at client
-# connect time rather than baked into the image. The shared on-demand cache is
-# mounted as a docker volume (UV_CACHE_DIR) for warm reuse across connects.
-RUN pip install --no-cache-dir uv && uv --version && uvx --version
+COPY --from=ghcr.io/astral-sh/uv:python3.12-bookworm-slim /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
 
-# Node.js 20 runtime so stdio MCP servers can be launched via `npx`
-# (e.g. `npx mcp-remote ...`). Copied from the official slim image to avoid
-# apt/NodeSource network steps; bookworm→bookworm keeps the glibc ABI compatible.
+ENV PYTHONUNBUFFERED=1 \
+    PATH="/app/gateway/.venv/bin:$PATH" \
+    PYTHONPATH=/app/shared:/app/gateway:/app/gateway/ai_mesh_gateway
+
+WORKDIR /app/gateway
+COPY shared /app/shared
+COPY gateway/ai_mesh_gateway ./ai_mesh_gateway
+COPY --from=builder /app/gateway/.venv /app/gateway/.venv
+
+# Node.js 20 for stdio MCP servers via npx (bookworm glibc matches Python wheels).
 COPY --from=node:20-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=node:20-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-    && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
-    && node --version && npm --version && npx --version
+    && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 EXPOSE 8300
 
-# Multi-process ASGI server. gunicorn pre-forks WEB_CONCURRENCY uvicorn workers
-# (uvloop+httptools), each an independent event loop. This removes the single-
-# process bottleneck that collapsed the gateway under load. Worker count and
-# socket/timeout tuning are env-overridable for per-instance sizing (one worker
-# per vCPU is the default). Shell form is used so ${VAR:-default} expands.
 CMD gunicorn ai_mesh_gateway.main:app \
     -k uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:8300 \

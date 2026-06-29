@@ -71,6 +71,11 @@ def send_graph_mail(
 
     Returns True when Graph accepts the message (HTTP 202).
     """
+    # MAIL REMOVED (2026-06-17): outbound email is COMPLETELY DISABLED in ALL
+    # environments (local + prod). The mail-sending code is retained only as a
+    # no-op shell; do NOT re-enable without explicit product sign-off.
+    logger.info("send_graph_mail: outbound email disabled — not sending.")
+    return False
     to_list = [r.strip() for r in recipients if r and "@" in r]
     if not to_list:
         logger.warning("send_graph_mail: no valid recipients")

@@ -43,7 +43,7 @@ c=$(curl -s -o /dev/null -w "%{http_code}" -H "$AUTH" "$BASE/api/mcp-connector/s
 check "mcp servers" "$c" "200"
 
 # Policy (1.2)
-c=$(curl -s -o /dev/null -w "%{http_code}" -H "$AUTH" "$BASE/api/policies/?policy_domain=global")
+c=$(curl -s -o /dev/null -w "%{http_code}" -H "$AUTH" "$BASE/api/policies/?policy_domain=pipeline")
 check "policies list" "$c" "200"
 
 # Kill-switch / model isolation (1.6)

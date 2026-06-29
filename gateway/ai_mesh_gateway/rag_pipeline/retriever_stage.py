@@ -78,7 +78,10 @@ class RetrieverStage:
                 )
 
         # ── 3. Get vector client ──
-        client = self._clients.get(inp.vector_db_type)
+        # Prefer the request-scoped per-org client (resolved from the caller's
+        # VectorProviderConfig) over the static, env-built dict. This is how an
+        # organisation's own vector DB credentials drive retrieval.
+        client = inp.vector_client or self._clients.get(inp.vector_db_type)
         if client is None:
             return RetrieverStageOutput(
                 verdict=StageVerdict(
@@ -114,19 +117,51 @@ class RetrieverStage:
                     action="block",
                     threat_type="retrieval_error",
                     confidence=1.0,
-                    detail=f"Vector query failed: {exc}",
+                    # E3: do NOT leak the raw provider exception (Pinecone internals /
+                    # query echo) to the client; the full exc is logged above.
+                    detail="Vector retrieval failed.",
                 ),
                 retrieval_latency_ms=(time.perf_counter() - start) * 1000,
                 circuit_breaker_state=cb_state,
             )
 
+        # ── 4b. Optional per-org provider-hosted reranking ──
+        # When the org configured a reranker_model on its vector provider (e.g.
+        # Pinecone-hosted bge-reranker-v2-m3), reorder the retrieved documents by
+        # semantic relevance to the query BEFORE threshold filtering + guardrail
+        # scoring. Fail-open: rerank() returns the original order on any error.
+        if documents and hasattr(client, "rerank") and getattr(client, "_reranker_model", ""):
+            try:
+                documents = await client.rerank(inp.query_text, documents, top_n=inp.n_results)
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("Reranker step failed (keeping retrieval order): %s", exc)
+
         # ── 5. Relevance threshold filtering ──
-        relevance_threshold = self._config.get("rag_relevance_threshold", 0.75)
+        # Compare a normalized SIMILARITY (higher = more relevant) against the
+        # threshold. Clients emit `score` (cosine similarity) and/or `distance`
+        # (1 - similarity). Previously this read only `score`/`similarity` and
+        # defaulted to 1.0, so when a client emitted only `distance` every doc
+        # passed — a silent no-op filter that never dropped degenerate matches.
+        # Derive the similarity from whichever key is present. (H6)
+        def _relevance(doc: dict) -> float:
+            if doc.get("score") is not None:
+                return float(doc["score"])
+            if doc.get("similarity") is not None:
+                return float(doc["similarity"])
+            if doc.get("distance") is not None:
+                return max(0.0, min(1.0, 1.0 - float(doc["distance"])))
+            return 1.0  # no relevance signal available → don't drop
+
+        # Default 0.0 = OFF. The previous default (0.75) was never actually
+        # applied — the filter read a key the clients don't emit and fell back to
+        # 1.0, so EVERY doc passed. Activating it now WITH that stale 0.75 default
+        # would wrongly drop legitimate results (e5 cosine for good matches often
+        # sits below 0.75). So default OFF and let operators opt in to a calibrated
+        # threshold; the filter is now functional when they do. Degenerate matches
+        # from embedding failure are already prevented upstream (fail-closed embed).
+        relevance_threshold = self._config.get("rag_relevance_threshold", 0.0)
         if documents and relevance_threshold > 0:
-            documents = [
-                doc for doc in documents
-                if doc.get("score", doc.get("similarity", 1.0)) >= relevance_threshold
-            ]
+            documents = [doc for doc in documents if _relevance(doc) >= relevance_threshold]
 
         # ── 6. Build document manifest for chain-of-custody tracking ──
         manifest: list[DocumentManifest] = []

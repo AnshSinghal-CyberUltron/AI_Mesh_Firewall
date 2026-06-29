@@ -46,40 +46,21 @@ def _is_browser_reachable(url: str) -> bool:
         return False
 
 
-def _local_frontend_origin(request: Request) -> str:
-    origin = (request.headers.get("Origin") or "").strip()
-    if origin and _is_browser_reachable(origin):
-        return origin.rstrip("/")
-    referer = (request.headers.get("Referer") or "").strip()
-    if referer:
+def _resolve_public_gateway_url(request: Request) -> str:
+    """URL the browser should call for /v1/* (same-origin UI host when nginx proxies /v1)."""
+    frontend_origin = (os.environ.get("FRONTEND_ORIGIN") or "").strip().rstrip("/")
+    if frontend_origin and _is_browser_reachable(frontend_origin):
         try:
-            parsed = urlparse(referer)
-            if parsed.scheme and parsed.netloc:
-                candidate = f"{parsed.scheme}://{parsed.netloc}"
-                if _is_browser_reachable(candidate):
-                    return candidate.rstrip("/")
+            req_host = (request.get_host() or "").split(":")[0].lower()
+            fo_host = urlparse(frontend_origin).hostname or ""
+            if fo_host and req_host and fo_host == req_host:
+                return frontend_origin
         except Exception:
             pass
-    return ""
-
-
-def _resolve_public_gateway_url(request: Request) -> str:
-    # Local dev: simulators must hit the Vite same-origin proxy so browser API keys
-    # match the control plane Redis — not a remote GATEWAY_PUBLIC_URL from .env.
-    if getattr(settings, "DEBUG", False):
-        for candidate in (
-            _local_frontend_origin(request),
-            "http://127.0.0.1:8180",
-            "http://localhost:8180",
-            "http://127.0.0.1:8300",
-            os.environ.get("FRONTEND_ORIGIN", "").strip(),
-        ):
-            if candidate and _is_browser_reachable(candidate):
-                return candidate.rstrip("/")
 
     for candidate in (
+        frontend_origin,
         getattr(settings, "GATEWAY_PUBLIC_URL", None) or "",
-        os.environ.get("FRONTEND_ORIGIN", "").strip(),
         "http://127.0.0.1:8180",
         "http://127.0.0.1:8300",
     ):
@@ -138,16 +119,33 @@ class GatewayInstanceRegisterView(APIView):
         endpoint = None
         identifier = (data.get("endpoint_identifier") or "").strip()
         if identifier:
-            endpoint, created = Endpoint.objects.get_or_create(
-                identifier=identifier,
-                defaults={
-                    "name": identifier,
-                    "status": "online",
-                    "last_seen_at": timezone.now(),
-                    "organization_id": org_id,
-                },
+            # Endpoint.identifier is NOT unique, and concurrent gateway-worker
+            # registrations (all 6 uvicorn workers POST the same hostname at
+            # startup) previously created DUPLICATE Endpoint rows. After that,
+            # get_or_create(identifier=...) runs an internal .get() that finds >1
+            # row and raises MultipleObjectsReturned → HTTP 500 → the racing
+            # workers never register and fall back to the degraded sync path (no
+            # model routing). Use a duplicate-tolerant lookup (collapse to the
+            # oldest row) and create only when none exists, tolerating creation
+            # races — so registration is idempotent and never 500s.
+            endpoint = (
+                Endpoint.objects.filter(identifier=identifier).order_by("id").first()
             )
-            if not created:
+            if endpoint is None:
+                try:
+                    endpoint = Endpoint.objects.create(
+                        identifier=identifier,
+                        name=identifier,
+                        status="online",
+                        last_seen_at=timezone.now(),
+                        organization_id=org_id,
+                    )
+                except Exception:
+                    # Lost a concurrent creation race — re-read the winner's row.
+                    endpoint = (
+                        Endpoint.objects.filter(identifier=identifier).order_by("id").first()
+                    )
+            if endpoint is not None:
                 endpoint.status = "online"
                 endpoint.last_seen_at = timezone.now()
                 if org_id and endpoint.organization_id is None:

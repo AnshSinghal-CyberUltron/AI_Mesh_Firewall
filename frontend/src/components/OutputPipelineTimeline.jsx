@@ -40,7 +40,7 @@ function StageNode({ stage, isLast, actionColor }) {
             {stage.label}
           </span>
           {stage.badge && (
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
               stage.badge === "blocked" ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" :
               stage.badge === "redacted" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400" :
               stage.badge === "flagged" ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" :
@@ -58,7 +58,7 @@ function StageNode({ stage, isLast, actionColor }) {
         {stage.tags && stage.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {stage.tags.map((tag, i) => (
-              <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+              <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                 {tag}
               </span>
             ))}
@@ -92,9 +92,14 @@ export function OutputPipelineTimeline({ event }) {
   const confidence = meta.risk_score || meta.security_risk_score || 0;
   const confidencePct = (typeof confidence === "number" && confidence <= 1) ? Math.round(confidence * 100) : Math.round(confidence);
   const matchedPatterns = extra.matched_patterns || meta.matched_patterns || [];
+  const matchedValues = extra.matched_values || meta.matched_values || {};
+  const outputSnippetTruncated = extra.output_snippet_truncated ?? meta.output_snippet_truncated;
   const complianceTags = meta.compliance_tags || extra.compliance_tags || [];
   const latency = meta.latency_ms || extra.latency_ms || 0;
   const model = meta.model || "";
+  const matchedValueEntries = Object.entries(
+    matchedValues && typeof matchedValues === "object" ? matchedValues : {},
+  );
 
   // Build pipeline stages
   const stages = [];
@@ -111,7 +116,12 @@ export function OutputPipelineTimeline({ event }) {
     id: "raw_output",
     label: "2. Raw Model Output",
     content: rawOutput || "(raw output not available)",
-    metrics: model ? [{ label: "Model", value: model }] : [],
+    metrics: [
+      ...(model ? [{ label: "Model", value: model }] : []),
+      ...(outputSnippetTruncated
+        ? [{ label: "Note", value: "First 500 chars shown; detection ran on full output" }]
+        : []),
+    ],
   });
 
   // Stage 3: Guardrail Evaluation
@@ -119,6 +129,9 @@ export function OutputPipelineTimeline({ event }) {
   if (threatType) evalTags.push(`Category: ${threatType.replace(/_/g, " ")}`);
   if (confidencePct > 0) evalTags.push(`Confidence: ${confidencePct}%`);
   matchedPatterns.forEach(p => evalTags.push(p));
+  matchedValueEntries.forEach(([key, value]) => {
+    evalTags.push(`${key}: ${String(value).slice(0, 40)}${String(value).length > 40 ? "…" : ""}`);
+  });
 
   stages.push({
     id: "evaluation",
@@ -141,8 +154,15 @@ export function OutputPipelineTimeline({ event }) {
   });
 
   // Stage 5: Action Taken
+  const redactUnchanged = action === "redact"
+    && sanitizedOutput
+    && rawOutput
+    && sanitizedOutput.trim() === rawOutput.trim();
   const actionLabel = action === "block" ? "BLOCKED — Response not delivered"
-    : action === "redact" ? "REDACTED — Sensitive content removed"
+    : action === "redact"
+      ? (redactUnchanged
+        ? "REDACTED — Action applied; visible snippet unchanged (see matched spans above or content beyond 500 chars)"
+        : "REDACTED — Sensitive content removed")
     : action === "flag" ? "FLAGGED — Marked for review"
     : "ALLOWED — Clean response delivered";
 

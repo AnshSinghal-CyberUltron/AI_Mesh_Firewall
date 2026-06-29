@@ -28,6 +28,21 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
+try:
+    from _url_guard import is_safe_outbound_url as _is_safe_outbound_url
+except ImportError:
+    from ._url_guard import is_safe_outbound_url as _is_safe_outbound_url
+
+
+def _assert_safe_url(url: str) -> None:
+    """H4: SSRF guard for endpoints DERIVED from attacker-controlled OAuth metadata
+    (registration/token/refresh endpoints). Validating the metadata DOCUMENT url
+    does not validate the urls inside it, so each must be re-checked before the
+    outbound POST. Raises RuntimeError (the callers treat it as a flow failure)."""
+    ok, reason = _is_safe_outbound_url(url or "")
+    if not ok:
+        raise RuntimeError(f"Unsafe MCP OAuth endpoint rejected: {reason}")
+
 import httpx
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Request
@@ -185,7 +200,8 @@ async def _refresh_token(org_slug: str, server_url: str, data: dict) -> dict | N
     if data.get("resource"):
         body["resource"] = data["resource"]
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        _assert_safe_url(token_endpoint)  # H4: token_endpoint is from attacker metadata (persisted, reused on refresh)
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:  # H4: no redirect-SSRF
             resp = await client.post(
                 token_endpoint,
                 data=body,
@@ -270,7 +286,9 @@ async def _discover_oauth_metadata(server_url: str) -> dict:
     Returns dict with keys: as_metadata, resource_metadata, resource.
     Raises RuntimeError on failure.
     """
-    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+    # H4: follow_redirects=False so a redirect to an internal address cannot
+    # bypass the is_safe_outbound_url guard applied at the oauth_start entry.
+    async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
         # 1. Probe server — expect 401 or resource metadata hint
         try:
             probe = await client.post(
@@ -300,6 +318,10 @@ async def _discover_oauth_metadata(server_url: str) -> dict:
         LOG.info("Resource-metadata URL: %s", resource_metadata_url)
 
         # 3. Fetch resource metadata
+        # H4 (residual): resource_metadata_url is derived from the attacker WWW-
+        # Authenticate header — validate before the GET (the entry-point guard +
+        # follow_redirects=False do not cover a URL supplied directly here).
+        _assert_safe_url(resource_metadata_url)
         try:
             rm = await client.get(resource_metadata_url)
             rm.raise_for_status()
@@ -313,6 +335,9 @@ async def _discover_oauth_metadata(server_url: str) -> dict:
             raise RuntimeError("No authorization_servers in resource metadata")
         as_base = auth_servers[0].rstrip("/")
 
+        # H4 (residual): as_base is from the attacker-controlled resource metadata
+        # document — validate before the GET.
+        _assert_safe_url(as_base)
         try:
             asm = await client.get(
                 f"{as_base}/.well-known/oauth-authorization-server"
@@ -387,6 +412,18 @@ async def oauth_start(org_slug: str, server_slug: str, request: Request):
     server_url = (body.get("server_url") or "").strip()
     if not server_url:
         return JSONResponse({"error": "server_url is required"}, 400)
+    # H4: SSRF guard. server_url is attacker-supplied on an UNAUTHENTICATED endpoint
+    # (middleware bypasses the Bearer check for /oauth/start) and is fetched +
+    # its discovered endpoints are POSTed to. The B10 fix added is_safe_outbound_url
+    # to the control-plane oauth.py + gateway mcp_proxy discover-tools, but this
+    # first-order gateway OAuth-proxy path was missed and still shipped unguarded.
+    try:
+        from _url_guard import is_safe_outbound_url as _safe_url
+    except ImportError:
+        from ._url_guard import is_safe_outbound_url as _safe_url
+    _ok, _reason = _safe_url(server_url)
+    if not _ok:
+        return JSONResponse({"error": f"Upstream URL rejected by SSRF guard: {_reason}"}, 400)
 
     # 1. Discover OAuth metadata
     try:
@@ -402,7 +439,8 @@ async def oauth_start(org_slug: str, server_slug: str, request: Request):
     client_id = client_secret = None
 
     if reg_ep:
-        async with httpx.AsyncClient(timeout=15) as client:
+        _assert_safe_url(reg_ep)  # H4: registration_endpoint is from attacker metadata
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:  # H4: no redirect-SSRF
             try:
                 reg = await client.post(
                     reg_ep,
@@ -546,7 +584,8 @@ async def oauth_callback(request: Request):
     if flow.get("resource"):
         token_body["resource"] = flow["resource"]
 
-    async with httpx.AsyncClient(timeout=15) as client:
+    _assert_safe_url(token_ep)  # H4: token_endpoint is from attacker metadata
+    async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:  # H4: no redirect-SSRF
         try:
             tok = await client.post(
                 token_ep,

@@ -74,6 +74,12 @@ class RetrieverStageInput:
     policy: dict[str, Any]
     escalation_level: int
     key_hash: str
+    # Request-scoped vector client resolved from the caller's per-org provider
+    # config (VectorProviderConfig). When set, the retriever uses it instead of
+    # the pipeline's static, env-built client dict — this is what lets an org's
+    # own Pinecone/Milvus credentials drive retrieval without leaking a client
+    # into the shared, cross-tenant dict.
+    vector_client: Any = None
 
 
 @dataclass
@@ -96,6 +102,8 @@ class RankerStageInput:
     query_text: str
     policy: dict[str, Any]
     escalation_level: int
+    # M-04: request actor ({user_id, agent_id, roles}) for actor-scoped policies.
+    actor: dict[str, Any] | None = None
 
 
 @dataclass

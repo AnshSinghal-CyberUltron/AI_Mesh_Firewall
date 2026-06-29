@@ -44,7 +44,7 @@ const MODULES = [
     tab: "firewall-1-2",
     title: "Policy Management",
     actions: async (page, ctx) => {
-      await ctx.expectApiOk(page, "/api/policies/?policy_domain=global");
+      await ctx.expectApiOk(page, "/api/policies/?policy_domain=pipeline");
       const create = page.getByRole("button", { name: /create|new policy/i }).first();
       if (await create.isVisible().catch(() => false)) {
         ctx.notes.push("Create policy button visible");

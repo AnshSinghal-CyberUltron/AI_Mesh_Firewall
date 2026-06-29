@@ -42,6 +42,14 @@ EVENT_CLASS_TIER2_DEGRADED_PASS = "tier2_degraded_pass"
 EVENT_CLASS_QUERY_REWRITTEN = "query_rewritten"
 EVENT_CLASS_QUERY_BLOCKED = "query_blocked"
 EVENT_CLASS_QUERY_DOWNGRADED = "query_downgraded"
+# OG-6: the output-guard 'redact' action was missing from the query-audit vocabulary,
+# so every output redaction logged "unknown decision=redact" and emitted NO D_G5 audit
+# event (compliance-trail gap). Give it its own honest class (not conflated with rewrite).
+EVENT_CLASS_QUERY_REDACTED = "query_redacted"
+# OG-FLAG / OG-6b: the output-guard 'flag' action (redact-no-byte-change + the
+# degraded/visibility path, non-stream AND streaming) was the remaining decision
+# missing from the audit vocabulary -> "unknown decision='flag'", no D_G5 event.
+EVENT_CLASS_QUERY_FLAGGED = "query_flagged"
 # Phase 1 D_G10 — Semantic Hallucination Grounding
 EVENT_CLASS_HALLUCINATION_DETECTED = "hallucination_detected"
 
@@ -55,6 +63,8 @@ KNOWN_EVENT_CLASSES = frozenset(
         EVENT_CLASS_QUERY_REWRITTEN,
         EVENT_CLASS_QUERY_BLOCKED,
         EVENT_CLASS_QUERY_DOWNGRADED,
+        EVENT_CLASS_QUERY_REDACTED,
+        EVENT_CLASS_QUERY_FLAGGED,
         EVENT_CLASS_HALLUCINATION_DETECTED,
     }
 )
@@ -111,9 +121,11 @@ _QUERY_AUDIT_DECISION_TO_EVENT_CLASS = {
     "rewrite": EVENT_CLASS_QUERY_REWRITTEN,
     "block": EVENT_CLASS_QUERY_BLOCKED,
     "downgrade": EVENT_CLASS_QUERY_DOWNGRADED,
+    "redact": EVENT_CLASS_QUERY_REDACTED,  # OG-6
+    "flag": EVENT_CLASS_QUERY_FLAGGED,     # OG-FLAG / OG-6b
 }
 _QUERY_AUDIT_VALID_DECISIONS = frozenset(
-    {"allow", "rewrite", "block", "downgrade"}
+    {"allow", "rewrite", "block", "downgrade", "redact", "flag"}
 )
 
 
@@ -143,7 +155,7 @@ async def emit_query_audit_event(
     rule_code: str,
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Emit a D_G5 query-audit event (rewrite / block / downgrade).
+    """Emit a D_G5 query-audit event (rewrite / block / downgrade / redact / flag).
 
     ``decision == "allow"`` is an explicit no-op so the hot path can call
     this helper unconditionally without branching.

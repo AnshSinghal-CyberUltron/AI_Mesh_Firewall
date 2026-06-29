@@ -458,8 +458,14 @@ function MCPConnectorPanelInner() {
     if (tab === "tools") loadTools();
     if (tab === "execute") loadTools();
     if (tab === "protection") { loadServers(); }
-    if (tab === "observability") { loadEvents(); loadEventSummary(); }
-  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadEventSummary, loadOrgGatewayKey]);
+    if (tab === "observability") { loadEvents(); }
+  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadOrgGatewayKey]);
+
+  /* The header-strip decision StatCards (Allowed / Blocked / Redact·Monitor)
+     are ALWAYS visible regardless of the active tab, so the decision summary
+     must load on mount (and whenever the obs time-lens changes) — not only on
+     the observability tab. Without this it reads 0/0/0 on the default tab. */
+  useEffect(() => { loadEventSummary(); }, [loadEventSummary]);
 
   /* ────────── actions ────────── */
 
@@ -1743,6 +1749,7 @@ function MCPConnectorPanelInner() {
               rows={6}
               value={executeArguments}
               onChange={(e) => setExecuteArguments(e.target.value)}
+              aria-label="Tool arguments (JSON)"
             />
           </div>
 
@@ -1805,7 +1812,7 @@ function MCPConnectorPanelInner() {
               <span className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-1.5 py-0.5 text-[10px]">
                 <span className="font-semibold text-slate-600 dark:text-slate-300">{String(tier).replace(/_/g, " ")}</span>
                 {dir && <span className="text-slate-400">{dir}</span>}
-                {ai && <Badge variant={ai.badge} className="px-1 py-0 text-[9px]">{ai.label}</Badge>}
+                {ai && <Badge variant={ai.badge} className="px-1 py-0 text-[10px]">{ai.label}</Badge>}
                 {findings != null && findings > 0 && (
                   <span className="text-amber-600 dark:text-amber-400">{findings} finding{findings === 1 ? "" : "s"}</span>
                 )}

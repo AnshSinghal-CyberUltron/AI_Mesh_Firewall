@@ -1,0 +1,119 @@
+{
+  "defaults": {
+    "region": "ap-south-1",
+    "account_id": "935951870001",
+    "instance_id": "i-07a9d65b103ac1a87",
+    "instance_name": "aimeshfirewall-server",
+    "public_ip": "35.154.124.71",
+    "private_ip": "172.31.9.177",
+    "deploy_path": "/home/ec2-user/AI_Mesh_Firewall",
+    "ui_host": "aimeshfirewall.zeroshield.ai",
+    "backend_host": "aimeshbackend.zeroshield.ai",
+    "gateway_host": "aimeshgateway.zeroshield.ai"
+  },
+  "runbooks": [
+    {
+      "match": "*UnHealthyHostCount*",
+      "severity": "critical",
+      "category": "Infrastructure",
+      "title": "UI load balancer target is unhealthy",
+      "summary": "The Application Load Balancer reports unhealthy targets in the UI target group. Users may not reach aimeshfirewall.zeroshield.ai.",
+      "steps": [
+        "SSH to the demo host and check container status: cd /home/ec2-user/AI_Mesh_Firewall && docker compose -f docker-compose.yml -f docker-compose.prod.yml ps",
+        "Verify nginx/UI health: curl -sf -H \"Host: aimeshfirewall.zeroshield.ai\" http://127.0.0.1/ && curl -sf -H \"Host: aimeshfirewall.zeroshield.ai\" http://127.0.0.1/gw-health",
+        "If checks fail, redeploy: bash scripts/deploy-ec2.sh",
+        "If still failing, verify ALB health check path/port and security group ALB → EC2 on 80/443."
+      ],
+      "buttons": [
+        {"label": "Open EC2 instance", "url_template": "https://ap-south-1.console.aws.amazon.com/ec2/home?region=ap-south-1#InstanceDetails:instanceId={instance_id}"},
+        {"label": "View alarm", "url_template": "https://ap-south-1.console.aws.amazon.com/cloudwatch/deeplink.js?region=ap-south-1#alarmsV2:alarm/{alarm_name}"},
+        {"label": "Open ALB console", "url_template": "https://ap-south-1.console.aws.amazon.com/ec2/home?region=ap-south-1#LoadBalancer:"},
+        {"label": "Test UI URL", "url_template": "https://{ui_host}/", "primary": true}
+      ]
+    },
+    {
+      "match": "ai-mesh-firewall-demo-stack-down",
+      "severity": "critical",
+      "category": "Infrastructure",
+      "title": "Application stack health check failed",
+      "summary": "StackReady metric is 0 for 10+ minutes. Gateway, control, or nginx may be down after deploy or crash.",
+      "steps": [
+        "SSH and inspect containers: docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.observability.yml ps",
+        "Check local health: curl http://127.0.0.1:8300/health && curl http://127.0.0.1:8100/api/health/",
+        "Redeploy: bash scripts/deploy-ec2.sh",
+        "Confirm StackReady=1 in CloudWatch namespace AIMeshFirewall/EC2 after deploy completes."
+      ],
+      "buttons": [
+        {"label": "Open EC2 instance", "url_template": "https://ap-south-1.console.aws.amazon.com/ec2/home?region=ap-south-1#InstanceDetails:instanceId={instance_id}"},
+        {"label": "Gateway logs", "url_template": "https://ap-south-1.console.aws.amazon.com/cloudwatch/home?region=ap-south-1#logsV2:log-groups/log-group/$252Fai-mesh-firewall$252Fec2$252Fgateway"},
+        {"label": "Test gateway health", "url_template": "https://{gateway_host}/health", "primary": true}
+      ]
+    },
+    {
+      "match": "ai-mesh-firewall-demo-gateway-errors",
+      "severity": "warning",
+      "category": "Application",
+      "title": "Gateway ERROR log burst detected",
+      "summary": "More than 10 ERROR lines in gateway logs within 5 minutes. Check CloudWatch Live Tail for root cause.",
+      "steps": [
+        "Open CloudWatch Live Tail on /ai-mesh-firewall/ec2/gateway",
+        "On EC2: docker compose logs gateway --tail 200",
+        "Check Bedrock/IAM and policy sync: curl -H \"Host: {gateway_host}\" http://127.0.0.1/health",
+        "Restart gateway if needed: docker compose up -d --force-recreate gateway"
+      ],
+      "buttons": [
+        {"label": "Gateway log group", "url_template": "https://ap-south-1.console.aws.amazon.com/cloudwatch/home?region=ap-south-1#logsV2:log-groups/log-group/$252Fai-mesh-firewall$252Fec2$252Fgateway"},
+        {"label": "Prometheus metrics", "url_template": "https://{gateway_host}/metrics"}
+      ]
+    },
+    {
+      "match": "ai-mesh-firewall-demo-host-mem",
+      "severity": "warning",
+      "category": "Infrastructure",
+      "title": "Host memory above 90%",
+      "summary": "EC2 memory pressure may cause OOM kills of Docker containers.",
+      "steps": [
+        "On EC2: free -h && docker stats --no-stream",
+        "Identify heavy containers; consider restarting workers/gateway if stuck",
+        "Check for memory leaks in gateway/control logs",
+        "If recurring, evaluate instance resize (current: c8g.2xlarge)"
+      ],
+      "buttons": [
+        {"label": "Open EC2 instance", "url_template": "https://ap-south-1.console.aws.amazon.com/ec2/home?region=ap-south-1#InstanceDetails:instanceId={instance_id}"},
+        {"label": "Host metrics", "url_template": "https://ap-south-1.console.aws.amazon.com/cloudwatch/home?region=ap-south-1#metricsV2:graph=~();namespace=AIMeshFirewall/EC2"}
+      ]
+    },
+    {
+      "match": "ai-mesh-firewall-demo-root-disk",
+      "severity": "warning",
+      "category": "Infrastructure",
+      "title": "Root or Docker disk above 85%",
+      "summary": "Disk full risk — Docker logs or images may fill /var/lib/docker.",
+      "steps": [
+        "On EC2: df -h && du -sh /var/lib/docker/* | sort -h | tail",
+        "Prune unused Docker data: docker system prune -af (caution: removes unused images)",
+        "Bootstrap script configures json-file rotation; verify /etc/docker/daemon.json",
+        "Ensure demo stop uses scripts/demo-ec2-lifecycle.sh stop before EC2 stop"
+      ],
+      "buttons": [
+        {"label": "Open EC2 instance", "url_template": "https://ap-south-1.console.aws.amazon.com/ec2/home?region=ap-south-1#InstanceDetails:instanceId={instance_id}"}
+      ]
+    },
+    {
+      "match": "ai-mesh-firewall-demo-status-check",
+      "severity": "critical",
+      "category": "Infrastructure",
+      "title": "EC2 status check failed",
+      "summary": "AWS reports hardware or reachability failure on the demo instance.",
+      "steps": [
+        "Open EC2 console → Status checks tab",
+        "If reachability failed, stop/start instance (use demo-ec2-lifecycle.sh to manage alarms first)",
+        "After start, run: bash scripts/deploy-ec2.sh",
+        "Wait DEMO_ALARM_GRACE_SECONDS (900) before re-enabling alarms"
+      ],
+      "buttons": [
+        {"label": "Open EC2 instance", "url_template": "https://ap-south-1.console.aws.amazon.com/ec2/home?region=ap-south-1#InstanceDetails:instanceId={instance_id}"}
+      ]
+    }
+  ]
+}

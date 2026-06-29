@@ -15,6 +15,10 @@ GLOBAL_SUFFIX = "global"
 MODEL_KEY_PREFIX = "model:"
 CREDENTIAL_KEY_PREFIX = "credential:"
 
+# Mirrors control's KILL_SWITCH_ACTION_CHOICES (core/models.py). Any other
+# value in a Redis payload indicates corruption and the entry is ignored.
+VALID_ACTIONS = frozenset({"disable", "reroute"})
+
 
 @dataclass
 class KillSwitchVerdict:
@@ -38,6 +42,9 @@ async def check_kill_switch(
 
     Precedence: credential-scoped > per-model > global.
     On Redis failure, fail-closed (disable).
+    Malformed payloads (non-dict JSON, unknown/missing action, reroute
+    without fallback) are ignored — FAIL-OPEN — so a corrupt entry cannot
+    crash the request path or deny all traffic for a model.
     """
     prefix = org_slug or "default"
     keys: list[tuple[str, str]] = []
@@ -67,20 +74,32 @@ async def check_kill_switch(
         for (scope_name, redis_key), raw in zip(keys, results):
             if not raw:
                 continue
-            payload = _parse_payload(raw)
+            payload = _parse_payload(raw, redis_key)
             if payload is None:
-                LOG.error(
-                    "Malformed kill-switch payload at %s — fail-CLOSED",
+                # FAIL-OPEN: a corrupt entry must not crash the request path
+                # or deny all traffic for a model. _parse_payload already
+                # logged the key and the rejection reason.
+                continue
+            if not payload.get("is_active"):
+                continue
+
+            action = payload.get("action")
+            if action not in VALID_ACTIONS:
+                LOG.warning(
+                    "Ignoring kill-switch entry at %s: unknown/missing action %r "
+                    "(expected one of %s) — fail-open",
+                    redis_key,
+                    action,
+                    sorted(VALID_ACTIONS),
+                )
+                continue
+            fallback = str(payload.get("fallback_model") or "").strip()
+            if action == "reroute" and not fallback:
+                LOG.warning(
+                    "Ignoring kill-switch entry at %s: action='reroute' with no "
+                    "fallback_model (nowhere to reroute) — fail-open",
                     redis_key,
                 )
-                return KillSwitchVerdict(
-                    is_killed=True,
-                    action="disable",
-                    fallback_model="",
-                    reason="Kill-switch payload corrupt — fail-closed",
-                    scope="malformed_payload",
-                )
-            if not payload.get("is_active"):
                 continue
 
             if scope_name == "org_global":
@@ -96,8 +115,6 @@ async def check_kill_switch(
                     scope="org_global",
                 )
 
-            action = payload.get("action", "disable")
-            fallback = payload.get("fallback_model", "")
             reason = sanitize_kill_switch_reason(payload.get("reason", ""))
             LOG.warning(
                 "Kill-switch active scope=%s model='%s' action=%s fallback=%s reason=%s",
@@ -139,10 +156,30 @@ def sanitize_kill_switch_reason(reason: str, max_len: int = 500) -> str:
     return cleaned[:max_len]
 
 
-def _parse_payload(raw: str) -> dict | None:
-    """Parse a JSON payload from Redis, returning None on failure."""
+def _parse_payload(raw: str | bytes, redis_key: str = "") -> dict | None:
+    """
+    Parse a JSON object payload from Redis.
+
+    Returns None (entry is ignored — fail-open) when the value is not valid
+    JSON or decodes to anything other than a dict ('123', '[1]', '"x"', …),
+    so callers can rely on dict semantics without an AttributeError.
+    """
     try:
-        return json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        LOG.warning("Malformed kill-switch payload in Redis: %s", str(raw)[:100])
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
+        LOG.warning(
+            "Ignoring malformed kill-switch payload at %s: not valid JSON (%.100s)",
+            redis_key,
+            str(raw),
+        )
         return None
+    if not isinstance(payload, dict):
+        LOG.warning(
+            "Ignoring malformed kill-switch payload at %s: expected JSON object, "
+            "got %s (%.100s)",
+            redis_key,
+            type(payload).__name__,
+            str(raw),
+        )
+        return None
+    return payload

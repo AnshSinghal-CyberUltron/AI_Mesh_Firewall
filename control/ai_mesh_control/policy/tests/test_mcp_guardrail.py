@@ -1,7 +1,7 @@
 """Tests for the revamped MCP guardrail policy engine.
 
-Covers the new rule shape (preset × direction × scope × action), global+mcp
-domain combination, Luhn validation on the credit-card preset, per-key scope
+Covers the new rule shape (preset × direction × scope × action), strict MCP
+domain isolation, Luhn validation on the credit-card preset, per-key scope
 targeting, and the per-org PII MCP seed.
 
 Run inside the control container:
@@ -111,15 +111,15 @@ def test_scope_key_targets_named_field_only():
 
 
 @pytest.mark.django_db
-def test_global_policy_also_applies_to_mcp_domain():
-    glob = _mk_policy("GLOBAL_EMAIL", domain="global")
-    _mk_rule(glob, preset="email", action="redact", direction="both")
+def test_pipeline_policy_does_not_apply_to_mcp_domain():
+    pipeline = _mk_policy("PIPELINE_EMAIL", domain="pipeline")
+    _mk_rule(pipeline, preset="email", action="redact", direction="both")
 
     qs = Policy.objects.filter(enabled=True).prefetch_related("rules")
     result = evaluate({"input_args": {"to": "a@b.com"}}, policies_qs=qs, domain="mcp")
 
-    assert result.action == "redact"
-    assert glob.id in result.matched_policy_ids
+    assert result.action == "allow"
+    assert pipeline.id not in result.matched_policy_ids
 
 
 @pytest.mark.django_db

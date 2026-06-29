@@ -36,7 +36,7 @@ fi
 echo "Using gateway key prefix=${KEY:0:8}..."
 
 create_policy() {
-  curl -sf -X POST "$BASE/api/policies/?policy_domain=global" \
+  curl -sf -X POST "$BASE/api/policies/?policy_domain=pipeline" \
     -H "$AUTH" -H 'Content-Type: application/json' \
     -d "{
       \"name\": \"E2E Toggle Block\",
@@ -46,7 +46,7 @@ create_policy() {
       \"description\": \"Live E2E policy toggle verification\",
       \"enabled\": true,
       \"priority\": 999,
-      \"policy_domain\": \"global\"
+      \"policy_domain\": \"pipeline\"
     }"
 }
 

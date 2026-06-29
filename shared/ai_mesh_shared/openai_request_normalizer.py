@@ -17,6 +17,16 @@ OPENAI_TOP_LEVEL_KEYS = frozenset({
     "stop", "presence_penalty", "frequency_penalty", "tools", "tool_choice",
     "response_format", "seed", "n", "user",
     "reasoning", "reasoning_effort", "logprobs", "max_output_tokens", "text",
+    # SDK-compat additions: GPT-5.x / function-calling params the stock SDK emits
+    # that were previously stripped (silently degrading the request).
+    "max_completion_tokens", "parallel_tool_calls", "stream_options", "top_logprobs",
+    # SEAM-B 2-layer fix: these survive responses_to_chat's allowlist but were
+    # RE-STRIPPED here when proxy_responses re-enters proxy_chat ->
+    # normalize_openai_chat_request(strip_unknown_top_level=True). Adding them only
+    # to _RESP_DIRECT_PASSTHROUGH is end-to-end ineffective without this layer.
+    # (logit_bias was also dropped on the DIRECT chat path — fixed here too.)
+    "logit_bias", "service_tier", "modalities", "safety_identifier",
+    "prediction", "prompt_cache_key", "truncation",
 })
 
 
@@ -39,8 +49,16 @@ def _normalize_content_parts(content):
 def _normalize_messages(messages):
     if not messages:
         return messages
+    # Be tolerant of malformed shapes: let the downstream clean per-field
+    # validators reject them (so the client gets a stable, sanitized 400)
+    # instead of a raw CPython TypeError from dict()/iteration here.
+    if not isinstance(messages, list):
+        return messages
     out = []
     for m in messages:
+        if not isinstance(m, dict):
+            out.append(m)
+            continue
         msg = dict(m)
         if "content" in msg:
             msg["content"] = _normalize_content_parts(msg["content"])

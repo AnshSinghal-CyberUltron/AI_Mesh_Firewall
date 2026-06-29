@@ -1,18 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useGatewayConfig } from "./useGatewayConfig";
 import { useAuth } from "../context/AuthContext";
-import { isLocalDevBrowser } from "../utils/environmentUrls";
-import {
-  getGatewayApiKey,
-  migrateGatewayStorage,
-  setGatewayApiKey,
-} from "../utils/gatewayStorage";
-import {
-  resolveGatewayKeyContext,
-  writeStoredGatewayKeyContext,
-} from "../api/gatewayContext";
+import { resolveGatewayHealthUrl } from "../utils/environmentUrls";
 
 const HEALTH_POLL_INTERVAL = 15000;
+const GATEWAY_KEY_STORAGE_LEGACY = "zeroshield_gateway_key";
+
+function gatewayKeyStorageKey(orgId) {
+  return orgId ? `zeroshield_gateway_key:${orgId}` : GATEWAY_KEY_STORAGE_LEGACY;
+}
+
+function readStoredGatewayKey(orgId) {
+  try {
+    const scoped = orgId ? localStorage.getItem(gatewayKeyStorageKey(orgId)) : "";
+    if (scoped) return scoped;
+    return localStorage.getItem(GATEWAY_KEY_STORAGE_LEGACY) || "";
+  } catch {
+    return "";
+  }
+}
 
 /**
  * Shared hook for all Module 1 live simulators.
@@ -21,14 +27,11 @@ const HEALTH_POLL_INTERVAL = 15000;
  */
 export function useSimulatorEngine() {
   const { gatewayUrl } = useGatewayConfig();
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, user, loading: authLoading } = useAuth();
+  const orgId = user?.organization?.id;
 
-  const [gatewayKey, setGatewayKey] = useState(() => {
-    migrateGatewayStorage();
-    return getGatewayApiKey();
-  });
+  const [gatewayKey, setGatewayKey] = useState(() => readStoredGatewayKey(orgId));
   const [connectionStatus, setConnectionStatus] = useState("disconnected"); // connected | degraded | disconnected
-  const [authStatus, setAuthStatus] = useState("unknown"); // ok | invalid | missing | unknown
   const [backendHealth, setBackendHealth] = useState(null);
   const [gatewayHealth, setGatewayHealth] = useState(null);
   const [executing, setExecuting] = useState(false);
@@ -36,21 +39,21 @@ export function useSimulatorEngine() {
   const [previousResult, setPreviousResult] = useState(null);
 
   const healthRef = useRef(null);
-  const defaultKeyFetchedRef = useRef(false);
+  const bootstrapAttemptedRef = useRef(null);
 
-  // Save gateway key to localStorage (both legacy + primary keys)
-  const updateGatewayKey = useCallback((key) => {
+  // Save gateway key to org-scoped localStorage (prevents cross-tenant leakage).
+  const updateGatewayKey = useCallback((key, storageKey) => {
     setGatewayKey(key);
-    setGatewayApiKey(key);
-    const trimmed = String(key || "").trim();
-    if (trimmed) {
-      resolveGatewayKeyContext(fetchWithAuth, trimmed)
-        .then((ctx) => {
-          if (ctx) writeStoredGatewayKeyContext(ctx);
-        })
-        .catch(() => {});
+    const target = storageKey || gatewayKeyStorageKey(orgId);
+    try {
+      localStorage.setItem(target, key);
+      if (target !== GATEWAY_KEY_STORAGE_LEGACY) {
+        localStorage.removeItem(GATEWAY_KEY_STORAGE_LEGACY);
+      }
+    } catch {
+      // localStorage may be unavailable in private mode.
     }
-  }, [fetchWithAuth]);
+  }, [orgId]);
 
   // Authenticated fetch to gateway
   const gatewayFetch = useCallback(async (path, opts = {}) => {
@@ -112,14 +115,13 @@ export function useSimulatorEngine() {
     }
   }, [fetchWithAuth]);
 
-  // Health check polling (includes API key validation — /health alone is not enough)
+  // Health check polling
   const checkHealth = useCallback(async () => {
     let gwOk = false;
     let beOk = false;
-    let keyOk = false;
 
     try {
-      const res = await fetch(`${gatewayUrl}/health`, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(resolveGatewayHealthUrl(gatewayUrl), { signal: AbortSignal.timeout(5000) });
       const data = await res.json().catch(() => null);
       gwOk = res.ok;
       setGatewayHealth(data);
@@ -135,31 +137,8 @@ export function useSimulatorEngine() {
       setBackendHealth(null);
     }
 
-    if (gatewayKey?.trim()) {
-      try {
-        const res = await fetch(`${gatewayUrl}/v1/models`, {
-          headers: { Authorization: `Bearer ${gatewayKey.trim()}` },
-          signal: AbortSignal.timeout(5000),
-        });
-        keyOk = res.status !== 401;
-        setAuthStatus(res.status === 401 ? "invalid" : "ok");
-      } catch {
-        setAuthStatus("unknown");
-      }
-    } else {
-      setAuthStatus("missing");
-    }
-
-    if (gwOk && beOk && gatewayKey?.trim() && keyOk) {
-      setConnectionStatus("connected");
-    } else if (gwOk && beOk) {
-      setConnectionStatus(keyOk ? "connected" : "degraded");
-    } else if (gwOk || beOk) {
-      setConnectionStatus("degraded");
-    } else {
-      setConnectionStatus("disconnected");
-    }
-  }, [gatewayUrl, gatewayKey]);
+    setConnectionStatus(gwOk && beOk ? "connected" : gwOk || beOk ? "degraded" : "disconnected");
+  }, [gatewayUrl]);
 
   useEffect(() => {
     checkHealth();
@@ -167,31 +146,38 @@ export function useSimulatorEngine() {
     return () => clearInterval(healthRef.current);
   }, [checkHealth]);
 
+  // Reload cached key when org context becomes available or changes.
   useEffect(() => {
-    if (gatewayKey || defaultKeyFetchedRef.current) return;
-    if (!isLocalDevBrowser()) return;
-    defaultKeyFetchedRef.current = true;
+    if (!orgId) return;
+    const cached = readStoredGatewayKey(orgId);
+    if (cached) {
+      setGatewayKey(cached);
+    }
+  }, [orgId]);
+
+  // Lazy-provision per-org simulator key (POST returns plaintext once at creation).
+  useEffect(() => {
+    if (authLoading || !orgId) return;
+    if (gatewayKey) return;
+    const attemptKey = String(orgId);
+    if (bootstrapAttemptedRef.current === attemptKey) return;
+    bootstrapAttemptedRef.current = attemptKey;
 
     (async () => {
       try {
-        const res = await fetchWithAuth("/api/gateways/simulator-default/");
+        const res = await fetchWithAuth("/api/gateways/simulator-default/", {
+          method: "POST",
+        });
         if (!res.ok) return;
         const data = await res.json();
         if (data?.key) {
-          updateGatewayKey(data.key);
-          if (data.prefix && data.key_id) {
-            writeStoredGatewayKeyContext({
-              prefix: data.prefix,
-              keyId: data.key_id,
-              name: data.name || "simulator-default",
-            });
-          }
+          updateGatewayKey(data.key, data.storage_key);
         }
       } catch {
         // Simulator bootstrap is best-effort; manual entry still works.
       }
     })();
-  }, [fetchWithAuth, gatewayKey, updateGatewayKey]);
+  }, [authLoading, fetchWithAuth, gatewayKey, orgId, updateGatewayKey]);
 
   // Execute a scenario against the gateway
   const executeScenario = useCallback(async (config) => {
@@ -238,7 +224,6 @@ export function useSimulatorEngine() {
     gatewayKey,
     setGatewayKey: updateGatewayKey,
     connectionStatus,
-    authStatus,
     backendHealth,
     gatewayHealth,
     gatewayFetch,

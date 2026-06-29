@@ -154,6 +154,35 @@ if _PROM_AVAILABLE:
         ["org", "reason"],
         registry=REGISTRY,
     )
+    chat_completions_total = Counter(
+        "amf_gateway_chat_completions_total",
+        "Chat completion handler invocations by org and terminal outcome.",
+        ["org", "outcome"],
+        registry=REGISTRY,
+    )
+    chat_request_duration_seconds = Histogram(
+        "amf_gateway_chat_request_duration_seconds",
+        "Wall-clock duration of /v1/chat/completions handler (seconds).",
+        ["org"],
+        buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0),
+        registry=REGISTRY,
+    )
+    pipeline_stage_seconds = Histogram(
+        "amf_gateway_pipeline_stage_seconds",
+        "Per-stage latency inside chat completion pipeline (seconds).",
+        ["org", "stage"],
+        buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
+        registry=REGISTRY,
+    )
+
+_PIPELINE_STAGES = (
+    "auth",
+    "policy",
+    "tier1",
+    "tier2",
+    "upstream",
+    "telemetry",
+)
 
 
 def _safe_label(value: object, fallback: str = "unknown") -> str:
@@ -260,6 +289,38 @@ def inc_active_connections(delta: int = 1) -> None:
         gateway_active_connections.inc(delta)
     else:
         gateway_active_connections.dec(-delta)
+
+
+def record_chat_completion(
+    org_slug: str,
+    outcome: str,
+    duration_seconds: float,
+    stage_metrics_ms: dict[str, float] | None = None,
+) -> None:
+    """Record chat-completion totals, wall time, and per-stage histograms."""
+    if not _PROM_AVAILABLE:
+        return
+    org = _safe_label(org_slug, "anonymous")
+    out = _safe_label(outcome, "unknown")
+    chat_completions_total.labels(org=org, outcome=out).inc()
+    try:
+        chat_request_duration_seconds.labels(org=org).observe(float(duration_seconds))
+    except (TypeError, ValueError):
+        pass
+    if not stage_metrics_ms:
+        return
+    for stage in _PIPELINE_STAGES:
+        key = f"{stage}_ms"
+        raw = stage_metrics_ms.get(key)
+        if raw is None:
+            continue
+        try:
+            seconds = float(raw) / 1000.0
+        except (TypeError, ValueError):
+            continue
+        if seconds < 0:
+            continue
+        pipeline_stage_seconds.labels(org=org, stage=stage).observe(seconds)
 
 
 def render_latest() -> tuple[bytes, str]:

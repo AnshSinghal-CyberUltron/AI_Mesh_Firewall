@@ -13,8 +13,38 @@
 
 @theme {
   /* Typography */
-    --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-sans: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, monospace;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warn: var(--warn);
+  --color-warn-foreground: var(--warn-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --animate-shimmer: fwShimmer 2s linear infinite;
 }
 
 /* Base Styles */
@@ -54,6 +84,7 @@ body {
 
 .zs-app-shell button:not(:disabled),
 .zs-app-shell [role="button"] {
+  cursor: pointer;
   transition: transform 180ms ease, box-shadow 220ms ease, background-color 180ms ease, border-color 180ms ease;
 }
 
@@ -68,6 +99,42 @@ body {
 }
 
 :root {
+  /* Firewall config semantic tokens — light */
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.18 0.03 260);
+  --surface-1: oklch(1 0 0);
+  --surface-2: oklch(0.975 0.005 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.03 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.03 260);
+  --muted: oklch(0.965 0.008 250);
+  --muted-foreground: oklch(0.5 0.03 255);
+  --accent: oklch(0.95 0.03 270);
+  --accent-foreground: oklch(0.3 0.12 270);
+  --border: oklch(0.92 0.008 250);
+  --input: oklch(0.93 0.008 250);
+  --primary: oklch(0.55 0.22 270);
+  --primary-foreground: oklch(0.99 0.005 250);
+  --secondary: oklch(0.96 0.01 250);
+  --secondary-foreground: oklch(0.22 0.04 265);
+  --destructive: oklch(0.6 0.22 25);
+  --destructive-foreground: oklch(0.99 0.005 250);
+  --success: oklch(0.65 0.16 155);
+  --success-foreground: oklch(0.12 0.02 160);
+  --warning: oklch(0.78 0.16 75);
+  --warning-foreground: oklch(0.2 0.06 70);
+  --warn: oklch(0.78 0.16 75);
+  --warn-foreground: oklch(0.2 0.06 70);
+  --ring: oklch(0.55 0.22 270);
+  --radius: 0.5rem;
+  --shimmer-bg: linear-gradient(90deg, transparent, oklch(0.5 0.03 255 / 0.08), transparent);
+  --gradient-hero: linear-gradient(135deg, oklch(0.97 0.02 275) 0%, oklch(0.99 0.01 250) 50%, oklch(0.96 0.03 275) 100%);
+  --gradient-card-glow: radial-gradient(ellipse at top right, oklch(0.55 0.22 275 / 0.08), transparent 55%);
+  --shadow-elegant: 0 1px 2px oklch(0.18 0.02 250 / 0.04), 0 8px 24px oklch(0.18 0.02 250 / 0.06);
+  --shadow-glow: 0 0 0 1px oklch(0.55 0.22 275 / 0.12), 0 8px 32px oklch(0.55 0.22 275 / 0.1);
+  --shimmer: linear-gradient(90deg, oklch(0.95 0.01 250) 0%, oklch(0.98 0.005 250) 50%, oklch(0.95 0.01 250) 100%);
+
   --mesh-ink: #0f172a;
   --mesh-muted: #475569;
   --mesh-border: rgba(148, 163, 184, 0.22);
@@ -78,6 +145,40 @@ body {
 }
 
 .dark {
+  --background: oklch(0.16 0.02 260);
+  --foreground: oklch(0.97 0.005 250);
+  --surface-1: oklch(0.2 0.025 260);
+  --surface-2: oklch(0.235 0.028 262);
+  --card: oklch(0.2 0.025 260);
+  --card-foreground: oklch(0.97 0.005 250);
+  --popover: oklch(0.21 0.025 260);
+  --popover-foreground: oklch(0.97 0.005 250);
+  --muted: oklch(0.24 0.025 262);
+  --muted-foreground: oklch(0.68 0.025 258);
+  --accent: oklch(0.3 0.06 275);
+  --accent-foreground: oklch(0.92 0.04 275);
+  --border: oklch(1 0 0 / 0.08);
+  --input: oklch(1 0 0 / 0.1);
+  --primary: oklch(0.7 0.2 275);
+  --primary-foreground: oklch(0.14 0.02 260);
+  --secondary: oklch(0.26 0.03 262);
+  --secondary-foreground: oklch(0.97 0.005 250);
+  --destructive: oklch(0.65 0.22 25);
+  --destructive-foreground: oklch(0.98 0.005 250);
+  --success: oklch(0.72 0.17 158);
+  --success-foreground: oklch(0.1 0.02 160);
+  --warning: oklch(0.82 0.16 78);
+  --warning-foreground: oklch(0.18 0.05 70);
+  --warn: oklch(0.82 0.16 78);
+  --warn-foreground: oklch(0.18 0.05 70);
+  --ring: oklch(0.7 0.2 275);
+  --shimmer-bg: linear-gradient(90deg, transparent, oklch(1 0 0 / 0.06), transparent);
+  --gradient-hero: linear-gradient(135deg, oklch(0.18 0.03 275) 0%, oklch(0.16 0.02 250) 50%, oklch(0.2 0.04 275) 100%);
+  --gradient-card-glow: radial-gradient(ellipse at top right, oklch(0.55 0.22 275 / 0.15), transparent 55%);
+  --shadow-elegant: 0 1px 2px oklch(0 0 0 / 0.2), 0 12px 32px oklch(0 0 0 / 0.35);
+  --shadow-glow: 0 0 0 1px oklch(0.62 0.2 275 / 0.2), 0 8px 40px oklch(0.55 0.22 275 / 0.18);
+  --shimmer: linear-gradient(90deg, oklch(0.22 0.02 250) 0%, oklch(0.28 0.02 250) 50%, oklch(0.22 0.02 250) 100%);
+
   --mesh-ink: #e2e8f0;
   --mesh-muted: #94a3b8;
   --mesh-border: rgba(71, 85, 105, 0.8);
@@ -85,6 +186,103 @@ body {
   --mesh-panel-strong: rgba(15, 23, 42, 0.92);
   --mesh-glow: rgba(45, 212, 191, 0.12);
   --mesh-shadow: 0 22px 56px rgba(2, 6, 23, 0.35);
+}
+
+@keyframes fwShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.fw-shimmer {
+  background: var(--shimmer);
+  background-size: 200% 100%;
+  animation: fwShimmer 1.5s ease-in-out infinite;
+}
+
+.fw-config-page {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+@utility shadow-elegant {
+  box-shadow: var(--shadow-elegant);
+}
+
+@utility shadow-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+@utility bg-hero {
+  background-image: var(--gradient-hero);
+}
+
+@utility bg-card-glow {
+  background-image: var(--gradient-card-glow);
+}
+
+@utility surface-1 {
+  background-color: var(--surface-1);
+}
+
+@utility surface-2 {
+  background-color: var(--surface-2);
+}
+
+.fw-shimmer-block {
+  position: relative;
+  overflow: hidden;
+  background: var(--muted);
+}
+
+.fw-config-page .fw-action-pills button:hover,
+.fw-config-page [data-guard-action] button:hover {
+  transform: none;
+}
+
+.fw-section-card {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--shadow-elegant);
+}
+
+.fw-section-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--gradient-card-glow);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.fw-section-card:hover::before {
+  opacity: 1;
+}
+
+.fw-mono-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.fw-status-dot--live {
+  background: var(--success);
+  box-shadow: 0 0 8px oklch(0.62 0.17 155 / 0.5);
+}
+
+.fw-status-dot--warn {
+  background: var(--warning);
+  animation: meshPulse 2s ease-in-out infinite;
 }
 
 .ai-mesh-shell {

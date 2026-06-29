@@ -2,7 +2,7 @@ import {
   getRequestedModel as routingRequestedModel,
   getRoutedModel as routingRoutedModel,
   getRoutingContext,
-} from "../utils/routingEventFields";
+} from "../utils/routingEventFields.js";
 
 const MODULE_FILTERS = {
   "1.1": {},
@@ -117,8 +117,8 @@ const MODULE_PAGE_CONFIG = {
     },
     columns: [
       { label: "Time", value: (event) => formatTimestamp(event.timestamp) },
-      { label: "Collection", value: (event) => getMetadata(event).collection || getMetadata(event).vector_collection || "--" },
-      { label: "Namespace", value: (event) => getMetadata(event).namespace || getMetadata(event).vector_namespace || "--" },
+      { label: "Collection", value: (event) => getMetadata(event).collection || getMetadata(event).vector_collection || getExtra(event).collection || "--" },
+      { label: "Namespace", value: (event) => getMetadata(event).namespace || getMetadata(event).vector_namespace || getExtra(event).namespace || "--" },
       { label: "Action", kind: "action", value: (event) => event.action || "allow" },
       { label: "Threat", value: (event) => formatThreat(event) },
       { label: "Risk", kind: "severity", value: (event) => getRiskScore(event) || "--" },
@@ -250,7 +250,26 @@ export function filterEventsForModule(moduleId, threatFeed = []) {
 export function buildModulePageData(moduleId, threatFeed = [], extras = {}) {
   const config = MODULE_PAGE_CONFIG[moduleId] || MODULE_PAGE_CONFIG["1.1"];
   const events = filterEventsForModule(moduleId, threatFeed);
-  const summary = summarizeEvents(events);
+  let summary = summarizeEvents(events);
+  // Module 1.1 = the unified gateway lane. Its funnel ("Client requests → Auth →
+  // Rate Limiter → Gateway") and cards must both count ONE gateway request as +1,
+  // regardless of how many routing/guard events it emits (a kill-switch reroute
+  // alone adds a 2nd event per request, doubling the raw-event count). Override the
+  // raw-event summary with the server's DISTINCT-request partition so the funnel
+  // matches "Requests inspected" instead of the ~2× raw-event total.
+  if (moduleId === "1.1" && extras.socKpis) {
+    const d = deriveSocKpiSummary(extras.socKpis);
+    if (d) {
+      summary = {
+        ...summary,
+        total: d.total,
+        allowed: d.allowed,
+        blocked: d.blocked,
+        redacted: d.redacted,
+        critical: Number(extras.socKpis.requests_critical) || Math.min(summary.critical, d.total),
+      };
+    }
+  }
   const rows = buildRows(config.columns, events);
 
   return {
@@ -326,24 +345,82 @@ function buildLogDetailPayload(event) {
   };
 }
 
+function deriveSocKpiSummary(socKpis) {
+  if (!socKpis) return null;
+  // Module 1.1 = unified gateway lane. The server returns REQUEST-SCOPED counts:
+  // one count per distinct gateway request, partitioned block>redact>allow. A
+  // single request emits several enforcement rows (request + model_routed +
+  // output_guard, or input_blocked, or — when inference is unavailable — a
+  // request(block) marker), all sharing one request_id; these fields collapse them
+  // to one counted request and INCLUDE blocked/failed/streamed requests that never
+  // emit an event_type='request' row. Prefer them; fall back to the legacy
+  // row-based fields for older backends.
+  if (socKpis.requests_inspected != null && socKpis.requests_allowed != null) {
+    const total = Number(socKpis.requests_inspected) || 0;
+    const blocked = Number(socKpis.requests_blocked) || 0;
+    const redacted = Number(socKpis.requests_redacted) || 0;
+    const allowedRaw = Number(socKpis.requests_allowed);
+    return {
+      total,
+      blocked,
+      redacted,
+      allowed: Number.isFinite(allowedRaw) ? Math.max(0, allowedRaw) : Math.max(0, total - blocked - redacted),
+    };
+  }
+  const total =
+    socKpis.requests_inspected != null
+      ? Number(socKpis.requests_inspected) || 0
+      : Number(socKpis.total_threats) || 0;
+  const blocked = Number(socKpis.blocked) || 0;
+  const redacted = Number(socKpis.redacted) || 0;
+  return {
+    total,
+    blocked,
+    redacted,
+    allowed: Math.max(0, total - blocked - redacted),
+  };
+}
+
 function buildSummaryCards(moduleId, summary, events, extras) {
+  const socDerived = moduleId === "1.1" ? deriveSocKpiSummary(extras.socKpis) : null;
+  const numeric = socDerived || summary;
   const base = {
-    total: fmtCount(summary.total),
-    blocked: fmtCount(summary.blocked),
-    redacted: fmtCount(summary.redacted),
+    total: fmtCount(numeric.total),
+    blocked: fmtCount(numeric.blocked),
+    redacted: fmtCount(numeric.redacted),
+    flagged: fmtCount(summary.flagged),
     critical: fmtCount(summary.critical),
-    allowed: fmtCount(summary.allowed),
+    allowed: fmtCount(numeric.allowed),
     monitor: fmtCount(summary.monitor),
   };
 
   switch (moduleId) {
     case "1.1": {
       const identities = uniqueCount(events.map((event) => getMetadata(event).project_id || getMetadata(event).organization_id || getMetadata(event).tenant_id));
+      const periodLabel = extras.socKpis?.period ? ` (${extras.socKpis.period})` : "";
       return [
-        { label: "Requests inspected", value: base.total, detail: "All ingress events in the selected lens" },
-        { label: "Allowed through gateway", value: base.allowed, detail: "Events that completed without a hard intervention" },
-        { label: "Rate-limited or blocked", value: base.blocked, detail: "Gateway events stopped before downstream completion" },
-        { label: "Identities observed", value: fmtCount(identities), detail: "Distinct tenant or project contexts in recent ingress events" },
+        {
+          label: "Requests inspected",
+          value: base.total,
+          detail: `Distinct requests that entered the gateway${periodLabel} — allowed + redacted + blocked (deduplicated across routing/guard events)`,
+        },
+        {
+          label: "Allowed through gateway",
+          value: base.allowed,
+          detail: socDerived
+            ? `Completed without block or redact (${base.redacted} redacted in period)`
+            : "Events that completed without a hard intervention",
+        },
+        {
+          label: "Rate-limited or blocked",
+          value: base.blocked,
+          detail: "Gateway events stopped before downstream completion",
+        },
+        {
+          label: "Identities observed",
+          value: fmtCount(identities),
+          detail: "Distinct tenants in recent evidence sample (table may show up to 500 rows)",
+        },
       ];
     }
     case "1.2": {
@@ -357,8 +434,8 @@ function buildSummaryCards(moduleId, summary, events, extras) {
       ];
     }
     case "1.3": {
-      const collections = uniqueCount(events.map((event) => getMetadata(event).collection || getMetadata(event).vector_collection));
-      const namespaces = uniqueCount(events.map((event) => getMetadata(event).namespace || getMetadata(event).vector_namespace));
+      const collections = uniqueCount(events.map((event) => getMetadata(event).collection || getMetadata(event).vector_collection || getExtra(event).collection));
+      const namespaces = uniqueCount(events.map((event) => getMetadata(event).namespace || getMetadata(event).vector_namespace || getExtra(event).namespace));
       return [
         { label: "Vector queries", value: base.total, detail: "Vector-specific events matched to this page" },
         { label: "Isolation blocks", value: base.blocked, detail: "Queries rejected before cross-tenant or risky retrieval completed" },
@@ -377,12 +454,20 @@ function buildSummaryCards(moduleId, summary, events, extras) {
       ];
     }
     case "1.5": {
-      const requestedModels = uniqueCount(events.map((event) => getRequestedModel(event)));
-      const routedModels = uniqueCount(events.map((event) => getRoutedModel(event)));
+      const requestedModels = uniqueCount(
+        events.map((event) => getRequestedModel(event)).filter(isPlausibleModelName),
+      );
+      const routedModels = uniqueCount(
+        events.map((event) => getRoutedModel(event)).filter(isPlausibleModelName),
+      );
       const failovers = events.filter((event) => {
         const requested = getRequestedModel(event);
         const routed = getRoutedModel(event);
-        return requested && routed && requested !== routed;
+        return (
+          isPlausibleModelName(requested) &&
+          isPlausibleModelName(routed) &&
+          requested !== routed
+        );
       }).length;
       return [
         { label: "Routing decisions", value: base.total, detail: "Model-governance events in the current time lens" },
@@ -406,13 +491,13 @@ function buildSummaryCards(moduleId, summary, events, extras) {
       ];
     }
     case "1.7": {
-      const reviewCandidates = events.filter((event) => String(event.action || "").toLowerCase() === "monitor" || getMetadata(event).review_required).length;
-      const triggers = uniqueCount(events.map((event) => getMetadata(event).owasp_code || getMetadata(event).threat_type || event.category));
+      const reviewCandidates = events.filter((event) => ["flag", "monitor"].includes(String(event.action || "").toLowerCase()) || getMetadata(event).review_required).length;
       return [
         { label: "Outputs scanned", value: base.total, detail: "Post-generation events matched to output guardrails" },
         { label: "Outputs blocked", value: base.blocked, detail: "Responses stopped before leaving the gateway" },
         { label: "Outputs redacted", value: base.redacted, detail: "Responses sanitized instead of blocked" },
-        { label: "Review triggers", value: fmtCount(reviewCandidates || triggers), detail: "Review or trigger categories surfaced in recent output evidence" },
+        { label: "Outputs flagged", value: base.flagged, detail: "IP-leakage / hallucination flagged for review, not blocked" },
+        { label: "Review triggers", value: fmtCount(reviewCandidates), detail: "Flagged or monitored outputs requiring human review" },
       ];
     }
     default:
@@ -452,7 +537,7 @@ function buildSpotlightCards(moduleId, summary, events, extras) {
       ];
     }
     case "1.3": {
-      const collections = countBy(events.map((event) => getMetadata(event).collection || getMetadata(event).vector_collection || "unknown"));
+      const collections = countBy(events.map((event) => getMetadata(event).collection || getMetadata(event).vector_collection || getExtra(event).collection || "unknown"));
       return [
         { label: "Busiest collection", value: titleCase(topKey(collections) || "unknown"), detail: "Collection with the most recent vector traffic" },
         { label: "Average risk", value: fmtPercent(avgRisk), detail: "Risk score across vector-specific events" },
@@ -468,7 +553,9 @@ function buildSpotlightCards(moduleId, summary, events, extras) {
       ];
     }
     case "1.5": {
-      const routed = countBy(events.map((event) => getRoutedModel(event) || "unknown"));
+      const routed = countBy(
+        events.map((event) => getRoutedModel(event)).filter(isPlausibleModelName),
+      );
       return [
         { label: "Primary routed model", value: titleCase(topKey(routed) || "unknown"), detail: "Most common execution target in recent routing evidence" },
         { label: "Average risk", value: fmtPercent(avgRisk), detail: "Mean risk score across model-governance decisions" },
@@ -502,13 +589,15 @@ function summarizeEvents(events) {
   const total = events.length;
   const blocked = actions.block || 0;
   const redacted = actions.redact || 0;
+  const flagged = actions.flag || 0;
   const monitor = actions.monitor || 0;
-  const allowed = Math.max(0, total - blocked - redacted - monitor);
+  const allowed = Math.max(0, total - blocked - redacted - flagged - monitor);
 
   return {
     total,
     blocked,
     redacted,
+    flagged,
     critical,
     monitor,
     allowed,
@@ -544,6 +633,13 @@ function getEventOperator(event) {
 
 function getMetadata(event) {
   return event?.metadata || {};
+}
+
+// The control plane nests the gateway's raw telemetry metadata under
+// `metadata.extra` (see control core/tasks.py). Vector collection/namespace
+// and similar gateway-emitted fields live there, not at the top level.
+function getExtra(event) {
+  return getMetadata(event).extra || {};
 }
 
 function getSource(event) {
@@ -607,6 +703,23 @@ function normalizeList(value) {
 
 function uniqueCount(values) {
   return new Set(values.filter(Boolean)).size;
+}
+
+// Obvious break-test / nonexistent-model sentinels that pollute routing demand.
+const GARBAGE_MODEL_RE =
+  /(does[_\- ]?not[_\- ]?exist|no[_\- ]?such[_\- ]?model|nonexistent|totally[_\- ]?unknown|definitely[_\- ]?not|leaktest|invalid model)/i;
+
+// Keep only structurally-plausible model names in governance KPIs so distinct
+// counts reflect real routing demand, not adversarial noise (multi-KB blobs,
+// zero-width chars, "(invalid model name)" sentinels, DOES_NOT_EXIST_* probes).
+// Real model ids use word chars plus . / : - _ space @ + — anything else is junk.
+function isPlausibleModelName(name) {
+  if (!name) return false;
+  const s = String(name).trim();
+  if (!s || s.length > 100) return false;
+  if (!/^[\w.\/:@+\- ]+$/.test(s)) return false;
+  if (GARBAGE_MODEL_RE.test(s)) return false;
+  return true;
 }
 
 function countBy(values) {

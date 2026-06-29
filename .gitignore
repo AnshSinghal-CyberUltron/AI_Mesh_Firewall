@@ -17,6 +17,9 @@ postgres_data/
 # Verification run artifacts (may contain bearer tokens, payloads, screenshots)
 runs/verification/
 
+# EC2 static UI (synced from frontend/dist — not committed)
+deploy/static/
+
 # Terraform cache
 **/.terraform/*
 
@@ -29,3 +32,13 @@ crash.log
 
 # Keep dependency lock file
 !.terraform.lock.hcl
+
+# Personal scratch file at repo root — must never be committed (file stays local)
+/temp.py.env
+
+# Local env with secrets (never commit)
+.env
+.env.bak
+.playwright-mcp/
+/tmp/
+.skill-workspace/

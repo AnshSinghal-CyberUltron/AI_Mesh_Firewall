@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell,
 } from "recharts";
 import { useAuth } from "../context/AuthContext";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 
 const CHART_COLORS = ["#14b8a6", "#8b5cf6", "#f59e0b", "#ef4444", "#3b82f6", "#10b981", "#ec4899", "#6366f1"];
 
@@ -71,7 +72,7 @@ function AreaChartRenderer({ data }) {
   );
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <SafeResponsiveChart className="h-[280px] w-full">
       <AreaChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
         <XAxis dataKey={xKey} stroke="#64748b" tick={{ fontSize: 11 }} />
@@ -97,7 +98,7 @@ function AreaChartRenderer({ data }) {
           />
         ))}
       </AreaChart>
-    </ResponsiveContainer>
+    </SafeResponsiveChart>
   );
 }
 
@@ -105,7 +106,7 @@ function PieChartRenderer({ data }) {
   const total = data.reduce((s, d) => s + (d.value || 0), 0);
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <SafeResponsiveChart className="h-[280px] w-full">
       <PieChart>
         <Pie
           data={data}
@@ -127,7 +128,7 @@ function PieChartRenderer({ data }) {
         </Pie>
         <Tooltip formatter={(value) => [value.toLocaleString(), "Count"]} />
       </PieChart>
-    </ResponsiveContainer>
+    </SafeResponsiveChart>
   );
 }
 
@@ -140,7 +141,7 @@ function BarChartRenderer({ data }) {
   const yKey = numericKeys[0] || "count";
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <SafeResponsiveChart className="h-[280px] w-full">
       <BarChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
         <XAxis
@@ -174,7 +175,7 @@ function BarChartRenderer({ data }) {
           ))
         )}
       </BarChart>
-    </ResponsiveContainer>
+    </SafeResponsiveChart>
   );
 }
 
@@ -186,7 +187,7 @@ function LineChartRenderer({ data }) {
   );
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <SafeResponsiveChart className="h-[280px] w-full">
       <LineChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
         <XAxis dataKey={xKey} stroke="#64748b" tick={{ fontSize: 11 }} />
@@ -212,6 +213,6 @@ function LineChartRenderer({ data }) {
           />
         ))}
       </LineChart>
-    </ResponsiveContainer>
+    </SafeResponsiveChart>
   );
 }

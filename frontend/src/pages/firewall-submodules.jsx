@@ -11,18 +11,16 @@ import { RoutingAuditPanel } from "../components/RoutingAuditPanel";
 import { RoutingGovernancePanel } from "../components/RoutingGovernancePanel";
 import { OutputGovernancePanel } from "../components/OutputGovernancePanel";
 import { OutputGuardrailEngineCard } from "../components/OutputGuardrailEngineCard";
+import { OutputGuardrailCharts } from "../components/OutputGuardrailCharts";
 import { OutputGuardrailControls } from "../components/OutputGuardrailControls";
-import { RAGPipelinePanel } from "../components/RAGPipelinePanel";
-import { RAGPipelineSimulator } from "../components/RAGPipelineSimulator";
 import { RAGPipelineTelemetry } from "../components/RAGPipelineTelemetry";
 import { RAGFeatureTestPanel } from "../components/RAGFeatureTestPanel";
+import { RAGAttackTrustSimulator } from "../components/RAGAttackTrustSimulator";
 import { DatabaseConnectionPanel } from "../components/DatabaseConnectionPanel";
-import { VectorFirewallSimulator } from "../components/simulator/VectorFirewallSimulator";
 import { MCPGuardrailSimulator } from "../components/simulator/MCPGuardrailSimulator";
 import { ModelRoutingSimulator } from "../components/simulator/ModelRoutingSimulator";
 import { IsolationOpsSimulator } from "../components/simulator/IsolationOpsSimulator";
 import { OrgIsolationBanner } from "../components/OrgIsolationBanner";
-import { OutputGuardSimulator } from "../components/simulator/OutputGuardSimulator";
 import { RAGIngestionPanel } from "../components/simulator/RAGIngestionPanel";
 import { VectorProviderConfigPanel } from "../components/rag/VectorProviderConfigPanel";
 import { CollectionManagerPanel } from "../components/rag/CollectionManagerPanel";
@@ -45,11 +43,12 @@ class FirewallModuleErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
+      const label = this.props.title || "This module";
       return (
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
-          <h2 className="text-base font-semibold">Multi-Model Governance failed to render</h2>
+          <h2 className="text-base font-semibold">{label} failed to render</h2>
           <p className="mt-2">
-            One of the routing panels threw an error while loading. The rest of the app remains usable, and this tab no longer blanks the screen.
+            One of the panels threw an error while loading. The rest of the app remains usable, and this tab no longer blanks the screen.
           </p>
         </div>
       );
@@ -69,18 +68,20 @@ export function Firewall11Page({ onViewResults, onViewLogDetail, children }) {
   ];
 
   return (
-    <FirewallModulePage
-      moduleId="1.1"
-      title="AI Gateway & Traffic Ingress"
-      description="The network entry point for every model request. This page now centers ingress pressure, gateway controls, and live evidence instead of the shared generic telemetry frame."
-      icon={Zap}
-      flowNodes={flowNodes}
-      onViewResults={onViewResults}
-      onViewLogDetail={onViewLogDetail}
-      controlPanels={[<GatewayKeyPanel key="gateway-keys" />]}
-      simulatorPanels={[<AttackSimulatorPanel key="attack-sim" />]}
-      inspectionPanels={children ? [children] : []}
-    />
+    <FirewallModuleErrorBoundary title="AI Gateway & Traffic Ingress">
+      <FirewallModulePage
+        moduleId="1.1"
+        title="AI Gateway & Traffic Ingress"
+        description="The network entry point for every model request. This page now centers ingress pressure, gateway controls, and live evidence instead of the shared generic telemetry frame."
+        icon={Zap}
+        flowNodes={flowNodes}
+        onViewResults={onViewResults}
+        onViewLogDetail={onViewLogDetail}
+        controlPanels={[<GatewayKeyPanel key="gateway-keys" />]}
+        simulatorPanels={[<AttackSimulatorPanel key="attack-sim" />]}
+        inspectionPanels={children ? [children] : []}
+      />
+    </FirewallModuleErrorBoundary>
   );
 }
 
@@ -92,40 +93,40 @@ export function Firewall12Page({ onViewResults, onViewLogDetail, children }) {
 // 1.3 RAG & Vector DB Firewall
 export function Firewall13Page({ onViewResults, onViewLogDetail, children }) {
   const flowNodes = [
-    { label: "Query", format: (summary) => `${summary.total.toLocaleString()} routed`, color: "teal" },
-    { label: "Retriever", format: (summary) => `${summary.allowed.toLocaleString()} scoped`, color: "purple" },
-    { label: "Vector DB", format: (summary) => `${summary.blocked.toLocaleString()} denied`, color: "indigo" },
-    { label: "Generator", format: (summary) => `${summary.redacted.toLocaleString()} sanitized`, color: "cyan" },
+    { label: "Scan", format: (summary) => `${summary.total.toLocaleString()} scanned`, color: "teal" },
+    { label: "Redact", format: (summary) => `${summary.redacted.toLocaleString()} sanitized`, color: "cyan" },
+    { label: "BYOK Embed", format: (summary) => `${summary.allowed.toLocaleString()} approved`, color: "purple" },
+    { label: "Store / Query Proxy", format: (summary) => `${summary.blocked.toLocaleString()} denied`, color: "indigo" },
   ];
 
   return (
-    <FirewallModulePage
-      moduleId="1.3"
-      title="RAG & Vector DB Firewall"
-      description="A unified retrieval-security workspace for database connectivity, pipeline enforcement, secure ingestion, and both RAG and vector attack simulations."
-      icon={Database}
-      flowNodes={flowNodes}
-      onViewResults={onViewResults}
-      onViewLogDetail={onViewLogDetail}
-      controlPanels={[
-        <RAGSetupGuide key="rag-setup-guide" />,
-        <DatabaseConnectionPanel key="db-connection" />,
-        <VectorProviderConfigPanel key="vector-providers" />,
-        <CollectionManagerPanel key="collection-manager" />,
-        <RAGPipelinePanel key="rag-pipeline" />,
-        <RAGIngestionPanel key="rag-ingestion" />,
-      ]}
-      simulatorPanels={[
-        <SemanticSearchPanel key="semantic-search" />,
-        <RAGPipelineSimulator key="rag-simulator" />,
-        <RAGFeatureTestPanel key="rag-feature-test" />,
-        <VectorFirewallSimulator key="vector-simulator" />,
-      ]}
-      inspectionPanels={[
-        <RAGPipelineTelemetry key="rag-telemetry" />,
-        ...(children ? [children] : []),
-      ]}
-    />
+    <FirewallModuleErrorBoundary title="RAG & Vector DB Firewall">
+      <FirewallModulePage
+        moduleId="1.3"
+        title="RAG & Vector DB Firewall"
+        description="Guardrails for your own RAG stack: connect your vector DB and BYOK embedding model, then route ingestion and queries through the gateway for tier-1 + tier-2 scanning and typed-placeholder redaction. You own the vector DB, ranking, and generation — we secure the data on the way in and out."
+        icon={Database}
+        flowNodes={flowNodes}
+        onViewResults={onViewResults}
+        onViewLogDetail={onViewLogDetail}
+        controlPanels={[
+          <RAGSetupGuide key="rag-setup-guide" />,
+          <VectorProviderConfigPanel key="vector-providers" />,
+          <DatabaseConnectionPanel key="db-connection" />,
+          <CollectionManagerPanel key="collection-manager" />,
+          <RAGIngestionPanel key="rag-ingestion" />,
+        ]}
+        simulatorPanels={[
+          <SemanticSearchPanel key="semantic-search" />,
+          <RAGFeatureTestPanel key="rag-feature-test" />,
+          <RAGAttackTrustSimulator key="rag-attack-trust" />,
+        ]}
+        inspectionPanels={[
+          <RAGPipelineTelemetry key="rag-telemetry" />,
+          ...(children ? [children] : []),
+        ]}
+      />
+    </FirewallModuleErrorBoundary>
   );
 }
 
@@ -139,27 +140,29 @@ export function Firewall14Page({ onViewResults, onViewLogDetail, children }) {
   ];
 
   return (
-    <FirewallModulePage
-      moduleId="1.4"
-      title="Context Assembly & MCP Guardrails"
-      description="The control surface for context minimization, MCP tool scope, data-access guardrails, and field-level redaction before generation."
-      icon={Eye}
-      flowNodes={flowNodes}
-      onViewResults={onViewResults}
-      onViewLogDetail={onViewLogDetail}
-      controlPanels={[<MCPConnectorPanel key="mcp-connector" />]}
-      simulatorPanels={[<MCPGuardrailSimulator key="mcp-simulator" />]}
-      inspectionPanels={[
-        ...(children ? [children] : []),
-      ]}
-    />
+    <FirewallModuleErrorBoundary title="Context Assembly & MCP Guardrails">
+      <FirewallModulePage
+        moduleId="1.4"
+        title="Context Assembly & MCP Guardrails"
+        description="The control surface for context minimization, MCP tool scope, data-access guardrails, and field-level redaction before generation."
+        icon={Eye}
+        flowNodes={flowNodes}
+        onViewResults={onViewResults}
+        onViewLogDetail={onViewLogDetail}
+        controlPanels={[<MCPConnectorPanel key="mcp-connector" />]}
+        simulatorPanels={[<MCPGuardrailSimulator key="mcp-simulator" />]}
+        inspectionPanels={[
+          ...(children ? [children] : []),
+        ]}
+      />
+    </FirewallModuleErrorBoundary>
   );
 }
 
 // 1.5 Multi-Model Governance & Routing
 export function Firewall15Page(props) {
   return (
-    <FirewallModuleErrorBoundary>
+    <FirewallModuleErrorBoundary title="Multi-Model Governance">
       <FirewallConfigProvider>
         <Firewall15PageInner {...props} />
       </FirewallConfigProvider>
@@ -167,12 +170,19 @@ export function Firewall15Page(props) {
   );
 }
 
+// Persist the last model-list signature across page remounts. A ref alone
+// resets to "" every time the user navigates away from §1.5 and back, so the
+// first onModelsChanged after remount always looked "changed" and triggered a
+// redundant config refetch (invalidate) even when nothing had changed.
+let _lastModelsSig = "";
+
 function Firewall15PageInner({ onViewResults, onViewLogDetail }) {
   const { invalidate } = useFirewallConfig();
-  const lastModelsSigRef = useRef("");
+  const lastModelsSigRef = useRef(_lastModelsSig);
 
   const handleConnectionsMutated = useCallback(() => {
     lastModelsSigRef.current = "";
+    _lastModelsSig = "";
     invalidate();
   }, [invalidate]);
 
@@ -181,6 +191,7 @@ function Firewall15PageInner({ onViewResults, onViewLogDetail }) {
       const sig = modelListSignature(models);
       if (sig === lastModelsSigRef.current) return;
       lastModelsSigRef.current = sig;
+      _lastModelsSig = sig;
       invalidate();
     },
     [invalidate],
@@ -230,50 +241,47 @@ export function Firewall16Page({ onViewResults, onViewLogDetail, children }) {
   ];
 
   return (
-    <FirewallModulePage
-      moduleId="1.6"
-      title="Inline Model Isolation & Kill-Switch"
-      description="An incident-style workspace for model containment, threshold breaches, circuit-breaker state, and emergency isolation controls."
-      icon={AlertTriangle}
-      flowNodes={flowNodes}
-      onViewResults={onViewResults}
-      onViewLogDetail={onViewLogDetail}
-      controlPanels={[
-        <OrgIsolationBanner key="org-isolation-banner" />,
-        <GatewayKeyPanel key="gateway-keys-isolation" />,
-        <ModelStatePanel key="model-state" />,
-        <KillSwitchPanel key="kill-switch" />,
-      ]}
-      simulatorPanels={[<IsolationOpsSimulator key="isolation-ops" />]}
-      inspectionPanels={children ? [children] : []}
-    />
+    <FirewallModuleErrorBoundary title="Inline Model Isolation & Kill-Switch">
+      <FirewallModulePage
+        moduleId="1.6"
+        title="Inline Model Isolation & Kill-Switch"
+        description="An incident-style workspace for model containment, threshold breaches, circuit-breaker state, and emergency isolation controls."
+        icon={AlertTriangle}
+        flowNodes={flowNodes}
+        onViewResults={onViewResults}
+        onViewLogDetail={onViewLogDetail}
+        controlPanels={[
+          <OrgIsolationBanner key="org-isolation-banner" />,
+          <GatewayKeyPanel key="gateway-keys-isolation" />,
+          <ModelStatePanel key="model-state" />,
+          <KillSwitchPanel key="kill-switch" />,
+        ]}
+        simulatorPanels={[<IsolationOpsSimulator key="isolation-ops" />]}
+        inspectionPanels={children ? [children] : []}
+      />
+    </FirewallModuleErrorBoundary>
   );
 }
 
 // 1.7 Generator-Level Output Guardrails
 export function Firewall17Page({ onViewResults, onViewLogDetail }) {
-  const flowNodes = [
-    { label: "User Input", format: (summary) => `${summary.total.toLocaleString()} prompts`, color: "blue" },
-    { label: "Model Output", format: (summary) => `${summary.total.toLocaleString()} responses`, color: "purple" },
-    { label: "Output Guard", format: (summary) => `${(summary.blocked + summary.redacted).toLocaleString()} caught`, color: "amber" },
-    { label: "Final Output", format: (summary) => `${summary.allowed.toLocaleString()} released`, color: "emerald" },
-  ];
-
   return (
-    <FirewallModulePage
-      moduleId="1.7"
-      title="Generator-Level Output Guardrails"
-      description="Real-time output governance: every model response is scanned for PII, credentials, hallucinations, and IP leakage before delivery. No black boxes."
-      icon={Filter}
-      flowNodes={flowNodes}
-      onViewResults={onViewResults}
-      onViewLogDetail={onViewLogDetail}
-      controlPanels={[
-        <OutputGuardrailControls key="output-guardrail-controls" />,
-        <OutputGuardrailEngineCard key="engine-card" />,
-        <OutputGovernancePanel key="output-governance" />,
-      ]}
-      simulatorPanels={[<OutputGuardSimulator key="output-guard-sim" />]}
-    />
+    <FirewallModuleErrorBoundary title="Generator-Level Output Guardrails">
+      <FirewallModulePage
+        moduleId="1.7"
+        title="Generator-Level Output Guardrails"
+        description="Real-time output governance: every model response is scanned for PII, credentials, hallucinations, and IP leakage before delivery. No black boxes."
+        icon={Filter}
+        onViewResults={onViewResults}
+        onViewLogDetail={onViewLogDetail}
+        showEvidenceSection={false}
+        controlPanels={[
+          <OutputGuardrailControls key="output-guardrail-controls" />,
+          <OutputGuardrailEngineCard key="engine-card" />,
+          <OutputGuardrailCharts key="output-charts" />,
+          <OutputGovernancePanel key="output-governance" />,
+        ]}
+      />
+    </FirewallModuleErrorBoundary>
   );
 }

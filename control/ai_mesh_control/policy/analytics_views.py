@@ -12,9 +12,106 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.models import Endpoint
-from policy.constants import ACTION_BLOCK, ACTION_REDACT
+from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
 from policy.models import EnforcementEvent, Policy, Rule
 from policy.security_views import _enforcement_events_for_request
+from policy.telemetry_resolution import metadata_policy_codes, metadata_rule_names
+
+
+def _enforcement_rate(
+    blocked: int,
+    redacted: int,
+    total: int,
+    *,
+    monitored: int = 0,
+) -> float:
+    """SOC enforcement rate: violations that were blocked, redacted, or monitored."""
+    enforced = blocked + redacted + monitored
+    return round((enforced / total * 100) if total else 0, 1)
+
+
+def _count_actions(evs) -> dict[str, int]:
+    return {
+        "blocked": evs.filter(action=ACTION_BLOCK).count(),
+        "redacted": evs.filter(action=ACTION_REDACT).count(),
+        "monitored": evs.filter(action=ACTION_MONITOR).count(),
+    }
+
+
+def _performance_status(effectiveness: float) -> str:
+    if effectiveness >= 98:
+        return "EXCELLENT"
+    if effectiveness >= 95:
+        return "GOOD"
+    if effectiveness >= 90:
+        return "NEEDS REVIEW"
+    return "LOW"
+
+
+def _normalize_policy_category(raw: str | None) -> str:
+    if raw is None or not str(raw).strip():
+        return "uncategorized"
+    return str(raw).strip().lower()
+
+
+POLICY_CATEGORY_LABELS = {
+    "pii": "PII Detection",
+    "jailbreak": "Jailbreak",
+    "prompt injection": "Prompt Injection",
+    "prompt_injection": "Prompt Injection",
+    "data protection": "PII Detection",
+    "dlp compliance": "Data Loss Prevention",
+    "uncategorized": "Uncategorized",
+}
+
+
+def _category_display_label(normalized_key: str, raw_category: str | None) -> str:
+    if normalized_key in POLICY_CATEGORY_LABELS:
+        return POLICY_CATEGORY_LABELS[normalized_key]
+    if raw_category and str(raw_category).strip():
+        return str(raw_category).strip()
+    return "Uncategorized"
+
+
+def _build_category_performance(policies_base, events) -> list[dict]:
+    """Aggregate enforcement stats per normalized policy category (one row per category)."""
+    cat_policy_ids: dict[str, list[int]] = defaultdict(list)
+    cat_raw: dict[str, str | None] = {}
+    for policy in policies_base.only("id", "category"):
+        norm = _normalize_policy_category(policy.category)
+        cat_policy_ids[norm].append(policy.id)
+        if norm not in cat_raw:
+            cat_raw[norm] = policy.category
+
+    category_performance = []
+    for norm_key in sorted(cat_policy_ids.keys()):
+        policy_ids = cat_policy_ids[norm_key]
+        raw_cat = cat_raw.get(norm_key)
+        display_cat = _category_display_label(norm_key, raw_cat)
+        evs = events.filter(policy_id__in=policy_ids)
+        total_v = evs.count()
+        counts = _count_actions(evs)
+        effectiveness = _enforcement_rate(
+            counts["blocked"], counts["redacted"], total_v, monitored=counts["monitored"]
+        )
+        category_performance.append(
+            {
+                "category": display_cat,
+                "categoryKey": norm_key,
+                "policies": len(policy_ids),
+                "totalViolations": total_v,
+                "blocked": counts["blocked"],
+                "redacted": counts["redacted"],
+                "monitored": counts["monitored"],
+                "blockRate": round((counts["blocked"] / total_v * 100) if total_v else 0, 1),
+                "redactRate": round((counts["redacted"] / total_v * 100) if total_v else 0, 1),
+                "monitorRate": round((counts["monitored"] / total_v * 100) if total_v else 0, 1),
+                "effectiveness": effectiveness,
+                "status": _performance_status(effectiveness),
+                "avgResponseTime": None,
+            }
+        )
+    return category_performance
 
 
 class PolicyAnalyticsView(APIView):
@@ -37,22 +134,30 @@ class PolicyAnalyticsView(APIView):
         base_events = EnforcementEvent.objects.filter(created_at__gte=since)
         events = _enforcement_events_for_request(request, base_events)
 
-        # Effectiveness trend: per-day { date, effectiveness } (effectiveness = blocked/total * 100)
-        daily = defaultdict(lambda: {"total": 0, "blocked": 0})
+        # Effectiveness trend: per-day enforcement rate (blocked + redacted) / total
+        daily = defaultdict(lambda: {"total": 0, "blocked": 0, "redacted": 0, "monitored": 0})
         for ev in events.values("created_at", "action"):
             d = ev["created_at"].date() if ev["created_at"] else None
             if d:
                 daily[str(d)]["total"] += 1
                 if ev["action"] == ACTION_BLOCK:
                     daily[str(d)]["blocked"] += 1
+                elif ev["action"] == ACTION_REDACT:
+                    daily[str(d)]["redacted"] += 1
+                elif ev["action"] == ACTION_MONITOR:
+                    daily[str(d)]["monitored"] += 1
         effectiveness_trend = []
         for d in sorted(daily.keys()):
-            t = daily[d]["total"]
-            b = daily[d]["blocked"]
+            row = daily[d]
             effectiveness_trend.append(
                 {
                     "date": d,
-                    "effectiveness": round((b / t * 100) if t else 0, 1),
+                    "effectiveness": _enforcement_rate(
+                        row["blocked"],
+                        row["redacted"],
+                        row["total"],
+                        monitored=row["monitored"],
+                    ),
                 }
             )
 
@@ -120,44 +225,21 @@ class PolicyAnalyticsView(APIView):
                 _tag_event(meta, week_buckets[iso_key])
         violations_by_week = [{"week": week_labels[k], **week_buckets[k]} for k in sorted(week_buckets.keys())]
 
-        # Category performance: per Policy.category (org-scoped)
+        # Category performance: one row per normalized Policy.category (org-scoped)
         policies_base = Policy.objects.filter(enabled=True)
         if org is not None:
             policies_base = policies_base.filter(organization=org)
-        categories = policies_base.values("category").distinct()
-        category_performance = []
-        for c in categories:
-            cat = c["category"] or "Uncategorized"
-            policies_qs = policies_base.filter(category=c["category"])
-            policy_ids = list(policies_qs.values_list("id", flat=True))
-            evs = events.filter(policy_id__in=policy_ids)
-            total_v = evs.count()
-            blocked_v = evs.filter(action=ACTION_BLOCK).count()
-            effectiveness = round((blocked_v / total_v * 100) if total_v else 0, 1)
-            if effectiveness >= 98:
-                status = "EXCELLENT"
-            elif effectiveness >= 95:
-                status = "GOOD"
-            elif effectiveness >= 90:
-                status = "NEEDS REVIEW"
-            else:
-                status = "LOW"
-            category_performance.append(
-                {
-                    "category": cat,
-                    "policies": policies_qs.count(),
-                    "totalViolations": total_v,
-                    "effectiveness": effectiveness,
-                    "status": status,
-                    "avgResponseTime": None,  # Reserved for future response-time metrics
-                }
-            )
+        category_performance = _build_category_performance(policies_base, events)
 
         # Period-wide totals for metric cards
         total_violations = events.count()
-        total_blocked = events.filter(action=ACTION_BLOCK).count()
-        total_redacted = events.filter(action=ACTION_REDACT).count()
-        avg_effectiveness = round((total_blocked / total_violations * 100) if total_violations else 0, 1)
+        totals = _count_actions(events)
+        total_blocked = totals["blocked"]
+        total_redacted = totals["redacted"]
+        total_monitored = totals["monitored"]
+        avg_effectiveness = _enforcement_rate(
+            total_blocked, total_redacted, total_violations, monitored=total_monitored
+        )
 
         # Overall avg response time: not yet computed (no timing in EnforcementEvent); expose for UI
         avg_response_time = None
@@ -173,6 +255,7 @@ class PolicyAnalyticsView(APIView):
                 "total_violations": total_violations,
                 "total_blocked": total_blocked,
                 "total_redacted": total_redacted,
+                "total_monitored": total_monitored,
                 "avg_effectiveness": avg_effectiveness,
                 "avg_response_time": avg_response_time,
             }
@@ -222,25 +305,58 @@ class TopViolatorsView(APIView):
 
         # For each endpoint, collect distinct policy codes and max risk score
         events_for_ep = list(events.filter(endpoint_id__in=endpoint_ids).values("endpoint_id", "policy_id", "metadata"))
-        ep_policies: dict = defaultdict(set)
+        ep_policy_ids: dict = defaultdict(set)
+        ep_metadata_codes: dict = defaultdict(set)
         ep_risk: dict = defaultdict(int)
         for ev in events_for_ep:
             eid = ev["endpoint_id"]
             if ev["policy_id"]:
-                ep_policies[eid].add(ev["policy_id"])
+                ep_policy_ids[eid].add(ev["policy_id"])
+            ep_metadata_codes[eid].update(metadata_policy_codes(ev.get("metadata")))
             score = (ev.get("metadata") or {}).get("security_risk_score", 0) or 0
             if score > ep_risk[eid]:
                 ep_risk[eid] = score
 
-        # Bulk-fetch policy codes
-        all_policy_ids = {pid for pids in ep_policies.values() for pid in pids}
+        # ── also include events with no endpoint but a user_id ───────────────
+        user_stats = (
+            events.filter(endpoint_id__isnull=True, user_id__isnull=False)
+            .values("user_id")
+            .annotate(
+                total_violations=Count("id"),
+                blocked=Count("id", filter=Q(action=ACTION_BLOCK)),
+            )
+            .order_by("-total_violations")[:limit]
+        )
+        user_ids = [r["user_id"] for r in user_stats]
+        events_for_user = list(
+            events.filter(endpoint_id__isnull=True, user_id__in=user_ids).values("user_id", "policy_id", "metadata")
+        )
+        user_policy_ids: dict = defaultdict(set)
+        user_metadata_codes: dict = defaultdict(set)
+        user_risk: dict = defaultdict(int)
+        for ev in events_for_user:
+            uid = ev["user_id"]
+            if ev["policy_id"]:
+                user_policy_ids[uid].add(ev["policy_id"])
+            user_metadata_codes[uid].update(metadata_policy_codes(ev.get("metadata")))
+            score = (ev.get("metadata") or {}).get("security_risk_score", 0) or 0
+            if score > user_risk[uid]:
+                user_risk[uid] = score
+
+        # Bulk-fetch policy codes (endpoint + user FK ids)
+        all_policy_ids = {
+            pid for pids in ep_policy_ids.values() for pid in pids
+        } | {pid for pids in user_policy_ids.values() for pid in pids}
         policy_codes = {p.id: p.code for p in Policy.objects.filter(id__in=all_policy_ids).only("id", "code")}
 
         out = []
         for row in endpoint_stats:
             eid = row["endpoint_id"]
             ep = endpoints_by_id.get(eid)
-            codes = sorted(policy_codes.get(pid, f"POL-{pid}") for pid in ep_policies.get(eid, []))
+            codes = sorted(
+                {policy_codes.get(pid, f"POL-{pid}") for pid in ep_policy_ids.get(eid, [])}
+                | ep_metadata_codes.get(eid, set())
+            )
             out.append(
                 {
                     "endpoint_id": eid,
@@ -254,25 +370,13 @@ class TopViolatorsView(APIView):
                 }
             )
 
-        # ── also include events with no endpoint but a user_id ───────────────
-        user_stats = (
-            events.filter(endpoint_id__isnull=True, user_id__isnull=False)
-            .values("user_id")
-            .annotate(
-                total_violations=Count("id"),
-                blocked=Count("id", filter=Q(action=ACTION_BLOCK)),
-            )
-            .order_by("-total_violations")[:limit]
-        )
         for row in user_stats:
             uid = row["user_id"]
-            evs_u = list(events.filter(endpoint_id__isnull=True, user_id=uid).values("policy_id", "metadata"))
             codes_u = sorted(
-                {policy_codes.get(ev["policy_id"], f"POL-{ev['policy_id']}") for ev in evs_u if ev["policy_id"]}
+                {policy_codes.get(pid, f"POL-{pid}") for pid in user_policy_ids.get(uid, [])}
+                | user_metadata_codes.get(uid, set())
             )
-            risk_u = (
-                max(((ev.get("metadata") or {}).get("security_risk_score", 0) or 0) for ev in evs_u) if evs_u else 0
-            )
+            risk_u = user_risk.get(uid, 0)
             out.append(
                 {
                     "endpoint_id": None,
@@ -291,9 +395,62 @@ class TopViolatorsView(APIView):
         return Response(out[:limit])
 
 
+def _aggregate_top_rules(events, *, limit: int) -> list[dict]:
+    """Aggregate rule stats from FK-linked events and metadata-only telemetry rows."""
+    by_rule_id: dict[int, dict] = defaultdict(
+        lambda: {"triggered": 0, "blocked": 0, "redacted": 0, "monitored": 0}
+    )
+    by_name: dict[str, dict] = defaultdict(
+        lambda: {"triggered": 0, "blocked": 0, "redacted": 0, "monitored": 0, "policy_code": ""}
+    )
+
+    for ev in events.values("rule_id", "action", "metadata"):
+        action = ev["action"]
+        meta = ev.get("metadata") or {}
+
+        if ev["rule_id"]:
+            bucket = by_rule_id[ev["rule_id"]]
+        else:
+            names = metadata_rule_names(meta)
+            if not names:
+                continue
+            name = names[0]
+            bucket = by_name[name]
+            codes = metadata_policy_codes(meta)
+            if codes and not bucket["policy_code"]:
+                bucket["policy_code"] = codes[0]
+
+        bucket["triggered"] += 1
+        if action == ACTION_BLOCK:
+            bucket["blocked"] += 1
+        elif action == ACTION_REDACT:
+            bucket["redacted"] += 1
+        elif action == ACTION_MONITOR:
+            bucket["monitored"] += 1
+
+    rows: list[dict] = []
+    for rule_id, stats in by_rule_id.items():
+        rows.append({"rule_id": rule_id, "rule_name": None, **stats})
+    for rule_name, stats in by_name.items():
+        rows.append(
+            {
+                "rule_id": None,
+                "rule_name": rule_name,
+                "policy_code": stats["policy_code"],
+                "triggered": stats["triggered"],
+                "blocked": stats["blocked"],
+                "redacted": stats["redacted"],
+                "monitored": stats["monitored"],
+            }
+        )
+
+    rows.sort(key=lambda r: r["triggered"], reverse=True)
+    return rows[:limit]
+
+
 class TopRulesView(APIView):
     """
-    GET /api/policy/top-rules/?limit=10
+    GET /api/policy/top-rules/?days=14&limit=10
     Returns rules with highest triggered/blocked counts from EnforcementEvent.
     """
 
@@ -301,31 +458,24 @@ class TopRulesView(APIView):
 
     def get(self, request):
         limit = min(int(request.query_params.get("limit", 10)), 50)
+        days = min(int(request.query_params.get("days", 14)), 90)
+        since_dt = timezone.now() - timedelta(days=days)
         since = request.query_params.get("since")
         if since:
             try:
                 since_dt = timezone.datetime.fromisoformat(since.replace("Z", "+00:00"))
             except Exception:
-                since_dt = timezone.now() - timedelta(days=7)
-        else:
-            since_dt = timezone.now() - timedelta(days=7)
+                pass
 
-        base_events = EnforcementEvent.objects.filter(created_at__gte=since_dt, rule_id__isnull=False)
+        base_events = EnforcementEvent.objects.filter(created_at__gte=since_dt)
         events = _enforcement_events_for_request(request, base_events)
-        rule_stats = (
-            events.values("rule_id")
-            .annotate(
-                triggered=Count("id"),
-                blocked=Count("id", filter=Q(action=ACTION_BLOCK)),
-            )
-            .order_by("-triggered")[:limit]
-        )
+        aggregated = _aggregate_top_rules(events, limit=limit)
 
         from auth.utils import get_request_organization
 
         org = get_request_organization(request)
 
-        rule_ids = [r["rule_id"] for r in rule_stats]
+        rule_ids = [r["rule_id"] for r in aggregated if r.get("rule_id")]
         rules = {r.id: r for r in Rule.objects.filter(id__in=rule_ids).select_related("policy")}
         rules_qs = Rule.objects.filter(policy__enabled=True, enabled=True)
         if org is not None:
@@ -333,22 +483,37 @@ class TopRulesView(APIView):
         rules_applied_count = rules_qs.count()
 
         out = []
-        for r in rule_stats:
-            rule = rules.get(r["rule_id"])
-            if not rule:
-                continue
-            triggered = r["triggered"]
-            blocked = r["blocked"]
-            effectiveness = round((blocked / triggered * 100) if triggered else 0, 1)
+        for row in aggregated:
+            rule = rules.get(row["rule_id"]) if row.get("rule_id") else None
+            triggered = row["triggered"]
+            blocked = row["blocked"]
+            redacted = row["redacted"]
+            monitored = row.get("monitored", 0)
+            effectiveness = _enforcement_rate(
+                blocked, redacted, triggered, monitored=monitored
+            )
+            rule_name = rule.name if rule else (row.get("rule_name") or "Unknown rule")
+            policy_code = (
+                rule.policy.code
+                if rule and rule.policy
+                else (row.get("policy_code") or "")
+            )
+            rule_id_label = (
+                f"{policy_code}-R{rule.id}"
+                if rule and rule.policy
+                else (f"{policy_code}-R?" if policy_code else f"R?-{rule_name}")
+            )
             out.append(
                 {
-                    "ruleId": f"{rule.policy.code}-R{rule.id}" if rule.policy else f"R{rule.id}",
-                    "ruleName": rule.name,
-                    "description": rule.description or "",
-                    "policyCode": rule.policy.code if rule.policy else "",
+                    "ruleId": rule_id_label,
+                    "ruleName": rule_name,
+                    "description": (rule.description or "") if rule else "",
+                    "policyCode": policy_code,
                     "appliedTo": f"{rules_applied_count} rules",
                     "triggered": triggered,
                     "blocked": blocked,
+                    "redacted": redacted,
+                    "monitored": monitored,
                     "effectiveness": effectiveness,
                 }
             )

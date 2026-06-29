@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   ShieldAlert,
   Zap,
@@ -37,6 +38,16 @@ import { useAuth } from "../context/AuthContext";
 import { useRealtimeNotifications } from "../hooks/useRealtimeNotifications";
 import { OWASPStatsPanel } from "../components/OWASPStatsPanel";
 import { PolicyAnalyticsPanel } from "../components/PolicyAnalyticsPanel";
+import { SafeResponsiveChart } from "../components/SafeResponsiveChart";
+import { formatTrendBucketLabel } from "../utils/chartLabels";
+
+const PERIOD_INTAKE_HINTS = {
+  "1h": "Last hour intake across the mesh",
+  "6h": "Last 6 hours intake across the mesh",
+  "24h": "24 hour intake across the mesh",
+  "7d": "7 day intake across the mesh",
+  "30d": "30 day intake across the mesh",
+};
 
 function useCompactViewport(maxWidth = 900) {
   const [compact, setCompact] = useState(() => window.innerWidth <= maxWidth);
@@ -174,7 +185,7 @@ function CommandShortcut({ icon: Icon, eyebrow, title, description, onClick, cta
   );
 }
 
-function SubModuleCard({ id, title, icon: Icon, color, summary, metrics, chartData, onViewDetails }) {
+function SubModuleCard({ id, title, icon: Icon, color, summary, metrics, chartData, curveSubtitle = "Pressure over 24h", onViewDetails }) {
   const tone = MODULE_COLORS[color] || MODULE_COLORS.teal;
 
   return (
@@ -216,9 +227,9 @@ function SubModuleCard({ id, title, icon: Icon, color, summary, metrics, chartDa
         <div className="rounded-2xl border border-white/60 bg-white/70 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/45">
           <div className="mb-2 flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
             <span>Pressure Curve</span>
-            <span>24h</span>
+            <span>{curveSubtitle}</span>
           </div>
-          <ResponsiveContainer width="100%" height={72}>
+          <SafeResponsiveChart className="h-[72px] w-full">
             <AreaChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id={`mesh-card-${id}`} x1="0" y1="0" x2="0" y2="1">
@@ -228,7 +239,7 @@ function SubModuleCard({ id, title, icon: Icon, color, summary, metrics, chartDa
               </defs>
               <Area type="monotone" dataKey="value" stroke={tone.hex} strokeWidth={2.2} fill={`url(#mesh-card-${id})`} dot={false} />
             </AreaChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         </div>
       </div>
     </button>
@@ -303,7 +314,7 @@ function AttackVectorTrendChart({ data, compact = false }) {
       {empty ? (
         <div className="flex h-[300px] items-center justify-center text-sm text-slate-400">No attack events recorded in this period</div>
       ) : (
-        <ResponsiveContainer width="100%" height={compact ? 240 : 300}>
+        <SafeResponsiveChart className={`${compact ? "h-[240px]" : "h-[300px]"} w-full`}>
           <AreaChart data={data} margin={{ top: 4, right: compact ? 0 : 4, bottom: 0, left: compact ? -14 : -8 }}>
             <defs>
               {VECTOR_KEYS.map((k) => (
@@ -347,7 +358,7 @@ function AttackVectorTrendChart({ data, compact = false }) {
               />
             ))}
           </AreaChart>
-        </ResponsiveContainer>
+        </SafeResponsiveChart>
       )}
     </OverviewChartCard>
   );
@@ -443,7 +454,7 @@ function ModuleComparisonChart({ data, compact = false }) {
         </div>
       }
     >
-      <ResponsiveContainer width="100%" height={compact ? 260 : 300}>
+      <SafeResponsiveChart className={`${compact ? "h-[260px]" : "h-[300px]"} w-full`}>
         <BarChart data={data} margin={{ top: 4, right: 4, bottom: compact ? 12 : 24, left: compact ? -14 : -8 }} barGap={3} barCategoryGap={compact ? "18%" : "28%"}>
           <defs>
             <linearGradient id="bargrad-teal" x1="0" y1="0" x2="0" y2="1">
@@ -476,9 +487,9 @@ function ModuleComparisonChart({ data, compact = false }) {
           />
           <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(148, 163, 184, 0.08)" }} />
           <Bar dataKey="requests" fill="url(#bargrad-teal)" radius={[6, 6, 0, 0]} name="Total events" maxBarSize={40} />
-          <Bar dataKey="blocked"  fill="url(#bargrad-rose)"  radius={[6, 6, 0, 0]} name="Interventions" maxBarSize={40} />
+          <Bar dataKey="interventions" fill="url(#bargrad-rose)" radius={[6, 6, 0, 0]} name="Interventions" maxBarSize={40} />
         </BarChart>
-      </ResponsiveContainer>
+      </SafeResponsiveChart>
     </OverviewChartCard>
   );
 }
@@ -492,7 +503,7 @@ function ModuleBlockRateChart({ data }) {
   };
 
   return (
-    <OverviewChartCard eyebrow="Enforcement posture" title="Block rate by module">
+    <OverviewChartCard eyebrow="Enforcement posture" title="Intervention rate by module">
       <div className="space-y-3">
         {data.map((item) => (
           <div key={item.id}>
@@ -525,95 +536,85 @@ function ModuleBlockRateChart({ data }) {
   );
 }
 
-function GlobalTrafficOverview({ socKpis, timeSeriesData, loading, compact = false }) {
+function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 0, loading, compact = false }) {
   const total = socKpis?.total_threats || 0;
   const blocked = socKpis?.blocked || 0;
   const redacted = socKpis?.redacted || 0;
   const allowed = Math.max(0, total - blocked - redacted);
-  const critical = socKpis?.critical_count || 0;
 
-  const trafficData = timeSeriesData.length > 0
-    ? timeSeriesData.map((item) => ({ time: item.time, total: item.primary, blocked: item.secondary }))
-    : Array.from({ length: 24 }, (_, index) => ({ time: `${index}:00`, total: 0, blocked: 0 }));
+  // hasData is derived from real intake (module 1.1 total), NOT the array length —
+  // module-trends always returns a full bucket array, so length is always > 0.
+  const hasData = intakeTotal > 0;
+  const nonZeroBuckets = enforcementSeries.filter((d) => d.allowed + d.blocked + d.redacted > 0).length;
+  const sparse = hasData && nonZeroBuckets > 0 && nonZeroBuckets <= 3;
 
   const actionData = [
-    { name: "Allowed", value: allowed || 0, color: "#14b8a6" },
+    { name: "Allowed", value: allowed || 0, color: "#10b981" },
     { name: "Blocked", value: blocked || 0, color: "#ef4444" },
     { name: "Redacted", value: redacted || 0, color: "#f59e0b" },
   ];
 
-  const stats = [
-    { label: "Total Events", value: socKpis ? total.toLocaleString() : "--", hint: socKpis ? `${socKpis.block_rate || 0}% block rate` : "Awaiting feed", icon: Activity, tone: "teal" },
-    { label: "Blocked", value: socKpis ? blocked.toLocaleString() : "--", hint: "Hard enforcement decisions", icon: AlertTriangle, tone: "red" },
-    { label: "Redacted", value: socKpis ? redacted.toLocaleString() : "--", hint: socKpis ? `${socKpis.redact_rate || 0}% content sanitation` : "Awaiting feed", icon: Shield, tone: "amber" },
-    { label: "Critical", value: socKpis ? String(critical) : "--", hint: "Events requiring immediate escalation", icon: ShieldCheck, tone: "blue" },
+  const ENF_SERIES = [
+    { key: "allowed", name: "Allowed / Monitored", color: "#10b981" },
+    { key: "blocked", name: "Blocked", color: "#ef4444" },
+    { key: "redacted", name: "Redacted", color: "#f59e0b" },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <HeroMetric key={stat.label} icon={stat.icon} label={stat.label} value={stat.value} hint={stat.hint} tone={stat.tone} loading={loading} />
-        ))}
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.45fr,0.8fr]">
-        <div className="ai-mesh-card rounded-[28px] p-6">
-          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-300">Live Telemetry</div>
-              <h3 className="mt-2 text-xl font-semibold text-slate-950 dark:text-slate-50">Global request pressure over the last 24 hours</h3>
-            </div>
-            <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-teal-500" /> Total</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Prompt injection</span>
-            </div>
+    <div className="grid gap-6 xl:grid-cols-[1.45fr,0.8fr]">
+      <div className="ai-mesh-card rounded-[28px] p-6">
+        <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-300">Live Telemetry</div>
+            <h3 className="mt-2 text-xl font-semibold text-slate-950 dark:text-slate-50">Enforcement actions over time</h3>
           </div>
-          <ResponsiveContainer width="100%" height={compact ? 230 : 280}>
-            <AreaChart data={trafficData} margin={{ top: 4, right: 4, bottom: compact ? 8 : 16, left: compact ? -14 : -8 }}>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+            {ENF_SERIES.map((s) => (
+              <span key={s.key} className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.color }} /> {s.name}</span>
+            ))}
+          </div>
+        </div>
+        {loading ? (
+          <div className="h-[280px] w-full animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800/50" />
+        ) : !hasData ? (
+          <div className="flex h-[280px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 px-6 text-center dark:border-slate-700">
+            <Activity className="h-6 w-6 text-slate-300 dark:text-slate-600" />
+            <p className="text-sm text-slate-500 dark:text-slate-400">No enforcement events in this window — the chart populates as traffic flows.</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Try a wider lens (7d / 30d) using the time selector above.</p>
+          </div>
+        ) : (
+          <SafeResponsiveChart className="h-[280px]">
+            <AreaChart data={enforcementSeries} margin={{ top: 4, right: 4, bottom: 4, left: compact ? -14 : -8 }}>
               <defs>
-                <linearGradient id="mesh-traffic" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.28} />
-                  <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.02} />
-                </linearGradient>
-                <linearGradient id="mesh-blocked" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.18} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0.01} />
-                </linearGradient>
+                {ENF_SERIES.map((s) => (
+                  <linearGradient key={s.key} id={`mesh-enf-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={s.color} stopOpacity={0.4} />
+                    <stop offset="95%" stopColor={s.color} stopOpacity={0.04} />
+                  </linearGradient>
+                ))}
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.15} vertical={false} />
-              <XAxis
-                dataKey="time"
-                stroke="#94a3b8"
-                tick={{ fontSize: 11, fill: "#94a3b8" }}
-                tickLine={false}
-                axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }}
-                interval={compact ? 1 : 0}
-                minTickGap={compact ? 16 : 8}
-                label={compact ? undefined : { value: "Hour (UTC)", position: "insideBottom", offset: -4, fontSize: 10, fill: "#64748b" }}
-              />
-              <YAxis
-                stroke="#94a3b8"
-                tick={{ fontSize: 11, fill: "#94a3b8" }}
-                tickLine={false}
-                axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }}
-                width={compact ? 28 : 40}
-                label={compact ? undefined : { value: "Events", angle: -90, position: "insideLeft", offset: 12, fontSize: 10, fill: "#64748b" }}
-              />
+              <XAxis dataKey="time" stroke="#94a3b8" tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }} interval="preserveStartEnd" minTickGap={compact ? 24 : 44} />
+              <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }} width={compact ? 26 : 34} allowDecimals={false} />
               <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#94a3b8", strokeWidth: 1, strokeDasharray: "4 4" }} />
-              <Area type="monotone" dataKey="total" stroke="#14b8a6" strokeWidth={2.4} fill="url(#mesh-traffic)" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name="Total" />
-              <Area type="monotone" dataKey="blocked" stroke="#ef4444" strokeWidth={1.8} fill="url(#mesh-blocked)" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name="Prompt injection" />
+              {ENF_SERIES.map((s) => (
+                <Area key={s.key} type="monotone" dataKey={s.key} stackId="1" stroke={s.color} strokeWidth={1.8} fill={`url(#mesh-enf-${s.key})`} name={s.name} dot={sparse ? { r: 2.5, strokeWidth: 0 } : false} activeDot={{ r: 4, strokeWidth: 0 }} isAnimationActive={false} />
+              ))}
             </AreaChart>
-          </ResponsiveContainer>
-        </div>
+          </SafeResponsiveChart>
+        )}
+        {sparse && (
+          <p className="mt-2 text-center text-[11px] text-slate-400 dark:text-slate-500">Sparse window — {nonZeroBuckets} active interval{nonZeroBuckets === 1 ? "" : "s"}. Widen the lens for more context.</p>
+        )}
+      </div>
 
-        <div className="ai-mesh-card rounded-[28px] p-6">
+      <div className="ai-mesh-card rounded-[28px] p-6">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-300">Distribution</div>
           <h3 className="mt-2 text-xl font-semibold text-slate-950 dark:text-slate-50">Enforcement posture</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">Breakdown of how the firewall responds to every request — allow, block, or sanitise.</p>
 
           <div className="mt-5 flex items-center justify-center rounded-[24px] border border-slate-200/80 bg-white/75 p-4 dark:border-slate-700 dark:bg-slate-950/40">
-            <ResponsiveContainer width="100%" height={200}>
+            <SafeResponsiveChart className="h-[200px] w-full">
               <PieChart>
                 <Pie
                   data={actionData}
@@ -641,7 +642,7 @@ function GlobalTrafficOverview({ socKpis, timeSeriesData, loading, compact = fal
                 </Pie>
                 <Tooltip content={<ChartTooltip />} />
               </PieChart>
-            </ResponsiveContainer>
+            </SafeResponsiveChart>
           </div>
 
           <div className="mt-4 space-y-2.5">
@@ -668,13 +669,40 @@ function GlobalTrafficOverview({ socKpis, timeSeriesData, loading, compact = fal
           </div>
         </div>
       </div>
-    </div>
   );
+}
+
+const ZERO_PRESSURE_CHART = Array.from({ length: 24 }, (_, index) => ({
+  time: `${String(index).padStart(2, "0")}:00`,
+  value: 0,
+}));
+
+const MODULE_PRESSURE_CURVE_LABELS = {
+  "1.1": "Blocked over 24h",
+  "1.2": "Blocked over 24h",
+  "1.3": "Blocked over 24h",
+  "1.4": "Redacted over 24h",
+  "1.5": "Blocked over 24h",
+  "1.6": "Critical over 24h",
+  "1.7": "Blocked over 24h",
+};
+
+function moduleInterventions(moduleId, mod) {
+  if (!mod) return 0;
+  if (moduleId === "1.4") return (mod.blocked || 0) + (mod.redacted || 0);
+  if (moduleId === "1.6") return mod.critical || 0;
+  return mod.blocked || 0;
+}
+
+function moduleInterventionRate(moduleId, mod) {
+  if (!mod?.total) return 0;
+  return Math.round((moduleInterventions(moduleId, mod) / mod.total) * 100);
 }
 
 export function AIMeshFirewallOverview({ onTabChange }) {
   const { fetchWithAuth } = useAuth();
   const compact = useCompactViewport(900);
+  const reduceMotion = useReducedMotion();
   const [socKpis, setSocKpis] = useState(null);
   const [attackTrends, setAttackTrends] = useState([]);
   const [moduleKpis, setModuleKpis] = useState(null);
@@ -682,17 +710,22 @@ export function AIMeshFirewallOverview({ onTabChange }) {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [fetchError, setFetchError] = useState(null);
+  const [period, setPeriod] = useState("24h");
   const intervalRef = useRef(null);
+  const inFlightRef = useRef(false);
+  const realtimeTimerRef = useRef(null);
 
   const fetchOverviewData = useCallback(async (showLoader = false) => {
+    if (inFlightRef.current) return; // single-flight: collapse overlapping refetches
+    inFlightRef.current = true;
     if (showLoader) setLoading(true);
     setFetchError(null);
     try {
       const results = await Promise.allSettled([
-        fetchWithAuth("/api/security/soc-kpis/?period=24h"),
-        fetchWithAuth("/api/security/attack-vector-trends/?period=24h"),
-        fetchWithAuth("/api/security/module-kpis/?period=24h"),
-        fetchWithAuth("/api/security/module-trends/?period=24h"),
+        fetchWithAuth(`/api/security/soc-kpis/?period=${period}`),
+        fetchWithAuth(`/api/security/attack-vector-trends/?period=${period}`),
+        fetchWithAuth(`/api/security/module-kpis/?period=${period}`),
+        fetchWithAuth(`/api/security/module-trends/?period=${period}`),
       ]);
 
       const errors = [];
@@ -731,36 +764,37 @@ export function AIMeshFirewallOverview({ onTabChange }) {
       console.error("Dashboard fetch error:", err);
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, period]);
 
+  const lastFetchedPeriodRef = useRef(null);
   useEffect(() => {
-    fetchOverviewData(true);
+    // M3: fetch the 4 analytics endpoints ONCE per actual `period` value — not on
+    // every effect re-run. React 18 StrictMode (and any incidental re-mount)
+    // otherwise re-fires the initial loader fetch, multiplying network requests
+    // per page load. The single-flight guard collapses CONCURRENT bursts, but a
+    // post-resolve re-mount slips through; this ref dedupes against the period.
+    if (lastFetchedPeriodRef.current !== period) {
+      lastFetchedPeriodRef.current = period;
+      fetchOverviewData(true);
+    }
     intervalRef.current = setInterval(() => fetchOverviewData(false), 10_000);
     return () => clearInterval(intervalRef.current);
-  }, [fetchOverviewData]);
+  }, [fetchOverviewData, period]);
 
-  // Real-time WebSocket: refresh dashboard data on new enforcement events
+  // Real-time WebSocket: refresh on new enforcement events, but coalesce bursts
+  // with a 2s trailing debounce so N events/min collapse to a single refetch
+  // (on top of the single-flight guard) instead of stacking 4 calls per event.
   useRealtimeNotifications({
     enabled: true,
     onEnforcementEvent: useCallback(() => {
-      fetchOverviewData(false);
+      if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
+      realtimeTimerRef.current = setTimeout(() => fetchOverviewData(false), 2000);
     }, [fetchOverviewData]),
   });
 
-  const timeSeriesData = attackTrends.map((bucket) => {
-    const time = new Date(bucket.time);
-    return {
-      time: `${time.getHours()}:00`,
-      primary:
-        (bucket.promptInjection || 0) +
-        (bucket.dataLeakage || 0) +
-        (bucket.jailbreak || 0) +
-        (bucket.goalHijacking || 0) +
-        (bucket.toolOverreach || 0),
-      secondary: bucket.promptInjection || 0,
-    };
-  });
+  useEffect(() => () => clearTimeout(realtimeTimerRef.current), []);
 
   const total = socKpis?.total_threats ?? 0;
   const blocked = socKpis?.blocked ?? 0;
@@ -769,23 +803,39 @@ export function AIMeshFirewallOverview({ onTabChange }) {
   const blockRate = socKpis?.block_rate ?? 0;
   const redactRate = socKpis?.redact_rate ?? 0;
 
-  const chartDataFromTrends = timeSeriesData.length > 0
-    ? timeSeriesData.map((item) => ({ time: item.time, value: item.primary }))
-    : Array.from({ length: 24 }, (_, index) => ({ time: `${index}:00`, value: 0 }));
+  // Real enforcement time-series from the gateway-intake superset (module 1.1),
+  // which vends per-bucket {total, blocked, redacted}. The green band is labelled
+  // "Allowed / Monitored" because allowed = total − blocked − redacted still
+  // includes ACTION_MONITOR events (monitor is not bucketed separately upstream).
+  const intakeTotal = moduleKpis?.modules?.["1.1"]?.total ?? 0;
+  const enforcementSeries = useMemo(() => {
+    const buckets = moduleTrends?.["1.1"];
+    if (!Array.isArray(buckets)) return [];
+    return buckets.map((pt) => {
+      const t = pt.total ?? 0;
+      const b = pt.blocked ?? 0;
+      const r = pt.redacted ?? 0;
+      return {
+        time: formatTrendBucketLabel(pt.time, moduleTrends?.period || period),
+        allowed: Math.max(0, t - b - r),
+        blocked: b,
+        redacted: r,
+      };
+    });
+  }, [moduleTrends, period]);
 
-  // Per-module pressure curve data from /api/security/module-trends/
   const getModuleChartData = (moduleId) => {
     if (moduleTrends && moduleTrends[moduleId]) {
-      return moduleTrends[moduleId].map((pt) => {
-        const t = new Date(pt.time);
-        return { time: `${t.getHours()}:00`, value: pt.value };
-      });
+      return moduleTrends[moduleId].map((pt) => ({
+        time: formatTrendBucketLabel(pt.time, moduleTrends.period || "24h"),
+        value: pt.pressure ?? pt.value ?? 0,
+      }));
     }
-    // Fallback: use global chart data if per-module trends unavailable
-    return chartDataFromTrends;
+    return ZERO_PRESSURE_CHART;
   };
 
   const modules = moduleKpis?.modules || {};
+  const modulesWithTraffic = Object.values(modules).filter((m) => (m?.total || 0) > 0).length;
   const fmt = (value) => (value != null ? value.toLocaleString() : "--");
 
   const subModules = [
@@ -797,8 +847,8 @@ export function AIMeshFirewallOverview({ onTabChange }) {
       tabId: "firewall-1-1",
       summary: "Authenticate, throttle, and inspect every model request at the front door of the mesh.",
       metrics: [
-        { label: "Events", value: moduleKpis ? fmt(modules["1.1"]?.total) : socKpis ? total.toLocaleString() : "--" },
-        { label: "Blocked", value: moduleKpis ? fmt(modules["1.1"]?.blocked) : socKpis ? blocked.toLocaleString() : "--", change: moduleKpis && modules["1.1"]?.total ? `${Math.round((modules["1.1"].blocked / modules["1.1"].total) * 100)}% pressure` : `${blockRate}% pressure` },
+        { label: "Intake", value: moduleKpis ? fmt(modules["1.1"]?.total) : "--" },
+        { label: "Blocked", value: moduleKpis ? fmt(modules["1.1"]?.blocked) : "--", change: moduleKpis && modules["1.1"]?.total ? `${Math.round((modules["1.1"].blocked / modules["1.1"].total) * 100)}% pressure` : null },
       ],
     },
     {
@@ -809,7 +859,7 @@ export function AIMeshFirewallOverview({ onTabChange }) {
       tabId: "firewall-1-2",
       summary: "Manage content rules and vector isolation policies from one page instead of splitting enforcement across retrieval tabs.",
       metrics: [
-        { label: "Events", value: moduleKpis ? fmt(modules["1.2"]?.total) : "--" },
+        { label: "Matched", value: moduleKpis ? fmt(modules["1.2"]?.total) : "--" },
         { label: "Blocked", value: moduleKpis ? fmt(modules["1.2"]?.blocked) : "--", change: "Content + namespace policy actions" },
       ],
     },
@@ -821,7 +871,7 @@ export function AIMeshFirewallOverview({ onTabChange }) {
       tabId: "firewall-1-3",
       summary: "Run the full retrieval workflow from secure ingestion through vector-query simulation on one combined operations page.",
       metrics: [
-        { label: "Events", value: moduleKpis ? fmt(modules["1.3"]?.total) : "--" },
+        { label: "Matched", value: moduleKpis ? fmt(modules["1.3"]?.total) : "--" },
         { label: "Blocked", value: moduleKpis ? fmt(modules["1.3"]?.blocked) : "--", change: "RAG + vector enforcement" },
       ],
     },
@@ -833,7 +883,7 @@ export function AIMeshFirewallOverview({ onTabChange }) {
       tabId: "firewall-1-4",
       summary: "Guard context packaging, device metadata, tool inputs, and MCP assembly before execution.",
       metrics: [
-        { label: "Events", value: moduleKpis ? fmt(modules["1.4"]?.total) : "--" },
+        { label: "Matched", value: moduleKpis ? fmt(modules["1.4"]?.total) : "--" },
         { label: "Redacted", value: moduleKpis ? fmt(modules["1.4"]?.redacted) : "--", change: "Sensitive context removed" },
       ],
     },
@@ -845,7 +895,7 @@ export function AIMeshFirewallOverview({ onTabChange }) {
       tabId: "firewall-1-5",
       summary: "Route traffic across models with policy-aware controls for cost, risk, and failure domains.",
       metrics: [
-        { label: "Events", value: moduleKpis ? fmt(modules["1.5"]?.total) : "--" },
+        { label: "Matched", value: moduleKpis ? fmt(modules["1.5"]?.total) : "--" },
         { label: "Blocked", value: moduleKpis ? fmt(modules["1.5"]?.blocked) : "--", change: "Governance and failover" },
       ],
     },
@@ -857,8 +907,8 @@ export function AIMeshFirewallOverview({ onTabChange }) {
       tabId: "firewall-1-6",
       summary: "Escalate quickly when a model or route drifts out of bounds and provide operators with hard stop controls.",
       metrics: [
-        { label: "Events", value: moduleKpis ? fmt(modules["1.6"]?.total) : "--" },
-        { label: "Critical", value: moduleKpis ? fmt(modules["1.6"]?.critical) : socKpis ? String(critical) : "--", change: "Critical + containment" },
+        { label: "Matched", value: moduleKpis ? fmt(modules["1.6"]?.total) : "--" },
+        { label: "Critical", value: moduleKpis ? fmt(modules["1.6"]?.critical) : "--", change: "Critical + containment" },
       ],
     },
     {
@@ -876,13 +926,13 @@ export function AIMeshFirewallOverview({ onTabChange }) {
   ];
 
   const activityData = [
-    { module: "1.1 Gateway", requests: modules["1.1"]?.total ?? total, blocked: modules["1.1"]?.blocked ?? blocked },
-    { module: "1.2 Policy", requests: modules["1.2"]?.total ?? 0, blocked: modules["1.2"]?.blocked ?? 0 },
-    { module: "1.3 RAG+Vector", requests: modules["1.3"]?.total ?? 0, blocked: modules["1.3"]?.blocked ?? 0 },
-    { module: "1.4 Context", requests: modules["1.4"]?.total ?? 0, blocked: modules["1.4"]?.redacted ?? 0 },
-    { module: "1.5 Routing", requests: modules["1.5"]?.total ?? 0, blocked: modules["1.5"]?.blocked ?? 0 },
-    { module: "1.6 Isolation", requests: modules["1.6"]?.total ?? 0, blocked: modules["1.6"]?.blocked ?? 0 },
-    { module: "1.7 Guards", requests: modules["1.7"]?.total ?? 0, blocked: modules["1.7"]?.blocked ?? 0 },
+    { module: "1.1 Gateway", requests: modules["1.1"]?.total ?? 0, interventions: moduleInterventions("1.1", modules["1.1"]) },
+    { module: "1.2 Policy", requests: modules["1.2"]?.total ?? 0, interventions: moduleInterventions("1.2", modules["1.2"]) },
+    { module: "1.3 RAG+Vector", requests: modules["1.3"]?.total ?? 0, interventions: moduleInterventions("1.3", modules["1.3"]) },
+    { module: "1.4 Context", requests: modules["1.4"]?.total ?? 0, interventions: moduleInterventions("1.4", modules["1.4"]) },
+    { module: "1.5 Routing", requests: modules["1.5"]?.total ?? 0, interventions: moduleInterventions("1.5", modules["1.5"]) },
+    { module: "1.6 Isolation", requests: modules["1.6"]?.total ?? 0, interventions: moduleInterventions("1.6", modules["1.6"]) },
+    { module: "1.7 Guards", requests: modules["1.7"]?.total ?? 0, interventions: moduleInterventions("1.7", modules["1.7"]) },
   ];
 
   // ── Attack vector computed data ──
@@ -911,17 +961,19 @@ export function AIMeshFirewallOverview({ onTabChange }) {
   const vectorDistData = VECTOR_KEYS.map((k) => ({ name: k, value: vectorSums[k], fill: VECTOR_COLORS[k] }));
 
   const moduleBlockRateData = [
-    { id: "1.1", name: "Gateway & Ingress",   total: modules["1.1"]?.total ?? 0, blockRate: modules["1.1"]?.total ? Math.round((modules["1.1"].blocked  / modules["1.1"].total) * 100) : blockRate },
-    { id: "1.2", name: "Policy Mgmt",         total: modules["1.2"]?.total ?? 0, blockRate: modules["1.2"]?.total ? Math.round((modules["1.2"].blocked  / modules["1.2"].total) * 100) : 0 },
-    { id: "1.3", name: "RAG & Vector DB",     total: modules["1.3"]?.total ?? 0, blockRate: modules["1.3"]?.total ? Math.round((modules["1.3"].blocked  / modules["1.3"].total) * 100) : 0 },
-    { id: "1.4", name: "Context & MCP",       total: modules["1.4"]?.total ?? 0, blockRate: modules["1.4"]?.total ? Math.round((modules["1.4"].redacted / modules["1.4"].total) * 100) : 0 },
-    { id: "1.5", name: "Multi-Model Gov.",    total: modules["1.5"]?.total ?? 0, blockRate: modules["1.5"]?.total ? Math.round((modules["1.5"].blocked  / modules["1.5"].total) * 100) : 0 },
-    { id: "1.6", name: "Isolation & Kill-Sw", total: modules["1.6"]?.total ?? 0, blockRate: modules["1.6"]?.total ? Math.round((modules["1.6"].blocked / modules["1.6"].total) * 100) : 0 },
-    { id: "1.7", name: "Output Guardrails",   total: modules["1.7"]?.total ?? 0, blockRate: modules["1.7"]?.total ? Math.round((modules["1.7"].blocked  / modules["1.7"].total) * 100) : 0 },
+    { id: "1.1", name: "Gateway & Ingress", total: modules["1.1"]?.total ?? 0, blockRate: modules["1.1"]?.total ? moduleInterventionRate("1.1", modules["1.1"]) : blockRate },
+    { id: "1.2", name: "Policy Mgmt", total: modules["1.2"]?.total ?? 0, blockRate: moduleInterventionRate("1.2", modules["1.2"]) },
+    { id: "1.3", name: "RAG & Vector DB", total: modules["1.3"]?.total ?? 0, blockRate: moduleInterventionRate("1.3", modules["1.3"]) },
+    { id: "1.4", name: "Context & MCP", total: modules["1.4"]?.total ?? 0, blockRate: moduleInterventionRate("1.4", modules["1.4"]) },
+    { id: "1.5", name: "Multi-Model Gov.", total: modules["1.5"]?.total ?? 0, blockRate: moduleInterventionRate("1.5", modules["1.5"]) },
+    { id: "1.6", name: "Isolation & Kill-Sw", total: modules["1.6"]?.total ?? 0, blockRate: moduleInterventionRate("1.6", modules["1.6"]) },
+    { id: "1.7", name: "Output Guardrails", total: modules["1.7"]?.total ?? 0, blockRate: moduleInterventionRate("1.7", modules["1.7"]) },
   ];
 
+  const intakeHint = PERIOD_INTAKE_HINTS[period] || PERIOD_INTAKE_HINTS["24h"];
+
   const heroMetrics = [
-    { icon: Activity, label: "Total events", value: socKpis ? total.toLocaleString() : "--", hint: "24 hour intake across the mesh", tone: "teal" },
+    { icon: Activity, label: "Total events", value: socKpis ? total.toLocaleString() : "--", hint: intakeHint, tone: "teal" },
     { icon: AlertTriangle, label: "Block rate", value: socKpis ? `${blockRate}%` : "--", hint: "Requests denied before model execution", tone: "red" },
     { icon: ShieldCheck, label: "Redaction rate", value: socKpis ? `${redactRate}%` : "--", hint: "Requests sanitized instead of blocked", tone: "amber" },
     { icon: ShieldAlert, label: "Critical events", value: socKpis ? String(critical) : "--", hint: "High urgency incidents requiring operator review", tone: "blue" },
@@ -989,9 +1041,34 @@ export function AIMeshFirewallOverview({ onTabChange }) {
               </button>
             </div>
 
-            <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {heroMetrics.map((metric) => (
-                <HeroMetric key={metric.label} icon={metric.icon} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} loading={loading} />
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Time lens</span>
+              {["1h", "6h", "24h", "7d", "30d"].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  aria-pressed={period === p}
+                  className={`cursor-pointer rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
+                    period === p
+                      ? "bg-teal-600 text-white dark:bg-teal-500"
+                      : "border border-slate-200 bg-white/80 text-slate-600 hover:bg-white dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300 dark:hover:bg-slate-900"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {heroMetrics.map((metric, i) => (
+                <motion.div
+                  key={metric.label}
+                  initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, delay: Math.min(i * 0.06, 0.3), ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <HeroMetric icon={metric.icon} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} loading={loading} />
+                </motion.div>
               ))}
             </div>
           </div>
@@ -1009,7 +1086,6 @@ export function AIMeshFirewallOverview({ onTabChange }) {
               <div className="mt-6 grid gap-3">
                 {[
                   { label: "Protected submodules", value: moduleKpis ? `${Object.values(modules).filter((m) => m.total > 0).length} / 7` : "-- / 7", detail: moduleKpis ? `${Object.values(modules).filter((m) => m.total > 0).length === 7 ? "All" : "Active"} firewall lanes online` : "Awaiting data" },
-                  { label: "Allow vs enforce mix", value: socKpis ? `${Math.max(0, total - blocked - redacted)} / ${blocked + redacted}` : "--", detail: "Allowed requests versus intervention events" },
                   { label: "Response posture", value: socKpis?.avg_latency_ms ? `~${Math.round(socKpis.avg_latency_ms)}ms` : "--", detail: "Average decision latency across live traffic" },
                 ].map((item) => (
                   <div key={item.label} className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/45">
@@ -1043,41 +1119,13 @@ export function AIMeshFirewallOverview({ onTabChange }) {
         </div>
       </section>
 
-      <div className="ai-mesh-card rounded-[28px] p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-300">Live focus</div>
-              <h3 className="mt-2 text-xl font-semibold text-slate-950 dark:text-slate-50">Current operator priorities</h3>
-            </div>
-            <Activity className="h-5 w-5 text-teal-600 dark:text-teal-300" />
-          </div>
-
-          <div className="mt-6 space-y-3">
-            {[
-              { title: "Watch ingress pressure", detail: "Authentication, rate limiting, and request identity still define the dominant control surface.", value: socKpis ? `${blockRate}%` : "--" },
-              { title: "Keep redaction visible", detail: "Sanitized flows are operationally different from blocked flows; they need a separate operator lane.", value: socKpis ? `${redactRate}%` : "--" },
-              { title: "Escalate criticals early", detail: "Model isolation and output guardrails become the priority once critical events rise.", value: socKpis ? String(critical) : "--" },
-            ].map((item) => (
-              <div key={item.title} className="rounded-2xl border border-slate-200/80 bg-white/75 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/45">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.title}</div>
-                    <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.detail}</div>
-                  </div>
-                  <div className="rounded-full bg-slate-950 px-3 py-1 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-950">{item.value}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-      </div>
-
       <section className="space-y-5">
         <SectionHeading
           eyebrow="Telemetry"
           title="Traffic and enforcement overview"
           description="The top-level charts stay focused on operator decisions: volume, intervention mix, and where the firewall is absorbing pressure right now."
         />
-        <GlobalTrafficOverview socKpis={socKpis} timeSeriesData={timeSeriesData} loading={loading} compact={compact} />
+        <GlobalTrafficOverview socKpis={socKpis} enforcementSeries={enforcementSeries} intakeTotal={intakeTotal} loading={loading} compact={compact} />
       </section>
 
       <section className="space-y-5">
@@ -1085,11 +1133,30 @@ export function AIMeshFirewallOverview({ onTabChange }) {
           eyebrow="Submodules"
           title="AI Mesh Firewall command grid"
           description="Each submodule card exposes the operating surface, pressure signal, and quickest next action without forcing a context switch into raw tables first."
-          action={<span className="text-sm text-slate-500 dark:text-slate-400">{subModules.length} active modules</span>}
+          action={<span className="text-sm text-slate-500 dark:text-slate-400">{moduleKpis ? `${modulesWithTraffic} / 7 modules with traffic` : `${subModules.length} / 7 modules`}</span>}
         />
+        <div className="flex items-start gap-2 rounded-2xl border border-amber-200/70 bg-amber-50/60 px-4 py-2.5 text-xs leading-5 text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-200">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            <strong>1.1 is the gateway intake superset</strong> (it sees every request). Lanes <strong>1.2–1.7 are independent detection lenses</strong> — a single event can match several at once, so their <em>Matched</em> counts overlap and do not sum to total intake. When a lane equals 1.1 (e.g. 1.3 mirroring intake), it means all traffic in this window was that lane&rsquo;s type — not a duplicate count.
+          </span>
+        </div>
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {subModules.map((module) => (
-            <SubModuleCard key={module.id} {...module} chartData={getModuleChartData(module.id)} onViewDetails={() => onTabChange?.(module.tabId)} />
+          {subModules.map((module, i) => (
+            <motion.div
+              key={module.id}
+              initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.4, delay: Math.min(i * 0.05, 0.25), ease: [0.22, 1, 0.36, 1] }}
+            >
+              <SubModuleCard
+                {...module}
+                chartData={getModuleChartData(module.id)}
+                curveSubtitle={MODULE_PRESSURE_CURVE_LABELS[module.id] || "Pressure over 24h"}
+                onViewDetails={() => onTabChange?.(module.tabId)}
+              />
+            </motion.div>
           ))}
 
           <button
@@ -1132,8 +1199,8 @@ export function AIMeshFirewallOverview({ onTabChange }) {
       <section className="space-y-5">
         <SectionHeading
           eyebrow="Cross-module pressure"
-          title="Traffic and block-rate comparisons"
-          description="Side-by-side view of event volume and intervention rate for every firewall lane — quickly spot which modules are under the heaviest load."
+          title="Traffic and intervention comparisons"
+          description="Side-by-side view of event volume and intervention rate for every firewall lane. Lanes overlap — module 1.1 is the gateway intake superset; specialty modules 1.2–1.7 are non-exclusive lenses on the same traffic."
         />
         <div className="grid gap-6 xl:grid-cols-[1.4fr,1fr]">
           <ModuleComparisonChart data={activityData} compact={compact} />

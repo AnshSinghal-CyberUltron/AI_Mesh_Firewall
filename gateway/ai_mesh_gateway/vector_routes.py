@@ -38,16 +38,64 @@ router = APIRouter(prefix="/v1/vector", tags=["Vector Operations"])
 # ────────────────────────────────────────────────────────────────────────────
 
 
+def inject_vector_globals(
+    *,
+    rag_pipeline=None,
+    vector_clients=None,
+    vector_provider_sync=None,
+    telemetry=None,
+    policy_sync=None,
+    config=None,
+    redis_client=None,
+):
+    """Populate this module's singleton references at gateway startup.
+
+    The /v1/vector/* data plane resolves its provider/pipeline/policy/redis
+    handles from module-level globals (RAG_PIPELINE, VECTOR_PROVIDER_SYNC, …).
+    Those stay ``None`` unless startup injects the gateway's already-built
+    singletons here; without this call every endpoint short-circuits (e.g.
+    /query → 400 no_provider because VECTOR_PROVIDER_SYNC is None). main.py
+    must call this once, after its singletons are constructed, passing them by
+    keyword. Only non-None values overwrite an existing global so a partial
+    call never clobbers a previously-wired handle.
+    """
+    global RAG_PIPELINE, VECTOR_CLIENTS, VECTOR_PROVIDER_SYNC
+    global TELEMETRY, POLICY_SYNC, CONFIG, REDIS_CLIENT
+    if rag_pipeline is not None:
+        RAG_PIPELINE = rag_pipeline
+    if vector_clients is not None:
+        VECTOR_CLIENTS = vector_clients
+    if vector_provider_sync is not None:
+        VECTOR_PROVIDER_SYNC = vector_provider_sync
+    if telemetry is not None:
+        TELEMETRY = telemetry
+    if policy_sync is not None:
+        POLICY_SYNC = policy_sync
+    if config is not None:
+        CONFIG = config
+    if redis_client is not None:
+        REDIS_CLIENT = redis_client
+
+
 def _inject_vector_globals(app, globals_dict):
-    """Called at gateway startup to inject references to gateway services into this module."""
-    globals_dict["RAG_PIPELINE"] = app.state.get("rag_pipeline")
-    globals_dict["VECTOR_CLIENTS"] = app.state.get("vector_clients", {})
-    globals_dict["VECTOR_PROVIDER_SYNC"] = app.state.get("vector_provider_sync")
-    globals_dict["TELEMETRY"] = app.state.get("telemetry")
-    globals_dict["POLICY_SYNC"] = app.state.get("policy_sync")
-    globals_dict["CONFIG"] = app.state.get("config", {})
-    globals_dict["REDIS_CLIENT"] = app.state.get("redis_client")
-    # globals will be populated at init-time
+    """Backwards-compatible shim for the original (never-called) signature.
+
+    The prior implementation read ``app.state.get(...)``; Starlette's
+    ``app.state`` is a plain attribute namespace with no ``.get`` method, so
+    this path would have raised had it ever been invoked. Preserved only so an
+    existing caller (if any) does not break — it now forwards to
+    ``inject_vector_globals`` using getattr against app.state.
+    """
+    state = getattr(app, "state", None)
+    inject_vector_globals(
+        rag_pipeline=getattr(state, "rag_pipeline", None),
+        vector_clients=getattr(state, "vector_clients", None),
+        vector_provider_sync=getattr(state, "vector_provider_sync", None),
+        telemetry=getattr(state, "telemetry", None),
+        policy_sync=getattr(state, "policy_sync", None),
+        config=getattr(state, "config", None),
+        redis_client=getattr(state, "redis_client", None),
+    )
 
 
 RAG_PIPELINE = None
@@ -57,6 +105,13 @@ TELEMETRY = None
 POLICY_SYNC = None
 CONFIG = {}
 REDIS_CLIENT = None
+
+# M-12 — serialize lazy Redis client construction. Without this lock,
+# concurrent first-requests can each pass the ``REDIS_CLIENT is None``
+# check and independently build a connection pool, leaking pools and
+# racing the global assignment. The lock makes the lazy init effectively
+# single-flight; the fast path (client already set) still avoids it.
+_REDIS_INIT_LOCK = asyncio.Lock()
 
 
 def _resolve_runtime_vector_client(provider_type: str, provider_config: dict[str, Any]):
@@ -109,6 +164,35 @@ def _resolve_runtime_vector_client(provider_type: str, provider_config: dict[str
     return None
 
 
+# M-10 — cross-tenant guard for user-supplied collection names.
+#
+# Every vector op is namespaced by the vector client as
+# ``{project_id}__{collection_name}`` (see vector_client._build_collection_name),
+# where ``project_id`` is derived from the *authenticated* token. The tenant
+# boundary is therefore the ``__`` separator. A caller who smuggles ``__`` into
+# ``collection_name`` (e.g. ``victim_project__secret``) escapes their own prefix
+# and can address another org's namespace. This mirrors main.py's
+# ``_is_valid_collection_name`` (the canonical RAG-path guard) so the
+# portable vector routes enforce the same isolation contract.
+import re as _re
+
+_COLLECTION_NAME_RE = _re.compile(r"[A-Za-z0-9._-]+")
+
+
+def _is_owned_collection_name(name: str) -> bool:
+    """Return True only for collection names that stay inside the caller's tenant prefix.
+
+    Rejects the ``__`` tenant separator (cross-tenant namespace injection),
+    over-long names, and any non-allowlisted characters. Empty names are
+    rejected by callers before this point.
+    """
+    if not name or "__" in name:
+        return False
+    if len(name) > 128:
+        return False
+    return bool(_COLLECTION_NAME_RE.fullmatch(name))
+
+
 # ────────────────────────────────────────────────────────────────────────────
 #  AUTH + ORG RESOLUTION
 # ────────────────────────────────────────────────────────────────────────────
@@ -129,19 +213,26 @@ async def _ensure_redis_client():
     precedence and this fallback is a no-op.
     """
     global REDIS_CLIENT
+    # Fast path: already initialized — avoid taking the lock at all.
     if REDIS_CLIENT is not None:
         return REDIS_CLIENT
-    try:
-        import os
-        import redis.asyncio as _redis_async
-        url = os.environ.get("REDIS_URL") or os.environ.get("GATEWAY_REDIS_URL")
-        if not url:
+    # M-12 — guard the lazy init with an asyncio.Lock so concurrent callers
+    # don't each create a connection pool. Re-check inside the lock because
+    # another coroutine may have populated REDIS_CLIENT while we waited.
+    async with _REDIS_INIT_LOCK:
+        if REDIS_CLIENT is not None:
+            return REDIS_CLIENT
+        try:
+            import os
+            import redis.asyncio as _redis_async
+            url = os.environ.get("REDIS_URL") or os.environ.get("GATEWAY_REDIS_URL")
+            if not url:
+                return None
+            REDIS_CLIENT = _redis_async.from_url(url, decode_responses=True)
+            return REDIS_CLIENT
+        except Exception as exc:  # pragma: no cover - defensive
+            LOG.warning("vector_routes lazy redis init failed: %s", exc)
             return None
-        REDIS_CLIENT = _redis_async.from_url(url, decode_responses=True)
-        return REDIS_CLIENT
-    except Exception as exc:  # pragma: no cover - defensive
-        LOG.warning("vector_routes lazy redis init failed: %s", exc)
-        return None
 
 
 async def _resolve_org_from_token(authorization: Optional[str]) -> Optional[dict]:
@@ -347,9 +438,27 @@ async def query_vector_db(
 
         # Parse request body
         body = await request.json()
-        query_text = body.get("query", "").strip()
-        collection_name = body.get("collection_name", "documents").strip()
-        n_results = int(body.get("n_results", 5))
+        # M-12 — type-confusion hardening: a non-object body (list/str/number)
+        # or non-string/non-int fields must yield a clean 400, never a 500 from
+        # calling .strip()/int() on the wrong type.
+        if not isinstance(body, dict):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "bad_request", "code": "invalid_body"},
+            )
+        _query_raw = body.get("query", "")
+        query_text = _query_raw.strip() if isinstance(_query_raw, str) else ""
+        _collection_raw = body.get("collection_name", "documents")
+        collection_name = (
+            _collection_raw.strip() if isinstance(_collection_raw, str) else ""
+        )
+        try:
+            n_results = int(body.get("n_results", 5))
+        except (TypeError, ValueError, OverflowError):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "bad_request", "code": "invalid_n_results"},
+            )
         where_filter = body.get("where")
 
         if not query_text:
@@ -358,10 +467,47 @@ async def query_vector_db(
                 content={"error": "query required"},
             )
 
+        # Bound query length so an oversized prompt can't drive an expensive
+        # embedding call or starve the firewall pipeline. Mirrors the RAG path's
+        # GATEWAY_RAG_MAX_QUERY_LENGTH; falls back to a safe default when the
+        # gateway config has not been injected.
+        try:
+            max_query_length = int((CONFIG or {}).get("rag_max_query_length", 2000) or 2000)
+        except (TypeError, ValueError):
+            max_query_length = 2000
+        if max_query_length > 0 and len(query_text) > max_query_length:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "query_too_long",
+                    "message": f"Query exceeds maximum length of {max_query_length} characters",
+                },
+            )
+
         if n_results < 1 or n_results > 1000:
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"error": "n_results must be between 1 and 1000"},
+            )
+
+        # M-10 — org-ownership gate on the user-supplied collection name.
+        # The query is namespaced by the vector client under the caller's
+        # authenticated project_id ({project_id}__{collection_name}). Reject
+        # any collection name that carries the "__" tenant separator (or other
+        # disallowed characters), which would let a caller escape their own
+        # prefix and read another org's namespace. Legitimate single-tenant
+        # names (e.g. "documents", "policy-docs") pass unchanged.
+        if not _is_owned_collection_name(collection_name):
+            LOG.warning(
+                "Rejected cross-tenant collection access: org=%s collection=%r",
+                org_id, collection_name,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={
+                    "error": "forbidden",
+                    "message": "Collection is not accessible for this organization",
+                },
             )
 
         # Resolve org's vector provider config
@@ -377,7 +523,10 @@ async def query_vector_db(
             )
 
         provider_type = provider_config.get("provider_type", "pinecone")
-        project_id = auth_context.get("project_id", org_id)
+        # B6: org-isolated vector namespace — bind to the immutable org_id, not the
+        # client-settable project_id (same format as main._org_ns_project_id so
+        # /v1/vector/* and /v1/rag/* land in the same namespace for a given org).
+        project_id = f"org{org_id}-{auth_context.get('project_id') or 'default'}"
 
         # Execute query through RAG Firewall
         if RAG_PIPELINE is None:
@@ -391,6 +540,15 @@ async def query_vector_db(
         middleware_auth = getattr(request.state, "auth_context", None)
         org_slug = middleware_auth.org_slug if middleware_auth else "default"
 
+        # M-04: actor identity for actor-scoped policies (ranker-stage filtering).
+        actor = None
+        if middleware_auth is not None or user_id is not None:
+            actor = {
+                "user_id": getattr(middleware_auth, "user_id", None) or user_id,
+                "agent_id": getattr(middleware_auth, "prefix", None) or "",
+                "roles": list(getattr(middleware_auth, "roles", None) or []),
+            }
+
         try:
             rag_verdict = await RAG_PIPELINE.execute(
                 query_text=query_text,
@@ -400,15 +558,14 @@ async def query_vector_db(
                 n_results=n_results,
                 where_filter=where_filter,
                 policy=POLICY_SYNC.get_policies(org_slug) if POLICY_SYNC else {},
+                actor=actor,
             )
         except Exception as exc:
             LOG.exception("RAG pipeline execution failed: %s", exc)
+            # Never surface the raw embedder/litellm exception to the client.
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                content={
-                    "error": "pipeline_error",
-                    "message": str(exc),
-                },
+                content={"error": "pipeline_error"},
             )
 
         # Check verdict action
@@ -464,9 +621,10 @@ async def query_vector_db(
         )
     except Exception as exc:
         LOG.exception("Vector query failed: %s", exc)
+        # Generic body — keep raw detail server-side (logged above) only.
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"error": "internal_error", "message": str(exc)},
+            content={"error": "internal_error"},
         )
 
 
@@ -527,8 +685,35 @@ async def upsert_vector_documents(
         user_id = auth_context.get("user_id")
 
         body = await request.json()
+        if not isinstance(body, dict):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "bad_request", "code": "invalid_body"},
+            )
         documents = body.get("documents", [])
-        collection_name = body.get("collection_name", "documents").strip()
+        _collection_raw = body.get("collection_name", "documents")
+        collection_name = (
+            _collection_raw.strip() if isinstance(_collection_raw, str) else ""
+        )
+
+        # M-10 — org-ownership gate on the user-supplied collection name.
+        # The upsert is namespaced by the vector client under the caller's
+        # authenticated project_id ({project_id}__{collection_name}). Reject any
+        # collection name carrying the "__" tenant separator (or other
+        # disallowed characters) so a caller cannot write into another org's
+        # namespace via a crafted collection name.
+        if not _is_owned_collection_name(collection_name):
+            LOG.warning(
+                "Rejected cross-tenant collection access: org=%s collection=%r",
+                org_id, collection_name,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={
+                    "error": "forbidden",
+                    "message": "Collection is not accessible for this organization",
+                },
+            )
 
         if not documents:
             return JSONResponse(
@@ -568,6 +753,42 @@ async def upsert_vector_documents(
                 },
             )
 
+        # I7: aggregate-char cap (parity with /v1/rag/ingest + /v1/embeddings) so a
+        # batch under the doc-count limit can't still exhaust the worker with a few
+        # huge documents. R12: count text + id + metadata (not just text) — a small
+        # `text` with a multi-MB `metadata`/`id` blob otherwise slipped the cap and
+        # still amplified memory/payload downstream.
+        _max_chars = int(os.getenv("VECTOR_UPSERT_MAX_CHARS", "2000000"))
+
+        def _doc_char_weight(d):
+            if not isinstance(d, dict):
+                return 0
+            w = len(str(d.get("text", ""))) + len(str(d.get("id", "")))
+            _m = d.get("metadata")
+            if _m is not None:
+                w += len(str(_m))
+            return w
+
+        if sum(_doc_char_weight(d) for d in documents) > _max_chars:
+            return JSONResponse(
+                status_code=413,
+                content={"error": "payload_too_large", "code": "vector_input_too_large", "max_chars": _max_chars},
+            )
+
+        # Each document must be an OBJECT. A list element that is a string/int/
+        # null would raise AttributeError on the ``.get()`` calls below (-> 500);
+        # reject malformed elements with a clean 400 instead. (Checked after the
+        # size cap so an oversized list is rejected without iterating it.)
+        if not all(isinstance(d, dict) for d in documents):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "bad_request",
+                    "message": "each document must be an object",
+                    "code": "invalid_documents",
+                },
+            )
+
         # Resolve provider
         provider_config = await _resolve_vector_provider_for_org(org_id)
         if not provider_config:
@@ -580,7 +801,10 @@ async def upsert_vector_documents(
             )
 
         provider_type = provider_config.get("provider_type", "pinecone")
-        project_id = auth_context.get("project_id", org_id)
+        # B6: org-isolated vector namespace — bind to the immutable org_id, not the
+        # client-settable project_id (same format as main._org_ns_project_id so
+        # /v1/vector/* and /v1/rag/* land in the same namespace for a given org).
+        project_id = f"org{org_id}-{auth_context.get('project_id') or 'default'}"
 
         # Get vector client
         vector_client = _resolve_runtime_vector_client(provider_type, provider_config)
@@ -640,9 +864,11 @@ async def upsert_vector_documents(
 
         except Exception as exc:
             LOG.exception("Vector upsert failed: %s", exc)
+            # Mirror the delete handler: generic body, no raw embedder/
+            # litellm exception text leaked to the client.
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                content={"error": "upsert_failed", "message": str(exc)},
+                content={"error": "upsert_failed"},
             )
 
     except json.JSONDecodeError:
@@ -698,13 +924,53 @@ async def delete_vector_documents(
         user_id = auth_context.get("user_id")
 
         body = await request.json()
+        if not isinstance(body, dict):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "bad_request", "code": "invalid_body"},
+            )
         doc_ids = body.get("document_ids", [])
-        collection_name = body.get("collection_name", "documents").strip()
+        _collection_raw = body.get("collection_name", "documents")
+        collection_name = (
+            _collection_raw.strip() if isinstance(_collection_raw, str) else ""
+        )
+
+        # M-10 — org-ownership gate on the user-supplied collection name.
+        # The delete is namespaced by the vector client under the caller's
+        # authenticated project_id ({project_id}__{collection_name}). Reject any
+        # collection name carrying the "__" tenant separator (or other
+        # disallowed characters) so a caller cannot delete from another org's
+        # namespace via a crafted collection name.
+        if not _is_owned_collection_name(collection_name):
+            LOG.warning(
+                "Rejected cross-tenant collection access: org=%s collection=%r",
+                org_id, collection_name,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={
+                    "error": "forbidden",
+                    "message": "Collection is not accessible for this organization",
+                },
+            )
 
         if not doc_ids:
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"error": "document_ids required"},
+            )
+        # R12 (#10): bound the delete batch — an unbounded document_ids list is a
+        # memory/amplification vector symmetric to the upsert cap (I7).
+        if not isinstance(doc_ids, list):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "bad_request", "code": "invalid_document_ids", "message": "document_ids must be a list"},
+            )
+        _max_delete = int(os.getenv("VECTOR_DELETE_MAX_IDS", "10000"))
+        if len(doc_ids) > _max_delete:
+            return JSONResponse(
+                status_code=413,
+                content={"error": "payload_too_large", "code": "too_many_document_ids", "max_ids": _max_delete},
             )
 
         provider_config = await _resolve_vector_provider_for_org(org_id)
@@ -715,7 +981,10 @@ async def delete_vector_documents(
             )
 
         provider_type = provider_config.get("provider_type", "pinecone")
-        project_id = auth_context.get("project_id", org_id)
+        # B6: org-isolated vector namespace — bind to the immutable org_id, not the
+        # client-settable project_id (same format as main._org_ns_project_id so
+        # /v1/vector/* and /v1/rag/* land in the same namespace for a given org).
+        project_id = f"org{org_id}-{auth_context.get('project_id') or 'default'}"
 
         vector_client = _resolve_runtime_vector_client(provider_type, provider_config)
         if not vector_client:

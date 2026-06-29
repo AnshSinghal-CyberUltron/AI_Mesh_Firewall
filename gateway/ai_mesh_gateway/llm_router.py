@@ -5,9 +5,11 @@ plus smart multi-dimensional model selection.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, TYPE_CHECKING
@@ -26,6 +28,11 @@ from ai_mesh_shared.litellm_byok import (
     resolve_bedrock_model_id,
 )
 
+from ai_mesh_gateway.platform_models import (
+    is_platform_model_name,
+    resolve_platform_bedrock_model,
+)
+
 from litellm.exceptions import (
     APIConnectionError,
     APIError,
@@ -39,6 +46,27 @@ from litellm.exceptions import (
     ServiceUnavailableError,
     Timeout,
 )
+
+# C7: litellm's Router raises RouterRateLimitError / RouterRateLimitErrorBasic when
+# no healthy deployment is available (e.g. a model whose only upstream returns 404
+# triggers a cooldown). These subclass ONLY ValueError, so they bypass both the
+# litellm.exceptions catch and the exact-type _EXCEPTION_STATUS_MAP below, falling
+# through to the bare `except Exception` that returns a generic 502 internal_error.
+# A "no healthy deployment / throttle" condition is honestly a 503 — collect the
+# classes defensively (tolerating litellm version drift) so we can catch them
+# explicitly before the bare except. An empty tuple `except ()` simply matches
+# nothing, preserving the old behavior if the import path ever changes.
+_ROUTER_THROTTLE_EXCS: tuple = ()
+try:
+    from litellm.types.router import RouterRateLimitError as _RRLE
+    _ROUTER_THROTTLE_EXCS += (_RRLE,)
+except Exception:  # pragma: no cover - litellm version drift
+    pass
+try:
+    from litellm.types.router import RouterRateLimitErrorBasic as _RRLEB
+    _ROUTER_THROTTLE_EXCS += (_RRLEB,)
+except Exception:  # pragma: no cover - litellm version drift
+    pass
 
 LOG = logging.getLogger("gateway.llm_router")
 
@@ -62,6 +90,25 @@ _PASSTHROUGH_PARAMS = (
     "temperature", "top_p", "max_tokens", "stop",
     "presence_penalty", "frequency_penalty", "tools",
     "tool_choice", "response_format", "seed", "n",
+    # streaming #7: when the client sends stream_options.include_usage, the
+    # OpenAI contract requires a terminal SSE chunk carrying ``usage``. Forward
+    # it so providers that honor it emit that usage chunk natively. The gateway
+    # also synthesizes one in stream_with_finalize as a fallback for providers
+    # that do not.
+    "stream_options",
+    # SDK-compat: forward GPT-5.x / function-calling params to the provider.
+    # All are pure passthrough (no content) — the firewall runs pre-LLM and is
+    # unaffected; tool-call scanning (G7) inspects tool_calls regardless of these.
+    "logprobs", "top_logprobs", "max_completion_tokens",
+    "parallel_tool_calls", "reasoning", "reasoning_effort", "user",
+)
+
+# OpenAI Responses API top-level params forwarded to litellm.aresponses.
+_RESPONSES_PASSTHROUGH_PARAMS = (
+    "instructions", "max_output_tokens", "temperature", "top_p",
+    "tools", "tool_choice", "reasoning", "text", "truncation",
+    "store", "previous_response_id", "metadata", "parallel_tool_calls",
+    "include", "user",
 )
 
 # Keep compatibility with historical or UI-facing aliases.
@@ -69,7 +116,81 @@ _MODEL_ALIAS_MAP = {
     "bedrock-gpt-oss-120b-long-context": "bedrock-gpt-oss-120b",
 }
 
+# Default embedding deployment name. A request with no model (or an unknown
+# alias the org has not provisioned) must NOT silently fall through to this
+# deployment; it is only the explicit default and the baseline allowed name.
+_DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+
+# Defensive upper bound on the total characters across an embedding request's
+# `input` items. Mirrors the chat/output-guard input ceilings: without it a
+# multi-megabyte payload is forwarded to the upstream deployment (and, on
+# failure, re-tried across fallbacks) — a resource-exhaustion vector.
+_MAX_EMBEDDING_INPUT_CHARS = 1_000_000
+
+# R5: generic, client-safe messages keyed by HTTP status. Raw LiteLLM exception
+# text leaks fallback topology, provider names, API keys, and OpenRouter user_id —
+# it must be logged server-side only, never returned to the client.
+_CLIENT_SAFE_STATUS_MESSAGES = {
+    400: "The request was invalid.",
+    401: "Upstream authentication failed.",
+    404: "The requested model is not available.",
+    429: "Rate limit or budget exceeded. Please retry later.",
+    502: "The upstream inference request failed.",
+    503: "The upstream inference service is unavailable.",
+    504: "The upstream inference request timed out.",
+}
+
+
+_REDACTED_TOPOLOGY_KEYWORDS = (
+    "Available Model Group Fallbacks",
+    "Model Group",
+    "model_group",
+    "Fallbacks",
+    "fallback chain",
+)
+
+
+def _scrub_internal_topology(text: Any) -> str:
+    """M8: redact internal model-group / fallback-chain topology from a string
+    BEFORE it is logged. Client responses are already generic (see
+    _sanitize_exception_message); this keeps the same internal names
+    (e.g. "Model Group=...", "Fallbacks=[...]") out of server-side logs/telemetry
+    too, since logs may feed dashboards (compliance)."""
+    if not text:
+        return str(text) if text is not None else ""
+    out = str(text)
+    for kw in _REDACTED_TOPOLOGY_KEYWORDS:
+        out = out.replace(kw, "[REDACTED]")
+    return out
+
+
+def _sanitize_exception_message(exc: Exception, status: int | None = None) -> str:
+    """R5: Return a generic, client-safe error string.
+
+    NEVER includes provider/topology/api-key/user_id details from the raw
+    exception. Callers MUST log the raw ``exc`` server-side separately.
+    """
+    if status is not None and status in _CLIENT_SAFE_STATUS_MESSAGES:
+        return _CLIENT_SAFE_STATUS_MESSAGES[status]
+    mapped = _EXCEPTION_STATUS_MAP.get(type(exc))
+    if mapped is not None and mapped in _CLIENT_SAFE_STATUS_MESSAGES:
+        return _CLIENT_SAFE_STATUS_MESSAGES[mapped]
+    return "The upstream inference request failed."
+
+
 _SENSITIVITY_ORDER = {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
+
+
+def _req_sensitivity_level(value: object) -> int:
+    """Caller data_sensitivity -> level, FAIL-CLOSED: an unknown non-empty value
+    ('topsecret') is treated as the most restrictive level, not 0 (public), so it
+    cannot silently route restricted data onto a public model."""
+    key = str(value or "").strip().lower()
+    if key in _SENSITIVITY_ORDER:
+        return _SENSITIVITY_ORDER[key]
+    if key in ("", "public"):
+        return 0
+    return max(_SENSITIVITY_ORDER.values())
 
 _DEFAULT_ROUTING_WEIGHTS = {
     "risk": 0.30,
@@ -102,6 +223,8 @@ class LLMRouter:
         self._config = config
         self._router: LiteLLMRouter | None = None
         self._active_model_names: list[str] = []
+        self._qualified_model_names: set[str] = set()  # H7: org::model routing keys
+        self._deployment_params: dict[str, dict] = {}   # Responses API: name -> resolved litellm_params (BYOK)
 
         #global litellm settings
         litellm.drop_params = config.get("litellm_drop_params", True)
@@ -124,13 +247,21 @@ class LLMRouter:
             )
 
     def _set_active_model_names(self, model_list: list[dict]) -> None:
+        # H7: use the BARE name (model_info.base_model_name) — clients send bare
+        # model names, so validation/active-name matching must stay un-qualified
+        # even though the litellm routing key is org-qualified.
         self._active_model_names = [
-            self._normalize_model_alias(entry.get("model_name", ""))
+            self._normalize_model_alias((entry.get("model_info") or {}).get("base_model_name") or entry.get("model_name", ""))
             for entry in model_list
-            if entry.get("model_name")
+            if (entry.get("model_info") or {}).get("base_model_name") or entry.get("model_name")
         ]
 
     def _resolve_runtime_model(self, requested_model: str) -> str:
+        if is_platform_model_name(requested_model):
+            raise ValueError(
+                f"Platform model '{requested_model}' cannot be routed via LiteLLM inference. "
+                "Use BedrockClient.converse for guard and adjudicator calls."
+            )
         if not self._active_model_names:
             return requested_model
         if requested_model in self._active_model_names:
@@ -141,6 +272,24 @@ class LLMRouter:
             return preferred_default
 
         return self._active_model_names[0]
+
+    def _qualify_like_primary(self, candidate_model: str, primary: str) -> str:
+        """Org-qualify a vetted-failover candidate with the SAME org prefix as the
+        primary routing key. H7 (#17): the compliant-chain retry previously routed
+        ``_resolve_runtime_model(candidate)`` — a BARE name — so a failover could be
+        resolved by the shared LiteLLM Router to a same-named PEER org's deployment
+        (and its BYOK key). Re-applying the primary's ``{org}::`` prefix keeps the
+        retry inside the requesting tenant. Fail-safe to bare when the qualified
+        deployment doesn't exist (mirrors ``_build_kwargs``)."""
+        runtime = self._resolve_runtime_model(candidate_model)
+        if "::" in str(runtime):
+            return runtime
+        _org = str(primary).split("::", 1)[0] if "::" in str(primary) else ""
+        if _org:
+            _q = f"{_org}::{runtime}"
+            if _q in self._qualified_model_names:
+                return _q
+        return runtime
 
     def _init_legacy(self, config: dict):
         """Backward-compat: use single upstream_llm_url as custom OpenAI-like base."""
@@ -160,13 +309,23 @@ class LLMRouter:
             return [{"model": m} for m in fallback_models] if fallback_models else None
 
         # LiteLLM Router expects: [{"primary-model": ["fallback-a", "fallback-b"]}]
+        # R2: defense-in-depth — never allow a reserved platform model
+        # (provider=internal / zeroshield-model) to be a primary or fallback target.
+        # P4: the global fallback map is the CHAT chain — never let an embedding
+        # deployment enter it, else a non-retryable chat 4xx (e.g. bad tool schema)
+        # fans out across embedding endpoints (wasted cross-type upstream calls).
+        # Embedding requests use their own per-request `_embedding_fallbacks_for`.
         model_names = [
             self._normalize_model_alias(entry.get("model_name", ""))
             for entry in model_list
             if entry.get("model_name")
+            and not self._is_reserved_model_entry(entry)
+            and not self._is_embedding_model_id(str((entry.get("litellm_params") or {}).get("model") or ""))
         ]
         if not model_names:
             return None
+        # Also drop any reserved alias that slipped into the configured fallback list.
+        fallback_models = [m for m in fallback_models if not is_platform_model_name(m)]
 
         configured_default = self._normalize_model_alias(self._config.get("litellm_default_model", "") or "")
         fallback_map = []
@@ -217,6 +376,15 @@ class LLMRouter:
         valid_models: list[dict] = []
         invalid_models: list[tuple[str, str]] = []
         for entry in model_list:
+            # R2: reserved platform models (provider=internal / zeroshield-model /
+            # legacy 120b aliases / bedrock guard ids) must never enter the router
+            # model_list — they are not org inference targets.
+            if self._is_reserved_model_entry(entry):
+                name = ""
+                if isinstance(entry, dict):
+                    name = str(entry.get("model_name") or (entry.get("litellm_params") or {}).get("model") or "")
+                LOG.info("Excluding reserved platform model '%s' from router reload", name or "unknown")
+                continue
             prepared = self._prepare_reload_entry(entry)
             ok, reason = self._validate_reload_model_entry(prepared)
             if ok:
@@ -282,6 +450,28 @@ class LLMRouter:
     def _normalize_model_alias(model: str) -> str:
         return _MODEL_ALIAS_MAP.get(model, model)
 
+    @staticmethod
+    def _is_reserved_model_entry(entry: dict) -> bool:
+        """R2: True when a model entry is a reserved platform model.
+
+        The platform guard/adjudicator/Tier-2 model (``zeroshield-model`` and its
+        legacy aliases, provider == 'internal') must NEVER be a routable or
+        fallback inference target for org traffic. Detect via provider tag OR a
+        reserved name on either the public ``model_name`` or the underlying
+        ``litellm_params.model`` id.
+        """
+        if not isinstance(entry, dict):
+            return False
+        if str(entry.get("provider") or "").strip().lower() == "internal":
+            return True
+        model_name = LLMRouter._normalize_model_alias(str(entry.get("model_name") or ""))
+        if is_platform_model_name(model_name):
+            return True
+        litellm_id = str((entry.get("litellm_params") or {}).get("model") or "")
+        if is_platform_model_name(LLMRouter._normalize_model_alias(litellm_id)):
+            return True
+        return False
+
     def _default_fallback_model(self) -> str:
         configured = self._config.get("litellm_default_model", "")
         return self._normalize_model_alias(configured or "gpt-4o-mini")
@@ -296,20 +486,133 @@ class LLMRouter:
             return await self._router.aembedding(**kwargs)
         return await litellm.aembedding(**kwargs)
 
+    def _resolve_responses_deployment(self, body: dict) -> tuple[str, dict | None]:
+        """Resolve (route_model_name, litellm_params) for a Responses request,
+        org-qualifying the model EXACTLY like _build_kwargs (H7). Returns
+        (resolved_name, params) — params is None when the requested model is not a
+        configured deployment for this org, so the caller maps it to a 404
+        model_not_found (the clean OpenAI model-name contract)."""
+        requested = self._normalize_model_alias(body.get("model") or self._default_fallback_model())
+        _org = str(body.get("_zs_org_slug") or "")
+        _qualified = f"{_org}::{requested}" if _org else ""
+        # Clean OpenAI model-name contract: the CLIENT's requested model must be a
+        # configured model for this org. Do NOT silently remap to the first active
+        # model (the legacy _resolve_runtime_model fallback) — return None so the
+        # caller emits a 404 model_not_found.
+        if (
+            requested not in self._active_model_names
+            and (not _qualified or _qualified not in self._qualified_model_names)
+            and requested not in self._deployment_params
+        ):
+            return requested, None
+        route_model = requested
+        if _org and "::" not in str(requested) and _qualified in self._qualified_model_names:
+            route_model = _qualified
+        params = self._deployment_params.get(route_model) or self._deployment_params.get(requested)
+        return route_model, (dict(params) if isinstance(params, dict) else None)
+
+    async def aresponses(self, body: dict, redacted_content: str | None = None) -> tuple[int, dict]:
+        """OpenAI Responses API (non-streaming). Returns (http_status, response_dict).
+
+        litellm.Router exposes no aresponses in this version, so route via
+        module-level ``litellm.aresponses`` with the org deployment's explicit
+        decrypted BYOK api_key/api_base (the byok_embedder pattern) — preserving
+        per-tenant key isolation. ``redacted_content`` (when input is a plain
+        string) replaces the input so the upstream model never sees raw PII."""
+        if redacted_content is not None and isinstance(body.get("input"), str):
+            body = {**body, "input": redacted_content}
+        route_model, params = self._resolve_responses_deployment(body)
+        if params is None:
+            return 404, {"error": {
+                "message": f"Model '{body.get('model')}' is not configured for this organization.",
+                "type": "invalid_request_error",
+                "code": "model_not_found",
+            }}
+        upstream_model = str(params.get("model") or route_model)
+        kwargs: dict = {"input": body.get("input"), "model": upstream_model}
+        if params.get("api_key"):
+            kwargs["api_key"] = params["api_key"]
+        if params.get("api_base"):
+            kwargs["api_base"] = params["api_base"]
+        for p in _RESPONSES_PASSTHROUGH_PARAMS:
+            if p in body and body[p] is not None:
+                kwargs[p] = body[p]
+        try:
+            resp = await litellm.aresponses(**kwargs)
+            return 200, (resp.model_dump() if hasattr(resp, "model_dump") else dict(resp))
+        except (BadRequestError, NotFoundError) as exc:
+            status = _EXCEPTION_STATUS_MAP.get(type(exc), 400)
+            return status, {"error": {"message": _sanitize_exception_message(exc, status), "type": type(exc).__name__, "code": status}}
+        except tuple(_EXCEPTION_STATUS_MAP.keys()) as exc:
+            status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
+            LOG.warning("litellm responses error [%s %d]: %s", type(exc).__name__, status, _scrub_internal_topology(exc))
+            return status, {"error": {"message": _sanitize_exception_message(exc, status), "type": type(exc).__name__, "code": status}}
+        except Exception as exc:  # noqa: BLE001
+            LOG.exception("Unexpected responses error")
+            return 502, {"error": {"message": _sanitize_exception_message(exc, 502), "type": "internal_error"}}
+
     def _apply_redaction(self, body: dict, redacted_content: str | None) -> dict:
-        """Replace last user message content with redacted version."""
+        """Redact PII/secrets in EVERY conversation message before the upstream call.
+
+        Previously this overwrote ONLY the last user message with the whole
+        redacted-conversation blob, which (a) dumped the entire role-prefixed
+        concatenation into that one slot and (b) left every EARLIER user turn with
+        its ORIGINAL raw content — so PII in any non-final turn reached the
+        upstream LLM verbatim, defeating the "the model never sees raw PII"
+        guarantee for any multi-turn chat (the common case for SDK/history replay).
+        ``redacted_content`` is now only a SIGNAL that input redaction fired; we
+        redact each message's content in place with the SAME deterministic
+        redactor the input scanner uses (patterns.redact_all), covering str and
+        multimodal text parts. System messages (instructions) are left untouched.
+        """
         if redacted_content is None or not body.get("messages"):
             return body
-        messages = list(body["messages"])
-        for i in range(len(messages) - 1, -1, -1):
-            if messages[i].get("role") == "user":
-                messages = (
-                    messages[:i]
-                    + [{"role": "user", "content": redacted_content}]
-                    + messages[i + 1:]
-                )
-                break
-        return {**body, "messages": messages}
+        try:
+            from patterns import redact_all
+        except ImportError:
+            from .patterns import redact_all
+
+        def _redact_msg_text(text: str) -> str:
+            # ``redact_all`` here is, by construction, WEAKER than the verdict-aware
+            # ``InputScanner.redact_pii`` that produced ``redacted_content`` (the
+            # authoritative display / pipeline-trace string): redact_all only masks a
+            # 10-digit phone when an adjacent label disambiguates it, whereas a
+            # Tier-2 / policy detector flags the same number from ANY phrasing
+            # ("call me at 8929554991", "8929554991 is my number"). That asymmetry
+            # forwarded the RAW value to the upstream LLM while the pipeline trace
+            # showed it masked — a silent PII leak. ``redacted_content`` is the source
+            # of truth for "what the firewall decided must never reach the model", so
+            # after redact_all we run a FAIL-CLOSED digit backstop: any run of 7+
+            # digits that ``redacted_content`` masked (i.e. it is absent there) but
+            # this message still carries raw is masked here too. Partial masks like
+            # ``***-***-4991`` keep only 4 digits, so they never re-trigger the rule,
+            # and a value left intact in ``redacted_content`` (a legitimate order id
+            # the firewall did NOT redact) stays intact here.
+            out = redact_all(text)
+            for run in set(re.findall(r"\d{7,}", text)):
+                if run not in redacted_content and run in out:
+                    out = out.replace(run, f"***-***-{run[-4:]}")
+            return out
+
+        new_messages = []
+        for m in body["messages"]:
+            if not isinstance(m, dict) or m.get("role") == "system":
+                new_messages.append(m)
+                continue
+            c = m.get("content")
+            if isinstance(c, str) and c:
+                new_messages.append({**m, "content": _redact_msg_text(c)})
+            elif isinstance(c, list):
+                parts = [
+                    ({**p, "text": _redact_msg_text(p["text"])}
+                     if isinstance(p, dict) and isinstance(p.get("text"), str) and p["text"]
+                     else p)
+                    for p in c
+                ]
+                new_messages.append({**m, "content": parts})
+            else:
+                new_messages.append(m)
+        return {**body, "messages": new_messages}
 
     def _build_kwargs(
         self,
@@ -321,14 +624,29 @@ class LLMRouter:
         requested_model = body.get("model") or self._default_fallback_model()
         requested_model = self._normalize_model_alias(requested_model)
         if inference_allowlist and requested_model not in inference_allowlist:
-            if len(inference_allowlist) == 1:
-                model = next(iter(inference_allowlist))
-            else:
-                model = requested_model
+            # M-03 (allowlist bypass) fix: the requested model is NOT in a present
+            # allowlist, so we MUST NOT use it (previously the multi-item branch fell
+            # through to ``model = requested_model``, allowing a non-allowlisted model).
+            # Fail closed: pick the first allowlisted model that is also runtime-resolvable,
+            # otherwise just the first allowlist member. Sort for deterministic selection.
+            # A rerouted/compliant-fallback model that IS allowed still hits the ``else``
+            # branch below and resolves normally, so reroute is unaffected.
+            allowed_candidates = sorted(inference_allowlist)
+            model = next(
+                (m for m in allowed_candidates if m in self._active_model_names),
+                allowed_candidates[0],
+            )
         else:
             model = self._resolve_runtime_model(requested_model)
         if inference_allowlist and model not in inference_allowlist:
-            model = requested_model
+            # Never re-assign a non-allowlisted model: if runtime resolution drifted
+            # outside the allowlist, fail closed onto an allowlisted (and, where possible,
+            # runtime-resolvable) model instead of the original requested_model.
+            allowed_candidates = sorted(inference_allowlist)
+            model = next(
+                (m for m in allowed_candidates if m in self._active_model_names),
+                allowed_candidates[0],
+            )
         if model != requested_model:
             LOG.warning(
                 "Requested model '%s' is not active in router model groups; remapping to '%s'",
@@ -336,8 +654,19 @@ class LLMRouter:
                 model,
             )
         messages = body.get("messages") or body.get("input") or []
+        # H7: org-qualify the routing key so litellm selects THIS org's deployment
+        # (and its BYOK key), never a same-named peer from another tenant. The
+        # router deployments are keyed `{org}::{model}`; the bare name stays
+        # everywhere else. Qualify only when the qualified key actually exists in
+        # the router (fail-safe to bare so a missing tag never 404s a request).
+        _org = str(body.get("_zs_org_slug") or "")
+        _route_model = model
+        if _org and "::" not in str(model):
+            _qualified = f"{_org}::{model}"
+            if _qualified in self._qualified_model_names:
+                _route_model = _qualified
         kwargs = {
-            "model": model,
+            "model": _route_model,
             "messages": messages,
             "stream": stream,
         }
@@ -369,6 +698,15 @@ class LLMRouter:
         allowlist = self._pop_inference_allowlist(body)
         compliant_chain = self._pop_compliant_fallback_chain(body)
         kwargs = self._build_kwargs(body, stream=False, inference_allowlist=allowlist)
+        # H2: disable LiteLLM's constructor cross-model auto-failover on the chat
+        # path. That map is built from the STATIC catalog and is blind to the live
+        # kill_switch:*/model_state:* override namespaces, so a retryable provider
+        # error (429/5xx/timeout) on the requested model could silently fail over
+        # to ANY org chat model — including one an operator kill-switched/isolated.
+        # The gateway's OWN compliant_chain (below, kill-switch/model-state
+        # re-checked per G6/B7) owns all vetted failover; num_retries still retries
+        # the SAME allowed model for transient errors.
+        kwargs["fallbacks"] = []
 
         if not kwargs['model']:
             return 400, {
@@ -386,8 +724,8 @@ class LLMRouter:
                 for candidate in compliant_chain:
                     if candidate == primary:
                         continue
-                    retry_kwargs = {**kwargs, "model": self._resolve_runtime_model(candidate)}
                     try:
+                        retry_kwargs = {**kwargs, "model": self._qualify_like_primary(candidate, primary)}
                         response = await self._execute_completion(retry_kwargs)
                         LOG.warning(
                             "Compliant fallback retry: %s -> %s after %s",
@@ -396,6 +734,13 @@ class LLMRouter:
                             type(exc).__name__,
                         )
                         return 200, response.model_dump()
+                    except ValueError as resolve_exc:
+                        LOG.warning(
+                            "Skipping unroutable compliant fallback candidate '%s': %s",
+                            candidate,
+                            resolve_exc,
+                        )
+                        continue
                     except (BadRequestError, NotFoundError):
                         continue
                     except tuple(_EXCEPTION_STATUS_MAP.keys()):
@@ -403,13 +748,14 @@ class LLMRouter:
             if allowlist:
                 status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
                 LOG.warning(
-                    "Org-scoped inference model '%s' failed (%s); no compliant fallback",
+                    "Org-scoped inference model '%s' failed (%s); no compliant fallback: %s",
                     kwargs.get("model"),
                     type(exc).__name__,
+                    exc,
                 )
                 return status, {
                     "error": {
-                        "message": str(exc),
+                        "message": _sanitize_exception_message(exc, status),
                         "type": type(exc).__name__,
                         "code": status,
                     }
@@ -428,10 +774,10 @@ class LLMRouter:
                     return 200, response.model_dump()
                 except tuple(_EXCEPTION_STATUS_MAP.keys()) as retry_exc:
                     status = _EXCEPTION_STATUS_MAP.get(type(retry_exc), 502)
-                    LOG.warning("LiteLLM fallback retry error [%s %d]: %s", type(retry_exc).__name__, status, retry_exc)
+                    LOG.warning("LiteLLM fallback retry error [%s %d]: %s", type(retry_exc).__name__, status, _scrub_internal_topology(retry_exc))
                     return status, {
                         "error": {
-                            "message": str(retry_exc),
+                            "message": _sanitize_exception_message(retry_exc, status),
                             "type": type(retry_exc).__name__,
                             "code": status,
                         }
@@ -440,42 +786,102 @@ class LLMRouter:
                     LOG.exception("Unexpected fallback retry LLM error")
                     return 502, {
                         "error": {
-                            "message": f"Upstream LLM request failed after fallback retry: {retry_exc}",
+                            "message": _sanitize_exception_message(retry_exc, 502),
                             "type": "internal_error",
                         }
                     }
             status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
-            LOG.warning("LiteLLM error [%s %d]: %s", type(exc).__name__, status, exc)
+            LOG.warning("LiteLLM error [%s %d]: %s", type(exc).__name__, status, _scrub_internal_topology(exc))
             return status, {
                 "error": {
-                    "message": str(exc),
+                    "message": _sanitize_exception_message(exc, status),
                     "type": type(exc).__name__,
                     "code": status,
                 }
             }
         except tuple(_EXCEPTION_STATUS_MAP.keys()) as exc:
             status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
-            LOG.warning("LiteLLM error [%s %d]: %s", type(exc).__name__, status, exc)
+            LOG.warning("LiteLLM error [%s %d]: %s", type(exc).__name__, status, _scrub_internal_topology(exc))
             return status, {
                 "error": {
-                    "message": str(exc),
+                    "message": _sanitize_exception_message(exc, status),
                     "type": type(exc).__name__,
                     "code": status,
+                }
+            }
+        except _ROUTER_THROTTLE_EXCS as exc:
+            # C7: no healthy deployment / router throttle -> honest 503, not 502.
+            LOG.warning("LiteLLM no-deployment/throttle [503]: %s", _scrub_internal_topology(exc))
+            return 503, {
+                "error": {
+                    "message": _sanitize_exception_message(exc, 503),
+                    "type": "ServiceUnavailableError",
+                    "code": 503,
                 }
             }
         except Exception as exc:
             LOG.exception("Unexpected LLM error")
             return 502, {
                 "error": {
-                    "message": f"Upstream LLM request failed: {exc}",
+                    "message": _sanitize_exception_message(exc, 502),
                     "type": "internal_error",
                 }
             }
-    
-    async def _stream_chunks_from_response(self, response) -> AsyncGenerator[str, None]:
-        """Emit SSE chunks from an active LiteLLM streaming response."""
+
+    async def _stream_chunks_from_response(self, response, client_model: str = "") -> AsyncGenerator[str, None]:
+        """Emit SSE chunks from an active LiteLLM streaming response.
+
+        ``client_model`` is the client-facing model name (the requested/org-facing
+        alias). When set, each chunk's ``model`` field is rewritten to it so the
+        RAW upstream provider id (e.g. "anthropic/claude-3-5-haiku") never leaks in
+        the stream — matching the non-stream MODEL-ID LEAK fix in proxy_chat.
+        """
         async for chunk in response:
             chunk_dict = chunk.model_dump()
+            # Defense-in-depth: a provider/litellm chunk must NEVER carry a raw
+            # error (traceback / container paths / platform model id / fallback
+            # topology) to the client. The try/except branches below already
+            # sanitize errors raised as exceptions; this catches an error that
+            # litellm surfaces as a passthrough CHUNK instead of raising.
+            if isinstance(chunk_dict, dict) and chunk_dict.get("error"):
+                LOG.warning("Sanitized provider error chunk in stream")
+                chunk_dict["error"] = {
+                    "message": _sanitize_exception_message(None, 502),
+                    "type": "upstream_error",
+                    "code": 502,
+                }
+            if isinstance(chunk_dict, dict):
+                if client_model and chunk_dict.get("model"):
+                    chunk_dict["model"] = client_model
+                # TOPOLOGY LEAK FIX: litellm/OpenRouter stream chunks also carry the
+                # upstream `provider` (e.g. "Amazon Bedrock") and cost-basis fields;
+                # strip them the same way the non-stream path does (not OpenAI-schema,
+                # not consumed by clients).
+                chunk_dict.pop("provider", None)
+                _u = chunk_dict.get("usage")
+                if isinstance(_u, dict):
+                    for _k in ("cost", "cost_details", "is_byok"):
+                        _u.pop(_k, None)
+                # OAS-LEAK (class): strip upstream-internal passthrough from each chunk
+                # — normalized id (gen-… -> chatcmpl-…), top-level `citations`
+                # (OpenRouter/Perplexity), and provider_specific_fields (reasoning_details
+                # .format = provider family) + native_finish_reason at choice + delta level.
+                _cid = chunk_dict.get("id")
+                if isinstance(_cid, str) and _cid and not _cid.startswith("chatcmpl-"):
+                    _p = _cid.split("-", 1)
+                    chunk_dict["id"] = "chatcmpl-" + (_p[1] if len(_p) == 2 else _cid)
+                chunk_dict.pop("citations", None)
+                # OAS-LEAK-STREAM-ROOT-PSF: litellm also exposes provider_specific_fields
+                # at the CHUNK ROOT (not just choice/delta) — strip it here too.
+                chunk_dict.pop("provider_specific_fields", None)
+                for _ch in (chunk_dict.get("choices") or []):
+                    if not isinstance(_ch, dict):
+                        continue
+                    _ch.pop("provider_specific_fields", None)
+                    _ch.pop("native_finish_reason", None)
+                    _delta = _ch.get("delta")
+                    if isinstance(_delta, dict):
+                        _delta.pop("provider_specific_fields", None)
             yield f"data: {json.dumps(chunk_dict)}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -484,6 +890,7 @@ class LLMRouter:
             body: dict,
             redacted_content: str | None = None,
             metrics: "StreamRunMetrics | None" = None,
+            echo_model: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """Streaming completion. Yields SSE-formatted chunks.
 
@@ -502,6 +909,13 @@ class LLMRouter:
         allowlist = self._pop_inference_allowlist(body)
         compliant_chain = self._pop_compliant_fallback_chain(body)
         kwargs = self._build_kwargs(body, stream=True, inference_allowlist=allowlist)
+        kwargs["fallbacks"] = []  # H2: see acompletion — gateway owns vetted failover, not LiteLLM's catalog-blind constructor map
+        # MODEL-ID LEAK FIX: the client-facing model name to echo in every streamed
+        # chunk, so the raw upstream id in kwargs["model"] never leaks. Prefer the
+        # caller-supplied echo_model (the ORIGINAL requested model, for parity with
+        # the non-stream path) and fall back to body["model"] (the resolved alias);
+        # strip any org-qualification ("org::model" -> "model").
+        _client_model = str(echo_model or body.get("model") or "").split("::")[-1]
 
         if not kwargs['model']:
             error_chunk = {
@@ -544,7 +958,7 @@ class LLMRouter:
 
         try:
             response = await self._execute_completion(kwargs)
-            async for chunk in self._stream_chunks_from_response(response):
+            async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
                 yield _track_chunk(chunk)
             local_metrics.completed = True
         except (BadRequestError, NotFoundError) as exc:
@@ -553,22 +967,33 @@ class LLMRouter:
                 for candidate in compliant_chain:
                     if candidate == primary:
                         continue
-                    retry_kwargs = {**kwargs, "model": self._resolve_runtime_model(candidate)}
                     try:
+                        retry_kwargs = {**kwargs, "model": self._qualify_like_primary(candidate, primary)}
                         local_metrics.fallback_before_first_token = True
                         response = await self._execute_completion(retry_kwargs)
-                        async for chunk in self._stream_chunks_from_response(response):
+                        async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
                             yield _track_chunk(chunk)
                         local_metrics.completed = True
                         return
+                    except ValueError as resolve_exc:
+                        LOG.warning(
+                            "Skipping unroutable compliant fallback candidate '%s': %s",
+                            candidate,
+                            resolve_exc,
+                        )
+                        continue
                     except (BadRequestError, NotFoundError):
                         continue
                     except tuple(_EXCEPTION_STATUS_MAP.keys()):
                         continue
             if allowlist:
                 status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
+                LOG.warning(
+                    "LiteLLM stream org-scoped error [%s %d]: %s",
+                    type(exc).__name__, status, exc,
+                )
                 error_chunk = {
-                    "error": {"message": str(exc), "type": type(exc).__name__, "code": status}
+                    "error": {"message": _sanitize_exception_message(exc, status), "type": type(exc).__name__, "code": status}
                 }
                 yield f"data: {json.dumps(error_chunk)}\n\n"
                 yield "data: [DONE]\n\n"
@@ -586,15 +1011,15 @@ class LLMRouter:
                 retry_kwargs = {**kwargs, "model": fallback_model}
                 try:
                     response = await self._execute_completion(retry_kwargs)
-                    async for chunk in self._stream_chunks_from_response(response):
+                    async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
                         yield _track_chunk(chunk)
                     local_metrics.completed = True
                     return
                 except tuple(_EXCEPTION_STATUS_MAP.keys()) as retry_exc:
                     status = _EXCEPTION_STATUS_MAP.get(type(retry_exc), 502)
-                    LOG.warning("LiteLLM stream fallback retry error [%s %d]: %s", type(retry_exc).__name__, status, retry_exc)
+                    LOG.warning("LiteLLM stream fallback retry error [%s %d]: %s", type(retry_exc).__name__, status, _scrub_internal_topology(retry_exc))
                     error_chunk = {
-                        "error": {"message": str(retry_exc), "type": type(retry_exc).__name__, "code": status}
+                        "error": {"message": _sanitize_exception_message(retry_exc, status), "type": type(retry_exc).__name__, "code": status}
                     }
                     yield f"data: {json.dumps(error_chunk)}\n\n"
                     yield "data: [DONE]\n\n"
@@ -602,15 +1027,15 @@ class LLMRouter:
                     return
                 except Exception as retry_exc:
                     LOG.exception("Unexpected fallback retry LLM stream error")
-                    error_chunk = {"error": {"message": str(retry_exc), "type": "internal_error"}}
+                    error_chunk = {"error": {"message": _sanitize_exception_message(retry_exc, 502), "type": "internal_error"}}
                     yield f"data: {json.dumps(error_chunk)}\n\n"
                     yield "data: [DONE]\n\n"
                     local_metrics.had_error = True
                     return
             status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
-            LOG.warning("LiteLLM stream error [%s %d]: %s", type(exc).__name__, status, exc)
+            LOG.warning("LiteLLM stream error [%s %d]: %s", type(exc).__name__, status, _scrub_internal_topology(exc))
             error_chunk = {
-                "error": {"message": str(exc), "type": type(exc).__name__, "code": status}
+                "error": {"message": _sanitize_exception_message(exc, status), "type": type(exc).__name__, "code": status}
             }
             yield f"data: {json.dumps(error_chunk)}\n\n"
             yield "data: [DONE]\n\n"
@@ -618,16 +1043,23 @@ class LLMRouter:
             return
         except tuple(_EXCEPTION_STATUS_MAP.keys()) as exc:
             status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
-            LOG.warning("LiteLLM stream error [%s %d]: %s", type(exc).__name__, status, exc)
+            LOG.warning("LiteLLM stream error [%s %d]: %s", type(exc).__name__, status, _scrub_internal_topology(exc))
             error_chunk = {
-                "error": {"message": str(exc), "type": type(exc).__name__, "code": status}
+                "error": {"message": _sanitize_exception_message(exc, status), "type": type(exc).__name__, "code": status}
             }
+            yield f"data: {json.dumps(error_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+            local_metrics.had_error = True
+        except _ROUTER_THROTTLE_EXCS as exc:
+            # C7: no healthy deployment / router throttle -> honest 503, not 502.
+            LOG.warning("LiteLLM stream no-deployment/throttle [503]: %s", _scrub_internal_topology(exc))
+            error_chunk = {"error": {"message": _sanitize_exception_message(exc, 503), "type": "ServiceUnavailableError", "code": 503}}
             yield f"data: {json.dumps(error_chunk)}\n\n"
             yield "data: [DONE]\n\n"
             local_metrics.had_error = True
         except Exception as exc:
             LOG.exception("Unexpected LLM stream error")
-            error_chunk = {"error": {"message": str(exc), "type": "internal_error"}}
+            error_chunk = {"error": {"message": _sanitize_exception_message(exc, 502), "type": "internal_error"}}
             yield f"data: {json.dumps(error_chunk)}\n\n"
             yield "data: [DONE]\n\n"
             local_metrics.had_error = True
@@ -637,8 +1069,37 @@ class LLMRouter:
             body: dict,
     ) -> tuple[int, dict]:
         """Create embeddings. Returns (http_status, response_dict)."""
-        model = body.get("model") or "text-embedding-3-small"
+        model = body.get("model") or _DEFAULT_EMBEDDING_MODEL
         model = self._normalize_model_alias(model)
+
+        # R2 (defense-in-depth): a reserved platform/guard model name must NEVER
+        # be served via LiteLLM — and on the embedding path it would otherwise be
+        # silently answered by the single embedding deployment. Reject it with a
+        # GENERIC message; never echo the internal model id. Mirrors
+        # ``_resolve_runtime_model`` on the completion path.
+        if is_platform_model_name(model):
+            LOG.warning("Rejected reserved platform model on embedding path")
+            return 404, {
+                "error": {
+                    "message": _CLIENT_SAFE_STATUS_MESSAGES[404],
+                    "type": "invalid_request_error",
+                    "code": "model_not_allowed",
+                }
+            }
+
+        # Silent-substitution fix: a chat model or any unknown/wrong-type alias
+        # previously fell through to the single embedding deployment. Fail CLOSED
+        # for anything that is not a known embedding model instead of substituting.
+        if model not in self._allowed_embedding_model_names():
+            LOG.warning("Rejected non-embedding/unknown model on embedding path")
+            return 404, {
+                "error": {
+                    "message": _CLIENT_SAFE_STATUS_MESSAGES[404],
+                    "type": "invalid_request_error",
+                    "code": "model_not_allowed",
+                }
+            }
+
         raw_input = body.get("input", "")
         # Normalize input to a list of strings
         if isinstance(raw_input, str):
@@ -653,8 +1114,41 @@ class LLMRouter:
                 }
             }
 
+        # R6: validate EVERY item is a string before dispatch. Nested lists /
+        # mixed types previously reached LiteLLM, which retried each malformed
+        # item across num_retries * fallback models — a 120s+ retry-storm DoS.
+        # Fail fast with a 400 instead.
+        if not all(isinstance(item, str) for item in input_list):
+            return 400, {
+                "error": {
+                    "message": "`input` must be a string or a flat list of strings.",
+                    "type": "invalid_request_error",
+                }
+            }
+
+        # Defensive input-size ceiling (mirrors the chat/output-guard caps): an
+        # oversized payload would be forwarded to the upstream deployment and, on
+        # failure, re-tried across fallbacks — a resource-exhaustion vector.
+        if sum(len(item) for item in input_list) > _MAX_EMBEDDING_INPUT_CHARS:
+            return 400, {
+                "error": {
+                    "message": "`input` is too large.",
+                    "type": "invalid_request_error",
+                }
+            }
+
+        # H7: org-qualify the routing key (mirror _build_kwargs) so litellm selects
+        # THIS org's embedding deployment + its own BYOK key. The allowed-names
+        # gate above validated the BARE client name; the router deployments are
+        # keyed {org}::{model}. Fail-safe to bare if no qualified key exists.
+        _org = str(body.get("_zs_org_slug") or "")
+        _route_model = model
+        if _org and "::" not in str(model):
+            _q = f"{_org}::{model}"
+            if _q in self._qualified_model_names:
+                _route_model = _q
         kwargs = {
-            "model": model,
+            "model": _route_model,
             "input": input_list,
         }
         # Pass encoding_format if specified
@@ -662,16 +1156,21 @@ class LLMRouter:
             kwargs["encoding_format"] = body["encoding_format"]
         if "dimensions" in body:
             kwargs["dimensions"] = body["dimensions"]
+        # R6: restrict embedding fallbacks to embedding models only. The router's
+        # global fallback map is built from chat models; without this an embedding
+        # failure would fall back onto chat models (and add to the retry storm).
+        if self._router is not None:
+            kwargs["fallbacks"] = self._embedding_fallbacks_for(_route_model)
 
         try:
             response = await self._execute_embedding(kwargs)
             return 200, response.model_dump() if hasattr(response, "model_dump") else dict(response)
         except tuple(_EXCEPTION_STATUS_MAP.keys()) as exc:
             status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
-            LOG.warning("LiteLLM embedding error [%s %d]: %s", type(exc).__name__, status, exc)
+            LOG.warning("LiteLLM embedding error [%s %d]: %s", type(exc).__name__, status, _scrub_internal_topology(exc))
             return status, {
                 "error": {
-                    "message": str(exc),
+                    "message": _sanitize_exception_message(exc, status),
                     "type": type(exc).__name__,
                     "code": status,
                 }
@@ -680,10 +1179,87 @@ class LLMRouter:
             LOG.exception("Unexpected embedding error")
             return 502, {
                 "error": {
-                    "message": f"Upstream embedding request failed: {exc}",
+                    "message": _sanitize_exception_message(exc, 502),
                     "type": "internal_error",
                 }
             }
+
+    def _allowed_embedding_model_names(self) -> set[str]:
+        """Names that may legitimately be served as an embedding request.
+
+        An embedding model is one whose router entry resolves to the
+        ``embedding`` mode (same check used to build embedding-only fallbacks).
+        Reserved platform models are excluded. The default deployment name is
+        always allowed so a no-model / default request keeps working even when
+        no router is configured (legacy single-deployment mode).
+        """
+        allowed = {self._normalize_model_alias(_DEFAULT_EMBEDDING_MODEL)}
+        router = self._router
+        if router is None or not hasattr(router, "model_list"):
+            return allowed
+        for entry in router.model_list:
+            if not isinstance(entry, dict) or self._is_reserved_model_entry(entry):
+                continue
+            # H7 regression fix: clients send the BARE model name, but H7 rewrote
+            # router model_name to {org}::{model}. Use base_model_name so the gate
+            # accepts the bare client name (the route is org-qualified separately
+            # in aembedding). Without this, /v1/embeddings 404'd for every org.
+            name = self._normalize_model_alias(str((entry.get("model_info") or {}).get("base_model_name") or entry.get("model_name") or ""))
+            if not name:
+                continue
+            litellm_id = str((entry.get("litellm_params") or {}).get("model") or "")
+            if self._is_embedding_model_id(litellm_id):
+                allowed.add(name)
+        return allowed
+
+    def _embedding_fallbacks_for(self, model: str) -> list[dict]:
+        """R6: build an embedding-only fallback list for an embedding request.
+
+        Only models whose litellm id resolves to the ``embedding`` mode are
+        eligible — chat models must never be an embedding fallback. Reserved
+        platform models are excluded as well. Returns ``[]`` when no other
+        embedding model is available (disables cross-type fallback entirely).
+        """
+        router = self._router
+        if router is None or not hasattr(router, "model_list"):
+            return []
+        embedding_names: list[str] = []
+        # H7: the requested model is now an org-qualified routing key ({org}::name).
+        # Keep embedding fallbacks WITHIN that org so a failure can't fall back to
+        # ANOTHER tenant's embedding deployment + BYOK key.
+        _model_org = str(model).split("::", 1)[0] if "::" in str(model) else ""
+        for entry in router.model_list:
+            if not isinstance(entry, dict):
+                continue
+            if self._is_reserved_model_entry(entry):
+                continue
+            # Fallback TARGETS must be the qualified routing keys litellm knows.
+            name = self._normalize_model_alias(str(entry.get("model_name") or ""))
+            if not name or name == model or name in embedding_names:
+                continue
+            if _model_org and "::" in name and not name.startswith(f"{_model_org}::"):
+                continue
+            litellm_id = str((entry.get("litellm_params") or {}).get("model") or "")
+            if not self._is_embedding_model_id(litellm_id):
+                continue
+            embedding_names.append(name)
+        if not embedding_names:
+            return []
+        return [{model: embedding_names}]
+
+    @staticmethod
+    def _is_embedding_model_id(litellm_id: str) -> bool:
+        """Best-effort check that a litellm model id is an embedding model."""
+        mid = (litellm_id or "").strip().lower()
+        if not mid:
+            return False
+        if "embed" in mid:
+            return True
+        try:
+            info = litellm.get_model_info(mid)
+            return str((info or {}).get("mode") or "").lower() == "embedding"
+        except Exception:
+            return False
 
     def get_model_list(self) -> list[dict]:
         """Return available models in OpenAI-compatible format with model_id."""
@@ -731,6 +1307,50 @@ class LLMRouter:
         if not valid_models:
             LOG.error("All model entries were invalid during reload; keeping previous configuration")
             return
+
+        # H7: org-qualify each deployment's litellm ROUTING KEY to `{org}::{model}`
+        # so two tenants' same-named models cannot become load-balanced peers (and
+        # cross-use their distinct BYOK keys). The BARE name is kept in
+        # model_info.base_model_name for active-name validation / telemetry; the
+        # request path (_build_kwargs) qualifies kwargs['model'] the same way.
+        for _e in valid_models:
+            if not isinstance(_e, dict):
+                continue
+            _org = str(_e.get("_zs_org") or "")
+            _bare = str(_e.get("model_name") or "")
+            if _org and _bare and "::" not in _bare:
+                _mi = _e.get("model_info")
+                if not isinstance(_mi, dict):
+                    _mi = {}
+                    _e["model_info"] = _mi
+                _mi["base_model_name"] = _bare
+                _e["model_name"] = f"{_org}::{_bare}"
+        self._qualified_model_names = {
+            _e["model_name"]
+            for _e in valid_models
+            if isinstance(_e, dict) and _e.get("model_name") and "::" in str(_e["model_name"])
+        }
+
+        # Responses API: litellm.Router exposes NO aresponses in this version, so
+        # stash each deployment's resolved litellm_params (decrypted api_key +
+        # api_base + upstream model id) keyed by BOTH the qualified model_name and
+        # the bare base_model_name. aresponses() routes via module-level
+        # litellm.aresponses with these explicit BYOK creds (the byok_embedder
+        # pattern), preserving per-tenant key isolation.
+        _dep: dict[str, dict] = {}
+        for _e in valid_models:
+            if not isinstance(_e, dict):
+                continue
+            _lp = _e.get("litellm_params")
+            if not isinstance(_lp, dict):
+                continue
+            _nm = str(_e.get("model_name") or "")
+            if _nm:
+                _dep[_nm] = _lp
+            _bn = str((_e.get("model_info") or {}).get("base_model_name") or "")
+            if _bn and _bn not in _dep:
+                _dep[_bn] = _lp
+        self._deployment_params = _dep
 
         try:
             fallbacks = self._build_fallbacks(valid_models)
@@ -790,7 +1410,7 @@ class LLMRouter:
         return None
 
     @staticmethod
-    def estimate_prompt_tokens(messages: list[dict], max_tokens: int = 0) -> int:
+    def estimate_prompt_tokens(messages: list[dict], max_tokens: int = 0, n: int = 1) -> int:
         prompt_chars = 0
         for message in messages or []:
             content = message.get("content", "") if isinstance(message, dict) else ""
@@ -798,12 +1418,26 @@ class LLMRouter:
                 content = " ".join(str(part.get("text") or "") for part in content if isinstance(part, dict))
             prompt_chars += len(str(content or ""))
         prompt_tokens = max(1, prompt_chars // 4) if prompt_chars else 0
-        return max(prompt_tokens + max(max_tokens or 0, 0), 1)
+        # Charge the requested OUTPUT budget too: a request for ``n`` completions
+        # of ``max_tokens`` each can generate max_tokens*n output tokens, so fold
+        # that into the pre-inference TPM reservation (else a high n/max_tokens
+        # request under-charges the rate limiter — a DoS lever). (#4)
+        try:
+            _n = max(1, int(n or 1))
+        except (TypeError, ValueError):
+            _n = 1
+        return max(prompt_tokens + max(max_tokens or 0, 0) * _n, 1)
 
     @staticmethod
     def _normalize_weights(weights: dict[str, float] | None = None) -> dict[str, float]:
         resolved = {**_DEFAULT_ROUTING_WEIGHTS, **(weights or {})}
-        total = sum(resolved.values()) or 1.0
+        # R2-RT-3: guard a non-positive sum (not just zero). A negative total would
+        # INVERT every normalized component (caller-driven worst-model selection); the
+        # per-request weights are clamped to [0,1] upstream (_weight), but defend in
+        # depth here so an org-config or future caller path can't reintroduce it.
+        total = sum(resolved.values())
+        if total <= 0:
+            total = 1.0
         return {key: value / total for key, value in resolved.items()}
 
     def _score_routing_models(
@@ -819,7 +1453,10 @@ class LLMRouter:
     ) -> list[dict]:
         normalized_weights = self._normalize_weights(weights)
         allowed_set = {str(model).lower() for model in (allowed_models or []) if model}
-        req_sens_level = _SENSITIVITY_ORDER.get(data_sensitivity, 0)
+        # Lowercase: a mixed-case caller value ('RESTRICTED') must not miss the
+        # lowercase dict keys and collapse req level to 0 (public) — that would
+        # silently route restricted data onto a public model.
+        req_sens_level = _req_sensitivity_level(data_sensitivity)
         required_tags = [tag for tag in (required_compliance or []) if tag]
 
         eligible: list[dict] = []
@@ -834,7 +1471,7 @@ class LLMRouter:
                 model_tags = model.get("compliance_tags") or []
                 if not all(tag in model_tags for tag in required_tags):
                     continue
-            model_sens = _SENSITIVITY_ORDER.get(model.get("data_sensitivity_level", "public"), 0)
+            model_sens = _SENSITIVITY_ORDER.get(str(model.get("data_sensitivity_level", "public")).strip().lower(), 0)
             if model_sens < req_sens_level:
                 continue
             eligible.append(model)
@@ -949,7 +1586,7 @@ class LLMRouter:
         weights: dict[str, float] | None = None,
         allowed_models: list[str] | None = None,
         token_budget_tpm: int | None = None,
-        adjudicator_model: str = "bedrock-gpt-oss-120b",
+        adjudicator_model: str | None = None,
     ) -> ModelSelection | None:
         normalized_weights = self._normalize_weights(weights)
         scored = self._score_routing_models(
@@ -977,6 +1614,33 @@ class LLMRouter:
         )
         if heuristic is None:
             return None
+
+        # ── H5 perf: short-circuit the synchronous Bedrock adjudicator LLM call ──
+        # The deterministic weighted heuristic above already picked a model. The
+        # Bedrock adjudicator (Claude Haiku ~2-3s/request) only adds decision value
+        # when there is a genuine, governance-sensitive choice to make. Skip it when:
+        #   (a) there is at most one candidate — there is NO routing decision; or
+        #   (b) the request is low-risk AND carries no compliance constraints.
+        # This removes the dominant per-request latency (7-12s observed) for the
+        # common trivial path. Operators can force full adjudication with
+        # ROUTING_ADJUDICATOR_ALWAYS=true; the risk floor is tunable.
+        _adj_always = os.getenv("ROUTING_ADJUDICATOR_ALWAYS", "false").lower() in ("1", "true", "yes")
+        _adj_risk_floor = float(os.getenv("ROUTING_ADJUDICATOR_RISK_FLOOR", "0.30"))
+        _no_real_choice = len(scored) <= 1
+        _low_risk = (request_risk_score < _adj_risk_floor) and not (required_compliance or [])
+        if not _adj_always and (_no_real_choice or _low_risk):
+            heuristic.decision_source = "weighted_fastpath"
+            heuristic.requested_model = preferred_model or "auto"
+            heuristic.evaluator_model = "deterministic_weighted"
+            heuristic.policy_summary = (
+                "Single candidate — no routing decision required."
+                if _no_real_choice
+                else "Low-risk request routed by deterministic weighted scoring (adjudicator skipped for latency)."
+            )
+            heuristic.decision_factors = (heuristic.decision_factors or []) + [
+                "adjudicator_skipped_single_candidate" if _no_real_choice else "adjudicator_skipped_low_risk"
+            ]
+            return heuristic
 
         candidate_map = {item["model_name"]: item for item in scored}
         # Build case-insensitive + model_id lookup for robust matching
@@ -1035,54 +1699,65 @@ class LLMRouter:
             ],
         }
 
-        adjudicator_body = {
-            "model": adjudicator_model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are ZeroShield's /v1/chat/completions routing adjudicator — "
-                        "a Bedrock GPT OSS 120B model that analyzes user input and governance "
-                        "settings to select the optimal LLM for each request.\n\n"
-                        "INSTRUCTIONS:\n"
-                        "1. You MUST select exactly one model from the candidate_models list.\n"
-                        "2. Return the model_name field EXACTLY as it appears in the candidate — "
-                        "do NOT rephrase, alias, or invent a model name.\n"
-                        "3. Decision priority:\n"
-                        "   a) Hard constraints: compliance_tags and data_sensitivity_level MUST meet requirements.\n"
-                        "   b) Weighted scoring: evaluate risk, cost, latency, and priority using the provided weights.\n"
-                        "   c) Request analysis: consider the request content to pick the best-suited model "
-                        "(e.g., complex reasoning → high-capability model, simple Q&A → fast/cheap model).\n"
-                        "4. An explicit preferred_model is a soft preference, not a hard constraint.\n"
-                        "5. Return ONLY valid JSON with keys: selected_model, reason, policy_summary, decision_factors.\n"
-                        "   - selected_model: exact model_name string from candidate_models\n"
-                        "   - reason: 1-2 sentence explanation of why this model was chosen, explicitly referencing risk, latency budget, and cost/token budget impact\n"
-                        "   - policy_summary: brief governance summary explicitly covering data sensitivity and compliance requirements\n"
-                        "   - decision_factors: list of factor strings that influenced the decision"
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(adjudicator_prompt, ensure_ascii=True),
-                },
-            ],
-            "temperature": 0,
-            "max_tokens": 350,
-            "response_format": {"type": "json_object"},
-        }
-
-        code, response = await self.acompletion(adjudicator_body)
-        _log = logging.getLogger("gateway")
-        _log.info(
-            "Bedrock adjudicator call: model=%s, candidates=%d, status=%d",
+        adjudicator_bedrock_model = resolve_platform_bedrock_model(
+            "adjudicator",
             adjudicator_model,
+        )
+        adjudicator_system = (
+            "You are ZeroShield's /v1/chat/completions routing adjudicator — "
+            "a platform Bedrock model that analyzes user input and governance "
+            "settings to select the optimal organization LLM for each request.\n\n"
+            "INSTRUCTIONS:\n"
+            "1. You MUST select exactly one model from the candidate_models list.\n"
+            "2. Return the model_name field EXACTLY as it appears in the candidate — "
+            "do NOT rephrase, alias, or invent a model name.\n"
+            "3. Decision priority:\n"
+            "   a) Hard constraints: compliance_tags and data_sensitivity_level MUST meet requirements.\n"
+            "   b) Weighted scoring: evaluate risk, cost, latency, and priority using the provided weights.\n"
+            "   c) Request analysis: consider the request content to pick the best-suited model "
+            "(e.g., complex reasoning → high-capability model, simple Q&A → fast/cheap model).\n"
+            "4. An explicit preferred_model is a soft preference, not a hard constraint.\n"
+            "5. Return ONLY valid JSON with keys: selected_model, reason, policy_summary, decision_factors.\n"
+            "   - selected_model: exact model_name string from candidate_models\n"
+            "   - reason: 1-2 sentence explanation of why this model was chosen, explicitly referencing risk, latency budget, and cost/token budget impact\n"
+            "   - policy_summary: brief governance summary explicitly covering data sensitivity and compliance requirements\n"
+            "   - decision_factors: list of factor strings that influenced the decision"
+        )
+        adjudicator_user = json.dumps(adjudicator_prompt, ensure_ascii=True)
+        adjudicator_max_tokens = int(os.getenv("BEDROCK_ADJUDICATOR_MAX_TOKENS", "200"))
+
+        _log = logging.getLogger("gateway")
+        code = 502
+        response: dict[str, Any] = {}
+        try:
+            from ai_mesh_gateway.bedrock_client import default_bedrock_client
+
+            bedrock_client = default_bedrock_client()
+            result = await asyncio.to_thread(
+                bedrock_client.converse,
+                model=adjudicator_bedrock_model,
+                system_text=adjudicator_system,
+                user_text=adjudicator_user,
+                max_tokens=adjudicator_max_tokens,
+                temperature=0.0,
+                call_site="adjudicator",
+            )
+            response = result.get("raw") or {}
+            code = 200
+        except Exception as exc:
+            _log.warning("Bedrock adjudicator converse failed: %s", exc)
+
+        _log.info(
+            "Bedrock adjudicator call: model=%s, backend=bedrock, call_site=adjudicator, "
+            "candidates=%d, status=%d",
+            adjudicator_bedrock_model,
             len(scored),
             code,
         )
         if code != 200 or not isinstance(response, dict):
             heuristic.reason = f"Policy adjudicator unavailable; {heuristic.reason}"
             heuristic.decision_source = "weighted_fallback"
-            heuristic.evaluator_model = adjudicator_model
+            heuristic.evaluator_model = adjudicator_bedrock_model
             heuristic.requested_model = preferred_model or "auto"
             heuristic.policy_summary = "Fallback to weighted routing after adjudicator failure."
             heuristic.decision_factors = ["adjudicator_unavailable"]
@@ -1127,7 +1802,7 @@ class LLMRouter:
             )
             heuristic.reason = f"Policy adjudicator returned an invalid candidate '{selected_name}'; {heuristic.reason}"
             heuristic.decision_source = "weighted_fallback"
-            heuristic.evaluator_model = adjudicator_model
+            heuristic.evaluator_model = adjudicator_bedrock_model
             heuristic.requested_model = preferred_model or "auto"
             heuristic.policy_summary = "Fallback to weighted routing after invalid adjudicator response."
             heuristic.decision_factors = ["invalid_adjudicator_selection"]
@@ -1144,7 +1819,7 @@ class LLMRouter:
         bedrock_policy = str(parsed.get("policy_summary") or "").strip()
         if not bedrock_reason:
             bedrock_reason = (
-                f"Bedrock GPT OSS 120B adjudicator selected '{resolved_name}' "
+                f"ZeroShield Policy Adjudicator selected '{resolved_name}' "
                 f"(score={selected['score']:.4f}) from {len(scored)} candidates. "
                 f"Risk={request_risk_score:.2f}, latency_budget_ms={latency_budget_ms}, "
                 f"estimated_tokens={estimated_tokens}, token_budget_tpm={token_budget_tpm or 'n/a'}. "
@@ -1189,7 +1864,7 @@ class LLMRouter:
             fallback_chain=fallback_chain,
             requested_model=preferred_model or "auto",
             decision_source="policy_adjudicator",
-            evaluator_model=adjudicator_model,
+            evaluator_model=adjudicator_bedrock_model,
             policy_summary=bedrock_policy,
             decision_factors=[str(item) for item in decision_factors if item],
             candidate_count=len(scored),

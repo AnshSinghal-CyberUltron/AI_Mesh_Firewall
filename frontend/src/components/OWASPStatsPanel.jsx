@@ -7,6 +7,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
 import { useAuth } from "../context/AuthContext";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 
 const FAMILY_CONFIG = {
   llm: { label: "LLM (OWASP Top 10)", color: "#14b8a6", bg: "bg-teal-50 dark:bg-teal-900/20", border: "border-teal-200 dark:border-teal-800", text: "text-teal-700" },
@@ -69,7 +70,7 @@ function FamilySection({ familyKey, vectors, expanded, onToggle }) {
       {expanded && (
         <div className="p-4 space-y-4 bg-white dark:bg-slate-800">
           {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
+            <SafeResponsiveChart className="h-[200px]">
               <BarChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 10 }} />
@@ -78,7 +79,7 @@ function FamilySection({ familyKey, vectors, expanded, onToggle }) {
                 <Bar dataKey="blocked" stackId="a" fill="#ef4444" name="Blocked" />
                 <Bar dataKey="allowed" stackId="a" fill="#94a3b8" name="Allowed" radius={[4, 4, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </SafeResponsiveChart>
           ) : (
             <div className="text-center py-6 text-xs text-slate-400">No detections in this period</div>
           )}
@@ -159,6 +160,7 @@ export function OWASPStatsPanel() {
         </div>
         <div className="flex items-center gap-2">
           <select
+            aria-label="Statistics time window"
             value={hours}
             onChange={(e) => setHours(Number(e.target.value))}
             className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 px-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-teal-500"
@@ -209,7 +211,7 @@ export function OWASPStatsPanel() {
           {radarData.length > 2 && (
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 mb-4">
               <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase">Threat Radar (Top Active Vectors)</h4>
-              <ResponsiveContainer width="100%" height={250}>
+              <SafeResponsiveChart className="h-[250px] w-full">
                 <RadarChart data={radarData}>
                   <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
                   <PolarAngleAxis dataKey="vector" tick={{ fontSize: 10, fill: "#64748b" }} />
@@ -218,7 +220,7 @@ export function OWASPStatsPanel() {
                   <Radar name="Blocked" dataKey="blocked" stroke="#ef4444" fill="#ef4444" fillOpacity={0.15} />
                   <Tooltip contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0", borderRadius: "8px" }} />
                 </RadarChart>
-              </ResponsiveContainer>
+              </SafeResponsiveChart>
             </div>
           )}
 

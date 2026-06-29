@@ -2,6 +2,15 @@ from django.urls import path
 
 from .evaluation_views import SecurityScanView
 
+from .review_views import (
+    ReviewApproveView,
+    ReviewQueueListView,
+    ReviewRejectView,
+    SecurityIncidentEscalateView,
+    SecurityIncidentListView,
+    SecurityIncidentResolveView,
+)
+
 from .security_views import (
     AgentTypeStatsView,
     AttackCatalogView,
@@ -19,6 +28,7 @@ from .security_views import (
     RAGPipelineTraceView,
     ResolveIncidentView,
     SocKpisView,
+    ThreatFeedEventDetailView,
     ThreatFeedView,
     ThreatSourcesView,
     UsagePatternsView,
@@ -26,12 +36,12 @@ from .security_views import (
     UserBlockageStatsView,
     ViolationCategoriesView,
 )
-from .review_views import SecurityIncidentEscalateView, SecurityIncidentResolveView
 
 urlpatterns = [
     path("attack-catalog/", AttackCatalogView.as_view(), name="security-attack-catalog"),
     path("scan/", SecurityScanView.as_view(), name="security-scan"),
     path("threat-feed/", ThreatFeedView.as_view(), name="security-threat-feed"),
+    path("threat-feed/<int:pk>/", ThreatFeedEventDetailView.as_view(), name="security-threat-feed-detail"),
     path("attack-vector-trends/", AttackVectorTrendsView.as_view(), name="security-attack-vector-trends"),
     path("owasp-stats/", OwaspStatsView.as_view(), name="security-owasp-stats"),
     path("owasp-events/", OwaspEventsView.as_view(), name="security-owasp-events"),
@@ -43,16 +53,18 @@ urlpatterns = [
     path("module-charts/<str:module_id>/", ModuleChartsView.as_view(), name="security-module-charts"),
     path("incidents/<int:pk>/escalate/", EscalateIncidentView.as_view(), name="incident-escalate"),
     path("incidents/<int:pk>/resolve/", ResolveIncidentView.as_view(), name="incident-resolve"),
-    path(
-        "incidents/<int:pk>/escalate-incident/",
-        SecurityIncidentEscalateView.as_view(),
-        name="security-incident-escalate",
-    ),
-    path(
-        "incidents/<int:pk>/resolve-incident/",
-        SecurityIncidentResolveView.as_view(),
-        name="security-incident-resolve",
-    ),
+
+    # Human Review Queue + SecurityIncident-model SOC/HITL surface (policy.review_views).
+    # NOTE: escalate/resolve here operate on the SecurityIncident model and are mounted
+    # under -incident/ suffixes to avoid colliding with the EnforcementEvent-based
+    # incidents/<pk>/escalate|resolve/ routes above (those have fail-closed tenant
+    # scoping, admin gating, and notifications and must remain the canonical ones).
+    path("review-queue/", ReviewQueueListView.as_view(), name="security-review-queue"),
+    path("review-queue/<int:pk>/approve/", ReviewApproveView.as_view(), name="security-review-approve"),
+    path("review-queue/<int:pk>/reject/", ReviewRejectView.as_view(), name="security-review-reject"),
+    path("incidents/", SecurityIncidentListView.as_view(), name="security-incident-list"),
+    path("incidents/<int:pk>/escalate-incident/", SecurityIncidentEscalateView.as_view(), name="security-incident-escalate"),
+    path("incidents/<int:pk>/resolve-incident/", SecurityIncidentResolveView.as_view(), name="security-incident-resolve"),
     path("user-blockage-kpis/", UserBlockageKpisView.as_view(), name="security-user-blockage-kpis"),
     path("blockage-trend/", BlockageTrendView.as_view(), name="security-blockage-trend"),
     path("usage-patterns/", UsagePatternsView.as_view(), name="security-usage-patterns"),

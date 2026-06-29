@@ -105,12 +105,32 @@ def _proxy(method: str, gw_path: str, payload: dict | None = None) -> Response:
     )
 
 
+def _cb_forbidden(request):
+    """FF: the circuit-breaker Redis namespace is GLOBAL per model (no org
+    dimension), so trip/reset/read affects ALL tenants. Restrict to platform
+    operators — a per-org tenant admin (IsAdminOrSuperuser admits platform_admin)
+    must not control another org's breaker. Returns a 403 Response when forbidden,
+    else None."""
+    from auth.models import is_platform_operator
+    # Allow true platform admins (is_superuser, platform-level) OR explicit
+    # platform operators; block per-org tenant admins (is_staff + platform_admin
+    # role) who IsAdminOrSuperuser would otherwise admit to a global resource.
+    if request.user.is_superuser or is_platform_operator(request.user):
+        return None
+    return Response(
+        {"detail": "Circuit-breaker control is restricted to platform operators."},
+        status=403,
+    )
+
+
 class CircuitBreakerStateProxyView(APIView):
     """GET /api/admin/gateway/circuit-breaker/state/"""
 
     permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
 
     def get(self, request: Request) -> Response:
+        if _cb_forbidden(request):
+            return _cb_forbidden(request)
         return _proxy("GET", "/v1/admin/circuit-breaker-state")
 
 
@@ -123,6 +143,8 @@ class CircuitBreakerTriggerProxyView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
 
     def post(self, request: Request) -> Response:
+        if _cb_forbidden(request):
+            return _cb_forbidden(request)
         return _proxy("POST", "/v1/admin/circuit-breaker-trigger", request.data)
 
 
@@ -135,6 +157,8 @@ class CircuitBreakerResetProxyView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
 
     def post(self, request: Request) -> Response:
+        if _cb_forbidden(request):
+            return _cb_forbidden(request)
         return _proxy("POST", "/v1/admin/circuit-breaker-reset", request.data)
 
 
@@ -147,7 +171,11 @@ class CircuitBreakerResetProxyView(APIView):
 # the caller's ``project_id`` from their organization (slug fallback to
 # pk) so the simulator UI never needs an operator-pasted Bearer key.
 
-from auth.utils import get_request_organization  # noqa: E402
+from auth.utils import (  # noqa: E402
+    _request_data_get,
+    _request_query_get,
+    get_request_organization,
+)
 
 
 def _resolve_project_id(request: Request) -> str | None:
@@ -156,21 +184,36 @@ def _resolve_project_id(request: Request) -> str | None:
     Precedence: explicit ``project_id`` in body/query (superusers only,
     for cross-tenant inspection) > ``org.slug`` > ``str(org.pk)``.
     """
+    project_id, _ = _resolve_org_context(request)
+    return project_id
+
+
+def _resolve_org_context(request: Request) -> tuple[str | None, int | None]:
+    """Return (project_id, organization_id) for the caller's organization."""
     explicit = (
-        (request.data.get("project_id") if hasattr(request, "data") else None)
-        or request.query_params.get("project_id")
-        if hasattr(request, "query_params")
-        else None
+        _request_data_get(request, "project_id")
+        or _request_query_get(request, "project_id")
     )
-    if explicit and getattr(request.user, "is_superuser", False):
-        return str(explicit).strip() or None
+    from auth.models import is_platform_operator
+
+    # Cross-tenant targeting via body/query organization_id is reserved for
+    # PLATFORM OPERATORS only (is_staff AND profile.is_platform_operator). A
+    # plain superuser must NOT be able to act-as-org by mass-assigning
+    # organization_id — they fall through to their own authenticated org.
+    if explicit and is_platform_operator(request.user):
+        explicit_org = (
+            _request_data_get(request, "organization_id")
+            or _request_query_get(request, "organization_id")
+        )
+        org_id = int(explicit_org) if explicit_org and str(explicit_org).isdigit() else None
+        return str(explicit).strip() or None, org_id
+
     org = get_request_organization(request)
     if org is None:
-        return None
+        return None, None
     slug = (getattr(org, "slug", "") or "").strip()
-    if slug:
-        return slug
-    return str(org.pk)
+    project_id = slug if slug else str(org.pk)
+    return project_id, org.pk
 
 
 class GatewayRagCollectionsProxyView(APIView):
@@ -185,35 +228,76 @@ class GatewayRagCollectionsProxyView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
 
     def get(self, request: Request) -> Response:
-        project_id = _resolve_project_id(request)
+        project_id, organization_id = _resolve_org_context(request)
         if not project_id:
             return _envelope_error(
                 "Caller has no organization to scope RAG collections.",
                 "no_organization",
                 400,
             )
-        return _proxy("GET", f"/v1/admin/rag/collections?project_id={project_id}")
+        org_param = f"&organization_id={organization_id}" if organization_id is not None else ""
+        return _proxy(
+            "GET",
+            f"/v1/admin/rag/collections?project_id={project_id}{org_param}",
+        )
 
     def post(self, request: Request) -> Response:
-        project_id = _resolve_project_id(request)
+        project_id, organization_id = _resolve_org_context(request)
         if not project_id:
             return _envelope_error(
                 "Caller has no organization to scope RAG collections.",
                 "no_organization",
                 400,
             )
-        payload = dict(request.data or {})
+        payload = dict(request.data) if isinstance(request.data, dict) else {}
         payload["project_id"] = project_id  # server-stamped, browser cannot override for non-superusers
+        if organization_id is not None:
+            payload["organization_id"] = organization_id
         return _proxy("POST", "/v1/admin/rag/collections", payload)
 
     def delete(self, request: Request) -> Response:
-        project_id = _resolve_project_id(request)
+        project_id, organization_id = _resolve_org_context(request)
         if not project_id:
             return _envelope_error(
                 "Caller has no organization to scope RAG collections.",
                 "no_organization",
                 400,
             )
-        payload = dict(request.data or {})
+        payload = dict(request.data) if isinstance(request.data, dict) else {}
         payload["project_id"] = project_id
+        if organization_id is not None:
+            payload["organization_id"] = organization_id
         return _proxy("DELETE", "/v1/admin/rag/collections", payload)
+
+
+class GatewayDbTestProxyView(APIView):
+    """POST /api/admin/gateway/db-test/
+
+    Tests connectivity to a vector database (ChromaDB / Pinecone / Milvus)
+    through the gateway. The gateway ``/v1/admin/db-test`` endpoint is
+    admin-gated; rather than mint an admin gateway key for the browser, the
+    simulator UI calls this proxy and Django forwards using the internal key
+    after enforcing ``IsAdminOrSuperuser`` against the user's session. The
+    low-privilege per-org simulator key never needs admin perms. Body is
+    forwarded as-is: ``{"provider": str, "connection_url"?: str, ...}``.
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
+
+    def post(self, request: Request) -> Response:
+        return _proxy("POST", "/v1/admin/db-test", dict(request.data or {}))
+
+
+class GatewayBedrockTestProxyView(APIView):
+    """POST /api/admin/gateway/bedrock-test/
+
+    Tests AWS Bedrock connectivity through the gateway. Like db-test, the gateway
+    endpoint is admin-gated; the simulator UI calls this proxy so the low-priv
+    per-org simulator key is never used for admin operations. Django enforces
+    IsAdminOrSuperuser and forwards with the internal key.
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
+
+    def post(self, request: Request) -> Response:
+        return _proxy("POST", "/v1/admin/bedrock-test", dict(request.data or {}))

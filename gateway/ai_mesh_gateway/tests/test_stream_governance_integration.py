@@ -40,7 +40,7 @@ async def test_circuit_open_blocks_before_sse(fake_redis):
 async def test_launch_stream_response_returns_event_stream():
     from ai_mesh_gateway import main as gateway_main
 
-    async def fake_stream(body, redacted_prompt=None, metrics=None):
+    async def fake_stream(body, redacted_prompt=None, metrics=None, **kwargs):
         yield 'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n'
         if metrics is not None:
             metrics.completed = True

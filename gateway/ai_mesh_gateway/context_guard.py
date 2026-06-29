@@ -19,13 +19,24 @@ from dataclasses import dataclass, field
 from typing import Any
 
 try:
-    from .patterns import compile_pattern, detect_pii, detect_secrets
+    from .patterns import compile_pattern, detect_pii, detect_secrets, detect_credential_exposure
 except ImportError:
-    from patterns import compile_pattern, detect_pii, detect_secrets
+    from patterns import compile_pattern, detect_pii, detect_secrets, detect_credential_exposure
 
 LOG = logging.getLogger("gateway.context_guard")
 
 DEFAULT_THREAD_POOL_SIZE = 4
+
+# M-19 (truncation-order invariant): the ONLY truncation in this module is
+# the evidence snippet recorded in verdicts (``match.group(0)[:SNIPPET_MAX_CHARS]``).
+# It is applied strictly AFTER the guard decision: every regex / PII / secret
+# scan runs over the FULL document text, the verdict (block/flag/allow) is
+# decided from that full-text result, and only then is the *reported* match
+# trimmed so telemetry payloads stay bounded and never replay whole documents.
+# Do NOT "optimize" by slicing the document before scanning — a threat planted
+# beyond the slice boundary would silently bypass the guard
+# (see tests/test_context_guard.py::TestNoEarlyTruncation).
+SNIPPET_MAX_CHARS = 100
 
 
 @dataclass
@@ -41,7 +52,13 @@ class ContextScanVerdict:
 
 
 INDIRECT_INJECTION_PATTERNS: list[str] = [
-    r"ignore\s+(previous|all|above)\s+(instructions|context|rules)",
+    # RAG-1b + RAG-INJECTION-SYNONYM: one verb alternation (ignore/disregard/forget/
+    # override) against the full object+qualifier set. RAG-1b broadened only "ignore"
+    # and missed the synonyms ("disregard all previous instructions" sailed through
+    # ingest when tier-2 was off); folding the verbs into a single pattern closes the
+    # synonym bypass. Still requires at least one qualifier, so benign "ignore
+    # instructions" is not over-matched.
+    r"(?:ignore|disregard|forget|override)\s+(?:all|every|any|the|previous|prior|above|preceding|earlier)(?:\s+(?:previous|prior|above|preceding|earlier))?\s+(?:instructions|context|rules|prompts|messages|directives)",
     r"disregard\s+(the|all)\s+(above|preceding|context)",
     r"you\s+must\s+(now|instead|actually)",
     r"new\s+(instructions|directive|role)\s*:",
@@ -52,6 +69,17 @@ INDIRECT_INJECTION_PATTERNS: list[str] = [
     r"(?:IMPORTANT|CRITICAL|URGENT)\s*:\s*ignore",
     r"act\s+as\s+(?:if|though)\s+you",
     r"forget\s+(?:everything|all|previous)",
+    # C4-INJ-INGEST-SYNONYMS: ChatML/Llama control tokens + persona-reassignment +
+    # "pay no attention" phrasings that the verb-set above and the chat tier-2 catch
+    # but the ingest regex tier missed.
+    r"<\s*\|?\s*im_(?:start|end)\s*\|?\s*>",
+    r"<\s*\|?\s*(?:system|user|assistant)\s*\|?\s*>",
+    r"pay\s+no\s+attention\s+to\s+(?:the\s+)?(?:previous|prior|above|preceding|earlier)",
+    r"from\s+now\s+on,?\s+you\s+(?:are|will\s+be|act\s+as)",
+    r"new\s+persona\s*:",
+    # (removed an over-broad "you are now a/an/in" rule — it false-positived on benign
+    #  prose like "you are now a premium member". The specific persona-reassignment
+    #  phrasings above + ChatML tokens cover the real injection signal.)
 ]
 
 HIDDEN_INSTRUCTION_PATTERNS: list[str] = [
@@ -206,7 +234,12 @@ class ContextGuard:
         )
 
     def _scan_single_document_sync(self, text: str) -> ContextScanVerdict:
-        """Synchronous scan of a single document."""
+        """Synchronous scan of a single document.
+
+        Scans the FULL ``text`` — the ``[:SNIPPET_MAX_CHARS]`` slices below
+        truncate only the evidence snippet reported in the verdict, never the
+        text being scanned (see module-level truncation-order invariant).
+        """
         if not text:
             return ContextScanVerdict()
 
@@ -218,8 +251,8 @@ class ContextGuard:
                     action="block",
                     threat_type="indirect_injection",
                     confidence=0.95,
-                    detail=f"Indirect prompt injection in document: {match.group(0)[:100]}",
-                    matched_patterns=[match.group(0)[:100]],
+                    detail=f"Indirect prompt injection in document: {match.group(0)[:SNIPPET_MAX_CHARS]}",
+                    matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
                 )
 
         for pattern_str in HIDDEN_INSTRUCTION_PATTERNS:
@@ -242,28 +275,59 @@ class ContextGuard:
                     action="flag",
                     threat_type="toxicity",
                     confidence=0.8,
-                    detail=f"Toxic content in document: {match.group(0)[:100]}",
-                    matched_patterns=[match.group(0)[:100]],
+                    detail=f"Toxic content in document: {match.group(0)[:SNIPPET_MAX_CHARS]}",
+                    matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
                 )
+
+        # RAG-C5: check secrets BEFORE PII. A credential-bearing doc often also trips
+        # the PII detector (long key strings), and the PII branch returns first — so
+        # ordering secrets first is required for the block to actually fire. BLOCK
+        # (not flag) live credentials/secrets at ingest so they are never written to
+        # the vector store at rest (the per-org typed redaction was the only at-ingest
+        # mitigation and defaults OFF, leaving raw API keys/AWS secrets in Pinecone).
+        # Mirrors the injection/hidden-instruction blocks above; PII (names/emails —
+        # legitimate in documents) stays a flag below.
+        # C4-CRED-INGEST-*: run the FULL credential inventory at ingest, not just
+        # detect_secrets()'s SECRET_PATTERNS subset. Iteration-4 found connection
+        # strings / Azure / Stripe / Twilio / GitHub-in-key-name all stored unblocked
+        # because the ingest inventory was a strict subset of the output guard's. Union
+        # detect_credential_exposure (CREDENTIAL_EXPOSURE_PATTERNS) + detect_secrets so
+        # the ingest and output credential sets are unified — any credential the
+        # platform can detect anywhere is BLOCKED at rest here.
+        cred_found = {**(detect_secrets(text) or {}), **(detect_credential_exposure(text) or {})}
+        if cred_found:
+            return ContextScanVerdict(
+                action="block",
+                threat_type="secret",
+                confidence=0.9,
+                detail=f"Secret/credential in document: {', '.join(cred_found.keys())}",
+                matched_patterns=list(cred_found.keys()),
+            )
 
         pii_found = detect_pii(text)
         if pii_found:
+            # RAG-C5: detect_secrets misses live credentials (API keys, AWS keys/
+            # secrets) — detect_pii catches them under credential-ish category names
+            # (api_key_openai / aws_access_key / aws_secret_access_key). BLOCK those at
+            # ingest (fail-closed; never written to the vector store at rest). Human
+            # PII (email / phone_us / ssn / credit_card) stays a flag — legitimate in
+            # documents and filtered from results by the query-time output scan.
+            _CRED_TOKENS = ("key", "token", "secret", "aws", "api", "credential", "password")
+            _cred = [k for k in pii_found if any(t in k.lower() for t in _CRED_TOKENS)]
+            if _cred:
+                return ContextScanVerdict(
+                    action="block",
+                    threat_type="secret",
+                    confidence=0.9,
+                    detail=f"Secret/credential in document: {', '.join(_cred)}",
+                    matched_patterns=_cred,
+                )
             return ContextScanVerdict(
                 action="flag",
                 threat_type="pii",
                 confidence=0.85,
                 detail=f"PII detected in document: {', '.join(pii_found.keys())}",
                 matched_patterns=list(pii_found.keys()),
-            )
-
-        secret_found = detect_secrets(text)
-        if secret_found:
-            return ContextScanVerdict(
-                action="flag",
-                threat_type="secret",
-                confidence=0.9,
-                detail=f"Secret/credential in document: {', '.join(secret_found.keys())}",
-                matched_patterns=list(secret_found.keys()),
             )
 
         return ContextScanVerdict()

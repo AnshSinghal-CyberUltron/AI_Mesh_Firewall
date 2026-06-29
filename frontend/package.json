@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:acceptance:create-policy": "node --test src/utils/policyCreateBehavior.test.js",
-    "test:module2": "node --test src/pages/module2/pageData.test.js src/api/module2.test.js src/api/killSwitch.test.js"
+    "test:unit:live-gateway": "node --test src/utils/liveGateway.test.js",
+    "test:unit": "node --test \"src/utils/*.test.js\""
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.1.8",
@@ -16,6 +17,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.562.0",
+    "motion": "^12.40.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.6.1",

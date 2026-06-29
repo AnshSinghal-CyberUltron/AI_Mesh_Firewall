@@ -12,9 +12,15 @@ function cn(...values) {
 // output guardrails) age out of a 24h window, leaving the board blank on load.
 // Open them on a wider lens so operators see real recent activity by default.
 const DEFAULT_TIME_RANGE_BY_MODULE = {
+  "1.5": "7d",
   "1.6": "7d",
   "1.7": "7d",
 };
+
+// Control-lane panels that fetch their own data and should follow the operator
+// lens window (receive a `timeRange` prop via cloneElement). Keep in sync with
+// the keys assigned in firewall-submodules.jsx.
+const LENS_AWARE_PANEL_KEYS = new Set(["engine-card", "output-governance", "output-charts"]);
 
 export function FirewallModulePage({
   moduleId,
@@ -29,9 +35,12 @@ export function FirewallModulePage({
   inspectionPanels = [],
   secondaryPanels = [],
   footerPanels = [],
+  showEvidenceSection = true,
 }) {
   const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE_BY_MODULE[moduleId] || "24h");
   const firewallData = useFirewallData(moduleId, timeRange);
+  const hasSidebar =
+    (Array.isArray(flowNodes) && flowNodes.length > 0) || (Array.isArray(inspectionPanels) && inspectionPanels.length > 0);
 
   const pageConfig = getModulePageConfig(moduleId);
   const pageData = useMemo(
@@ -59,6 +68,18 @@ export function FirewallModulePage({
       return panel;
     });
   }, [footerPanels, firewallData.threatFeed, firewallData.refetch, isLoading]);
+
+  // Thread the operator-lens window into panels that fetch their own data, so
+  // they stay consistent with the page KPIs/Evidence instead of a fixed window.
+  // (Same clone-by-key convention as the routing-audit footer above.)
+  const resolvedControlPanels = useMemo(() => {
+    if (!controlPanels?.length) return controlPanels;
+    return controlPanels.map((panel) =>
+      isValidElement(panel) && LENS_AWARE_PANEL_KEYS.has(panel.key)
+        ? cloneElement(panel, { timeRange })
+        : panel,
+    );
+  }, [controlPanels, timeRange]);
 
   return (
     <div className="ai-mesh-shell space-y-8 pb-6">
@@ -165,10 +186,10 @@ export function FirewallModulePage({
           title={pageConfig.workspaceTitle}
           description={pageConfig.workspaceDescription}
         />
-        <div className="grid gap-6 xl:grid-cols-[1.4fr,0.9fr]">
+        <div className={cn("grid gap-6", hasSidebar && "xl:grid-cols-[1.4fr,0.9fr]")}>
           <div className="space-y-6">
             {controlPanels.length > 0 ? (
-              <PanelLane label={pageConfig.panelLabels.control} panels={controlPanels} />
+              <PanelLane label={pageConfig.panelLabels.control} panels={resolvedControlPanels} />
             ) : null}
             {simulatorPanels.length > 0 ? (
               <PanelLane label={pageConfig.panelLabels.simulator} panels={simulatorPanels} />
@@ -178,15 +199,18 @@ export function FirewallModulePage({
             ) : null}
           </div>
 
-          <div className="space-y-6 xl:sticky xl:top-6 xl:self-start">
-            <FlowSection flowNodes={flowNodes} summary={pageData.summary} />
-            {inspectionPanels.length > 0 ? (
-              <PanelLane label={pageConfig.panelLabels.inspection} panels={inspectionPanels} />
-            ) : null}
-          </div>
+          {hasSidebar ? (
+            <div className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+              <FlowSection flowNodes={flowNodes} summary={pageData.summary} />
+              {inspectionPanels.length > 0 ? (
+                <PanelLane label={pageConfig.panelLabels.inspection} panels={inspectionPanels} />
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </section>
 
+      {showEvidenceSection ? (
       <section className="space-y-5">
         <SectionHeading
           eyebrow="Evidence"
@@ -212,6 +236,7 @@ export function FirewallModulePage({
           />
         </div>
       </section>
+      ) : null}
 
       {resolvedFooterPanels.length > 0 ? (
         <section className="space-y-5">

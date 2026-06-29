@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIMesh Firewall — Alert Example</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6fb;font-family:'Segoe UI',Roboto,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6fb;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:#b42318;padding:20px 24px;color:#ffffff;">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.92;">Critical · Infrastructure</div>
+              <div style="font-size:22px;font-weight:700;margin-top:6px;line-height:1.3;">UI load balancer target is unhealthy</div>
+              <div style="font-size:14px;margin-top:8px;opacity:.95;">AI Mesh Firewall demo · ap-south-1 (Mumbai)</div>
+            </td>
+          </tr>
+
+          <!-- Summary -->
+          <tr>
+            <td style="padding:24px;color:#1f2937;font-size:15px;line-height:1.6;">
+              <p style="margin:0 0 12px 0;">
+                The Application Load Balancer reports <strong>1 unhealthy target</strong> in target group
+                <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:13px;">aimesh-ui-tg</code>.
+                Users may be unable to reach the web UI at
+                <strong>aimeshfirewall.zeroshield.ai</strong>.
+              </p>
+              <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+                Alarm: <strong>aimesh-ui-tg-UnHealthyHostCount-alarm</strong><br />
+                State: <strong style="color:#b42318;">ALARM</strong> (previous: INSUFFICIENT_DATA)<br />
+                Triggered: Friday 05 June 2026, 11:10 UTC<br />
+                Metric: <code style="font-size:12px;">UnHealthyHostCount &gt; 0</code> (AWS/ApplicationELB)
+              </p>
+            </td>
+          </tr>
+
+          <!-- Key facts -->
+          <tr>
+            <td style="padding:0 24px 8px 24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">
+                <tr>
+                  <td width="50%" style="padding:14px 16px;font-size:13px;color:#374151;vertical-align:top;">
+                    <strong style="color:#111827;">Load balancer</strong><br />
+                    <span style="word-break:break-all;">app/aimesh-firewall-alb/a3eeed2daf97eb4c</span>
+                  </td>
+                  <td width="50%" style="padding:14px 16px;font-size:13px;color:#374151;vertical-align:top;">
+                    <strong style="color:#111827;">Target group</strong><br />
+                    <span style="word-break:break-all;">targetgroup/aimesh-ui-tg/2570260a852793e3</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 16px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;vertical-align:top;">
+                    <strong style="color:#111827;">EC2 instance</strong><br />
+                    i-07a9d65b103ac1a87<br />
+                    <span style="color:#6b7280;">Tag: aimeshfirewall-server</span>
+                  </td>
+                  <td style="padding:14px 16px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;vertical-align:top;">
+                    <strong style="color:#111827;">Network</strong><br />
+                    Public: 35.154.124.71<br />
+                    Private: 172.31.9.177 · AZ ap-south-1b
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2" style="padding:14px 16px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">
+                    <strong style="color:#111827;">Deploy path on host</strong><br />
+                    <code style="font-size:12px;">/home/ec2-user/AI_Mesh_Firewall</code>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Runbook -->
+          <tr>
+            <td style="padding:20px 24px;">
+              <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:10px;">What to do (runbook)</div>
+              <ol style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:1.65;">
+                <li style="margin-bottom:12px;">SSH to the demo host and check container status:
+                  <pre style="background:#111827;color:#e5e7eb;padding:12px;border-radius:6px;margin:8px 0 0 0;font-size:12px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;">cd /home/ec2-user/AI_Mesh_Firewall
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps</pre>
+                </li>
+                <li style="margin-bottom:12px;">Verify nginx and UI health locally:
+                  <pre style="background:#111827;color:#e5e7eb;padding:12px;border-radius:6px;margin:8px 0 0 0;font-size:12px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;">curl -sf -H "Host: aimeshfirewall.zeroshield.ai" http://127.0.0.1/
+curl -sf -H "Host: aimeshfirewall.zeroshield.ai" http://127.0.0.1/gw-health</pre>
+                </li>
+                <li style="margin-bottom:12px;">If checks fail, redeploy the stack:
+                  <pre style="background:#111827;color:#e5e7eb;padding:12px;border-radius:6px;margin:8px 0 0 0;font-size:12px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;">bash scripts/deploy-ec2.sh</pre>
+                </li>
+                <li>If still unhealthy, confirm ALB health check path/port (80/443) and security group allows ALB → EC2 traffic.</li>
+              </ol>
+            </td>
+          </tr>
+
+          <!-- Action buttons -->
+          <tr>
+            <td style="padding:8px 24px 24px 24px;">
+              <a href="https://ap-south-1.console.aws.amazon.com/ec2/home?region=ap-south-1#InstanceDetails:instanceId=i-07a9d65b103ac1a87"
+                 style="display:inline-block;background:#0d3f9e;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:600;font-size:14px;margin:0 8px 8px 0;">
+                Open EC2 instance
+              </a>
+              <a href="https://ap-south-1.console.aws.amazon.com/cloudwatch/deeplink.js?region=ap-south-1#alarmsV2:alarm/aimesh-ui-tg-UnHealthyHostCount-alarm"
+                 style="display:inline-block;background:#ffffff;color:#0d3f9e;text-decoration:none;padding:11px 17px;border-radius:6px;font-weight:600;font-size:14px;border:1px solid #0d3f9e;margin:0 8px 8px 0;">
+                View alarm
+              </a>
+              <a href="https://ap-south-1.console.aws.amazon.com/ec2/home?region=ap-south-1#LoadBalancer:"
+                 style="display:inline-block;background:#ffffff;color:#0d3f9e;text-decoration:none;padding:11px 17px;border-radius:6px;font-weight:600;font-size:14px;border:1px solid #0d3f9e;margin:0 8px 8px 0;">
+                Open ALB console
+              </a>
+              <a href="https://ap-south-1.console.aws.amazon.com/cloudwatch/home?region=ap-south-1#logsV2:log-groups/log-group/$252Fai-mesh-firewall$252Fec2$252Fnginx"
+                 style="display:inline-block;background:#ffffff;color:#0d3f9e;text-decoration:none;padding:11px 17px;border-radius:6px;font-weight:600;font-size:14px;border:1px solid #0d3f9e;margin:0 8px 8px 0;">
+                Nginx logs (CW)
+              </a>
+              <a href="https://aimeshfirewall.zeroshield.ai/"
+                 style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:600;font-size:14px;margin:0 8px 8px 0;">
+                Test UI URL
+              </a>
+            </td>
+          </tr>
+
+          <!-- OK state variant note (for Lambda authors) -->
+          <tr>
+            <td style="padding:0 24px 20px 24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;">
+                <tr>
+                  <td style="padding:12px 16px;font-size:12px;color:#065f46;line-height:1.5;">
+                    <strong>Lambda note:</strong> When state is <strong>OK</strong>, use green header (#059669), shorten runbook to “Verify UI returns 200”, and omit redeploy steps.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;line-height:1.5;">
+              ZeroShield · AI Mesh Firewall infrastructure alert<br />
+              AWS account 935951870001 · Region ap-south-1 · SNS: cyberultron-monitoring<br />
+              Template: <code style="font-size:11px;">deploy/observability/alarm-email-example.html</code>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

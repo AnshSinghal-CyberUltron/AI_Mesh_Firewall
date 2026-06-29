@@ -139,14 +139,29 @@ class LLMJudge:
         start = time.perf_counter()
         try:
             client = self._get_client()
-            payload = {
-                "messages": [
-                    {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"Analyze this input for prompt injection:\n\n{text[:2000]}"},
-                ],
-                "max_tokens": 300,
-                "temperature": 0.0,
-            }
+            _user_content = f"Analyze this input for prompt injection:\n\n{text[:2000]}"
+            if "anthropic" in self._model.lower() or "claude" in self._model.lower():
+                # Claude on Bedrock rejects a `system` message role and requires
+                # anthropic_version — without this the call returns an error/empty
+                # body and json.loads -> "Expecting value: line 1 column 1", so the
+                # judge silently fell open ~100% of the time (H7). Use the Anthropic
+                # Messages schema with the system prompt hoisted to a top-level string.
+                payload = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "system": JUDGE_SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": _user_content}],
+                    "max_tokens": 300,
+                    "temperature": 0.0,
+                }
+            else:
+                payload = {
+                    "messages": [
+                        {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                        {"role": "user", "content": _user_content},
+                    ],
+                    "max_tokens": 300,
+                    "temperature": 0.0,
+                }
 
             response = client.invoke_model(
                 modelId=self._model,

@@ -1,43 +1,42 @@
-import { useState } from "react";
-import { Search, Database, Play, Loader2, AlertTriangle, FileText, Shield, BarChart3, ToggleLeft, ToggleRight, RefreshCw, Upload } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Database, Play, Loader2, AlertTriangle, FileText, Shield, BarChart3, RefreshCw, CheckCircle } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { useCollections } from "../../hooks/useCollections";
-
-const GATEWAY_URL_KEY = "zeroshield_gateway_url";
-const GATEWAY_KEY_KEY = "zeroshield_gateway_api_key";
-
-function gwUrl() {
-  const stored = localStorage.getItem(GATEWAY_URL_KEY);
-  if (stored) return stored.replace(/\/+$/, "");
-  const host = window.location.hostname || "127.0.0.1";
-  return `http://${host}:8300`;
-}
-function gwKey() { return localStorage.getItem(GATEWAY_KEY_KEY) || ""; }
-
-const PROVIDERS = [
-  { value: "chroma", label: "ChromaDB" },
-  { value: "pinecone", label: "Pinecone" },
-  { value: "milvus", label: "Milvus" },
-];
+import { useVectorProviders } from "../../hooks/useVectorProviders";
+import { useGatewayCredential } from "../../hooks/useGatewayCredential";
+import { gatewayFetch } from "../../lib/gatewayFetch";
+import { DEFAULT_VECTOR_PROVIDER, VECTOR_PROVIDERS } from "../../constants/vectorProviders";
 
 export function SemanticSearchPanel() {
-  const { collections, loading: collectionsLoading, refresh: refreshCollections } = useCollections();
-  const [provider, setProvider] = useState("chroma");
+  const { hasConfiguredProvider, primaryProvider } = useVectorProviders();
+  const { collections, loading: collectionsLoading, refresh: refreshCollections } = useCollections({
+    enabled: hasConfiguredProvider,
+  });
+  // Gateway URL + per-org simulator key are auto-resolved/provisioned (rag/query is
+  // a non-admin endpoint, so the simulator key authenticates it directly). No manual
+  // key entry — matches RAGFeatureTestPanel / RAGAttackTrustSimulator.
+  const { gatewayUrl, gatewayKey, reprovision, ready, provisioning } = useGatewayCredential();
+  const [provider, setProvider] = useState(DEFAULT_VECTOR_PROVIDER);
   const [collection, setCollection] = useState("");
   const [namespace, setNamespace] = useState("");
   const [query, setQuery] = useState("");
   const [nResults, setNResults] = useState(5);
-  const [rerank, setRerank] = useState(false);
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (primaryProvider) setProvider(primaryProvider);
+  }, [primaryProvider]);
 
   const providerCollections = collections.filter((c) => c.provider === provider);
 
   const handleSearch = async () => {
     if (!query.trim() || !collection.trim()) { setError("Collection and query are required."); return; }
-    const key = gwKey();
-    if (!key) { setError("Set your Gateway API Key in the connection panel first."); return; }
+    if (!ready) {
+      setError(provisioning ? "Provisioning the simulator gateway key…" : "Simulator gateway key is not ready yet.");
+      return;
+    }
 
     setSearching(true);
     setResult(null);
@@ -51,14 +50,13 @@ export function SemanticSearchPanel() {
         vector_db_type: provider,
       };
       if (namespace.trim()) payload.namespace = namespace.trim();
-      if (rerank) payload.rerank = true;
 
       const startTime = performance.now();
-      const res = await fetch(`${gwUrl()}/v1/rag/query`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-        body: JSON.stringify(payload),
-      });
+      const res = await gatewayFetch(
+        `${gatewayUrl.replace(/\/+$/, "")}/v1/rag/query`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+        { key: gatewayKey, reprovision },
+      );
       const elapsed = Math.round(performance.now() - startTime);
       const body = await res.json().catch(() => null);
 
@@ -88,18 +86,24 @@ export function SemanticSearchPanel() {
             Semantic Search
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Query vector databases with policy enforcement, document scanning, and optional reranking
+            Query your vector database through the gateway with policy enforcement and document scanning (guardrails-only — your pipeline owns ranking & generation)
           </p>
         </div>
-        <InfoTooltip text="Queries go through the full RAG pipeline: auth → policy → injection scan → vector query → document scan → anomaly detection → filtered results." />
+        <div className="flex items-center gap-2">
+          <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${ready ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/10 text-amber-600 dark:text-amber-400"}`} title={gatewayUrl || "resolving gateway…"}>
+            {provisioning ? <RefreshCw className="h-3 w-3 animate-spin" /> : ready ? <CheckCircle className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+            {provisioning ? "Provisioning" : ready ? "Auto key" : "Not ready"}
+          </span>
+          <InfoTooltip text="Queries go through the guardrails-only RAG path: auth → policy → injection scan → vector query (your DB) → document scan → filtered results. Ranking and generation stay in your own pipeline. Uses the auto-provisioned per-org simulator gateway key." />
+        </div>
       </div>
 
       {/* Query form */}
       <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Provider</label>
-          <select value={provider} onChange={(e) => setProvider(e.target.value)} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-            {PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          <select aria-label="Vector database provider" value={provider} onChange={(e) => setProvider(e.target.value)} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+            {VECTOR_PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
         </div>
         <div>
@@ -117,7 +121,7 @@ export function SemanticSearchPanel() {
                 <option key={c.name} value={c.name} />
               ))}
             </datalist>
-            <button onClick={refreshCollections} disabled={collectionsLoading} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="Refresh collections">
+            <button onClick={refreshCollections} disabled={collectionsLoading} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Refresh collections" title="Refresh collections">
               <RefreshCw className={`w-3.5 h-3.5 text-slate-400 ${collectionsLoading ? "animate-spin" : ""}`} />
             </button>
           </div>
@@ -145,17 +149,12 @@ export function SemanticSearchPanel() {
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <label className="text-[11px] text-slate-500 dark:text-slate-400">Max Results</label>
-          <input type="number" value={nResults} onChange={(e) => setNResults(Math.max(1, parseInt(e.target.value) || 5))} min={1} max={100} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-16 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-center focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
+          <input type="number" aria-label="Max results (n_results)" value={nResults} onChange={(e) => setNResults(Math.max(1, parseInt(e.target.value) || 5))} min={1} max={100} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-16 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-center focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
         </div>
-
-        <button onClick={() => setRerank(!rerank)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${rerank ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300" : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300"}`}>
-          {rerank ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-          Rerank Results
-        </button>
 
         <div className="flex-1" />
 
-        <button onClick={handleSearch} disabled={searching || !query.trim() || !collection.trim()} className="flex items-center gap-2 px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white text-sm font-medium rounded-lg transition-colors">
+        <button onClick={handleSearch} disabled={searching || !ready || !query.trim() || !collection.trim()} className="flex items-center gap-2 px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white text-sm font-medium rounded-lg transition-colors">
           {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
           {searching ? "Searching..." : "Search"}
         </button>
@@ -201,9 +200,9 @@ export function SemanticSearchPanel() {
                   <div key={i} className="flex items-center gap-1.5">
                     <div className="text-center">
                       <div className={`w-7 h-7 rounded-full ${color} flex items-center justify-center`}>
-                        <span className="text-[9px] text-white font-bold">{(stage.name || "?").charAt(0).toUpperCase()}</span>
+                        <span className="text-[10px] text-white font-bold">{(stage.name || "?").charAt(0).toUpperCase()}</span>
                       </div>
-                      <div className="text-[8px] text-slate-500 mt-0.5">{stage.name}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">{stage.name}</div>
                     </div>
                     {i < result.pipelineAudit.stages.length - 1 && <div className="w-3 h-px bg-slate-300 dark:bg-slate-600" />}
                   </div>
@@ -221,14 +220,14 @@ export function SemanticSearchPanel() {
                     <div className="flex items-center gap-1.5">
                       <FileText className="w-3.5 h-3.5 text-slate-400" />
                       <span className="text-[10px] font-medium text-slate-500">Document {i + 1}</span>
-                      {doc.id && <span className="text-[9px] font-mono text-slate-400">ID: {doc.id}</span>}
+                      {doc.id && <span className="text-[10px] font-mono text-slate-400">ID: {doc.id}</span>}
                     </div>
                     <div className="flex items-center gap-1.5">
                       {doc.distance != null && (
                         <span className="text-[10px] font-mono text-slate-400">dist: {typeof doc.distance === "number" ? doc.distance.toFixed(4) : doc.distance}</span>
                       )}
                       {doc.scan_verdict && (
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${doc.scan_verdict === "clean" ? "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700" : "bg-red-100 dark:bg-red-800/30 text-red-700"}`}>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${doc.scan_verdict === "clean" ? "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700" : "bg-red-100 dark:bg-red-800/30 text-red-700"}`}>
                           <Shield className="w-2.5 h-2.5 inline mr-0.5" />{doc.scan_verdict}
                         </span>
                       )}
@@ -240,7 +239,7 @@ export function SemanticSearchPanel() {
                   {doc.metadata && Object.keys(doc.metadata).length > 0 && (
                     <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 flex flex-wrap gap-1.5">
                       {Object.entries(doc.metadata).map(([k, v]) => (
-                        <span key={k} className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300">
+                        <span key={k} className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300">
                           {k}: {String(v)}
                         </span>
                       ))}

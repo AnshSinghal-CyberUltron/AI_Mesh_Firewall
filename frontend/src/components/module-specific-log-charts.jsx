@@ -3,40 +3,73 @@ import {
   ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 
 export function getModuleLogCharts(logData) {
   const moduleId = detectModuleId(logData);
+  let built;
   switch (moduleId) {
-    case "1.1": return get11LogCharts(logData);
-    case "1.2": return get12LogCharts(logData);
-    case "1.3": return get13LogCharts(logData);
-    case "1.4": return get14LogCharts(logData);
-    case "1.5": return get15LogCharts(logData);
-    case "1.6": return get16LogCharts(logData);
-    case "1.7": return get17LogCharts(logData);
-    default: return getDefaultLogCharts(logData);
+    case "1.1": built = get11LogCharts(logData); break;
+    case "1.2": built = get12LogCharts(logData); break;
+    case "1.3": built = get13LogCharts(logData); break;
+    case "1.4": built = get14LogCharts(logData); break;
+    case "1.5": built = get15LogCharts(logData); break;
+    case "1.6": built = get16LogCharts(logData); break;
+    case "1.7": built = get17LogCharts(logData); break;
+    default: built = getDefaultLogCharts(logData);
   }
+  // DYNAMIC: only surface charts backed by real data. A builder marks a chart
+  // `empty: true` when the underlying scan has no data for it (e.g. RAG-pipeline
+  // charts on a non-RAG request) — those are dropped here, and the whole
+  // "Module-Specific Scan Analysis" card hides when nothing real is left.
+  const charts = (built?.charts || []).filter((c) => c && !c.empty);
+  return { ...built, charts };
 }
 
+// Classify a scan by its REAL nature (endpoint / event type / stage) BEFORE
+// trusting a possibly-coarse module_id label — the gateway tags chat requests
+// with module_id "1.2", whose chart builder draws the RAG pipeline. Routing by
+// endpoint keeps a non-RAG request off the RAG charts entirely.
 function detectModuleId(logData) {
-  const metadata = logData?.metadata || {};
-  const sourceHint = String(logData?.source || metadata?.source || "").toLowerCase();
-  const moduleHint = String(logData?.module || metadata?.module || metadata?.module_id || "").toLowerCase();
-  if (moduleHint.startsWith("1.")) return moduleHint;
-  if (sourceHint.includes("1.1") || sourceHint.includes("ingress")) return "1.1";
-  if (sourceHint.includes("1.2") || sourceHint.includes("policy")) return "1.2";
-  if (sourceHint.includes("1.3") || sourceHint.includes("vector") || sourceHint.includes("rag")) return "1.3";
-  if (sourceHint.includes("1.4") || sourceHint.includes("mcp") || sourceHint.includes("context")) return "1.4";
-  if (sourceHint.includes("1.5") || sourceHint.includes("route") || sourceHint.includes("model")) return "1.5";
-  if (sourceHint.includes("1.6") || sourceHint.includes("kill_switch") || sourceHint.includes("isolation")) return "1.6";
-  if (sourceHint.includes("1.7") || sourceHint.includes("output")) return "1.7";
-  if (logData.app || logData.identity || logData.tokens) return "1.1";
-  if (logData.stage || logData.requestId) return "1.2";
-  if (logData.collection || logData.similarity) return "1.3";
-  if (logData.contextSize || logData.redactions) return "1.4";
-  if (logData.requested || logData.routed) return "1.5";
-  if (logData.model && logData.riskScore) return "1.6";
-  if (logData.guardrail || logData.confidence) return "1.7";
+  const m = logData?.metadata || {};
+  const extra = m?.extra || {};
+  const endpoint = String(m.endpoint || extra.endpoint || logData?.endpoint || "").toLowerCase();
+  const eventType = String(m.event_type || extra.event_type || "").toLowerCase();
+  const stage = String(m.pipeline_stage || extra.pipeline_stage || logData?.stage || "").toLowerCase();
+  const moduleHint = String(logData?.module || m.module || m.module_id || "").toLowerCase();
+  const sourceHint = String(logData?.source || m.source || "").toLowerCase();
+
+  // 1) Authoritative nature-of-scan signals. RAG/vector is the ONLY thing that
+  //    should render the RAG pipeline (query/retriever/ranker/generator) charts.
+  if (eventType.startsWith("rag") || eventType.includes("vector") ||
+      endpoint.includes("/rag") || endpoint.includes("/embedding") ||
+      ["rag", "query", "retriever", "ranker", "generator"].includes(stage)) return "1.3";
+  // Specific event types win over the generic chat-endpoint fallback below —
+  // an output_guard / model_routed / kill_switch event rides a /chat endpoint
+  // but is NOT a 1.1 ingress scan.
+  if (eventType.startsWith("output") || eventType.includes("guard")) return "1.7";
+  if (eventType.includes("kill") || eventType.includes("isolation") || eventType.includes("model_state")) return "1.6";
+  if (eventType === "model_routed") return "1.5";
+  if (endpoint.includes("/mcp")) return "1.4";
+  // Chat / responses / completions ingress → real token + latency charts, not RAG.
+  if (endpoint.includes("/chat") || endpoint.includes("/responses") || endpoint.includes("/completion") ||
+      eventType === "request" || eventType === "stream_complete" || eventType === "input_blocked") return "1.1";
+
+  // 2) Explicit module label as a fallback (e.g. seeded/simulated rows).
+  const mm = moduleHint.match(/^1\.[1-7]/);
+  if (mm) return mm[0];
+
+  // 3) Source / shape hints (legacy).
+  if (sourceHint.includes("rag") || sourceHint.includes("vector")) return "1.3";
+  if (sourceHint.includes("mcp") || sourceHint.includes("context")) return "1.4";
+  if (sourceHint.includes("output")) return "1.7";
+  if (sourceHint.includes("kill") || sourceHint.includes("isolation")) return "1.6";
+  if (sourceHint.includes("route")) return "1.5";
+  if (logData?.collection || logData?.similarity) return "1.3";
+  if (logData?.requested || logData?.routed) return "1.5";
+  if (logData?.guardrail) return "1.7";
+
+  // 4) Default to traffic ingress (real tokens/latency) — never RAG.
   return "1.1";
 }
 
@@ -48,19 +81,12 @@ function get11LogCharts(logData) {
   const outputTokens = parseNumeric(tokenUsageMeta.completion);
   const totalTokens = inputTokens + outputTokens;
   const requestSize = totalTokens || inputTokens || 0;
-  const requestTimeline = [
-    { step: "Auth", latency: Math.round(requestLatency * 0.2), size: Math.round(requestSize * 0.1) },
-    { step: "RateLimit", latency: Math.round(requestLatency * 0.15), size: Math.round(requestSize * 0.15) },
-    { step: "Policy", latency: Math.round(requestLatency * 0.25), size: Math.round(requestSize * 0.25) },
-    { step: "Route", latency: Math.round(requestLatency * 0.2), size: Math.round(requestSize * 0.2) },
-    { step: "Response", latency: Math.max(0, Math.round(requestLatency * 0.2)), size: Math.max(0, requestSize - Math.round(requestSize * 0.7)) },
-  ];
-  const authBreakdown = [
-    { phase: "Auth", duration: Math.max(1, Math.round(requestLatency * 0.25)) },
-    { phase: "Tenant", duration: Math.max(1, Math.round(requestLatency * 0.2)) },
-    { phase: "Budget", duration: Math.max(1, Math.round(requestLatency * 0.3)) },
-    { phase: "Ingress", duration: Math.max(1, Math.round(requestLatency * 0.25)) },
-  ];
+  // REAL per-stage latency from the pipeline trace (same data as the Pipeline
+  // Stages section) — never fabricate a latency breakdown from the total.
+  const ptStages = (metadata?.extra?.pipeline_trace?.stages || metadata?.pipeline_trace?.stages || logData?.pipeline_trace?.stages || []);
+  const realTimeline = (Array.isArray(ptStages) ? ptStages : [])
+    .map((s) => ({ step: String(s?.name || "").replace(/_/g, " "), latency: Math.round(parseNumeric(s?.latency_ms)) }))
+    .filter((s) => s.step);
   const tokenUsage = [
     { type: "Input", tokens: inputTokens || Math.round(requestSize * 0.6), color: "#14b8a6" },
     { type: "Output", tokens: outputTokens || Math.round(requestSize * 0.4), color: "#8b5cf6" },
@@ -68,42 +94,33 @@ function get11LogCharts(logData) {
   return {
     charts: [
       {
-        title: "Request Processing Timeline",
+        // Real per-stage latency (from the pipeline trace). Hidden when the
+        // scan carries no trace — no synthetic latency breakdown.
+        empty: realTimeline.length === 0,
+        title: "Pipeline Stage Latency",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={requestTimeline}>
+          <SafeResponsiveChart className="h-[250px] w-full">
+            <BarChart data={realTimeline}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis dataKey="step" stroke="#64748b" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="step" stroke="#64748b" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={70} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
-              <Tooltip /><Line type="monotone" dataKey="latency" stroke="#14b8a6" strokeWidth={2} name="Latency (ms)" />
-            </LineChart>
-          </ResponsiveContainer>
-        ),
-      },
-      {
-        title: "Authentication Breakdown",
-        component: (
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={authBreakdown} layout="horizontal">
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="phase" stroke="#64748b" tick={{ fontSize: 10 }} width={120} />
-              <Tooltip /><Bar dataKey="duration" fill="#8b5cf6" />
+              <Tooltip /><Bar dataKey="latency" fill="#14b8a6" name="Latency (ms)" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
+        empty: totalTokens <= 0,
         title: "Token Usage Distribution",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <PieChart>
               <Pie data={tokenUsage} cx="50%" cy="50%" outerRadius={90} dataKey="tokens" label={({ type, tokens }) => `${type}: ${tokens}`}>
                 {tokenUsage.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Pie>
               <Tooltip />
             </PieChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -175,12 +192,18 @@ function get12LogCharts(logData) {
         documents: s === stageHint ? baseThroughput : (hasStageData ? 100 : 0),
       }));
 
+  // RAG/vector pipeline charts are only meaningful with REAL stage data
+  // (pipeline_audit, or at least a pipeline_stage hint). A plain chat/policy
+  // request has neither — so mark them empty and they get dropped (the card
+  // hides) instead of rendering an empty "no stage data" RAG pipeline.
+  const ragEmpty = !hasAudit && !hasStageData;
   return {
     charts: [
       {
+        empty: ragEmpty,
         title: hasAudit ? "Pipeline Stage Latency (real audit)" : (hasStageData ? `Pipeline Stage: ${stageHint.charAt(0).toUpperCase() + stageHint.slice(1)}` : "Pipeline Stage (no stage data)"),
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={pipelineStages}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="stage" stroke="#64748b" tick={{ fontSize: 11 }} />
@@ -188,13 +211,14 @@ function get12LogCharts(logData) {
               <Tooltip />
               <Bar dataKey="latency" fill="#8b5cf6" name="Latency (ms)" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
+        empty: ragEmpty,
         title: hasAudit ? "Stage Verdicts (real audit)" : "Detection vs Passed by Stage",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={detectionFlow}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="stage" stroke="#64748b" tick={{ fontSize: 11 }} />
@@ -204,20 +228,21 @@ function get12LogCharts(logData) {
               <Bar dataKey="flagged" fill="#f59e0b" stackId="a" name="Flagged/Rewritten" />
               <Bar dataKey="passed" fill="#10b981" stackId="a" name="Passed" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
+        empty: ragEmpty,
         title: hasAudit ? "Document Filtering Funnel (real audit)" : "Stage Completion Funnel",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={docFunnel} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="stage" stroke="#64748b" tick={{ fontSize: 11 }} width={80} />
               <Tooltip /><Bar dataKey="documents" fill="#14b8a6" name="Documents" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -250,40 +275,40 @@ function get13LogCharts(logData) {
       {
         title: "Document Similarity Scores",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={similarityScores}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="doc" stroke="#64748b" tick={{ fontSize: 10 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 1]} />
               <Tooltip /><Bar dataKey="similarity" fill="#8b5cf6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Retrieval Performance Radar",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <RadarChart data={retrievalMetrics}>
               <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
               <PolarAngleAxis dataKey="metric" stroke="#64748b" tick={{ fontSize: 11 }} />
               <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 10 }} />
               <Radar name="Score" dataKey="value" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.6} /><Tooltip />
             </RadarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Query Response Time Breakdown",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <PieChart>
               <Pie data={timeBreakdown} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}ms`}>
                 {timeBreakdown.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Pie>
               <Tooltip />
             </PieChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -318,40 +343,40 @@ function get14LogCharts(logData) {
       {
         title: "Context Field Sizes (tokens)",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={fieldSizes}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="field" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip /><Bar dataKey="size" fill="#14b8a6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "PII Detections by Type",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <PieChart>
               <Pie data={piiDetections} cx="50%" cy="50%" outerRadius={90} dataKey="count" label={({ type, count }) => `${type}: ${count}`}>
                 {piiDetections.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Pie>
               <Tooltip />
             </PieChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Assembly Process Timeline",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={timeline} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="phase" stroke="#64748b" tick={{ fontSize: 10 }} width={120} />
               <Tooltip /><Bar dataKey="duration" fill="#8b5cf6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -387,40 +412,40 @@ function get15LogCharts(logData) {
       {
         title: "Routing Decision Factors",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <RadarChart data={routingDecision}>
               <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
               <PolarAngleAxis dataKey="factor" stroke="#64748b" tick={{ fontSize: 11 }} />
               <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 10 }} />
               <Radar name="Score" dataKey="score" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.6} /><Tooltip />
             </RadarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Cost Comparison",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={costComparison}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="model" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip /><Bar dataKey="cost" fill="#8b5cf6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Response Time Breakdown",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <PieChart>
               <Pie data={timeBreakdown} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}ms`}>
                 {timeBreakdown.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Pie>
               <Tooltip />
             </PieChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -453,7 +478,7 @@ function get16LogCharts(logData) {
       {
         title: "Risk Score Trend",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <AreaChart data={riskTrend}>
               <defs>
                 <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1">
@@ -466,33 +491,33 @@ function get16LogCharts(logData) {
               <Tooltip />
               <Area type="monotone" dataKey="risk" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#riskGradient)" />
             </AreaChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Model Health Metrics",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <RadarChart data={isolationMetrics}>
               <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
               <PolarAngleAxis dataKey="metric" stroke="#64748b" tick={{ fontSize: 10 }} />
               <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 10 }} />
               <Radar name="Score" dataKey="value" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.6} /><Tooltip />
             </RadarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Isolation Decision Timeline",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={timeline} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="phase" stroke="#64748b" tick={{ fontSize: 11 }} width={100} />
               <Tooltip /><Bar dataKey="duration" fill="#ef4444" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -528,40 +553,40 @@ function get17LogCharts(logData) {
       {
         title: "Guardrail Confidence Scores",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={guardrailScores}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="guardrail" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 1]} />
               <Tooltip /><Bar dataKey="score" fill="#8b5cf6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Content Analysis Results",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <PieChart>
               <Pie data={contentAnalysis} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ category, value }) => `${category}: ${value}%`}>
                 {contentAnalysis.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Pie>
               <Tooltip />
             </PieChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
       {
         title: "Processing Pipeline",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <BarChart data={pipeline} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="stage" stroke="#64748b" tick={{ fontSize: 10 }} width={100} />
               <Tooltip /><Bar dataKey="duration" fill="#14b8a6" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],
@@ -575,14 +600,14 @@ function getDefaultLogCharts(logData) {
       {
         title: "Processing Timeline",
         component: (
-          <ResponsiveContainer width="100%" height={250}>
+          <SafeResponsiveChart className="h-[250px] w-full">
             <LineChart data={[{ step: 1, value }]}>
               <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
               <XAxis dataKey="step" stroke="#64748b" tick={{ fontSize: 11 }} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip /><Line type="monotone" dataKey="value" stroke="#14b8a6" strokeWidth={2} />
             </LineChart>
-          </ResponsiveContainer>
+          </SafeResponsiveChart>
         ),
       },
     ],

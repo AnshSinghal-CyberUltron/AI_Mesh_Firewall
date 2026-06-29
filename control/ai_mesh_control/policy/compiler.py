@@ -13,6 +13,7 @@ core.signals (module-level ConnectionPool, error logging without blocking).
 
 import json
 import logging
+import threading
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -31,6 +32,117 @@ logger = logging.getLogger(__name__)
 REDIS_KEY_COMPILED = "policies:compiled"
 REDIS_KEY_VERSION = "policies:version"
 PUBSUB_CHANNEL = "policy_updates"
+
+# HIGH (compile-to-Redis stale-content-wins race): the bundle's ``compiled_at``
+# is the monotonic freshness stamp the gateway already orders on
+# (policy_sync._is_newer_notification). ``time.time()`` is wall-clock and can
+# regress under NTP/leap adjustments, which would let an *older* snapshot
+# masquerade as newer. A process-local monotonic floor guarantees that two
+# compiles produced by the same process always carry strictly increasing
+# stamps even if the wall clock steps backward between them. The Redis-side
+# guard in push_to_redis() enforces the same invariant *across* processes /
+# celery workers by refusing to overwrite a stored bundle whose ``compiled_at``
+# is newer than the one being pushed.
+_COMPILED_AT_LOCK = threading.Lock()
+_LAST_COMPILED_AT = 0.0
+
+# Per-org compile serialization lock (see compile_and_push). Held just long
+# enough to make compile_all()+push_to_redis() atomic w.r.t. other compilers
+# of the same org, so a slow compile of a *stale* snapshot can no longer
+# interleave its push between a fresh compile and the fresh push.
+_COMPILE_LOCK_KEY = "policies:compile_lock:{org}"
+_COMPILE_LOCK_TTL_S = 30
+
+
+class _StaleBundleSkip(Exception):
+    """Internal sentinel: abort the WATCH/MULTI/EXEC without writing because a
+    strictly-newer bundle is already stored. Never propagates outside
+    push_to_redis()."""
+
+
+def _coerce_float(val: Any) -> float | None:
+    """Best-effort float coercion; None on anything non-numeric. Mirrors the
+    gateway's defensive normalization so a malformed stored ``compiled_at``
+    can never raise inside the transaction (which would drop the write path)."""
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_compiled_at(stored_raw: Any) -> Any:
+    """Pull ``compiled_at`` out of a serialized bundle read back from Redis.
+    Returns None if the value is missing or the blob is unparseable — in which
+    case the caller treats freshness as unknown and allows the write (the new
+    bundle is at least as fresh as an unreadable one)."""
+    if not isinstance(stored_raw, (str, bytes, bytearray)):
+        return None
+    try:
+        parsed = json.loads(stored_raw)
+    except (ValueError, TypeError):
+        return None
+    if isinstance(parsed, dict):
+        return parsed.get("compiled_at")
+    return None
+
+
+def _next_compiled_at() -> float:
+    """Return a wall-clock-based ``compiled_at`` that never regresses within
+    this process. Strictly increasing across calls so co-resident compiles get
+    a deterministic ordering even under clock skew."""
+    global _LAST_COMPILED_AT
+    with _COMPILED_AT_LOCK:
+        now = time.time()
+        if now <= _LAST_COMPILED_AT:
+            # Smallest representable advance keeps the float a wall-clock-ish
+            # value the gateway can still compare with ``>``.
+            now = _LAST_COMPILED_AT + 1e-6
+        _LAST_COMPILED_AT = now
+        return now
+
+# R2: keys inside a rule's condition/redaction_config that name a *target model*
+# the gateway will route inference to (e.g. a model_downgrade rule sets
+# ``redaction_config["downgrade_to"]`` which gateway main.py reads as the new
+# ``body["model"]``). The reserved platform/guard model ("zeroshield-model" +
+# legacy 120b aliases) must NEVER be emitted as such a target — it is internal
+# ML only, never an org inference destination. A policy/rule that names it is
+# scrubbed at compile time so the gateway never receives the reserved model as
+# a routing/downgrade candidate via the policy bundle.
+_MODEL_TARGET_KEYS = ("downgrade_to", "target_model", "model", "route_to", "reroute_to")
+
+
+def _scrub_reserved_model_targets(mapping: Any) -> Any:
+    """Drop reserved platform-model names from any model-target key in a rule's
+    condition / redaction_config dict. Returns the mapping unchanged when no
+    reserved name is present. Defensive + cheap: only inspects the known
+    model-target keys, never touches regex/keyword/redaction content."""
+    if not isinstance(mapping, dict):
+        return mapping
+    try:
+        from core.models import is_platform_managed_llm_model_name
+    except Exception:  # pragma: no cover - import safety; never block a compile
+        return mapping
+
+    cleaned = None
+    for key in _MODEL_TARGET_KEYS:
+        val = mapping.get(key)
+        if isinstance(val, str) and is_platform_managed_llm_model_name(val):
+            if cleaned is None:
+                cleaned = dict(mapping)
+            # Remove the reserved target entirely; the gateway falls back to the
+            # org default model when ``downgrade_to`` is absent.
+            cleaned.pop(key, None)
+            logger.warning(
+                "Scrubbed reserved platform model from compiled rule field %r", key
+            )
+    return cleaned if cleaned is not None else mapping
+
+# M-04: bundle FORMAT/schema version (distinct from the monotonic Redis
+# "version" cache-invalidation counter). Bumped to 2 when actor-scoping
+# fields (allowed_user_ids/allowed_agent_ids/allowed_roles/redaction_fields)
+# were added to the compiled policy snapshot. Consumers may read this to
+# detect capability; absence (old bundle) implies schema 1 = no actor scoping.
+BUNDLE_SCHEMA_VERSION = 2
 
 _redis_pool: redis.ConnectionPool | None = None
 
@@ -102,8 +214,12 @@ class PolicyCompiler:
             compiled_policies.append(snapshot)
 
         bundle: dict[str, Any] = {
-            "compiled_at": time.time(),
+            "compiled_at": _next_compiled_at(),
+            # M-04: advertise the bundle format so gateways can detect that
+            # actor-scoping fields are present. Additive — old gateways ignore it.
+            "bundle_schema_version": BUNDLE_SCHEMA_VERSION,
             "policy_count": len(compiled_policies),
+            "rule_count": sum(len(p.get("rules", [])) for p in compiled_policies),
             "policies": compiled_policies,
         }
 
@@ -151,14 +267,54 @@ class PolicyCompiler:
             # Result: every (version, bundle) pair stored is consistent and
             # the publish notification carries the version that actually
             # matches the bytes at redis_key.
-            tx_state: dict[str, Any] = {"version": None, "policy_count": 0}
+            tx_state: dict[str, Any] = {
+                "version": None,
+                "policy_count": 0,
+                "skipped_stale": False,
+            }
+
+            # HIGH stale-content-wins fix: the bundle being pushed carries a
+            # monotonic ``compiled_at`` stamped at compile time. The freshness
+            # authority is that stamp, NOT the blind version counter. Resolve
+            # it once outside the (possibly-retried) transaction body.
+            incoming_compiled_at = _coerce_float(bundle.get("compiled_at"))
 
             def _atomic_publish(pipe: "redis.client.Pipeline") -> None:
+                # WATCH covers both keys: a concurrent push that advances the
+                # version OR replaces the bundle content forces a retry, so the
+                # staleness comparison below is always made against the bundle
+                # that is actually committed.
                 current_raw = pipe.get(version_key)
                 try:
                     current = int(current_raw) if current_raw is not None else 0
                 except (TypeError, ValueError):
                     current = 0
+
+                # Refuse to let an OLDER snapshot win. If a bundle is already
+                # stored and its ``compiled_at`` is strictly NEWER than the one
+                # we are about to push, abandon the write entirely (no version
+                # bump, no set, no publish) so a just-disabled/loosened policy
+                # cannot be resurrected by a slow, stale compile that lands
+                # last. Only advance to a strictly-newer snapshot.
+                stored_raw = pipe.get(redis_key)
+                if stored_raw is not None and incoming_compiled_at is not None:
+                    stored_compiled_at = _coerce_float(
+                        _extract_compiled_at(stored_raw)
+                    )
+                    if (
+                        stored_compiled_at is not None
+                        and stored_compiled_at >= incoming_compiled_at
+                    ):
+                        # Abandon the write entirely: leave the fresher stored
+                        # bundle in place (no version bump, no SET, no publish).
+                        # Raise a sentinel so the pipeline context manager's
+                        # reset() issues UNWATCH and releases the connection
+                        # cleanly — robust across redis-py versions, unlike
+                        # poking at empty-MULTI/watching internals.
+                        tx_state["skipped_stale"] = True
+                        tx_state["version"] = current
+                        raise _StaleBundleSkip
+
                 new_version = current + 1
 
                 # Bundle is mutated each retry so the signed payload always
@@ -194,6 +350,18 @@ class PolicyCompiler:
 
             try:
                 client.transaction(_atomic_publish, version_key)
+            except _StaleBundleSkip:
+                # A strictly-newer bundle is already stored; we deliberately
+                # did NOT overwrite it. This is a successful no-op (the fresher
+                # snapshot wins), not a failure.
+                logger.info(
+                    "Skipped pushing stale policy bundle to Redis (%s, "
+                    "incoming compiled_at=%s is not newer than stored, trigger=%s)",
+                    redis_key,
+                    incoming_compiled_at,
+                    trigger,
+                )
+                return True
             except RuntimeError:
                 logger.exception(
                     "Refusing to push unsigned policy bundle "
@@ -229,14 +397,68 @@ class PolicyCompiler:
         """
         Convenience method: compile all enabled policies and push to Redis.
         Returns True on success, False on failure.
+
+        HIGH stale-content-wins fix: compile_all() + push_to_redis() are wrapped
+        in a per-org Redis lock so concurrent compiles of the SAME org (celery
+        concurrency 2, PolicyCompileView, apps startup all share this entry
+        point) serialize instead of interleaving a fresh compile with a slow,
+        stale push. If the lock can't be acquired (another compile is already
+        running), we still compile+push: the push-side ``compiled_at`` guard is
+        the hard correctness backstop, so the lock is a contention optimizer,
+        not the sole safety mechanism — we never silently skip a legitimate
+        recompile just because the lock is busy or Redis is briefly unavailable.
         """
-        bundle = self.compile_all(organization=organization)
-        return self.push_to_redis(
-            bundle,
-            trigger=trigger,
-            changed_policy_ids=changed_policy_ids,
-            organization=organization,
+        org_slug = organization.slug if organization else "default"
+        lock_key = _COMPILE_LOCK_KEY.format(org=org_slug)
+        lock_token = f"{id(self)}:{time.time()}"
+        have_lock = False
+        client = None
+        try:
+            client = _get_redis_client()
+            # SET key token NX EX <ttl>: atomic acquire with auto-expiry so a
+            # crashed holder can't wedge compiles for this org forever.
+            have_lock = bool(
+                client.set(lock_key, lock_token, nx=True, ex=_COMPILE_LOCK_TTL_S)
+            )
+        except redis.RedisError:
+            # Lock acquisition is best-effort; fall through and rely on the
+            # push-side compiled_at ordering guarantee.
+            logger.warning(
+                "Could not acquire per-org policy compile lock for %s; "
+                "proceeding (push-side freshness guard still applies)",
+                org_slug,
+            )
+
+        try:
+            bundle = self.compile_all(organization=organization)
+            return self.push_to_redis(
+                bundle,
+                trigger=trigger,
+                changed_policy_ids=changed_policy_ids,
+                organization=organization,
+            )
+        finally:
+            if have_lock and client is not None:
+                # Release only if we still own the token (defensive against a
+                # TTL-expired lock having been re-acquired by another compile).
+                try:
+                    self._release_compile_lock(client, lock_key, lock_token)
+                except redis.RedisError:
+                    logger.warning(
+                        "Failed to release per-org policy compile lock for %s "
+                        "(it will expire via TTL)",
+                        org_slug,
+                    )
+
+    @staticmethod
+    def _release_compile_lock(client: "redis.Redis", lock_key: str, token: str) -> None:
+        """Compare-and-delete the compile lock so we never delete a lock now
+        owned by a different compiler (token mismatch after TTL expiry)."""
+        lua = (
+            "if redis.call('get', KEYS[1]) == ARGV[1] then "
+            "return redis.call('del', KEYS[1]) else return 0 end"
         )
+        client.eval(lua, 1, lock_key, token)
 
     @staticmethod
     def _build_snapshot(policy: Policy) -> dict[str, Any]:
@@ -264,6 +486,13 @@ class PolicyCompiler:
                 "target_tool",
             )
         )
+        # R2: never let a rule emit the reserved platform/guard model as a
+        # routing/downgrade target into the gateway-consumed bundle.
+        for rule in enabled_rules:
+            rule["condition"] = _scrub_reserved_model_targets(rule.get("condition"))
+            rule["redaction_config"] = _scrub_reserved_model_targets(
+                rule.get("redaction_config")
+            )
         mcp_server_slug = None
         if policy.mcp_server_id:
             mcp_server_slug = policy.mcp_server.server_slug if policy.mcp_server else None
@@ -281,6 +510,15 @@ class PolicyCompiler:
                 "version": policy.version,
                 "policy_domain": policy.policy_domain,
                 "mcp_server_slug": mcp_server_slug,
+                # M-04: actor-scoping allowlists + response field redaction.
+                # These were defined on the model + serializers but never
+                # serialized into the compiled bundle, so enforcement was a
+                # silent no-op. Emit them additively (default [] = applies to
+                # everyone). `or []` guards against legacy NULL column values.
+                "allowed_user_ids": list(policy.allowed_user_ids or []),
+                "allowed_agent_ids": list(policy.allowed_agent_ids or []),
+                "allowed_roles": list(policy.allowed_roles or []),
+                "redaction_fields": list(policy.redaction_fields or []),
             },
             "rules": enabled_rules,
         }

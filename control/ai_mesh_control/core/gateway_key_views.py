@@ -309,7 +309,11 @@ class GatewayAPIKeyViewSet(ModelViewSet):
         return GatewayAPIKeySerializer
 
     def create(self, request, *args, **kwargs):
-        serializer = GatewayAPIKeyCreateSerializer(data=request.data)
+        # Pass request context so the serializer can gate reserved privileged
+        # permission flags (admin/playground) on platform-operator status.
+        serializer = GatewayAPIKeyCreateSerializer(
+            data=request.data, context=self.get_serializer_context()
+        )
         serializer.is_valid(raise_exception=True)
         validated = serializer.validated_data
 

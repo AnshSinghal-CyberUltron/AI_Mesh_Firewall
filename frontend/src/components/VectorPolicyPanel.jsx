@@ -5,11 +5,14 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
+import { PolicyDomainSwitcher } from "./PolicyDomainSwitcher";
+import { DEFAULT_VECTOR_PROVIDER, VECTOR_PROVIDERS } from "../constants/vectorProviders";
 
 const DB_TYPE_LABELS = {
-  chroma: "ChromaDB",
+  chroma: "Chroma (BYOK)",
   pinecone: "Pinecone",
   milvus: "Milvus",
+  custom: "Custom",
 };
 
 const ACTION_CONFIG = {
@@ -22,7 +25,7 @@ const EMPTY_FORM = {
   name: "",
   project_id: "",
   collection_name: "",
-  vector_db_type: "chroma",
+  vector_db_type: DEFAULT_VECTOR_PROVIDER,
   namespace: "",
   default_action: "deny",
   allowed_operations: ["query"],
@@ -72,7 +75,7 @@ function ActionBadge({ action }) {
   );
 }
 
-function VectorPolicyModal({ title, form, setForm, onSubmit, onClose, submitting, error, isEdit }) {
+function VectorPolicyModal({ title, form, setForm, onSubmit, onClose, submitting, error, isEdit, onRequestGenericCreate }) {
   const toggleOp = (op) => {
     const ops = form.allowed_operations || [];
     if (ops.includes(op)) {
@@ -101,6 +104,8 @@ function VectorPolicyModal({ title, form, setForm, onSubmit, onClose, submitting
             onClick={guardedClose}
             disabled={submitting}
             className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Close"
+            title="Close"
           >
             <X className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </button>
@@ -111,6 +116,16 @@ function VectorPolicyModal({ title, form, setForm, onSubmit, onClose, submitting
           </div>
         )}
         <form onSubmit={onSubmit} className="space-y-4">
+          {!isEdit && onRequestGenericCreate ? (
+            <PolicyDomainSwitcher
+              value="vector"
+              onChange={(domain) => {
+                // Switching away from Vector hands off to the generic policy
+                // modal (Vector is a separate resource and stays its own form).
+                if (domain !== "vector") onRequestGenericCreate(domain);
+              }}
+            />
+          ) : null}
           <div>
             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Policy Name *</label>
             <input
@@ -154,11 +169,12 @@ function VectorPolicyModal({ title, form, setForm, onSubmit, onClose, submitting
                 value={form.vector_db_type}
                 disabled={isEdit}
                 onChange={(e) => setForm({ ...form, vector_db_type: e.target.value })}
+                aria-label="Vector DB type"
                 className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 disabled:bg-slate-50 dark:bg-slate-800/50 disabled:text-slate-400"
               >
-                <option value="chroma">ChromaDB</option>
-                <option value="pinecone">Pinecone</option>
-                <option value="milvus">Milvus</option>
+                {VECTOR_PROVIDERS.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -169,6 +185,7 @@ function VectorPolicyModal({ title, form, setForm, onSubmit, onClose, submitting
               <select
                 value={form.default_action}
                 onChange={(e) => setForm({ ...form, default_action: e.target.value })}
+                aria-label="Default action"
                 className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
               >
                 <option value="deny">Deny</option>
@@ -338,6 +355,10 @@ export function VectorPolicyPanel({
   title = "Vector Collection Policies",
   description = "Manage access policies for vector database collections",
   externalCreateSignal = 0,
+  // Invoked when the user picks a non-Vector domain in the in-panel switcher.
+  // The parent closes this Vector modal and opens the generic policy modal for
+  // the chosen domain (global/pipeline/rag/mcp -> /api/policies/).
+  onRequestGenericCreate,
 }) {
   const { fetchWithAuth, user } = useAuth();
   // Bundle Z4 — admin gate on the Compile button. The backend already
@@ -485,7 +506,7 @@ export function VectorPolicyPanel({
       name: policy.name || "",
       project_id: policy.project_id || "",
       collection_name: policy.collection_name || "",
-      vector_db_type: policy.vector_db_type || "chroma",
+      vector_db_type: policy.vector_db_type || DEFAULT_VECTOR_PROVIDER,
       namespace: policy.namespace || "",
       default_action: policy.default_action || "deny",
       allowed_operations: policy.allowed_operations || ["query"],
@@ -596,7 +617,7 @@ export function VectorPolicyPanel({
           <div>
             {compileStatus.success ? "Vector policies compiled and pushed to gateway." : `Compilation failed: ${compileStatus.error}`}
           </div>
-          <button onClick={() => setCompileStatus(null)} className="ml-auto p-0.5 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded transition-colors">
+          <button onClick={() => setCompileStatus(null)} className="ml-auto p-0.5 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded transition-colors" aria-label="Dismiss compile status" title="Dismiss">
             <X className="w-3 h-3" />
           </button>
         </div>
@@ -684,6 +705,7 @@ export function VectorPolicyPanel({
                           <button
                             onClick={() => openEditModal(p)}
                             className="p-1.5 hover:bg-slate-200 rounded text-slate-500 dark:text-slate-400 transition-colors"
+                            aria-label="Edit vector policy"
                             title="Edit Policy"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -691,6 +713,7 @@ export function VectorPolicyPanel({
                           <button
                             onClick={() => handleDelete(p.id)}
                             className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-400 hover:text-red-600 transition-colors"
+                            aria-label="Delete vector policy"
                             title="Delete Policy"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -716,6 +739,14 @@ export function VectorPolicyPanel({
           submitting={submitting}
           error={formError}
           isEdit={false}
+          onRequestGenericCreate={
+            onRequestGenericCreate
+              ? (domain) => {
+                  setCreateModalOpen(false);
+                  onRequestGenericCreate(domain);
+                }
+              : undefined
+          }
         />
       )}
 

@@ -97,6 +97,8 @@ class RAGFirewallPipeline:
         key_hash: str = "",
         organization_id: int | None = None,
         user_id: int | str | None = None,
+        vector_client_override: Any = None,
+        actor: dict[str, Any] | None = None,
     ) -> PipelineResult:
         effective_policy = policy or {}
         ctx = PipelineContext(
@@ -105,8 +107,9 @@ class RAGFirewallPipeline:
             query_text=query_text,
         )
 
-        # Hot-update compiled policies from sync cache
-        compiled_policies = self._get_compiled_policies()
+        # Hot-update compiled policies from sync cache (org-scoped)
+        org_slug = (effective_policy or {}).get("_org_slug") or ""
+        compiled_policies = self._get_compiled_policies(org_slug)
         if compiled_policies:
             self._ranker.update_policies(compiled_policies)
 
@@ -137,7 +140,7 @@ class RAGFirewallPipeline:
                 "original_query": q_out.original_query,
             },
         ))
-        self._emit_stage_telemetry(ctx, "query", q_out.verdict, project_id, key_hash, collection_name, q_out.latency_ms, organization_id=organization_id, user_id=user_id)
+        self._emit_stage_telemetry(ctx, "query", q_out.verdict, project_id, key_hash, collection_name, q_out.latency_ms, organization_id=organization_id, user_id=user_id, namespace=namespace)
         if q_out.verdict.action == "block":
             ctx.final_action = "block"
             return self._build_result(ctx, 0, blocked=True)
@@ -166,6 +169,7 @@ class RAGFirewallPipeline:
             policy=effective_policy,
             escalation_level=ctx.escalation_level,
             key_hash=key_hash,
+            vector_client=vector_client_override,
         ))
         ctx.add_stage(StageRecord(
             stage_name="retriever",
@@ -180,10 +184,48 @@ class RAGFirewallPipeline:
             },
             approved_doc_ids=[m.doc_id for m in r_out.document_manifest],
         ))
-        self._emit_stage_telemetry(ctx, "retriever", r_out.verdict, project_id, key_hash, collection_name, r_out.retrieval_latency_ms, organization_id=organization_id, user_id=user_id)
+        self._emit_stage_telemetry(ctx, "retriever", r_out.verdict, project_id, key_hash, collection_name, r_out.retrieval_latency_ms, organization_id=organization_id, user_id=user_id, namespace=namespace)
         if r_out.verdict.action == "block":
             ctx.final_action = "block"
             return self._build_result(ctx, r_out.total_retrieved, blocked=True)
+
+        # ──────── Guardrails-only simplified query pipeline ────────
+        # When both downstream stages are disabled (the default), the gateway's
+        # job is done after retrieval-scanning: return the retriever-approved
+        # documents directly. The client owns reranking/generation and calls the
+        # generator model through the normal chat pipeline (where Tier-1/Tier-2 +
+        # output guard apply). This removes the reranker/generator overhead.
+        rag_ranker_on = bool(self._config.get("rag_ranker_enabled", False))
+        rag_generator_on = bool(self._config.get("rag_generator_enabled", False))
+        # Force the ranker to run when the active policy declares document-content
+        # controls, even if the global ranker flag is off. RankerStage is the SOLE
+        # consumer of block_sensitive_documents / anomaly_distance_threshold /
+        # require_context_scan / sensitive_fields; skipping it would return docs
+        # with SSN/secret content (or sensitive metadata) verbatim. The
+        # guardrails-only fast path only applies when none of these are requested.
+        if not rag_ranker_on and self._policy_requires_ranker(effective_policy):
+            rag_ranker_on = True
+        if not rag_ranker_on and not rag_generator_on:
+            ctx.final_action = r_out.verdict.action
+            audit = ctx.to_audit_dict()
+            return PipelineResult(
+                action=r_out.verdict.action,
+                documents=r_out.documents,
+                total_retrieved=r_out.total_retrieved,
+                filtered_count=0,
+                scan_verdict={
+                    "action": r_out.verdict.action,
+                    "flagged_documents": [],
+                    "anomalous_documents": [],
+                    "detail": r_out.verdict.detail,
+                },
+                context_binding_id="",
+                pipeline_context=ctx,
+                context_chunks=[],
+                pipeline_audit=audit,
+                canary_word="",
+                model_downgrade=model_downgrade,
+            )
 
         # ──────── Stage 3: Ranker ────────
         t2 = time.perf_counter()
@@ -192,6 +234,7 @@ class RAGFirewallPipeline:
             query_text=effective_query,
             policy=effective_policy,
             escalation_level=ctx.escalation_level,
+            actor=actor,
         ))
         t2_end = time.perf_counter()
         ctx.add_stage(StageRecord(
@@ -208,10 +251,35 @@ class RAGFirewallPipeline:
             },
             approved_doc_ids=[m.doc_id for m in rank_out.approved_manifest],
         ))
-        self._emit_stage_telemetry(ctx, "ranker", rank_out.verdict, project_id, key_hash, collection_name, (t2_end - t2) * 1000, organization_id=organization_id, user_id=user_id)
+        self._emit_stage_telemetry(ctx, "ranker", rank_out.verdict, project_id, key_hash, collection_name, (t2_end - t2) * 1000, organization_id=organization_id, user_id=user_id, namespace=namespace)
         if rank_out.verdict.action == "block":
             ctx.final_action = "block"
             return self._build_result(ctx, r_out.total_retrieved, blocked=True)
+
+        # Generator stage disabled (default): return the ranker-approved
+        # documents directly. Canary tokens / context-binding / leakage
+        # registration are RAG-application plumbing the client owns.
+        if not rag_generator_on:
+            ctx.final_action = rank_out.verdict.action
+            audit = ctx.to_audit_dict()
+            return PipelineResult(
+                action=rank_out.verdict.action,
+                documents=rank_out.ranked_documents,
+                total_retrieved=r_out.total_retrieved,
+                filtered_count=r_out.total_retrieved - len(rank_out.ranked_documents),
+                scan_verdict={
+                    "action": rank_out.verdict.action,
+                    "flagged_documents": rank_out.flagged_indices,
+                    "anomalous_documents": rank_out.anomalous_indices,
+                    "detail": rank_out.verdict.detail,
+                },
+                context_binding_id="",
+                pipeline_context=ctx,
+                context_chunks=[],
+                pipeline_audit=audit,
+                canary_word="",
+                model_downgrade=model_downgrade,
+            )
 
         # ──────── Stage 4: Generator ────────
         t3 = time.perf_counter()
@@ -239,7 +307,7 @@ class RAGFirewallPipeline:
             },
             approved_doc_ids=[m.doc_id for m in gen_out.verified_manifest],
         ))
-        self._emit_stage_telemetry(ctx, "generator", gen_out.verdict, project_id, key_hash, collection_name, (t3_end - t3) * 1000, organization_id=organization_id, user_id=user_id)
+        self._emit_stage_telemetry(ctx, "generator", gen_out.verdict, project_id, key_hash, collection_name, (t3_end - t3) * 1000, organization_id=organization_id, user_id=user_id, namespace=namespace)
 
         if gen_out.verdict.action == "block":
             ctx.final_action = "block"
@@ -266,16 +334,45 @@ class RAGFirewallPipeline:
             model_downgrade=model_downgrade or gen_out.model_downgrade,
         )
 
-    def _get_compiled_policies(self) -> list[dict]:
-        """Retrieve compiled policies from the sync cache."""
+    @staticmethod
+    def _policy_requires_ranker(policy: dict[str, Any]) -> bool:
+        """True when the policy declares document-content controls the ranker enforces.
+
+        These advertised guardrails (sensitive-document blocking, anomaly
+        distance thresholds, required context scanning, per-field redaction)
+        only run inside RankerStage. If a policy asks for any of them we must
+        run the ranker for the request, even when the global ranker flag is off.
+        """
+        if not policy:
+            return False
+        if policy.get("block_sensitive_documents"):
+            return True
+        if policy.get("require_context_scan"):
+            return True
+        threshold = policy.get("anomaly_distance_threshold")
+        if threshold is not None:
+            try:
+                if float(threshold) > 0:
+                    return True
+            except (TypeError, ValueError):
+                pass
+        if policy.get("sensitive_fields"):
+            return True
+        return False
+
+    def _get_compiled_policies(self, org_slug: str = "") -> list[dict]:
+        """Retrieve compiled policy entries from the sync cache for an org."""
         if self._policy_sync is None:
             return []
+        slug = (org_slug or "").strip() or "default"
         try:
-            bundle = self._policy_sync.get_compiled_policies()
-            if bundle and isinstance(bundle, dict):
-                return bundle.get("policies", [])
-            if isinstance(bundle, list):
-                return bundle
+            try:
+                from ..policy_sync import filter_policies_by_domain
+            except ImportError:
+                from policy_sync import filter_policies_by_domain
+            return filter_policies_by_domain(
+                self._policy_sync.get_policies(slug) or [], "rag"
+            )
         except Exception:
             LOG.debug("Failed to retrieve compiled policies from sync", exc_info=True)
         return []
@@ -291,6 +388,7 @@ class RAGFirewallPipeline:
         latency_ms: float,
         organization_id: int | None = None,
         user_id: int | str | None = None,
+        namespace: str = "",
     ) -> None:
         if self._telemetry is None:
             return
@@ -313,6 +411,7 @@ class RAGFirewallPipeline:
             metadata={
                 "request_id": ctx.request_id,
                 "collection": collection_name,
+                "namespace": namespace,
                 "escalation_level": ctx.escalation_level,
                 "detail": verdict.detail,
                 "module": "1.3",

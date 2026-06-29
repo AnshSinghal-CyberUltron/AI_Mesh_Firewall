@@ -8,6 +8,8 @@ Runs in ThreadPoolExecutor to avoid blocking the async event loop.
 """
 
 import asyncio
+import base64
+import binascii
 import difflib
 import hashlib
 import logging
@@ -15,6 +17,7 @@ import os
 import random
 import re
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
@@ -22,6 +25,7 @@ from typing import Any
 try:
     from .bedrock_scanner import BedrockScanner
     from .bedrock_tier2_breaker import BREAKER, Tier2UnavailableStrict
+    from .config import _env_float, _env_int
     from .telemetry_ops import (
         EVENT_CLASS_TIER2_DEGRADED_PASS,
         emit_operational_event,
@@ -37,6 +41,7 @@ try:
 except ImportError:
     from bedrock_scanner import BedrockScanner
     from bedrock_tier2_breaker import BREAKER, Tier2UnavailableStrict  # type: ignore[no-redef]
+    from config import _env_float, _env_int  # type: ignore[no-redef]
     from telemetry_ops import (  # type: ignore[no-redef]
         EVENT_CLASS_TIER2_DEGRADED_PASS,
         emit_operational_event,
@@ -54,10 +59,16 @@ LOG = logging.getLogger("gateway.scanner")
 
 MAX_PROMPT_LENGTH = 10_000
 REPETITION_THRESHOLD = 0.30
+# Any single whitespace-free token longer than this is treated as a DoS attempt:
+# it has no legitimate use and would otherwise drive the word-segmenter's fuzzy
+# fallback (SequenceMatcher per vocab word per DP cell) into multi-second CPU.
+_MAX_REPETITIVE_TOKEN_LENGTH = 200
 # Scanner worker pool size. Sized via env so it can be raised per-instance
 # (e.g. to the worker's vCPU count) to avoid head-of-line blocking when blocking
 # scan work (Tier-2/vault) runs in the executor.
-DEFAULT_THREAD_POOL_SIZE = int(os.environ.get("GATEWAY_SCANNER_THREAD_POOL_SIZE", "8"))
+# M-09: _env_int so a typo'd value can't crash the gateway at import time.
+DEFAULT_THREAD_POOL_SIZE = _env_int(
+    "GATEWAY_SCANNER_THREAD_POOL_SIZE", 8, min_value=1, max_value=256)
 
 TOXICITY_INDICATORS: list[re.Pattern] = [
     re.compile(r"\b(?:kill|murder|attack|destroy|eliminate|exterminate)\b", re.IGNORECASE),
@@ -69,6 +80,27 @@ TOXICITY_INDICATORS: list[re.Pattern] = [
 ]
 TOXICITY_WEIGHT_PER_HIT = 0.15
 
+# ── policy #5: explanatory/quoting context guard (injection/jailbreak only) ──
+# Security-education prompts that merely MENTION or QUOTE an injection phrase
+# ("explain what 'ignore all previous instructions' means") were hard-blocked as
+# tier-1 false positives. This narrow lead-in pattern, plus a quote/backtick
+# wrapper check, lets us downgrade a quoted/explanatory mention from block to
+# allow — but ONLY for the prompt_injection / jailbreak category, and ONLY when
+# there is no fresh, unquoted imperative attack elsewhere in the prompt.
+_INJECTION_EXPLANATORY_CATEGORIES = frozenset({"prompt_injection", "jailbreak"})
+_EXPLANATORY_LEADIN = re.compile(
+    r"(?i)(explain|describe|what\s+(is|does|are)|why\s+(is|are)|example\s+of|"
+    r"meaning\s+of|quote|definition\s+of|how\s+does|tell\s+me\s+about|"
+    # mention constructs: "the phrase/sentence/string/text/words/term <X>" is a
+    # quoting/educational frame, never an imperative — a real attacker would not
+    # prepend it. Catches "...risk of the phrase 'ignore all instructions'" where
+    # the leading verb ("explain") sits outside the lookbehind window.
+    r"the\s+(phrase|sentence|string|text|words?|term))",
+)
+# How far back from a matched span we look for an explanatory lead-in.
+_EXPLANATORY_LEADIN_WINDOW = 30
+_QUOTE_CHARS = ("'", '"', "`")
+
 @dataclass
 class ScanVerdict:
     "carries structured results (action, threat_type, confidence, detail, matched_patterns, tier) for downstream decision-making"
@@ -77,6 +109,7 @@ class ScanVerdict:
     confidence: float = 0.0
     detail: str = ""
     matched_patterns: list[str] = field(default_factory=list)
+    matched_values: dict[str, str] = field(default_factory=dict)
     tier: str = ""
     reason_code: str = ""
     owasp_codes: list[str] = field(default_factory=list)
@@ -103,6 +136,14 @@ ATTACK_PATTERNS: dict[str, list[str]] = {
         r"repeat\s+(your|the)\s+(initial|system|original)\s+(prompt|instructions)",
         r"print\s+(your|the)\s+(system\s+)?prompt",
         r"output\s+(your|the)\s+(system\s+)?prompt",
+        # Chat-template / role-delimiter spoofing — a user payload that smuggles a
+        # forged system/developer turn via ChatML or Llama control tokens. These
+        # have no natural place in a genuine user message; the quoted-mention
+        # carve-out below still suppresses benign security-education quoting.
+        r"<\|im_start\|>\s*system",
+        r"<\|im_(start|end)\|>",
+        r"<<\s*sys\s*>>",
+        r"(?:^|\n)\s*(system|developer)\s*:\s*you\s+(are|have|must|will)\b",
     ],
     "jailbreak": [
         r"dan\s+mode",
@@ -110,7 +151,12 @@ ATTACK_PATTERNS: dict[str, list[str]] = {
         r"jailbreak",
         r"strive\s+to\s+avoid\s+norms",
         r"truly\s+submissive\s+ai",
-        r"\b(?:dan|stan|dude)\b.*(?:policy|virtual\s+machine|do\s+anything\s+now)",
+        # DAN/STAN persona jailbreak — require explicit persona framing or the
+        # acronym expansion, NOT a bare proper-noun "Dan" with a distant phrase
+        # (the old `\bdan\b.*do anything now` greedily matched a benign sentence
+        # like "my friend Dan asked if he can do anything now to fix his bike").
+        r"(?:you\s+are|act\s+as|become|pretend\s+(?:to\s+be|you\s+are)|roleplay\s+as|enable|activate)\s+(?:now\s+)?(?:dan|stan|dude)\b",
+        r"\b(?:dan|stan|dude)\b\s*(?:mode\b|\([^)]{0,30}\)|[,:\-]?\s*(?:which\s+)?(?:stands?\s+for|means?|=)\s*[\"']?\s*(?:do\s+anything\s+now|anything|bypass|no\s+restrictions))",
         r"unrestricted\s+mode",
         r"no\s+limitations",
         r"i\s+(?:am|have)\s+(?:now\s+)?unrestricted",
@@ -205,11 +251,164 @@ _DEOBFUSCATION_VOCAB: frozenset[str] = frozenset({
 _CONCAT_WORD_MIN_LENGTH: int = 8
 _FUZZY_SEGMENT_THRESHOLD: float = 0.80
 _MAX_VOCAB_WORD_LENGTH: int = max(len(w) for w in _DEOBFUSCATION_VOCAB)
+# Upper bound on the length of a single token handed to the DP word-segmenter.
+# The fuzzy fallback runs difflib.SequenceMatcher per vocab word per DP cell, so
+# cost grows with token length; a giant single token (e.g. ~10k chars with no
+# spaces) would hang the scanner for seconds. A legitimately segmentable
+# concatenated-obfuscation token is short, so any token longer than this is
+# treated as opaque and returned unchanged without running the DP.
+_MAX_SEGMENT_TOKEN_LENGTH: int = 64
 
 
 def _normalize_leet(text: str) -> str:
     """Replace common l33tspeak character substitutions with alphabetic equivalents."""
     return "".join(_LEET_MAP.get(c, c) for c in text)
+
+
+# Zero-width / bidirectional-override / soft-hyphen characters used to break up
+# attack phrases so they slip past plaintext pattern matching. Stripped wholesale.
+_ZERO_WIDTH_CHARS: str = (
+    "​‌‍⁠﻿"  # ZWSP, ZWNJ, ZWJ, word-joiner, BOM
+    "‎‏"                      # LRM, RLM
+    "‪‫‬‭‮"    # LRE, RLE, PDF, LRO, RLO
+    "⁦⁧⁨⁩"          # LRI, RLI, FSI, PDI
+    "­"                            # soft hyphen
+)
+_ZERO_WIDTH_RE: re.Pattern[str] = re.compile("[" + _ZERO_WIDTH_CHARS + "]")
+
+# Cyrillic / Greek confusables that NFKC does NOT fold to ASCII (they are
+# distinct legitimate letters), but which are routinely used as homoglyph
+# substitutes in injection payloads. Folded to their ASCII look-alike so the
+# downstream ASCII pattern set can match.
+_HOMOGLYPH_MAP: dict[str, str] = {
+    # Cyrillic lowercase look-alikes
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c",
+    "у": "y", "х": "x", "і": "i", "ј": "j", "һ": "h",
+    "ԁ": "d", "ԛ": "q", "ѕ": "s", "н": "h", "в": "b",
+    "м": "m", "т": "t", "к": "k",
+    # Cyrillic uppercase look-alikes
+    "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M",
+    "Н": "H", "О": "O", "Р": "P", "С": "C", "Т": "T",
+    "Х": "X", "Ѕ": "S", "І": "I", "Ј": "J",
+    # Greek look-alikes
+    "α": "a", "ο": "o", "ρ": "p", "υ": "u", "ν": "v",
+    "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H",
+    "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O",
+    "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X",
+}
+_HOMOGLYPH_TABLE: dict[int, int] = {ord(k): ord(v) for k, v in _HOMOGLYPH_MAP.items()}
+
+# Bounds for the transport decode-and-rescan stage (single decode, no recursion).
+_TRANSPORT_DECODE_MAX_LEN: int = 200
+_BASE64_TOKEN_RE: re.Pattern[str] = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
+_HEX_TOKEN_RE: re.Pattern[str] = re.compile(r"(?:[0-9a-fA-F]{2}){8,}")
+
+
+def _normalize_unicode(text: str) -> str:
+    """
+    Fold Unicode-obfuscated text toward canonical ASCII so the ASCII-oriented
+    pattern set can match. Closes the fullwidth / homoglyph / zero-width / RTL /
+    combining-diacritic smuggling blind spot.
+
+    Steps: strip zero-width & bidi-override chars -> NFKC (folds fullwidth,
+    ligatures, circled/styled forms) -> drop combining marks (NFD + Mn filter)
+    -> fold residual Cyrillic/Greek homoglyphs to ASCII look-alikes.
+    """
+    if not text:
+        return text
+    stripped = _ZERO_WIDTH_RE.sub("", text)
+    normalized = unicodedata.normalize("NFKC", stripped)
+    # Strip combining marks (e.g. zalgo / diacritic smuggling).
+    decomposed = unicodedata.normalize("NFD", normalized)
+    no_marks = "".join(
+        ch for ch in decomposed if unicodedata.category(ch) != "Mn"
+    )
+    recomposed = unicodedata.normalize("NFKC", no_marks)
+    return recomposed.translate(_HOMOGLYPH_TABLE)
+
+
+# ROT13 is its own inverse; a whole-text Caesar-13 shift is a common evasion
+# ("vtaber nyy cerivbhf vafgehpgvbaf" -> "ignore all previous instructions").
+_ROT13_MAP = str.maketrans(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    "NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm",
+)
+
+
+def _decode_transport_variants(text: str) -> list[str]:
+    """
+    Best-effort bounded transport decode (base64 / hex / ROT13) of embedded
+    tokens so an encoded injection payload can be rescanned. Single decode depth,
+    only tokens up to _TRANSPORT_DECODE_MAX_LEN, only readable ASCII results.
+    """
+    variants: list[str] = []
+    if not text or len(text) > MAX_PROMPT_LENGTH:
+        return variants
+    seen: set[str] = set()
+    # ROT13 whole-text variant — letters-only Caesar shift, no token extraction
+    # needed (the whole prompt may be ROT13-encoded). Bounded by the
+    # MAX_PROMPT_LENGTH guard above. Rescanned by the tier-0.5 deobfuscation pass.
+    try:
+        _rot = text.translate(_ROT13_MAP)
+        if _rot != text and _rot.isprintable():
+            seen.add(_rot)
+            variants.append(_rot)
+    except Exception:  # noqa: BLE001 - decode helpers must never break the scan
+        pass
+    for token in _BASE64_TOKEN_RE.findall(text)[:8]:
+        if len(token) > _TRANSPORT_DECODE_MAX_LEN:
+            continue
+        pad = "=" * (-len(token) % 4)
+        try:
+            raw = base64.b64decode(token + pad, validate=False)
+            decoded = raw.decode("utf-8", errors="strict")
+        except (binascii.Error, ValueError, UnicodeDecodeError):
+            continue
+        if decoded.isprintable() and decoded not in seen:
+            seen.add(decoded)
+            variants.append(decoded)
+    for token in _HEX_TOKEN_RE.findall(text)[:8]:
+        if len(token) > _TRANSPORT_DECODE_MAX_LEN:
+            continue
+        try:
+            decoded = bytes.fromhex(token).decode("utf-8", errors="strict")
+        except (ValueError, UnicodeDecodeError):
+            continue
+        if decoded.isprintable() and decoded not in seen:
+            seen.add(decoded)
+            variants.append(decoded)
+    return variants
+
+
+# Minimum length of a single-letter run before it is treated as a spaced-out
+# obfuscation candidate (e.g. "i g n o r e   a l l").
+_SINGLE_LETTER_RUN_MIN: int = 4
+
+
+def _collapse_single_letter_runs(tokens: list[str]) -> list[str]:
+    """
+    Collapse runs of >= _SINGLE_LETTER_RUN_MIN consecutive single-letter tokens
+    into one concatenated token so spaced-out injection ("i g n o r e") can be
+    re-segmented. Multi-letter tokens and short runs are left untouched.
+    """
+    result: list[str] = []
+    run: list[str] = []
+
+    def _flush() -> None:
+        if len(run) >= _SINGLE_LETTER_RUN_MIN:
+            result.append("".join(run))
+        else:
+            result.extend(run)
+        run.clear()
+
+    for token in tokens:
+        if len(token) == 1:
+            run.append(token)
+        else:
+            _flush()
+            result.append(token)
+    _flush()
+    return result
 
 
 def _segment_token(
@@ -228,6 +427,11 @@ def _segment_token(
     lower = token.lower()
     n = len(lower)
     if n < _CONCAT_WORD_MIN_LENGTH:
+        return [token]
+    # A single token longer than this has no legitimate word segmentation and
+    # would make the fuzzy DP fallback (SequenceMatcher per vocab word per cell)
+    # catastrophically expensive. Treat it as opaque and skip the DP.
+    if n > _MAX_SEGMENT_TOKEN_LENGTH:
         return [token]
 
     dp: list[tuple[list[str], float] | None] = [None] * (n + 1)
@@ -346,8 +550,7 @@ class InputScanner:
         self,
         thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,
         config: dict | None = None,
-        embedding_vault: Any = None,
-        config_sync: Any = None,
+        embedding_vault: Any = None,  # M9: removed (legacy Tier-1.6 vault); kept for call-site compat, ignored
     ) -> None:
         self._executor = ThreadPoolExecutor(
             max_workers=thread_pool_size,
@@ -357,14 +560,14 @@ class InputScanner:
         # off the CPU-bound Tier-1 scan pool prevents a slow/stalled Bedrock
         # invocation from starving Tier-1 workers (the head-of-line blocking that
         # caused the gateway to collapse under load).
-        bedrock_pool_size = int(os.environ.get("GATEWAY_BEDROCK_THREAD_POOL_SIZE", "16"))
+        bedrock_pool_size = _env_int(
+            "GATEWAY_BEDROCK_THREAD_POOL_SIZE", 16, min_value=1, max_value=256)
         self._bedrock_executor = ThreadPoolExecutor(
             max_workers=bedrock_pool_size,
             thread_name_prefix="bedrock",
         )
         self._config = config or {}
-        self._embedding_vault = embedding_vault
-        self._config_sync = config_sync
+        # M9: legacy Tier-1.6 EmbeddingVault removed; param ignored.
         # Tier-2 (Bedrock) feature flag can be enabled via env var ENABLE_TIER2
         self.tier2_enabled = os.getenv("ENABLE_TIER2", "true").lower() in ("1", "true", "yes")
         self._bedrock_scanner: BedrockScanner | None = BedrockScanner() if self.tier2_enabled else None
@@ -373,17 +576,17 @@ class InputScanner:
         # (decision logic is unchanged). Sampling defaults to 1.0 (always run)
         # so security posture is unchanged unless an operator opts in.
         self._tier2_cache: dict[str, tuple[float, dict[str, Any]]] = {}
-        self._tier2_cache_ttl = float(os.environ.get("GATEWAY_TIER2_CACHE_TTL_SECONDS", "300"))
-        self._tier2_cache_max = int(os.environ.get("GATEWAY_TIER2_CACHE_MAX", "10000"))
-        self._tier2_sample_rate = max(
-            0.0, min(1.0, float(os.environ.get("GATEWAY_TIER2_SAMPLE_RATE", "1.0")))
-        )
+        self._tier2_cache_ttl = _env_float(
+            "GATEWAY_TIER2_CACHE_TTL_SECONDS", 300.0, min_value=0.0)
+        self._tier2_cache_max = _env_int(
+            "GATEWAY_TIER2_CACHE_MAX", 10000, min_value=0)
+        self._tier2_sample_rate = _env_float(
+            "GATEWAY_TIER2_SAMPLE_RATE", 1.0, min_value=0.0, max_value=1.0)
         LOG.info(
-            "InputScanner initialized (thread_pool_size=%d, attack_categories=%d, pii_patterns=%d, embedding_vault=%s)",
+            "InputScanner initialized (thread_pool_size=%d, attack_categories=%d, pii_patterns=%d)",
             thread_pool_size,
             len(ATTACK_PATTERNS),
             len(PII_PATTERNS),
-            bool(self._embedding_vault and getattr(self._embedding_vault, "enabled", False)),
         )
 
     async def scan_prompt(
@@ -391,7 +594,6 @@ class InputScanner:
         text: str,
         is_rag: bool = False,
         toxicity_threshold: float | None = None,
-        org_slug: str = "",
     ) -> ScanVerdict:
         """Asynchronously scan the prompt for threats and return a structured verdict.
 
@@ -408,7 +610,6 @@ class InputScanner:
             text,
             is_rag,
             toxicity_threshold,
-            org_slug,
         )
     async def scan_output(self, text: str) -> ScanVerdict:
         """Asynchronously scan the LLM output for PII/Secrets and return a structured verdict."""
@@ -420,44 +621,11 @@ class InputScanner:
             text,
         )
 
-    def _check_threat_intel(self, text: str, org_slug: str) -> ScanVerdict | None:
-        """Tier-0: Module 2 threat intelligence pattern match."""
-        if not self._config_sync or not org_slug:
-            return None
-        entries = self._config_sync.get_threat_intel(org_slug)
-        for entry in entries:
-            indicator = entry.get("indicator") or ""
-            if not indicator:
-                continue
-            try:
-                if re.search(indicator, text, re.IGNORECASE):
-                    action = "block" if entry.get("auto_block") else "monitor"
-                    return ScanVerdict(
-                        action=action,
-                        threat_type=entry.get("threat_type") or "threat_intel",
-                        confidence=float(entry.get("confidence") or 0.9),
-                        detail=f"Threat intel match: {entry.get('threat_type', 'unknown')}",
-                        matched_patterns=[indicator[:80]],
-                        tier="tier_0",
-                    )
-            except re.error:
-                if indicator.lower() in text.lower():
-                    action = "block" if entry.get("auto_block") else "monitor"
-                    return ScanVerdict(
-                        action=action,
-                        threat_type=entry.get("threat_type") or "threat_intel",
-                        confidence=float(entry.get("confidence") or 0.9),
-                        detail=f"Threat intel substring match: {entry.get('threat_type', 'unknown')}",
-                        tier="tier_0",
-                    )
-        return None
-
     def _scan_prompt_sync(
         self,
         text: str,
         is_rag: bool,
         toxicity_threshold: float | None = None,
-        org_slug: str = "",
     ) -> ScanVerdict:
         """Synchronous prompt scanning logic, run in a thread to avoid blocking."""
         if not text:
@@ -484,28 +652,50 @@ class InputScanner:
                 detail="Excessive repetition detected (potential DoS)",
                 tier="tier_1",
             )
-
-        intel_verdict = self._check_threat_intel(text, org_slug)
-        if intel_verdict and intel_verdict.action == "block":
-            return intel_verdict
-
+        
         for category, patterns in ATTACK_PATTERNS.items():
             matched = []
+            match_objs: list[re.Match] = []
             for pattern_str in patterns:
                 compiled = compile_pattern(pattern_str)
                 match = compiled.search(text)
                 if match:
-                    matched.append(match.group(0))
+                    # Several attack patterns carry unbounded wildcard spans
+                    # (e.g. data_leakage "tell me .* ssn", command-injection
+                    # backticks), so the raw span can embed PII/secrets from
+                    # the prompt. matched_patterns reaches clients via the
+                    # zeroshield metadata and pipeline trace — mask evidence
+                    # the same way the tier-2 path does.
+                    matched.append(redact_all(match.group(0)))
+                    match_objs.append(match)
 
             if matched:
-                return ScanVerdict(
-                    action="block",
-                    threat_type=category,
-                    confidence=1.0,
-                    detail=f"Matched {category} pattern(s)",
-                    matched_patterns=matched,
-                    tier="tier_1",
-                )
+                # policy #5: for the injection/jailbreak class ONLY, suppress the
+                # block when EVERY matched span is a quoted or explanatory MENTION
+                # (security-education / quoting prompts) rather than an imperative
+                # attack. If any single match is a fresh, unquoted imperative the
+                # block stands. sql/command/data_leakage/credential/PII categories
+                # are never suppressed (real-payload risk even when quoted).
+                if (
+                    category in _INJECTION_EXPLANATORY_CATEGORIES
+                    and all(
+                        self._is_explanatory_mention(text, m) for m in match_objs
+                    )
+                ):
+                    LOG.info(
+                        "policy #5: suppressed %s block — all matches are "
+                        "quoted/explanatory mentions (patterns=%s)",
+                        category, matched,
+                    )
+                else:
+                    return ScanVerdict(
+                        action="block",
+                        threat_type=category,
+                        confidence=1.0,
+                        detail=f"Matched {category} pattern(s)",
+                        matched_patterns=matched,
+                        tier="tier_1",
+                    )
         if is_rag:
             for pattern_str in RAG_POISONING_PATTERNS:
                 compiled = compile_pattern(pattern_str)
@@ -515,22 +705,47 @@ class InputScanner:
                         action="block",
                         threat_type="rag_poisoning",
                         confidence=0.9,
-                        detail=f"RAG context poisoning attempt: {match.group(0)}",
-                        matched_patterns=[match.group(0)],
+                        detail=f"RAG context poisoning attempt: {redact_all(match.group(0))}",
+                        matched_patterns=[redact_all(match.group(0))],
                         tier="tier_1",
                     )
 
         deobfuscated = self._deobfuscate_text(text)
         if deobfuscated != text.lower():
-            LOG.debug("Deobfuscation produced: '%s'", deobfuscated[:200])
+            # NF-1: scrub PII from the deobfuscated buffer before logging. Even at
+            # DEBUG this trace echoed cleartext that survived deobfuscation (an
+            # already-plaintext name stays readable). redact_all masks the
+            # deterministic PII classes so a DEBUG trace can't leak SSN/CC/email
+            # (names have no deterministic mask — accepted; DEBUG is off in prod).
+            LOG.debug("Deobfuscation produced: '%s'", redact_all(deobfuscated[:200]))
             for category, patterns in ATTACK_PATTERNS.items():
                 matched = []
+                match_objs: list[re.Match] = []
                 for pattern_str in patterns:
                     compiled = compile_pattern(pattern_str)
                     match = compiled.search(deobfuscated)
                     if match:
-                        matched.append(match.group(0))
+                        matched.append(redact_all(match.group(0)))
+                        match_objs.append(match)
                 if matched:
+                    # policy #5 parity at tier-0.5: suppress the block when EVERY
+                    # match is a quoted/explanatory MENTION (security-education).
+                    # The raw text often didn't match (quotes broke the \s spans),
+                    # so the carve-out runs against the deobfuscated buffer — where
+                    # the explanatory lead-in words (explain / what does / means)
+                    # survive because they are alphabetic. Without this, benign
+                    # quoting like "what does 'ignore all previous instructions'
+                    # mean" hard-blocked at tier-0.5, defeating the tier-1 fix.
+                    if (
+                        category in _INJECTION_EXPLANATORY_CATEGORIES
+                        and all(self._is_explanatory_mention(deobfuscated, m) for m in match_objs)
+                    ):
+                        LOG.info(
+                            "policy #5 (tier-0.5): suppressed %s block — all matches "
+                            "are explanatory mentions (patterns=%s)",
+                            category, matched,
+                        )
+                        continue
                     LOG.warning(
                         "Tier-0.5 deobfuscation detected %s: patterns=%s",
                         category, matched,
@@ -550,14 +765,14 @@ class InputScanner:
                     if match:
                         LOG.warning(
                             "Tier-0.5 deobfuscation detected rag_poisoning: %s",
-                            match.group(0),
+                            redact_all(match.group(0)),
                         )
                         return ScanVerdict(
                             action="block",
                             threat_type="rag_poisoning",
                             confidence=0.90,
-                            detail=f"Obfuscated RAG poisoning detected: {match.group(0)}",
-                            matched_patterns=[match.group(0)],
+                            detail=f"Obfuscated RAG poisoning detected: {redact_all(match.group(0))}",
+                            matched_patterns=[redact_all(match.group(0))],
                             tier="tier_0_5",
                         )
 
@@ -565,36 +780,11 @@ class InputScanner:
         if fuzzy_verdict is not None:
             return fuzzy_verdict
 
-        # ── Tier-1.6: semantic injection check via EmbeddingVault ──
-        # Zero-overhead when vault is unconfigured (enabled gate short-circuits).
-        vault = self._embedding_vault
-        if vault is not None and getattr(vault, "enabled", False):
-            try:
-                vault_verdict = vault.check_sync(text)
-            except Exception as exc:  # noqa: BLE001 - vault failures must not break scan
-                LOG.warning("EmbeddingVault check_sync raised: %s", exc)
-                vault_verdict = None
-            if vault_verdict is not None and vault_verdict.is_match:
-                match_ids = [m.attack_id for m in vault_verdict.matches]
-                LOG.warning(
-                    "Tier-1.6 semantic injection match: distance=%.3f confidence=%.3f matches=%s",
-                    vault_verdict.closest_distance,
-                    vault_verdict.confidence,
-                    match_ids,
-                )
-                return ScanVerdict(
-                    action="block",
-                    threat_type="semantic_injection",
-                    confidence=vault_verdict.confidence,
-                    detail=(
-                        f"Semantic match against known attack vault "
-                        f"(distance={vault_verdict.closest_distance:.3f}, "
-                        f"matches={','.join(match_ids) or 'n/a'})"
-                    ),
-                    matched_patterns=match_ids,
-                    tier="tier_1_6",
-                )
-
+        # M9: the legacy Tier-1.6 EmbeddingVault semantic-injection check was
+        # REMOVED. It was disabled by default, failed OPEN on credential/config
+        # failure (silently disabling a whole detection layer with only a WARN),
+        # and is fully covered by the Tier-2 Bedrock semantic scan. Removed to
+        # eliminate the silent-fail-open footgun.
 
         pii_matched = detect_pii(text)
         if pii_matched:
@@ -642,6 +832,7 @@ class InputScanner:
                 confidence=0.85,
                 detail=f"PII detected in output: {', '.join(pii_matched.keys())}",
                 matched_patterns=list(pii_matched.keys()),
+                matched_values=dict(pii_matched),
             )
 
         secret_matched = detect_secrets(text)
@@ -652,17 +843,70 @@ class InputScanner:
                 confidence=0.9,
                 detail=f"Secret/credential in output: {', '.join(secret_matched.keys())}",
                 matched_patterns=list(secret_matched.keys()),
+                matched_values=dict(secret_matched),
             )
 
         return ScanVerdict()
     
 
-    def redact_pii(self, text: str) -> str:
-        return redact_all(text)
+    def redact_pii(self, text: str, verdict: ScanVerdict | None = None) -> str:
+        result = redact_all(text)
+        if verdict is None:
+            return result
+        sources: list[str] = [str(p) for p in (verdict.matched_patterns or [])]
+        scan_meta = verdict.scan_meta if isinstance(getattr(verdict, "scan_meta", None), dict) else {}
+        for finding in scan_meta.get("findings") or []:
+            if isinstance(finding, dict) and finding.get("evidence"):
+                sources.append(str(finding["evidence"]))
+        try:
+            from patterns import redact_evidence_digit_spans
+        except ImportError:
+            from .patterns import redact_evidence_digit_spans
+        return redact_evidence_digit_spans(result, sources)
+
+    @staticmethod
+    def _is_explanatory_mention(text: str, match: re.Match) -> bool:
+        """Return True when an injection/jailbreak match is a quoted or explanatory
+        MENTION rather than an imperative attack.
+
+        policy #5 (CONSERVATIVE): suppresses ONLY the prompt_injection / jailbreak
+        class — never sql/command injection, credentials, or PII. A single
+        injection match qualifies as a benign mention when:
+
+          (a) the matched span is wrapped in quotes (' ' / " " / backticks), OR
+          (b) it is immediately preceded (within ~30 chars) by an explanatory
+              lead-in ("explain", "what is", "example of", "meaning of", …).
+
+        Callers must additionally confirm that EVERY injection match in the prompt
+        is such a mention before downgrading — this only classifies one span.
+        """
+        start, end = match.start(), match.end()
+
+        # (a) quote/backtick wrapper: a quote char appears on both sides of the
+        # matched span (looking left within the lead-in window, and immediately
+        # to the right past any trailing punctuation).
+        left = text[max(0, start - _EXPLANATORY_LEADIN_WINDOW):start]
+        right = text[end:end + 5]
+        for q in _QUOTE_CHARS:
+            if q in left and q in right:
+                return True
+
+        # (b) explanatory lead-in immediately preceding the matched span.
+        lead_window = text[max(0, start - _EXPLANATORY_LEADIN_WINDOW):start]
+        if _EXPLANATORY_LEADIN.search(lead_window):
+            return True
+
+        return False
 
     def _is_repetitive(self, text: str) -> bool:
         """Detect excessive repetition as a simple heuristic for DoS attempts."""
         words = text.split()
+        # A single oversized whitespace-free token would otherwise slip past the
+        # word-frequency heuristic below (len(words) < 10) while still driving the
+        # downstream word-segmenter into its expensive fuzzy fallback. Flag it as
+        # a DoS attempt without running that fallback.
+        if any(len(word) > _MAX_REPETITIVE_TOKEN_LENGTH for word in words):
+            return True
         if len(words) < 10:
             return False
         word_counts: dict[str, int] = {}
@@ -713,11 +957,15 @@ class InputScanner:
 
         Returns the normalized text with spaces between segmented words.
         Only tokens longer than _CONCAT_WORD_MIN_LENGTH are segmented.
+
+        Unicode smuggling (fullwidth, homoglyph, zero-width, RTL-override,
+        combining diacritic) is folded to ASCII first, and bounded base64/hex
+        transport-decoded variants are appended so the Tier-0.5 rescan sees
+        them.
         """
-        normalized = _normalize_leet(text.lower())
-        tokens = re.findall(r"[a-zA-Z]+", normalized)
-        if not tokens:
-            return normalized
+        unified = _normalize_unicode(text)
+        normalized = _normalize_leet(unified.lower())
+        tokens = _collapse_single_letter_runs(re.findall(r"[a-zA-Z]+", normalized))
 
         result_tokens: list[str] = []
         for token in tokens:
@@ -726,6 +974,16 @@ class InputScanner:
                 result_tokens.extend(segments)
             else:
                 result_tokens.append(token)
+
+        # Append bounded transport-decoded payloads (base64/hex) so a wrapped
+        # injection is rescanned by the caller against the full pattern set.
+        for variant in _decode_transport_variants(unified):
+            decoded_norm = _normalize_leet(_normalize_unicode(variant).lower())
+            for token in re.findall(r"[a-zA-Z]+", decoded_norm):
+                if len(token) >= _CONCAT_WORD_MIN_LENGTH:
+                    result_tokens.extend(_segment_token(token))
+                else:
+                    result_tokens.append(token)
 
         return " ".join(result_tokens)
 
@@ -737,7 +995,8 @@ class InputScanner:
         Checks if known attack phrases appear as ordered subsequences
         in the input with per-word similarity >= FUZZY_WORD_SIMILARITY_THRESHOLD.
         """
-        input_words = re.findall(r"[a-zA-Z]+", text.lower())
+        normalized = _normalize_leet(_normalize_unicode(text).lower())
+        input_words = re.findall(r"[a-zA-Z]+", normalized)
         if not input_words:
             return None
 
@@ -774,18 +1033,49 @@ class InputScanner:
         """
         phrase_idx = 0
         matched_similarities: list[float] = []
+        first_match_idx = -1
+        last_match_idx = -1
 
-        for word in input_words:
+        for i, word in enumerate(input_words):
             if phrase_idx >= len(phrase_words):
                 break
             similarity = difflib.SequenceMatcher(
                 None, word, phrase_words[phrase_idx]
             ).ratio()
             if similarity >= threshold:
+                if first_match_idx < 0:
+                    first_match_idx = i
+                last_match_idx = i
                 matched_similarities.append(similarity)
                 phrase_idx += 1
 
         if phrase_idx >= len(phrase_words) and matched_similarities:
+            # Bound the matched SPAN. The match was an ordered subsequence with
+            # UNLIMITED gaps, so a benign input with the anchor tokens scattered
+            # far apart (e.g. "ignore" in one sentence, "previous instructions" 40
+            # words later) matched at similarity 1.00 — a false positive that
+            # blocked legitimate prompts. A real typo/word-split injection keeps
+            # the anchor words CLOSE together; require the span (first→last matched
+            # word) to stay within phrase_len + a small gap budget so insertion /
+            # splitting evasion ("ignore the previous set of instructions") still
+            # matches while scattered tokens do not. Purely additive — only
+            # REJECTS loose matches, never weakens a tight one (no detection loss).
+            span = last_match_idx - first_match_idx + 1
+            max_span = len(phrase_words) * 2 + 4
+            if span > max_span:
+                return (False, 0.0)
+            # Require a TYPO signal for GAPPED matches. The fuzzy tier-1.5 exists to
+            # catch typo/word-split evasion ("ignor prevous instuctions"); a tier-1
+            # regex already catches genuine EXACT injections (contiguous and common
+            # word-split forms). So when all matched tokens are EXACT *and* the
+            # match is gapped, it's benign words that merely appear in anchor order
+            # ("...want to ignore. What previous instructions...") — a false
+            # positive. Defer those to tier-1. A contiguous exact anchor, or any
+            # approximate (0.75<=sim<1.0) match, still fires.
+            has_approx = any(s < 0.999 for s in matched_similarities)
+            is_contiguous = span == len(phrase_words)
+            if not has_approx and not is_contiguous:
+                return (False, 0.0)
             avg = sum(matched_similarities) / len(matched_similarities)
             return (True, avg)
         return (False, 0.0)
@@ -852,6 +1142,7 @@ class InputScanner:
         org_slug: str = "",
         org_tier2_strict: bool = True,
         toxicity_threshold: float | None = None,
+        request_id: str = "",
     ) -> ScanVerdict:
         """
         Run Tier-1 regex/deterministic checks first. If no blocking verdict,
@@ -879,12 +1170,7 @@ class InputScanner:
             * strict=False -> Tier-2 is skipped; the Tier-1 verdict is
               returned and a ``tier2_degraded_pass`` event is emitted.
         """
-        tier1 = await self.scan_prompt(
-            text,
-            is_rag,
-            toxicity_threshold=toxicity_threshold,
-            org_slug=org_slug,
-        )
+        tier1 = await self.scan_prompt(text, is_rag, toxicity_threshold=toxicity_threshold)
         if tier1.action == "block":
             return tier1
 
@@ -937,8 +1223,11 @@ class InputScanner:
         cache_key = None
         bedrock_normalized = None
         if self._tier2_cache_ttl > 0:
+            # M-06: scope the verdict cache to the org so org A's cached verdict
+            # can't be reused for org B (cross-tenant collision in the shared
+            # _tier2_cache). Adding org_slug self-invalidates old entries (safe).
             cache_key = hashlib.sha256(
-                f"{bedrock_input}\x00{original_context or ''}".encode("utf-8", "ignore")
+                f"in\x00{org_slug or ''}\x00{bedrock_input}\x00{original_context or ''}".encode("utf-8", "ignore")
             ).hexdigest()
             entry = self._tier2_cache.get(cache_key)
             if entry is not None:
@@ -964,7 +1253,7 @@ class InputScanner:
         if bedrock_normalized is None:
             try:
                 bedrock_normalized = await loop.run_in_executor(
-                    self._bedrock_executor, self._bedrock_scan_sync, bedrock_input, original_context,
+                    self._bedrock_executor, self._bedrock_scan_sync, bedrock_input, original_context, request_id,
                 )
             except Exception:
                 # Hard failure during Bedrock invocation counts toward the
@@ -1008,7 +1297,14 @@ class InputScanner:
                         bedrock_owasp.append(rid)
                 ev = finding.get("evidence", "")
                 if ev:
-                    bedrock_evidence.append(ev)
+                    # The guard model's free-text evidence may carry RAW PII
+                    # (it only masks inconsistently). Run it through the
+                    # deterministic redactor so every reported pattern is masked,
+                    # and de-dup so overlapping findings don't repeat (these
+                    # strings are surfaced to the client in matched_patterns).
+                    ev_masked = redact_all(str(ev))
+                    if ev_masked not in bedrock_evidence:
+                        bedrock_evidence.append(ev_masked)
                 conf = self._normalize_score(finding.get("confidence", 0.0))
                 if conf > max_confidence:
                     max_confidence = conf
@@ -1023,7 +1319,7 @@ class InputScanner:
                     {
                         "category": finding.get("category") or "",
                         "confidence": self._normalize_score(finding.get("confidence", 0.0)),
-                        "evidence": finding.get("evidence") or "",
+                        "evidence": redact_all(str(finding.get("evidence") or "")),
                         "rule_id": finding.get("rule_id") or finding.get("owasp_code") or "",
                     }
                 )
@@ -1039,9 +1335,9 @@ class InputScanner:
         if recommended == "block":
             return _bedrock_verdict(
                 action="block",
-                threat_type=bedrock_categories[0] if bedrock_categories else "bedrock",
+                threat_type=bedrock_categories[0] if bedrock_categories else "policy_violation",
                 confidence=max_confidence or 1.0,
-                detail=f"Bedrock ML detected threat: {', '.join(bedrock_evidence[:2]) or 'recommended block'}",
+                detail=f"ZeroShield Tier-2 detected threat: {', '.join(bedrock_evidence[:2]) or 'recommended block'}",
                 matched_patterns=bedrock_evidence[:5] or [],
                 tier="tier_2",
                 reason_code=reason_code or "model_recommended_block",
@@ -1050,9 +1346,9 @@ class InputScanner:
         if recommended == "redact":
             return _bedrock_verdict(
                 action="flag",
-                threat_type=bedrock_categories[0] if bedrock_categories else "bedrock_redact",
+                threat_type=bedrock_categories[0] if bedrock_categories else "sensitive_content",
                 confidence=max_confidence or 0.9,
-                detail=f"Bedrock suggested redaction: {', '.join(bedrock_evidence[:2]) or 'redact'}",
+                detail=f"ZeroShield Tier-2 suggested redaction: {', '.join(bedrock_evidence[:2]) or 'redact'}",
                 matched_patterns=bedrock_evidence[:5] or [],
                 tier="tier_2",
                 reason_code=reason_code or "model_recommended_redact",
@@ -1061,15 +1357,32 @@ class InputScanner:
         if self._is_tier2_degraded(meta, llm_guard):
             degraded_reason = reason_code or "bedrock_degraded"
             degraded_detail = (
-                "Bedrock scanner degraded; unable to confidently validate prompt"
+                "ZeroShield Tier-2 degraded; unable to confidently validate prompt"
             )
             if meta.get("error"):
-                degraded_detail = "Bedrock scanner error; unable to confidently validate prompt"
+                degraded_detail = "ZeroShield Tier-2 error; unable to confidently validate prompt"
             elif meta.get("parse_failed"):
-                degraded_detail = "Bedrock response unparseable; unable to confidently validate prompt"
+                degraded_detail = "ZeroShield Tier-2 response unparseable; unable to confidently validate prompt"
+            # Fail-closed option for the INPUT path: a degraded/unparseable Tier-2
+            # response is reached precisely by prompts that EVADE Tier-1 static
+            # signatures, so a fail-open 'flag' forwards the (possibly evasive)
+            # attack to the LLM with no enforcement. When tier2_input_fail_closed
+            # is enabled (env GATEWAY_TIER2_INPUT_FAIL_CLOSED=true, or per-org
+            # override), block instead. Default OFF preserves availability. Output
+            # scanning (scan_output_with_tier2) intentionally stays fail-open.
+            _fail_closed = bool(self._config.get("tier2_input_fail_closed", False))
+            if _fail_closed:
+                return _bedrock_verdict(
+                    action="block",
+                    threat_type="scanner_degraded",
+                    confidence=max(score, 0.5),
+                    detail=degraded_detail + " (fail-closed: blocked by policy)",
+                    tier="tier_2",
+                    reason_code=degraded_reason + "_failclosed",
+                )
             return _bedrock_verdict(
                 action="flag",
-                threat_type="bedrock_degraded",
+                threat_type="scanner_degraded",
                 confidence=max(score, 0.5),
                 detail=degraded_detail,
                 tier="tier_2",
@@ -1078,9 +1391,9 @@ class InputScanner:
         if recommended == "monitor":
             return _bedrock_verdict(
                 action="flag",
-                threat_type=bedrock_categories[0] if bedrock_categories else "bedrock",
+                threat_type=bedrock_categories[0] if bedrock_categories else "policy_violation",
                 confidence=max_confidence or float(score),
-                detail=f"Bedrock advisory: {', '.join(bedrock_evidence[:2]) or 'monitor'}",
+                detail=f"ZeroShield Tier-2 advisory: {', '.join(bedrock_evidence[:2]) or 'monitor'}",
                 matched_patterns=bedrock_evidence[:5] or [],
                 tier="tier_2",
                 reason_code=reason_code or "model_recommended_monitor",
@@ -1092,9 +1405,9 @@ class InputScanner:
         if score >= BEDROCK_BLOCK_THRESHOLD:
             return _bedrock_verdict(
                 action="block",
-                threat_type=bedrock_categories[0] if bedrock_categories else "bedrock_score",
+                threat_type=bedrock_categories[0] if bedrock_categories else "risk_score",
                 confidence=score,
-                detail=f"High bedrock risk score: {', '.join(bedrock_evidence[:2]) or 'score-based block'}",
+                detail=f"High ZeroShield Tier-2 risk score: {', '.join(bedrock_evidence[:2]) or 'score-based block'}",
                 matched_patterns=bedrock_evidence[:5] or [],
                 tier="tier_2",
                 reason_code=reason_code or "score_threshold_block",
@@ -1103,9 +1416,9 @@ class InputScanner:
         if score >= BEDROCK_FLAG_THRESHOLD:
             return _bedrock_verdict(
                 action="flag",
-                threat_type=bedrock_categories[0] if bedrock_categories else "bedrock_score",
+                threat_type=bedrock_categories[0] if bedrock_categories else "risk_score",
                 confidence=score,
-                detail=f"Moderate bedrock risk score: {', '.join(bedrock_evidence[:2]) or 'score-based flag'}",
+                detail=f"Moderate ZeroShield Tier-2 risk score: {', '.join(bedrock_evidence[:2]) or 'score-based flag'}",
                 matched_patterns=bedrock_evidence[:5] or [],
                 tier="tier_2",
                 reason_code=reason_code or "score_threshold_flag",
@@ -1116,7 +1429,7 @@ class InputScanner:
                 action="flag",
                 threat_type=bedrock_categories[0],
                 confidence=max_confidence or 0.5,
-                detail="Bedrock found threats but recommended allow -- escalated to flag",
+                detail="ZeroShield Tier-2 found threats but recommended allow -- escalated to flag",
                 matched_patterns=bedrock_evidence[:5] or [],
                 tier="tier_2",
                 reason_code=reason_code or "findings_with_allow",
@@ -1124,14 +1437,177 @@ class InputScanner:
 
         return _bedrock_verdict(
             action="allow",
-            threat_type="none",
-            confidence=score,
-            detail="Tier-2 passed",
+            # M2: confidence here is consumed downstream as the request RISK score
+            # (main.py request_risk_score -> ×100 security_risk_score -> "critical"
+            # at >=80). The old `1.0 - score` INVERTED it: a clean prompt (score 0)
+            # got confidence 1.0 -> risk 100 -> every benign request flagged
+            # critical (63% of traffic, 99.5% on module 1.5). Report the actual
+            # (low) threat score instead — matches the tier-1 allow paths (0.0) and
+            # the threat paths (high). Clean -> ~0.
+            threat_type="clean",
+            confidence=round(max(0.0, score), 4),
+            detail="ZeroShield Model (Tier-2) completed — no threats detected.",
             tier="tier_2",
             reason_code=reason_code or "tier2_pass",
         )
 
-    def _bedrock_scan_sync(self, analyzed_text: str, original_text: str | None = None) -> dict[str, Any]:
+    async def scan_output_with_tier2(
+        self,
+        text: str,
+        *,
+        org_tier2_override: bool | None = None,
+        org_slug: str = "",
+        request_id: str = "",
+    ) -> ScanVerdict:
+        """Output counterpart of scan_prompt_with_tier2: run the STATIC output
+        scan (tier-1) FIRST, then the ZeroShield guard model (tier-2, Bedrock)
+        on the model OUTPUT. The SAME guard model + breaker/cache/sampling infra
+        as the input path is reused.
+
+        ALWAYS fail-open: a guard-model outage (breaker open, Bedrock error,
+        parse failure) must never block or hold an already-generated completion
+        — it degrades to the static tier-1 verdict. ``org_tier2_override`` is the
+        same tri-state per-org switch as input (pass ``org_config.get("tier2_enabled")``
+        so ``None`` is preserved).
+        """
+        tier1 = await self.scan_output(text)
+        if org_tier2_override is False:
+            return tier1
+        if org_tier2_override is None and not self.tier2_enabled:
+            return tier1
+        if self._bedrock_scanner is None or not text:
+            return tier1
+
+        scanner_model_id = getattr(self._bedrock_scanner, "model", "") or ""
+        # Fail-open breaker for output (strict=False -> never raise; OPEN -> tier1).
+        if not BREAKER.allow(org_slug=org_slug, model_id=scanner_model_id, strict=False):
+            return tier1
+
+        cache_key = None
+        bedrock_normalized = None
+        if self._tier2_cache_ttl > 0:
+            # M-06: scope the verdict cache to the org so org A's cached output
+            # verdict can't be reused for org B (cross-tenant collision). Adding
+            # org_slug to the key self-invalidates any pre-existing entries (safe).
+            cache_key = hashlib.sha256(
+                f"out\x00{org_slug or ''}\x00{text}".encode("utf-8", "ignore")
+            ).hexdigest()
+            entry = self._tier2_cache.get(cache_key)
+            if entry is not None:
+                ts, value = entry
+                if (time.monotonic() - ts) <= self._tier2_cache_ttl:
+                    bedrock_normalized = value
+                else:
+                    self._tier2_cache.pop(cache_key, None)
+
+        if (
+            bedrock_normalized is None
+            and self._tier2_sample_rate < 1.0
+            and tier1.action == "allow"
+            and random.random() > self._tier2_sample_rate
+        ):
+            return tier1
+
+        if bedrock_normalized is None:
+            loop = asyncio.get_event_loop()
+            try:
+                bedrock_normalized = await loop.run_in_executor(
+                    self._bedrock_executor, self._bedrock_scan_sync, text, None, request_id,
+                )
+            except Exception:
+                BREAKER.record_result(org_slug, scanner_model_id, failure=True)
+                return tier1  # fail-open
+            if cache_key is not None:
+                _cm = bedrock_normalized.get("meta", {})
+                if not _cm.get("error") and not _cm.get("parse_failed"):
+                    self._store_tier2_cache(cache_key, bedrock_normalized)
+
+        meta = bedrock_normalized.get("meta", {})
+        recommended = self._normalize_bedrock_action(meta.get("recommended_action"))
+        llm_guard = bedrock_normalized.get("llm_guard", {})
+        score = self._normalize_score(llm_guard.get("score", 0.0))
+        _failed = bool(meta.get("error") or meta.get("parse_failed") or not llm_guard)
+        BREAKER.record_result(org_slug, scanner_model_id, failure=_failed)
+        if _failed:
+            return tier1  # degraded output scan -> fail-open to static verdict
+
+        raw_findings = meta.get("raw_findings") or []
+        cats: list[str] = []
+        evidence: list[str] = []
+        owasp: list[str] = []
+        max_conf = 0.0
+        for f in raw_findings:
+            if not isinstance(f, dict):
+                continue
+            if f.get("category"):
+                cats.append(f["category"])
+            if f.get("evidence"):
+                # M-01: the guard model's free-text evidence may carry RAW PII
+                # (it masks inconsistently). Mirror the INPUT path: run every
+                # evidence string through the deterministic redactor and de-dup
+                # (exact, order-preserving) before it reaches the client via
+                # matched_patterns / detail / scan_meta findings.
+                ev_masked = redact_all(str(f["evidence"]))
+                if ev_masked not in evidence:
+                    evidence.append(ev_masked)
+            rid = str(f.get("rule_id") or f.get("owasp_code") or "").strip().upper()
+            if rid and rid[:3] in ("LLM", "MCP", "AGE") and len(rid) >= 5 and rid not in owasp:
+                owasp.append(rid)
+            c = self._normalize_score(f.get("confidence", 0.0))
+            if c > max_conf:
+                max_conf = c
+        reason_code = str(meta.get("decision_reason", "")).strip().lower()
+
+        def _verdict(action: str, threat: str, conf: float, detail: str, rc: str) -> ScanVerdict:
+            v = ScanVerdict(
+                action=action, threat_type=threat, confidence=conf, detail=detail,
+                matched_patterns=evidence[:5], tier="tier_2",
+                reason_code=rc, owasp_codes=owasp,
+            )
+            v.scan_meta = {
+                "scanner": "zeroshield_guard_model",
+                "recommended_action": recommended,
+                "decision_reason": str(meta.get("decision_reason") or ""),
+                "llm_guard_score": score,
+                "findings": [
+                    {
+                        "category": ff.get("category") or "",
+                        "confidence": self._normalize_score(ff.get("confidence", 0.0)),
+                        # M-01: mask evidence here too (mirror input-path findings).
+                        "evidence": redact_all(str(ff.get("evidence") or "")),
+                        "rule_id": ff.get("rule_id") or ff.get("owasp_code") or "",
+                    }
+                    for ff in raw_findings if isinstance(ff, dict)
+                ][:8],
+            }
+            return v
+
+        if recommended == "block":
+            return _verdict("block", cats[0] if cats else "output_finding", max_conf or 1.0,
+                            f"ZeroShield Model flagged output: {', '.join(evidence[:2]) or 'recommended block'}",
+                            reason_code or "model_recommended_block")
+        if recommended in ("redact", "monitor"):
+            return _verdict("flag", cats[0] if cats else "output_finding", max_conf or float(score),
+                            f"ZeroShield Model output advisory: {', '.join(evidence[:2]) or recommended}",
+                            reason_code or f"model_recommended_{recommended}")
+        if score >= 0.70:
+            return _verdict("block", cats[0] if cats else "output_finding", score,
+                            "ZeroShield Model: high output risk score", reason_code or "score_threshold_block")
+        if score >= 0.40:
+            return _verdict("flag", cats[0] if cats else "output_finding", score,
+                            "ZeroShield Model: moderate output risk score", reason_code or "score_threshold_flag")
+        if cats:
+            return _verdict("flag", cats[0], max_conf or 0.5,
+                            "ZeroShield Model found output findings; escalated to flag",
+                            reason_code or "findings_with_allow")
+        # Clean tier-2: preserve any static tier-1 flag, else allow.
+        if tier1.action != "allow":
+            return tier1
+        return _verdict("allow", "clean", round(max(0.0, 1.0 - score), 4),
+                        "ZeroShield Model (Tier-2) output scan — no threats detected.",
+                        reason_code or "tier2_pass")
+
+    def _bedrock_scan_sync(self, analyzed_text: str, original_text: str | None = None, request_id: str = "") -> dict[str, Any]:
         """Synchronous helper to call the Bedrock scanner from a thread.
 
         Parameters
@@ -1143,7 +1619,7 @@ class InputScanner:
             model can see the obfuscation pattern.
         """
         assert self._bedrock_scanner is not None
-        return self._bedrock_scanner.scan(analyzed_text, context=original_text)
+        return self._bedrock_scanner.scan(analyzed_text, context=original_text, request_id=request_id or None)
 
 
 @dataclass
@@ -1237,6 +1713,12 @@ def classify_intent_v2(text: str) -> IntentClassification:
 
     primary = sorted_intents[0]
     primary_category = primary[0]
+    # M-18: confidence = primary's share of all keyword hits (in (0, 1]) plus a
+    # +0.3 additive boost, clamped to 1.0. Semantics are correct/monotonic: a
+    # primary intent that dominates the hits yields >= confidence than one that
+    # ties with others. The +0.3 is an intentional floor so a clear-but-not-
+    # dominant primary (e.g. share 0.2) still reports moderate confidence (0.5),
+    # not a near-zero value. Not an inversion — left as-is.
     primary_confidence = min(primary[1] / max(total_hits, 1) + 0.3, 1.0)
     primary_risk = _INTENT_CATEGORIES[primary_category]["risk_score"]
 

@@ -8,6 +8,7 @@ from ai_mesh_shared.litellm_byok import (
     is_openrouter_api_base,
     needs_openai_compatible_client,
     normalize_litellm_params,
+    sanitize_api_base,
 )
 
 
@@ -18,15 +19,22 @@ class LitellmByokTests(SimpleTestCase):
         self.assertFalse(is_openrouter_api_base("https://api.openai.com/v1"))
         self.assertFalse(is_openrouter_api_base(""))
 
+    def test_sanitize_api_base_strips_chat_completions_suffix(self):
+        self.assertEqual(
+            sanitize_api_base("https://openrouter.ai/api/v1/chat/completions"),
+            "https://openrouter.ai/api/v1",
+        )
+
     def test_openrouter_custom_model_gets_openai_compat_provider(self):
         params = normalize_litellm_params(
             {
                 "model": "anthropic/claude-haiku-4.5",
-                "api_base": "https://openrouter.ai/api/v1",
+                "api_base": "https://openrouter.ai/api/v1/chat/completions",
                 "api_key_encrypted": "enc",
             },
             provider="custom",
         )
+        self.assertEqual(params["api_base"], "https://openrouter.ai/api/v1")
         self.assertEqual(params["custom_llm_provider"], "openai")
         self.assertEqual(params["model"], "anthropic/claude-haiku-4.5")
 

@@ -1,7 +1,9 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Upload, Database, CheckCircle, AlertTriangle, FileUp, Plus, X, Loader2, RefreshCw } from "lucide-react";
 import { useSimulatorEngine } from "../../hooks/useSimulatorEngine";
 import { useCollections } from "../../hooks/useCollections";
+import { useVectorProviders } from "../../hooks/useVectorProviders";
+import { DEFAULT_VECTOR_PROVIDER, VECTOR_PROVIDERS } from "../../constants/vectorProviders";
 
 /**
  * RAG document ingestion panel for Module 1.3.
@@ -10,11 +12,14 @@ import { useCollections } from "../../hooks/useCollections";
  */
 export function RAGIngestionPanel() {
   const { gatewayFetch, connectionStatus, gatewayKey } = useSimulatorEngine();
-  const { collections, loading: collectionsLoading, refresh: refreshCollections } = useCollections();
+  const { hasConfiguredProvider, primaryProvider } = useVectorProviders();
+  const { collections, loading: collectionsLoading, refresh: refreshCollections } = useCollections({
+    enabled: hasConfiguredProvider,
+  });
   const [collection, setCollection] = useState("test_collection");
   const [namespace, setNamespace] = useState("default");
   const [sensitivity, setSensitivity] = useState("unclassified");
-  const [provider, setProvider] = useState("chroma");
+  const [provider, setProvider] = useState(DEFAULT_VECTOR_PROVIDER);
   const [ingesting, setIngesting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -26,6 +31,10 @@ export function RAGIngestionPanel() {
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkDocs, setBulkDocs] = useState([]);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (primaryProvider) setProvider(primaryProvider);
+  }, [primaryProvider]);
 
   const SAMPLE_DOCS = [
     { label: "Public Policy", content: "Employees must use strong passwords with at least 12 characters including uppercase, lowercase, numbers, and symbols.", namespace: "public", sensitivity: "unclassified" },
@@ -157,9 +166,9 @@ export function RAGIngestionPanel() {
         <div>
           <label className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Provider</label>
           <select value={provider} onChange={(e) => setProvider(e.target.value)} className="w-full mt-1 px-2 py-1.5 rounded-md bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-xs text-slate-800 dark:text-slate-200">
-            <option value="chroma">ChromaDB</option>
-            <option value="pinecone">Pinecone</option>
-            <option value="milvus">Milvus</option>
+            {VECTOR_PROVIDERS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
           </select>
         </div>
         <div>
@@ -180,7 +189,7 @@ export function RAGIngestionPanel() {
                   <option key={c.name} value={c.name} />
                 ))}
             </datalist>
-            <button onClick={refreshCollections} disabled={collectionsLoading} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" title="Refresh collections">
+            <button onClick={refreshCollections} disabled={collectionsLoading} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" aria-label="Refresh collections" title="Refresh collections">
               <RefreshCw className={`w-3 h-3 text-slate-400 ${collectionsLoading ? "animate-spin" : ""}`} />
             </button>
           </div>

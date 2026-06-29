@@ -14,6 +14,38 @@ if TYPE_CHECKING:
 LOG = logging.getLogger("gateway.rag_pipeline.ranker_stage")
 
 
+_REDACTED_PLACEHOLDER = "[REDACTED]"
+
+
+def _redact_sensitive_fields(documents: list, sensitive_fields: list) -> int:
+    """Redact policy-declared sensitive metadata fields from retrieved docs.
+
+    VectorCollectionPolicy.sensitive_fields names metadata keys whose values
+    must never leave the firewall in cleartext (e.g. ``ssn``, ``email``,
+    ``api_key``). The control plane compiles this list into Redis but, prior to
+    this, no gateway stage consumed it — the values flowed straight through to
+    the caller. Here we walk each document's ``metadata`` mapping and replace
+    any value whose key matches a sensitive field (case-insensitive) with a
+    fixed placeholder, in place. Returns the count of values redacted so the
+    caller can flag the request.
+    """
+    if not sensitive_fields:
+        return 0
+    targets = {str(f).strip().lower() for f in sensitive_fields if str(f).strip()}
+    if not targets:
+        return 0
+    redacted = 0
+    for doc in documents:
+        metadata = doc.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        for key in list(metadata.keys()):
+            if str(key).strip().lower() in targets and metadata[key] not in (None, "", _REDACTED_PLACEHOLDER):
+                metadata[key] = _REDACTED_PLACEHOLDER
+                redacted += 1
+    return redacted
+
+
 def compute_trust_score(document: dict, policy: dict) -> float:
     """Compute a trust score [0.0-1.0] for a retrieved document.
 
@@ -79,6 +111,25 @@ class RankerStage:
         threshold_override = inp.policy.get("anomaly_distance_threshold")
         distances = [doc.get("distance", 0.0) for doc in documents]
         anomaly_removed_all = False
+
+        # PART B (rag #3 defense-in-depth): detect a DEGENERATE distance
+        # distribution. If every document is at the SAME distance (e.g. all 1.0)
+        # across several docs, the query embedding was constant/degenerate (an
+        # unhealthy embedding model), so embedding-anomaly detection AND trust
+        # re-ranking are mathematically inert (every trust score is identical).
+        # The fail-closed embedder blocks a truly-zero query vector upstream;
+        # this catches the subtler "all distances equal" case. Monitor-only:
+        # log loudly so it is observable; do NOT drop documents.
+        try:
+            if len(distances) >= 3 and len({round(float(d), 6) for d in distances}) == 1:
+                LOG.warning(
+                    "RAG ranker: DEGENERATE retrieval — all %d documents at distance=%.6f "
+                    "(constant); embedding-anomaly + trust re-ranking are inert. Likely an "
+                    "unhealthy query embedding model (project=%s).",
+                    len(distances), float(distances[0]), getattr(inp, "project_id", ""),
+                )
+        except (TypeError, ValueError):
+            pass  # never let a malformed distance break ranking
 
         if anomalies_enabled and distances:
             if threshold_override is None:
@@ -176,6 +227,17 @@ class RankerStage:
                 clean.append(doc)
             documents = clean
 
+        # ── 4b. Per-field sensitive-metadata redaction ──
+        # Consume VectorCollectionPolicy.sensitive_fields (compiled into the
+        # policy bundle): redact any matching metadata value before the docs
+        # leave the firewall. Runs regardless of the content scan so declared
+        # sensitive columns are always scrubbed.
+        sensitive_redactions = 0
+        if documents:
+            sensitive_redactions = _redact_sensitive_fields(
+                documents, inp.policy.get("sensitive_fields") or []
+            )
+
         # ── 5. Stage-specific policy-based filtering ──
         policy_rules_consulted: list[str] = []
         rejected_doc_ids: list[str] = []
@@ -193,6 +255,7 @@ class RankerStage:
                     response_text="",
                     compiled_policies=self._compiled_policies,
                     stage="ranker",
+                    actor=inp.actor,
                 )
                 policy_rules_consulted.extend(result.matched_rule_names)
                 if result.action == "block":
@@ -226,13 +289,25 @@ class RankerStage:
             verdict_action = "block" if not documents else "flag"
         elif anomaly_removed_all:
             verdict_action = "flag"
+        elif sensitive_redactions and verdict_action == "allow":
+            verdict_action = "redact"
+
+        if sensitive_redactions:
+            verdict_threat = "sensitive_field"
+            verdict_detail = f"Redacted {sensitive_redactions} sensitive metadata field(s) per policy"
+        elif anomaly_removed_all:
+            verdict_threat = "anomaly" if anomalous_indices else ""
+            verdict_detail = "All retrieved documents matched anomaly heuristics; returning flagged results without drop"
+        else:
+            verdict_threat = "anomaly" if anomalous_indices else ""
+            verdict_detail = ""
 
         return RankerStageOutput(
             verdict=StageVerdict(
                 action=verdict_action,
-                threat_type="anomaly" if anomalous_indices else "",
-                confidence=0.4 if anomaly_removed_all else 0.0,
-                detail="All retrieved documents matched anomaly heuristics; returning flagged results without drop" if anomaly_removed_all else "",
+                threat_type=verdict_threat,
+                confidence=0.4 if (anomaly_removed_all or sensitive_redactions) else 0.0,
+                detail=verdict_detail,
             ),
             ranked_documents=documents,
             anomalous_indices=anomalous_indices,

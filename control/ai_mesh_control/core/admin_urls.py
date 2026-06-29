@@ -12,6 +12,8 @@ from core.gateway_admin_proxy_views import (
     CircuitBreakerResetProxyView,
     CircuitBreakerStateProxyView,
     CircuitBreakerTriggerProxyView,
+    GatewayBedrockTestProxyView,
+    GatewayDbTestProxyView,
     GatewayRagCollectionsProxyView,
 )
 
@@ -45,6 +47,20 @@ urlpatterns = [
         "gateway/rag/collections/",
         GatewayRagCollectionsProxyView.as_view(),
         name="admin-gateway-rag-collections",
+    ),
+    # Server-side proxy for gateway /v1/admin/db-test (vector DB connectivity
+    # test). Admin-gated on the gateway; the simulator UI's low-priv per-org
+    # key never needs admin perms — Django enforces IsAdminOrSuperuser and
+    # forwards with the internal key.
+    path(
+        "gateway/db-test/",
+        GatewayDbTestProxyView.as_view(),
+        name="admin-gateway-db-test",
+    ),
+    path(
+        "gateway/bedrock-test/",
+        GatewayBedrockTestProxyView.as_view(),
+        name="admin-gateway-bedrock-test",
     ),
     path(
         "redis/kill-switches/validate/",

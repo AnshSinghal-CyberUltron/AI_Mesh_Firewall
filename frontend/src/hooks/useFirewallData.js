@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRealtimeNotifications } from "./useRealtimeNotifications";
 
-const TIME_RANGE_TO_HOURS = {
+export const TIME_RANGE_TO_HOURS = {
   "1h": 1,
   "6h": 6,
   "24h": 24,
@@ -20,7 +20,7 @@ const MODULE_SOURCE_MAP = {
   "1.7": "security_scan",
 };
 
-export function useFirewallData(moduleId, timeRange = "24h") {
+export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } = {}) {
   const { fetchWithAuth } = useAuth();
   const [socKpis, setSocKpis] = useState(null);
   const [threatFeed, setThreatFeed] = useState([]);
@@ -48,7 +48,7 @@ export function useFirewallData(moduleId, timeRange = "24h") {
     }
 
     const hours = TIME_RANGE_TO_HOURS[timeRange] || 24;
-    const period = timeRange === "6h" ? "24h" : timeRange;
+    const period = timeRange;
     const source = MODULE_SOURCE_MAP[moduleId] || null;
 
     try {
@@ -124,21 +124,27 @@ export function useFirewallData(moduleId, timeRange = "24h") {
     }
   }, [fetchWithAuth, moduleId, timeRange]);
 
+  // #5: `enabled` lets a parent that already runs this hook pass its result down
+  // (instead of a child mounting a SECOND instance that duplicates the fetch +
+  // the 15s polling). When disabled, skip the initial fetch, realtime refetch,
+  // and polling — the parent drives the data.
   useEffect(() => {
+    if (!enabled) return;
     hasLoadedOnce.current = false;
     fetchData({ background: false });
-  }, [fetchData]);
+  }, [fetchData, enabled]);
 
   useRealtimeNotifications({
-    enabled: true,
+    enabled,
     onEnforcementEvent: () => fetchData({ background: true }),
   });
 
   // Polling fallback: refresh without clearing UI (avoids hero/table flicker).
   useEffect(() => {
+    if (!enabled) return undefined;
     const id = setInterval(() => fetchData({ background: true }), 15000);
     return () => clearInterval(id);
-  }, [fetchData]);
+  }, [fetchData, enabled]);
 
   const metrics = buildMetrics(moduleId, socKpis, gatewayStats, threatFeedCount);
 

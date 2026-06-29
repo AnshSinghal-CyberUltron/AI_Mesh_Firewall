@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+date: Wed, 24 Jun 2026 13:05:09 GMT
+server: uvicorn
+x-zeroshield-action: pass
+x-processing-time-ms: 1.6
+content-length: 153
+content-type: application/json
+x-request-id: zs-emb-01b5525e1416
+
+{"object":"list","data":[{"object":"embedding","index":0,"embedding":[0.01,-0.02,0.03]}],"model":"zs-embed","usage":{"prompt_tokens":4,"total_tokens":4}}

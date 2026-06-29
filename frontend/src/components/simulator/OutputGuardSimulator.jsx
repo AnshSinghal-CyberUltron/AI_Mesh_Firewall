@@ -276,7 +276,7 @@ export function OutputGuardSimulator() {
                     <span className="text-slate-600 dark:text-slate-400 line-through font-mono">{t.original}</span>
                     <span className="text-slate-500 dark:text-slate-500">→</span>
                     <span className="text-amber-700 dark:text-amber-300 font-mono">{t.replacement}</span>
-                    <span className="text-slate-500 dark:text-slate-500 text-[9px] ml-auto">pos {t.start}–{t.end}</span>
+                    <span className="text-slate-500 dark:text-slate-500 text-[10px] ml-auto">pos {t.start}–{t.end}</span>
                   </div>
                 ))}
               </div>

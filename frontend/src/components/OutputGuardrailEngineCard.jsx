@@ -1,10 +1,31 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Shield, ShieldCheck, ShieldAlert, Eye, Fingerprint, Brain,
-  Key, FileWarning, Loader2, Activity,
+  Key, FileWarning, Loader2, Activity, AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
+import { TIME_RANGE_TO_HOURS } from "../hooks/useFirewallData";
+import { normalizeCategory, OUTPUT_ACTION_COLORS } from "../constants/outputGuardColors";
+
+// Bucket a real EnforcementEvent.action (block/redact/monitor/rewrite/
+// model_downgrade) into the three card lanes, reusing the canonical color map
+// as the single source of truth. Anything tinted red = blocked; amber/violet/
+// orange (redact, rewrite, model_downgrade, flag, alert) = a content
+// modification (folded into the "redacted/modified" lane, never "allowed");
+// emerald (monitor, allow) = allowed. model_downgrade has no own color entry,
+// so it's pinned to "modified" explicitly below.
+const RED = OUTPUT_ACTION_COLORS.block;       // blocked
+const EMERALD = OUTPUT_ACTION_COLORS.allow;   // allowed / monitored
+function actionBucket(action) {
+  const a = String(action || "").toLowerCase();
+  if (a === "model_downgrade") return "redacted"; // response was altered (no own color)
+  const color = OUTPUT_ACTION_COLORS[a];
+  if (color === RED) return "blocked";
+  if (color === EMERALD) return "allowed"; // monitor/monitored/allow/allowed
+  if (color) return "redacted"; // redact, rewrite, flag, alert → content modified
+  return "allowed"; // genuinely-unknown/unmapped → treat as allowed (fail-open)
+}
 
 const DETECTION_CATEGORIES = [
   { id: "pii", label: "PII Detection", icon: Fingerprint, description: "SSNs, emails, phone numbers, addresses" },
@@ -43,21 +64,27 @@ function CategoryCard({ category, stats }) {
   );
 }
 
-export function OutputGuardrailEngineCard() {
+export function OutputGuardrailEngineCard({ timeRange = "24h" }) {
   const { fetchWithAuth } = useAuth();
   const [stats, setStats] = useState({});
   const [summary, setSummary] = useState({ total: 0, blocked: 0, redacted: 0, flagged: 0, allowed: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const fetchStats = useCallback(async () => {
     try {
+      // Honor the operator-lens window (default 7d for §1.7) instead of a fixed
+      // 24h, so the engine card stays consistent with the page KPIs + Evidence.
+      const hours = TIME_RANGE_TO_HOURS[timeRange] || 24;
       const res = await fetchWithAuth(
-        "/api/security/threat-feed/?hours=24&limit=100&source=security_scan"
+        `/api/security/threat-feed/?hours=${hours}&limit=500&source=security_scan`
       );
       if (res.ok) {
         const data = await res.json();
         const outputEvents = (data.results || []).filter((ev) => {
-          const et = (ev.metadata?.event_type || "").toLowerCase();
+          // String(...) guards against truthy non-string event_type values
+          // (numbers/objects from older gateway payloads) throwing on toLowerCase.
+          const et = String(ev.metadata?.event_type || "").toLowerCase();
           return et === "output_guard" || et === "output_scan";
         });
 
@@ -65,21 +92,35 @@ export function OutputGuardrailEngineCard() {
         let blocked = 0, redacted = 0, flagged = 0, allowed = 0;
 
         for (const ev of outputEvents) {
-          const tt = (ev.metadata?.threat_category || ev.metadata?.threat_type || "").toLowerCase();
-          if (tt) categoryStats[tt] = (categoryStats[tt] || 0) + 1;
-          if (ev.action === "block") blocked++;
-          else if (ev.action === "redact") redacted++;
-          else if (ev.action === "flag") flagged++;
+          // Normalize the gateway threat vocabulary onto the six canonical
+          // categories (credential_exposure→credential, hallucination_risk→…)
+          // so the category cards reflect real counts instead of staying 0.
+          const cat = normalizeCategory(ev.metadata?.threat_category || ev.metadata?.threat_type);
+          categoryStats[cat] = (categoryStats[cat] || 0) + 1;
+          // Bucket on the real action vocabulary via the canonical color map:
+          // block→blocked, redact/rewrite/model_downgrade→redacted (modified),
+          // monitor→allowed. Avoids the prior bug where rewrite/model_downgrade
+          // silently counted as "allowed" and a non-existent "flag" was tallied.
+          const bucket = actionBucket(ev.action);
+          if (bucket === "blocked") blocked++;
+          else if (bucket === "redacted") redacted++;
           else allowed++;
         }
 
         setStats(categoryStats);
         setSummary({ total: outputEvents.length, blocked, redacted, flagged, allowed });
+        setError(null);
+      } else {
+        // A backend failure (e.g. 400 on bad params, 403/500/timeout) must stay
+        // distinct from a successful-but-empty window, which renders "Idle".
+        setError(`Failed to load engine status (HTTP ${res.status}).`);
       }
+    } catch (err) {
+      setError(`Failed to load engine status: ${err?.message || "request failed"}`);
     } finally {
       setLoading(false);
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, timeRange]);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
@@ -101,16 +142,18 @@ export function OutputGuardrailEngineCard() {
             </InfoTooltip>
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Detection categories, action distribution, and engine health (24h window)
+            Detection categories, action distribution, and engine health ({timeRange} window)
           </p>
         </div>
         <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-          engineActive
+          error
+            ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+            : engineActive
             ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"
             : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
         }`}>
-          <Activity className="w-3 h-3" />
-          {engineActive ? "Active" : "Idle"}
+          {error ? <AlertTriangle className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
+          {error ? "Error" : engineActive ? "Active" : "Idle"}
         </div>
       </div>
 
@@ -118,6 +161,19 @@ export function OutputGuardrailEngineCard() {
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-5 h-5 text-teal-500 animate-spin" />
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading engine status...</span>
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <div>{error}</div>
+          </div>
+          <button
+            onClick={fetchStats}
+            className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Retry
+          </button>
         </div>
       ) : (
         <>

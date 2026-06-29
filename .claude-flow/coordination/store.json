@@ -1,0 +1,100 @@
+{
+  "topology": {
+    "type": "hierarchical",
+    "maxNodes": 15,
+    "redundancy": 2,
+    "consensusAlgorithm": "raft"
+  },
+  "loadBalance": {
+    "algorithm": "adaptive",
+    "weights": {},
+    "healthCheck": true
+  },
+  "sync": {
+    "lastSync": "2026-06-22T08:54:43.333Z",
+    "syncCount": 0,
+    "conflicts": 0,
+    "pendingChanges": 0
+  },
+  "nodes": {},
+  "version": "3.0.0",
+  "consensus": {
+    "pending": [
+      {
+        "proposalId": "proposal-1782118483335-670uj0",
+        "type": "coordination",
+        "proposal": {
+          "phase": "P2-triage-reconciled",
+          "confirmed": 12,
+          "all_xfail_strict": true,
+          "dropped": 20,
+          "needs_live": 2,
+          "high": [
+            "P2-MCT-CHAT-injects-max_tokens",
+            "P2-RESP-drops-response_format"
+          ],
+          "core_clean": "D1-D5 disproven; cross-tenant isolation holds; no header drop; streaming edges correct",
+          "repro_file": "gateway/ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py"
+        },
+        "proposedBy": "system",
+        "proposedAt": "2026-06-22T08:54:43.336Z",
+        "votes": {},
+        "status": "pending",
+        "strategy": "quorum",
+        "quorumPreset": "majority"
+      }
+    ],
+    "history": [
+      {
+        "proposalId": "proposal-1782121724338-i1ss5i",
+        "result": "approved",
+        "votes": {
+          "for": 1,
+          "against": 0
+        },
+        "decidedAt": "2026-06-22T09:49:28.902Z",
+        "strategy": "quorum"
+      },
+      {
+        "proposalId": "proposal-1782122381535-lxdw7a",
+        "result": "approved",
+        "votes": {
+          "for": 1,
+          "against": 0
+        },
+        "decidedAt": "2026-06-22T10:00:19.132Z",
+        "strategy": "quorum"
+      },
+      {
+        "proposalId": "proposal-1782127356836-xfn4rd",
+        "result": "approved",
+        "votes": {
+          "for": 1,
+          "against": 0
+        },
+        "decidedAt": "2026-06-22T11:22:59.263Z",
+        "strategy": "quorum"
+      },
+      {
+        "proposalId": "proposal-1782133060540-os4gk2",
+        "result": "approved",
+        "votes": {
+          "for": 1,
+          "against": 0
+        },
+        "decidedAt": "2026-06-22T12:57:50.796Z",
+        "strategy": "quorum"
+      },
+      {
+        "proposalId": "proposal-1782306975773-kghx8v",
+        "result": "approved",
+        "votes": {
+          "for": 1,
+          "against": 0
+        },
+        "decidedAt": "2026-06-24T13:17:02.324Z",
+        "strategy": "quorum"
+      }
+    ]
+  }
+}

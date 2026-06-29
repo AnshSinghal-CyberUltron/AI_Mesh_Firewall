@@ -2,7 +2,13 @@
  * Helpers for Module 1 UI panels that exercise the live gateway (no /v1/simulator/*).
  */
 
-import { formatDetectionTier, formatModelDisplayName } from "../constants/zeroshieldBrand";
+import {
+  formatDecisionSource,
+  formatDetectionTier,
+  formatModelDisplayName,
+  formatRoutingReason,
+  isRoutingReroute,
+} from "../constants/zeroshieldBrand.js";
 
 /** Distinguish gateway-key 401 (middleware) from upstream provider 401 (LiteLLM). */
 export function describeGatewayHttp401(data, { modelName = "" } = {}) {
@@ -64,7 +70,12 @@ export function chatCompletionBody({
     body.stream = true;
   }
   if (!runInference) {
-    body.max_tokens = 0;
+    // "scan-only / no-inference" probe: OMIT max_tokens entirely (absent →
+    // gateway treats as no-inference). Previously this sent max_tokens=0, which
+    // the gateway's request validation rejects as "'max_tokens' must be a
+    // positive integer" (400) — so every probe surfaced a confusing block in the
+    // pipeline trace instead of the input-scan verdict.
+    delete body.max_tokens;
   }
   if (routingPreferences && typeof routingPreferences === "object") {
     body.routing_preferences = routingPreferences;
@@ -108,6 +119,33 @@ export async function consumeSSEStream(response) {
   let aggregatedContent = "";
   let terminalError = null;
 
+  // Parse a single SSE "event block" (already split on the \n\n boundary).
+  // Returns nothing; mutates events/aggregatedContent/terminalError in place.
+  const processPart = (part) => {
+    const line = part.trim();
+    if (!line.startsWith("data: ")) return;
+    const payload = line.slice(6).trim();
+    if (payload === "[DONE]") {
+      events.push({ type: "done" });
+      return;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      events.push({ type: "raw", payload });
+      return;
+    }
+    events.push({ type: "data", payload: parsed });
+    if (parsed?.error) {
+      terminalError = parsed.error;
+    }
+    const delta = parsed?.choices?.[0]?.delta?.content;
+    if (typeof delta === "string") {
+      aggregatedContent += delta;
+    }
+  };
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -115,29 +153,17 @@ export async function consumeSSEStream(response) {
     const parts = buffer.split("\n\n");
     buffer = parts.pop() || "";
     for (const part of parts) {
-      const line = part.trim();
-      if (!line.startsWith("data: ")) continue;
-      const payload = line.slice(6).trim();
-      if (payload === "[DONE]") {
-        events.push({ type: "done" });
-        continue;
-      }
-      let parsed;
-      try {
-        parsed = JSON.parse(payload);
-      } catch {
-        events.push({ type: "raw", payload });
-        continue;
-      }
-      events.push({ type: "data", payload: parsed });
-      if (parsed?.error) {
-        terminalError = parsed.error;
-      }
-      const delta = parsed?.choices?.[0]?.delta?.content;
-      if (typeof delta === "string") {
-        aggregatedContent += delta;
-      }
+      processPart(part);
     }
+  }
+
+  // Flush any trailing buffer: if the stream ends without a final \n\n
+  // (common when the gateway closes after the last delta or an error frame),
+  // the last event would otherwise be silently dropped. Drain the decoder
+  // and process whatever remains so terminal errors / final deltas survive.
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    processPart(buffer);
   }
 
   return { isStream: true, events, aggregatedContent, terminalError, raw: "" };
@@ -151,9 +177,15 @@ export function normalizeStreamChatPipelineResult(
   context = {},
 ) {
   const headers = responseHeaders || {};
-  const scanMode = headers.get?.("x-zeroshield-stream-scan-mode")
-    || headers["x-zeroshield-stream-scan-mode"]
-    || "";
+  // Read case-insensitively: real fetch Headers.get() is already CI, but a
+  // plain-object fallback (tests / proxies) is not — so try both casings.
+  const readHeader = (key) => getHeaderValue(headers, key);
+  const scanMode = readHeader("x-zeroshield-stream-scan-mode");
+  // Always thread responseHeaders into the downstream context so the
+  // X-ZeroShield-* routing telemetry survives BOTH the success and the 4xx
+  // error path (extractRoutingFromHeaders reads context.responseHeaders).
+  // Prefer the explicit arg; fall back to whatever the caller already set.
+  const ctx = { ...context, responseHeaders: responseHeaders || context.responseHeaders };
   const terminalErr = sseResult?.terminalError;
   const blockedInStream = Boolean(
     terminalErr
@@ -161,7 +193,7 @@ export function normalizeStreamChatPipelineResult(
   );
 
   if (httpStatus === 403 || (httpStatus >= 400 && !sseResult?.isStream)) {
-    return normalizeChatPipelineResult(sseResult?.data || {}, httpStatus, context);
+    return normalizeChatPipelineResult(sseResult?.data || {}, httpStatus, ctx);
   }
 
   const synthetic = {
@@ -177,7 +209,7 @@ export function normalizeStreamChatPipelineResult(
     error: terminalErr || undefined,
   };
 
-  const normalized = normalizeChatPipelineResult(synthetic, blockedInStream ? 403 : httpStatus, context);
+  const normalized = normalizeChatPipelineResult(synthetic, blockedInStream ? 403 : httpStatus, ctx);
   return {
     ...normalized,
     stream: true,
@@ -463,13 +495,29 @@ function truncateText(text, limit = 1200) {
   return `${raw.slice(0, limit)}…`;
 }
 
+/**
+ * Read a single header value case-insensitively.
+ * Real fetch Headers.get() is already case-insensitive; a plain-object
+ * fallback (tests, server-side proxies) is not, so probe the requested
+ * key plus its lower/upper-cased variants before giving up.
+ */
+function getHeaderValue(headers, key) {
+  if (!headers) return "";
+  if (typeof headers.get === "function") return headers.get(key) || "";
+  if (headers[key] != null) return headers[key] || "";
+  const lower = key.toLowerCase();
+  if (headers[lower] != null) return headers[lower] || "";
+  const upper = key.toUpperCase();
+  if (headers[upper] != null) return headers[upper] || "";
+  // Last resort: linear case-insensitive scan of the plain object's keys.
+  const match = Object.keys(headers).find((k) => k.toLowerCase() === lower);
+  return match ? (headers[match] || "") : "";
+}
+
 /** Read routing telemetry from gateway response headers when zeroshield is redacted. */
 export function extractRoutingFromHeaders(headers) {
   if (!headers) return {};
-  const get = (key) => {
-    if (typeof headers.get === "function") return headers.get(key) || "";
-    return headers[key] || "";
-  };
+  const get = (key) => getHeaderValue(headers, key);
   return {
     requested_model: get("X-ZeroShield-Original-Model"),
     original_model: get("X-ZeroShield-Original-Model"),
@@ -503,11 +551,10 @@ function latencyForStage(stageName, stageMetrics, zs = {}, context = {}) {
     output_guardrail: roundMs(stageMetrics.output_guard_ms, 0.2),
   };
   if (map[stageName] > 0) return map[stageName];
-  const total = roundMs(context.totalLatencyMs);
-  if (total > 0) {
-    const idx = stageIndex(stageName);
-    if (idx >= 0) return roundMs(total / PIPELINE_STAGE_ORDER.length, 0.1);
-  }
+  // Do NOT fabricate an even total/N split for stages with no real metric — it
+  // rendered an identical (e.g. 714.7ms) latency on multiple unrelated stages,
+  // misrepresenting where time was spent. Return the honest small default; the
+  // real end-to-end time is surfaced separately as total_latency_ms.
   return 0.1;
 }
 
@@ -539,16 +586,48 @@ function enrichStages(stages, data, zs, context) {
     }
     if (stage.name === "model_routing") {
       const routing = zs.routing || {};
-      enriched.requested_model = enriched.requested_model || routing.original_model || routing.requested_model || context.requestedModel || "";
-      enriched.selected_model = enriched.selected_model || routing.selected_model || routing.routed_model || zs.selected_model || "";
-      enriched.routing_reason = enriched.routing_reason || routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "";
-      enriched.decision_source = enriched.decision_source || routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "";
-      enriched.policy_summary = enriched.policy_summary || routing.policy_summary || zs.policy_summary || context.routingHeaders?.policy_summary || "";
-      enriched.decision_factors = enriched.decision_factors || routing.decision_factors || zs.decision_factors || [];
+      enriched.requested_model = enriched.requested_model
+        || routing.original_model
+        || routing.requested_model
+        || context.requestedModel
+        || "";
+      enriched.selected_model = enriched.selected_model
+        || routing.selected_model
+        || routing.routed_model
+        || zs.selected_model
+        || "";
+      const rawReason = enriched.routing_reason
+        || routing.routing_reason
+        || zs.routing_reason
+        || context.routingHeaders?.routing_reason
+        || "";
+      const rawSource = enriched.decision_source
+        || routing.decision_source
+        || zs.decision_source
+        || context.routingHeaders?.decision_source
+        || "";
+      enriched.decision_source = rawSource;
+      enriched.decision_source_label = enriched.decision_source_label
+        || formatDecisionSource(rawSource);
+      enriched.routing_reason = formatRoutingReason(rawReason, { decisionSource: rawSource });
+      enriched.policy_summary = enriched.policy_summary
+        || routing.policy_summary
+        || zs.policy_summary
+        || context.routingHeaders?.policy_summary
+        || "";
+      enriched.decision_factors = enriched.decision_factors
+        || routing.decision_factors
+        || zs.decision_factors
+        || [];
       enriched.weights = enriched.weights || routing.weights || zs.weights || {};
       if (!enriched.detail && enriched.routing_reason) {
         enriched.detail = enriched.routing_reason;
       }
+    }
+    if (stage.name === "kill_switch" && enriched.action === "reroute" && enriched.routing_reason) {
+      enriched.detail = formatRoutingReason(enriched.routing_reason, {
+        decisionSource: enriched.decision_source,
+      });
     }
     return enriched;
   });
@@ -634,22 +713,43 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
   {
     const at = stageAt("policy");
     const policyBlocked = blockedStage === "policy";
-    const matched = zs.matched_patterns || data?.matched_policies || [];
+    const matchedPolicies = data?.matched_policies || zs.matched_policies || [];
+    let matchedRules = data?.matched_rules || zs.matched_rules || [];
+    // The deterministic policy-redaction path reports the rule names it applied
+    // in `matched_patterns` (the redact-path zeroshield carries no matched_rules),
+    // so the Policy stage used to fall through to "allow" even though it had just
+    // redacted PII. Detect a policy-tier redaction and surface those rule names so
+    // the card honestly shows REDACT instead of ALLOW.
+    const policyTier = String(zs.detection_tier || data?.detection_tier || "").toLowerCase() === "policy";
+    const policyRedacted = policyTier && (finalAction === "redact" || String(zs.action || "").toLowerCase() === "redact");
+    if (!matchedRules.length && policyRedacted) {
+      const redactNames = (zs.matched_patterns || data?.matched_patterns || [])
+        .filter((p) => /redact/i.test(String(p)));
+      matchedRules = redactNames.length ? redactNames : (zs.matched_patterns || []);
+    }
+    const policyActed = Boolean(matchedPolicies?.length || matchedRules?.length || policyRedacted);
     stages.push({
       name: "policy",
       action: policyBlocked
         ? "block"
         : at === "after"
           ? "skip"
-          : (finalAction === "redact" || finalAction === "flag" ? finalAction : "allow"),
+          : policyRedacted
+            ? "redact"
+            : (policyActed && finalAction === "flag" ? "flag" : "allow"),
       latency_ms: latencyForStage("policy", stageMetrics, zs, context),
       detail: policyBlocked
         ? formatPolicyBlockDetail(data, zs)
         : at === "after"
           ? skipDetail("policy", blockedStage)
-          : "Policy Management: no organization rules configured — stage allowed",
-      matched_policies: matched,
-      threat_type: policyBlocked ? (data?.category || zs.threat_type || "policy") : "",
+          : policyRedacted
+            ? `Policy engine redacted sensitive data — applied ${matchedRules.length} rule(s) before forwarding to the LLM`
+            : (matchedRules?.length
+              ? `Policy engine matched ${matchedRules.length} rule(s)`
+              : "Policy engine evaluated request against compiled rules; no matching policy rule"),
+      matched_policies: matchedPolicies,
+      matched_rules: matchedRules,
+      threat_type: policyBlocked ? (data?.category || zs.threat_type || "policy") : (policyRedacted ? (zs.threat_type || "pii") : ""),
     });
   }
 
@@ -681,17 +781,25 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
         tier: "skipped",
       });
     } else {
+      // When the deterministic POLICY tier already redacted the prompt, Tier-2
+      // input scanning runs on the ALREADY-REDACTED text — so it is clean, not a
+      // flag. Attribute the redaction to the Policy stage and show input_scan as
+      // a clean pass (it used to inherit the request-level "redact"/"flag").
+      const policyTierRedact = String(tier).toLowerCase() === "policy"
+        && (finalAction === "redact" || String(zs.action || "").toLowerCase() === "redact");
       stages.push({
         name: "input_scan",
-        action: scanStageAction(finalAction, blockedStage, httpStatus),
+        action: policyTierRedact ? "allow" : scanStageAction(finalAction, blockedStage, httpStatus),
         latency_ms: latencyForStage("input_scan", stageMetrics, zs, context) || roundMs(zs.processing_time_ms, 0.5),
-        detail: scanRan
-          ? formatInputScanDetail(data, zs, { blocked: false })
-          : "Input scan not invoked for this request",
-        threat_type: zs.threat_type && zs.threat_type !== "none" ? zs.threat_type : "",
-        confidence: zs.confidence ?? 0,
+        detail: policyTierRedact
+          ? "Tier-2 scanned the policy-redacted prompt — no additional threats (PII already masked upstream)"
+          : (scanRan
+            ? formatInputScanDetail(data, zs, { blocked: false })
+            : "Input scan not invoked for this request"),
+        threat_type: (!policyTierRedact && zs.threat_type && zs.threat_type !== "none") ? zs.threat_type : "",
+        confidence: policyTierRedact ? 0 : (zs.confidence ?? 0),
         tier: formatDetectionTier(tier) || tier || "",
-        matched_patterns: zs.matched_patterns || [],
+        matched_patterns: policyTierRedact ? [] : (zs.matched_patterns || []),
         prompt_submitted: promptPreview,
       });
     }
@@ -701,15 +809,22 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
   {
     const at = stageAt("kill_switch");
     const ksBlocked = blockedStage === "kill_switch";
+    const ksRerouted = Boolean(
+      routing.rerouted && String(routing.trigger_source || routing.decision_source || "").toLowerCase() === "kill_switch",
+    );
     stages.push({
       name: "kill_switch",
-      action: ksBlocked ? "block" : at === "after" ? "skip" : "allow",
+      action: ksBlocked ? "block" : ksRerouted ? "reroute" : at === "after" ? "skip" : "allow",
       latency_ms: latencyForStage("kill_switch", stageMetrics, zs, context),
       detail: ksBlocked
         ? (data?.message || "Model kill-switch is active")
-        : at === "after"
-          ? skipDetail("kill_switch", blockedStage)
-          : "No active kill-switch for this model",
+        : ksRerouted
+          ? formatRoutingReason(routing.routing_reason || routing.reason || "", {
+            decisionSource: routing.decision_source,
+          })
+          : at === "after"
+            ? skipDetail("kill_switch", blockedStage)
+            : "No active kill-switch for this model",
     });
   }
 
@@ -721,6 +836,12 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     const hasRouting = Boolean(
       routing.selected_model || routing.routed_model || zs.selected_model || zs.routing_reason,
     );
+    const reqModel = routing.original_model || routing.requested_model || context.requestedModel || data?.model || "";
+    const selModel = routing.selected_model || routing.routed_model || zs.selected_model || "";
+    const rawRoutingReason = routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "";
+    const rawDecisionSource = routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "";
+    const formattedReason = formatRoutingReason(rawRoutingReason, { decisionSource: rawDecisionSource });
+    const rerouted = isRoutingReroute(reqModel, selModel, routing);
     stages.push({
       name: "model_routing",
       action: needsModel
@@ -729,25 +850,28 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
           ? "block"
           : at === "after"
             ? "skip"
-            : hasRouting || !isBlocked
-              ? "allow"
-              : "skip",
+            : rerouted
+              ? "reroute"
+              : hasRouting || !isBlocked
+                ? "allow"
+                : "skip",
       detail: needsModel
         ? (data?.message || "Connect your organization's inference model (Module 1.5 → Model Connection). ZeroShield guard models are for scanning only.")
         : routingBlocked
           ? (data?.message || "Model not allowed or not configured")
           : at === "after"
             ? skipDetail("model_routing", blockedStage)
-            : (zs.routing_reason || routing.routing_reason
+            : (formattedReason
               || (hasRouting
-                ? `Routed to ${formatModelDisplayName(zs.selected_model || routing.selected_model || requestedModel)}`
+                ? `Routed to ${formatModelDisplayName(selModel || requestedModel)}`
                 : "Model routing evaluated")),
       model: requestedModel,
-      requested_model: routing.original_model || data?.model || routing.requested_model || "",
-      selected_model: routing.selected_model || zs.selected_model || "",
+      requested_model: reqModel,
+      selected_model: selModel,
       routed_model: routing.routed_model || routing.selected_model || "",
-      routing_reason: routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "",
-      decision_source: routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "",
+      routing_reason: formattedReason,
+      decision_source: rawDecisionSource,
+      decision_source_label: formatDecisionSource(rawDecisionSource),
       policy_summary: routing.policy_summary || zs.policy_summary || context.routingHeaders?.policy_summary || "",
       decision_factors: routing.decision_factors || zs.decision_factors || [],
       weights: routing.weights || zs.weights || {},
@@ -758,6 +882,8 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
   // 7 — Model input
   {
     const at = stageAt("model_input");
+    const forwardedPrompt = zs.redacted_prompt || data?.redacted_prompt || promptPreview;
+    const forwardedPreview = truncateText(forwardedPrompt);
     stages.push({
       name: "model_input",
       action: isBlocked && at !== "past" ? "skip" : at === "blocked" ? "block" : "allow",
@@ -765,8 +891,8 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       detail: isBlocked
         ? "Prompt was not sent to the model (blocked upstream)"
         : "Sanitized prompt delivered to LLM after firewall processing",
-      content: isBlocked ? "[BLOCKED — prompt was not sent to the model]" : promptPreview,
-      prompt_submitted: promptPreview,
+      content: isBlocked ? "[BLOCKED — prompt was not sent to the model]" : forwardedPreview,
+      prompt_submitted: isBlocked ? promptPreview : forwardedPreview,
     });
   }
 
@@ -788,13 +914,19 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       const needsModel = finalAction === "needs_model";
       stages.push({
         name: "model_output",
+        // An upstream inference FAILURE (502/error) is NOT a security block — it is
+        // a provider/credential/infra error. Label it "error" so it is visually and
+        // semantically distinct from a guardrail "block" (which denies content).
+        // Only a genuine block-stage at model_output keeps "block".
         action: needsModel
           ? "skip"
-          : inferenceBlocked || isError
-            ? "block"
-            : isBlocked || !hasChoices
-              ? "skip"
-              : "allow",
+          : isError
+            ? "error"
+            : inferenceBlocked
+              ? "block"
+              : isBlocked || !hasChoices
+                ? "skip"
+                : "allow",
         latency_ms: latencyForStage("model_output", stageMetrics, zs, context),
         detail: needsModel
           ? "Inference skipped — connect an organization model under Module 1.5 (Model Connection)"
@@ -884,10 +1016,12 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
         ? zs.matched_patterns
         : (inputStage?.matched_patterns || summary?.guard_findings),
       detection_tier: zs.detection_tier || inputStage?.tier,
+      risk_score: zs.risk_score ?? inputStage?.risk_score ?? summary?.risk_score,
+      scan_outcome: zs.scan_outcome || inputStage?.scan_outcome || summary?.scan_outcome,
+      reason_code: zs.reason_code || inputStage?.reason_code || guardSource?.reason_code,
       guard_reason: zs.guard_reason || guardSource?.guard_reason,
       guard_action: zs.guard_action || guardSource?.guard_action,
       guard_model: zs.guard_model || guardSource?.guard_model,
-      reason_code: zs.reason_code || guardSource?.reason_code,
       recommended_action: zs.recommended_action || guardSource?.recommended_action,
       guard_findings: zs.guard_findings?.length ? zs.guard_findings : guardSource?.guard_findings,
       enforcement_source: zs.enforcement_source || guardSource?.enforcement_source,
@@ -899,16 +1033,22 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     const finalAction = inferFinalAction(data, httpStatus, zs);
     const blockedStage = inferTerminalBlockedStage(data, httpStatus, zs, finalAction);
     const stages = enrichStages(data.pipeline_trace.stages, data, zs, mergedContext);
+    const totalLatency = data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs;
+    const guardSummary = data.pipeline_trace.guard_summary || null;
+    // Hoist stages/guard_summary/total_latency to the top level (the single
+    // source the simulator reads) and DROP the raw pipeline_trace so the result
+    // doesn't carry a full duplicate of the stage array + guard summary.
+    const { pipeline_trace: _omitTrace, ...rest } = data;
     return {
-      ...data,
+      ...rest,
       final_action: finalAction,
       blocked_by: blockedStage || "",
       detection_checkpoint: inferDetectionCheckpoint(data, zs),
       zeroshield: zs,
-      guard_summary: data.pipeline_trace.guard_summary || null,
+      guard_summary: guardSummary,
       request_id: data.request_id || zs.request_id,
       stages,
-      total_latency_ms: data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs,
+      total_latency_ms: totalLatency,
       estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
       pipeline_live: true,
     };
@@ -958,8 +1098,11 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
       }
       : null);
 
+  const totalLatency = context.totalLatencyMs ?? payload.pipeline_trace?.total_latency_ms;
+  // Drop the raw pipeline_trace — its stages/guard_summary are hoisted below.
+  const { pipeline_trace: _omitTrace, ...payloadRest } = payload;
   return {
-    ...payload,
+    ...payloadRest,
     final_action: finalAction,
     blocked_by: blockedStage || "",
     detection_checkpoint: inferDetectionCheckpoint(payload, zs),
@@ -967,7 +1110,7 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     zeroshield: zs,
     guard_summary: guardSummary,
     request_id: payload.request_id || zs.request_id,
-    total_latency_ms: context.totalLatencyMs ?? payload.pipeline_trace?.total_latency_ms,
+    total_latency_ms: totalLatency,
     estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
     pipeline_live: true,
   };
@@ -978,8 +1121,17 @@ export function outputGuardChatBody(text, contextChunks = [], model) {
   const contextHint = contextChunks?.length
     ? `\n\nReference context:\n${contextChunks.join("\n")}`
     : "";
+  // NOTE: the prompt must NOT look like an instruction-override / jailbreak, or the
+  // Tier-2 INPUT scanner blocks it as prompt_injection (403) and the OUTPUT guard is
+  // never reached — the simulator would only ever show an input block. "Repeat the
+  // following text exactly as your entire reply (no preamble)" tripped exactly that.
+  // A neutral "echo for receipt confirmation" framing passes input scan and still
+  // reproduces the text so the output guard can act on it. (High-sensitivity inputs —
+  // raw SSN/card/credentials — are still intercepted by the INPUT guard before
+  // inference; that is defense-in-depth, not a bug. Output-guard demonstration is
+  // most reliable on model-generated sensitive content.)
   return chatCompletionBody({
-    prompt: `Repeat the following text exactly as your entire reply (no preamble):\n\n${text}${contextHint}`,
+    prompt: `Echo the following record back unchanged for a receipt confirmation:\n\n${text}${contextHint}`,
     model,
     runInference: true,
     maxTokens: 1024,

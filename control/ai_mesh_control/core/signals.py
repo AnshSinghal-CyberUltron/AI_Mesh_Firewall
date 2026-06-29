@@ -31,7 +31,14 @@ from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from core.models import FirewallConfig, GatewayAPIKey, KillSwitch, LLMModelConfig, ModelState
+from core.models import (
+    FirewallConfig,
+    GatewayAPIKey,
+    KillSwitch,
+    LLMModelConfig,
+    ModelState,
+    is_platform_managed_llm_model_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +136,135 @@ def sync_gateway_apikey_to_redis(
     transaction.on_commit(
         _do_sync
     )  # Ensure Redis sync happens after DB transaction commits, so we don't cache data that might roll back
+
+
+def resync_all_gateway_keys() -> int:
+    """Reconcile EVERY active GatewayAPIKey into Redis (idempotent).
+
+    The post_save signal only fires on save, so a Redis flush/eviction or a
+    redis/worker container recycle silently blanks the gateway auth keyspace and
+    makes every /v1/* request 401 until each key is re-saved. This full reconcile
+    (run on worker startup + periodically via Celery beat) restores them. Safe to
+    call any time; returns the number of keys synced.
+    """
+    from django.utils import timezone
+
+    synced = 0
+    try:
+        client = _get_redis_client()
+    except redis.RedisError:
+        logger.exception("resync_all_gateway_keys: cannot connect to Redis")
+        return 0
+    for key in GatewayAPIKey.objects.filter(is_active=True).iterator():
+        try:
+            redis_key = _build_redis_key(key.key_hash)
+            payload = json.dumps(key.build_redis_payload())
+            # FC: the row was chunk-fetched into memory (.iterator), widening the
+            # window in which a concurrent DELETE/deactivate can land. Re-check the
+            # row is STILL live immediately before the blind SET so this reconcile
+            # cannot resurrect a key revoked after the fetch (mirrors the F3
+            # only-if-live gateway guard).
+            if not GatewayAPIKey.objects.filter(pk=key.pk, is_active=True).exists():
+                client.delete(redis_key)
+                continue
+            if key.expires_at:
+                ttl = int((key.expires_at - timezone.now()).total_seconds())
+                if ttl <= 0:
+                    client.delete(redis_key)
+                    continue
+                client.setex(redis_key, ttl, payload)
+            else:
+                client.set(redis_key, payload)
+            synced += 1
+        except Exception:  # noqa: BLE001 - one bad key must not abort the reconcile
+            logger.exception("resync_all_gateway_keys: failed for prefix=%s", getattr(key, "prefix", "?"))
+
+    # Revocation prune: a bulk ``QuerySet.update(is_active=False)`` bypasses the
+    # per-instance post_save signal, so the Redis auth entry for a deactivated
+    # key is never removed and the gateway keeps authenticating it (silent
+    # revocation failure). The active-only loop above re-writes live keys but
+    # never deletes stale ones — so explicitly delete Redis entries for every
+    # currently-inactive key on each reconcile. (Fully-deleted keys are handled
+    # by the post_delete receiver; this covers deactivated-but-not-deleted.)
+    pruned = 0
+    for key in GatewayAPIKey.objects.filter(is_active=False).iterator():
+        try:
+            if client.delete(_build_redis_key(key.key_hash)):
+                pruned += 1
+        except Exception:  # noqa: BLE001 - one bad key must not abort the reconcile
+            logger.exception("resync_all_gateway_keys: prune failed for prefix=%s", getattr(key, "prefix", "?"))
+
+    # FC: orphan reap (true reconcile by ground truth). A blind SET can still lose
+    # a microsecond race and resurrect a HARD-deleted key — whose Redis entry then
+    # has NO DB row, so neither the active loop (is_active=True) nor the prune loop
+    # (is_active=False) ever reaps it and the deleted credential authenticates
+    # forever. Delete any auth:apikey:* entry whose hash is not in the CURRENT
+    # active set. Guarded with a non-empty check so a transient empty/failed active
+    # query can never mass-delete live keys.
+    reaped = 0
+    try:
+        _active_keys = {
+            _build_redis_key(h)
+            for h in GatewayAPIKey.objects.filter(is_active=True).values_list("key_hash", flat=True)
+        }
+        if _active_keys:
+            for rkey in client.scan_iter(match=f"{REDIS_KEY_PREFIX}*", count=500):
+                _rk = rkey.decode() if isinstance(rkey, (bytes, bytearray)) else rkey
+                if _rk not in _active_keys and client.delete(_rk):
+                    reaped += 1
+    except Exception:  # noqa: BLE001 - reap is best-effort; never abort the reconcile
+        logger.exception("resync_all_gateway_keys: orphan reap failed")
+
+    logger.info(
+        "resync_all_gateway_keys: reconciled %d active gateway keys into Redis (pruned %d inactive, reaped %d orphan)",
+        synced,
+        pruned,
+        reaped,
+    )
+    return synced
+
+
+def reconcile_all_routing_state() -> dict:
+    """Full reconcile of ALL routing-relevant config into Redis (idempotent).
+
+    B2 DEFENSE: a bulk ``QuerySet.update()`` emits no ``post_save`` signal, so the
+    gateway's routing/isolation/allowlist state in Redis goes STALE and the gateway
+    keeps routing on the old config (e.g. a model bulk-deactivated, bulk-isolated,
+    or whose priority/sensitivity was bulk-updated still receives traffic /
+    mis-routes). Run on worker startup + periodically via Celery beat. Mirrors
+    ``resync_all_gateway_keys``: re-push live state for LLMModelConfig (the per-org
+    bundle is rebuilt from ``is_active=True`` rows, so a bulk-deactivated model is
+    evicted), FirewallConfig (allowlist / routing flags), and ModelState (isolation).
+    """
+    counts = {"llm_models": 0, "firewall_configs": 0, "model_states": 0}
+    try:
+        _sync_all_llm_models(None)  # rebuilds every org's bundle from active rows
+        counts["llm_models"] = LLMModelConfig.objects.filter(is_active=True).count()
+    except Exception:  # noqa: BLE001
+        logger.exception("reconcile_all_routing_state: LLM model sync failed")
+    try:
+        client = _get_redis_client()
+    except redis.RedisError:
+        logger.exception("reconcile_all_routing_state: cannot connect to Redis")
+        return counts
+    for cfg in FirewallConfig.objects.all().iterator():
+        try:
+            client.set(cfg.build_redis_key(), json.dumps(cfg.build_gateway_payload()))
+            counts["firewall_configs"] += 1
+        except Exception:  # noqa: BLE001 - one bad row must not abort the reconcile
+            logger.exception("reconcile: firewall config failed org=%s", getattr(cfg, "organization_id", "?"))
+    for st in ModelState.objects.all().iterator():
+        try:
+            client.set(st.build_redis_key(), json.dumps(st.build_redis_payload()))
+            counts["model_states"] += 1
+        except Exception:  # noqa: BLE001
+            logger.exception("reconcile: model state failed %s", getattr(st, "model_name", "?"))
+    try:
+        client.publish(CONFIG_UPDATES_CHANNEL, json.dumps({"action": "reload"}))
+    except Exception:  # noqa: BLE001 - publish is best-effort
+        pass
+    logger.info("reconcile_all_routing_state: %s", counts)
+    return counts
 
 
 @receiver(post_delete, sender=GatewayAPIKey)
@@ -349,7 +485,13 @@ def _sync_all_llm_models(instance: LLMModelConfig | None = None) -> None:
         for org in orgs:
             slug = org.slug
             redis_key = f"llm:model_configs:{slug}"
-            qs = LLMModelConfig.objects.filter(is_active=True, organization=org)
+            # P5a: exclude platform/guard (provider=internal) models from the gateway
+            # litellm + routing + fallback entries — they must never be a user-routable
+            # or fallback target. The tier-2 guard scan uses a separate Bedrock client,
+            # so it is unaffected.
+            qs = LLMModelConfig.queryset_user_managed(
+                LLMModelConfig.objects.filter(is_active=True, organization=org)
+            )
             entries = [m.build_litellm_entry() for m in qs]
             routing_entries = [m.build_routing_payload() for m in qs]
             from core.routing_fallback import build_compliant_fallback_chains
@@ -368,6 +510,43 @@ def _sync_all_llm_models(instance: LLMModelConfig | None = None) -> None:
         logger.exception("Failed to sync LLMModelConfig to Redis.")
 
 
+def _prune_orphaned_model_artifacts(organization, model_name: str) -> None:
+    """Remove now-orphaned ModelState + KillSwitch rows for (org, model_name).
+
+    When an LLMModelConfig is deleted or deactivated, its ModelState (Risk
+    Monitor) and KillSwitch (Kill-Switch Management) rows would otherwise linger
+    forever — that is exactly the cross-surface drift this prevents. No-op if
+    another ACTIVE config still owns the same model_name, or for platform-managed
+    guard models. The deletes trigger the ModelState/KillSwitch post_delete
+    receivers above, which clean their Redis keys.
+    """
+    if organization is None or not model_name:
+        return
+    if is_platform_managed_llm_model_name(model_name):
+        return
+    if LLMModelConfig.objects.filter(
+        organization=organization, model_name=model_name, is_active=True
+    ).exists():
+        return
+    try:
+        deleted_states, _ = ModelState.objects.filter(
+            organization=organization, model_name=model_name
+        ).delete()
+        deleted_ks, _ = KillSwitch.objects.filter(
+            organization=organization, model_name=model_name
+        ).delete()
+        if deleted_states or deleted_ks:
+            logger.info(
+                "Pruned orphaned artifacts for model=%s org=%s (model_states=%s kill_switches=%s)",
+                model_name,
+                getattr(organization, "slug", organization),
+                deleted_states,
+                deleted_ks,
+            )
+    except Exception:  # pragma: no cover - defensive; never block the config op
+        logger.exception("Failed pruning orphaned artifacts for model=%s", model_name)
+
+
 @receiver(post_save, sender=LLMModelConfig)
 def sync_llm_model_config_to_redis(
     sender: type,
@@ -375,9 +554,18 @@ def sync_llm_model_config_to_redis(
     created: bool,
     **kwargs: Any,
 ) -> None:
-    """Push all active LLM model configs to Redis on create/update."""
+    """Push all active LLM model configs to Redis on create/update.
+
+    When a config is DEACTIVATED (is_active=False), also prune its orphaned
+    ModelState/KillSwitch rows so the risk-monitor / kill-switch surfaces don't
+    show a model that is no longer connected.
+    """
     captured = instance
     transaction.on_commit(lambda: _sync_all_llm_models(captured))
+    if not instance.is_active:
+        org = instance.organization
+        model_name = instance.model_name
+        transaction.on_commit(lambda: _prune_orphaned_model_artifacts(org, model_name))
 
 
 @receiver(post_delete, sender=LLMModelConfig)
@@ -386,5 +574,9 @@ def delete_llm_model_config_from_redis(
     instance: LLMModelConfig,
     **kwargs: Any,
 ) -> None:
-    """Re-sync all active LLM model configs to Redis on delete."""
+    """Re-sync all active LLM model configs to Redis on delete and prune the
+    deleted model's orphaned ModelState/KillSwitch rows."""
+    org = instance.organization
+    model_name = instance.model_name
     transaction.on_commit(lambda: _sync_all_llm_models(instance))
+    transaction.on_commit(lambda: _prune_orphaned_model_artifacts(org, model_name))

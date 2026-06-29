@@ -194,14 +194,14 @@ print(response.content)`,
   /** ─────────────────────────────────────────────────────── 1.2 ── */
   "1.2": {
     title: "Manage All Policy Families",
-    audience: "For operators governing global, pipeline, RAG, PCM/MCP, and vector enforcement policies",
+    audience: "For operators governing pipeline, RAG, PCM/MCP, and vector enforcement policies",
     intro:
-      "Use this page as the unified policy console for the entire AI firewall. Manage global safeguards, pipeline rules, RAG protections, PCM or MCP controls, and vector database access policies from one workspace.",
+      "Use this page as the unified policy console for the entire AI firewall. Manage pipeline rules, RAG protections, PCM or MCP controls, and vector database access policies from one workspace.",
     steps: [
       {
         id: "step-policy",
         label: "Work section by section",
-        text: 'Use the dedicated sections for Global, Pipeline, RAG, PCM / MCP, and Other policies so each policy family stays organized and reviewable on one page.',
+        text: 'Use the dedicated sections for Pipeline, RAG, PCM / MCP, Vector, and Analytics so each policy family stays organized and reviewable on one page.',
       },
       {
         id: "step-vector",
@@ -278,7 +278,7 @@ curl -X POST https://aisecshieldgateway.zeroshield.ai/api/vector-policies/ \
     notes: [
       {
         icon: "shield",
-        text: "Keep global, RAG, and vector policies aligned: blocking risky prompts without namespace isolation or pipeline controls still leaves room for data leakage.",
+        text: "Keep pipeline, RAG, and vector policies aligned: blocking risky prompts without namespace isolation or domain-specific controls still leaves room for data leakage.",
       },
       {
         icon: "info",
@@ -292,12 +292,12 @@ curl -X POST https://aisecshieldgateway.zeroshield.ai/api/vector-policies/ \
     title: "Operate Your RAG & Vector DB Firewall",
     audience: "For engineers securing retrieval pipelines, managing vector providers, and governing document ingestion",
     intro:
-      "Use this page to configure vector DB providers, manage collections, ingest documents, run semantic search with reranking, and test the full RAG pipeline. Every retrieval call stays inside the AI Mesh Firewall, where namespace isolation and stage-by-stage policy enforcement are applied before results are returned.",
+      "The RAG firewall is guardrails-only: you own the vector DB, embedding model, ranking, and generation — we secure the data on the way in and out. Use this page to connect your vector DB provider (with your BYOK embedding model), manage collections, ingest documents (tier-1 + tier-2 scan → optional typed-placeholder redaction → BYOK embed → store), and run semantic search. Every ingest and query call passes through the AI Mesh Firewall, where namespace isolation and policy enforcement are applied before data is stored or returned.",
     steps: [
       {
         id: "step-provider",
         label: "1. Configure your vector DB provider",
-        text: 'Open the "Vector Provider Configuration" panel. Select a provider (ChromaDB, Pinecone, or Milvus), enter the connection URL and API key, then click Save. The key is stored securely and never exposed in the UI — only a "Key Set" badge appears. These org-level credentials are used automatically for all gateway operations.',
+        text: 'Open the "Vector Provider Configuration" panel. Select a provider (Pinecone, Milvus, or a custom Milvus-compatible endpoint), enter the connection URL, API key, and your BYOK embedding model, then click Save. The key is stored securely and never exposed in the UI — only a "Key Set" badge appears. These org-level credentials are used automatically for all gateway operations.',
       },
       {
         id: "step-connect",
@@ -311,23 +311,23 @@ curl -X POST https://aisecshieldgateway.zeroshield.ai/api/vector-policies/ \
       },
       {
         id: "step-pipeline",
-        label: "4. Configure the RAG pipeline stages",
-        text: 'Use the "RAG Pipeline" panel to enable checks across query rewriting, retrieval, ranking, and generation. These four stages form the chain-of-custody audit trail for every retrieval operation.',
+        label: "4. Configure RAG guardrails",
+        text: 'In the firewall settings, toggle Document Redaction (typed-placeholder PII redaction before embedding) and Tier-2 Scanning (the ML guard model on ingest + query) for RAG. By default the query path is guardrails-only — query and retrieved-document scanning form the chain-of-custody audit trail; ranking and generation stay in your own pipeline.',
       },
       {
         id: "step-ingest",
         label: "5. Ingest documents (single or bulk)",
-        text: 'Use "RAG Ingestion" in single mode to paste content directly, or switch to bulk mode to upload .txt, .md, .csv, or .json files. Each document is scanned for poisoning, PII, and malware payloads before entering the vector store. Set sensitivity levels (unclassified, confidential, restricted) per ingestion.',
+        text: 'Use "RAG Ingestion" in single mode to paste content directly, or switch to bulk mode to upload .txt, .md, .csv, or .json files. Each document is scanned (tier-1 + optional tier-2) for poisoning, PII, and malware payloads, then optionally PII-redacted with typed placeholders, then embedded with your BYOK model before entering your vector store. Set sensitivity levels (unclassified, confidential, restricted) per ingestion.',
       },
       {
         id: "step-search",
-        label: "6. Run semantic search with reranking",
-        text: 'Use the "Semantic Search" panel to query your collections. Select a provider and collection, type your query, set the number of results, and optionally enable reranking for better relevance ordering. Results show document content, distance scores, scan verdicts, policy action badges, and the full pipeline trace. Cross-tenant collection names are denied explicitly instead of falling back silently.',
+        label: "6. Run semantic search",
+        text: 'Use the "Semantic Search" panel to query your collections. Select a provider and collection, type your query, and set the number of results. The gateway scans the query and the retrieved documents, then returns the retriever-approved results — ranking and generation stay in your own pipeline. Results show document content, distance scores, scan verdicts, policy action badges, and the pipeline trace. Cross-tenant collection names are denied explicitly instead of falling back silently.',
       },
       {
         id: "step-simulate",
         label: "7. Test attack scenarios",
-        text: 'Use the "RAG Pipeline Simulator", "RAG Feature Test", and "Vector Firewall Simulator" together to validate that prompt injection, namespace bypass, poisoning, and exfiltration attacks are properly blocked by your policies.',
+        text: 'Use the "RAG Feature Test" and "Attack & Trust Simulator" panels together to validate that prompt injection, namespace bypass, poisoning, and exfiltration attacks are properly blocked by your policies.',
       },
       {
         id: "step-monitor",
@@ -369,7 +369,7 @@ curl -X POST http://localhost:8300/v1/rag/collections \\
   -H "Content-Type: application/json" \\
   -d '{
     "collection_name": "customer-kb",
-    "vector_db_type": "chroma"
+    "vector_db_type": "pinecone"
   }'`,
       },
       {
@@ -414,7 +414,8 @@ resp = requests.post(
         id: "semantic-search",
         label: "Semantic Search",
         language: "bash",
-        code: `# Query with optional reranking
+        code: `# Guardrails-only query: scan + retrieve through your vector DB.
+# Ranking and generation stay in your own pipeline.
 curl -X POST http://localhost:8300/v1/rag/query \\
   -H "Authorization: Bearer <gateway_api_key>" \\
   -H "Content-Type: application/json" \\
@@ -422,8 +423,7 @@ curl -X POST http://localhost:8300/v1/rag/query \\
     "query": "What are the latest renewal terms?",
     "collection": "customer-kb",
     "n_results": 5,
-    "rerank": true,
-    "vector_db_type": "chroma",
+    "vector_db_type": "pinecone",
     "namespace": "tenant-a"
   }'`,
       },
@@ -643,7 +643,7 @@ curl -X POST http://127.0.0.1:8300/api/mcp/servers/<server_id>/connect/ \\
       {
         id: "step-keys",
         label: "Add your model provider API keys",
-        text: 'Open "Model Connection" above. Add keys for OpenAI, Anthropic, AWS Bedrock, Azure OpenAI, and any other provider. Keys are stored encrypted server-side.',
+        text: 'Open "Model Connection" above. Add keys for OpenAI, Anthropic, AWS Bedrock, Azure OpenAI, and any other provider. Keys you paste are stored encrypted server-side. A model can also be connected via an environment-variable reference managed on the gateway, in which case the key is never stored in ZeroShield.',
       },
       {
         id: "step-rules",
@@ -785,7 +785,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="zeroshield-guard-120b",
+    model="zeroshield-model",
     messages=[{"role": "user", "content": "Hello from ZeroShield!"}],
 )
 print(response.choices[0].message.content)`,

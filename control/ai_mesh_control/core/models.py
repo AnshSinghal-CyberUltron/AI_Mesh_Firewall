@@ -8,7 +8,7 @@ from typing import Any
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from ai_mesh_shared.llm_model_crypto import (
     LLM_MODEL_KEY_ENCRYPTION_ENV,
@@ -42,6 +42,24 @@ DEFAULT_PERMISSIONS = {
     "allowed_actions": ["chat", "completion", "embedding"],
     "denied_actions": [],
 }
+
+
+def _playground_permissions() -> dict:
+    """Permissions for Module 1.6 isolation playground keys (skip threat-intel gate)."""
+    perms = DEFAULT_PERMISSIONS.copy()
+    perms["playground"] = True
+    return perms
+
+
+def is_isolation_playground_project_id(project_id: str | None) -> bool:
+    """True when project_id belongs to Module 1.6 isolation playground keys."""
+    return (project_id or "").startswith("isolation-playground-")
+
+
+def is_live_test_gateway_project_id(project_id: str | None) -> bool:
+    """True for org simulator / isolation-playground keys (exempt from key risk telemetry)."""
+    pid = project_id or ""
+    return pid.startswith("isolation-playground-") or pid.startswith("simulator-")
 
 
 def _default_permissions() -> dict:
@@ -324,6 +342,15 @@ class GatewayAPIKey(models.Model):
         ("active", "Active"),
     ]
 
+    # UNIT (M-25a): FRACTION in [0.0, 1.0]. This is NOT the same scale as
+    # ModelState.risk_score, which is a PERCENTAGE in [0.0, 100.0]. Never
+    # compare or assign one to the other without an explicit conversion:
+    #   percent  = gateway_api_key.risk_score * 100.0
+    #   fraction = model_state.risk_score / 100.0
+    # Known converting boundaries: core/tasks.py _build_enforcement_metadata
+    # (fraction -> 0-100 int security_risk_score) and the gateway service
+    # (ai_mesh_gateway/main.py divides ModelState verdict scores by 100.0
+    # before mixing them with fraction-scale telemetry risk).
     risk_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
@@ -375,6 +402,11 @@ class GatewayAPIKey(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Fernet-encrypted plaintext, set ONLY for platform-managed shared keys
+    # (the per-org "simulator" key) so they can be recovered and applied to
+    # every simulator in the org without re-minting. User/prod keys stay
+    # hash-only (this field stays empty for them).
+    encrypted_secret = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["-created_at"]
@@ -440,25 +472,263 @@ class GatewayAPIKey(models.Model):
         Returns ``(instance, raw_key)`` where *raw_key* is the plaintext key
         when a new key was created, or ``None`` when an existing key was found.
         The plaintext is only available at creation time.
+
+        Concurrency: the whole check-then-create section runs inside
+        ``transaction.atomic()`` with a ``select_for_update`` on the organization
+        row (mirroring ``ensure_isolation_playground_for_org``). Locking the org
+        row serializes concurrent provisioning per org so two callers that both
+        observe "no active key" cannot each mint a duplicate active key.
         """
         project_id = f"mcp-default-{organization.slug}"
-        existing = cls.objects.filter(
-            organization=organization,
-            project_id=project_id,
-            is_active=True,
-        ).first()
-        if existing:
-            return existing, None
+        with transaction.atomic():
+            type(organization).objects.select_for_update().get(pk=organization.pk)
+            existing = (
+                cls.objects.select_for_update()
+                .filter(
+                    organization=organization,
+                    project_id=project_id,
+                    is_active=True,
+                )
+                .first()
+            )
+            if existing:
+                # Idempotently re-push the existing key to Redis: a Redis flush /
+                # container recycle may have evicted it, in which case handing the
+                # caller a key the gateway 401s on is useless. save() re-fires the
+                # post_save -> Redis sync (no field value change).
+                try:
+                    existing.save(update_fields=["is_active"])
+                except Exception:  # noqa: BLE001 - never fail provisioning on a resync hiccup
+                    pass
+                return existing, None
+
+            instance, raw_key = cls.generate_key(
+                name=f"MCP Default Key ({organization.name})",
+                owner=owner,
+                project_id=project_id,
+            )
+            # organization is auto-set via save(), but be explicit
+            if not instance.organization_id:
+                instance.organization = organization
+                instance.save(update_fields=["organization"])
+            return instance, raw_key
+
+    def store_secret(self, raw_key: str) -> None:
+        """Persist the Fernet-encrypted plaintext so this key can be recovered.
+        Used ONLY for platform-managed shared keys (the org simulator key)."""
+        if not raw_key:
+            return
+        cipher = _build_llm_model_key_cipher()
+        self.encrypted_secret = cipher.encrypt(raw_key.encode("utf-8")).decode("utf-8")
+        self.save(update_fields=["encrypted_secret"])
+
+    def recover_secret(self) -> str | None:
+        """Decrypt the stored plaintext, or None if absent/undecryptable."""
+        if not self.encrypted_secret:
+            return None
+        cipher = _build_llm_model_key_cipher()
+        try:
+            return cipher.decrypt(self.encrypted_secret.encode("utf-8")).decode("utf-8")
+        except Exception:
+            return None
+
+    @classmethod
+    def ensure_simulator_for_org(cls, organization, owner) -> tuple["GatewayAPIKey", str | None]:
+        """Return the org's simulator gateway key, creating one if needed.
+
+        Uses a stable ``project_id`` of ``simulator-{slug}`` so Module 1 simulators
+        can auto-provision without manual key entry. For recoverable keys the same
+        plaintext is returned on EVERY call (one stable per-org key); plaintext is
+        withheld only for legacy non-recoverable keys that are not being re-minted.
+        """
+        project_id = f"simulator-{organization.slug}"
+        # Concurrency: serialize provisioning per org by locking the org row
+        # (mirrors ensure_isolation_playground_for_org). Locking only the key
+        # rows cannot prevent the duplicate-create race when NO key exists yet,
+        # so the org row is locked first — a second caller blocks until the
+        # first commits, then sees the freshly minted key instead of minting a
+        # duplicate active simulator key.
+        with transaction.atomic():
+            type(organization).objects.select_for_update().get(pk=organization.pk)
+            # Self-healing single-key invariant: collect ALL active simulator keys
+            # for the org (canonical project_id OR legacy name="simulator"), keep
+            # exactly ONE — the most-recently-used canonical key (so the key that
+            # browsers/scripts are actively using survives) — and deactivate the
+            # rest. Historically the ensure/rotate path churned the org through
+            # dozens of keys and left multiple active; this collapses them to one
+            # WITHOUT minting anything.
+            active = list(
+                cls.objects.select_for_update()
+                .filter(organization=organization, is_active=True)
+                .filter(
+                    models.Q(project_id=project_id)
+                    | models.Q(name="simulator")
+                    | models.Q(name__startswith="simulator-")
+                    | models.Q(project_id__startswith="simulator-")
+                )
+            )
+            if active:
+                def _recency(k):
+                    return k.last_used_at or k.created_at
+                canonical = max(
+                    (k for k in active if k.project_id == project_id),
+                    default=None, key=_recency,
+                ) or max(active, key=_recency)
+                recovered = canonical.recover_secret()
+                if recovered is not None:
+                    # Recoverable: reuse the SAME key for every simulator in the
+                    # org (no re-mint, no churn); just collapse any duplicates.
+                    for k in active:
+                        if k.pk != canonical.pk:
+                            k.is_active = False
+                            k.save(update_fields=["is_active"])
+                    return canonical, recovered
+                # Legacy key(s) minted before recoverable storage existed:
+                # deactivate ALL and mint ONE fresh recoverable key (a one-time
+                # migration per org; afterwards every provision returns the same
+                # recoverable key).
+                for k in active:
+                    k.is_active = False
+                    k.save(update_fields=["is_active"])
+
+            instance, raw_key = cls.generate_key(
+                name="simulator",
+                owner=owner,
+                project_id=project_id,
+                allowed_models=[],
+            )
+            if not instance.organization_id:
+                instance.organization = organization
+                instance.save(update_fields=["organization"])
+            instance.store_secret(raw_key)  # persist encrypted so it stays recoverable
+            return instance, raw_key
+
+    @classmethod
+    def rotate_simulator_for_org(cls, organization, owner) -> tuple["GatewayAPIKey", str]:
+        """Deactivate the org's existing simulator key(s) and issue a fresh one.
+
+        Plaintext keys are hash-only (never recoverable), so when a browser needs a
+        usable simulator credential but the existing key's plaintext is gone (e.g.
+        cleared localStorage, new device), rotation is the only way to hand back a
+        working key. Always returns plaintext. Deactivation uses save() so the
+        post_save signal propagates is_active=False to Redis (the gateway then
+        rejects the stale key); generate_key syncs the new key the same way.
+        """
+        project_id = f"simulator-{organization.slug}"
+        stale = list(
+            cls.objects.filter(organization=organization, is_active=True).filter(
+                models.Q(project_id=project_id) | models.Q(name="simulator")
+            )
+        )
+        for key in stale:
+            key.is_active = False
+            key.save(update_fields=["is_active"])
 
         instance, raw_key = cls.generate_key(
-            name=f"MCP Default Key ({organization.name})",
+            name="simulator",
             owner=owner,
             project_id=project_id,
+            allowed_models=[],
         )
-        # organization is auto-set via save(), but be explicit
         if not instance.organization_id:
             instance.organization = organization
             instance.save(update_fields=["organization"])
+        return instance, raw_key
+
+    @classmethod
+    def ensure_isolation_playground_for_org(
+        cls, organization, owner
+    ) -> tuple["GatewayAPIKey", str | None]:
+        """Return the org's isolation playground key, creating one if needed.
+
+        Uses ``project_id=isolation-playground-{slug}`` so Module 1.6 live tests
+        do not share risk_score with the attack simulator key.
+
+        M-25b: the whole get-or-create critical section runs inside
+        ``transaction.atomic()`` with ``select_for_update``. Locking only the
+        key rows cannot prevent the duplicate-create race when NO key exists
+        yet (there is nothing to lock), so the organization row is locked
+        first — serializing concurrent provisioning per org. A second caller
+        blocks on the org lock until the first commits, then sees (and
+        returns) the freshly created key instead of minting a duplicate.
+        """
+        project_id = f"isolation-playground-{organization.slug}"
+        with transaction.atomic():
+            type(organization).objects.select_for_update().get(pk=organization.pk)
+            active = list(
+                cls.objects.select_for_update()
+                .filter(organization=organization, is_active=True)
+                .filter(
+                    models.Q(project_id=project_id) | models.Q(name="isolation-playground")
+                )
+            )
+            if active:
+                def _recency(k):
+                    return k.last_used_at or k.created_at
+
+                canonical = max(
+                    (k for k in active if k.project_id == project_id),
+                    default=None,
+                    key=_recency,
+                ) or max(active, key=_recency)
+                recovered = canonical.recover_secret()
+                if recovered is not None:
+                    updates = []
+                    if not canonical.permissions.get("playground"):
+                        canonical.permissions = {**canonical.permissions, "playground": True}
+                        updates.append("permissions")
+                    for k in active:
+                        if k.pk != canonical.pk:
+                            k.is_active = False
+                            k.save(update_fields=["is_active"])
+                    if updates:
+                        canonical.save(update_fields=updates)
+                    return canonical, recovered
+                for k in active:
+                    k.is_active = False
+                    k.save(update_fields=["is_active"])
+
+            instance, raw_key = cls.generate_key(
+                name="isolation-playground",
+                owner=owner,
+                project_id=project_id,
+                permissions=_playground_permissions(),
+                allowed_models=[],
+                risk_score=0.0,
+            )
+            if not instance.organization_id:
+                instance.organization = organization
+                instance.save(update_fields=["organization"])
+            instance.store_secret(raw_key)
+        return instance, raw_key
+
+    @classmethod
+    def rotate_isolation_playground_for_org(
+        cls, organization, owner
+    ) -> tuple["GatewayAPIKey", str]:
+        """Deactivate existing isolation playground keys and mint a fresh one."""
+        project_id = f"isolation-playground-{organization.slug}"
+        stale = list(
+            cls.objects.filter(organization=organization, is_active=True).filter(
+                models.Q(project_id=project_id) | models.Q(name="isolation-playground")
+            )
+        )
+        for key in stale:
+            key.is_active = False
+            key.save(update_fields=["is_active"])
+
+        instance, raw_key = cls.generate_key(
+            name="isolation-playground",
+            owner=owner,
+            project_id=project_id,
+            permissions=_playground_permissions(),
+            allowed_models=[],
+            risk_score=0.0,
+        )
+        if not instance.organization_id:
+            instance.organization = organization
+            instance.save(update_fields=["organization"])
+        instance.store_secret(raw_key)
         return instance, raw_key
 
     def save(self, *args, **kwargs):
@@ -717,6 +987,15 @@ class FirewallConfig(models.Model):
         validators=[MaxValueValidator(1000)],
         help_text="Maximum requests in a short burst.",
     )
+    # 1.1c: org-wide tokens-per-minute ceiling. The gateway already enforces this
+    # fail-closed (RATE_LIMITER.check_org_rate_limit) but the control plane never
+    # emitted the key, so the ceiling was always 0 (disabled / multi-key stacking
+    # defeated per-key TPM). 0 keeps it disabled (backward-safe); any positive
+    # value activates the existing gateway Lua check across ALL of an org's keys.
+    org_tpm_limit = models.PositiveIntegerField(
+        default=0,
+        help_text="Org-wide tokens-per-minute ceiling across all keys (0 = disabled).",
+    )
 
     # -- Content Filtering --
     content_filtering_enabled = models.BooleanField(
@@ -961,6 +1240,21 @@ class FirewallConfig(models.Model):
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
         help_text="Minimum similarity score for retrieval (0-1).",
     )
+    rag_redaction_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Redact sensitive values with vector-safe typed placeholders "
+            "([EMAIL], [SSN], [CREDIT_CARD], ...) before embedding RAG "
+            "documents at ingestion. Preserves semantics for vector matching."
+        ),
+    )
+    rag_tier2_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Run the ML Tier-2 guard model (boto3 Bedrock) on RAG ingestion "
+            "documents and vector queries, in addition to static Tier-1 scanning."
+        ),
+    )
 
     # -- Threat Intelligence --
     threat_intel_enabled = models.BooleanField(
@@ -991,22 +1285,6 @@ class FirewallConfig(models.Model):
         default=_default_compliance_frameworks,
         blank=True,
         help_text="Active compliance frameworks (e.g. ['SOC2', 'ISO27001']).",
-    )
-
-    # -- Alerting --
-    alerting_enabled = models.BooleanField(
-        default=True,
-        help_text="Send alerts for security events.",
-    )
-    critical_alert_threshold = models.PositiveIntegerField(
-        default=90,
-        validators=[MaxValueValidator(100)],
-        help_text="Risk score to trigger critical alerts (0-100).",
-    )
-    alert_recipients = models.TextField(
-        default="security-team@company.com",
-        blank=True,
-        help_text="Email addresses for security alerts.",
     )
 
     # -- Routing Governance --
@@ -1099,6 +1377,7 @@ class FirewallConfig(models.Model):
             "rate_limit_enabled": self.rate_limit_enabled,
             "requests_per_minute": self.requests_per_minute,
             "burst_limit": self.burst_limit,
+            "org_tpm_limit": self.org_tpm_limit,  # 1.1c: gateway consumes this for the org-wide TPM ceiling
             "input_scan_enabled": self.content_filtering_enabled,
             "scan_block_on_pii": self.pii_detection_enabled,
             "toxicity_threshold": self.toxicity_threshold,
@@ -1141,15 +1420,14 @@ class FirewallConfig(models.Model):
             "vector_db_isolation": self.vector_db_isolation,
             "rag_default_max_results": self.rag_max_documents,
             "rag_relevance_threshold": self.rag_relevance_threshold,
+            "rag_redaction_enabled": self.rag_redaction_enabled,
+            "rag_tier2_enabled": self.rag_tier2_enabled,
             "threat_intel_enabled": self.threat_intel_enabled,
             "auto_block_threats": self.auto_block_threats,
             "threat_score_threshold": self.threat_score_threshold,
             "telemetry_enabled": self.audit_logging_enabled,
             "retention_days": self.retention_days,
             "compliance_frameworks": self.compliance_frameworks or [],
-            "alerting_enabled": self.alerting_enabled,
-            "critical_alert_threshold": self.critical_alert_threshold,
-            "alert_recipients": self.alert_recipients,
             "routing_risk_weight": self.routing_risk_weight,
             "routing_cost_weight": self.routing_cost_weight,
             "routing_latency_weight": self.routing_latency_weight,
@@ -1161,6 +1439,10 @@ class FirewallConfig(models.Model):
 
 PLATFORM_GUARD_MODEL_NAMES = frozenset(
     {
+        # Current user-facing platform model name (display: "ZeroShield Model").
+        "zeroshield-model",
+        # Legacy names kept so older registrations are still detected as platform
+        # models (blocked from inference / hidden from kill-switch governance).
         "zeroshield-guard-120b",
         "bedrock-gpt-oss-120b",
         "bedrock-gpt-oss-120b-long-context",
@@ -1168,10 +1450,28 @@ PLATFORM_GUARD_MODEL_NAMES = frozenset(
 )
 
 
+def _canonical_guard_model_name(name: str) -> str:
+    """Fold a model name to its canonical comparison form.
+
+    B2 (regression fix): the previous check only did ``.strip().lower()``,
+    which folds CASE but not SEPARATORS — so the display variant
+    ``"ZeroShield Model"`` (space) or ``"zeroshield_model"`` (underscore) did
+    NOT match the canonical frozenset member ``"zeroshield-model"`` and could be
+    isolated / re-surfaced in the user model-isolation UI. Mirror the gateway's
+    ``_canonical_model_name`` (collapse any run of whitespace/underscore/hyphen
+    to a single hyphen) so both planes agree on what is a platform model.
+    """
+    import re
+
+    return re.sub(r"[\s_-]+", "-", (name or "").strip().lower()).strip("-")
+
+
 def platform_guard_model_names() -> frozenset[str]:
-    """Model names reserved for ZeroShield scanning (not user governance)."""
-    names = set(PLATFORM_GUARD_MODEL_NAMES)
-    env_name = os.getenv("ZEROSHIELD_GUARD_MODEL_NAME", "zeroshield-guard-120b").strip().lower()
+    """Canonicalized model names reserved for ZeroShield scanning (not governance)."""
+    names = {_canonical_guard_model_name(n) for n in PLATFORM_GUARD_MODEL_NAMES}
+    env_name = _canonical_guard_model_name(
+        os.getenv("ZEROSHIELD_GUARD_MODEL_NAME", "zeroshield-model")
+    )
     if env_name:
         names.add(env_name)
     return frozenset(names)
@@ -1182,7 +1482,10 @@ def is_platform_managed_llm_provider(provider: str) -> bool:
 
 
 def is_platform_managed_llm_model_name(model_name: str) -> bool:
-    return (model_name or "").strip().lower() in platform_guard_model_names()
+    # B2: canonicalize the candidate the SAME way as the reserved set so
+    # separator/whitespace variants ("ZeroShield Model", "zeroshield_model")
+    # are caught, not just case variants.
+    return _canonical_guard_model_name(model_name) in platform_guard_model_names()
 
 
 LLM_PROVIDER_CHOICES = [
@@ -1370,9 +1673,31 @@ class LLMModelConfig(models.Model):
         try:
             return cipher.decrypt(self.encrypted_api_key.encode("utf-8")).decode("utf-8")
         except InvalidToken:
+            # A NON-EMPTY blob that fails to decrypt = the key was encrypted under a
+            # DIFFERENT cipher key (e.g. a prior DJANGO_SECRET_KEY rotation). This was
+            # silently swallowed → treated as "no key" → the gateway routed anyway and
+            # surfaced an opaque upstream 502 ("Missing credentials"). Log it so the
+            # broken credential is VISIBLE and the model can be reconnected.
+            logging.getLogger(__name__).warning(
+                "LLM model %r (org=%s) has an UNDECRYPTABLE api_key (InvalidToken) — "
+                "likely encrypted under a rotated key; treating as no key. Reconnect the model.",
+                self.model_name, getattr(self, "organization_id", None),
+            )
             return ""
         except Exception:
+            logging.getLogger(__name__).warning(
+                "LLM model %r (org=%s) api_key decrypt failed unexpectedly — treating as no key.",
+                self.model_name, getattr(self, "organization_id", None),
+            )
             return ""
+
+    def has_usable_api_key(self) -> bool:
+        """True only when a NON-EMPTY, DECRYPTABLE key is actually stored. The
+        ``api_key_set`` property is just ``bool(encrypted_api_key)`` and stays True
+        for a blob that no longer decrypts (rotated cipher key); routing-eligibility
+        must use USABILITY, not mere presence, so a broken credential produces a
+        clean 'no provider configured' error instead of an opaque upstream 502."""
+        return bool(self.encrypted_api_key and self.get_api_key())
 
     def build_litellm_entry(self) -> dict[str, Any]:
         """Build a LiteLLM model_list entry for organization-owned inference."""
@@ -1435,7 +1760,15 @@ class LLMModelConfig(models.Model):
             "routing_priority": self.routing_priority,
             "rate_limit_rpm": self.rate_limit_rpm,
             "is_active": self.is_active,
-            "api_key_set": self.api_key_set,
+            # Usability-aware (NOT bare self.api_key_set): an undecryptable stored
+            # blob must read as "no key" here so the gateway's routing-eligibility
+            # excludes it and returns a clean 422, never an opaque upstream 502.
+            "api_key_set": self.has_usable_api_key(),
+            # BYOK-via-env: a model can carry its key by ENV-VAR REFERENCE
+            # (api_key_env_var) instead of a stored encrypted key. The gateway
+            # treats it as credentialed when that env var is present in its
+            # environment — the "connect a key without persisting it" path.
+            "api_key_env_var": self.api_key_env_var or "",
         }
 
 
@@ -1472,6 +1805,14 @@ class ModelState(models.Model):
         default="active",
         db_index=True,
     )
+    # UNIT (M-25a): PERCENTAGE in [0.0, 100.0]. This is NOT the same scale as
+    # GatewayAPIKey.risk_score, which is a FRACTION in [0.0, 1.0]. Never
+    # compare or assign one to the other without an explicit conversion:
+    #   fraction = model_state.risk_score / 100.0
+    #   percent  = gateway_api_key.risk_score * 100.0
+    # `threshold` below and KillSwitchAuditLog.risk_score use this same 0-100
+    # scale; the gateway converts to fraction (/ 100.0) when it mixes a
+    # ModelState verdict into fraction-scale telemetry (ai_mesh_gateway/main.py).
     risk_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],

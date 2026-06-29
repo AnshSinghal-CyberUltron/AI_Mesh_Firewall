@@ -3,9 +3,13 @@ import {
   Activity, AlertTriangle, MessageSquare, RotateCcw, ShieldOff, Zap,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { useSimulatorEngine } from "../../hooks/useSimulatorEngine";
+import { useIsolationPlayground } from "../../hooks/useIsolationPlayground";
 import { useSimulatorGatewayModels } from "../../hooks/useSimulatorGatewayModels";
-import { chatCompletionBody } from "../../utils/liveGateway";
+import {
+  chatCompletionBody,
+  normalizeChatPipelineResult,
+  normalizeStreamChatPipelineResult,
+} from "../../utils/liveGateway";
 import { SimulatorShell } from "./SimulatorShell";
 import { SimulatorModelSelector } from "./SimulatorModelSelector";
 
@@ -15,9 +19,16 @@ const TABS = [
   { id: "isolate", label: "Manual isolate", icon: ShieldOff },
 ];
 
+const GUIDED_STEPS = [
+  "1. Send benign prompt",
+  "2. Isolate model (tab)",
+  "3. Send again (expect block)",
+  "4. Recover in Model State panel",
+];
+
 export function IsolationOpsSimulator() {
   const { fetchWithAuth } = useAuth();
-  const engine = useSimulatorEngine();
+  const engine = useIsolationPlayground();
   const gatewayModels = useSimulatorGatewayModels();
   const [tab, setTab] = useState("live");
 
@@ -58,11 +69,15 @@ export function IsolationOpsSimulator() {
 
   const handleLiveChat = async () => {
     if (!gatewayModels.selectedModel) {
-      setLiveResult({ error: "Select a connected model with an API key (Model Connections on 1.5)." });
+      setLiveResult({
+        error: "Select a connected model with an API key (Model Connections on 1.5).",
+        final_action: "error",
+      });
       return;
     }
     setLiveLoading(true);
     setLiveResult(null);
+    const started = performance.now();
     try {
       const res = stream
         ? await engine.gatewayFetchStream("/v1/chat/completions", {
@@ -86,28 +101,56 @@ export function IsolationOpsSimulator() {
             ),
           });
 
-      if (!res.ok) {
-        const msg = res.data?.error?.message || res.data?.message || res.data?.detail || `HTTP ${res.status}`;
+      const elapsed = Math.round(performance.now() - started);
+      const context = {
+        prompt,
+        maxTokens: 256,
+        requestedModel: gatewayModels.selectedModel,
+        responseHeaders: res.headers,
+        totalLatencyMs: elapsed,
+      };
+
+      if (stream && res.isStream && res.sse) {
+        const normalized = normalizeStreamChatPipelineResult(
+          res.sse,
+          res.status,
+          res.headers,
+          context,
+        );
         setLiveResult({
-          error: msg,
-          code: res.data?.error?.code || res.data?.code,
-          status: res.status,
-          model: gatewayModels.selectedModel,
-        });
-      } else if (res.isStream && res.sse) {
-        setLiveResult({
-          ok: true,
+          ...normalized,
+          httpStatus: res.status,
+          elapsed,
+          total_latency_ms: normalized.total_latency_ms ?? elapsed,
+          action: normalized.final_action || (res.status === 403 ? "block" : res.status >= 400 ? "error" : "allow"),
           stream: true,
           content: res.sse.aggregatedContent,
-          events: res.sse.events?.length ?? 0,
           model: gatewayModels.selectedModel,
         });
       } else {
-        const content = res.data?.choices?.[0]?.message?.content ?? JSON.stringify(res.data);
-        setLiveResult({ ok: true, content, model: gatewayModels.selectedModel, status: res.status });
+        const normalized = normalizeChatPipelineResult(res.data, res.status, context);
+        const content = res.ok
+          ? res.data?.choices?.[0]?.message?.content ?? ""
+          : undefined;
+        setLiveResult({
+          ...normalized,
+          httpStatus: res.status,
+          elapsed,
+          total_latency_ms: normalized.total_latency_ms ?? elapsed,
+          action: normalized.final_action || (res.status === 403 ? "block" : res.status >= 400 ? "error" : "allow"),
+          ok: res.ok,
+          content,
+          model: gatewayModels.selectedModel,
+          error: res.ok
+            ? undefined
+            : res.data?.error?.message || res.data?.message || res.data?.detail || `HTTP ${res.status}`,
+          code: res.data?.error?.code || res.data?.code,
+          status: res.status,
+        });
       }
+      await engine.refreshMetadata();
     } catch (err) {
-      setLiveResult({ error: String(err) });
+      setLiveResult({ error: String(err), final_action: "error" });
     } finally {
       setLiveLoading(false);
     }
@@ -131,7 +174,12 @@ export function IsolationOpsSimulator() {
     } catch (err) {
       parsed = { status: "error", data: { message: String(err) } };
     }
-    setCbResult({ ok: httpOk && parsed?.status === "ok", data: parsed?.data ?? null, model });
+    setCbResult({
+      ok: httpOk && parsed?.status === "ok",
+      data: parsed?.data ?? null,
+      model,
+      final_action: httpOk && parsed?.status === "ok" ? "allow" : "error",
+    });
     setPolling(true);
     await loadCbState();
   };
@@ -149,7 +197,7 @@ export function IsolationOpsSimulator() {
 
   const handleIsolate = async () => {
     if (!gatewayModels.selectedModel) {
-      setIsolateResult({ error: "Select a model first." });
+      setIsolateResult({ error: "Select a model first.", final_action: "error" });
       return;
     }
     setIsolating(true);
@@ -167,14 +215,19 @@ export function IsolationOpsSimulator() {
       const data = await res.json().catch(() => ({}));
       setIsolateResult(
         res.ok
-          ? { ok: true, ...data }
-          : { error: data.error || data.detail || "Isolation failed" },
+          ? { ok: true, ...data, final_action: "block" }
+          : { error: data.error || data.detail || "Isolation failed", final_action: "error" },
       );
     } catch {
-      setIsolateResult({ error: "Network error" });
+      setIsolateResult({ error: "Network error", final_action: "error" });
     } finally {
       setIsolating(false);
     }
+  };
+
+  const handleResetKey = async () => {
+    await engine.resetPlaygroundKey();
+    await engine.refreshMetadata();
   };
 
   const stateColor = (state) => {
@@ -182,6 +235,8 @@ export function IsolationOpsSimulator() {
     if (state === "half_open" || state === "half-open") return "text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-500/30";
     return "text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border-emerald-500/30";
   };
+
+  const riskDisplay = engine.riskScore != null ? engine.riskScore.toFixed(2) : "—";
 
   return (
     <SimulatorShell
@@ -195,8 +250,28 @@ export function IsolationOpsSimulator() {
       onExecute={tab === "live" ? handleLiveChat : tab === "circuit" ? handleCbTrigger : handleIsolate}
       executing={liveLoading || isolating || engine.executing}
       result={tab === "live" ? liveResult : tab === "circuit" ? cbResult : isolateResult}
+      extraActions={
+        <button
+          type="button"
+          onClick={handleResetKey}
+          disabled={engine.rotating}
+          className="flex min-h-[44px] items-center gap-1 rounded-xl bg-slate-200 px-3 py-2 text-xs font-medium text-slate-800 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200"
+        >
+          <RotateCcw className={`h-3.5 w-3.5 ${engine.rotating ? "animate-spin" : ""}`} />
+          Reset playground key
+        </button>
+      }
       customInput={
         <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900/40">
+            <span className="text-slate-600 dark:text-slate-400">
+              Playground key risk: <strong className="font-mono text-slate-800 dark:text-slate-200">{riskDisplay}</strong>
+            </span>
+            {engine.keyPrefix && (
+              <span className="text-slate-500 dark:text-slate-500 font-mono">prefix {engine.keyPrefix}</span>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Isolation simulator modes">
             {TABS.map(({ id, label, icon: Icon }) => (
               <button
@@ -235,6 +310,16 @@ export function IsolationOpsSimulator() {
 
           {tab === "live" && (
             <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {GUIDED_STEPS.map((step) => (
+                  <span
+                    key={step}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400"
+                  >
+                    {step}
+                  </span>
+                ))}
+              </div>
               <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400">
                 Prompt
                 <textarea
@@ -301,17 +386,21 @@ export function IsolationOpsSimulator() {
           )}
         </div>
       }
-      extraActions={null}
     >
       <div className="px-4 py-3 space-y-3" aria-live="polite">
         {tab === "live" && liveResult?.error && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-800 dark:text-red-200">
             <p className="font-medium">{liveResult.error}</p>
             {liveResult.code && (
-              <p className="mt-1 text-xs opacity-90">Code: {liveResult.code} · HTTP {liveResult.status}</p>
+              <p className="mt-1 text-xs opacity-90">Code: {liveResult.code} · HTTP {liveResult.status ?? liveResult.httpStatus}</p>
             )}
             {liveResult.code === "kill_switch_active" && (
               <p className="mt-2 text-xs">Deactivate the kill-switch for this model or repair Redis keys below.</p>
+            )}
+            {liveResult.code === "threat_intel_blocked" && (
+              <p className="mt-2 text-xs">
+                Playground keys skip threat intel after deploy. Click Reset playground key if you still see this.
+              </p>
             )}
           </div>
         )}
@@ -320,7 +409,7 @@ export function IsolationOpsSimulator() {
             <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Model: {liveResult.model}</p>
             <p className="mt-2 whitespace-pre-wrap">{liveResult.content || "(empty)"}</p>
             {liveResult.stream && (
-              <p className="mt-1 text-xs opacity-75">{liveResult.events} SSE events</p>
+              <p className="mt-1 text-xs opacity-75">{liveResult.stream_events ?? liveResult.events} SSE events</p>
             )}
           </div>
         )}

@@ -308,6 +308,7 @@ export function RoutingGovernancePanel() {
                     step="0.05"
                     value={weights[key]}
                     onChange={e => handleWeightChange(key, e.target.value)}
+                    aria-label={`${label} weight`}
                     className={`flex-1 h-1.5 rounded-full appearance-none cursor-pointer ${WEIGHT_ACCENT_STYLES[color]} bg-slate-300 dark:bg-slate-700`}
                   />
                   <input
@@ -317,6 +318,7 @@ export function RoutingGovernancePanel() {
                     step="0.05"
                     value={weights[key]}
                     onChange={e => handleWeightChange(key, e.target.value)}
+                    aria-label={`${label} weight value`}
                     className="w-16 bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded px-2 py-0.5 text-xs text-slate-900 dark:text-white text-center font-mono"
                   />
                 </div>

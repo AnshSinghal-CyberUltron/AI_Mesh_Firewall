@@ -18,7 +18,9 @@
       "Resource": [
         "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-gateway",
         "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-control",
-        "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-workers"
+        "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-workers",
+        "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-nginx",
+        "arn:aws:ecr:ap-south-1:935951870001:repository/ai-mesh-demo"
       ]
     },
     {
@@ -35,6 +37,40 @@
       "Effect": "Allow",
       "Action": ["bedrock:ListFoundationModels"],
       "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchLogsShip",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+        "logs:DescribeLogGroups"
+      ],
+      "Resource": [
+        "arn:aws:logs:ap-south-1:935951870001:log-group:/ai-mesh-firewall/ec2/*",
+        "arn:aws:logs:ap-south-1:935951870001:log-group:/ai-mesh-firewall/ec2/*:*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchHostMetrics",
+      "Effect": "Allow",
+      "Action": ["cloudwatch:PutMetricData"],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:namespace": "AIMeshFirewall/EC2"
+        }
+      }
+    },
+    {
+      "Sid": "SSMCloudWatchAgentConfig",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+      "Resource": [
+        "arn:aws:ssm:ap-south-1:935951870001:parameter/ai-mesh-firewall/ec2/*"
+      ]
     }
   ]
 }

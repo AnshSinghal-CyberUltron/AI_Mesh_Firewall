@@ -16,7 +16,7 @@ from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
-from ai_mesh_shared.redis_pool import connection_pool_kwargs
+from ai_mesh_shared.redis_pool import channels_redis_host_config, connection_pool_kwargs
 from celery.schedules import crontab
 from kombu import Queue
 from django.core.exceptions import ImproperlyConfigured
@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DEBUG", "True").lower() in ("true", "1", "yes")
+DEBUG = os.environ.get("DEBUG", "False").lower() in ("true", "1", "yes")
 
 _INSECURE_SECRET_KEY = "django-insecure-44ippgo!n1q&hw+rhu%-u=-6lxsz_5lx()4ogt8e3*z=@@+7+8"
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", _INSECURE_SECRET_KEY if DEBUG else "")
@@ -39,7 +39,61 @@ if not SECRET_KEY:
         'Generate one with: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"'
     )
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").strip().split(",")
+# SECURITY: when not in DEBUG, refuse to boot with a guessable/placeholder
+# SECRET_KEY. A short or well-known key lets anyone forge JWTs (SIMPLE_JWT
+# signs with SIGNING_KEY which historically defaulted to SECRET_KEY), so this
+# guard is critical to prevent authentication bypass / privilege escalation.
+_SECRET_KEY_PLACEHOLDERS = frozenset(
+    {
+        "change-me-in-production",
+        "dev-secret-change-me",
+        "changeme",
+        "secret",
+        "your-secret-key",
+        "django-insecure",
+        _INSECURE_SECRET_KEY,
+    }
+)
+if not DEBUG:
+    _secret_key_stripped = SECRET_KEY.strip()
+    if (
+        len(_secret_key_stripped.encode("utf-8")) < 32
+        or _secret_key_stripped in _SECRET_KEY_PLACEHOLDERS
+        or _secret_key_stripped.startswith("django-insecure-")
+    ):
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY is insecure (empty, a known placeholder, or < 32 bytes) "
+            "and DEBUG=False. Generate a unique high-entropy key per deployment with: "
+            'python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"'
+        )
+
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
+
+# Production hardening (behind nginx / Cloudflare). With DEBUG=True, Django emits
+# technical error pages that dump this entire settings table — never enable DEBUG
+# on a public-facing control plane.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "0"))
+    if SECURE_HSTS_SECONDS > 0:
+        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+        SECURE_HSTS_PRELOAD = os.environ.get("SECURE_HSTS_PRELOAD", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
 
 # Application definition
@@ -62,6 +116,7 @@ INSTALLED_APPS = [
     "django.contrib.postgres",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "drf_spectacular",
     "auth.apps.AuthConfig",
@@ -113,7 +168,12 @@ if _channel_layers_redis_url:
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [_channel_layers_redis_url]},
+            "CONFIG": {
+                "hosts": [channels_redis_host_config(_channel_layers_redis_url)],
+                "capacity": 1500,
+                "expiry": 60,
+                "group_expiry": 86400,
+            },
         },
     }
 else:
@@ -152,7 +212,12 @@ if _database_url:
                 "PASSWORD": _parsed_db_url.password or "",
                 "HOST": _parsed_db_url.hostname or "localhost",
                 "PORT": str(_parsed_db_url.port or 5432),
+                # Cap persistent-connection reuse and probe liveness before reuse
+                # so a wedged/half-closed connection is recycled instead of
+                # accumulating until the Postgres pool (max_connections) is
+                # exhausted under load.
                 "CONN_MAX_AGE": int(os.environ.get("POSTGRES_CONN_MAX_AGE", "60")),
+                "CONN_HEALTH_CHECKS": True,
             }
         }
         _replica_url = os.environ.get("DATABASE_REPLICA_URL", "").strip()
@@ -167,6 +232,7 @@ if _database_url:
                     "HOST": _parsed_replica_url.hostname or "localhost",
                     "PORT": str(_parsed_replica_url.port or 5432),
                     "CONN_MAX_AGE": int(os.environ.get("POSTGRES_CONN_MAX_AGE", "60")),
+                    "CONN_HEALTH_CHECKS": True,
                 }
     else:
         raise ImproperlyConfigured(
@@ -213,6 +279,18 @@ else:
             "OPTIONS": {"MAX_ENTRIES": 10000},
         }
     }
+
+# Request body size limits. Bound the in-memory size of a single request body
+# and the number of form fields so an attacker cannot push arbitrary multi-MB
+# JSON payloads (or huge nested form data) through the ingestion/policy APIs and
+# onto the shared drain queue. Default 1 MiB body / 1000 fields; both overridable
+# via env for the rare large-batch deployment.
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(
+    os.environ.get("DATA_UPLOAD_MAX_MEMORY_SIZE", str(1 * 1024 * 1024))
+)
+DATA_UPLOAD_MAX_NUMBER_FIELDS = int(
+    os.environ.get("DATA_UPLOAD_MAX_NUMBER_FIELDS", "1000")
+)
 
 # Rate limiting for policy check API (requests per minute per key)
 RATELIMIT_POLICY_CHECK_PER_MINUTE = int(os.environ.get("RATELIMIT_POLICY_CHECK_PER_MINUTE", "120"))
@@ -335,7 +413,6 @@ CELERY_TASK_ROUTES = {
     "policy.compile_vector_policies": {"queue": "policy.compile"},
     "core.tasks.process_telemetry_batch": {"queue": "platform.batch"},
     "core.tasks.process_gateway_jobs_batch": {"queue": "platform.batch"},
-    "core.tasks.send_critical_alert_email": {"queue": "platform.batch"},
     "core.tasks.log_audit": {"queue": "platform.batch"},
     "core.tasks.cleanup_old_audit_logs": {"queue": "compute.heavy"},
     "core.tasks.update_risk_scores_from_telemetry": {"queue": "compute.heavy"},
@@ -405,6 +482,19 @@ CELERY_BEAT_SCHEDULE = {
         "task": "module2.tasks.repair_telemetry_metadata",
         "schedule": MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC,
     },
+    # Reconcile active gateway API keys into Redis so a Redis flush / container
+    # recycle cannot leave the data plane returning 401 for every /v1/* request.
+    "resync-gateway-keys": {
+        "task": "core.tasks.resync_gateway_keys",
+        "schedule": float(os.environ.get("GATEWAY_KEY_RESYNC_INTERVAL_SEC", "300")),
+    },
+    # B2 DEFENSE: periodically re-push routing state (models/allowlist/isolation)
+    # so a bulk QuerySet.update() (which bypasses post_save signals) cannot leave
+    # the gateway routing on stale config indefinitely.
+    "reconcile-routing-state": {
+        "task": "core.tasks.reconcile_routing_state",
+        "schedule": float(os.environ.get("ROUTING_RECONCILE_INTERVAL_SEC", "120")),
+    },
 }
 
 if MODULE2_UEBA_AUTO_KILL_ENABLED:
@@ -439,13 +529,49 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "core.pagination.PublicUrlPagination",
     "PAGE_SIZE": 10,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Convert malformed-input ValueError/TypeError (bad ?days=/?limit=, wrong-type
+    # body fields) into clean 400s instead of unhandled 500s, project-wide.
+    "EXCEPTION_HANDLER": "main_app.exception_handlers.safe_exception_handler",
+    # Scoped throttle rates used only by the login view (no global throttle
+    # class set, so only views declaring throttle_classes are limited). Backed
+    # by the Redis cache configured above.
+    "DEFAULT_THROTTLE_RATES": {
+        "login_ip": os.environ.get("LOGIN_THROTTLE_IP_RATE", "10/min"),
+        "login_user": os.environ.get("LOGIN_THROTTLE_USER_RATE", "5/min"),
+    },
+    # Number of TRUSTED reverse proxies in front of the app. DRF's get_ident
+    # uses this to pick the real client IP from X-Forwarded-For; with it set,
+    # a client cannot spoof XFF to evade the per-IP login throttle.
+    #   0 = direct (use REMOTE_ADDR, ignore client XFF)  -- default / local
+    #   1 = behind one proxy (e.g. nginx); 2 = nginx + Cloudflare, etc.
+    "NUM_PROXIES": int(os.environ.get("NUM_PROXIES", "0")),
 }
+
+# Dedicated JWT signing key, DISTINCT from SECRET_KEY. SimpleJWT defaults
+# SIGNING_KEY to SECRET_KEY; deriving a separate key (or reading JWT_SIGNING_KEY
+# from the environment) ensures a leak/guess of one surface does not compromise
+# the other. The HMAC-derived fallback is deterministic per SECRET_KEY so all
+# processes agree without extra configuration.
+_jwt_signing_key = os.environ.get("JWT_SIGNING_KEY", "").strip()
+if not _jwt_signing_key:
+    import hashlib
+    import hmac
+
+    _jwt_signing_key = hmac.new(
+        SECRET_KEY.encode("utf-8"), b"simple-jwt-signing-key", hashlib.sha256
+    ).hexdigest()
 
 # Simple JWT: update User.last_login on token obtain so Last Login column works in User Management
 SIMPLE_JWT = {
+    "SIGNING_KEY": _jwt_signing_key,
     "UPDATE_LAST_LOGIN": True,
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=30),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=90),
+    # Short-lived access token; clients refresh via /api/auth/token/refresh/.
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    # Rotate the refresh token on every refresh and blacklist the previous one
+    # so a stolen/replayed refresh token cannot be reused, and logout can revoke.
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 # Resolve dynamic URL placeholders for OpenAPI docs

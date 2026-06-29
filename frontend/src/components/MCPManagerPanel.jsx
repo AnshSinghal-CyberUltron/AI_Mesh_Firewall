@@ -849,6 +849,7 @@ export function MCPManagerPanel() {
                         <button
                           onClick={(e) => { e.stopPropagation(); copyToClipboard(getGatewayUrl(srv)); }}
                           className="p-0.5 rounded hover:bg-indigo-100 dark:hover:bg-indigo-800/30 text-indigo-400 hover:text-indigo-600"
+                          aria-label="Copy gateway URL"
                           title="Copy gateway URL only"
                         >
                           <Copy className="w-3 h-3" />
@@ -897,6 +898,7 @@ export function MCPManagerPanel() {
                       setTab("tools");
                     }}
                     className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-300"
+                    aria-label="View tools"
                     title="View tools"
                   >
                     <Eye className="w-3.5 h-3.5" />
@@ -908,6 +910,7 @@ export function MCPManagerPanel() {
                         ? "bg-indigo-100 dark:bg-indigo-800/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-700/40"
                         : "hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-400 dark:text-slate-500"
                     }`}
+                    aria-label={srv.verbose_logging ? "Disable detailed logs" : "Enable detailed logs"}
                     title={srv.verbose_logging ? "Disable detailed logs" : "Enable detailed logs"}
                   >
                     <FileText className="w-3.5 h-3.5" />
@@ -915,6 +918,7 @@ export function MCPManagerPanel() {
                   <button
                     onClick={() => deleteServer(srv.id)}
                     className="p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                    aria-label="Delete server"
                     title="Delete server"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -935,6 +939,7 @@ export function MCPManagerPanel() {
             <select
               value={selectedServerId || ""}
               onChange={(e) => setSelectedServerId(e.target.value || null)}
+              aria-label="MCP server"
               className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             >
               <option value="">— select —</option>
@@ -1002,6 +1007,7 @@ export function MCPManagerPanel() {
                       <td className="px-4 py-2 text-center">
                         <button
                           onClick={() => toggleTool(tool.id)}
+                          aria-label={(tool.is_enabled ?? tool.enabled) ? "Disable tool" : "Enable tool"}
                           title={(tool.is_enabled ?? tool.enabled) ? "Disable tool" : "Enable tool"}
                           className="group"
                         >
@@ -1037,6 +1043,7 @@ export function MCPManagerPanel() {
               <select
                 value={selectedServerId || ""}
                 onChange={(e) => setSelectedServerId(e.target.value || null)}
+                aria-label="Filter policies by server"
                 className="px-3 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
               >
                 <option value="">All servers (global)</option>
@@ -1141,6 +1148,8 @@ export function MCPManagerPanel() {
                     <td className="px-4 py-2 text-center">
                       <button
                         onClick={() => deletePolicy(p.id)}
+                        aria-label="Delete policy"
+                        title="Delete policy"
                         className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-400 hover:text-red-600"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1263,6 +1272,7 @@ export function MCPManagerPanel() {
             <select
               value={selectedServerId || ""}
               onChange={(e) => setSelectedServerId(e.target.value || null)}
+              aria-label="Filter audit log by server"
               className="px-3 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             >
               <option value="">All servers</option>
@@ -1273,6 +1283,7 @@ export function MCPManagerPanel() {
             <select
               value={auditActionFilter}
               onChange={(e) => setAuditActionFilter(e.target.value)}
+              aria-label="Filter audit log by action"
               className="px-3 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
             >
               <option value="">All actions</option>
@@ -1294,6 +1305,7 @@ export function MCPManagerPanel() {
             <button
               onClick={() => loadAuditLogs(selectedServerId, { action: auditActionFilter, tool_name: auditToolFilter })}
               className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+              aria-label="Refresh audit log"
               title="Refresh"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -1471,6 +1483,7 @@ export function MCPManagerPanel() {
                 <select
                   value={addServerForm.transport}
                   onChange={(e) => setAddServerForm({ ...addServerForm, transport: e.target.value })}
+                  aria-label="Transport"
                   className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                 >
                   <option value="streamable_http">Streamable HTTP</option>
@@ -1604,6 +1617,7 @@ export function MCPManagerPanel() {
                   <select
                     value={policyForm.tool_id}
                     onChange={(e) => setPolicyForm({ ...policyForm, tool_id: e.target.value })}
+                    aria-label="Policy tool scope"
                     className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                   >
                     <option value="">All tools on server</option>
@@ -1617,6 +1631,7 @@ export function MCPManagerPanel() {
                   <select
                     value={policyForm.action}
                     onChange={(e) => setPolicyForm({ ...policyForm, action: e.target.value })}
+                    aria-label="Policy action"
                     className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                   >
                     <option value="deny">Deny</option>
@@ -1667,6 +1682,7 @@ export function MCPManagerPanel() {
                             updated[idx] = { ...updated[idx], operator: e.target.value };
                             setPolicyForm({ ...policyForm, argument_rules: updated });
                           }}
+                          aria-label={`Argument rule operator${rule.param ? ` for ${rule.param}` : ""}`}
                           className="w-full px-2 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                         >
                           <option value="no_injection">No Injection</option>
@@ -1718,6 +1734,8 @@ export function MCPManagerPanel() {
                             const updated = policyForm.argument_rules.filter((_, i) => i !== idx);
                             setPolicyForm({ ...policyForm, argument_rules: updated.length ? updated : [{ param: "", operator: "no_injection", value: "", message: "" }] });
                           }}
+                          aria-label="Remove argument rule"
+                          title="Remove argument rule"
                           className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-400"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -1827,6 +1845,7 @@ export function MCPManagerPanel() {
                         min="0" max="10" step="0.5"
                         value={policyForm.risk_threshold}
                         onChange={(e) => setPolicyForm({ ...policyForm, risk_threshold: e.target.value })}
+                        aria-label="Risk threshold (0-10)"
                         className="flex-1"
                       />
                       <span className="text-sm font-mono text-slate-700 dark:text-slate-300 w-8 text-right">{policyForm.risk_threshold}</span>
@@ -1844,6 +1863,7 @@ export function MCPManagerPanel() {
                         <select
                           value={policyForm[key]}
                           onChange={(e) => setPolicyForm({ ...policyForm, [key]: e.target.value })}
+                          aria-label={`Action for ${label} risk`}
                           className="w-full px-2 py-1.5 text-[11px] rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                         >
                           <option value="deny">Deny</option>

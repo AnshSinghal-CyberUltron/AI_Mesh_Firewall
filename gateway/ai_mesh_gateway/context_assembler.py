@@ -47,6 +47,8 @@ FIELD_SENSITIVITY_MAP: Dict[str, str] = {
     "medical_record": "restricted",
     "diagnosis": "restricted",
     "private_key": "restricted",
+    "clearance": "restricted",
+    "security_clearance": "restricted",
     "token": "confidential",
     "email": "confidential",
     "phone": "confidential",

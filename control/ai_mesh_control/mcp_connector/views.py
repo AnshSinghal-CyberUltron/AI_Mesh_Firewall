@@ -9,6 +9,7 @@ the legacy Enkrypt Secure-MCP-Gateway profile layer has been removed.
 import json
 import logging
 import os
+import re
 import secrets
 import time
 import uuid as uuid_mod
@@ -17,7 +18,6 @@ from functools import lru_cache
 
 import jsonschema
 import requests
-from auth.utils import get_request_organization
 from django.conf import settings
 from django.db import IntegrityError
 from django.db.models import Count, Q
@@ -40,6 +40,37 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _mcp_compliance_tags(*hint_sources) -> list[str]:
+    """Best-effort: union compliance tags from matched preset/entity keys.
+
+    Mirrors the gateway scan path's compliance tagging on the control-plane
+    MCP tool-call enforcement events. Each redaction hint carries a ``preset``
+    (and/or ``key``) identifier; we map those through the shared
+    ``tags_for_preset_or_entity`` table and union the result. Never raises —
+    a failure to tag must never break enforcement, so we default to [].
+    """
+    try:
+        from ai_mesh_shared.mcp_compliance_tags import tags_for_preset_or_entity
+
+        keys: set[str] = set()
+        for hints in hint_sources:
+            for hint in hints or []:
+                if not isinstance(hint, dict):
+                    continue
+                for field_name in ("preset", "key"):
+                    val = hint.get(field_name)
+                    if isinstance(val, str) and val.strip():
+                        keys.add(val.strip())
+        tags: set[str] = set()
+        for key in keys:
+            tags.update(tags_for_preset_or_entity(key))
+        return sorted(tags)
+    except Exception as exc:  # pragma: no cover - defensive, never break enforcement
+        logger.warning("mcp_connector.tool.compliance_tag_compute_failed err=%s", exc)
+        return []
+
 
 # HTTP read timeout (seconds) for the control -> gateway discover-tools call.
 # This MUST be >= the gateway's stdio init timeout (MCP_STDIO_INIT_TIMEOUT,
@@ -92,6 +123,92 @@ class IsAuthenticatedOrGatewayInternal(BasePermission):
         if user and user.is_authenticated:
             return True
         return _is_gateway_internal_request(request)
+
+
+class IsGatewayInternalOnly(BasePermission):
+    """Allow ONLY trusted gateway->backend requests (shared secret).
+
+    Used for internal endpoints (e.g. audit record-event) that must never be
+    callable with an end-user JWT, to prevent audit forgery / event injection.
+    """
+
+    def has_permission(self, request, view):
+        return _is_gateway_internal_request(request)
+
+
+# Free-text fields written to MCPEvent are rendered in the operator dashboard;
+# sanitise them to prevent stored XSS and unbounded growth.
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _sanitize_event_text(value, max_len: int = 255) -> str:
+    """Strip control chars + angle brackets (kills stored <script>) and cap length."""
+    text = "" if value is None else str(value)
+    text = _CONTROL_CHARS_RE.sub("", text).replace("<", "").replace(">", "")
+    return text[:max_len]
+
+
+def _sanitize_event_structure(obj, _depth: int = 0, max_str_len: int = 2000):
+    """Recursively sanitise caller-supplied JSON (metadata / compliance_tags /
+    scan_findings) before it is persisted to MCPEvent and mirrored to
+    EnforcementEvent. Scalar-field sanitisation alone was bypassable by
+    smuggling raw <script>/control-chars through the metadata dict.
+
+    Strips control chars + angle brackets from every string value AND key,
+    bounds string length, and bounds nesting depth (defends against deep-nest
+    DoS in stored audit payloads).
+    """
+    if _depth > 24:
+        return "[truncated:max-depth]"
+    if isinstance(obj, str):
+        return _sanitize_event_text(obj, max_str_len)
+    if isinstance(obj, dict):
+        return {
+            _sanitize_event_text(str(k), 256): _sanitize_event_structure(v, _depth + 1, max_str_len)
+            for k, v in list(obj.items())[:200]
+        }
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_event_structure(v, _depth + 1, max_str_len) for v in list(obj)[:500]]
+    # int/float/bool/None pass through unchanged
+    return obj
+
+
+# Heuristic classification of mutating / destructive MCP tools. This is FLAG-ONLY:
+# the tool-call path attaches the label to the audit event and logs it, but does
+# NOT block (operators decide whether to disable a flagged tool).
+_DESTRUCTIVE_TOOL_RE = re.compile(
+    r"(?:^|[_\-/.:])(?:delete|remove|destroy|drop|purge|revoke|wipe|truncate|"
+    r"merge|force[_-]?push|reset|terminate|kill|uninstall|deprovision)(?:$|[_\-/.:s])",
+    re.IGNORECASE,
+)
+_WRITE_TOOL_RE = re.compile(
+    r"(?:^|[_\-/.:])(?:create|update|write|save|set|modify|edit|add|insert|post|"
+    r"put|patch|push|comment|send|upload|execute|run|approve|close|publish|assign|"
+    r"move|rename|disable|enable|grant|provision|invite|trigger|deploy|cancel)(?:$|[_\-/.:s])",
+    re.IGNORECASE,
+)
+
+
+def _classify_tool_write_risk(tool_name: str, description: str = "", annotations: dict | None = None) -> str:
+    """Classify a tool as 'destructive' | 'write' | 'read'.
+
+    Prefers explicit MCP tool annotations (destructiveHint / readOnlyHint) when
+    present, else uses a name keyword heuristic.
+    """
+    ann = annotations or {}
+    if isinstance(ann, dict):
+        if ann.get("destructiveHint") is True:
+            return "destructive"
+        if ann.get("readOnlyHint") is True:
+            return "read"
+        if ann.get("writeHint") is True or ann.get("idempotentHint") is False:
+            return "write"
+    name = tool_name or ""
+    if _DESTRUCTIVE_TOOL_RE.search(name):
+        return "destructive"
+    if _WRITE_TOOL_RE.search(name):
+        return "write"
+    return "read"
 
 
 def _request_actor(request) -> tuple[int | None, str]:
@@ -157,10 +274,17 @@ def _validate_tool_arguments(tool_reg, arguments: dict) -> list[dict] | None:
 
 
 def _request_org(request):
-    """Resolve request organization for strict tenant scoping."""
-    org = get_request_organization(request)
-    if org is not None:
-        return org
+    """Resolve request organization for STRICT tenant scoping.
+
+    Tenant is derived ONLY from the authenticated principal's own profile
+    (for JWT users) or a trusted gateway-internal header (for the data plane).
+    A client-supplied ``organization_id`` is intentionally NOT honored here —
+    even for superusers — so no MCP request (server/tool/event/scan-control)
+    can read or write another organization's data.
+    """
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
+        return getattr(getattr(user, "profile", None), "organization", None)
     return _gateway_request_org(request)
 
 
@@ -457,6 +581,19 @@ def _resync_server_tools(server, org) -> dict:
     }
 
 
+class _MCPToolCallError(requests.RequestException):
+    """A tool-call failure carrying the intended client-facing HTTP status, so the
+    view returns 404 (unknown tool) / 400 (bad request) instead of a blanket 502.
+    Subclasses RequestException so existing ``except requests.RequestException``
+    handlers still catch it; the view reads ``http_status`` to pick the code. 502
+    stays reserved for genuine gateway/upstream OUTAGES (connection/timeout). (M6)
+    """
+
+    def __init__(self, *args, http_status: int = 502, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.http_status = http_status
+
+
 def _call_tool_via_gateway(server, org, tool_name: str, arguments: dict) -> dict:
     """Execute a tool through the gateway's internal MCP route.
 
@@ -520,8 +657,12 @@ def _call_tool_via_gateway(server, org, tool_name: str, arguments: dict) -> dict
             timeout=90,
         )
         if resp.status_code != 200:
-            raise requests.RequestException(
-                f"Gateway tool execution returned HTTP {resp.status_code}: {resp.text[:500]}"
+            # Propagate a 4xx from the gateway as a client error; collapse 5xx to
+            # 502 (genuine upstream failure). (M6)
+            _st = 502 if resp.status_code >= 500 else resp.status_code
+            raise _MCPToolCallError(
+                f"Gateway tool execution returned HTTP {resp.status_code}: {resp.text[:500]}",
+                http_status=_st,
             )
 
         data = resp.json() if resp.content else {}
@@ -530,11 +671,46 @@ def _call_tool_via_gateway(server, org, tool_name: str, arguments: dict) -> dict
 
         rpc_error = data.get("error")
         if isinstance(rpc_error, dict):
-            raise requests.RequestException(rpc_error.get("message") or "Gateway tool execution failed")
+            # The gateway+upstream RESPONDED with a JSON-RPC error → not an outage.
+            # -32601 (method not found) / "unknown tool" → 404; -32602 (invalid
+            # params) → 400; any other application-level error → 400. (M6)
+            _code = rpc_error.get("code")
+            _msg = rpc_error.get("message") or "Gateway tool execution failed"
+            _ml = _msg.lower()
+            if _code == -32601 or "not found" in _ml or "unknown tool" in _ml:
+                raise _MCPToolCallError(_msg, http_status=404)
+            if _code == -32602:
+                raise _MCPToolCallError(_msg, http_status=400)
+            raise _MCPToolCallError(_msg, http_status=400)
         if rpc_error:
-            raise requests.RequestException(str(rpc_error))
+            raise _MCPToolCallError(str(rpc_error), http_status=400)
 
-        return data.get("result") if isinstance(data.get("result"), dict) else data
+        # C1: a tool-execution FAILURE is most commonly reported NOT via the
+        # top-level JSON-RPC ``error`` key but via the MCP result convention
+        # ``result: {isError: true, content: [{type:"text", text:"..."}]}``
+        # (stdio servers, streamable-http servers, etc.). Without inspecting it,
+        # a failed / unknown-tool call fell through to a success return → the
+        # caller recorded ``decision=allow`` and returned HTTP 200, defeating the
+        # M6 error classification and corrupting the audit trail (SOC blind
+        # spot). Surface it as the same typed error so the -32601→404 /
+        # -32602→400 mapping applies and the MCPEvent records a failure.
+        _result = data.get("result")
+        if isinstance(_result, dict) and _result.get("isError"):
+            _err_text = ""
+            _content = _result.get("content")
+            if isinstance(_content, list):
+                _err_text = " ".join(
+                    str(p.get("text", "")) for p in _content if isinstance(p, dict)
+                ).strip()
+            _err_text = _err_text or "MCP tool execution reported an error"
+            _etl = _err_text.lower()
+            if "-32601" in _etl or "not found" in _etl or "unknown tool" in _etl:
+                raise _MCPToolCallError(_err_text, http_status=404)
+            if "-32602" in _etl or "invalid" in _etl:
+                raise _MCPToolCallError(_err_text, http_status=400)
+            raise _MCPToolCallError(_err_text, http_status=400)
+
+        return _result if isinstance(_result, dict) else data
     except requests.RequestException:
         raise
     except Exception as exc:
@@ -787,6 +963,12 @@ class MCPToolCallView(APIView):
 
         actor_user_id, _actor_username = _request_actor(request)
 
+        if not isinstance(request.data, dict):
+            return Response(
+                {"error": "Request body must be a JSON object."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         tool_name = request.data.get("name")
         arguments = request.data.get("arguments", {})
         if not tool_name:
@@ -829,27 +1011,76 @@ class MCPToolCallView(APIView):
                 return None
             return _record_event_impl(*_a, **_kw)
 
-        # ── Tool enable/disable check ──
-        tool_reg_qs = MCPToolRegistration.objects.filter(
-            organization=org, tool_name=tool_name
+        # ── Tool enable/disable check (hardened against X-Server-Slug evasion) ──
+        # Load EVERY registration of this tool across the org's servers, not just
+        # the one matching the slug hint, so a caller cannot route a disabled tool
+        # through a different server slug where it happens to be unregistered.
+        org_tool_regs = list(
+            MCPToolRegistration.objects.filter(
+                organization=org, tool_name=tool_name
+            ).select_related("server")
         )
-        if requested_server is not None:
-            tool_reg_qs = tool_reg_qs.filter(server=requested_server)
-        tool_reg = tool_reg_qs.first()
 
-        resolved_server = requested_server or (tool_reg.server if tool_reg else None)
-        if tool_reg and not tool_reg.enabled:
+        # mcp #4 / mcp #32 (flag-only): classify mutating/destructive tools ONCE,
+        # up-front — BEFORE any block/error early-return — so the OWASP-MCP01
+        # write-risk signal is present on EVERY audit event (blocked + errored),
+        # not only on the success path. Primary signal is the tool NAME; the
+        # description (when a registration row exists) is a secondary hint. Does
+        # NOT block — operators decide whether to disable a flagged tool.
+        _classify_desc = next(
+            (tr.description for tr in org_tool_regs if tr.description), ""
+        )
+        _write_risk = _classify_tool_write_risk(tool_name, _classify_desc)
+        _write_risk_meta = {
+            "write_risk": _write_risk,
+            "is_write_tool": _write_risk != "read",
+        }
+
+        # (a) Evasion guard: if this tool is disabled on ANY of the org's servers,
+        #     block regardless of which server slug was requested.
+        disabled_reg = next((tr for tr in org_tool_regs if not tr.enabled), None)
+        if disabled_reg is not None:
             _record_event(
                 org=org, request=request, tool_name=tool_name,
                 decision="block", reason="tool_disabled",
                 request_id=request_id, latency_ms=int((time.time() - t0) * 1000),
-                server_name=tool_reg.server.name if tool_reg.server else "",
-                server_slug=tool_reg.server.server_slug if tool_reg.server else "",
+                server_name=disabled_reg.server.name if disabled_reg.server else "",
+                server_slug=disabled_reg.server.server_slug if disabled_reg.server else "",
+                metadata=dict(_write_risk_meta),
             )
             return Response(
                 {"error": "Tool is disabled", "reason": "tool_disabled", "request_id": request_id},
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        # (b) Require a registered+enabled tool for the RESOLVED server. An unknown
+        #     tool (no registration row) is denied rather than blindly forwarded.
+        if requested_server is not None:
+            tool_reg = next(
+                (tr for tr in org_tool_regs if tr.server_id == requested_server.id), None
+            )
+        else:
+            tool_reg = org_tool_regs[0] if org_tool_regs else None
+
+        if tool_reg is None:
+            _record_event(
+                org=org, request=request, tool_name=tool_name,
+                decision="block", reason="tool_not_registered",
+                request_id=request_id, latency_ms=int((time.time() - t0) * 1000),
+                server_name=requested_server.name if requested_server else "",
+                server_slug=requested_server.server_slug if requested_server else "",
+                metadata=dict(_write_risk_meta),
+            )
+            return Response(
+                {
+                    "error": "Tool is not registered for this server",
+                    "reason": "tool_not_registered",
+                    "request_id": request_id,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        resolved_server = requested_server or tool_reg.server
 
         # ── SEC-03 FIX: JSON Schema validation ──
         validation_errors = _validate_tool_arguments(tool_reg, arguments)
@@ -860,6 +1091,7 @@ class MCPToolCallView(APIView):
                 request_id=request_id, latency_ms=int((time.time() - t0) * 1000),
                 server_name=resolved_server.name if resolved_server else "",
                 server_slug=resolved_server.server_slug if resolved_server else "",
+                metadata=dict(_write_risk_meta),
             )
             logger.warning(
                 "mcp_connector.tool.schema_validation_failed org=%s tool=%s errors=%s",
@@ -913,13 +1145,10 @@ class MCPToolCallView(APIView):
             "agent_id": agent_id,
             "roles": actor_roles,
         }
-        # Get policies: org-specific + system-wide (org=None), in the MCP
-        # domain PLUS the universal 'global' baseline. Global policies apply
-        # everywhere; severity (ACTION_ORDER) resolves any overlap with MCP
-        # rules and redaction hints are unioned, so the two never conflict.
+        # Get policies: org-specific + system-wide (org=None), MCP domain only.
         policy_qs = PolicyModel.objects.filter(
             enabled=True,
-            policy_domain__in=["mcp", "global"],
+            policy_domain="mcp",
         ).filter(
             Q(organization=org) | Q(organization__isnull=True)
         ).prefetch_related("rules")
@@ -985,6 +1214,7 @@ class MCPToolCallView(APIView):
                 metadata={
                     "matched_policy_codes": list(eval_result.matched_policy_codes or []),
                     "matched_rule_names": list(eval_result.matched_rule_names or []),
+                    **_write_risk_meta,
                 },
             )
             logger.warning(
@@ -1064,6 +1294,7 @@ class MCPToolCallView(APIView):
                 metadata={
                     "matched_policy_codes": list(policy_result.get("violations", []) or []),
                     "matched_rule_names": [],
+                    **_write_risk_meta,
                 },
             )
             logger.warning(
@@ -1109,14 +1340,23 @@ class MCPToolCallView(APIView):
                 request_id=request_id, latency_ms=latency_ms,
                 server_name=resolved_server.name if resolved_server else "",
                 server_slug=resolved_server.server_slug if resolved_server else "",
+                metadata=dict(_write_risk_meta),
             )
             logger.warning(
                 "mcp_connector.tool.failed org_id=%s user_id=%s tool=%s detail=%s",
                 org.id, actor_user_id, tool_name, str(exc),
             )
+            # M6: honor a typed http_status (404 unknown-tool / 400 bad-request);
+            # default 502 only for genuine outages (plain RequestException).
+            _http_status = getattr(exc, "http_status", status.HTTP_502_BAD_GATEWAY)
+            _err_label = (
+                "Tool not found" if _http_status == 404
+                else "Invalid tool request" if _http_status == 400
+                else "Tool call failed"
+            )
             return Response(
-                {"error": "Tool call failed", "detail": _upstream_error_detail(exc), "request_id": request_id},
-                status=status.HTTP_502_BAD_GATEWAY,
+                {"error": _err_label, "detail": _upstream_error_detail(exc), "request_id": request_id},
+                status=_http_status,
             )
 
         latency_ms = int((time.time() - t0) * 1000)
@@ -1163,6 +1403,7 @@ class MCPToolCallView(APIView):
                     "matched_policy_codes": list(eval_out.matched_policy_codes or []),
                     "matched_rule_names": list(eval_out.matched_rule_names or []),
                     "stage": "output",
+                    **_write_risk_meta,
                 },
             )
             logger.warning(
@@ -1261,6 +1502,16 @@ class MCPToolCallView(APIView):
             (eval_out is not None and (eval_out.matched_rule_ids or eval_out.redaction_hints))
             or redacted_field_names
         )
+
+        # Compliance tagging (best-effort): union the frameworks implied by the
+        # matched presets/entity types across BOTH the input-stage and
+        # output-stage redaction hints, so control-plane enforcement events
+        # carry the same compliance tags the gateway scan path emits.
+        _enforcement_compliance_tags = _mcp_compliance_tags(
+            getattr(eval_result, "redaction_hints", None),
+            getattr(eval_out, "redaction_hints", None) if eval_out is not None else None,
+        )
+
         if _scan_action == "block" and _output_pii_detected:
             latency_ms = int((time.time() - t0) * 1000)
             mcp_firewall_client.postflight_audit(
@@ -1275,12 +1526,14 @@ class MCPToolCallView(APIView):
                 server_name=resolved_server.name if resolved_server else "",
                 server_slug=resolved_server.server_slug if resolved_server else "",
                 policy_ids=eval_result.matched_policy_ids,
+                compliance_tags=_enforcement_compliance_tags,
                 metadata={
                     "matched_policy_codes": list(eval_result.matched_policy_codes or []),
                     "matched_rule_names": list(eval_result.matched_rule_names or []),
                     "redacted_field_names": redacted_field_names,
                     "scan_action": _scan_action,
                     "stage": "output",
+                    **_write_risk_meta,
                 },
             )
             return Response(
@@ -1322,6 +1575,10 @@ class MCPToolCallView(APIView):
         # decision='monitor' when a monitor-posture control detected output PII
         # (observe-only: allowed, unmutated, audited); else 'allow'.
         _final_decision = "monitor" if _output_monitor else "allow"
+        # mcp #4 (flag-only): the mutating/destructive classification was computed
+        # once up-front (so blocked/errored events carry it too — mcp #32); reuse
+        # ``_write_risk`` here for the success-path label + log. Does NOT block —
+        # operators disable a flagged tool if needed.
         mcp_firewall_client.postflight_audit(
             tool_name, org_id=str(org.id), user_id=str(actor_user_id or ""),
             decision=_final_decision, success=True, latency_ms=latency_ms,
@@ -1333,6 +1590,7 @@ class MCPToolCallView(APIView):
             server_name=resolved_server.name if resolved_server else "",
             server_slug=resolved_server.server_slug if resolved_server else "",
             policy_ids=eval_result.matched_policy_ids,
+            compliance_tags=_enforcement_compliance_tags,
             metadata={
                 "matched_policy_codes": list(eval_result.matched_policy_codes or []),
                 "matched_rule_names": list(eval_result.matched_rule_names or []),
@@ -1341,32 +1599,22 @@ class MCPToolCallView(APIView):
                 "monitored": _output_monitor,
                 "actor_agent_id": agent_id,
                 "actor_roles": actor_roles,
+                "write_risk": _write_risk,
+                "is_write_tool": _write_risk != "read",
             },
         )
 
+        if _write_risk != "read":
+            logger.warning(
+                "mcp_connector.tool.write_flagged org_id=%s tool=%s write_risk=%s decision=%s "
+                "(flag-only, not blocked)",
+                org.id, tool_name, _write_risk, _final_decision,
+            )
         logger.info(
             "mcp_connector.tool.called org_id=%s user_id=%s agent=%s tool=%s success=true latency_ms=%s decision=%s redacted_fields=%s",
             org.id, actor_user_id, agent_id, tool_name, latency_ms, _final_decision, redacted_field_names,
         )
-        # Surface output redaction to the gateway: its outbound scan only ever
-        # sees the post-redaction response, so without this flag the canonical
-        # gateway audit event would mis-record redacted calls as clean allows.
-        _output_redaction_applied = bool(
-            not _output_monitor
-            and (
-                (eval_out is not None and eval_out.redaction_hints)
-                or redacted_field_names
-            )
-        )
-        return Response(
-            {
-                "result": result,
-                "request_id": request_id,
-                "decision": _final_decision,
-                "redacted": _output_redaction_applied,
-                "redacted_fields": redacted_field_names,
-            }
-        )
+        return Response({"result": result, "request_id": request_id, "decision": _final_decision})
 
 
 # ── Helper: Record structured MCP event ──────────────────────────────
@@ -1399,6 +1647,13 @@ def _record_event(
         actor_user_id, actor_username = _request_actor(request)
         ev_metadata = dict(metadata or {})
 
+        # ── Sanitise client/free-text fields before persistence (stored-XSS +
+        # unbounded-growth guard); these are rendered in the operator dashboard. ──
+        tool_name = _sanitize_event_text(tool_name, 255)
+        server_name = _sanitize_event_text(server_name, 255)
+        server_slug = _sanitize_event_text(server_slug, 255)
+        reason = _sanitize_event_text(reason, 500)
+
         # ── Invariant 3: reject org-less events ──
         if org is None:
             logger.error(
@@ -1426,6 +1681,13 @@ def _record_event(
                 "(tool=%s, server=%s)", missing, tool_name, server_slug,
             )
 
+        # Recursively sanitise caller-supplied JSON before persistence so the
+        # scalar-field sanitisation above cannot be bypassed via the metadata /
+        # compliance_tags / scan_findings channels (stored-XSS + NUL + deep-nest).
+        ev_metadata = _sanitize_event_structure(ev_metadata)
+        safe_compliance_tags = _sanitize_event_structure(compliance_tags or [])
+        safe_scan_findings = _sanitize_event_structure(scan_findings or [])
+
         MCPEvent.objects.create(
             organization=org,
             user_id=actor_user_id,
@@ -1439,8 +1701,8 @@ def _record_event(
             latency_ms=latency_ms,
             request_id=request_id,
             metadata=ev_metadata,
-            compliance_tags=compliance_tags or [],
-            scan_findings=scan_findings or [],
+            compliance_tags=safe_compliance_tags,
+            scan_findings=safe_scan_findings,
         )
 
         # ── Mirror to EnforcementEvent so AI Mesh Firewall dashboard
@@ -1528,18 +1790,8 @@ def _record_event(
                     except Exception:
                         _policy_obj = None
 
-                # threat_type drives the auto-created SecurityIncident title
-                # for blocked calls (see _GATEWAY_THREAT_TO_INCIDENT_TITLE).
-                if "pii" in _reason:
-                    _threat_type = "data_leakage"
-                elif "tool_disabled" in _reason:
-                    _threat_type = "tool_overreach"
-                else:
-                    _threat_type = "policy_violation"
-
                 _ef_metadata = {
                     "source": "mcp_scan",
-                    "threat_type": _threat_type if decision == "block" else "",
                     "threat_category": _threat_category,
                     "owasp_code": _owasp,
                     "owasp_codes": [_owasp] if _owasp else [],
@@ -1567,14 +1819,6 @@ def _record_event(
                     "pipeline_stage": "mcp_tool_call",
                     "intent": f"mcp:{tool_name}",
                     "event_type": "mcp_tool_call",
-                    # Module 2 MCP Risk page direction split: inbound = argument
-                    # scans, outbound = tool-response scans. Gateway scan meta
-                    # carries this as scan_direction.
-                    "mcp_direction": str(
-                        ev_metadata.get("mcp_direction")
-                        or ev_metadata.get("scan_direction")
-                        or "inbound"
-                    ),
                     "compliance_tags": ["OWASP-MCP", _owasp],
                     "rate_limit_status": "n/a",
                     "auth_status": "authenticated" if actor_user_id else "anonymous",
@@ -1590,11 +1834,21 @@ def _record_event(
                     },
                 }
                 # Carry through any extra context the caller passed
-                # (e.g. matched_policy_codes, matched_rule_names).
-                for _k, _v in (metadata or {}).items():
+                # (e.g. matched_policy_codes, matched_rule_names). Use the
+                # already-sanitised ``ev_metadata`` (NOT the raw ``metadata``
+                # arg) so caller-controlled keys/values cannot smuggle raw
+                # <script>/control-chars/NUL bytes into the dashboard mirror.
+                for _k, _v in (ev_metadata or {}).items():
                     _ef_metadata.setdefault(_k, _v)
 
-                _ef_event = _EnforcementEvent.objects.create(
+                # Defence-in-depth: recursively sanitise the full mirror payload
+                # before persistence. A stray NUL byte makes the Postgres jsonb
+                # INSERT fail (DataError), which the broad except below would
+                # otherwise swallow — silently dropping MCP traffic from the
+                # operator dashboard.
+                _ef_metadata = _sanitize_event_structure(_ef_metadata)
+
+                _EnforcementEvent.objects.create(
                     organization=org,
                     policy=_policy_obj,
                     rule=_rule_obj,
@@ -1602,18 +1856,6 @@ def _record_event(
                     user_id=actor_user_id,
                     metadata=_ef_metadata,
                 )
-                # Blocked MCP calls must surface in the SOC incident queue just
-                # like blocked gateway traffic does via the telemetry drain.
-                if _action == "block":
-                    try:
-                        from core.tasks import _auto_create_review_items_and_incidents
-
-                        _auto_create_review_items_and_incidents([_ef_event])
-                    except Exception as _inc_exc:
-                        logger.warning(
-                            "Failed to create SecurityIncident for blocked MCP event: %s",
-                            _inc_exc,
-                        )
             except Exception as _ef_exc:
                 logger.warning(
                     "Failed to mirror MCP event to EnforcementEvent: %s",
@@ -1735,6 +1977,14 @@ class MCPScanControlListCreateView(APIView):
             return Response({"error": "No organization context."}, status=status.HTTP_400_BAD_REQUEST)
         serializer = MCPScanControlSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # Strict tenant isolation: a scan-control may only reference a server
+        # that belongs to the caller's own organization.
+        target_server = serializer.validated_data.get("server")
+        if target_server is not None and target_server.organization_id != org.id:
+            return Response(
+                {"server": "Server does not belong to your organization."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         instance = serializer.save(organization=org)
         return Response(MCPScanControlSerializer(instance).data, status=status.HTTP_201_CREATED)
 
@@ -1765,6 +2015,17 @@ class MCPScanControlDetailView(APIView):
             return err
         serializer = MCPScanControlSerializer(obj, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        # F6: the `server` FK is a free writable field over an all-tenants
+        # queryset, so a PATCH could re-point this org's scan-control at ANOTHER
+        # org's MCP server (the POST create path was org-guarded; PATCH was not).
+        # Reject a target server not owned by the request org (mirrors POST).
+        _org = _request_org(request)
+        _tgt = serializer.validated_data.get("server")
+        if _tgt is not None and getattr(_tgt, "organization_id", None) != getattr(_org, "id", None):
+            return Response(
+                {"server": "Server does not belong to your organization."},
+                status=400,
+            )
         serializer.save()
         return Response(MCPScanControlSerializer(obj).data)
 
@@ -1907,10 +2168,12 @@ class MCPGatewayRecordEventView(APIView):
         }
     """
 
-    permission_classes = [IsAuthenticatedOrGatewayInternal]
+    # Internal-only: an end-user JWT must never be able to inject/forge audit
+    # events. Requires the gateway shared secret (X-Gateway-Internal-Key).
+    permission_classes = [IsGatewayInternalOnly]
 
     def post(self, request):
-        org = _request_org(request)
+        org = _gateway_request_org(request)
         if org is None:
             return Response(
                 {"error": "No organization context."},
@@ -1936,10 +2199,41 @@ class MCPGatewayRecordEventView(APIView):
             if srv:
                 server_name = srv.name
 
+        tool_name = data.get("tool_name", "")
+
+        # R18: gateway-originated events must carry the same OWASP-MCP01
+        # write/destructive-tool classification the direct MCPToolCallView path
+        # attaches up-front, so the write-risk signal is present on EVERY MCP
+        # audit event (including blocked/errored) regardless of which transport
+        # short-circuited the call. Primary signal is the tool NAME; the
+        # registered tool description (when present) is a secondary hint. The
+        # gateway may already supply ``write_risk`` in metadata, so only compute
+        # when absent (caller value wins — never clobber an explicit annotation).
+        ev_metadata = data.get("metadata") or {}
+        if not (isinstance(ev_metadata, dict) and "write_risk" in ev_metadata):
+            _classify_desc = ""
+            if tool_name:
+                tool_reg = (
+                    MCPToolRegistration.objects.filter(
+                        organization=org, tool_name=tool_name,
+                    )
+                    .exclude(description="")
+                    .values_list("description", flat=True)
+                    .first()
+                )
+                _classify_desc = tool_reg or ""
+            _write_risk = _classify_tool_write_risk(tool_name, _classify_desc)
+            if not isinstance(ev_metadata, dict):
+                ev_metadata = {}
+            else:
+                ev_metadata = dict(ev_metadata)
+            ev_metadata["write_risk"] = _write_risk
+            ev_metadata["is_write_tool"] = _write_risk != "read"
+
         _record_event(
             org=org,
             request=request,
-            tool_name=data.get("tool_name", ""),
+            tool_name=tool_name,
             decision=decision,
             reason=data.get("reason", ""),
             policy_ids=data.get("policy_ids") or [],
@@ -1947,7 +2241,7 @@ class MCPGatewayRecordEventView(APIView):
             latency_ms=int(data.get("latency_ms") or 0),
             server_name=server_name,
             server_slug=server_slug,
-            metadata=data.get("metadata") or {},
+            metadata=ev_metadata,
             compliance_tags=data.get("compliance_tags") or [],
             scan_findings=data.get("scan_findings") or data.get("presidio_findings") or [],
         )
@@ -2328,12 +2622,24 @@ class MCPOAuthCallbackView(APIView):
     authentication_classes: list = []
 
     def _html(self, ok: bool, message: str, server_name: str = "") -> HttpResponse:
+        # B3: this hand-built HTML bypasses Django template auto-escaping, and
+        # `message` (and server_name via return_url) are attacker-controlled on an
+        # unauthenticated callback (request.GET error/error_description), so a raw
+        # f-string interpolation is a reflected/stored XSS that — with JWT in
+        # localStorage on the single prod origin — exfiltrates the session. Escape
+        # every dynamic value; only allow http(s) return URLs (no javascript:).
+        from django.utils.html import escape
+
         return_url = _oauth_frontend_return_url(ok, server_name, message)
+        if not isinstance(return_url, str) or not return_url.lower().startswith(("http://", "https://", "/")):
+            return_url = "/"
         status_word = "succeeded" if ok else "failed"
         color = "#16a34a" if ok else "#dc2626"
+        _msg = escape(str(message or ""))
+        _url = escape(return_url)
         body = f"""<!doctype html><html><head><meta charset="utf-8">
 <title>MCP OAuth {status_word}</title>
-<meta http-equiv="refresh" content="3;url={return_url}">
+<meta http-equiv="refresh" content="3;url={_url}">
 <style>body{{font-family:system-ui,sans-serif;background:#0b1020;color:#e5e7eb;
 display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}
 .card{{background:#111827;padding:32px 40px;border-radius:12px;max-width:520px;
@@ -2341,10 +2647,13 @@ box-shadow:0 10px 40px rgba(0,0,0,.4);border:1px solid #1f2937}}
 h1{{color:{color};margin:0 0 12px;font-size:20px}}
 p{{margin:6px 0;line-height:1.5}} a{{color:#60a5fa}}</style></head>
 <body><div class="card"><h1>Authorization {status_word}</h1>
-<p>{message}</p>
-<p>Returning to the dashboard… <a href="{return_url}">click here</a> if you are not redirected.</p>
+<p>{_msg}</p>
+<p>Returning to the dashboard… <a href="{_url}">click here</a> if you are not redirected.</p>
 </div></body></html>"""
-        return HttpResponse(body, content_type="text/html")
+        resp = HttpResponse(body, content_type="text/html")
+        resp["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
+        resp["X-Content-Type-Options"] = "nosniff"
+        return resp
 
     def get(self, request):
         from . import oauth as oauth_mod

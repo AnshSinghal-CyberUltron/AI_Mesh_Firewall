@@ -5,9 +5,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "gateway"))
+# The gateway data plane uses flat intra-package imports (e.g.
+# ``from rag_pipeline.ranker_stage import ...`` inside rag_orchestrator),
+# so the package directory itself must be on sys.path.
+sys.path.insert(
+    0,
+    os.path.join(os.path.dirname(__file__), "..", "..", "gateway", "ai_mesh_gateway"),
+)
 
-from gateway.rag_orchestrator import RAGOrchestrator, RAGVerdict, compute_trust_score
+from rag_orchestrator import RAGOrchestrator, RAGVerdict, compute_trust_score
 
 
 class TestComputeTrustScore:
@@ -80,6 +86,7 @@ class TestRAGOrchestrator:
             collection_name="test",
             query_text="search query",
             project_id="proj1",
+            vector_db_type="chroma",
         )
         assert result.action == "allow"
         assert len(result.documents) == 2
@@ -111,13 +118,21 @@ class TestRAGOrchestrator:
             collection_name="test",
             query_text="query",
             project_id="proj1",
+            vector_db_type="chroma",
         )
         assert result.action == "allow"
         assert len(result.documents) == 1
         assert 1 in result.anomalous_indices
 
     @pytest.mark.asyncio
-    async def test_all_anomalous_blocks(self, mock_context_guard, mock_vector_client):
+    async def test_all_anomalous_flags_without_drop(
+        self, mock_context_guard, mock_vector_client
+    ):
+        """When EVERY document is anomalous, the pipeline intentionally does
+        not hard-block on anomaly heuristics alone (ranker_stage.py): it
+        preserves retrieval continuity, keeps the documents, and surfaces a
+        'flag' verdict with the anomalous indices for downstream handling.
+        """
         mock_context_guard.detect_embedding_anomaly.return_value = [0, 1]
         orch = RAGOrchestrator(
             context_guard=mock_context_guard,
@@ -128,9 +143,13 @@ class TestRAGOrchestrator:
             collection_name="test",
             query_text="query",
             project_id="proj1",
+            vector_db_type="chroma",
         )
-        assert result.action == "block"
-        assert "anomalous" in result.detail
+        assert result.action == "allow"
+        assert len(result.documents) == 2
+        assert result.anomalous_indices == [0, 1]
+        assert result.scan_verdict["action"] == "flag"
+        assert "anomaly heuristics" in result.detail
 
     @pytest.mark.asyncio
     async def test_context_scan_block(self, mock_context_guard, mock_vector_client):
@@ -146,6 +165,7 @@ class TestRAGOrchestrator:
             collection_name="test",
             query_text="query",
             project_id="proj1",
+            vector_db_type="chroma",
             policy={"require_context_scan": True},
         )
         assert result.action == "block"
@@ -163,6 +183,7 @@ class TestRAGOrchestrator:
             collection_name="test",
             query_text="query",
             project_id="proj1",
+            vector_db_type="chroma",
         )
         assert result.action == "allow"
         assert result.documents == []
