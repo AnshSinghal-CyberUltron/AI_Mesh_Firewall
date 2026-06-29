@@ -32,3 +32,17 @@
 - `/oauth/callback` (`src/pages/OAuthCallback.jsx`) intentionally preserves `?code`/`?state` (the
   router `*` route would otherwise redirect to `/` and destroy them) and only shows a spinner; token
   exchange happens in the opener window (MCPManagerPanel).
+
+## MCP panels (Module 1.4 — Context Assembly & MCP)
+- The 1.4 control surface is ONLY `MCPConnectorPanel` (`src/components/MCPConnectorPanel.jsx`); it
+  mounts the registry + 6 internal Tabs: MCP Servers, Tool Discovery, Tool Execution, Scan Controls
+  (`MCPScanControlMatrix`), MCP Security Policies (`PolicyManagementPanel`), Observability.
+  `MCPManagerPanel`/`MCPScannerPanel` are NOT wired into any live route — not customer-reachable.
+- Durable verifier: `scripts/playwright_mcp_panels.mjs` (D4). UI honesty assertions: server-card count
+  (== count of `Delete server` aria-buttons) == GET `/api/mcp-connector/servers/` length; per-card
+  "Connected" badges (`span.rounded-md`, NOT the header `span.rounded-full border` pill) == backend
+  connected count; Tool Execution decision badge ("Allow" via `lib/mcpColors.js` DECISION) mirrors the
+  POST `/api/mcp-connector/tools/call/` `decision`.
+- Register CRUD in tests: prefer transport=**stdio** (command `npx` + args). streamable-http register
+  is gated by an SSRF guard that requires DNS resolution to succeed → public hosts 400 from inside the
+  control container. tool-call request body is `{name, arguments, server_slug}` (NOT `tool_name`).
