@@ -180,7 +180,7 @@
       "id": "D2-ui-model-routing",
       "title": "Verify model/routing/kill-switch panels in browser (1.5/1.6)",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": [],
       "userStory": "As a user, I can connect/route models and disable/isolate/reroute, and the UI reflects state.",
       "acceptanceCriteria": [
