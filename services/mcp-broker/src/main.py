@@ -26,4 +26,8 @@ app.include_router(build_sandbox_router(docker_manager))
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "mcp-broker"}
+    return {
+        "status": "ok",
+        "service": "mcp-broker",
+        "docker_ok": docker_manager.ping(),
+    }

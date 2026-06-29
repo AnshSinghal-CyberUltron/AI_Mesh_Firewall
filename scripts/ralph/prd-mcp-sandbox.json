@@ -98,7 +98,7 @@
       "id": "S8-broker-wire",
       "title": "Wire sandbox module into FastAPI + health docker check",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S6-broker-routes", "S7-broker-auth", "S5-registry-reaper"],
       "userStory": "As deployer I need /health to report Docker connectivity.",
       "acceptanceCriteria": [
