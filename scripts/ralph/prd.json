@@ -94,7 +94,7 @@
       "id": "B5-rag-at-rest",
       "title": "RAG redaction default + nothing raw at rest in the vector store (G2)",
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "A2-egress-rig",
         "B2-redactor-coverage"
