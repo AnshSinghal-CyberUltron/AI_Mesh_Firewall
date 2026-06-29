@@ -3179,10 +3179,19 @@ async def _scan_redact_embedding_inputs(
     if INPUT_SCANNER is None or not org_config.get("input_scan_enabled", True):
         return texts, None
 
+    # B4 (egress parity / one redaction implementation): redact embedding inputs with
+    # the SAME deterministic egress redactor the chat & operator-simulator path uses
+    # (``LLMRouter._apply_redaction`` -> ``llm_router._redact_text_with_backstop``), so
+    # /v1/embeddings and RAG-ingest egress are BYTE-IDENTICAL to chat for the same
+    # input. ``redact_pii`` (== ``redact_all`` + Tier-2 evidence-digit-spans) is the
+    # firewall's authoritative "what must never reach the provider"; the shared
+    # backstop then masks ONLY digit runs the firewall removed — so an order-id the
+    # firewall deliberately KEPT stays intact (no over-redaction divergence) while any
+    # separator-split phone the firewall masked can never ride raw (egress = truth).
     try:
-        from patterns import redact_evidence_digit_spans  # type: ignore[no-redef]
+        from llm_router import _redact_text_with_backstop  # type: ignore[no-redef]
     except ImportError:  # pragma: no cover - packaging fallback
-        from .patterns import redact_evidence_digit_spans  # type: ignore[no-redef]
+        from .llm_router import _redact_text_with_backstop  # type: ignore[no-redef]
 
     redacted_texts: list[str] = []
     for i, text in enumerate(texts):
@@ -3191,37 +3200,18 @@ async def _scan_redact_embedding_inputs(
             continue
 
         verdict = await INPUT_SCANNER.scan_prompt(text)
-        redacted = INPUT_SCANNER.redact_pii(text, verdict=verdict)
+        red_pii = INPUT_SCANNER.redact_pii(text, verdict=verdict)
 
         _detected = (
             getattr(verdict, "threat_type", "") in ("pii", "secret")
             or bool(getattr(verdict, "matched_patterns", None))
             or bool(getattr(verdict, "matched_values", None))
         )
-        # Fail-closed digit backstop (mirrors llm_router._apply_redaction): the
-        # verdict-aware ``redact_pii`` is the source of truth for "what must not
-        # reach the provider", but a bare value in a phrasing it misses can survive
-        # it. Run whenever PII was detected (``_detected``) OR redaction was a total
-        # no-op — NOT only on a total no-op: a LIVE test proved a mixed
-        # "SSN+email+phone" input leaked the bare phone, because the SSN/email
-        # redaction made ``redacted != text`` and the old gate skipped the backstop.
-        # Mask any run of 7+ digits still present, ``***-***-####`` shape. Partial
-        # masks (already ``***-***-1234``) keep only 4 digits so they never
-        # re-trigger.
-        if _detected or redacted == text:
-            backstopped = redacted
-            for run in set(re.findall(r"\d{7,}", text)):
-                if run in backstopped:
-                    backstopped = backstopped.replace(run, f"***-***-{run[-4:]}")
-            # Also honor any Tier-2-style evidence digit spans the verdict carried.
-            sources = [str(p) for p in (getattr(verdict, "matched_patterns", None) or [])]
-            scan_meta = getattr(verdict, "scan_meta", None)
-            if isinstance(scan_meta, dict):
-                for finding in scan_meta.get("findings") or []:
-                    if isinstance(finding, dict) and finding.get("evidence"):
-                        sources.append(str(finding["evidence"]))
-            backstopped = redact_evidence_digit_spans(backstopped, sources)
-            redacted = backstopped
+        # Shared egress redactor — identical to the chat/simulator wire path. Uses the
+        # firewall-authoritative ``red_pii`` as the egress-truth reference so the
+        # masked output matches chat byte-for-byte (Tier-2 evidence spans are already
+        # folded into ``red_pii`` and so are honored transitively).
+        redacted = _redact_text_with_backstop(text, red_pii)
 
         # BYTE-VERIFY FAIL-CLOSED (G4): the scanner detected PII/secret but the
         # redaction (incl. the digit backstop above) could not change the input.
