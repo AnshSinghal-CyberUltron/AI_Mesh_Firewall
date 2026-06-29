@@ -970,3 +970,39 @@
   endpoint DIRECTLY and assert it stays under the upstream caller's read budget WITH the dead
   fixture provider live, so the bound (asyncio.wait_for per provider + asyncio.gather) is proven
   active, not just incidentally fast because the slow provider happened to be quiet.
+- rigor-verified: D4-ui-mcp 2026-06-29 — re-proved the MCP Guardrails UI (module 1.4,
+  ?tab=firewall-1-4) for REAL against the live stack (Vite :8180 -> control :8100 + gateway :8300).
+  Build gate green (cd frontend && npm run build, exit 0, 17s; only the benign >500kB chunk-size
+  hint, non-blocking). (1) DURABLE GATE LIVE: scripts/playwright_mcp_panels.mjs -> 27/27 asserts,
+  9 steps, 0 pageErrors, screenshots runs/d4/ — POSITIVE-PATH honesty proven from DOM + REAL API:
+  card count==GET /api/mcp-connector/servers/ (20==20), on-screen "Connected" badges==backend
+  connected (17==17), Register CRUD side-effect-free (POST 201 -> card+backend appear -> DELETE 204
+  -> both gone), scan-default Select PATCH backend-verified BOTH directions (tag->block->tag), Tool
+  Discovery renders 207 backend tools, Tool Execution live echo -> decision=="allow" AND on-screen
+  badge "Allow"+echoed preview mirror it. (2) ADVERSARIAL NEGATIVE-PATH honesty live-proven (the
+  gate only covers ALLOW; the honesty invariant also requires NO phantom "Allow" on a non-allow
+  outcome): drove a schema-invalid echo call through the SAME Tool Execution control -> backend
+  HTTP 400 reason=invalid_arguments with NO `decision` field -> UI renders the honest "HTTP 400"
+  status badge + the real failure reason AND ZERO visible "Allow" verdict (8/8 asserts, 0
+  pageErrors). (3) CODE-PROOF the badge cannot lie: MCPConnectorPanel.jsx:1783-1786 renders the
+  verdict from `decisionInfo(executeResult.decision)` (data-driven, guarded on a truthy decision);
+  lib/mcpColors.js DECISION maps allow->"Allow"/success, block->"Block"/danger, redact/monitor/error
+  -> their own labels, falsy->Error fallback — so the green "Allow" CANNOT render unless the backend
+  body said decision=="allow". A non-2xx sets {...body,error:true,status} -> honest "HTTP <status>"
+  warning badge + raw reason, never Allow. (4) API-PROOF of block outcomes: tool_not_registered->403,
+  invalid_arguments->400 (no decision=allow); even default_scan_action=block on everything-mcp with an
+  injected secret echoed returned the backend's GENUINE decision=allow (output didn't match an active
+  output-PII policy — backend-enforcement scope, NOT a D4 UI-honesty gap), faithfully what the UI
+  would render. NO source change needed; NO real product gap; D4 stays passes:true.
+- PATTERN (UI gate rigor / local daphne wedge + auth rate-limit): the control plane runs a SINGLE
+  daphne (ASGI) worker locally; each module page (e.g. 1.4) holds long-lived streaming/websocket
+  connections, and on browser.close() daphne logs "Application instance ... took too long to shut
+  down and was killed". Running SEVERAL playwright UI sessions back-to-back accumulates these and
+  WEDGES daphne -> ALL endpoints (even no-auth /health) hang at HTTP 000. Recovery =
+  `docker restart ai_mesh_firewall-control-1` then poll until healthy (boot ~60s incl. 66-key
+  gateway-key Redis resync). SEPARATELY, POST /api/auth/token/ is RATE-LIMITED (429 after repeated
+  attempts) — do NOT poll login in a tight loop to "warm-check"; it self-trips the limiter. To verify
+  warmth poll a cheap GET, not the token endpoint. A SINGLE clean UI run on a warm stack is
+  deterministically green (the durable gate 27/27 and the negative-path drive 8/8 both pass in
+  isolation) — treat multi-run hangs as self-induced env saturation, NOT a regression. Prod fix for
+  the daphne-serialization class is gunicorn x5 (already documented); local stays single-worker.
