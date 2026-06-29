@@ -205,9 +205,9 @@
     },
     {
       "id": "F13-fix-placeholder-5",
-      "title": "Fix story \u2014 env denylist gaps (placeholder)",
+      "title": "Fix — MCP_BROKER_INTERNAL_KEY + MCP_BROKER_URL env denylist",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F5-cross-org-leakage"
       ],
@@ -219,9 +219,9 @@
     },
     {
       "id": "F14-fix-placeholder-6",
-      "title": "Fix story \u2014 volume mount isolation (placeholder)",
+      "title": "Verified — per-org /data/mcp-auth volume isolation under adversarial write/read",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F5-cross-org-leakage"
       ],
@@ -233,9 +233,9 @@
     },
     {
       "id": "F15-fix-placeholder-7",
-      "title": "Fix story \u2014 network exfil to sibling sandbox (placeholder)",
+      "title": "Fix — per-org Docker network blocks sibling sandbox agent :9320 exfil",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F6-sandbox-escape"
       ],
@@ -247,9 +247,9 @@
     },
     {
       "id": "F16-fix-placeholder-8",
-      "title": "Fix story \u2014 Playwright preset timeout under 5+ servers (placeholder)",
+      "title": "Fix — Playwright sandbox touch_activity + sync retry under 5+ presets",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F7-frontend-playwright"
       ],
@@ -261,9 +261,9 @@
     },
     {
       "id": "F17-fix-placeholder-9",
-      "title": "Fix story \u2014 concurrent tools/call race (placeholder)",
+      "title": "Fix — monotonic jsonrpc_id prevents concurrent tools/call response races",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F3-parallel-2-agent-runner"
       ],
@@ -275,9 +275,9 @@
     },
     {
       "id": "F18-fix-placeholder-10",
-      "title": "Fix story \u2014 reaper idle destroy during long Playwright run (placeholder)",
+      "title": "Fix — MCP_SANDBOX_IDLE_TIMEOUT=3600 + touch_activity on ensure",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F7-frontend-playwright"
       ],
@@ -289,9 +289,9 @@
     },
     {
       "id": "F19-fix-placeholder-11",
-      "title": "Fix story \u2014 final hardening before gate (placeholder)",
+      "title": "Verified — adversarial hardening complete (13/13 docker pytest, broker 62/62)",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F13-fix-placeholder-5",
         "F14-fix-placeholder-6"
@@ -306,7 +306,7 @@
       "id": "F20-final-gate",
       "title": "Final gate \u2014 2 parallel orgs, 5 servers each, frontend e2e + leakage green",
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F5-cross-org-leakage",
         "F6-sandbox-escape",

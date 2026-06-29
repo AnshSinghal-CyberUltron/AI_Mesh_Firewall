@@ -122,7 +122,9 @@
 - Gateway sandbox client: `gateway/ai_mesh_gateway/mcp_sandbox_client.py` — `ensure_sandbox`, `broker_send_jsonrpc`; `X-MCP-Broker-Key` from `MCP_BROKER_INTERNAL_KEY`; 503 exponential backoff (`MCP_SANDBOX_RETRY_*`); 502/503 → safe `RuntimeError` (no agent IP/BYOK in client message); timeouts from `MCP_STDIO_*` forwarded in RPC body.
 - MCP rate limits: `org_mcp_jsonrpc` calls `main._enforce_org_tpm_rate_limit` + `_enforce_org_burst_rpm` via `_enforce_mcp_org_rate_limits`; HTTP 429 mapped to JSON-RPC error envelope (HTTP 200, code -32000) with `Retry-After` preserved.
 - Docker integration gate: `gateway/ai_mesh_gateway/tests/test_mcp_sandbox_integration.py` — `@pytest.mark.docker`; broker runs in Docker on `mcp_sandbox_bridge` (host uvicorn cannot reach sandbox bridge IPs); stdio stub via `docker cp` to `/data/mcp-auth/` (read-only rootfs); wait for sandbox-agent health before RPC; asserts labels + cross-org volume/env isolation.
-- E1 parallel load gate: `test_mcp_sandbox_parallel_load.py` — 5 orgs × 5 servers; single hermetic Python stub with per-server env identity; `asyncio.gather` for ensure + 75 concurrent RPCs; volume file + env marker cross-tenant checks.
+- Per-org sandbox network: `docker_manager.org_network_name()` → `mcp_sandbox_net_{org}` isolates sibling
+  agent :9320; broker container joins each org network (`MCP_BROKER_CONTAINER_NAME` or hostname lookup);
+  host-run broker falls back to shared bridge + published agent port.
 
 ### Iteration log
 - 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
@@ -395,6 +397,15 @@
   MCPConnectorPanel: Filesystem MCP + Fetch MCP (`mcp-server-fetch`) presets added. Gates green:
   `--full` (workers + leak probe + pytest 4/4), adversarial pytest 11/11, frontend_parallel_orgs,
   broker tests 59/59. **13/21 stories pass (F0–F12).**
+
+- 2026-06-29 iter-4: F13 denylist — `MCP_BROKER_INTERNAL_KEY` + `MCP_BROKER_URL` in
+  `shared/ai_mesh_shared/mcp_stdio_common.py`. F14 volume `-k volume` green. F15 REAL BUG: sibling sandbox
+  network exfil to :9320 — per-org Docker network in `docker_manager.py` (`mcp_sandbox_net_{org}`), broker
+  joins via `MCP_BROKER_CONTAINER_NAME` (compose `ai_mesh_mcp_broker`). F16 frontend touch_activity on ensure
+  + sync retry. F17 REAL BUG: `mcp_sandbox_client` reused `jsonrpc_id=1` under concurrent RPC → monotonic
+  `_RPC_ID_SEQ`. F18 idle timeout 3600 + touch_activity on ensure route. F19 adversarial 13/13, broker 62/62.
+  F20 final gate green (`--full`, frontend_parallel_orgs, lint+build). Rebuilt mcp-broker container.
+  **21/21 stories pass — MCP FRONTEND ADVERSARIAL COMPLETE.**
 
 - 2026-06-29 D1-ui-auth-keys PASSES (gate green). Built a DURABLE, re-runnable browser gate
   `scripts/playwright_auth_keys.mjs` (real customer perspective, real stack :8180→control:8100/
