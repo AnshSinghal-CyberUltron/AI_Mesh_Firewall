@@ -20,6 +20,17 @@
   `_detected and redacted==text`, block (PII detected but unmaskable). bedrock_inference.py is ONLY
   model-selection helpers, NOT an inference path.
 
+- UI-VERIFICATION pattern (D-stories): ship a DURABLE `scripts/playwright_*.mjs` (real customer POV)
+  as the re-runnable gate, not just an ad-hoc MCP click-through. Run node FROM `frontend/` (playwright
+  lives in frontend/node_modules); pass SHOT_DIR/E2E_REPORT env so artifacts land at repo-root runs/.
+  Stack: Vite :8180 proxies /api→control:8100, /v1→gateway:8300. Login=POST /api/auth/token/
+  (admin@zeroshield.io / Adm1n!Pass#2024); tokens in localStorage.auth_access/auth_refresh. Drive
+  via waitForResponse on the real API call (assert status), assert the PARSED result + honest on-screen
+  display, collect `pageerror` (hard-fail) — a UI claim is valid ONLY if the DOM/bytes reflect it
+  (e.g. a created secret must NOT reappear in the listing; only `prefix...`). Time-based UI (inactivity)
+  → `page.clock.install()` + `fastForward()` AFTER networkidle. Gateway resource IDs are UUIDs (match
+  `[^/]+`, not `\d+`). Gate = `npm run lint && npm run build` (lint==test:unit) + the playwright run.
+
 ## Environment / harness gotchas (discovered this repo)
 - Gateway tests run with the gateway venv: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q` (PYTHONPATH may need the shared/ + ai_mesh_gateway dirs). Plain `python` may not have deps.
 - control container: WorkingDir is /app/control/ai_mesh_control (so daphne can import main_app); manage.py lives one level up, so exec it with `-w /app/control -e PYTHONPATH=/app/control/ai_mesh_control`. Recreate control with explicit `-f docker-compose.yml -f docker-compose.override.yml` (default discovery drops the working_dir override).
@@ -350,3 +361,43 @@
   value in metadata WITHOUT a cue is order-id-shaped + intentionally kept — build
   metadata in natural cued phrasing (`item.prompt()`), not bare `item.raw`.
   REMAINING backlog: only the D1–D6 UI/browser stories (priority 3) are passes:false.
+
+## MCP Frontend Adversarial Ralph Loop
+- 2026-06-29 iter-1: NEW campaign `prd-mcp-frontend-adversarial.json` (F0–F20, min 20 iters).
+  Created adversarial pytest (`test_mcp_sandbox_adversarial.py`), `run_parallel_org_agents.mjs`,
+  `org_worker.mjs` (6 stdio servers/org), `frontend_parallel_orgs.mjs`, Ralph shell + CLAUDE prompt.
+- F0 PASS: mcp-broker started manually (compose blocked: `mcp_sandbox_bridge` network label conflict
+  with test-created network). `node scripts/ralph/run_parallel_org_agents.mjs --bootstrap-only` green.
+- F1/F2/F3 PASS: 2 parallel org workers (adv-org-alpha, adv-org-beta) × 6 servers; env probe
+  denylist OK (GATEWAY_INTERNAL_API_KEY, MCP_BROKER_INTERNAL_KEY, DATABASE_URL empty).
+- F4 PASS: denylist unit tests green (`pytest -k denylist`).
+- BLOCKER doc: `docker compose --profile services up -d` fails when `mcp_sandbox_bridge` exists
+  without compose label — workaround: `docker run` mcp-broker on both networks OR `docker network rm`
+  before compose (destructive). Gateway missing `MCP_STDIO_IN_PROCESS=false` in running container —
+  frontend F7 needs gateway recreate with services profile.
+- Next: F5 cross-org leakage (docker pytest), F7 frontend Playwright, fix compose network story.
+
+- 2026-06-29 D1-ui-auth-keys PASSES (gate green). Built a DURABLE, re-runnable browser gate
+  `scripts/playwright_auth_keys.mjs` (real customer perspective, real stack :8180→control:8100/
+  gateway:8300). 10 phases / 19 asserts, 0 pageerrors: login EMPTY (HTML5 `#email:invalid`, no
+  submit, stays /login), login INVALID (POST /api/auth/token/ → 401 + "Invalid email or password"
+  shown), login VALID (token → `localStorage.auth_access` set, nav off /login), OAuth callback
+  (`/oauth/callback?code&state` PRESERVES params — no wildcard "*"→"/" redirect — and shows
+  "Completing authorization"), GatewayKeyPanel create (POST returns full secret ONCE in the modal +
+  "will not be shown again"), copy (clipboard == exact secret; grant `clipboard-read/write` on the
+  context), HONESTY (full secret is NOT in the listing DOM — table shows only `prefix...` + Active
+  badge), revoke (DELETE → row leaves listing), inactivity modal (page.clock fast-forward 14m →
+  "Session expiring" → "Stay logged in" dismisses, token retained), logout (POST /api/auth/logout/ →
+  `auth_access` cleared, back to /login). Gate: `cd frontend && npm run lint && npm run build` (lint
+  ==test:unit, 26 passed; build ✓) + `BASE_URL=http://127.0.0.1:8180 SHOT_DIR=../runs/d1 node
+  ../scripts/playwright_auth_keys.mjs` (run from frontend/ so playwright resolves) → ok:true 19/19,
+  screenshots in runs/d1/. GOTCHAS (now in frontend/AGENTS.md): (1) login endpoint is
+  POST /api/auth/token/ (NOT /api/auth/login/ — that 404s). (2) Gateway key IDs are UUIDs, so a
+  DELETE-URL matcher must be `/keys/[^/]+/$` NOT `\d+`. (3) Revoke = HARD DELETE (row disappears);
+  the "Revoked" badge is only for retained-but-inactive keys (e.g. expired) — do NOT assert a Revoked
+  badge after the revoke button. (4) No dedicated ROTATE control/endpoint in GatewayKeyPanel —
+  rotation == revoke + create (both primitives verified). (5) Inactivity hook is hardcoded 15m/14m on
+  Date.now()+30s interval; verify via Playwright `page.clock.install()` then `fastForward(14*60e3+ε)`
+  AFTER networkidle (so the login fetch's AbortSignal.timeout already resolved). (6) Run node from
+  frontend/ (playwright lives in frontend/node_modules); screenshots/report dirs are cwd-relative —
+  pass SHOT_DIR/E2E_REPORT to land them at repo-root runs/.

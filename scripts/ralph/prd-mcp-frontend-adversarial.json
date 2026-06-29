@@ -1,0 +1,327 @@
+{
+  "feature": "MCP frontend adversarial sandbox isolation (Phase 2)",
+  "branchName": "ralph/mcp-frontend-adversarial",
+  "sourcePlan": ".cursor/ralph/scratchpad.md",
+  "minIterations": 20,
+  "maxIterations": 50,
+  "completionPromise": "MCP FRONTEND ADVERSARIAL COMPLETE",
+  "userStories": [
+    {
+      "id": "F0-bootstrap",
+      "title": "Bootstrap — docker compose services profile, broker+gateway sandbox path",
+      "priority": 0,
+      "passes": true,
+      "dependencies": [],
+      "userStory": "As Ralph I need the full stack up with MCP_STDIO_IN_PROCESS=false before adversarial testing.",
+      "acceptanceCriteria": [
+        "docker compose --profile services config validates",
+        "docker compose --profile services up -d brings mcp-broker + gateway + control + frontend",
+        "curl -sf http://127.0.0.1:8311/health | jq -e '.docker_ok==true'",
+        "curl -sf http://127.0.0.1:8300/health or gateway health endpoint returns 200",
+        "Gate: node scripts/ralph/run_parallel_org_agents.mjs --bootstrap-only"
+      ]
+    },
+    {
+      "id": "F1-org-alpha-harness",
+      "title": "Org-alpha adversarial harness — 5+ stdio MCP servers",
+      "priority": 1,
+      "passes": true,
+      "dependencies": [
+        "F0-bootstrap"
+      ],
+      "userStory": "As security I need org-alpha running 5+ distinct stdio MCP servers in its sandbox.",
+      "acceptanceCriteria": [
+        "org-alpha sandbox container labeled ai_mesh.org_slug=adv-org-alpha",
+        "5+ stdio servers registered; tools/list returns distinct tool sets per server",
+        "Gate: ORG_SLUG=adv-org-alpha node tests/e2e/mcp_sandbox_adversarial/org_worker.mjs"
+      ]
+    },
+    {
+      "id": "F2-org-beta-harness",
+      "title": "Org-beta adversarial harness — 5+ stdio MCP servers",
+      "priority": 1,
+      "passes": true,
+      "dependencies": [
+        "F0-bootstrap"
+      ],
+      "userStory": "As security I need org-beta running 5+ distinct stdio MCP servers in its sandbox.",
+      "acceptanceCriteria": [
+        "org-beta sandbox container labeled ai_mesh.org_slug=adv-org-beta",
+        "5+ stdio servers registered; tools/list returns distinct tool sets per server",
+        "Gate: ORG_SLUG=adv-org-beta node tests/e2e/mcp_sandbox_adversarial/org_worker.mjs"
+      ]
+    },
+    {
+      "id": "F3-parallel-2-agent-runner",
+      "title": "Parallel 2-agent iteration runner (org-alpha + org-beta)",
+      "priority": 2,
+      "passes": true,
+      "dependencies": [
+        "F1-org-alpha-harness",
+        "F2-org-beta-harness"
+      ],
+      "userStory": "As Ralph each iteration MUST run 2 parallel org agents before marking any story pass.",
+      "acceptanceCriteria": [
+        "scripts/ralph/run_parallel_org_agents.mjs spawns 2 workers concurrently",
+        "Each worker: own org, 5+ MCP servers, tools/list + tools/call",
+        "Gate: node scripts/ralph/run_parallel_org_agents.mjs exits 0"
+      ]
+    },
+    {
+      "id": "F4-adversarial-pytest-suite",
+      "title": "Backend adversarial pytest suite scaffold",
+      "priority": 2,
+      "passes": true,
+      "dependencies": [
+        "F0-bootstrap"
+      ],
+      "userStory": "As CI I need pytest adversarial probes runnable without the frontend.",
+      "acceptanceCriteria": [
+        "gateway/ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py exists with @pytest.mark.docker",
+        "Covers denylist, volume isolation, escape probes",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q -k 'not docker' OR full docker gate when Docker available"
+      ]
+    },
+    {
+      "id": "F5-cross-org-leakage",
+      "title": "Cross-org leakage probes (volume, env, npm cache bleed)",
+      "priority": 3,
+      "passes": false,
+      "dependencies": [
+        "F3-parallel-2-agent-runner",
+        "F4-adversarial-pytest-suite"
+      ],
+      "userStory": "As security no org may read another org's volume, env markers, or shared cache secrets.",
+      "acceptanceCriteria": [
+        "test_cross_org_volume_secrets_not_readable between adv-org-alpha and adv-org-beta",
+        "test_env_foreign_org_marker_not_visible across both orgs",
+        "test_npm_cache_bleed_probe — sibling org marker absent in get_env",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q -k leakage"
+      ]
+    },
+    {
+      "id": "F6-sandbox-escape",
+      "title": "Sandbox escape attempts (path traversal, /proc, docker.sock)",
+      "priority": 3,
+      "passes": false,
+      "dependencies": [
+        "F4-adversarial-pytest-suite"
+      ],
+      "userStory": "As security adversarial MCP payloads must not escape the sandbox container.",
+      "acceptanceCriteria": [
+        "test_host_path_traversal_cannot_read_host_etc_passwd",
+        "test_proc_self_environ_no_gateway_secret",
+        "test_docker_sock_not_accessible_from_sandbox",
+        "test_sibling_container_metadata_not_readable",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q -k escape"
+      ]
+    },
+    {
+      "id": "F7-frontend-playwright",
+      "title": "Frontend Playwright — MCPConnectorPanel 5+ stdio servers per org",
+      "priority": 4,
+      "passes": false,
+      "dependencies": [
+        "F3-parallel-2-agent-runner"
+      ],
+      "userStory": "As user I register 5+ stdio MCP servers via UI per org; tools/list and tools/call work.",
+      "acceptanceCriteria": [
+        "cd frontend && npm run lint && npm run build green",
+        "tests/e2e/mcp_sandbox_adversarial/frontend_parallel_orgs.mjs registers 5+ presets per org",
+        "tools/list sync + tools/call via MCPConnectorPanel for each org",
+        "Gate: BASE_URL=http://127.0.0.1:8180 node tests/e2e/mcp_sandbox_adversarial/frontend_parallel_orgs.mjs"
+      ]
+    },
+    {
+      "id": "F8-parallel-runner-script",
+      "title": "Parallel 2-agent iteration runner script (Ralph gate)",
+      "priority": 4,
+      "passes": false,
+      "dependencies": [
+        "F3-parallel-2-agent-runner"
+      ],
+      "userStory": "As Ralph operator I run one command to gate every iteration.",
+      "acceptanceCriteria": [
+        "scripts/ralph/run_parallel_org_agents.mjs documented in scratchpad",
+        "Combines org_worker.mjs (2 parallel) + optional pytest leakage subset",
+        "Gate: node scripts/ralph/run_parallel_org_agents.mjs --full"
+      ]
+    },
+    {
+      "id": "F9-fix-placeholder-1",
+      "title": "Fix story — issues found in iteration 1-5 (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F5-cross-org-leakage"
+      ],
+      "userStory": "As Ralph I fix critical isolation failures discovered in early iterations.",
+      "acceptanceCriteria": [
+        "Rename/update title when a real failure is found",
+        "Gate: node scripts/ralph/run_parallel_org_agents.mjs exits 0 after fix"
+      ]
+    },
+    {
+      "id": "F10-fix-placeholder-2",
+      "title": "Fix story — issues found in iteration 6-10 (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F6-sandbox-escape"
+      ],
+      "userStory": "As Ralph I fix escape or leakage failures from mid-campaign runs.",
+      "acceptanceCriteria": [
+        "Rename/update title when a real failure is found",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q"
+      ]
+    },
+    {
+      "id": "F11-fix-placeholder-3",
+      "title": "Fix story — frontend MCPConnectorPanel failures (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F7-frontend-playwright"
+      ],
+      "userStory": "As Ralph I fix UI registration/sync/call failures under parallel org load.",
+      "acceptanceCriteria": [
+        "Rename/update title when a real failure is found",
+        "Gate: node tests/e2e/mcp_sandbox_adversarial/frontend_parallel_orgs.mjs exits 0"
+      ]
+    },
+    {
+      "id": "F12-fix-placeholder-4",
+      "title": "Fix story — broker auth / rate limit under adversarial load (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F8-parallel-runner-script"
+      ],
+      "userStory": "As Ralph I fix broker 401/429 edge cases during parallel adversarial runs.",
+      "acceptanceCriteria": [
+        "Rename/update title when a real failure is found",
+        "Gate: pytest services/mcp-broker/tests -q green"
+      ]
+    },
+    {
+      "id": "F13-fix-placeholder-5",
+      "title": "Fix story — env denylist gaps (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F5-cross-org-leakage"
+      ],
+      "userStory": "As security any newly discovered secret env key must be denylisted.",
+      "acceptanceCriteria": [
+        "Extend shared/ai_mesh_shared/mcp_stdio_common.py denylist if probe finds leak",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q -k denylist"
+      ]
+    },
+    {
+      "id": "F14-fix-placeholder-6",
+      "title": "Fix story — volume mount isolation (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F5-cross-org-leakage"
+      ],
+      "userStory": "As security per-org /data/mcp-auth must remain isolated under adversarial write/read.",
+      "acceptanceCriteria": [
+        "Rename/update title when a real failure is found",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q -k volume"
+      ]
+    },
+    {
+      "id": "F15-fix-placeholder-7",
+      "title": "Fix story — network exfil to sibling sandbox (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F6-sandbox-escape"
+      ],
+      "userStory": "As security sandboxes must not reach sibling container agent ports.",
+      "acceptanceCriteria": [
+        "Rename/update title when a real failure is found",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q -k network"
+      ]
+    },
+    {
+      "id": "F16-fix-placeholder-8",
+      "title": "Fix story — Playwright preset timeout under 5+ servers (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F7-frontend-playwright"
+      ],
+      "userStory": "As Ralph I fix UI timeouts when registering many stdio presets per org.",
+      "acceptanceCriteria": [
+        "Rename/update title when a real failure is found",
+        "Gate: node tests/e2e/mcp_sandbox_adversarial/frontend_parallel_orgs.mjs exits 0"
+      ]
+    },
+    {
+      "id": "F17-fix-placeholder-9",
+      "title": "Fix story — concurrent tools/call race (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F3-parallel-2-agent-runner"
+      ],
+      "userStory": "As Ralph I fix RPC races when 2 orgs hammer broker concurrently.",
+      "acceptanceCriteria": [
+        "Rename/update title when a real failure is found",
+        "Gate: node scripts/ralph/run_parallel_org_agents.mjs --full exits 0"
+      ]
+    },
+    {
+      "id": "F18-fix-placeholder-10",
+      "title": "Fix story — reaper idle destroy during long Playwright run (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F7-frontend-playwright"
+      ],
+      "userStory": "As ops sandbox reaper must not destroy containers mid adversarial e2e.",
+      "acceptanceCriteria": [
+        "Rename/update title when a real failure is found",
+        "Gate: MCP_SANDBOX_IDLE_TIMEOUT raised or touch_activity on UI RPC"
+      ]
+    },
+    {
+      "id": "F19-fix-placeholder-11",
+      "title": "Fix story — final hardening before gate (placeholder)",
+      "priority": 5,
+      "passes": false,
+      "dependencies": [
+        "F13-fix-placeholder-5",
+        "F14-fix-placeholder-6"
+      ],
+      "userStory": "As Ralph I address any remaining adversarial findings before F20.",
+      "acceptanceCriteria": [
+        "All F9-F18 either passes:true or explicitly cancelled with evidence",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q"
+      ]
+    },
+    {
+      "id": "F20-final-gate",
+      "title": "Final gate — 2 parallel orgs, 5 servers each, frontend e2e + leakage green",
+      "priority": 6,
+      "passes": false,
+      "dependencies": [
+        "F5-cross-org-leakage",
+        "F6-sandbox-escape",
+        "F7-frontend-playwright",
+        "F8-parallel-runner-script",
+        "F19-fix-placeholder-11"
+      ],
+      "userStory": "As platform I need proof that frontend + adversarial isolation holds under parallel 2-org load.",
+      "acceptanceCriteria": [
+        "node scripts/ralph/run_parallel_org_agents.mjs --full exits 0",
+        "cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q",
+        "BASE_URL=http://127.0.0.1:8180 node tests/e2e/mcp_sandbox_adversarial/frontend_parallel_orgs.mjs exits 0",
+        "cd frontend && npm run lint && npm run build",
+        "Output completion promise when ALL stories passes:true"
+      ]
+    }
+  ]
+}
