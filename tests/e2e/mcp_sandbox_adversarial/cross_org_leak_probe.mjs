@@ -27,7 +27,7 @@ async function brokerFetch(pathname, opts = {}, attempt = 0) {
       },
       signal: AbortSignal.timeout(60000),
     });
-    if ((res.status === 429 || res.status === 503 || res.status === 502) && attempt < maxAttempts) {
+    if ((res.status === 429 || res.status === 503 || res.status === 502 || res.status === 500) && attempt < maxAttempts) {
       await new Promise((r) => setTimeout(r, backoffMs));
       return brokerFetch(pathname, opts, attempt + 1);
     }

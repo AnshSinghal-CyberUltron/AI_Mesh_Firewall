@@ -20,6 +20,14 @@ ultrathink. Work fully autonomously — never ask for confirmation (you run head
 2. Read `scripts/ralph/prd-mcp-frontend-adversarial.json`. Pick the SINGLE highest-priority story
    with `passes:false` whose dependencies are all `passes:true`.
 3. If F0 not passing, start with F0-bootstrap.
+4. **Regression mode (iterations 5–20):** When F0–F20 all have `passes:true`, do NOT emit the
+   completion promise until R1–R16 also pass. Pick the lowest-numbered R-story with `passes:false`
+   (R1 = iteration 5 … R16 = iteration 20). Each R-story runs the **full gate** even when no new
+   feature work is needed:
+   ```bash
+   ./scripts/ralph/run_regression_iteration.sh <iteration_number>
+   ```
+   Or manually: `--full` parallel org agents, full adversarial pytest, `frontend_parallel_orgs.mjs`.
 
 ## Step 2 — Parallel gate FIRST (before marking pass)
 ```bash
@@ -50,13 +58,14 @@ BASE_URL=http://127.0.0.1:8180 node tests/e2e/mcp_sandbox_adversarial/frontend_p
 Append dated note to `scripts/ralph/progress.txt` under `## MCP Frontend Adversarial Ralph Loop`.
 
 ## Step 6 — Completion
-If EVERY story in prd-mcp-frontend-adversarial.json has `passes:true` AND:
+If EVERY story (F0–F20 **and** R1–R16) in prd-mcp-frontend-adversarial.json has `passes:true` AND
+at least **20 iterations** have been logged in progress.txt AND:
 - `node scripts/ralph/run_parallel_org_agents.mjs --full` exits 0
 - adversarial pytest + frontend_parallel_orgs.mjs green
 
 output exactly:
 <promise>MCP FRONTEND ADVERSARIAL COMPLETE</promise>
 
-Otherwise end normally.
+Otherwise end normally (regression iterations 5–20 may still be pending).
 
 Constraints: one story per iteration; never mark passing without green parallel-org gate; minimal diffs.

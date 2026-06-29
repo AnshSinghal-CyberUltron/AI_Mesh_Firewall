@@ -1,9 +1,9 @@
 ---
-iteration: 4
+iteration: 7
 min_iterations: 20
 max_iterations: 50
 completion_promise: "MCP FRONTEND ADVERSARIAL COMPLETE"
-status: COMPLETE
+status: REGRESSION_MODE
 ---
 
 # MCP Frontend Adversarial Sandbox Isolation — Ralph Loop
@@ -11,6 +11,33 @@ status: COMPLETE
 **Prior campaign:** `prd-mcp-sandbox.json` — 15/15 complete (backend sandbox MVP).
 
 **This campaign:** Rigorous **frontend + adversarial** isolation testing with **2 parallel org agents per iteration**.
+
+## Status (2026-06-29)
+
+| Metric | Value |
+|--------|-------|
+| Feature stories | **21/21** (F0–F20) pass |
+| Regression stories | **R1–R16** (iterations 5–20) — re-run full gate each iter |
+| Min iterations | 20 (feature work done at iter 4; iters 5–20 = regression) |
+| Completion | Valid only when F0–F20 **and** R1–R16 all `passes:true` |
+
+### Regression mode (iterations 5–20)
+
+When all F-stories pass, each remaining iteration re-proves isolation:
+
+```bash
+./scripts/ralph/run_regression_iteration.sh <N>   # N = 5..20
+# or batch:
+for i in $(seq 8 20); do ./scripts/ralph/run_regression_iteration.sh $i; done
+```
+
+Full gate per regression iter:
+1. `node scripts/ralph/run_parallel_org_agents.mjs --full`
+2. `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q`
+3. `BASE_URL=http://127.0.0.1:8180 node tests/e2e/mcp_sandbox_adversarial/frontend_parallel_orgs.mjs`
+4. (iter 20 only) `cd frontend && npm run lint && npm run build`
+
+Logs: `scripts/ralph/regression.log`
 
 ## Requirements
 
@@ -43,6 +70,7 @@ status: COMPLETE
 | Frontend Playwright | F7 |
 | Fix placeholders | F9–F19 |
 | Final gate | F20 |
+| Regression (iters 5–20) | R1–R16 |
 
 ## Quality gates
 
@@ -125,4 +153,25 @@ chmod +x scripts/ralph/ralph-mcp-frontend-adversarial.sh
   `MCP_BROKER_CONTAINER_NAME`.
 - **F20 PASS:** `--full` parallel gate, frontend_parallel_orgs (5 presets sync+call), lint+build green.
 - **Gate:** `node scripts/ralph/run_parallel_org_agents.mjs --full` → workers + leak probe + pytest 4/4.
-- **Stories:** 21/21 passing (F0–F20). Campaign complete.
+- **Stories:** 21/21 passing (F0–F20). **Regression:** R1–R3 pass (iters 5–7); R4–R16 pending (iters 8–20).
+
+### Iteration 5 regression (R1 — complete)
+- Full gate green: `--full` parallel workers + leak probe + pytest leakage 4/4; adversarial pytest 13/13; frontend_parallel_orgs 5 presets sync+call.
+
+### Iteration 6 regression (R2 — complete)
+- Parallel + pytest green; frontend failed attempt 1 (`Everything MCP` tools/call `Adapter error: 'command'` after pytest sandbox teardown); attempt 2 pass after sandbox warmup.
+
+### Iteration 7 regression (R3 — complete)
+- All gates green on first attempt.
+
+### Iteration 5 (regression — R1)
+- **R1 PASS:** full gate green after regression script hardening (pytest prep cooldown, parallel retry).
+- Gates: `--full` parallel workers + leak probe, adversarial pytest 13/13, frontend_parallel_orgs.
+
+### Iteration 6 (regression — R2)
+- **R2 PASS:** parallel + pytest green; frontend flaky on first attempt (`Everything MCP` tools/call 400 `Adapter error: 'command'`), passed on retry.
+- Fix: `prep_for_frontend` + frontend gate retry in `run_regression_iteration.sh`.
+
+### Iteration 7 (regression — R3)
+- **R3 PASS:** all gates green on first attempt.
+- **Regression progress:** 3/16 (R1–R3). Remaining: `for i in $(seq 8 20); do ./scripts/ralph/run_regression_iteration.sh $i; done`

@@ -420,6 +420,24 @@
   F20 final gate green (`--full`, frontend_parallel_orgs, lint+build). Rebuilt mcp-broker container.
   **21/21 stories pass — MCP FRONTEND ADVERSARIAL COMPLETE.**
 
+- 2026-06-29 regression mode: Added R1–R16 stories (iters 5–20) to
+  `prd-mcp-frontend-adversarial.json`; `run_regression_iteration.sh` runs full gate
+  (`--full` parallel org agents → adversarial pytest 13/13 → frontend_parallel_orgs)
+  and logs to `scripts/ralph/regression.log`. CLAUDE + scratchpad updated: completion
+  promise requires F0–F20 AND R1–R16; min 20 iterations enforced via regression passes.
+- 2026-06-29 iter-5 regression (R1): PASS — `--full` 1st attempt, pytest 13/13,
+  frontend_parallel_orgs green (~20 min).
+- 2026-06-29 iter-6 regression (R2): PASS after frontend retry — iter-6 attempt-1
+  failed `tools/call Everything MCP: 400 Adapter error: 'command'` (stale sandbox
+  after pytest teardown); attempt-2 green after `prep_for_frontend` warmup.
+- 2026-06-29 iter-7 regression (R3): PASS — all gates green 1st attempt (~28 min).
+- FIX: `cross_org_leak_probe.mjs` retries HTTP 500 (transient broker under parallel load).
+- FIX: `run_regression_iteration.sh` — docker cooldown before pytest (avoids 11/13
+  failures when pytest broker races parallel-run containers), sandbox warmup before
+  frontend, 2× retry on parallel + frontend gates.
+- Remaining: R4–R16 (iters 8–20). Run:
+  `for i in $(seq 8 20); do ./scripts/ralph/run_regression_iteration.sh $i; done`
+
 - 2026-06-29 regression iters 5–7: Added R1–R16 to `prd-mcp-frontend-adversarial.json` (min-20
   requirement). `run_regression_iteration.sh` runs full gate + logs to `regression.log`. Hardening:
   cross_org_leak_probe retries 500; pytest prep (docker cooldown + rm test broker); parallel/frontend
