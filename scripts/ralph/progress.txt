@@ -53,6 +53,27 @@
   combined run], policy_check_input_scan, stream_governance, context_guard, org_tpm) — none touched by A1,
   none in the SDK harness. They belong to later stories' domains / are test-ordering artifacts; do NOT
   block A1 on them.
+- 2026-06-29 A2-egress-rig PASSES (gate green). Built the pytest leak-hunt suite at
+  gateway/tests/leakhunt/ (NOT repo-root tests/leakhunt — that dir holds the mitmproxy
+  capture_addon.py only). Files: conftest.py (puts ai_mesh_gateway on sys.path since this
+  suite is OUTSIDE the package so the package conftest doesn't load; also adds its own dir
+  for flat `import corpus`/`import recording_provider`), corpus.py (PiiItem dataclass + CORPUS
+  incl. phone formats us_3_3_4/dotted/paren/bare10_contextual/intl_e164/intl_cc_dash + KNOWN
+  LEAK us_5_5_spaced + by-design pass-through bare10_no_cue; `.covered` flag marks what the
+  current redactor neutralizes, KNOWN_LEAKS/REDACTABLE views), recording_provider.py
+  (RecordingProvider monkeypatches litellm.acompletion/aembedding/aresponses — the egress
+  choke point when org_only_inference=True empties the router; serialize_wire=
+  json.dumps(kwargs,default=str); assert_no_pii_egressed(corpus) substring-scans every captured
+  wire; independent_pii_scan oracle uses regexes SEPARATE from patterns.py so a leak isn't
+  missed by the same failing regex; RecordingVectorStore captures at-rest documents+metadata
+  for B5), test_rig_selfcheck.py (proves capture is faithful + the assertion actually RAISES on
+  a real leak — negative control guards a no-op gate), test_repro_g0.py (xfail strict=False).
+  Gate: `cd gateway && ./.venv/bin/python -m pytest tests/leakhunt -q` → 6 passed, 1 xfailed.
+  ROOT CAUSE of G0 (hand to B2): redact_all's phone patterns AND
+  _redact_text_with_backstop's `re.findall(r"\d{7,}")` are BOTH contiguous-digit only, so any
+  separator-split phone format (5+5 spaced "89295 54991") behind a phone cue bypasses both and
+  egresses raw even though the verdict fired. B2 = broaden coverage (context-gated), B1 =
+  byte-verify the no-op-scrub fail-closed. ruff is NOT installed in gateway/.venv (gate skips it).
 
 ## MCP Sandbox Ralph Loop (2026-06-29)
 

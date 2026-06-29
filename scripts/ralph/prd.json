@@ -5,7 +5,9 @@
     {
       "id": "A1-sdk-harness",
       "title": "OpenAI SDK conformance harness (the gate for all SDK stories)",
-      "priority": 0, "passes": true, "dependencies": [],
+      "priority": 0,
+      "passes": true,
+      "dependencies": [],
       "userStory": "As a maintainer I need an executable conformance suite so SDK-compat stories have a real gate.",
       "acceptanceCriteria": [
         "Extend gateway/ai_mesh_gateway/tests/test_openai_sdk_compat.py: REAL app over httpx.ASGITransport driven by the stock `openai` SDK; ONLY the upstream provider stubbed.",
@@ -17,7 +19,9 @@
     {
       "id": "A2-egress-rig",
       "title": "Recording-provider egress-capture rig + PII corpus (the gate for all leak stories)",
-      "priority": 0, "passes": false, "dependencies": [],
+      "priority": 1,
+      "passes": true,
+      "dependencies": [],
       "userStory": "As a maintainer I need to capture exactly what the provider receives so leaks are provable.",
       "acceptanceCriteria": [
         "Create tests/leakhunt/recording_provider.py (fake OpenAI/embedding/vector upstream recording exact request bytes) + assert_no_pii_egressed(corpus).",
@@ -29,7 +33,11 @@
     {
       "id": "B1-attestation-byte-verify",
       "title": "Verdict-scrub honesty invariant on the input/egress path (G0b/G4)",
-      "priority": 1, "passes": false, "dependencies": ["A2-egress-rig"],
+      "priority": 1,
+      "passes": false,
+      "dependencies": [
+        "A2-egress-rig"
+      ],
       "userStory": "As a user I must never have raw PII forwarded while the verdict says redact.",
       "acceptanceCriteria": [
         "When any tier sets action in {redact,mask} OR a caller attests assume_redacted=True, verify the flagged span is actually gone from the outbound bytes; if the scrubber is a no-op, fail closed (stronger scrub or block).",
@@ -40,7 +48,12 @@
     {
       "id": "B2-redactor-coverage",
       "title": "Phone/intl redactor coverage for leaking formats, context-gated (G0)",
-      "priority": 1, "passes": false, "dependencies": ["A2-egress-rig", "B1-attestation-byte-verify"],
+      "priority": 1,
+      "passes": false,
+      "dependencies": [
+        "A2-egress-rig",
+        "B1-attestation-byte-verify"
+      ],
       "userStory": "As a user my phone number is redacted regardless of format, without over-redacting order ids.",
       "acceptanceCriteria": [
         "Extend patterns.py phone handling to catch bare-10-digit, 5+5, +CC formats using context-gating (phone cue or Tier-2 verdict) so order-id/revenue numbers still pass.",
@@ -50,7 +63,13 @@
     {
       "id": "B3-embeddings-scan",
       "title": "Scan + redact /v1/embeddings input (G1)",
-      "priority": 1, "passes": false, "dependencies": ["A1-sdk-harness", "A2-egress-rig", "B1-attestation-byte-verify"],
+      "priority": 1,
+      "passes": false,
+      "dependencies": [
+        "A1-sdk-harness",
+        "A2-egress-rig",
+        "B1-attestation-byte-verify"
+      ],
       "userStory": "As a user, embedding inputs are scanned so raw PII never reaches the embedding provider.",
       "acceptanceCriteria": [
         "Add input scan+redaction to the /v1/embeddings handler at parity with chat; fail-safe on no-op scrub.",
@@ -60,7 +79,11 @@
     {
       "id": "B4-unify-redaction-paths",
       "title": "Unify embedding + simulator/SDK egress redaction (G3/G0c)",
-      "priority": 1, "passes": false, "dependencies": ["B3-embeddings-scan"],
+      "priority": 1,
+      "passes": false,
+      "dependencies": [
+        "B3-embeddings-scan"
+      ],
       "userStory": "As a user, every path applies identical redaction so no path leaks while another redacts.",
       "acceptanceCriteria": [
         "Make /v1/embeddings and the RAG-ingest byok_embedder path share one redaction implementation; make the simulator (bedrock_inference) and SDK (acompletion->_apply_redaction) egress outcomes identical.",
@@ -70,7 +93,12 @@
     {
       "id": "B5-rag-at-rest",
       "title": "RAG redaction default + nothing raw at rest in the vector store (G2)",
-      "priority": 1, "passes": false, "dependencies": ["A2-egress-rig", "B2-redactor-coverage"],
+      "priority": 1,
+      "passes": false,
+      "dependencies": [
+        "A2-egress-rig",
+        "B2-redactor-coverage"
+      ],
       "userStory": "As a user, ingested PII is never stored raw at rest in the vector DB (content or metadata).",
       "acceptanceCriteria": [
         "Flip rag_redaction_enabled to safe-by-default (or force-on by policy for regulated orgs); guarantee nothing raw is embedded/stored.",
@@ -81,7 +109,11 @@
     {
       "id": "C1-error-envelope",
       "title": "Unify error envelope + x-request-id via one /v1 shim (D2/D3)",
-      "priority": 2, "passes": false, "dependencies": ["A1-sdk-harness"],
+      "priority": 0,
+      "passes": false,
+      "dependencies": [
+        "A1-sdk-harness"
+      ],
       "userStory": "As an SDK user, errors carry e.code/e.type/e.param and every response has a request id.",
       "acceptanceCriteria": [
         "Add one choke point (exception handler/middleware on /v1/*) that rewrites flat {error,message,code} bodies via responses_adapters.coerce_chat_error_to_openai and guarantees x-request-id on every response.",
@@ -91,7 +123,11 @@
     {
       "id": "C2-dead-route",
       "title": "Delete dead duplicate /v1/responses handler (D1)",
-      "priority": 2, "passes": false, "dependencies": ["A1-sdk-harness"],
+      "priority": 0,
+      "passes": false,
+      "dependencies": [
+        "A1-sdk-harness"
+      ],
       "userStory": "As a maintainer, only one /v1/responses route exists to avoid confusion.",
       "acceptanceCriteria": [
         "Remove the shadowed second @app.post('/v1/responses') (main.py ~7988); keep the full-featured handler (streaming+store).",
@@ -101,7 +137,12 @@
     {
       "id": "C3-responses-stream",
       "title": "Responses typed-stream event conformance (D5)",
-      "priority": 2, "passes": false, "dependencies": ["A1-sdk-harness", "C2-dead-route"],
+      "priority": 0,
+      "passes": false,
+      "dependencies": [
+        "A1-sdk-harness",
+        "C2-dead-route"
+      ],
       "userStory": "As an SDK user, responses.create(stream=True) yields correct typed events.",
       "acceptanceCriteria": [
         "_translate_chat_stream_to_responses emits response.created -> output_item.added -> content_part.added -> output_text.delta... -> output_text.done -> output_item.done -> response.completed (response.failed on guard block), framed event:/data:.",
@@ -111,7 +152,12 @@
     {
       "id": "C4-thin-endpoints",
       "title": "Add models/{id}, completions, moderations; 404 images/audio (D4)",
-      "priority": 2, "passes": false, "dependencies": ["A1-sdk-harness", "C1-error-envelope"],
+      "priority": 0,
+      "passes": false,
+      "dependencies": [
+        "A1-sdk-harness",
+        "C1-error-envelope"
+      ],
       "userStory": "As an SDK user, common endpoints resolve and unsupported ones 404 cleanly.",
       "acceptanceCriteria": [
         "GET /v1/models/{model}; POST /v1/completions (prompt->messages through the SAME firewall, return text_completion); POST /v1/moderations (wire existing detectors to the OpenAI moderation schema); 404+nested-envelope for /v1/images and /v1/audio.",
@@ -121,7 +167,9 @@
     {
       "id": "D1-ui-auth-keys",
       "title": "Verify auth flows + GatewayKeyPanel in browser",
-      "priority": 3, "passes": false, "dependencies": [],
+      "priority": 3,
+      "passes": false,
+      "dependencies": [],
       "userStory": "As a user, login/logout/session and API-key create/rotate/copy/revoke work and never expose the secret.",
       "acceptanceCriteria": [
         "Verify in browser using dev-browser skill: login (valid/invalid/empty), OAuth callback, logout, inactivity modal; GatewayKeyPanel create/rotate/copy/revoke shows only a 'Key Set' badge.",
@@ -131,7 +179,9 @@
     {
       "id": "D2-ui-model-routing",
       "title": "Verify model/routing/kill-switch panels in browser (1.5/1.6)",
-      "priority": 3, "passes": false, "dependencies": [],
+      "priority": 3,
+      "passes": false,
+      "dependencies": [],
       "userStory": "As a user, I can connect/route models and disable/isolate/reroute, and the UI reflects state.",
       "acceptanceCriteria": [
         "Verify in browser using dev-browser skill: ModelConnection/Governance, RoutingGovernance/Audit, KillSwitch/ModelState — click every control, assert state badges and results.",
@@ -141,7 +191,9 @@
     {
       "id": "D3-ui-rag-vector",
       "title": "Verify RAG/Vector + DatabaseConnection panels in browser (1.2/1.3)",
-      "priority": 3, "passes": false, "dependencies": [],
+      "priority": 3,
+      "passes": false,
+      "dependencies": [],
       "userStory": "As a user, I can connect a vector store, manage collections/namespaces, and run RAG feature tests.",
       "acceptanceCriteria": [
         "Verify in browser using dev-browser skill: DatabaseConnection status, VectorPolicy, collection manager, RAGFeatureTest/AttackTrust/PipelineTelemetry.",
@@ -151,7 +203,9 @@
     {
       "id": "D4-ui-mcp",
       "title": "Verify MCP panels in browser (1.4)",
-      "priority": 3, "passes": false, "dependencies": [],
+      "priority": 3,
+      "passes": false,
+      "dependencies": [],
       "userStory": "As a user, I can manage MCP connectors and run scans, with results shown correctly.",
       "acceptanceCriteria": [
         "Verify in browser using dev-browser skill: MCPConnector/Manager/Scanner/ScanControlMatrix — click every control, assert results.",
@@ -161,7 +215,9 @@
     {
       "id": "D5-ui-output-logs",
       "title": "Verify output-guardrail panels + LogViewer in browser (1.7), incl. UI honesty",
-      "priority": 3, "passes": false, "dependencies": [],
+      "priority": 3,
+      "passes": false,
+      "dependencies": [],
       "userStory": "As a user, output-guardrail controls work and the Log viewer never renders raw secrets it shouldn't.",
       "acceptanceCriteria": [
         "Verify in browser using dev-browser skill: OutputGovernance/Controls/Charts/Engine/Timeline; LogViewer/LogDetail filters + drill-down; assert no raw secret/PII is displayed where it shouldn't be, and dashboard counts match enforced reality.",
@@ -171,7 +227,9 @@
     {
       "id": "D6-ui-demo-simulators",
       "title": "Verify how-to + live simulators run end-to-end in browser (demo app)",
-      "priority": 3, "passes": false, "dependencies": [],
+      "priority": 3,
+      "passes": false,
+      "dependencies": [],
       "userStory": "As a new customer, the how-to is correct and every simulator runs to a clear, honest result.",
       "acceptanceCriteria": [
         "Verify in browser using dev-browser skill: HowToUse (snippets copyable+correct, instructions match real UI); AttackSimulator, RAGAttackTrust, IsolationOps, BedrockTest run e2e and show correct allow/block/redact verdicts; honest result display (claimed redaction reflected on screen).",
