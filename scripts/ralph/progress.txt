@@ -805,3 +805,28 @@
   Gate: leakhunt 101 passed/1 skipped (was 93); broader -k pii/redact/scan suite 314
   passed, the 2 test_policy_check_input_scan tier1_injection failures are PRE-EXISTING
   (fail on clean stashed tree + in isolation — injection domain, not phones). commit 7f53d41c.
+- rigor-verified: B3-embeddings-scan 2026-06-29 — adversarially re-proved the
+  /v1/embeddings input scan+redact via the FULL HTTP handler (proxy_embeddings),
+  not just the _scan_redact_embedding_inputs helper. Built a standalone harness
+  that mounts the REAL gateway app behind httpx.ASGITransport and drives the STOCK
+  openai AsyncOpenAI SDK (client.embeddings.create) with a 6-format PII battery
+  (email, ssn, separated phone, +CC intl-5+5 "+91 98765 43210", sk-proj API key,
+  spaced credit-card), wrapping LLM_ROUTER.aembedding to CAPTURE the exact body
+  forwarded upstream (egress = truth). RESULT: every format neutralized on the
+  captured wire — email→j***@e***.com, ssn→***-**-6789, phone→***-***-0142, intl
+  5+5→***-***-3210 (the B2 phone_intl widening is honored TRANSITIVELY through the
+  shared _redact_text_with_backstop egress redactor), api_key→sk-****5pqr,
+  card→****-****-****-1111 — raw_leaked:false for ALL, and the stock SDK parsed a
+  valid CreateEmbeddingResponse (parsed_ok) in every case. INDEPENDENT ORACLE
+  (mcp__ruflo__aidefence_has_pii, regexes SEPARATE from patterns.py under test):
+  redacted egress concatenation → hasPII:false (true negative); raw inputs →
+  hasPII:true (positive control). GOTCHA (recorded so future iterations don't
+  false-fail): proxy_embeddings fails CLOSED with 503 {code:kill_switch_active,
+  "Kill-switch enforcement unavailable."} when REDIS_CLIENT is None UNLESS
+  org_config has kill_switch_enabled:False — mirror the SDK harness TEST_CONFIG
+  (kill_switch_enabled/threat_intel_enabled/routing_enabled all False, tier2 off)
+  for a stateless in-process embeddings drive. Gates green (no source change
+  needed — implementation already correct): tests/leakhunt 101 passed/1 skipped,
+  test_embedding_input_redaction.py 10 passed, SDK harness embeddings cells 2
+  passed. B3 covers email/ssn/phone/api_key/card scan+redact + fail-closed
+  (G4 byte-verify, _UnmaskableScanner cell) + batch-each + scan-disabled honesty.
