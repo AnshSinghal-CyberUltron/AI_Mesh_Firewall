@@ -579,6 +579,25 @@
   ALL D1-D6 UI stories pass. Every prd.json story now passes:true.
 
 ## Rigor round 2026-06-29
+- rigor-verified: C2-dead-route 2026-06-29 — re-proved exactly one POST /v1/responses, AND
+  closed the gap the literal-path introspection test can't see. The existing
+  test_only_one_post_v1_responses_route counts routes whose `path == "/v1/responses"`, but
+  Starlette resolves FIRST-MATCH-WINS, so an EARLIER param/regex route (e.g. /v1/{rest:path})
+  could intercept POST /v1/responses even with one literal route. Drove a real route-resolution
+  probe (Match.FULL over app.router.routes in registration order): exactly ONE FULL match →
+  `proxy_responses`, no shadowing route. Confirmed the SURVIVING handler (main.py:8382) is the
+  FULL-featured one: streaming via _translate_chat_stream_to_responses, store via _ResponseStore
+  + raw_body.get("store"), previous_response_id replay — all present in source AND exercised by
+  passing harness cells (test_responses_streaming_events_and_text,
+  test_responses_store_retrieve_delete_roundtrip, test_responses_previous_response_id_replay,
+  test_responses_typed_stream_sequence_D5). Added DURABLE cell
+  test_v1_responses_first_match_wins_is_full_handler (asserts full==["proxy_responses"]) so the
+  dead duplicate can never be resurrected by route ORDERING, not just by re-registration. Gate:
+  `env -u PYTHONPATH ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q`
+  → 40 passed, 2 xpassed (was 39/2; +1 new cell). NO real gap; C2 stays passes:true.
+  PATTERN (add to first-match-wins note): a route-count test is necessary but NOT sufficient —
+  to prove a Starlette route isn't shadowed, probe r.matches({method,path}) over routes in order
+  and assert the resolved endpoint name, not just the literal path count.
 - rigor-verified: C1-error-envelope 2026-06-29 — re-proved the single /v1 choke point
   (_openai_compat_shim main.py:254 + StarletteHTTPException handler :198 + outer
   _unhandled_handler :170) as a UNIVERSAL invariant, not just the block path. Added 5 durable
