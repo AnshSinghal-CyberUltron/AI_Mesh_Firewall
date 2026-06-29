@@ -24,12 +24,14 @@ ultrathink. Work fully autonomously — never ask for confirmation (you run head
   scrubber is a no-op on a flagged span, fail closed.
 
 ## Step 3 — Run the REAL quality gate for that story (this repo's commands)
-Backend stories:
-  cd gateway && python -m pytest ai_mesh_gateway/tests -q
+Backend stories (USE THE GATEWAY VENV — plain `python` lacks the deps and will false-fail):
+  cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q
   # plus the story's specific suite, e.g.:
-  #   python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q     (SDK stories)
-  #   python -m pytest tests/leakhunt -q                                       (leak stories)
-  ruff check gateway/ai_mesh_gateway || true
+  #   ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q   (SDK stories)
+  #   ./.venv/bin/python -m pytest tests/leakhunt -q   (leak stories — BUILD the A2 suite under
+  #       gateway/tests/leakhunt so this gate path resolves; repo-root tests/leakhunt/capture_addon.py
+  #       is a separate mitmproxy addon, NOT this pytest suite)
+  ./.venv/bin/ruff check ai_mesh_gateway 2>/dev/null || ruff check ai_mesh_gateway || true
 Frontend stories:
   cd frontend && npm run lint && npm run build
   # UI behavior: "Verify in browser using the dev-browser skill" against the running Vite app —
@@ -51,7 +53,7 @@ Frontend stories:
   mcp__ruflo__neural_train(<trajectory>).
 
 ## Step 6 — Completion check
-- If EVERY story in prd.json now has passes:true, output exactly: <promise>COMPLETE</promise>
+- If EVERY story in prd.json now has passes:true, output exactly: <promise>COMPLETE and tested from frontend and backend</promise>
 - Otherwise, end normally (the loop spawns the next fresh iteration).
 
 Constraints: one story per iteration; never break a passing gate (CI must stay green — broken code
