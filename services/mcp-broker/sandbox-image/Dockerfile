@@ -22,12 +22,19 @@ RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && mkdir -p /data/mcp-auth /tmp/mcp-orgs
 
+# Shared stdio denylist/OAuth heuristics (gateway parity).
+COPY shared/ai_mesh_shared/mcp_stdio_common.py /opt/shared/ai_mesh_shared/mcp_stdio_common.py
+RUN mkdir -p /opt/shared/ai_mesh_shared \
+    && printf '%s\n' '"""Sandbox subset of ai_mesh_shared (stdio common only)."""' \
+        > /opt/shared/ai_mesh_shared/__init__.py
+ENV PYTHONPATH="/opt/shared:${PYTHONPATH}"
+
 # Sandbox-agent (in-container stdio MCP process manager).
 COPY services/mcp-broker/sandbox-image/pyproject.toml ./pyproject.toml
 COPY services/mcp-broker/sandbox-image/agent/ ./agent/
 RUN uv sync --no-dev \
     && useradd --create-home --shell /usr/sbin/nologin sandbox \
-    && chown -R sandbox:sandbox /opt/agent /data/mcp-auth /tmp/mcp-orgs
+    && chown -R sandbox:sandbox /opt/agent /opt/shared /data/mcp-auth /tmp/mcp-orgs
 
 USER sandbox
 

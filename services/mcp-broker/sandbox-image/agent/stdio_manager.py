@@ -15,6 +15,12 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
+from ai_mesh_shared.mcp_stdio_common import (
+    _args_have_oauth_header,
+    _build_child_env,
+    _looks_like_oauth_prompt,
+)
+
 LOG = logging.getLogger("sandbox_agent.stdio")
 
 ORG_SLUG = os.environ.get("ORG_SLUG", "default")
@@ -28,51 +34,12 @@ _HUNG_INIT_TIMEOUT = float(os.environ.get("MCP_STDIO_HUNG_INIT_TIMEOUT", "180"))
 _MAX_PROCESSES_PER_ORG = int(os.environ.get("MCP_STDIO_MAX_PROCESSES_PER_ORG", "8"))
 _MAX_CONCURRENT_INITS = int(os.environ.get("MCP_STDIO_MAX_CONCURRENT_INITS", "4"))
 
-_OAUTH_HINT_SUBSTRINGS = (
-    "please visit", "open the following url", "open this url",
-    "authorize this app", "authorization required", "to authenticate",
-    "log in to your", "visit the following", "press any key to open",
-    "waiting for authentication", "sign in to continue",
-    "please authorize", "by visiting", "authentication required",
-    "waiting for authorization", "browser opened automatically",
-    "oauth callback server running",
-)
-_MCP_REMOTE_HEADLESS_OAUTH_INFO = (
-    "discovering oauth server configuration",
-    "discovered authorization server",
-    "using custom headers",
-    "connecting to remote server",
-    "connected to remote server",
-    "proxy established successfully",
-    "local stdio server running",
-    "using transport strategy",
-    "using automatically selected callback port",
-    "press ctrl+c to exit",
-)
-
 _ALLOWED_COMMANDS = {
     c.strip().lower()
     for c in os.environ.get(
         "MCP_STDIO_ALLOWED_COMMANDS", "npx,node,python,python3,uvx,uv"
     ).split(",")
     if c.strip()
-}
-
-_SECRET_ENV_DENYLIST = {
-    "GATEWAY_INTERNAL_API_KEY", "AGENT_API_KEY",
-    "BACKEND_URL", "AIGUARDX_BACKEND_URL", "AI_MESH_CONTROL_URL",
-    "MCP_FIREWALL_URL", "SECURE_MCP_GATEWAY_URL",
-    "SECRET_KEY", "DJANGO_SECRET_KEY", "FIELD_ENCRYPTION_KEY",
-    "DATABASE_URL", "REDIS_URL", "POSTGRES_PASSWORD",
-    "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
-    "PYTHONPATH",
-}
-
-_SAFE_ENV_PASSTHROUGH = {
-    "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR",
-    "NODE_PATH", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR",
-    "NPM_CONFIG_CACHE", "NPM_CONFIG_PREFIX",
-    "UV_CACHE_DIR", "UV_PYTHON_INSTALL_DIR", "XDG_CACHE_HOME",
 }
 
 _init_semaphore: asyncio.Semaphore | None = None
@@ -83,42 +50,6 @@ _reaper_task: asyncio.Task | None = None
 
 def _command_basename(command: str) -> str:
     return os.path.basename(command).lower()
-
-
-def _args_have_oauth_header(args: list[str]) -> bool:
-    for idx, arg in enumerate(args):
-        if arg == "--header" and idx + 1 < len(args):
-            if args[idx + 1].lower().startswith("authorization:"):
-                return True
-    return False
-
-
-def _looks_like_oauth_prompt(text: str, *, oauth_header_injected: bool = False) -> bool:
-    t = text.lower()
-    if oauth_header_injected and any(info in t for info in _MCP_REMOTE_HEADLESS_OAUTH_INFO):
-        return False
-    if not any(h in t for h in _OAUTH_HINT_SUBSTRINGS):
-        return False
-    return ("http://" in t or "https://" in t
-            or "authenticat" in t or "authoriz" in t)
-
-
-def _build_child_env(env: dict[str, str] | None, org_slug: str) -> dict[str, str]:
-    child: dict[str, str] = {
-        k: os.environ[k] for k in _SAFE_ENV_PASSTHROUGH if k in os.environ
-    }
-    for k, v in (env or {}).items():
-        if k in _SECRET_ENV_DENYLIST:
-            LOG.warning("Refusing to pass denylisted env var %s to stdio child", k)
-            continue
-        child[k] = v
-    for dangerous in ("LD_PRELOAD", "DYLD_INSERT_LIBRARIES"):
-        child.pop(dangerous, None)
-    for secret in _SECRET_ENV_DENYLIST:
-        child.pop(secret, None)
-    config_dir = os.environ.get("MCP_REMOTE_CONFIG_DIR", f"/tmp/mcp-orgs/{org_slug}/mcp-auth")
-    child["MCP_REMOTE_CONFIG_DIR"] = config_dir
-    return child
 
 
 def _get_init_semaphore() -> asyncio.Semaphore:
@@ -309,7 +240,12 @@ async def _ensure_process(
                 "connection and retry."
             )
 
-        proc_env = _build_child_env(requested_env, ORG_SLUG)
+        proc_env = _build_child_env(
+            requested_env,
+            ORG_SLUG,
+            remote_config_dir=os.environ.get("MCP_REMOTE_CONFIG_DIR"),
+            log=LOG,
+        )
 
         LOG.info("Starting stdio MCP process: %s %s (key=%s)", command, args, key)
         try:
