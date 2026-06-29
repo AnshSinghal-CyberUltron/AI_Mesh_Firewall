@@ -168,7 +168,7 @@
       "id": "D1-ui-auth-keys",
       "title": "Verify auth flows + GatewayKeyPanel in browser",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": [],
       "userStory": "As a user, login/logout/session and API-key create/rotate/copy/revoke work and never expose the secret.",
       "acceptanceCriteria": [

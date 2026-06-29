@@ -1,0 +1,118 @@
+{
+  "base": "http://127.0.0.1:8180",
+  "ok": true,
+  "steps": [
+    "login-empty-blocked",
+    "login-invalid-error-shown",
+    "login-valid",
+    "oauth-callback-params-preserved",
+    "key-created",
+    "key-copied",
+    "key-secret-not-reexposed",
+    "key-revoked",
+    "inactivity-modal-verified",
+    "logout"
+  ],
+  "asserts": [
+    {
+      "label": "empty submit stays on /login",
+      "pass": true,
+      "phase": "login-empty"
+    },
+    {
+      "label": "empty email is :invalid (required)",
+      "pass": true,
+      "phase": "login-empty"
+    },
+    {
+      "label": "invalid creds -> 401 (got 401)",
+      "pass": true,
+      "phase": "login-invalid"
+    },
+    {
+      "label": "valid creds -> 2xx (got 200)",
+      "pass": true,
+      "phase": "login-valid"
+    },
+    {
+      "label": "auth_access token stored after login",
+      "pass": true,
+      "phase": "login-valid"
+    },
+    {
+      "label": "oauth callback preserves ?code & ?state (no wildcard redirect)",
+      "pass": true,
+      "phase": "oauth-callback"
+    },
+    {
+      "label": "create key -> 2xx (got 201)",
+      "pass": true,
+      "phase": "keys-create"
+    },
+    {
+      "label": "create response returns a full secret key once",
+      "pass": true,
+      "phase": "keys-create"
+    },
+    {
+      "label": "full secret shown ONCE in the create modal",
+      "pass": true,
+      "phase": "keys-create"
+    },
+    {
+      "label": "copy button copies the exact secret to clipboard",
+      "pass": true,
+      "phase": "keys-copy"
+    },
+    {
+      "label": "new key row shows Active badge",
+      "pass": true,
+      "phase": "keys-honesty"
+    },
+    {
+      "label": "full secret is NOT present anywhere in the listing DOM (honesty invariant)",
+      "pass": true,
+      "phase": "keys-honesty"
+    },
+    {
+      "label": "listing shows only the key prefix",
+      "pass": true,
+      "phase": "keys-honesty"
+    },
+    {
+      "label": "revoke -> 2xx/204 (got 204)",
+      "pass": true,
+      "phase": "keys-revoke"
+    },
+    {
+      "label": "revoked key removed from listing (immediately stops working)",
+      "pass": true,
+      "phase": "keys-revoke"
+    },
+    {
+      "label": "inactivity warning modal 'Session expiring' appears after ~14m idle",
+      "pass": true,
+      "phase": "inactivity-modal"
+    },
+    {
+      "label": "Stay logged in keeps session (token retained, modal dismissed)",
+      "pass": true,
+      "phase": "inactivity-modal"
+    },
+    {
+      "label": "logout clears auth_access token + returns to /login",
+      "pass": true,
+      "phase": "logout"
+    },
+    {
+      "label": "no uncaught JS errors (found 0)",
+      "pass": true,
+      "phase": "final"
+    }
+  ],
+  "pageErrors": [],
+  "notes": [
+    "Rotation in this panel = revoke + create (no dedicated rotate control/endpoint in GatewayKeyPanel); both primitives verified. Revoke = DELETE hard-removal (row leaves listing); a soft 'Revoked' badge is shown only for retained-but-inactive keys (e.g. expired)."
+  ],
+  "error": null
+}
