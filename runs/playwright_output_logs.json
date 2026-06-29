@@ -1,0 +1,170 @@
+{
+  "base": "http://127.0.0.1:8180",
+  "ok": true,
+  "steps": [
+    "login",
+    "generate",
+    "1.7-render",
+    "controls-roundtrip",
+    "governance-honesty",
+    "charts",
+    "logviewer"
+  ],
+  "asserts": [
+    {
+      "label": "valid creds -> 2xx (got 200)",
+      "pass": true,
+      "phase": "login"
+    },
+    {
+      "label": "live firewall response is redacted (no raw phone/email in returned content)",
+      "pass": true,
+      "phase": "generate"
+    },
+    {
+      "label": "GET firewall config -> 2xx (200)",
+      "pass": true,
+      "phase": "1.7-render"
+    },
+    {
+      "label": "1.7 renders Controls + Engine + Analytics + Governance panels",
+      "pass": true,
+      "phase": "1.7-render"
+    },
+    {
+      "label": "read current firewall config",
+      "pass": true,
+      "phase": "controls-roundtrip"
+    },
+    {
+      "label": "Save guardrails PUT -> 2xx (200)",
+      "pass": true,
+      "phase": "controls-roundtrip"
+    },
+    {
+      "label": "backend incident-logging flipped (false -> true)",
+      "pass": true,
+      "phase": "controls-roundtrip"
+    },
+    {
+      "label": "backend output_ip_leakage_action == \"flag\"",
+      "pass": true,
+      "phase": "controls-roundtrip"
+    },
+    {
+      "label": "restore PUT -> 2xx (200)",
+      "pass": true,
+      "phase": "controls-roundtrip"
+    },
+    {
+      "label": "backend incident-logging restored",
+      "pass": true,
+      "phase": "controls-roundtrip"
+    },
+    {
+      "label": "backend ip-leakage action restored",
+      "pass": true,
+      "phase": "controls-roundtrip"
+    },
+    {
+      "label": "governance \"blocked\" chip (8) == backend (8)",
+      "pass": true,
+      "phase": "governance-honesty"
+    },
+    {
+      "label": "governance \"redacted\" chip (9) == backend (9)",
+      "pass": true,
+      "phase": "governance-honesty"
+    },
+    {
+      "label": "governance \"flagged\" chip (1) == backend (1)",
+      "pass": true,
+      "phase": "governance-honesty"
+    },
+    {
+      "label": "redact event expands to the step-by-step output pipeline timeline",
+      "pass": true,
+      "phase": "governance-honesty"
+    },
+    {
+      "label": "governance timeline shows masking (***) for the redaction",
+      "pass": true,
+      "phase": "governance-honesty"
+    },
+    {
+      "label": "governance timeline does NOT show the raw email",
+      "pass": true,
+      "phase": "governance-honesty"
+    },
+    {
+      "label": "governance timeline does NOT show an unmasked phone number",
+      "pass": true,
+      "phase": "governance-honesty"
+    },
+    {
+      "label": "Output Guardrail Analytics renders a chart (recharts svg)",
+      "pass": true,
+      "phase": "charts"
+    },
+    {
+      "label": "\"Detailed Records (6)\" == backend 24h security_scan feed (6)",
+      "pass": true,
+      "phase": "logviewer"
+    },
+    {
+      "label": "Export CSV control present",
+      "pass": true,
+      "phase": "logviewer"
+    },
+    {
+      "label": "Redacted filter shows at least one row",
+      "pass": true,
+      "phase": "logviewer"
+    },
+    {
+      "label": "every filtered row Action == redact (saw [\"redact\"])",
+      "pass": true,
+      "phase": "logviewer"
+    },
+    {
+      "label": "row drill-down opens the LogDetail Scan Detail Report with a Request ID",
+      "pass": true,
+      "phase": "logviewer"
+    },
+    {
+      "label": "LogDetail does NOT render the raw phone we submitted",
+      "pass": true,
+      "phase": "logviewer"
+    },
+    {
+      "label": "LogDetail does NOT render the raw email we submitted",
+      "pass": true,
+      "phase": "logviewer"
+    },
+    {
+      "label": "LogDetail does NOT render a raw secret/credential token",
+      "pass": true,
+      "phase": "logviewer"
+    },
+    {
+      "label": "LogDetail shows the masked (***) redacted form",
+      "pass": true,
+      "phase": "logviewer"
+    },
+    {
+      "label": "no uncaught pageerror (saw 0)",
+      "pass": true,
+      "phase": "pageerrors"
+    }
+  ],
+  "pageErrors": [],
+  "notes": [
+    "generation: action=redact content=\"Reach Alex at phone ***-***-5309 or email a***@a***.com.\" err=null",
+    "backend output events (7d): 18 (block=8 redact=9 flag=1)",
+    "24h security_scan rows: 6"
+  ],
+  "error": null,
+  "generatedAction": "redact",
+  "governanceText": "Output Governance Log\n\nReal-time output-governance evidence — prompt, raw output, detected risks, action, final output\n\n8 blocked\n9 redacted\n1 flagged\nAll\n18\nBlock\n8\nRedact\n9\nFlag\n1\nAllow\n0\nRedacted\nPii\n85%\n10:37:57 AM\ne14-llama\nPROMPT\n[user]: Write a short 2-line fictional voicemail greeting for Alex Rivera. Include a 10-digit callback phone number and …\nOUTPUT\nYou've reached Alex Rivera. I'm currently unavailable, but please leave a message or contact me at ***-***-7890 or a***@…\nREASON\nPII/secret detected in output: email, phone_us — email=a***@e***.com, phone_us=***-***-7890\nemail\nphone_us\nINGESTION PIPELINE — STEP-BY-STEP\n1. USER INPUT\n[user]: Write a short 2-line fictional voicemail greeting for Alex Rivera. Include a 10-digit callback phone number and a contact email address.\n2. RAW MODEL OUTPUT\nYou've reached Alex Rivera. I'm currently unavailable, but please leave a message or contact me at ***-***-7890 or a***@e***.com.\nModel: e14-llama\nNote: First 500 chars shown; detection ran on full output\n3. GUARDRAIL EVALUATION\nDetected: pii (confidence: 85%)\nCategory: pii\nConfidence: 85%\nemail\nphone_us\nemail: a***@e***.com\nphone_us: ***-***-7890\n4. GUARDRAIL REASONING\nPII/secret detected in output: email, phone_us — email=a***@e***.com, phone_us=***-***-7890\n5. GUARDRAIL ACTION\nREDACTED\nREDACTED — Action applied; visible snippet unchanged (see matched spans above or content beyond 500 chars)\nProcessing: 2535ms\nCompliance: GDPR, PII\n6. FINAL OUTPUT TO USER\nYou've reached Alex Rivera. I'm currently unavailable, but please leave a message or contact me at ***-***-7890 or a***@e***.com.\nRedacted\nPii\n85%\n10:37:55 AM\ne14-gemini\nPROMPT\n[user]: Write a short 2-line fictional voicemail greeting for Alex Rivera. Include a 10-digit callback phone number and …\nOUTPUT\n\"Hi, you've reached Alex Rivera! Please leave a message, and I'll get back to you shortly. For urgent matters, you can c…\nREASON\nPII/secret detected in output: email, phone_us — email=a***@e***.com, phone_us=***-***-4567\nemail\nphone_us\nRedacted\nPii\n85%\n10:37:51 AM\ne14-gpt4o\nPROMPT\n[user]: Write a short 2-line fictional voicemail greeting for Alex Rivera. Include a 10-digit callback phone number and …\nOUTPUT\nHello, you've reached Alex Rivera! Please leave a message, and I'll get back to you soon. You can also reach me at ***-*…\nREASON\nPII/secret detected in output: email, phone_us — email=a***@e***.com, phone_us=***-***-4567\nemail\nphone_us\nRedacted\nPii\n85%\n10:36:59 AM\ngpt4o-mini\nPROMPT\n[user]: Write a short 2-line fictional voicemail greeting for Alex Rivera. Include a 10-digit callback phone number and …\nOUTPUT\n\"Hi, you've reached Alex Rivera. Please leave a message or reach me at 555-0192 or a***@e***.com!\"\nREASON\nPII/secret detected in output: email — email=a***@e***.com\nemail\nRedacted\nPii\n85%\n10:35:30 AM\ngpt4o-mini\nPROMPT\n[user]: Write a short 2-line fictional voicemail greeting for Alex Rivera. Include a 10-digit callback phone number and …\nOUTPUT\n\"Hi, you've reached Alex Rivera. Please leave your message at ***-***-4567 or email me at a***@e***.com. Thanks!\"\nREASON\nPII/secret detected in output: email, phone_us — email=a***@e***.com, phone_us=***-***-4567\nemail\nphone_us\nRedacted\nPii\n0%\n10:13:14 AM\ngpt4o-mini\nREASON\nPII/secret detected in output: email — email=i***@e***.com\nRedacted\nPii\n85%\n10:11:41 AM\ngpt4o-mini\nPROMPT\n[user]: Write a short 2-line fictional voicemail greeting for Alex Rivera with a callback phone number and a contact ema…\nOUTPUT\n\"Hi, you've reached Alex Rivera! Please leave a message at the beep, or reach me at ***-***-4567 or a***@e***.com. Thank…\nREASON\nPII/secret detected in output: email, phone_us — email=a***@e***.com, phone_us=***-***-4567\nemail\nphone_us\nRedacted\nCredential\n95%\n10:08:44 AM\ngpt4o-mini\nPROMPT\n[user]: Write a minimal example .env file for a Node app with three variables: PORT, DATABASE_PASSWORD, and API_TOKEN. U…\nOUTPUT\nHere's a minimal example of a `.env` file for a Node.js application with the specified variables: ```plaintext # .en",
+  "logDetailText": "ZeroShield\n\nAI Security Platform\n\nPRODUCT\nAI Mesh Firewall\nAI Gateway & Traffic Ingress\nPolicy Management\nRAG & Vector DB Firewall\nContext Assembly & MCP\nMulti-Model Governance\nModel Isolation & Kill-Switch\nOutput Guardrails\nInputs\nSystem Status\n\nAll systems operational\n\nProtected\n\nadmin@zeroshield.io\n\nadmin@zeroshield.io\n\nOUTPUT GUARDRAILS\nDEV\nConnected\nScan Model\n\nadmin@zeroshield.io\n\nadmin@zeroshield.io\n\nBack to Activity Preview\nScan Detail Report\nredact\nScan ID: 12553\n6/29/2026, 11:49:37 AM\nDuration: 25240.17ms\nRequest ID: zs-9d07ee1291b6\nLoading full trace…\nCopy\nShare\nExport\nREDACT\nOverall Status\n25240.17ms\nTotal Duration\n75/100\nSecurity Score\nMEDIUM\nThreat Level\nRequest Latency\nEvent\n0\n6500\n13000\n19500\n26000\nPipeline Stages (9)\nALLOW\nAuth\n20.1ms latency\nHover for details\nALLOW\nRate Limit\n1ms latency\nHover for details\nREDACT\nPolicy\n2572.7ms latency\nHover for details\nFLAG\nInput Scan\n5657.7ms latency\nHover for details\nALLOW\nKill Switch\n<1ms latency\nHover for details\nREROUTE\nModel Routing\n<1ms latency\nHover for details\nALLOW\nModel Input\n<1ms latency\nHover for details\nALLOW\nModel Output\n8829.1ms latency\nHover for details\nALLOW\nOutput Guardrail\n<1ms latency\nHover for details\nTip: Hover a stage for instant detail, click to pin details while comparing stages.\nInput / Output\nINPUT (PROMPT)\nCopy\n[user]: Repeat this contact card back to me exactly: Reach Alex at phone ***-***-5309 or email a***@a***.com.\nOUTPUT (RESPONSE)\nCopy\nReach Alex at phone ***-***-5309 or email a***@a***.com.\nRequest Details\nRequest ID\tzs-9d07ee1291b6\nScan (row) ID\t12553\nTimestamp\t6/29/2026, 11:49:37 AM\nMethod\tPOST\nEndpoint\t/v1/chat/completions\nSource IP\t172.19.0.8\nUser Agent\t--\nModel\thaiku-cheap\nStatus Code\t200\nResponse Details\nSecurity Analysis\nMetadata & Context\n6500"
+}

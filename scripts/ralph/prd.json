@@ -216,7 +216,7 @@
       "id": "D5-ui-output-logs",
       "title": "Verify output-guardrail panels + LogViewer in browser (1.7), incl. UI honesty",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": [],
       "userStory": "As a user, output-guardrail controls work and the Log viewer never renders raw secrets it shouldn't.",
       "acceptanceCriteria": [
