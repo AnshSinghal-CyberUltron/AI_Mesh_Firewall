@@ -942,3 +942,31 @@
   MCP before treating it as a product defect. The honesty oracle for D2 is the live GET
   /api/kill-switches/ + PUT-response config echo — the badge/toggle label is valid ONLY if it equals
   that backend truth.
+- rigor-verified: D3-ui-rag-vector 2026-06-29 — re-proved the RAG/Vector + DatabaseConnection UI
+  (modules 1.2/1.3) for REAL against the live stack (Vite :8180 -> control :8100 + gateway :8300)
+  via the durable customer-POV gate scripts/playwright_rag_vector.mjs. Build gate green
+  (cd frontend && npm run build, exit 0, 12.8s). Browser run: 14/14 asserts, 0 pageErrors,
+  screenshots runs/d3/. EVERY criterion proven from the DOM + REAL API responses: 1.3 renders
+  Vector Database Connection + Collection Manager + RAG Feature Test Suite + RAG attack/trust +
+  pipeline telemetry; Collection Manager reaches LOADED state ("Existing Collections (N)") with NO
+  "Gateway unreachable" banner; 1.2 Vector section renders the Vector DB Policies panel with >=1
+  row matching the backend /api/vector-policies/ count. ADVERSARIAL BACKEND PROOF of the D3
+  root-cause fix (the substance of the story = multi-provider fan-out timeout, not just panel
+  render): timed GET /api/admin/gateway/rag/collections/ directly -> HTTP 200, status="ok",
+  TIME=4.79s — comfortably under the control admin-proxy's 10s read budget — and the org3
+  e2e-fixture pinecone provider pointing at example.com (the permanent dead-provider landmine)
+  DEGRADES to 0 collections instead of blocking. 4.79s ≈ the RAG_LIST_COLLECTIONS_TIMEOUT (4s)
+  bound + overhead, i.e. ~= slowest single bounded call (asyncio.gather + asyncio.wait_for in
+  rag_collections.py:175/192), vs the documented pre-fix sequential ~18s that exceeded the proxy
+  budget and showed "gateway_unreachable" for EVERY provider. CONFIRMED the fix is present in BOTH
+  source (rag_collections.py) AND the running gateway container (docker exec grep -c
+  RAG_LIST_COLLECTIONS_TIMEOUT == 1). DOCUMENTED ENV INFRA ITEM (NOT a D3 code gap, already
+  FLAGGED in the original D3 note): collection CREATE on chroma 500s (chromadb python-client vs
+  chromadb-server VERSION MISMATCH, KeyError('_type')); the gate takes the error branch and proves
+  UI HONESTY — "Create failed" shown, NO phantom "created" success banner, and the failed create
+  does NOT leak a collection into the backend listing. NO source change needed; NO real product
+  gap; D3 stays passes:true. PATTERN (multi-provider fan-out rigor): a UI render+honesty gate is
+  necessary but NOT sufficient for a fan-out-timeout story — also time the backend aggregate
+  endpoint DIRECTLY and assert it stays under the upstream caller's read budget WITH the dead
+  fixture provider live, so the bound (asyncio.wait_for per provider + asyncio.gather) is proven
+  active, not just incidentally fast because the slow provider happened to be quiet.
