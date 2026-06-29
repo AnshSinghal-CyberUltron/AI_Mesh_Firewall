@@ -138,6 +138,12 @@
   `MCP_STDIO_INIT_TIMEOUT` / `MCP_STDIO_METHOD_TIMEOUT`; 7 tests in `test_mcp_sandbox_client.py`
   (httpx mock); gate: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_client.py -q`
   → 7 passed.
+- 2026-06-29 iteration 11: S11-stdio-adapter-branch DONE — `mcp_stdio_adapter.send_jsonrpc` branches on
+  `MCP_STDIO_IN_PROCESS` (default true for dev): false → `mcp_sandbox_client.broker_send_jsonrpc` with
+  `org_slug`/`server_slug` from `server_config`; `_adapter_forward` injects `org_slug`+`server_slug` into
+  `server_config` for broker path; in-process logic extracted to `_send_jsonrpc_in_process`; 4 tests in
+  `test_mcp_stdio_adapter_branch.py` (broker mock + in-process mock); MCP-focused gate 37 passed;
+  full suite 952 passed / 17 failed (pre-existing, unrelated to MCP).
 - 2026-06-29 C1-error-envelope PASSES (gate green). The choke point ALREADY EXISTED from
   prior phase work: `_openai_compat_shim` BaseHTTPMiddleware (main.py:254) is registered
   OUTSIDE auth, rewrites flat {error,message,code} bodies via
@@ -188,3 +194,24 @@
   PATTERN (recorded at top): when a story's implementation predates the loop, the gate's JOB is to
   PROVE it — strengthen the assertion to the criterion's exact contract (ordered sequence, not just
   presence) rather than re-implementing. Verify-and-flip.
+
+- 2026-06-29 C4-thin-endpoints PASSES (gate green). The thin-endpoint surface was MOSTLY
+  already present: GET /v1/models/{id} (main.py:12178), POST /v1/moderations (12194), and
+  clean-404 for /v1/images,/v1/audio,/v1/files,/v1/batches (the _openai_surface_unimplemented
+  loop). The ONLY missing piece was POST /v1/completions — it sat in that 404 loop. Implemented
+  it as a FORMAT ADAPTER over proxy_chat (same keystone pattern as /v1/responses): translate
+  prompt->messages, call _dispatch_chat_internally (reuses the unchanged auth/kill-switch/Tier-1/2/
+  output-guard/redaction/telemetry chain), then translate ChatCompletion JSON -> text_completion
+  ({object:"text_completion", choices[].text, logprobs:null}, usage passed through, zeroshield
+  mirrored top-level). prompt str -> 1 choice; list[str] -> batch (N internal dispatches, indexed
+  choices, summed usage); token-id arrays + stream rejected with a clean _build_oai_error 400.
+  GOTCHAS: (1) removing /v1/completions from the unimplemented loop is REQUIRED — Starlette is
+  first-match-wins so the catch-all would otherwise shadow nothing but the loop registers it as a
+  real 404 route; deleted the tuple. (2) TWO existing tests asserted /v1/completions->404 as their
+  "unimplemented/catch-all" example: test_openai_sdk_compat.test_unimplemented_surface_returns_clean_404
+  and test_p2_runtime_evidence_agent.test_header_present_catchall_404 — RETARGET both at /v1/images
+  (still unimplemented) rather than weakening them. Gate: SDK harness 30 passed/2 xpassed; full
+  suite 952 passed, 17 failed (== the SAME documented pre-existing baseline: bedrock_logger/routing,
+  context_guard, live_uvicorn, phase5/phase6, org_tpm, policy_check_input_scan, stream_governance —
+  all fail in isolation, none touch /v1/completions, NO new regression). Route-introspection: exactly
+  one POST /v1/completions -> create_legacy_completion.
