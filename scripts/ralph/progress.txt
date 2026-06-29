@@ -887,3 +887,28 @@
   redaction is choke-pointed in the handler unconditionally, not behind the very toggle
   the story "defaults on" — a default that can be turned off must not be the only thing
   standing between PII and the store.
+
+- rigor-verified: D1-ui-auth-keys 2026-06-29 — re-proved the auth + GatewayKeyPanel UI
+  story for REAL against the live stack (Vite :8180 -> control :8100 + gateway :8300) with
+  the durable customer-POV gate scripts/playwright_auth_keys.mjs (NODE_PATH=tests/e2e/
+  node_modules, BASE_URL=http://127.0.0.1:8180). Build gate green (cd frontend && npm run
+  build; NOTE: package.json `lint`==`test:unit`, do NOT treat as a blocking lint). Browser
+  run: 19/19 asserts, 0 pageErrors, screenshots in runs/d1/. EVERY criterion proven from the
+  DOM + real API responses, not flags: login EMPTY (HTML5 :invalid, stays /login), INVALID
+  (real 401 + "invalid email or password" shown), VALID (200 + auth_access stored + nav off
+  /login); OAuth callback PRESERVES ?code/?state (inert OAuthCallback.jsx makes NO API call /
+  no token mutation, so it can't drop the session — confirmed by source) and shows
+  "Completing authorization…"; key CREATE -> 201 full secret shown ONCE in modal; COPY ->
+  clipboard == exact secret; HONESTY INVARIANT byte-verified — after Done the full secret is
+  NOT present anywhere in the listing DOM (page.content() substring check), only created.prefix
+  is; REVOKE -> 204 DELETE, row leaves the listing (hard-removal; "Revoked" badge is reserved
+  for retained-but-inactive keys); inactivity modal "Session expiring" appears at ~14m via
+  page.clock.fastForward + "Stay logged in" retains the token; logout clears auth_access +
+  returns to /login. HONEST GAP (documented, not a defect): GatewayKeyPanel has NO dedicated
+  rotate control/endpoint — rotation = revoke + create, both primitives verified. NO source
+  change needed. FLAKE GOTCHA (recorded): on a COLD control plane the first run TIMED OUT
+  waiting for the "Gateway API Keys" panel (it sits ~2269px down the page and the first
+  data-heavy render after a fresh page load can exceed the 30s wait while the control plane
+  warms); a warm re-run is deterministically green. If the D1 gate fails on panel-visibility,
+  re-run once before treating it as a regression — direct nav to /?tab=firewall-1-1 with a
+  seeded token renders the panel + "Create API Key" button in ~3s when warm.
