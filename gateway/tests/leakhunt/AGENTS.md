@@ -59,3 +59,16 @@ live-fleet capture — it is NOT part of this pytest suite.
 - conftest now also puts repo-root `shared/` on sys.path (`_HERE.parents[2]/"shared"`)
   so `import main` resolves `ai_mesh_shared` and the CLAUDE.md gate
   (`cd gateway && pytest tests/leakhunt -q`) runs with NO manual PYTHONPATH.
+- B4 LANDED: `test_b4_unify_redaction_paths.py` is the DIFFERENTIAL gate — it proves
+  the chat/simulator egress and the embedding/RAG-ingest egress apply IDENTICAL
+  redaction (byte-for-byte) over the whole corpus, so no path leaks while another
+  redacts. ROOT FIX: `main._scan_redact_embedding_inputs` now delegates to the chat
+  redactor `llm_router._redact_text_with_backstop(text, red_pii)` (red_pii =
+  `INPUT_SCANNER.redact_pii`) instead of its own blanket `\d{7,}`-on-no-op backstop,
+  which over-redacted the corpus's `bare10_no_cue` order-id (chat KEEPS it). To test a
+  new egress surface, drive REAL egress via RecordingProvider and assert
+  `chat_out == surface_out` (not just "raw absent") — divergence is the bug. The
+  operator simulator IS the chat path (LLM_ROUTER.acompletion); there's no separate
+  simulator handler. Identity-of-callable across `import main` vs
+  `from ai_mesh_gateway import main` is UNRELIABLE in this env (two module instances) —
+  assert functional equivalence (`__qualname__` + byte-identical output), not `is`.
