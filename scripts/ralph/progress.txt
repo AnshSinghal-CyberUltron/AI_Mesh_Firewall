@@ -1006,3 +1006,23 @@
   deterministically green (the durable gate 27/27 and the negative-path drive 8/8 both pass in
   isolation) — treat multi-run hangs as self-induced env saturation, NOT a regression. Prod fix for
   the daphne-serialization class is gunicorn x5 (already documented); local stays single-worker.
+- rigor-verified: D5-ui-output-logs 2026-06-29 — re-proved the output-guardrail UI (module 1.7,
+  ?tab=firewall-1-7) + LogViewer/LogDetail for REAL against the live stack (Vite :8180 -> control
+  :8100 + gateway :8300). Build gate green (cd frontend && npm run build, exit 0, 19.55s; only the
+  benign >500kB chunk hint). (1) DURABLE GATE LIVE: scripts/playwright_output_logs.mjs -> 29/29
+  asserts, 7 steps, 0 pageErrors, screenshots runs/d5/. (2) EGRESS=TRUTH anchor: the verifier MINTS a
+  short-lived gateway key, drives ONE live /v1/chat/completions carrying KNOWN raw PII
+  (555-867-5309 / alex.rivera@acmecomp.com), confirms the firewall verdict==redact AND the returned
+  content is already masked ("***-***-5309 ... a***@a***.com"), then DELETES the key — so the honesty
+  check is anchored on enforced bytes, not a label. (3) COUNTS==REALITY: governance chips
+  (8 blocked/9 redacted/1 flagged) == backend output-event counts over /api/security/threat-feed
+  (7d, event_type output_guard|output_scan); "Detailed Records (36)" == backend 24h security_scan
+  feed length; Redact filter -> every visible row Action==redact. (4) Controls round-trip
+  backend-verified BOTH directions (incident-logging + IP-leakage action pill flip -> PUT 2xx ->
+  GET reflects -> restored, side-effect free). (5) UI HONESTY PROVEN: governance timeline + LogDetail
+  render *** masking and NEITHER the raw phone NOR raw email NOR a secret token (sk-/AKIA/PRIVATE KEY);
+  INDEPENDENT ORACLE cross-check (mcp__ruflo__aidefence_has_pii over the captured governanceText +
+  logDetailText) -> hasPII:false (separate scanner agrees masked egress is PII-free); secondary regex
+  sweep of the full 5.8KB capture -> 0 full 3-3-4 phones, 0 secret tokens, raw submitted PII absent,
+  only legitimate email == operator's own admin@zeroshield.io identity in the nav. NO source change
+  needed; NO real product gap; D5 stays passes:true. (Remaining for next round: D6-ui-demo-simulators.)
