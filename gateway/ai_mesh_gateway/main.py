@@ -4340,6 +4340,7 @@ async def proxy_chat(
                 content={
                     "error": "invalid_request",
                     "message": "'model' must be a string.",
+                    "param": "model",
                     "code": "invalid_model",
                 },
             )
@@ -4487,6 +4488,7 @@ async def proxy_chat(
                 content={
                     "error": "invalid_request",
                     "message": "'messages' must be an array.",
+                    "param": "messages",
                     "code": "invalid_messages",
                 },
             )
@@ -4499,6 +4501,7 @@ async def proxy_chat(
                 content={
                     "error": "invalid_request",
                     "message": "'messages' must contain at least one message with content.",
+                    "param": "messages",
                     "code": "invalid_messages",
                 },
             )
@@ -4522,6 +4525,7 @@ async def proxy_chat(
                         content={
                             "error": "invalid_request",
                             "message": f"messages[{idx}] must be an object.",
+                            "param": f"messages[{idx}]",
                             "code": "invalid_messages",
                         },
                     )
@@ -4537,6 +4541,7 @@ async def proxy_chat(
                         content={
                             "error": "invalid_request",
                             "message": f"messages[{idx}].content must be a string or an array.",
+                            "param": f"messages[{idx}].content",
                             "code": "invalid_messages",
                         },
                     )
@@ -4586,6 +4591,7 @@ async def proxy_chat(
                                 content={
                                     "error": "invalid_request",
                                     "message": f"messages[{idx}].content[{pidx}] {_bad}.",
+                                    "param": f"messages[{idx}].content[{pidx}]",
                                     "code": "invalid_messages",
                                 },
                             )
@@ -4630,6 +4636,7 @@ async def proxy_chat(
                     content={
                         "error": "invalid_request",
                         "message": "'messages' must contain at least one message with content.",
+                        "param": "messages",
                         "code": "invalid_messages",
                     },
                 )
@@ -4676,6 +4683,7 @@ async def proxy_chat(
                     status_code=400,
                     content={"error": "invalid_request",
                              "message": f"'{_p}' must be a finite number.",
+                             "param": _p,
                              "code": "invalid_sampling_param"},
                 )
             if not _math.isfinite(_pf):
@@ -4683,6 +4691,7 @@ async def proxy_chat(
                     status_code=400,
                     content={"error": "invalid_request",
                              "message": f"'{_p}' must be a finite number (not NaN/Infinity).",
+                             "param": _p,
                              "code": "invalid_sampling_param"},
                 )
 
@@ -8666,6 +8675,7 @@ async def proxy_embeddings(request: Request):
                 content={
                     "error": "invalid_request",
                     "message": "'model' must be a string.",
+                    "param": "model",
                     "code": "invalid_model",
                 },
             )
@@ -8676,6 +8686,7 @@ async def proxy_embeddings(request: Request):
                 content={
                     "error": "invalid_request_error",
                     "message": "`input` is required.",
+                    "param": "input",
                 },
             )
 
@@ -8696,6 +8707,7 @@ async def proxy_embeddings(request: Request):
                 content={
                     "error": "invalid_request_error",
                     "message": "`input` must be a string or an array of strings.",
+                    "param": "input",
                     "code": "invalid_embedding_input",
                 },
             )

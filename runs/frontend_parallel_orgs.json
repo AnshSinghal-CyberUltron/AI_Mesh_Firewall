@@ -1,9 +1,48 @@
 {
   "base": "http://127.0.0.1:8180",
-  "ok": false,
-  "orgs": [],
-  "steps": [
-    "login"
+  "ok": true,
+  "orgs": [
+    {
+      "preset": "Playwright MCP",
+      "reg": "already-listed",
+      "synced": 23
+    },
+    {
+      "preset": "Semgrep MCP",
+      "reg": "already-listed",
+      "synced": 8
+    },
+    {
+      "preset": "Memory MCP",
+      "reg": "already-listed",
+      "synced": 9
+    },
+    {
+      "preset": "Everything MCP",
+      "reg": "already-listed",
+      "synced": 13
+    },
+    {
+      "preset": "Vibe Check MCP",
+      "reg": "already-listed",
+      "synced": 5
+    }
   ],
-  "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /Playwright MCP/i }) to be visible\n"
+  "steps": [
+    "control-plane-ready",
+    "login",
+    "mcp-panel",
+    "Playwright MCP:already-listed",
+    "Playwright MCP:synced-23",
+    "Semgrep MCP:already-listed",
+    "Semgrep MCP:synced-8",
+    "Memory MCP:already-listed",
+    "Memory MCP:synced-9",
+    "Everything MCP:already-listed",
+    "Everything MCP:synced-13",
+    "Vibe Check MCP:already-listed",
+    "Vibe Check MCP:synced-5",
+    "tools-call-ok"
+  ],
+  "error": null
 }

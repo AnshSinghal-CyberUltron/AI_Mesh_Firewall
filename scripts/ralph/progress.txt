@@ -632,3 +632,25 @@
   honesty counter-checks (e.param null on a content block). Change is path-only (additive,
   14 lines) — enforcement untouched. A1 stays passes:true.
   PATTERN: a test-harness path fix belongs in conftest (loaded before fixtures), not in env.
+- rigor-verified: C3-responses-stream 2026-06-29 — re-proved the typed-stream event
+  conformance AND closed the gap the existing gate left open. The happy-path SDK cell
+  (test_responses_streaming_events_and_text) asserts the full canonical lifecycle
+  (response.created -> output_item.added -> content_part.added -> output_text.delta* ->
+  output_text.done -> output_item.done -> response.completed, in order, terminal=completed,
+  parsed pydantic completed.response.output_text). The FAILED path (response.failed on a
+  mid-stream block) was only proven at the TRANSLATOR-UNIT level (test_responses_stream_errors,
+  test_p2_phase6_holes assert raw SSE bytes) — NEVER through the stock openai SDK over ASGI.
+  Added DURABLE SDK-transport cell test_responses_mid_stream_failure_surfaces_typed_response_failed:
+  monkeypatches LLM_ROUTER.acompletion_stream to yield a content delta THEN an output_blocked
+  error frame, drives stock client.responses.create(stream=True), and asserts the SDK ITSELF
+  decodes a terminal typed ResponseFailedEvent (types[-1]=="response.failed", parsed
+  .response.status=="failed", .response.error populated, output_text==""), with NO phantom
+  response.completed and NO SDK decode error. GREEN. Full harness 47 passed/2 xpassed (was
+  46/2; +1 cell), test_responses_stream_errors + test_p2_phase6_holes still green. NO real gap;
+  C3 stays passes:true. SCOPE NOTE: the partial "partial " delta emitted before the block is the
+  chat-path secure_streaming guard's responsibility (output-guard story), NOT C3 translation —
+  C3's contract is event-type fidelity + fail-closed result (output_text==""), both upheld.
+  PATTERN (SDK-stream stories): proving the translator emits the right SSE BYTES is necessary but
+  NOT sufficient — also drive the stock SDK over httpx.ASGITransport so the SDK's own event
+  decoder is exercised; override LLM_ROUTER.acompletion_stream via monkeypatch to inject
+  mid-stream upstream/guard failures, then assert the PARSED terminal typed event, not a string.

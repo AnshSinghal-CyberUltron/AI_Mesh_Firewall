@@ -88,7 +88,9 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
     def ensure_sandbox(org_slug: str, body: EnsureRequest) -> dict[str, Any]:
         _require_docker(docker_manager)
         _check_org_quota(docker_manager, org_slug)
-        return _ensure_response(docker_manager, org_slug)
+        response = _ensure_response(docker_manager, org_slug)
+        docker_manager.touch_activity(org_slug)
+        return response
 
     @router.post("/{org_slug}/stdio/rpc")
     async def stdio_rpc(org_slug: str, body: StdioRpcRequest) -> dict[str, Any]:

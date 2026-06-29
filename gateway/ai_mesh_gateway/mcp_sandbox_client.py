@@ -8,6 +8,7 @@ to the internal mcp-broker Sandbox Controller.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import logging
 import os
 import random
@@ -18,6 +19,7 @@ import httpx
 LOG = logging.getLogger("gateway.mcp_sandbox_client")
 
 BROKER_KEY_HEADER = "X-MCP-Broker-Key"
+_RPC_ID_SEQ = itertools.count(1)
 
 _BROKER_URL = os.environ.get("MCP_BROKER_URL", "http://mcp-broker:8311").rstrip("/")
 _INIT_TIMEOUT = float(os.environ.get("MCP_STDIO_INIT_TIMEOUT", "120"))
@@ -152,7 +154,7 @@ async def broker_send_jsonrpc(
         "env": dict(server_config.get("env_vars") or server_config.get("env") or {}),
         "method": method,
         "params": params,
-        "jsonrpc_id": 1 if msg_id is None else msg_id,
+        "jsonrpc_id": next(_RPC_ID_SEQ) if msg_id is None else msg_id,
         "timeouts": _timeouts_payload(timeout),
     }
 

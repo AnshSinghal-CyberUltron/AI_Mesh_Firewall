@@ -17,6 +17,22 @@ def test_secret_env_denylist_includes_gateway_internal_api_key():
     assert "GATEWAY_INTERNAL_API_KEY" in _SECRET_ENV_DENYLIST
 
 
+def test_secret_env_denylist_includes_mcp_broker_internal_key():
+    assert "MCP_BROKER_INTERNAL_KEY" in _SECRET_ENV_DENYLIST
+
+
+def test_build_child_env_blocks_mcp_broker_key_in_requested_env(caplog):
+    with caplog.at_level(logging.WARNING):
+        child = _build_child_env(
+            {"MCP_BROKER_INTERNAL_KEY": "must-not-leak", "LINEAR_API_KEY": "byok-ok"},
+            "acme",
+            host_environ={"PATH": "/usr/bin"},
+        )
+    assert "MCP_BROKER_INTERNAL_KEY" not in child
+    assert child["LINEAR_API_KEY"] == "byok-ok"
+    assert any("MCP_BROKER_INTERNAL_KEY" in r.message for r in caplog.records)
+
+
 def test_build_child_env_blocks_gateway_internal_api_key_in_requested_env(caplog):
     with caplog.at_level(logging.WARNING):
         child = _build_child_env(
