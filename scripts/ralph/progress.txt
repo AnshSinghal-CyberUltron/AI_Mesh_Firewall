@@ -177,6 +177,14 @@
   files + ORG_ONLY_MARKER env isolation; broker-in-Docker pattern reused from T1; gate:
   `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_parallel_load.py -q`
   → 2 passed (~234s with Docker builds).
+- 2026-06-29 iteration 15: E2-frontend-mcp-sandbox DONE — `MCPConnectorPanel.jsx` comments/labels updated
+  for per-org Docker sandbox (not gateway subprocess); `frontend/package.json` adds `lint` → `test:unit`;
+  new `scripts/playwright_mcp_sandbox_stdio.mjs` (login → stdio preset/list → sync tools/list → tools/call);
+  gate: `cd frontend && npm run lint && npm run build` → 26 unit + build green; Playwright on :8180 with
+  `admin@zeroshield.io` + Vibe Check stdio → tools-list-synced:5 + tools-call-ok (`runs/playwright_mcp_sandbox_stdio.json`);
+  broker gate `pytest services/mcp-broker/tests -q` → 59 passed; MCP unit gate
+  `pytest ai_mesh_gateway/tests/test_mcp*.py -m 'not docker' -q` → 53 passed (5 `@pytest.mark.docker` tests
+  require `docker compose --profile services` + broker on `mcp_sandbox_bridge`). **All 15/15 stories pass.**
 - 2026-06-29 C1-error-envelope PASSES (gate green). The choke point ALREADY EXISTED from
   prior phase work: `_openai_compat_shim` BaseHTTPMiddleware (main.py:254) is registered
   OUTSIDE auth, rewrites flat {error,message,code} bodies via

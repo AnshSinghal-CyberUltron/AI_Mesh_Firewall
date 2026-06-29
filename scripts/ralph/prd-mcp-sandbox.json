@@ -190,7 +190,7 @@
       "id": "E2-frontend-mcp-sandbox",
       "title": "MCPConnectorPanel sandbox path verification",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S11-stdio-adapter-branch"],
       "userStory": "As user I can register stdio MCP via UI with sandbox backend.",
       "acceptanceCriteria": [
