@@ -309,6 +309,8 @@ volumes:
   uv_cache:
 
 networks:
+  # Pre-created by tests/manual broker runs; external avoids compose label conflicts
+  # when the network already exists. Run scripts/ensure_mcp_sandbox_network.sh first.
   mcp_sandbox_bridge:
     name: mcp_sandbox_bridge
-    driver: bridge
+    external: true

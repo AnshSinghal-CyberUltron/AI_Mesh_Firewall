@@ -1,13 +1,11 @@
 {
   "base": "http://127.0.0.1:8180",
-  "preset": "Vibe Check",
-  "ok": true,
+  "preset": "Playwright MCP",
+  "ok": false,
   "steps": [
     "login",
     "navigate-mcp-tab",
-    "stdio-server-already-listed",
-    "tools-list-synced:5",
-    "tools-call-ok"
+    "stdio-preset-exists"
   ],
-  "error": null
+  "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('h4').filter({ hasText: 'Playwright MCP' }).first() to be visible\n"
 }

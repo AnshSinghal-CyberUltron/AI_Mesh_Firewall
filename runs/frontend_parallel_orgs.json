@@ -1,0 +1,9 @@
+{
+  "base": "http://127.0.0.1:8180",
+  "ok": false,
+  "orgs": [],
+  "steps": [
+    "login"
+  ],
+  "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /Playwright MCP/i }) to be visible\n"
+}

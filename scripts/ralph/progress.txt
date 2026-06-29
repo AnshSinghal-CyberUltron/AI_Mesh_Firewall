@@ -401,3 +401,24 @@
   AFTER networkidle (so the login fetch's AbortSignal.timeout already resolved). (6) Run node from
   frontend/ (playwright lives in frontend/node_modules); screenshots/report dirs are cwd-relative —
   pass SHOT_DIR/E2E_REPORT to land them at repo-root runs/.
+
+- 2026-06-29 D2-ui-model-routing PASSES (gate green). Durable gate: scripts/playwright_model_routing.mjs
+  (real-customer POV over Vite :8180 → control :8100 + gateway :8300). 19/19 asserts, 0 pageErrors,
+  re-runnable + side-effect-free (restores routing_enabled; pre-cleans + deletes its own kill-switch).
+  Covers 1.5 (LLM Model Connections lists backend models; ModelGovernance + RoutingGovernance +
+  RoutingAudit render; Dynamic-Routing toggle → PUT /api/firewall/config/ round-trip asserted vs the
+  PARSED backend config, then restored) and 1.6 (ModelState + KillSwitch render; create via modal →
+  POST /api/kill-switches/, badge MIRRORS create-response is_active, deactivate/activate/deactivate each
+  cross-checked vs live GET, delete → gone from backend). GOTCHAS (UI-VERIFICATION addendum):
+    * Module pages STREAM telemetry → waitUntil:"networkidle" NEVER settles; the goto hangs/bounces to
+      /login. Use waitUntil:"domcontentloaded" + per-panel waitFor (panels lazy-render their h3 after data).
+    * getByRole("combobox") matches a native <select> behind the modal backdrop → click intercepted
+      forever. Target the KillSwitchModelCombobox by its unique placeholder (/search connected models/i).
+    * Native <option> ALSO exposes role="option"; scope the picker option to getByRole("listbox") (the
+      combobox's <ul role=listbox> with <button role=option>).
+    * A model that already has a kill-switch at the same scope is HIDDEN in the create modal (so a leftover
+      from a prior failed run makes the combobox absent). Pre-clean via page.request DELETE before create.
+    * The ModelState panel renders a <tr> for the SAME model above the kill-switch table — scope the KS row
+      by a button[aria-label*="kill switch for <model>" i] filter, not bare hasText.
+  Run: cd frontend && BASE_URL=http://127.0.0.1:8180 SHOT_DIR=<repo>/runs/d2 \
+       E2E_REPORT=<repo>/runs/playwright_model_routing.json node <repo>/scripts/playwright_model_routing.mjs
