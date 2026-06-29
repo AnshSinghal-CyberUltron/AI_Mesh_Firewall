@@ -27,6 +27,7 @@ try:  # gateway modules are imported both as a package and as top-level
         PCI_PATTERNS,
         CREDENTIAL_EXPOSURE_PATTERNS,
         compile_pattern,
+        _BARE_PHONE_10_SPLIT,
     )
 except ImportError:  # pragma: no cover - top-level import path
     from patterns import (  # type: ignore[no-redef]
@@ -36,7 +37,31 @@ except ImportError:  # pragma: no cover - top-level import path
         PCI_PATTERNS,
         CREDENTIAL_EXPOSURE_PATTERNS,
         compile_pattern,
+        _BARE_PHONE_10_SPLIT,
     )
+
+
+# The contextual bare-phone pattern matches a CUE + (possibly long) gap + the
+# trailing phone value (e.g. "contact <email>, call back on 8929554991"). Its
+# match SPAN therefore includes the cue/gap, which may contain another nested
+# PII match (the email). ``patterns.redact_all`` masks ONLY the trailing digit
+# run for this type (``_mask_phone_bare_contextual``), preserving the prefix; the
+# typed redactor must use the SAME narrow span so the phone placeholder does not
+# overlap-swallow the email in the merge step — keeping both engines' redaction
+# byte-identical in structure (B4 path-unification). Compiled once.
+_BARE_PHONE_VALUE_RE = compile_pattern(_BARE_PHONE_10_SPLIT + r"\b")
+
+
+def _narrow_bare_contextual_phone(match) -> Tuple[int, int]:
+    """Return the (start, end) of just the trailing phone value inside a
+    ``phone_us_bare_contextual`` match, so the redaction span excludes the cue
+    prefix (which may nest another PII match). Falls back to the full span if the
+    value sub-pattern unexpectedly does not re-match."""
+    value = _BARE_PHONE_VALUE_RE.search(match.group(0))
+    if value is None:  # pragma: no cover - defensive; pattern guarantees a value
+        return match.start(), match.end()
+    base = match.start()
+    return base + value.start(), base + value.end()
 
 
 # Bare, semantic-category placeholders (same type -> same token, so a doc with
@@ -135,8 +160,18 @@ def detect_and_redact_typed(text: str) -> RedactionResult:
     for catalogue in _REDACTION_CATALOGUES:
         for ptype, pattern in catalogue.items():
             for m in compile_pattern(pattern).finditer(text):
-                if m.end() > m.start():  # skip zero-length matches
-                    raw.append((m.start(), m.end(), ptype))
+                if ptype == "phone_us_bare_contextual":
+                    # Narrow to the trailing phone value only (mirrors
+                    # patterns._mask_phone_bare_contextual) so the cue/gap — which
+                    # may contain a nested email/SSN match — is NOT swallowed into
+                    # the [PHONE] span during overlap-merge.
+                    start, end = _narrow_bare_contextual_phone(m)
+                elif m.end() > m.start():
+                    start, end = m.start(), m.end()
+                else:
+                    continue  # skip zero-length matches
+                if end > start:
+                    raw.append((start, end, ptype))
     if not raw:
         return RedactionResult(text=text)
 

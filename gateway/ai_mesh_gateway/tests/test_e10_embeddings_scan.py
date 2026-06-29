@@ -218,15 +218,26 @@ async def test_embeddings_clean_input_passes_through_unchanged(emb_ctx):
 async def test_scan_redact_helper_blocks_unmaskable_pii(monkeypatch):
     """G1 FAIL-SAFE: when the scanner DETECTS PII/secret it cannot mask, the helper
     returns a BLOCK (caller 403s) rather than embedding the raw value. We force the
-    'detected but unmaskable' shape by stubbing redact_pii to a no-op so the helper
-    must fail closed instead of leaking."""
+    'detected but unmaskable' shape by stubbing redaction to a no-op so the helper
+    must fail closed instead of leaking.
+
+    B4: ``_scan_redact_embedding_inputs`` now masks via the shared egress redactor
+    ``llm_router._redact_text_with_backstop``, which itself calls
+    ``patterns.redact_all`` — so stubbing ``redact_pii`` ALONE no longer forces a
+    no-op (redact_all would still mask the email/SSN, and the helper would correctly
+    NOT block a maskable value). To exercise the genuine detected-but-unmaskable
+    branch we neutralise BOTH the verdict-aware ``redact_pii`` AND the backstop's
+    ``redact_all`` (the flat ``patterns`` module is the one the backstop imports)."""
+    import patterns as gateway_patterns
+
     from ai_mesh_gateway import main as gateway_main
     from ai_mesh_gateway.scanner import InputScanner
 
     scanner = InputScanner(thread_pool_size=2)
-    # Force redaction to a no-op: redact_pii returns the input unchanged, so the
+    # Force redaction to a no-op on EVERY masking path the helper uses, so the
     # byte-verify fail-closed branch must trip on a detected secret.
     monkeypatch.setattr(scanner, "redact_pii", lambda text, verdict=None: text)
+    monkeypatch.setattr(gateway_patterns, "redact_all", lambda text: text)
     monkeypatch.setattr(gateway_main, "INPUT_SCANNER", scanner)
 
     redacted, block = await gateway_main._scan_redact_embedding_inputs(
