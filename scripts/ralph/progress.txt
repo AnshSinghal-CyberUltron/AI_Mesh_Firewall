@@ -855,3 +855,35 @@
   faked litellm.aresponses (deployment-resolution), so a responses egress-capture drive
   needs a registered deployment; assert responses==chat at the redaction-function level
   instead (the exact wire bytes) to avoid the 404 artifact.
+
+- rigor-verified: B5-rag-at-rest 2026-06-29 — adversarially re-proved "RAG redaction
+  default + nothing raw at rest" with egress=truth + an INDEPENDENT ML oracle, AND
+  traced the REAL handler (not just the helpers the gate drives). FINDINGS: (1) the
+  production rag_ingest path funnels EVERY allowed doc through the SAME unified helpers
+  the gate reproduces — content via `_scan_redact_embedding_inputs` (main.py ~10370) and
+  metadata via `_scan_redact_metadata` (~10386) — then reassigns doc_strings/
+  normalized_metas; the SYNC path stores exactly those (client.add ~10469-10473) and the
+  ASYNC path hands the SAME redacted payload to the worker (~10420-10422). The async
+  `vector_ingest_task` (workers/.../tasks/telemetry.py:730) is a NO-OP PLACEHOLDER that
+  stores nothing, so neither path can persist raw. (2) CRITICAL ROBUSTNESS: both helpers
+  run UNCONDITIONALLY (gated only by input_scan_enabled, default True) — NOT by
+  rag_redaction_enabled — so the at-rest guarantee survives an org turning the B5 default
+  off; rag_redaction_enabled=True only adds typed [EMAIL]/[SSN] placeholders as
+  defense-in-depth (the helpers-alone proof is therefore a conservative LOWER BOUND on the
+  real handler, which redacts strictly more). (3) Drove the FULL REDACTABLE corpus + a
+  6-case adversarial extra set (multi-PII-per-field, nested-list metadata, spaced credit
+  card, split-5+5 phone [the G0 leak], e164, openai key) through both helpers, persisted,
+  read at rest: 0 raw substrings; the test's separate-regex oracle == [] AND the
+  INDEPENDENT mcp__ruflo__aidefence_has_pii ML oracle == hasPII:false over the at-rest
+  blob (positive control: the RAW multi-PII prompt -> piiFound:true, so the oracle is
+  capable). (4) FAIL-CLOSED holds: unmaskable PII content -> doc not stored; unmaskable
+  metadata value -> "[REDACTED]". DOCUMENTED LONG-TAIL (NOT a B5 gap): an AWS *secret*
+  access key (wJalr.../no AKIA prefix, slash-delimited) persisted raw — but it is OUT of
+  the B5 corpus AND the independent aidefence oracle ALSO does not flag it as PII, so it
+  is the already-recorded credential-deobfuscation tier-2-ML-on-ingest deferral, not a
+  regression. NO source change. Gate: `cd gateway && ./.venv/bin/python -m pytest
+  tests/leakhunt -q` -> 120 passed, 1 skipped (B5 file 5 passed). PATTERN (RAG at-rest
+  rigor): trace BOTH storage paths (sync client.add + async worker) AND confirm the
+  redaction is choke-pointed in the handler unconditionally, not behind the very toggle
+  the story "defaults on" — a default that can be turned off must not be the only thing
+  standing between PII and the store.
