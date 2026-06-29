@@ -94,6 +94,7 @@
 - Sandbox registry + reaper: `registry.py` (thread-safe org→container map, `last_activity`), `reaper.py` (`MCP_SANDBOX_IDLE_TIMEOUT` default 600s, interval 60s); `reap_idle_sandboxes()` testable with mock clock; wired via FastAPI lifespan in `main.py`.
 - Broker sandbox routes: `src/sandbox/routes.py` + `src/auth.py` (`X-MCP-Broker-Key` / `MCP_BROKER_INTERNAL_KEY`, fail closed); POST ensure/stdio/rpc, GET status, DELETE destroy; stdio/rpc forwards httpx to sandbox-agent `/rpc` and `touch_activity`; quota via `MCP_SANDBOX_MAX_ORGS`.
 - Broker health: `GET /health` returns `docker_ok` (true when `DockerManager.ping()` succeeds); full wire in `main.py` (sandbox router, registry, reaper lifespan).
+- Compose sandbox stack: `docker compose --profile services up` builds `services/mcp-broker/Dockerfile` + `sandbox-image/Dockerfile`; Docker socket on mcp-broker only; `mcp_sandbox_bridge` network; gateway `MCP_STDIO_IN_PROCESS=false` + shared `MCP_BROKER_INTERNAL_KEY`.
 
 ### Iteration log
 - 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
@@ -123,6 +124,12 @@
   `docker_manager.ping()`; sandbox router + reaper lifespan + registry already wired; 3 tests in
   `test_main_health.py` (docker_ok true/false, router mounted); gate: `pytest services/mcp-broker/tests -q`
   → 57 passed.
+- 2026-06-29 iteration 9: S9-docker-compose DONE — `services/mcp-broker/Dockerfile` (uv + docker SDK,
+  LABEL sandbox-image path) + `pyproject.toml`; `docker-compose.yml` adds `mcp_sandbox_bridge` network,
+  `mcp-sandbox-image` build service, mcp-broker with `/var/run/docker.sock` mount (never gateway),
+  `MCP_BROKER_INTERNAL_KEY` on broker+gateway, `MCP_STDIO_IN_PROCESS=false` on gateway; documented
+  `--profile services`; 2 tests in `test_docker_compose.py`; gate: `docker compose --profile services config`
+  → exit 0; broker suite → 59 passed.
 - 2026-06-29 C1-error-envelope PASSES (gate green). The choke point ALREADY EXISTED from
   prior phase work: `_openai_compat_shim` BaseHTTPMiddleware (main.py:254) is registered
   OUTSIDE auth, rewrites flat {error,message,code} bodies via
@@ -153,3 +160,23 @@
   GOTCHA: importing the app needs ai_mesh_shared on PYTHONPATH (../shared) — it is NOT pip-installed
   in gateway/.venv; the ralph gate env must export PYTHONPATH (shared + gateway + ai_mesh_gateway).
   Unblocks C3-responses-stream.
+- 2026-06-29 C3-responses-stream PASSES (gate green). The implementation was ALREADY complete:
+  _translate_chat_stream_to_responses (main.py:8185) emits the full Responses typed-event lifecycle
+  via _responses_sse (main.py:8181 -> framed `event: <type>\ndata: <json>\n\n`):
+  response.created -> response.in_progress -> output_item.added -> content_part.added ->
+  output_text.delta* -> output_text.done -> output_item.done -> response.completed -> [DONE];
+  response.failed (status=failed, error{message,code}) on guard block / upstream mid-stream error
+  (zeroshield.action=='error' OR err.code=='output_blocked' clears accumulated text, fail-closed).
+  Tool/function-call deltas surface as typed function_call items (output_item.added ->
+  function_call_arguments.delta* -> function_call_arguments.done -> output_item.done) with parity to
+  the non-stream path. The REMAINING C3 gap was purely in the GATE: the SDK harness cell
+  test_responses_streaming_events_and_text asserted only MEMBERSHIP of response.created/completed, not
+  the ordered sequence the criterion demands. Strengthened it to (a) require all 7 lifecycle event
+  types present, (b) assert first-occurrence indices are monotonic in the canonical order, (c) assert
+  every output_text.delta precedes output_text.done, (d) assert response.completed is terminal.
+  Gate: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q`
+  -> 27 passed/2 xpassed. Related suites still green: test_responses_stream_errors.py +
+  test_responses_adapters.py + test_stream_trace_frame.py -> 29 passed. ruff NOT installed (gate skips).
+  PATTERN (recorded at top): when a story's implementation predates the loop, the gate's JOB is to
+  PROVE it — strengthen the assertion to the criterion's exact contract (ordered sequence, not just
+  presence) rather than re-implementing. Verify-and-flip.

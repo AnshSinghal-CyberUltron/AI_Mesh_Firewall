@@ -111,7 +111,7 @@
       "id": "S9-docker-compose",
       "title": "Broker Dockerfile and docker-compose sandbox wiring",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S8-broker-wire", "S1-sandbox-dockerfile"],
       "userStory": "As dev I need compose profile to run broker with Docker socket and sandbox network.",
       "acceptanceCriteria": [
