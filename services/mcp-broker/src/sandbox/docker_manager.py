@@ -6,7 +6,10 @@ import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from sandbox.registry import SandboxRegistry
 
 LABEL_ROLE = "ai_mesh.role"
 LABEL_ORG_SLUG = "ai_mesh.org_slug"
@@ -54,9 +57,11 @@ class DockerManager:
         self,
         client: Any | None = None,
         config: SandboxDockerConfig | None = None,
+        registry: SandboxRegistry | None = None,
     ) -> None:
         self._client = client
         self.config = config or SandboxDockerConfig.from_env()
+        self._registry = registry
 
     @property
     def client(self) -> Any:
@@ -114,6 +119,22 @@ class DockerManager:
         )
         host = ip or "127.0.0.1"
         return f"http://{host}:{self.config.agent_port}"
+
+    def _sync_registry(self, info: SandboxContainerInfo) -> None:
+        if self._registry is None:
+            return
+        if info.status == "running" and info.container_id:
+            self._registry.register(
+                org_slug=info.org_slug,
+                container_id=info.container_id,
+                agent_url=info.agent_url,
+            )
+        else:
+            self._registry.remove(info.org_slug)
+
+    def touch_activity(self, org_slug: str) -> None:
+        if self._registry is not None:
+            self._registry.touch(org_slug)
 
     def to_info(self, org_slug: str, container: Any | None) -> SandboxContainerInfo:
         status = self.container_status(container)
@@ -185,32 +206,44 @@ class DockerManager:
         if container is None:
             container = self.create_container(org_slug)
             container.reload()
-            return self.to_info(org_slug, container)
+            info = self.to_info(org_slug, container)
+            self._sync_registry(info)
+            return info
         status = self.container_status(container)
         if status != "running":
             container.start()
             container.reload()
-        return self.to_info(org_slug, container)
+        info = self.to_info(org_slug, container)
+        self._sync_registry(info)
+        return info
 
     def start(self, org_slug: str) -> SandboxContainerInfo:
         container = self.find_container(org_slug)
         if container is None:
             container = self.create_container(org_slug)
             container.reload()
-            return self.to_info(org_slug, container)
+            info = self.to_info(org_slug, container)
+            self._sync_registry(info)
+            return info
         if self.container_status(container) != "running":
             container.start()
             container.reload()
-        return self.to_info(org_slug, container)
+        info = self.to_info(org_slug, container)
+        self._sync_registry(info)
+        return info
 
     def stop(self, org_slug: str) -> SandboxContainerInfo:
         container = self.find_container(org_slug)
         if container is None:
-            return self.to_info(org_slug, None)
+            info = self.to_info(org_slug, None)
+            self._sync_registry(info)
+            return info
         if self.container_status(container) == "running":
             container.stop(timeout=30)
             container.reload()
-        return self.to_info(org_slug, container)
+        info = self.to_info(org_slug, container)
+        self._sync_registry(info)
+        return info
 
     def destroy(self, org_slug: str) -> bool:
         container = self.find_container(org_slug)
@@ -225,4 +258,6 @@ class DockerManager:
             removed = True
         except Exception:
             pass
+        if self._registry is not None:
+            self._registry.remove(org_slug)
         return removed
