@@ -2,19 +2,20 @@
 
 Listens on port 9320 inside per-org sandbox containers. The mcp-broker Sandbox
 Controller forwards JSON-RPC exchanges via POST /rpc.
-
-Phase 1: health + RPC stub; full stdio spawn logic lands in S2-sandbox-agent.
 """
 
 from __future__ import annotations
 
+import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="MCP Sandbox Agent", version="0.1.0")
+from agent.stdio_manager import list_processes, send_jsonrpc, shutdown_all, start_reaper
 
+LOG = logging.getLogger("sandbox_agent")
 ORG_SLUG = os.environ.get("ORG_SLUG", "default")
 
 
@@ -29,26 +30,48 @@ class RpcRequest(BaseModel):
     timeouts: dict[str, float] = Field(default_factory=dict)
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    start_reaper()
+    yield
+    await shutdown_all()
+
+
+app = FastAPI(title="MCP Sandbox Agent", version="0.1.0", lifespan=lifespan)
+
+
 @app.get("/health")
-def health() -> dict:
+async def health() -> dict:
+    processes = await list_processes()
     return {
         "status": "ok",
         "service": "mcp-sandbox-agent",
         "org_slug": ORG_SLUG,
+        "process_count": len(processes),
     }
 
 
 @app.post("/rpc")
 async def rpc(body: RpcRequest) -> dict:
-    """Proxy one JSON-RPC exchange to a stdio MCP server (S2 implements spawn)."""
-    return {
-        "jsonrpc": "2.0",
-        "id": body.jsonrpc_id,
-        "error": {
-            "code": -32000,
-            "message": (
-                f"Sandbox agent RPC not yet wired for server '{body.server_slug}' "
-                f"(method={body.method}). See story S2-sandbox-agent."
-            ),
-        },
-    }
+    """Proxy one JSON-RPC exchange to a stdio MCP server child process."""
+    init_timeout = body.timeouts.get("init_seconds")
+    method_timeout = body.timeouts.get("method_seconds")
+    try:
+        return await send_jsonrpc(
+            server_slug=body.server_slug,
+            command=body.command,
+            args=body.args,
+            env=body.env,
+            method=body.method,
+            params=body.params,
+            msg_id=body.jsonrpc_id,
+            init_timeout=init_timeout,
+            method_timeout=method_timeout,
+        )
+    except RuntimeError as exc:
+        LOG.warning("RPC failed for %s/%s method=%s: %s", ORG_SLUG, body.server_slug, body.method, exc)
+        return {
+            "jsonrpc": "2.0",
+            "id": body.jsonrpc_id,
+            "error": {"code": -32000, "message": str(exc)},
+        }

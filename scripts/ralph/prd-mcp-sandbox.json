@@ -20,7 +20,7 @@
       "id": "S2-sandbox-agent",
       "title": "In-container sandbox-agent (stdio JSON-RPC over HTTP)",
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S1-sandbox-dockerfile"],
       "userStory": "As broker I need an in-container agent that spawns and talks to stdio MCP children.",
       "acceptanceCriteria": [
