@@ -1,12 +1,15 @@
 ---
-iteration: 14
+iteration: 15
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
+status: COMPLETE
 ---
 
 # MCP Per-Tenant Docker Sandbox — Ralph Loop
 
 **Source of truth:** `.skill-workspace/implementation_plan.md` (Phase 1 MVP — stdio transport, Docker runc, one sandbox per org/tenant).
+
+**Status: ALL 15/15 stories pass (2026-06-29 iteration 15).**
 
 ## Architecture summary
 
@@ -59,6 +62,11 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 3. Append learnings to `scripts/ralph/progress.txt` under `## MCP Sandbox Ralph Loop`.
 4. Use gateway venv for gateway tests: `cd gateway && ./.venv/bin/python -m pytest ...`
 5. Security: never inject gateway secrets into sandboxes; egress bytes remain source of truth for scan/audit (unchanged in `mcp_proxy.py`).
+
+## Iteration 15 complete — LOOP FINISHED
+
+- **E2-frontend-mcp-sandbox** — MCPConnectorPanel sandbox comments/labels; `npm run lint` (26 unit tests) + build green; Playwright stdio flow (`scripts/playwright_mcp_sandbox_stdio.mjs`) login → Vibe Check sync (5 tools) → `vibe_check` tools/call OK on :8180.
+- **All 15/15 stories** in `prd-mcp-sandbox.json` now `passes:true`.
 
 ## Iteration 14 complete
 

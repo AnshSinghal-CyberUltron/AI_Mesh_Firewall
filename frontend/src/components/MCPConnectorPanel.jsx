@@ -2,6 +2,8 @@
  * MCPConnectorPanel — ZeroShield MCP integration management.
  *
  * Backend proxy: /api/mcp-connector/*
+ * Stdio transport: production delegates to per-org Docker sandbox (mcp-broker);
+ * dev may use in-process gateway spawn when MCP_STDIO_IN_PROCESS=true.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -61,13 +63,12 @@ import {
 const TRANSPORT_OPTIONS = [
   { value: "streamable-http", label: "Streamable HTTP", supported: true },
   { value: "sse", label: "SSE", supported: true },
-  // stdio spawns a subprocess INSIDE the gateway container. The gateway now
-  // ships node/npx/python/python3, so npx-based servers (Linear/Playwright)
-  // launch. The command must be one of the allow-listed interpreters and the
-  // package's own runtime dependency must be present in the container (e.g.
-  // Semgrep MCP needs the `semgrep` binary). Failures surface a clear
-  // actionable error in last_sync_error rather than a silent "disconnected".
-  { value: "stdio", label: "Stdio (subprocess)", supported: true },
+  // Stdio MCP servers run in a per-org Docker sandbox (mcp-broker → sandbox-agent)
+  // when MCP_STDIO_IN_PROCESS=false (production default). Dev may use in-process
+  // spawn inside the gateway container (MCP_STDIO_IN_PROCESS=true). Command must be
+  // an allow-listed interpreter (npx/node/python/python3); package runtime deps must
+  // exist in the sandbox image. Failures surface in last_sync_error, not silent disconnect.
+  { value: "stdio", label: "Stdio (sandbox)", supported: true },
   { value: "websocket", label: "WebSocket", supported: true },
 ];
 
@@ -1314,8 +1315,8 @@ function MCPConnectorPanelInner() {
                 ))}
               </Select>
               <p className="text-xs text-slate-500 mt-1">
-                Supports HTTP, SSE, WebSocket, and Stdio (subprocess) transports.
-                Stdio runs the command inside the gateway container.
+                Supports HTTP, SSE, WebSocket, and Stdio (per-org sandbox) transports.
+                Stdio delegates to the mcp-broker sandbox in production; dev may use in-process gateway spawn.
               </p>
             </div>
             <div>
@@ -1336,8 +1337,9 @@ function MCPConnectorPanelInner() {
               <h4 className="text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">Stdio Transport Settings</h4>
               <p className="text-xs text-teal-700/80 dark:text-teal-300/80">
                 Command must be an allow-listed interpreter (<code>npx</code>, <code>node</code>,
-                <code> python</code>, <code>python3</code>) — not a path. The package's own
-                runtime dependency must also be installed in the gateway container
+                <code> python</code>, <code>python3</code>) — not a path. Production runs the
+                command inside your org&apos;s Docker sandbox (not a gateway subprocess); the
+                package&apos;s runtime dependency must be present in the sandbox image
                 (e.g. Semgrep MCP requires the <code>semgrep</code> binary). Missing
                 dependencies surface a clear error below the server.
               </p>
