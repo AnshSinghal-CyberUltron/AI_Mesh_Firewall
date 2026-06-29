@@ -114,3 +114,19 @@
   destroy) + `src/auth.py` (X-MCP-Broker-Key fail closed); wired in main.py; stdio/rpc httpx-forwards
   to agent POST /rpc with touch_activity; 10 tests in test_sandbox_routes.py (mock docker + httpx);
   gate: `pytest services/mcp-broker/tests -q` → 45 passed.
+- 2026-06-29 C1-error-envelope PASSES (gate green). The choke point ALREADY EXISTED from
+  prior phase work: `_openai_compat_shim` BaseHTTPMiddleware (main.py:254) is registered
+  OUTSIDE auth, rewrites flat {error,message,code} bodies via
+  responses_adapters.coerce_chat_error_to_openai (idempotent on already-nested bodies), and
+  guarantees an x-request-id header on EVERY /v1 response (prefers a handler-set id on
+  request.state.gw_request_id so header==body). C1's only remaining job was to FLIP the two
+  defect cells from non-strict xfail to REAL passing assertions (no product code touched):
+  test_error_fields_populated_on_block_D2 (e.code/e.type/e.message non-None on a block) and
+  test_error_request_id_present_on_block_D3 (e.request_id from the header). D4/D5 cells stay
+  xfail — they belong to C4 (models/{id}+thin endpoints) and C3 (responses typed-stream).
+  Gate: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q`
+  → 27 passed, 2 xpassed (was 25 passed/4 xpassed). PATTERN: several C/D "fix" stories may
+  already be landed in-tree via the earlier OpenAI-compat PHASE work (shim + responses_adapters)
+  — verify the in-tree fix with the harness and flip the matching xfail cell instead of
+  re-implementing. C2 next-easiest: route-introspection test (test_only_one_post_v1_responses_route
+  already exists at line 457) — confirm exactly one POST /v1/responses route + delete the dead dup.
