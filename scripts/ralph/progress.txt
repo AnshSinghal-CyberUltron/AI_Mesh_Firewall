@@ -830,3 +830,28 @@
   test_embedding_input_redaction.py 10 passed, SDK harness embeddings cells 2
   passed. B3 covers email/ssn/phone/api_key/card scan+redact + fail-closed
   (G4 byte-verify, _UnmaskableScanner cell) + batch-each + scan-disabled honesty.
+- rigor-verified: B4-unify-redaction-paths 2026-06-29 — adversarially re-proved the
+  egress-redaction UNIFICATION invariant beyond the gate. CONFIRMED chat (acompletion
+  -> _apply_redaction) and embedding/RAG-ingest/metadata (_scan_redact_embedding_inputs)
+  BOTH funnel through llm_router._redact_text_with_backstop(text, red_pii) where
+  red_pii = INPUT_SCANNER.redact_pii(verdict) — byte-identical BY CONSTRUCTION. The gate
+  only ever drove ONE PII value per prompt and never exercised the /v1/responses surface.
+  Closed both coverage gaps THIS round: (1) RESPONSES PATH — aresponses redacts
+  DIFFERENTLY (replaces input with redacted_content DIRECTLY: `body={**body,"input":
+  redacted_content}`, NOT via the backstop), so B4 requires redact_pii(prompt) ==
+  _redact_text_with_backstop(prompt, redact_pii) or /v1/responses would egress a different
+  string than /v1/chat. Proved EQUAL byte-for-byte over the entire REDACTABLE corpus + a
+  multi-PII combined prompt (no divergence). (2) MULTI-PII COMPOSITIONAL — one prompt
+  bearing phone+email+ssn+api-key+cued-phone+intl-5+5 at once redacts byte-identically on
+  chat vs embedding with NO raw value on either wire. INDEPENDENT ORACLE
+  (mcp__ruflo__aidefence_has_pii, regexes separate from patterns.py under test): raw
+  multi-PII prompt -> hasPII:true (positive control); the redacted egress
+  (chat==embed==responses) -> hasPII:false (true negative). NO source change needed —
+  implementation already unified; hardened the GATE with two permanent additive cases
+  (test_b4_responses_input_redaction_matches_chat_egress over REDACTABLE +
+  test_b4_multi_pii_combined_byte_identical). Gates: test_b4 file 58 passed/1 skipped
+  (was 39), full tests/leakhunt 120 passed/1 skipped (was 101). GOTCHA recorded: an empty
+  org_only LLMRouter returns 404 (model_not_found) from aresponses BEFORE reaching the
+  faked litellm.aresponses (deployment-resolution), so a responses egress-capture drive
+  needs a registered deployment; assert responses==chat at the redaction-function level
+  instead (the exact wire bytes) to avoid the 404 artifact.

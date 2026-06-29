@@ -23,7 +23,7 @@ import pytest
 
 import main
 from scanner import InputScanner, ScanVerdict
-from llm_router import LLMRouter
+from llm_router import LLMRouter, _redact_text_with_backstop
 
 from corpus import CORPUS, REDACTABLE, by_label
 from recording_provider import RecordingProvider, independent_pii_scan
@@ -273,3 +273,69 @@ async def test_b4_fail_closed_parity_embedding_and_metadata(monkeypatch):
     # Nothing was dispatched on either surface — the defining guarantee.
     assert provider.embed == [], "fail-closed input must NOT reach the embedding provider"
     assert raw not in provider.wire_blob
+
+
+# ── Responses-path egress parity (the SDK surface the headline differential omits):
+#    ``LLMRouter.aresponses`` does NOT funnel its input through the chat backstop —
+#    it replaces the input with ``redacted_content`` DIRECTLY (llm_router.py: the
+#    ``body = {**body, "input": redacted_content}`` line). The chat/embedding paths
+#    instead apply ``_redact_text_with_backstop(text, redacted_content)``. B4's
+#    unification invariant therefore requires those two redactors to agree
+#    byte-for-byte, or /v1/responses would egress a DIFFERENT (possibly leaking)
+#    string than /v1/chat and /v1/embeddings for the same input. We assert that
+#    convergence at the redaction-function level (the exact bytes each path puts on
+#    the wire), avoiding the deployment-resolution 404 that an empty org-only router
+#    raises before reaching the faked ``litellm.aresponses``. ──
+@pytest.mark.parametrize("item", REDACTABLE, ids=lambda it: f"{it.label}:{it.fmt}")
+@pytest.mark.asyncio
+async def test_b4_responses_input_redaction_matches_chat_egress(item, real_scanner):
+    prompt = item.prompt()
+    verdict = await real_scanner.scan_prompt(prompt)
+    # What /v1/responses egresses: aresponses replaces input with redacted_content.
+    responses_egress = real_scanner.redact_pii(prompt, verdict=verdict)
+    # What /v1/chat (and /v1/embeddings) egress: the shared deterministic backstop.
+    chat_egress = _redact_text_with_backstop(prompt, responses_egress)
+    assert item.raw not in responses_egress, (
+        f"/v1/responses egress leaked raw {item.label}/{item.fmt}"
+    )
+    assert responses_egress == chat_egress, (
+        f"/v1/responses egress DIVERGED from /v1/chat for {item.label}/{item.fmt}:\n"
+        f"  responses: {responses_egress!r}\n  chat     : {chat_egress!r}"
+    )
+
+
+# ── Multi-PII combined prompt (the headline differential only ever carries ONE PII
+#    value per prompt): a single message bearing phone + email + ssn + api-key +
+#    cued-phone + intl-5+5 at once must redact byte-identically on chat and embedding
+#    AND leave no raw value on either wire — proving the convergence is compositional,
+#    not an artifact of isolated single-value inputs. ──
+@pytest.mark.asyncio
+async def test_b4_multi_pii_combined_byte_identical(real_scanner, monkeypatch):
+    multi = (
+        "hi, reach me at 415-555-0142 or email bob@corp.example, ssn 123-45-6789, "
+        "my key sk-proj-ABCDEF1234567890abcdef and call the customer back at "
+        "8929554991 plus my mobile is +91 98765 43210"
+    )
+    raw_values = [
+        "415-555-0142", "bob@corp.example", "123-45-6789",
+        "sk-proj-ABCDEF1234567890abcdef", "8929554991", "+91 98765 43210",
+    ]
+    chat_provider = RecordingProvider().install(monkeypatch)
+    chat_out = await _chat_egress_text(multi, real_scanner, chat_provider)
+    embed_provider = RecordingProvider().install(monkeypatch)
+    embed_out = await _embed_egress_text(multi, embed_provider)
+
+    assert embed_out is not None, "multi-PII prompt unexpectedly fail-closed on embedding"
+    for rv in raw_values:
+        assert rv not in chat_out, (
+            f"chat egress leaked raw {rv!r}; oracle="
+            f"{independent_pii_scan(chat_provider.wire_blob)!r}"
+        )
+        assert rv not in embed_out, (
+            f"embedding egress leaked raw {rv!r}; oracle="
+            f"{independent_pii_scan(embed_provider.wire_blob)!r}"
+        )
+    assert chat_out == embed_out, (
+        f"multi-PII redaction DIVERGED across paths:\n"
+        f"  chat : {chat_out!r}\n  embed: {embed_out!r}"
+    )
