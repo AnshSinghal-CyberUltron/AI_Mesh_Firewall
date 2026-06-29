@@ -59,7 +59,7 @@
       "id": "S5-registry-reaper",
       "title": "Sandbox registry and idle reaper",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S4-docker-manager"],
       "userStory": "As ops I need idle sandboxes stopped after MCP_SANDBOX_IDLE_TIMEOUT.",
       "acceptanceCriteria": [
