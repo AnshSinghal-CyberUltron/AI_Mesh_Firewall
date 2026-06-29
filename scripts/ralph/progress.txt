@@ -676,3 +676,26 @@
   parsed Categories bools + request_id join), audio/images/files via their SDK namespace methods
   (assert NotFoundError 404), retrieve via models.retrieve() on BOTH a hit and a miss. A handler
   existing in main.py + a raw-httpx 200 is necessary but NOT sufficient; the SDK decoder is the oracle.
+- rigor-verified: A2-egress-rig 2026-06-29 — re-proved the leak-hunt GATE is trustworthy (a no-op
+  gate would make every B-story hollow). Gate green from a clean shell: `cd gateway &&
+  ./.venv/bin/python -m pytest tests/leakhunt -q` -> 89 passed, 1 skipped (the skip is
+  test_b4:168 by-design FP-protected bare10_no_cue pass-through — correct). Verified the RIG ITSELF,
+  not just the count: (1) NEGATIVE CONTROLS are real — test_rig_selfcheck has TWO pytest.raises
+  asserting assert_no_pii_egressed RAISES on a forged raw wire AND RecordingVectorStore catches a
+  metadata leak, so the assertion is not silently passing; (2) capture is faithful — a benign prompt
+  reaches provider.wire_blob verbatim through the REAL LLMRouter(org_only_inference=True) monkeypatched
+  at litellm.acompletion (the empirical proof the choke point is the right one); (3) corpus covers
+  the acceptance formats — bare-10 (bare10_contextual/bare10_no_cue), 5+5 spaced (us_5_5_spaced),
+  +CC-10 (intl_e164/intl_cc_dash/cc_space_10). ADVERSARIAL E2E: drove the FULL covered corpus
+  (17 items) through the REAL InputScanner.redact_pii + router egress AND the embeddings path,
+  captured the actual wire bytes -> RIG_LEAKS=[] and the rig's independent_pii_scan oracle found 0
+  classes. TRULY-EXTERNAL ORACLE (mcp__ruflo__aidefence_has_pii, regexes separate from BOTH patterns.py
+  AND the rig's own oracle) over the captured egress blob -> hasPII:false; the SAME oracle over the RAW
+  pre-redaction prompts -> hasPII:true (proves the clean verdict is a true negative, not an oracle blind
+  spot). egress=truth invariant holds end-to-end. NO real gap; A2 stays passes:true.
+  PATTERN (leak-GATE rigor): rigor-verifying a leak RIG (vs a product story) = prove the gate can't be
+  hollow — (a) the assertion RAISES on a forged leak (negative control), (b) capture is faithful
+  (benign text reaches the wire verbatim through the REAL router, not a stub), (c) a THIRD independent
+  oracle (aidefence_has_pii) agrees on the captured bytes AND fires on the raw control. Three oracles
+  (patterns.py under test, rig's independent_pii_scan, aidefence) converging on the SAME captured
+  egress is the standard for "egress=truth proven".
