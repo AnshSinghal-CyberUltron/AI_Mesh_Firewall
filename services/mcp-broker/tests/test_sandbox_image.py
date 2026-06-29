@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import importlib.util
+import importlib
 import sys
 from pathlib import Path
 
@@ -10,23 +10,23 @@ import pytest
 from fastapi.testclient import TestClient
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-AGENT_MAIN = REPO_ROOT / "services/mcp-broker/sandbox-image/agent/main.py"
+SANDBOX_IMAGE = REPO_ROOT / "services/mcp-broker/sandbox-image"
 DOCKERFILE = REPO_ROOT / "services/mcp-broker/sandbox-image/Dockerfile"
 
 
-def _load_agent_app():
-    spec = importlib.util.spec_from_file_location("sandbox_agent_main", AGENT_MAIN)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["sandbox_agent_main"] = mod
-    spec.loader.exec_module(mod)
-    return mod.app
+def _load_agent_app(monkeypatch):
+    monkeypatch.setenv("ORG_SLUG", "test-org")
+    sandbox_image = str(SANDBOX_IMAGE)
+    if sandbox_image not in sys.path:
+        sys.path.insert(0, sandbox_image)
+    for mod in ("agent.main", "agent.stdio_manager", "agent"):
+        sys.modules.pop(mod, None)
+    return importlib.import_module("agent.main").app
 
 
 @pytest.fixture
 def agent_client(monkeypatch):
-    monkeypatch.setenv("ORG_SLUG", "test-org")
-    app = _load_agent_app()
+    app = _load_agent_app(monkeypatch)
     with TestClient(app) as client:
         yield client
 
@@ -49,13 +49,13 @@ def test_agent_health(agent_client):
     assert body["org_slug"] == "test-org"
 
 
-def test_agent_rpc_stub_returns_jsonrpc_error(agent_client):
+def test_agent_rpc_missing_command_returns_error(agent_client):
     resp = agent_client.post(
         "/rpc",
         json={
             "server_slug": "stub",
-            "command": "npx",
-            "args": ["-y", "some-mcp"],
+            "command": "bash",
+            "args": ["-c", "echo hi"],
             "method": "tools/list",
             "jsonrpc_id": 7,
         },

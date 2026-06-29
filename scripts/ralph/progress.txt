@@ -56,3 +56,6 @@
 ### Iteration log
 - 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
   S1-sandbox-dockerfile DONE: sandbox-image/Dockerfile + agent health/RPC stub; 4 tests green incl docker build.
+- 2026-06-29 iteration 2: S2-sandbox-agent DONE — agent/stdio_manager.py (spawn, JSON-RPC line protocol,
+  env denylist, OAuth hang detection, 8MiB line limit, reaper); POST /rpc wired; 8 tests in test_agent_rpc.py;
+  gate: `gateway/.venv/bin/pytest services/mcp-broker/tests -q` → 12 passed.
