@@ -37,6 +37,22 @@
       `cd gateway && pytest tests/leakhunt` (gateway/tests/leakhunt) — reconcile the location for A2.
   Do NOT pre-mark passes:true — each story flips only on its own green gate.
 - (append dated notes below)
+- 2026-06-29 A1-sdk-harness PASSES (gate green). The conformance suite
+  gateway/ai_mesh_gateway/tests/test_openai_sdk_compat.py already exists and is complete: REAL app over
+  httpx.ASGITransport driven by the stock `openai` SDK, ONLY the upstream provider stubbed. Covers every
+  required cell — chat (non-stream/stream/tool_calls/json_schema/usage), responses
+  (non-stream/typed-stream D5/previous_response_id/store-retrieve-delete/input-items), embeddings
+  (single+batch), models list+retrieve(D4), errors (exception CLASS + e.code/e.type/e.param/e.message
+  populated + e.request_id non-empty across error classes), clean-404 surface. Gate:
+  `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q` →
+  25 passed, 4 xpassed (D2/D3/D4/D5 cells are non-strict xfail and XPASS = fixed in-tree, exactly as the
+  criteria allow). openai PINNED EXACTLY at `openai==2.38.0` in gateway/pyproject.toml [project.optional
+  -dependencies] dev list (recorded here per criterion 3). NOTE: the FULL suite
+  `pytest ai_mesh_gateway/tests -q` shows 17 PRE-EXISTING failures in OTHER files (bedrock_logger/routing,
+  live_uvicorn [run SEPARATELY — mutates globals], phase5/phase6 correlation [global mutation under
+  combined run], policy_check_input_scan, stream_governance, context_guard, org_tpm) — none touched by A1,
+  none in the SDK harness. They belong to later stories' domains / are test-ordering artifacts; do NOT
+  block A1 on them.
 
 ## MCP Sandbox Ralph Loop (2026-06-29)
 
