@@ -95,6 +95,7 @@
 - Broker sandbox routes: `src/sandbox/routes.py` + `src/auth.py` (`X-MCP-Broker-Key` / `MCP_BROKER_INTERNAL_KEY`, fail closed); POST ensure/stdio/rpc, GET status, DELETE destroy; stdio/rpc forwards httpx to sandbox-agent `/rpc` and `touch_activity`; quota via `MCP_SANDBOX_MAX_ORGS`.
 - Broker health: `GET /health` returns `docker_ok` (true when `DockerManager.ping()` succeeds); full wire in `main.py` (sandbox router, registry, reaper lifespan).
 - Compose sandbox stack: `docker compose --profile services up` builds `services/mcp-broker/Dockerfile` + `sandbox-image/Dockerfile`; Docker socket on mcp-broker only; `mcp_sandbox_bridge` network; gateway `MCP_STDIO_IN_PROCESS=false` + shared `MCP_BROKER_INTERNAL_KEY`.
+- Gateway sandbox client: `gateway/ai_mesh_gateway/mcp_sandbox_client.py` — `ensure_sandbox`, `broker_send_jsonrpc`; `X-MCP-Broker-Key` from `MCP_BROKER_INTERNAL_KEY`; 503 exponential backoff (`MCP_SANDBOX_RETRY_*`); 502/503 → safe `RuntimeError` (no agent IP/BYOK in client message); timeouts from `MCP_STDIO_*` forwarded in RPC body.
 
 ### Iteration log
 - 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
@@ -130,6 +131,13 @@
   `MCP_BROKER_INTERNAL_KEY` on broker+gateway, `MCP_STDIO_IN_PROCESS=false` on gateway; documented
   `--profile services`; 2 tests in `test_docker_compose.py`; gate: `docker compose --profile services config`
   → exit 0; broker suite → 59 passed.
+- 2026-06-29 iteration 10: S10-sandbox-client DONE — `gateway/ai_mesh_gateway/mcp_sandbox_client.py`
+  (`ensure_sandbox`, `broker_send_jsonrpc` → POST broker `/v1/sandbox/{org}/ensure` + `/stdio/rpc`);
+  `X-MCP-Broker-Key` from `MCP_BROKER_INTERNAL_KEY`; 503 retry with exponential backoff;
+  502 → safe `RuntimeError` (internal broker detail logged server-side only); timeouts from
+  `MCP_STDIO_INIT_TIMEOUT` / `MCP_STDIO_METHOD_TIMEOUT`; 7 tests in `test_mcp_sandbox_client.py`
+  (httpx mock); gate: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_client.py -q`
+  → 7 passed.
 - 2026-06-29 C1-error-envelope PASSES (gate green). The choke point ALREADY EXISTED from
   prior phase work: `_openai_compat_shim` BaseHTTPMiddleware (main.py:254) is registered
   OUTSIDE auth, rewrites flat {error,message,code} bodies via
