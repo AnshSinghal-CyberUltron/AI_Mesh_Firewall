@@ -99,7 +99,14 @@ PII_PATTERNS: Dict[str, str] = {
     # run-together (`\d{10,15}` right after `+`) or separator-grouped numbers, so an
     # international number with the country code split off by a single dash leaked —
     # incl. through redact_all (the scrubber used on guard-model evidence/advisory).
-    "phone_intl": r"\+(?:\d{10,15}|\d{1,4}[\s\-]?\d{6,12}|\d{1,3}(?:[\s\-]\d{1,4}){2,6})\b",
+    # B2 rigor: the grouped branch capped each group at 4 digits, so the extremely
+    # common 5-digit grouping ("+91 98765 43210", Indian/EU mobiles) escaped while the
+    # docstring claimed to cover separated international numbers. The cap is now {1,5}
+    # so 5+5 groupings are masked too. FP-safety is structural — the leading '+' is a
+    # distinctive E.164 marker (order-id / revenue runs never carry it) and every group
+    # is a fixed bounded quantifier under a single non-nested repeat, so it stays
+    # LINEAR-time (no ReDoS).
+    "phone_intl": r"\+(?:\d{10,15}|\d{1,4}[\s\-]?\d{6,12}|\d{1,3}(?:[\s\-]\d{1,5}){2,6})\b",
     # Dotted phone ("415.555.0142"). The 3.3.4 dotted grouping is distinctive;
     # fixed quantifiers keep it linear and the \b bounds avoid swallowing
     # adjacent digits. Version strings ("1.2.3") and dotted-quad IPs do not fit
