@@ -18,6 +18,10 @@ deliberately KEPT (a legit order id) is never over-redacted.
 These tests drive the REAL ``LLMRouter`` egress path (chat + responses) with only
 the upstream provider faked, and assert the wire reflects the verdict.
 """
+import sys
+from pathlib import Path
+from unittest.mock import AsyncMock
+
 import pytest
 
 from llm_router import LLMRouter
@@ -130,6 +134,72 @@ async def test_b1_responses_string_input_wire_equals_firewall_redaction(monkeypa
     status, _ = await router.aresponses(body, redacted_content=redacted_content)
     assert status == 200
     assert raw_phone not in provider.wire_blob
+
+
+# ── END-TO-END: the REAL chat endpoint must produce egress-truth redaction ──
+# The router-level cells above hand-feed an already-correct ``redacted_content``, so
+# they prove the ROUTER honors a good verdict — but NOT that main.py PRODUCES one.
+# This cell drives the stock SDK against the live chat endpoint with a Tier-2 verdict
+# whose evidence echoes a bare digit run the deterministic regexes (``redact_all``)
+# miss. main.py must pass that VERDICT to ``redact_pii`` (so
+# ``redact_evidence_digit_spans`` masks the run); otherwise ``redact_pii`` degrades to
+# plain ``redact_all`` (scanner.py:854) and the raw digits ride to the provider while
+# the verdict says "redact" — a phantom redaction the unit cells cannot see.
+@pytest.mark.asyncio
+async def test_b1_chat_endpoint_honors_tier2_evidence_digit_span(monkeypatch):
+    _gw_root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(_gw_root))  # so the ``ai_mesh_gateway`` package resolves
+    sys.path.insert(0, str(_gw_root / "ai_mesh_gateway" / "tests"))
+    import test_openai_sdk_compat as H  # in-process app + auth + stock-SDK helpers
+    # Use the SAME module object the harness patches (``ai_mesh_gateway.main``), not the
+    # flat ``main`` the leakhunt conftest also exposes — they are distinct module objects.
+    from ai_mesh_gateway import main as gateway_main
+    from scanner import ScanVerdict
+
+    acct = "4480293185"  # bare 10-digit: no phone/ssn/card shape -> redact_all misses it
+    captured: dict = {}
+
+    async def _capture_completion(body, redacted_prompt=None, **_kw):
+        # ``redacted_prompt`` is exactly the bytes main.py forwards to the provider.
+        captured["redacted_prompt"] = redacted_prompt
+        return 200, {
+            "id": "chatcmpl-b1e2e", "object": "chat.completion", "created": 1700000000,
+            "model": "gpt-4o-mini",
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"},
+                         "finish_reason": "stop"}],
+        }
+
+    app, auth_redis = await H._make_sdk_app(monkeypatch, redis_client=None)
+
+    async def _scan(text, *a, **k):
+        # A Tier-2 guard flags a bare account number; evidence echoes the raw digits.
+        return ScanVerdict(
+            action="redact", threat_type="pii",
+            matched_patterns=["llm_guard_pii"],
+            scan_meta={"findings": [{"evidence": f"account {acct} flagged"}]},
+        )
+
+    monkeypatch.setattr(gateway_main.INPUT_SCANNER, "scan_prompt", _scan)
+    monkeypatch.setattr(gateway_main.INPUT_SCANNER, "scan_prompt_with_tier2", _scan)
+    monkeypatch.setattr(gateway_main.LLM_ROUTER, "acompletion",
+                        AsyncMock(side_effect=_capture_completion))
+
+    client = H._stock_client(app)
+    try:
+        await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": f"the reference value is {acct} per the audit"}],
+        )
+    finally:
+        await auth_redis.aclose()
+
+    red = captured.get("redacted_prompt")
+    assert red is not None, "main.py forwarded a redact-verdict prompt without redacting"
+    assert acct not in red, (
+        "phantom redaction: verdict said redact but the raw bare digit span reached the "
+        f"provider; redacted_prompt={red!r}"
+    )
 
 
 @pytest.mark.asyncio

@@ -6247,7 +6247,13 @@ async def proxy_chat(
                     "PII/secret detected, redacting before LLM call (type=%s, patterns=%s, user=%s)",
                     verdict.threat_type, _safe_patterns, user_id,
                 )
-                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt)
+                # B1 (egress = truth): pass the VERDICT so redact_pii applies its
+                # authoritative redaction (redact_all + redact_evidence_digit_spans for
+                # Tier-2 evidence digit runs the regexes miss). Without it, redact_pii
+                # degrades to plain redact_all (scanner.py:854) and a Tier-2-flagged
+                # bare digit span would ride RAW to the provider while the verdict says
+                # "redact" — a phantom redaction. Matches the embeddings egress path.
+                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
                 redacted_prompt = effective_prompt
             elif (
                 verdict.threat_type == "pii"
@@ -6261,7 +6267,9 @@ async def proxy_chat(
 
             if verdict.action == "flag" and _redact_threat:
                 LOG.info("PII/secret flagged in prompt, redacting before LLM call (user=%s)", user_id)
-                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt)
+                # B1 (egress = truth): pass the verdict (see the redact-action branch
+                # above) so Tier-2 evidence digit spans are masked, not just regex hits.
+                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
                 redacted_prompt = effective_prompt
 
         if not AGENT_ID or not CONFIG["backend_url"]:
