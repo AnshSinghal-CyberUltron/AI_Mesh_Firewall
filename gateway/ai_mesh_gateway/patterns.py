@@ -24,6 +24,26 @@ def compile_pattern(pattern: str) -> re.Pattern[str]:
     return re.compile(pattern, re.IGNORECASE)
 
 
+# B2-redactor-coverage: a trailing 10-digit US phone that may carry a SINGLE
+# separator (space / dot / hyphen) between groups. Used ONLY in the
+# context-gated ``phone_us_bare_contextual`` pattern below, so a phone cue
+# always precedes it — keeping order-id / revenue runs (which never carry a
+# phone cue) untouched. The branches enumerate every realistic grouping whose
+# digits sum to exactly 10 (contiguous, 5+5, 4+6, 3-3-4, 3+7); the trailing
+# ``\b`` plus the fixed total prevents swallowing a longer numeric id (an
+# 11+ digit run fails ``\b`` after 10 contiguous digits and has no matching
+# split branch, so it is left raw rather than partially masked). Every
+# quantifier is fixed and each separator is mandatory in its branch — no
+# ambiguous optional-repeat, so it stays LINEAR-time (no ReDoS).
+_BARE_PHONE_10_SPLIT = (
+    r"(?:\d{10}"
+    r"|\d{5}[\s.\-]\d{5}"
+    r"|\d{4}[\s.\-]\d{6}"
+    r"|\d{3}[\s.\-]\d{3}[\s.\-]\d{4}"
+    r"|\d{3}[\s.\-]\d{7})"
+)
+
+
 PII_PATTERNS: Dict[str, str] = {
     "credit_card": r"\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b",
     "ssn": r"\b\d{3}-\d{2}-\d{4}\b",
@@ -99,6 +119,11 @@ PII_PATTERNS: Dict[str, str] = {
     # (which preserves any run already present in redacted_content as a value the
     # firewall chose to keep) let it ride. Detecting it HERE masks it everywhere
     # downstream — verdict, redact_pii/redacted_content, redact_all, and the backstop.
+    # B2: the trailing value broadened from contiguous ``\d{10}`` to
+    # ``_BARE_PHONE_10_SPLIT`` so separator-split 10-digit phones behind a phone
+    # cue ("please call me at 89295 54991" — the G0 5+5 leak) are also masked.
+    # Context-gating is unchanged, so order-id / revenue runs (no phone cue) are
+    # still untouched.
     "phone_us_bare_contextual": (
         r"(?:"
         # "phone/mobile/cell/tel [number] is/:" 8929554991
@@ -107,7 +132,7 @@ PII_PATTERNS: Dict[str, str] = {
         r"|\b(?:call|text|dial|ring|sms|reach|contact|phone)\s+(?:me\s+|us\s+)?(?:back\s+)?(?:at|on)\s+"
         # possessive: "my/the [phone/mobile/cell] number/no/# [is]" 8929554991
         r"|\b(?:my|the)\s+(?:phone\s+|mobile\s+|cell\s+)?(?:number|no\.?|#)\s+(?:is\s+)?"
-        r")\d{10}\b"
+        r")" + _BARE_PHONE_10_SPLIT + r"\b"
     ),
     # N-CRED FIX: the original r"\bsk-[a-zA-Z0-9]{32,}\b" required an UNBROKEN
     # alphanumeric run, so it MISSED every modern hyphenated key format —
@@ -503,12 +528,13 @@ def _mask_secret_assignment(m: re.Match) -> str:
 
 
 def _mask_phone_bare_contextual(m: re.Match) -> str:
-    """Mask only the trailing 10-digit run in a contextual phone phrase."""
+    """Mask only the trailing 10-digit phone (contiguous OR separator-split) in a
+    contextual phone phrase, preserving the cue prefix."""
     s = m.group(0)
-    digits_match = re.search(r"\d{10}\b", s)
+    digits_match = compile_pattern(_BARE_PHONE_10_SPLIT + r"\b").search(s)
     if not digits_match:
         return s
-    digits = digits_match.group(0)
+    digits = re.sub(r"\D", "", digits_match.group(0))
     masked = f"***-***-{digits[-4:]}"
     return s[: digits_match.start()] + masked + s[digits_match.end() :]
 
