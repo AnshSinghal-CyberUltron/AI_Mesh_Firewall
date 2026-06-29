@@ -671,7 +671,10 @@ async def test_error_bad_body_raises_bad_request(sdk_client):
     assert excinfo.value.status_code == 400
 
 
-@pytest.mark.xfail(strict=False, reason="D2: chat-path block must populate e.code/e.type/e.message (a flat envelope left them None); fix is in-tree (_build_safe_block_response main.py:599) so XPASS is expected")
+# C1 (D2): the chat-path block now populates the nested OpenAI error envelope via the
+# universal /v1 compat shim choke point (_openai_compat_shim, main.py:254) +
+# _build_safe_block_response. The fix landed, so this is a REAL passing cell (no longer
+# xfail) — e.code/e.type/e.message must be non-None on a block.
 @pytest.mark.asyncio
 async def test_error_fields_populated_on_block_D2(sdk_client):
     with pytest.raises(openai.APIStatusError) as excinfo:
@@ -685,7 +688,9 @@ async def test_error_fields_populated_on_block_D2(sdk_client):
     assert err.message
 
 
-@pytest.mark.xfail(strict=False, reason="D3: a blocked error must carry e.request_id from the x-request-id header; fix is in-tree (main.py:684 + shim 241-277) so XPASS is expected")
+# C1 (D3): the same shim guarantees an x-request-id header on every /v1 error response, so
+# the SDK's error.request_id is populated even on a block. The fix landed (main.py:684 +
+# shim 254-287) — REAL passing cell, no longer xfail.
 @pytest.mark.asyncio
 async def test_error_request_id_present_on_block_D3(sdk_client):
     with pytest.raises(openai.APIStatusError) as excinfo:
