@@ -138,7 +138,7 @@
       "id": "C3-responses-stream",
       "title": "Responses typed-stream event conformance (D5)",
       "priority": 0,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "A1-sdk-harness",
         "C2-dead-route"
