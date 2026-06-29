@@ -1,0 +1,24 @@
+## Codebase Patterns
+- Services/ports: control plane :8100, gateway :8300; frontend Vite proxies /v1->8300 and /api->8100. chromadb test store at localhost:8001.
+- Starlette routing is FIRST-MATCH-WINS. Duplicate @app.post(same path): the FIRST registered handler serves traffic; later ones are dead code. (Verified empirically.)
+- responses_adapters.py is the canonical OpenAI translation layer. Reuse build_openai_error and coerce_chat_error_to_openai for the nested {"error":{message,type,param,code}} envelope. ID prefixes: resp_/msg_/fc_; usage remap prompt_tokens->input_tokens etc.
+- patterns.redact_all + detect_pii share PII_PATTERNS and are intentionally conservative on phones (require a separator, to avoid matching order-ids/revenue). Extend with context-gating; do NOT remove the false-positive protection.
+- The OUTPUT guard already downgrades "redact"->"flag" when the bytes didn't change (main.py ~1330). The INPUT/egress path lacks this honesty check — add it (story B1).
+- /v1/embeddings currently does NOT scan/redact input — it only gates model/kill-switch (story B3).
+- RAG ingest stores documents + metadata in the vector store and metadata flows into generator prompts; rag_redaction_enabled defaults False (story B5). RAG embed/grounding are fail-closed via assume_redacted=True — but that checks the FLAG not the bytes (story B1/B4).
+
+## Environment / harness gotchas (discovered this repo)
+- Gateway tests run with the gateway venv: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q` (PYTHONPATH may need the shared/ + ai_mesh_gateway dirs). Plain `python` may not have deps.
+- control container: WorkingDir is /app/control/ai_mesh_control (so daphne can import main_app); manage.py lives one level up, so exec it with `-w /app/control -e PYTHONPATH=/app/control/ai_mesh_control`. Recreate control with explicit `-f docker-compose.yml -f docker-compose.override.yml` (default discovery drops the working_dir override).
+- A1 SDK harness already exists at gateway/ai_mesh_gateway/test_openai_sdk_compat.py path (tests/). tests/leakhunt does NOT exist yet (A2 creates it under gateway/).
+
+## PRIME INVARIANTS (every leak/security story)
+- Egress = truth: a redact/block verdict (or assume_redacted=True) is valid ONLY if the captured outbound bytes reflect it.
+- Attestation must be byte-verified: if the scrubber is a no-op on a flagged span, fail closed (stronger scrub or block) — never forward/embed/store raw while attesting clean.
+
+## Test harness patterns
+- Conformance: httpx.ASGITransport + stock `openai` SDK against the real app; stub ONLY the upstream provider (LLM_ROUTER.acompletion/_stream/aembedding/aresponses). Use max_retries=0 so raw status is visible. Assert the PARSED pydantic object and e.code/e.type/e.param/request_id.
+- Leak: a recording fake provider captures exact egress bytes; assert no raw corpus fixture present. Cross-check with an independent oracle (mcp__ruflo__aidefence_has_pii) so detection doesn't depend on the same regexes under test. For at-rest, query chromadb directly.
+
+## Iteration log
+- (append dated notes below)
