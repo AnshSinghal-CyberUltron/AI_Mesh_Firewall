@@ -124,7 +124,7 @@
       "id": "S10-sandbox-client",
       "title": "Gateway mcp_sandbox_client.py HTTP client",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": ["S6-broker-routes"],
       "userStory": "As gateway I need HTTP client wrapping broker stdio/rpc and ensure.",
       "acceptanceCriteria": [

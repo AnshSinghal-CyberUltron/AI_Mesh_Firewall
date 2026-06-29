@@ -1,5 +1,5 @@
 ---
-iteration: 9
+iteration: 10
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 ---
@@ -59,6 +59,11 @@ Integration test `test_mcp_sandbox_parallel_load.py` (or equivalent) that:
 3. Append learnings to `scripts/ralph/progress.txt` under `## MCP Sandbox Ralph Loop`.
 4. Use gateway venv for gateway tests: `cd gateway && ./.venv/bin/python -m pytest ...`
 5. Security: never inject gateway secrets into sandboxes; egress bytes remain source of truth for scan/audit (unchanged in `mcp_proxy.py`).
+
+## Iteration 10 complete
+
+- **S10-sandbox-client** — `gateway/ai_mesh_gateway/mcp_sandbox_client.py` (`ensure_sandbox`, `broker_send_jsonrpc`); `X-MCP-Broker-Key` from `MCP_BROKER_INTERNAL_KEY`; 503 exponential backoff; 502 → safe `RuntimeError`; timeouts from `MCP_STDIO_*`; 7 tests in `test_mcp_sandbox_client.py` (httpx mock); gate 7 passed.
+- **Next:** S11-stdio-adapter-branch (`MCP_STDIO_IN_PROCESS` routing in `mcp_stdio_adapter.send_jsonrpc`).
 
 ## Iteration 9 complete
 
