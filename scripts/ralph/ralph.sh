@@ -3,7 +3,7 @@
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG="$SCRIPT_DIR/ralph.log"
-PROMISE="COMPLETE"
+PROMISE="${2:-COMPLETE}"
 MAX_ITERS="${1:-30}"      # default 30 (we have ~17 stories; leave headroom for splits/retries)
 
 echo "=== Ralph start $(date -u +%FT%TZ) max_iters=$MAX_ITERS ===" | tee -a "$LOG"

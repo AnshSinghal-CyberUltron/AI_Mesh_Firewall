@@ -21,4 +21,38 @@
 - Leak: a recording fake provider captures exact egress bytes; assert no raw corpus fixture present. Cross-check with an independent oracle (mcp__ruflo__aidefence_has_pii) so detection doesn't depend on the same regexes under test. For at-rest, query chromadb directly.
 
 ## Iteration log
+- 2026-06-29 (pre-loop seed) Prior commits THIS repo already cover much of the leak backlog — run each
+  story's real gate, confirm, and flip fast (do NOT re-implement from scratch):
+    * B1 honesty = f31b5275 (Tier-2 must not downgrade a Tier-1 redact) + 19e72e2d (output-guard honesty).
+      B1's remaining job: mirror/byte-verify the no-op-scrub fail-closed on the INPUT/egress path.
+    * B2 phone = 15cb2be8 (imperative-lead-in bare-phone context-gating in patterns.py: "call/text/reach
+      me at <10-digit>", FP-safe: order-id / "call N customers" untouched). B2 broadens to 5+5 / +CC.
+    * B3 embeddings = 5c4968ec + gateway/.../tests/test_embedding_input_redaction.py
+      (main._scan_redact_embedding_inputs already scans/redacts /v1/embeddings input).
+    * tool-def description redaction = 6101ed37; IP/host/URL output-channel scrub = 091ea46a (E15).
+    * A2 partial = 71496ea7 (hermetic gateway/.../tests/test_egress_wire_capture.py taps litellm and
+      asserts no raw PII on the serialized payload) + REPO-ROOT tests/leakhunt/capture_addon.py
+      (mitmproxy addon). A2's recording_provider.py / corpus.py / test_repro_g0.py are NOT built yet.
+      PATH NOTE: capture_addon.py is at repo-root tests/leakhunt, but the CLAUDE.md gate runs
+      `cd gateway && pytest tests/leakhunt` (gateway/tests/leakhunt) — reconcile the location for A2.
+  Do NOT pre-mark passes:true — each story flips only on its own green gate.
 - (append dated notes below)
+
+## MCP Sandbox Ralph Loop (2026-06-29)
+
+**Backlog:** `scripts/ralph/prd-mcp-sandbox.json` (separate from gateway hardening `prd.json`).
+**Plan:** `.skill-workspace/implementation_plan.md` — Phase 1 runc, one sandbox per org, extend mcp-broker.
+**Cursor scratchpad:** `.cursor/ralph/scratchpad.md` (completion promise: "COMPLETE and tested from frontend and backend").
+**Bash loop:** `scripts/ralph/ralph-mcp-sandbox.sh` [max_iters] [completion_promise].
+
+### Patterns
+- mcp-broker is Sandbox Controller; gateway keeps policy/scan/audit in mcp_proxy.py.
+- Dev: `MCP_STDIO_IN_PROCESS=true` → existing mcp_stdio_adapter in-process spawn.
+- Prod: `MCP_STDIO_IN_PROCESS=false` → broker HTTP → per-org container → sandbox-agent :9320.
+- Docker socket ONLY on mcp-broker, never gateway.
+- Final gate: 5 orgs × 5 MCP servers parallel (`E1-parallel-load`), no cross-tenant leakage.
+- Broker tests: `pytest services/mcp-broker/tests -q`; gateway venv for gateway tests.
+
+### Iteration log
+- 2026-06-29 iteration 1: Ralph loop scaffolded (scratchpad, prd-mcp-sandbox.json, ralph-mcp-sandbox.sh).
+  S1-sandbox-dockerfile DONE: sandbox-image/Dockerfile + agent health/RPC stub; 4 tests green incl docker build.
