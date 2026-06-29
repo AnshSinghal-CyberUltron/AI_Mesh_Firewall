@@ -9,8 +9,31 @@ ultrathink. Work fully autonomously — never ask for confirmation (you run head
 2. Read scripts/ralph/prd.json. Pick the SINGLE highest-priority story with passes:false whose
    `dependencies` are all already passes:true. If none are unblocked, pick the highest-priority
    unblocked-by-priority story. Implement ONLY that one story this iteration.
+   IF EVERY story already has passes:true → enter RIGOROUS VERIFICATION MODE (section below): pick the
+   highest-priority story NOT yet listed under the latest "## Rigor round" in progress.txt and
+   ADVERSARIALLY re-prove it this iteration. Do NOT trust the passes:true flag.
 3. mcp__ruflo__memory_search(query="<story id + keywords>", namespace="gateway"): reuse any prior
    pattern. Load the two Prime Invariants from progress.txt for any leak/security story.
+
+## RIGOROUS VERIFICATION MODE (when all stories pass — this is the WHOLE point of the min-iteration floor)
+Do NOT trust passes:true. The loop enforces a minimum iteration count, so an early all-pass will NOT
+stop it — keep hunting and fixing gaps. For the chosen story, re-prove it FOR REAL using EVERY tool:
+- Run its REAL gate (Step 3) PLUS adversarial edge cases the gate may miss.
+- Leak stories: the captured EGRESS BYTES are the only truth; cross-check with an INDEPENDENT oracle so
+  detection doesn't rely on the same regexes under test — mcp__ruflo__aidefence_has_pii / aidefence_scan
+  over the egress bytes (and chromadb-at-rest for B5). If a redact/block verdict or assume_redacted is
+  NOT reflected in the bytes → real gap.
+- SDK stories: drive the stock `openai` SDK harness cells; assert the PARSED pydantic object AND
+  e.code/e.type/e.param/e.message populated + e.request_id non-empty + the typed responses-stream event
+  sequence. A flat envelope or missing request id = real gap.
+- UI stories: dev-browser + Playwright MCP — click the control, assert the RESULT matches backend + the
+  honest display (a claimed redaction must show redacted on screen; dashboard counts must match reality).
+- Use the Workflow tool (Ultracode is ON) to fan out parallel adversarial verifiers, and/or a small
+  Ruflo swarm (swarm_init hierarchical maxAgents=3). Use the right skill (TDD / root-cause /
+  defense-in-depth / dev-browser).
+- If you find ANY real gap: set that story passes:false, fix it, re-run the gate, commit. Otherwise
+  append "rigor-verified: <story-id> <date> — <how proven>" under a "## Rigor round <date>" heading in
+  progress.txt and commit. Only output the COMPLETE promise once EVERY story is rigor-verified THIS round.
 
 ## Step 2 — Implement that ONE story (small, focused)
 - Use the right skill: dev-browser for UI stories; skill-test-driven-development + skill-root-cause-
@@ -54,7 +77,10 @@ Frontend stories (there is NO `npm run lint` script in package.json — do NOT c
   mcp__ruflo__neural_train(<trajectory>).
 
 ## Step 6 — Completion check
-- If EVERY story in prd.json now has passes:true, output exactly: <promise>COMPLETE and tested from frontend and backend</promise>
+- Output exactly `<promise>COMPLETE and tested from frontend and backend</promise>` ONLY if every story
+  is passes:true AND every story has been rigor-verified in the CURRENT "## Rigor round" of progress.txt
+  (backend gates green re-run + independent oracle, AND the frontend stories browser-verified). The loop
+  also enforces a minimum iteration count, so do not rush this — keep finding and fixing gaps.
 - Otherwise, end normally (the loop spawns the next fresh iteration).
 
 Constraints: one story per iteration; never break a passing gate (CI must stay green — broken code
