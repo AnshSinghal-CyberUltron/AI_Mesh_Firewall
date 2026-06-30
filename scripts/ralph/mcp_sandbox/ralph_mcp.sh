@@ -14,12 +14,37 @@ LOAD_MAX="${LOAD_MAX:-16}"                 # wait until 1-min load < this before
 BROKER_NAME="ai_mesh_mcp_broker_2"
 BROKER_URL="${MCP_BROKER_URL:-http://127.0.0.1:8312}"
 KEY="${MCP_BROKER_INTERNAL_KEY:-dev-mcp-broker-key-change-me}"
+BROKER_BASE_NET="${MCP_BROKER_BASE_NET:-mcp_sandbox_bridge_2}"   # broker#2's OWN base bridge
+BROKER_IMAGE="${MCP_BROKER_IMAGE:-ai_mesh_firewall-mcp-broker}"
+BROKER_HOST_PORT="${MCP_BROKER_HOST_PORT:-8312}"
 export MCP_BROKER_URL="$BROKER_URL" MCP_BROKER_INTERNAL_KEY="$KEY"
 
-ensure_broker() {  # restart + wait for /health 200 (broker#2 gets OOM-killed under load)
+recreate_broker() {  # under host saturation broker#2 can be REMOVED (not just stopped); `docker start`
+                     # cannot bring back a removed container — recreate it from the :8311 template.
+                     # NEVER touches :8311 / alpha-delta; own net mcp_sandbox_bridge_2, own port 8312.
+  docker network inspect "$BROKER_BASE_NET" >/dev/null 2>&1 || docker network create "$BROKER_BASE_NET" >/dev/null 2>&1 || true
+  docker rm -f "$BROKER_NAME" >/dev/null 2>&1 || true
+  docker run -d --name "$BROKER_NAME" \
+    --network "$BROKER_BASE_NET" \
+    -p "${BROKER_HOST_PORT}:8311" \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -e MCP_BROKER_INTERNAL_KEY="$KEY" \
+    -e MCP_SANDBOX_IMAGE=ai-mesh/mcp-sandbox:latest \
+    -e MCP_SANDBOX_NETWORK="$BROKER_BASE_NET" \
+    -e MCP_SANDBOX_IDLE_TIMEOUT=3600 \
+    -e MCP_BROKER_CONTAINER_NAME="$BROKER_NAME" \
+    --restart unless-stopped \
+    "$BROKER_IMAGE" >/dev/null 2>&1 || true
+}
+
+ensure_broker() {  # restart/recreate + wait for /health 200 (broker#2 gets OOM-killed OR removed under load)
   for _ in $(seq 1 45); do
     [ "$(curl -s --max-time 3 -H "X-MCP-Broker-Key: $KEY" -o /dev/null -w '%{http_code}' "$BROKER_URL/health" 2>/dev/null)" = "200" ] && return 0
-    docker start "$BROKER_NAME" >/dev/null 2>&1 || true
+    if docker inspect "$BROKER_NAME" >/dev/null 2>&1; then
+      docker start "$BROKER_NAME" >/dev/null 2>&1 || true   # exists but stopped
+    else
+      recreate_broker                                        # gone entirely — rebuild it
+    fi
     sleep 2
   done
   return 1

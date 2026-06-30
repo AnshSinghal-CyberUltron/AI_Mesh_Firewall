@@ -68,3 +68,25 @@ its OWN sandbox and actively trying to break out / read the sibling org's data.
 
 ## Log
 (iterations append dated notes below)
+
+## 2026-06-30T21:47Z — iter (M1): HOST-SATURATION BLOCKED (no fake-green, no fake-red)
+- Target story: M1 (iso gate green). Outcome: NOT run to completion — host saturated.
+- Host state this iteration: load avg oscillated 30 → 48 → 61 (loop's safe LOAD_MAX=16; progress
+  notes say broker#2 OOM-flaps at load 25-29 — we were 2-4x over that the whole window).
+- broker#2 was found "unhealthy" then its PID went ZOMBIE (docker daemon could not reap it under
+  load: "PID 56540 is zombie and can not be killed"); after the failed restart it exited, then was
+  REMOVED entirely ("no such object"). `docker start` cannot recover a removed container.
+- 3 gate attempts (LEAK_PROBE_HAMMER_ROUNDS=4 each): ALL died on the FIRST broker call with
+  "fetch failed" / health HTTP 000. runs/iso_gate.json showed `steps: []` every time → ZERO
+  isolation logic executed. The broker container was destroyed mid-gate (saturation/OOM/removal),
+  NOT an isolation breach. Recorded as neither pass nor fail per the loop playbook.
+- ROOT-CAUSE HARNESS FIX (additive, this branch): ralph_mcp.sh `ensure_broker()` previously only
+  ran `docker start` — which CANNOT bring back a *removed* container, so the loop was permanently
+  bricked once broker#2 was rm'd under load. Added `recreate_broker()` (replicates the :8311
+  broker config onto broker#2: own net mcp_sandbox_bridge_2, port 8312, docker.sock, own
+  CONTAINER_NAME env) and made ensure_broker `docker inspect`-gate: start if present, recreate if
+  gone. NEVER touches :8311 / alpha-delta / services/mcp-broker.
+- Left broker#2 recreated and running with `--restart unless-stopped` (Docker auto-revives on
+  OOM-exit). Derived the recreate config by READ-ONLY inspect of the live :8311 broker template.
+- DECISION: M1 stays passes:false. Next fresh iteration retries when host has headroom (parallel
+  session's :8311 load was the saturation source; nothing isolation-related to fix here).
