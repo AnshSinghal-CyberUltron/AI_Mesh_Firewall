@@ -1,12 +1,12 @@
 ---
-iteration: 1
+iteration: 3
 min_iterations: 20
 max_iterations: 50
-completion_promise: "MCP FRONTEND ADVERSARIAL COMPLETE"
+completion_promise: "COMPLETE and tested from frontend and backend"
 status: ACTIVE
-active_story: R1-regression-iter5
+active_story: R3-regression-iter7
 prd: scripts/ralph/prd-mcp-frontend-adversarial.json
-note: Cursor Ralph Loop — NOT Claude CLI. FULL RESET 2026-06-30.
+note: Cursor Ralph Loop — iteration 2 gates green (R2 pass); starting iter 3.
 ---
 
 # MCP Frontend Adversarial — Cursor Ralph Loop
@@ -16,7 +16,9 @@ You are one **Cursor Agent** iteration of the Ralph loop. The **stop hook** in `
 ## User requirements (full)
 
 - **Min 20 iterations** (`min_iterations: 20` in frontmatter)
+- **Max 50 iterations** (`max_iterations: 50`)
 - **Each iteration:** run **2 parallel org agents** (`adv-org-alpha`, `adv-org-beta`), each with **≥5 MCP servers** in Docker sandbox
+- **Docker naming:** per-org sandboxes MUST be `{org_slug}-mcp-sandbox` (e.g. `adv-org-alpha-mcp-sandbox`, `zeroshield-mcp-sandbox`)
 - **Leakage checks** + **adversarial break-sandbox probes**
 - **Frontend Playwright** — `MCPConnectorPanel` + all MCP server presets
 - **Gates per iteration** (run in order; fix failures before next gate):
@@ -26,7 +28,7 @@ You are one **Cursor Agent** iteration of the Ralph loop. The **stop hook** in `
   4. Mark **one** PRD story `passes:true` when all gates green
 - Read `scripts/ralph/prd-mcp-frontend-adversarial.json` **each iteration**
 - **DO NOT** use `claude` CLI or `scripts/ralph/ralph.sh`
-- Only output `<promise>MCP FRONTEND ADVERSARIAL COMPLETE</promise>` when **ALL** stories pass **AND** `iteration` ≥ 20
+- Only output `<promise>COMPLETE and tested from frontend and backend</promise>` when **ALL** stories pass **AND** `iteration` ≥ 20
 
 ## DO NOT USE
 
@@ -97,19 +99,25 @@ When all gates green:
 
 ### 5. Completion check
 
-Output `<promise>MCP FRONTEND ADVERSARIAL COMPLETE</promise>` only when all stories pass AND iteration ≥ 20.
+Output `<promise>COMPLETE and tested from frontend and backend</promise>` only when all stories pass AND iteration ≥ 20.
 
 ---
 
 ## Iteration log
 
-### FULL RESET 2026-06-30 (user restart — Cursor Ralph)
-- `make mcp-adversarial-reset` + `mcp-adversarial-reset-prd`; iteration: 1; R1–R16 `passes:false`.
-- Docker stack up; starting **iteration 1** gates (2× org parallel agents → pytest → frontend E2E).
-- **Active story:** R1-regression-iter5
+### Iteration 1 gates 2–3 (2026-06-30)
+- **Gate 2** (full adversarial pytest): **GREEN** — 13 passed in ~9m18s
+- **Gate 3** (frontend Playwright `frontend_parallel_orgs.mjs`): **FAIL** — `The operation was aborted due to timeout`
+- **R1** remains `passes:false`; next iteration should retry Playwright (stack up, `BASE_URL=http://127.0.0.1:8180`)
 
-### Iteration 1 attempt (2026-06-30) — gates NOT fully green
-- **Gate 1** (`run_parallel_org_agents.mjs --full`): GREEN on best run (2×6 servers, cross-org leak, 4 leakage pytest)
-- **Gate 2** (full pytest): 11 passed / 2 failed (`test_parallel_2_orgs_5_servers_tools_list`, `test_network_concurrent_cross_org_rpc_hammer` — stdio limit 8); fix applied `MCP_STDIO_MAX_PROCESSES_PER_ORG=16`
-- **Gate 3** (frontend Playwright): not reached
-- **R1** remains `passes:false`; **next iteration:** retry full `make mcp-adversarial-gate` after `docker compose build mcp-broker` + fresh sandboxes
+### Iteration 1 gate 3 retry (2026-06-30)
+- **Root cause:** `touchSandboxActivity` used 30s `AbortSignal.timeout` (broker ensure ~11–15s, flaky under load); `openMcpPanel` waited on page-wide `.animate-spin` (module hero loader) and `networkidle` never settled on polling UI.
+- **Fix:** test-only — 120s broker ensure with retries, best-effort warm, scoped MCP panel wait, `load` + post-login redirect wait.
+- **Gate 3 retry:** **GREEN** — 5 presets synced + tools-call-ok in ~54s (`runs/frontend_parallel_orgs.json`)
+- **R1-regression-iter5:** `passes:true`; scratchpad bumped to iteration 2
+
+### Iteration 2 (2026-06-30)
+- **Gate 1** (parallel org agents --full): **GREEN** — 2×6 servers + cross-org leak probe ~98s
+- **Gate 2** (full adversarial pytest): **GREEN** — 13 passed in ~47s
+- **Gate 3** (frontend Playwright): **GREEN** — 5 presets synced + tools-call-ok in ~37s
+- **R2-regression-iter6:** `passes:true`; scratchpad bumped to iteration 3

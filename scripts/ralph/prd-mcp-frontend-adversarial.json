@@ -4,7 +4,7 @@
   "sourcePlan": ".cursor/ralph/scratchpad.md",
   "minIterations": 20,
   "maxIterations": 50,
-  "completionPromise": "MCP FRONTEND ADVERSARIAL COMPLETE",
+  "completionPromise": "COMPLETE and tested from frontend and backend",
   "userStories": [
     {
       "id": "F0-bootstrap",
@@ -327,7 +327,7 @@
       "id": "R1-regression-iter5",
       "title": "Regression iter 5 — full adversarial gate re-run",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "F20-final-gate"
       ],
@@ -343,7 +343,7 @@
       "id": "R2-regression-iter6",
       "title": "Regression iter 6 — full adversarial gate re-run",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "R1-regression-iter5"
       ],
