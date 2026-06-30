@@ -60,7 +60,17 @@ observability-apply:
 verify-observability:
 	bash scripts/verify-observability-local.sh
 
-# MCP frontend adversarial Ralph regression (run long loops in Terminal — see START_IN_TERMINAL.md)
+# MCP frontend adversarial — Cursor Ralph Loop (see scripts/ralph/README-CURSOR-RALPH.md)
+mcp-adversarial-gate:
+	node scripts/ralph/run_parallel_org_agents.mjs --full
+	cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q
+	BASE_URL=http://127.0.0.1:8180 node tests/e2e/mcp_sandbox_adversarial/frontend_parallel_orgs.mjs
+
+mcp-adversarial-reset-prd:
+	@test -f scripts/ralph/prd-mcp-frontend-adversarial.json || (echo "PRD not found" && exit 1)
+	@tmp=$$(mktemp) && jq '(.userStories[] | select(.id | startswith("R")) | .passes) = false' scripts/ralph/prd-mcp-frontend-adversarial.json >$$tmp && mv $$tmp scripts/ralph/prd-mcp-frontend-adversarial.json
+	@echo "PRD: R1–R16 reset to passes:false (F stories unchanged)"
+
 mcp-adversarial-reset:
 	bash scripts/ralph/mcp-adversarial-reset.sh
 
@@ -69,5 +79,6 @@ mcp-adversarial-iter:
 	bash scripts/ralph/run_logical_iteration.sh $(ITER)
 
 mcp-adversarial-loop:
-	@echo "Run in Terminal (not Cursor subagent):"
+	@echo "Cursor Ralph: say 'continue Ralph loop' in chat (see README-CURSOR-RALPH.md)"
+	@echo "Terminal alternative:"
 	@echo "  cd $(CURDIR) && for i in \$$(seq 1 20); do ./scripts/ralph/run_logical_iteration.sh \$$i || exit 1; done"
