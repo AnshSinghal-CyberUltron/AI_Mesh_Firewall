@@ -1,0 +1,70 @@
+# MCP Sandbox Isolation — Ralph loop progress / cross-context memory
+
+This loop rigorously tests whether the MCP sandbox broker keeps per-org stdio MCP
+servers ISOLATED (no cross-org leakage, no secret exfil, no sandbox breakout), using
+2 parallel adversarial org agents per iteration, each driving 6 stdio MCP servers in
+its OWN sandbox and actively trying to break out / read the sibling org's data.
+
+## Codebase Patterns (read first, every iteration)
+
+### Dedicated isolated broker (NEVER touch the :8311 broker)
+- A SECOND mcp-broker runs ONLY for this loop: container `ai_mesh_mcp_broker_2`,
+  host port **:8312** (-> container 8311), base net `mcp_sandbox_bridge_2`,
+  env MCP_BROKER_CONTAINER_NAME=ai_mesh_mcp_broker_2, image ai_mesh_firewall-mcp-broker.
+- Key: `dev-mcp-broker-key-change-me` (header `X-MCP-Broker-Key`).
+- MY ORGS = `adv-org-epsilon`, `adv-org-zeta` ONLY. Per-org nets `mcp_sandbox_net_adv-org-{epsilon,zeta}`.
+- The PARALLEL SESSION owns :8311 (`ai_mesh_mcp_broker`) + orgs alpha/beta/gamma/delta +
+  `main`. It restarts that broker constantly and commits every ~10 min. DO NOT use :8311,
+  alpha, beta, gamma, delta. DO NOT edit `services/mcp-broker/**` (handoff backend holes).
+
+### Broker API contract (verified)
+- GET  /health                         -> {status, docker_ok}  (needs key)
+- POST /v1/sandbox/{org}/ensure        body {warm:true} -> {container_id, status}
+- POST /v1/sandbox/{org}/stdio/rpc     body {server_slug,command,args,env,method,params,jsonrpc_id}
+- GET  /v1/sandbox/{org}/status        -> {status}   ; DELETE /v1/sandbox/{org} (teardown)
+- Sandbox agent listens on :9320 INSIDE the sandbox (waitForAgent probes /health there).
+- Stub MCP server exposes only tools: `echo`, `get_env`.
+
+### Bootstrap (REQUIRED before any stdio rpc — the stub is NOT in the image)
+  ensure(org) -> wait sandbox-agent(:9320) healthy -> `docker cp
+  services/mcp-broker/tests/fixtures/stdio_mcp_stub.py {cid}:/data/mcp-auth/stdio_mcp_stub.py`
+  A fresh sandbox with no stub returns an EMPTY tools/list (looks like a bug but isn't).
+
+### The gate (this loop's per-iteration quality gate)
+  MCP_BROKER_URL=http://127.0.0.1:8312 node scripts/ralph/mcp_sandbox/run_iso_orgs.mjs
+  -> bootstrap both orgs, 2 parallel org_worker.mjs (6 servers + env-exfil probes),
+     cross-org leak hammer (markers + secret denylist). Writes runs/iso_gate.json.
+  Exit 0 == isolation holds. Any non-empty foreign marker / secret == ISOLATION BREACH.
+
+### Isolation assertions (what "no leak" means)
+- epsilon must NEVER see `marker-adv-org-zeta` (and vice-versa); each sees only its own.
+- get_env on GATEWAY_INTERNAL_API_KEY / MCP_BROKER_INTERNAL_KEY / DATABASE_URL /
+  AWS_SECRET_ACCESS_KEY / DJANGO_SECRET_KEY must return EMPTY from inside any sandbox.
+- Reaper is org-scoped + per-broker registry (registry.remove(org_slug)); idle 3600s.
+
+## CRITICAL: host is resource-constrained
+- Docker VM = 8 GB only; with the parallel session active, load avg ~25-29 / 11 containers.
+- broker#2 has been OOM-killed (Exit 137) under combined load. EVERY iteration MUST:
+  1. ensure broker#2 is up + `/health`==200 BEFORE running the gate (restart + wait if down);
+  2. keep the footprint MINIMAL (LEAK_PROBE_HAMMER_ROUNDS=4, do not spin extra sandboxes);
+  3. if the gate fails with `fetch failed` / ECONNREFUSED, that is broker#2 down (host
+     saturation) — NOT an isolation bug. Restart broker#2, wait health, re-run. Never record
+     a host-saturation crash as a sandbox-isolation failure (no fake-red).
+
+## Adversarial breakout backlog (escalate one new vector per rigorous iteration)
+- [ ] cross-org marker read (baseline — in gate)        - [ ] secret denylist (baseline — in gate)
+- [ ] filesystem escape: read other org's /data, host paths, ../ path traversal
+- [ ] network egress: sandbox -> broker docker.sock, -> sibling sandbox IP, -> internet
+- [ ] container breakout: reach /var/run/docker.sock from inside a sandbox
+- [ ] resource exhaustion: fork/mem bomb in one org must not kill the sibling org
+- [ ] injection: command/args injection via server_slug/command/args; foreign {org} in rpc path
+- [ ] frontend path (when host has headroom): MCPConnectorPanel stdio presets, 2 orgs, on :8312
+
+## Fix policy
+- Harness / test / frontend gaps -> fix on this branch (additive files only).
+- Real broker/gateway isolation hole -> root-cause it, write a HANDOFF to ruflo memory
+  (namespace gateway, key mcp-sandbox-handoff-<date>) + a findings note; DO NOT edit
+  services/mcp-broker (parallel session owns it on main). Surface as evidence.
+
+## Log
+(iterations append dated notes below)
