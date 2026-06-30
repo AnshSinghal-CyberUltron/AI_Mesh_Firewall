@@ -79,11 +79,11 @@
   (the adjudicated verdict the UI renders) — the owasp_llm/owasp_mcp/owasp_agentic `summary` subsections
   are EMPTY categorization buckets that read "allow" even for a critical injection, so asserting on them
   (or on a bare `/block/i.test(bodyText)`) is a FALSE PASS.
-- E1-LIVE-SDK pattern: `scripts/openai_sdk_live_gateway.py` drives stock `openai==2.38.0` AsyncOpenAI
-  against the LIVE stack (default via Vite :8180 proxy; override CONTROL_URL/GATEWAY_URL to :8100/:8300).
-  Provisions simulator-default key via POST /api/gateways/simulator-default/ after JWT login; asserts
-  e.request_id + e.code/e.type/e.message on forced 400 (injection→content_filter) and 403/404 (forbidden
-  model). Gate: `cd gateway && ./.venv/bin/python ../scripts/openai_sdk_live_gateway.py`. Playwright demo:
+- E1-LIVE-SDK pattern: `tests/e2e/openai_sdk/live_gateway_sdk.py` drives stock `openai==2.38.0`
+  OpenAI SDK against the LIVE stack (:8100 control + :8300 gateway, or :8180 Vite proxy).
+  Provisions simulator-default key via POST /api/gateways/simulator-default/; asserts e.request_id +
+  e.code/e.type/e.message on forced 400 (injection→content_filter) and 403/404 (forbidden model).
+  Gate: `cd gateway && ./.venv/bin/python ../tests/e2e/openai_sdk/live_gateway_sdk.py`. Playwright demo:
   `cd frontend && BASE_URL=http://127.0.0.1:8180 E2E_REPORT=../runs/playwright_demo_simulators.json node
   ../scripts/playwright_demo_simulators.mjs`.
 
@@ -1661,9 +1661,8 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
 ## Ralph OpenAI SDK campaign 2026-06-30
 - Started headless loop: E1-openai-sdk-frontend-playwright (passes:false); gates = test_openai_sdk_compat.py + full gateway pytest + frontend lint/build + playwright_demo_simulators.mjs + live openai SDK e2e.
 - 2026-06-30T14:09:06Z Cursor multitask Ralph coordinator start — E1-openai-sdk-frontend-playwright; max_iters=50; min_iters=20
-- 2026-06-30 E1 iter 1 WIP (gate NOT green — passes:false). Built scripts/openai_sdk_live_gateway.py
-  (stock openai SDK over live stack via :8180 proxy; simulator-default key; 400 content_filter + 403
-  forbidden-model cells). Gates: test_openai_sdk_compat.py PASS (46 passed/2 xpassed); frontend build PASS;
+- 2026-06-30 E1 iter 1 WIP (gate NOT green — passes:false). Extended
+  tests/e2e/openai_sdk/live_gateway_sdk.py (403 forbidden-model cell + strict e.type/e.message on 400). Gates: test_openai_sdk_compat.py PASS (46 passed/2 xpassed); frontend build PASS;
   full pytest FAIL (19 failed, 16 errors — mostly test_mcp_sandbox_* needing live broker :8311);
   docker stack UNREACHABLE from host after duplicate-control recreate (curl :8180/:8100/:8300 → 000/timeout
   despite containers Running); playwright_demo_simulators.mjs NOT RUN; openai_sdk_live_gateway.py NOT RUN.
