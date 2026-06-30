@@ -18,6 +18,13 @@ fi
 R_NUM=$((ITER - 4))
 R_ID="R${R_NUM}-regression-iter${ITER}"
 
+LOCK_FILE="$SCRIPT_DIR/.regression_iteration.lock"
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+  echo "Another regression iteration is already running (lock: $LOCK_FILE)" >&2
+  exit 2
+fi
+
 log() {
   echo "$*" | tee -a "$LOG"
 }
@@ -51,9 +58,24 @@ run_gate_with_retry() {
   return 1
 }
 
+ADVERSARIAL_TEST_BROKER="mcp-broker-adversarial-test"
+
+_rm_adversarial_test_broker() {
+  local attempt
+  for attempt in $(seq 1 10); do
+    docker rm -f "$ADVERSARIAL_TEST_BROKER" >>"$LOG" 2>&1 || true
+    if ! docker ps -aq --filter "name=^/${ADVERSARIAL_TEST_BROKER}$" 2>/dev/null | grep -q .; then
+      return 0
+    fi
+    sleep 2
+  done
+  log "WARN: ${ADVERSARIAL_TEST_BROKER} still present after cleanup retries"
+  return 1
+}
+
 prep_for_pytest() {
   log "--- prep: docker cooldown before isolated pytest broker ---"
-  docker rm -f mcp-broker-adversarial-test 2>/dev/null || true
+  _rm_adversarial_test_broker || true
   for org in adv-org-alpha adv-org-beta; do
     local ids
     ids="$(docker ps -aq --filter "label=ai_mesh.org_slug=${org}" 2>/dev/null || true)"
