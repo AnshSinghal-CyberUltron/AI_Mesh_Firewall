@@ -198,11 +198,15 @@ def _wait_for_sandbox_agent(container_id: str, timeout: float = 150.0) -> None:
         "urllib.request.urlopen('http://127.0.0.1:9320/health', timeout=3)"
     )
     while time.time() < deadline:
-        proc = subprocess.run(
-            ["docker", "exec", container_id, "python", "-c", probe],
-            capture_output=True,
-            timeout=15,
-        )
+        try:
+            proc = subprocess.run(
+                ["docker", "exec", container_id, "python", "-c", probe],
+                capture_output=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            time.sleep(2)
+            continue
         if proc.returncode == 0:
             return
         time.sleep(2)

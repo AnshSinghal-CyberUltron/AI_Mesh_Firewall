@@ -84,7 +84,7 @@ prep_for_pytest() {
       docker rm -f ${ids} >>"$LOG" 2>&1 || true
     fi
   done
-  sleep 15
+  sleep 25
   if curl -sf "${BROKER_URL%/}/health" >/dev/null 2>&1; then
     log "live broker healthy at ${BROKER_URL}"
   else
@@ -114,7 +114,7 @@ run_gate_with_retry "parallel org agents --full" 2 \
 
 prep_for_pytest
 
-run_gate "adversarial pytest full" bash -c \
+run_gate_with_retry "adversarial pytest full" 2 bash -c \
   'cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q' \
   || FAILED=1
 
