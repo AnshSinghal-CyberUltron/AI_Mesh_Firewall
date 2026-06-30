@@ -145,8 +145,22 @@ REAL GAP FIXED: `phone_intl`'s grouped branch `\d{1,3}(?:[\s\-]\d{1,4}){2,6}` ca
 group at 4 digits, missing the very common 5+5 international grouping (+91 98765 43210).
 Widened to `\d{1,5}`; FP-safe because the whole pattern is `+`-anchored (E.164 marker —
 order-ids/revenue never carry it). BY-DESIGN pass-throughs to LEAVE (non-phantom + high-FP
-+ not-PII-per-oracle): bare 2+4+4 grouping, slash/underscore separators, "whatsapp" cue
-(common word, not a contact verb), and `00`-prefix intl (ambiguous with long account nums).
++ not-PII-per-oracle): bare 2+4+4 grouping, slash/underscore separators, and `00`-prefix
+intl (ambiguous with long account nums).
+REAL GAP FIXED (2026-06-30 rigor, direct-adjacency): a STRONG dialing/messaging verb placed
+IMMEDIATELY before the number with NO "at/on" connector ("sms 89295 54991",
+"whatsapp 8929554991", "dial 4155550142") leaked RAW to the wire (COVERAGE gap, never
+phantom) — the imperative cue branch demanded "...<=40 non-digit chars> (at|on)" and Tier-2
+did not flag it. Added a curated direct-adjacency branch to `phone_us_bare_contextual`:
+`\b(?:call|text|dial|ring|sms|whatsapp|telegram|imessage)\b[:\s]+` directly on
+`_BARE_PHONE_10_SPLIT`. This SUPERSEDES the prior "whatsapp = pass-through" note: whatsapp
+(and telegram/imessage) are now masked, but ONLY under the FP-safe direct-adjacency gate —
+the gap is whitespace/colon ONLY, so the 10-digit grouping must START right after the cue
+("call 5000 customers", "text the 1234567890 line", "we will call 89295 customers in batch
+54991" stay verbatim). `message`/`msg`/`reach`/`contact` were deliberately KEPT OUT of the
+direct-adjacency list (still gated on at/on) because a bare run after them is more
+order-id-shaped. Do NOT re-restrict these to at/on without re-proving the leak via the FULL
+egress path (InputScanner.redact_pii + LLMRouter backstop + RecordingProvider), not redact_all.
 
 ## B1 — non-digit fail-closed (the chat egress gap the digit round missed)
 Egress=truth on the input/egress path has TWO sub-cases. The 2026-06-29 round closed the
