@@ -407,7 +407,7 @@
       "id": "R6-regression-iter10",
       "title": "Regression iter 10 — full adversarial gate re-run",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "R5-regression-iter9"
       ],
