@@ -1294,3 +1294,24 @@
   check is exact-substring of the known raw (regex-independent, the strongest control), so the
   proof does not depend on the same regexes under test. Did NOT broaden the shared _ORACLE
   (would risk FPs in B4/B5 where independent_pii_scan(blob)==[] is an assertion).
+- rigor-verified: B3-embeddings-scan 2026-06-30 — adversarially re-proved /v1/embeddings input
+  scan+redact at the FULL HTTP handler (proxy_embeddings, not just the helper) via a standalone
+  harness mounting the REAL app behind httpx.ASGITransport + the STOCK openai AsyncOpenAI SDK
+  (client.embeddings.create), wrapping LLM_ROUTER.aembedding to CAPTURE the exact upstream body
+  (egress=truth). 9-case adversarial battery incl. NEW edges the helper test misses: batch with
+  PII in element-2 ["benign…","ssn 987-65-4321"]→ssn masked only in elem2; multiline buried email
+  (alice@corp.io mid-text)→masked; THREE PII types in one input (email+ssn+phone)→ALL masked. Every
+  format neutralized on the captured wire (email→j***@e***.com, ssn→***-**-6789, phone_sep→***-***-
+  0142, intl 5+5 "+91 98765 43210"→***-***-3210 [B2 widening honored transitively via shared
+  _redact_text_with_backstop], sk-proj key→sk-****5pqr, card→****-****-****-1111), raw_leaked:false
+  for ALL, stock SDK parsed a valid CreateEmbeddingResponse each time. INDEPENDENT ORACLE
+  (mcp__ruflo__aidefence_has_pii — regexes SEPARATE from patterns.py under test): RAW blob (all 9
+  inputs concat) → hasPII:true (positive control); REDACTED-egress blob (captured wire concat) →
+  hasPII:false (true negative). G4 FAIL-CLOSED re-proved at the FULL HANDLER (separate harness,
+  INPUT_SCANNER=_UnmaskableScanner that detects PII but redact_pii is a no-op): detected-but-
+  unmaskable input → 4xx block (400/content_filter via the C1 shim's content-block mapping) with
+  ZERO captured egress (raw NEVER forwarded) — the byte-truth fail-open guard. GOTCHA (recorded):
+  the in-process embeddings drive needs TEST_CONFIG.allowed_models incl. "zs-embed" AND the
+  get_model_routing entry needs api_key_set:True, else proxy_embeddings 422s no_provider_configured
+  BEFORE the scan (false-fail). Gates green, no source change: leakhunt 152 passed/1 skipped,
+  test_embedding_input_redaction.py (within), SDK harness embeddings cells 2 passed.
