@@ -453,7 +453,9 @@ async def send_jsonrpc(
     if params is not None:
         message["params"] = params
 
-    resp = await _send_message(proc, message, timeout=method_to)
+    # Stdio MCP is line-oriented on a single stdin/stdout pair — serialize per process.
+    async with proc.lock:
+        resp = await _send_message(proc, message, timeout=method_to)
     if msg_id is not None:
         resp["id"] = msg_id
     return resp

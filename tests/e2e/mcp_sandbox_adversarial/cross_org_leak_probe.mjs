@@ -73,19 +73,36 @@ async function rpc(org, cfg, method, params, id) {
 }
 
 async function hammerOrg(org, cfg, round) {
-  const list = await rpc(org, cfg, "tools/list", null, round * 100);
-  const names = (list?.result?.tools || []).map((t) => t.name);
-  if (!names.includes("echo")) throw new Error(`${org} round ${round}: tools/list missing echo`);
-  const echo = await rpc(
-    org,
-    cfg,
-    "tools/call",
-    { name: "echo", arguments: { msg: `hammer-${org}-${round}` } },
-    round * 100 + 1
-  );
-  const text = echo?.result?.content?.[0]?.text;
-  if (text !== `hammer-${org}-${round}`) {
-    throw new Error(`${org} round ${round}: echo mismatch ${text}`);
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const list = await rpc(org, cfg, "tools/list", null, round * 100);
+    if (list?.error) {
+      if (attempt < maxAttempts - 1) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      throw new Error(`${org} round ${round}: tools/list error ${JSON.stringify(list.error)}`);
+    }
+    const names = (list?.result?.tools || []).map((t) => t.name);
+    if (!names.includes("echo")) {
+      if (attempt < maxAttempts - 1) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      throw new Error(`${org} round ${round}: tools/list missing echo`);
+    }
+    const echo = await rpc(
+      org,
+      cfg,
+      "tools/call",
+      { name: "echo", arguments: { msg: `hammer-${org}-${round}` } },
+      round * 100 + 1
+    );
+    const text = echo?.result?.content?.[0]?.text;
+    if (text !== `hammer-${org}-${round}`) {
+      throw new Error(`${org} round ${round}: echo mismatch ${text}`);
+    }
+    return;
   }
 }
 

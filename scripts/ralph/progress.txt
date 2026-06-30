@@ -1472,6 +1472,15 @@
   via its OWN native API; if the service is healthy in isolation the failure is a client/version skew
   (infra), and the correct verification is UI-honesty-under-failure, not forcing the happy path.
 
+## MCP Frontend Adversarial regression (prd-mcp-frontend-adversarial.json) — 2026-06-30 iter 9 recovery
+- Scratchpad was overwritten by E1-openai-sdk campaign; restored to iteration 9 / R9-regression-iter13.
+- Recovery: removed adv-org sandboxes + orphan pytest brokers (mcp-broker-adversarial-test, integration-test, parallel-load-test, ai_mesh_mcp_broker_2). Broker docker_ok=true.
+- Gate 1 attempt 1: org_workers OK; cross_org_leak_probe FAIL round 8 tools/list missing echo (transient stdio race).
+- Gate 1 attempt 2: sandbox-agent not healthy within 120s; docker exec hangs; control :8100 health hangs.
+- Production fix: stdio_manager.py per-process lock around JSON-RPC send (requires `docker build -t ai-mesh/mcp-sandbox:latest`).
+- cross_org_leak_probe.mjs: hammerOrg retries tools/list on transient empty/error (matches existing 500-retry pattern).
+- **BLOCKED:** Docker daemon exhaustion — restart Docker Desktop before resuming iter 9. R9 passes:false. Scratchpad iteration: 9.
+
 ## MCP Frontend Adversarial regression (prd-mcp-frontend-adversarial.json) — 2026-06-30 follow-up
 - Prior subagent 5ee33cc1: PING timeout during iter 8 parallel workers (2026-06-29T17:48Z). Last fully marked OK before resume: **iter 7 (R3)**.
 - Resume 2026-06-30: docker compose --profile services healthy (broker :8311 docker_ok=true, gateway :8300, control :8100).
