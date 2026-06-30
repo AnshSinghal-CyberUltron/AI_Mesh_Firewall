@@ -1194,6 +1194,28 @@
   critical (matches flagged=True); benign → safe:true (matches flagged=False) — not a same-regex
   coincidence. NO source change needed; C4 stays passes:true.
   (Remaining for next round: A2 + B1-B5 leak stories, D1-D6 UI stories.)
+- rigor-verified: A2-egress-rig 2026-06-30 — adversarially re-proved the leak-hunt egress-capture rig
+  itself (recording_provider.py / corpus.py / test_rig_selfcheck.py / test_repro_g0.py) is TRUSTWORTHY,
+  since every B-story gate is meaningless if the rig is a no-op. GATE GREEN clean-shell: `cd gateway &&
+  ./.venv/bin/python -m pytest tests/leakhunt -q` → 120 passed/1 skipped. (1) CHOKE-POINT COMPLETENESS
+  (the rig's core claim): read llm_router.py — _execute_completion/_execute_embedding fall to
+  MODULE-LEVEL `litellm.acompletion`/`aembedding` exactly when self._router is empty (the
+  org_only_inference=True path the rig uses, lines 540-548), and aresponses ALWAYS routes via
+  module-level litellm.aresponses (line 613) — i.e. the precise three functions RecordingProvider.install
+  patches; no non-streaming chat/embeddings/responses egress bypasses the patch. (2) CAPTURE FAITHFUL +
+  NEGATIVE CONTROL: selfcheck proves exact-byte capture (benign prompt rides verbatim) AND
+  test_assertion_actually_detects_a_leak FORGES a raw-PII wire and asserts assert_no_pii_egressed
+  RAISES — so the gate is not silently-passing. (3) CORPUS HONESTY: a fresh probe (/tmp/a2_rigor_probe.py)
+  built ONE prompt carrying EVERY corpus.REDACTABLE value, ran the REAL InputScanner.scan_prompt +
+  redact_pii, drove router.acompletion(redacted_content=...) with RecordingProvider → verdict=redact,
+  the captured wire shows ALL values masked (phones ***-***-XXXX, ssn, card, email, sk-keys), rig
+  assertion + the rig's INDEPENDENT regex oracle (_ORACLE, separate from patterns.py) both report 0
+  leaks — so every `covered=True` flag is byte-honest, not aspirational. (4) FULLY-INDEPENDENT DETECTOR:
+  mcp ruflo aidefence_has_pii (separate codebase from patterns.py) over the EXACT captured wire bytes →
+  hasPII:false, while the same detector over the RAW prompt → hasPII:true (positive control, so the
+  false is meaningful not vacuous). (5) AT-REST: RecordingVectorStore selfcheck catches the classic
+  metadata-only leak. NO source change needed; A2 stays passes:true; no real gap.
+  (Remaining for next round: B1-B5 leak stories, D1-D6 UI stories.)
 
 ## MCP Frontend Adversarial Ralph loop (prd-mcp-frontend-adversarial.json)
 - 2026-06-30 loop-restart: F0–F20 all passes:true (21/21). Regression R1–R3 pass; R4–R16 were pending.
