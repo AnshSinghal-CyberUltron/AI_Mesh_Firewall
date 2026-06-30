@@ -1097,3 +1097,6 @@
   tail safety. The earlier RAG-step miss in one run was the documented control-saturation auth-bounce
   flake (server session stayed valid per control logs; gotoTab re-seeds on /login) — recovered green on
   a warm single run. NO frontend source change needed; D6 product is correct. D6 stays passes:true.
+
+## Rigor round 2026-06-30 (fresh re-verification run — re-prove EVERY story from scratch with independent oracles; the tree changed since the 2026-06-29 round, so do NOT trust the prior passes:true)
+- (instances append "rigor-verified: <id> 2026-06-30 — <how proven>" here; COMPLETE only after all 17 appear under THIS heading)
