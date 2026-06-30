@@ -1120,3 +1120,28 @@
   response.completed) PLUS a mid-stream upstream failure surfacing as a terminal typed
   response.failed (.response.error populated) — never a false response.completed. openai PINNED
   EXACTLY at openai==2.38.0 in gateway/pyproject.toml dev deps. No gap.
+- rigor-verified: C1-error-envelope 2026-06-30 — adversarially re-proved the SINGLE /v1 shim
+  choke point (main.py:255 `_openai_compat_shim`) beyond the main harness. New durable gate
+  gateway/ai_mesh_gateway/tests/test_c1_error_envelope_adversarial.py (7 cells, all green; reuses
+  the real-app ASGITransport fixtures, only upstream stubbed). Proved the claims the conformance
+  suite doesn't cover: x-request-id is stamped on responses that NEVER reach a handler — a 401 from
+  AuthMiddleware (body is the NESTED OpenAI envelope, e.type/e.message populated; stock-SDK
+  AuthenticationError.request_id + .type populated) AND an unmatched /v1/* router-404 (coerced to
+  nested envelope via responses_adapters.coerce_chat_error_to_openai) AND a 405/404 method case.
+  EGRESS-TRUTH equality: on a content block the x-request-id HEADER == body request_id (joinable to
+  the [SECURITY_BLOCK] log) and body.error.code=="content_filter" with the original ZS top-level
+  diagnostics (code=="content_blocked", category) preserved (no demo/ZS regression). Success body is
+  NOT mangled (resp._request_id present, choices intact). Scope guard: a non-/v1 path is NOT forced
+  into the OpenAI envelope (choke point correctly scoped, not global). FALSE-POSITIVE caught + fixed
+  in my OWN probe: an UNauth non-/v1 GET returns 401 (AuthMiddleware fires on all paths) not 404 —
+  test now sends valid auth. Full SDK gate + new probe co-run: 53 passed, 2 xpassed, 0 regression. No gap.
+
+## MCP Frontend Adversarial Ralph loop (prd-mcp-frontend-adversarial.json)
+- 2026-06-30 loop-restart: F0–F20 all passes:true (21/21). Regression R1–R3 pass; R4–R16 were pending.
+  Prior batch run_iters_8_20.sh (PID 11642) stalled mid iter-8 parallel workers (2026-06-29T17:48Z).
+  Docker stack verified healthy (broker docker_ok=true, gateway :8300, frontend :8180).
+- 2026-06-30 R4-regression-iter8 PASS (~330s): parallel --full attempt 1/2, adversarial pytest 13/13,
+  frontend_parallel_orgs attempt 1/2 — all green first try. PRD R4 marked passes:true.
+  Remaining: R5–R16 (iters 9–20). Next gate: `./scripts/ralph/run_regression_iteration.sh 9`
+  Batch: `for i in $(seq 9 20); do ./scripts/ralph/run_regression_iteration.sh $i; done`
+  Loop: `./scripts/ralph/ralph-mcp-frontend-adversarial.sh 50`
