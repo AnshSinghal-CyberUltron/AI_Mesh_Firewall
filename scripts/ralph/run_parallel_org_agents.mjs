@@ -55,7 +55,7 @@ function run(cmd, cmdArgs, env = {}, cwd = REPO_ROOT) {
 }
 
 async function curlOk(url) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
   return res.ok ? res.json().catch(() => ({})) : null;
 }
 
