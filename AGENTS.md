@@ -11,3 +11,10 @@
   verdict or assume_redacted attestation must be byte-verified; fail closed on a no-op scrub.
 - Reuse responses_adapters.py error helpers; respect patterns.py false-positive protection; mirror the
   output-guard honesty check onto the input/egress path.
+- UI-story gate (D*): the durable re-runnable gates are `scripts/playwright_*.mjs`. Run with
+  `NODE_PATH="$PWD/tests/e2e/node_modules" BASE_URL=http://127.0.0.1:8180 node scripts/playwright_<story>.mjs`
+  — playwright lives in `tests/e2e/node_modules`, NOT `frontend/`. They drive the LIVE docker stack
+  (Vite :8180 → control :8100 → gateway :8300); login admin@zeroshield.io / Adm1n!Pass#2024 via the REAL
+  form (localStorage-token injection alone does NOT establish a session — the AuthContext guard bounces to
+  /login). Module-1.1 is telemetry-heavy: keep panel/login waits ≥60s so a slow-but-correct render is not a
+  false failure; never lower an assertion to make a flaky gate pass.
