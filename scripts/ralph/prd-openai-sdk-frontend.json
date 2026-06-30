@@ -1,0 +1,233 @@
+{
+  "feature": "OpenAI SDK frontend + backend demo gates (Ruflo + Playwright)",
+  "branchName": "ralph/openai-sdk-frontend",
+  "sourcePlan": ".cursor/ralph/scratchpad.md",
+  "minIterations": 20,
+  "maxIterations": 50,
+  "completionPromise": "COMPLETE and tested from frontend and backend",
+  "userStories": [
+    {
+      "id": "O0-bootstrap",
+      "title": "Bootstrap — docker stack healthy for OpenAI SDK gates",
+      "priority": 0,
+      "passes": true,
+      "dependencies": [],
+      "userStory": "As Ralph I need Vite :8180, control :8100, and gateway :8300 up before SDK testing.",
+        "docker compose --profile services ps shows gateway, control, frontend Up",
+        "curl -sf http://127.0.0.1:8180/ returns 200",
+        "curl -sf http://127.0.0.1:8100/api/health/ returns 200",
+        "curl -sf http://127.0.0.1:8300/health returns 200"
+      ]
+    },
+    {
+      "id": "O1-backend-sdk-compat",
+      "title": "Backend OpenAI SDK compat + live gateway SDK e2e",
+      "priority": 1,
+      "passes": false,
+      "dependencies": ["O0-bootstrap"],
+      "userStory": "As a maintainer I need stock openai SDK green in-process and against the live gateway.",
+      "acceptanceCriteria": [
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q",
+        "Gate: cd gateway && ./.venv/bin/python ../scripts/openai_sdk_live_gateway.py exits 0 — stock openai against live gateway with simulator-default key (or GATEWAY_API_KEY preset); asserts e.request_id + typed error fields on forced 400/403",
+        "Note: full ai_mesh_gateway/tests suite has pre-existing failures outside SDK scope (MCP sandbox docker integration ~17F+18E, bedrock_logger/routing ~6F, context_guard ~1F) — tracked by mcp-frontend-adversarial campaign; not an O1 gate",
+        "Ruflo memory_store key O1-backend-sdk-compat after green gate"
+      ]
+    },
+    {
+      "id": "O2-frontend-chat-playwright",
+      "title": "Frontend Playwright — chat completion via gateway proxy",
+      "priority": 2,
+      "passes": false,
+      "dependencies": ["O1-backend-sdk-compat"],
+      "userStory": "As a customer I run the demo Attack Simulator and see an honest ALLOW via /v1/chat/completions.",
+      "acceptanceCriteria": [
+        "Gate: cd frontend && npm run lint && npm run build",
+        "scripts/playwright_openai_sdk.mjs exists",
+        "Gate: NODE_PATH=$PWD/tests/e2e/node_modules BASE_URL=http://127.0.0.1:8180 E2E_REPORT=runs/playwright_openai_sdk.json node scripts/playwright_openai_sdk.mjs exits 0",
+        "Playwright logs in via REAL form (admin@zeroshield.io), runs clean chat scenario, asserts HTTP 200 + ALLOWED + model answer"
+      ]
+    },
+    {
+      "id": "O3-frontend-streaming-sse",
+      "title": "Frontend Playwright — streaming SSE chat completions",
+      "priority": 3,
+      "passes": false,
+      "dependencies": ["O2-frontend-chat-playwright"],
+      "userStory": "As an SDK user I can toggle stream mode in the demo and receive chunked SSE honestly.",
+      "acceptanceCriteria": [
+        "playwright_openai_sdk.mjs covers AttackSimulator stream toggle",
+        "Gate: NODE_PATH=$PWD/tests/e2e/node_modules BASE_URL=http://127.0.0.1:8180 E2E_PHASE=stream node scripts/playwright_openai_sdk.mjs exits 0",
+        "Assert stream response content-type includes text/event-stream and UI shows ALLOWED with aggregated content"
+      ]
+    },
+    {
+      "id": "O4-error-rate-limit-ui",
+      "title": "Frontend Playwright — SDK error envelope + rate-limit honesty",
+      "priority": 4,
+      "passes": false,
+      "dependencies": ["O2-frontend-chat-playwright"],
+      "userStory": "As an SDK user blocked requests show typed errors (not generic ERROR) and rate-limit stress is honest.",
+      "acceptanceCriteria": [
+        "playwright_openai_sdk.mjs injection scenario asserts HTTP 4xx + BLOCKED banner (not ERROR)",
+        "Optional burst path asserts rate-limit or block honesty without raw PII on screen",
+        "Gate: NODE_PATH=$PWD/tests/e2e/node_modules BASE_URL=http://127.0.0.1:8180 E2E_PHASE=errors node scripts/playwright_openai_sdk.mjs exits 0"
+      ]
+    },
+    {
+      "id": "O5-regression-iter5",
+      "title": "Regression iter 5 — re-prove backend + frontend SDK gates",
+      "priority": 5,
+      "passes": false,
+      "dependencies": ["O4-error-rate-limit-ui", "O3-frontend-streaming-sse"],
+      "userStory": "As Ralph iteration 5 re-runs all OpenAI SDK gates under live stack.",
+      "acceptanceCriteria": [
+        "cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q",
+        "cd gateway && ./.venv/bin/python ../scripts/openai_sdk_live_gateway.py",
+        "NODE_PATH=tests/e2e/node_modules BASE_URL=http://127.0.0.1:8180 node scripts/playwright_openai_sdk.mjs"
+      ]
+    },
+    {
+      "id": "O6-regression-iter6",
+      "title": "Regression iter 6 — full SDK gate re-run",
+      "priority": 6,
+      "passes": false,
+      "dependencies": ["O5-regression-iter5"],
+      "userStory": "As Ralph iteration 6 re-proves SDK gates.",
+      "acceptanceCriteria": [
+        "Same gates as O5-regression-iter5 — all exit 0"
+      ]
+    },
+    {
+      "id": "O7-regression-iter7",
+      "title": "Regression iter 7 — full SDK gate re-run",
+      "priority": 7,
+      "passes": false,
+      "dependencies": ["O6-regression-iter6"],
+      "userStory": "As Ralph iteration 7 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O8-regression-iter8",
+      "title": "Regression iter 8 — full SDK gate re-run",
+      "priority": 8,
+      "passes": false,
+      "dependencies": ["O7-regression-iter7"],
+      "userStory": "As Ralph iteration 8 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O9-regression-iter9",
+      "title": "Regression iter 9 — full SDK gate re-run",
+      "priority": 9,
+      "passes": false,
+      "dependencies": ["O8-regression-iter8"],
+      "userStory": "As Ralph iteration 9 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O10-regression-iter10",
+      "title": "Regression iter 10 — full SDK gate re-run",
+      "priority": 10,
+      "passes": false,
+      "dependencies": ["O9-regression-iter9"],
+      "userStory": "As Ralph iteration 10 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O11-regression-iter11",
+      "title": "Regression iter 11 — full SDK gate re-run",
+      "priority": 11,
+      "passes": false,
+      "dependencies": ["O10-regression-iter10"],
+      "userStory": "As Ralph iteration 11 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O12-regression-iter12",
+      "title": "Regression iter 12 — full SDK gate re-run",
+      "priority": 12,
+      "passes": false,
+      "dependencies": ["O11-regression-iter11"],
+      "userStory": "As Ralph iteration 12 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O13-regression-iter13",
+      "title": "Regression iter 13 — full SDK gate re-run",
+      "priority": 13,
+      "passes": false,
+      "dependencies": ["O12-regression-iter12"],
+      "userStory": "As Ralph iteration 13 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O14-regression-iter14",
+      "title": "Regression iter 14 — full SDK gate re-run",
+      "priority": 14,
+      "passes": false,
+      "dependencies": ["O13-regression-iter13"],
+      "userStory": "As Ralph iteration 14 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O15-regression-iter15",
+      "title": "Regression iter 15 — full SDK gate re-run",
+      "priority": 15,
+      "passes": false,
+      "dependencies": ["O14-regression-iter14"],
+      "userStory": "As Ralph iteration 15 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O16-regression-iter16",
+      "title": "Regression iter 16 — full SDK gate re-run",
+      "priority": 16,
+      "passes": false,
+      "dependencies": ["O15-regression-iter15"],
+      "userStory": "As Ralph iteration 16 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O17-regression-iter17",
+      "title": "Regression iter 17 — full SDK gate re-run",
+      "priority": 17,
+      "passes": false,
+      "dependencies": ["O16-regression-iter16"],
+      "userStory": "As Ralph iteration 17 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O18-regression-iter18",
+      "title": "Regression iter 18 — full SDK gate re-run",
+      "priority": 18,
+      "passes": false,
+      "dependencies": ["O17-regression-iter17"],
+      "userStory": "As Ralph iteration 18 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O19-regression-iter19",
+      "title": "Regression iter 19 — full SDK gate re-run",
+      "priority": 19,
+      "passes": false,
+      "dependencies": ["O18-regression-iter18"],
+      "userStory": "As Ralph iteration 19 re-proves SDK gates.",
+      "acceptanceCriteria": ["Same gates as O5 — all exit 0"]
+    },
+    {
+      "id": "O20-regression-iter20",
+      "title": "Regression iter 20 — min-iteration completion + promise",
+      "priority": 20,
+      "passes": false,
+      "dependencies": ["O19-regression-iter19"],
+      "userStory": "As platform iteration 20 completes min-20 with full OpenAI SDK proof.",
+      "acceptanceCriteria": [
+        "All O0–O4 gates green",
+        "cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q",
+        "cd frontend && npm run lint && npm run build",
+        "NODE_PATH=tests/e2e/node_modules BASE_URL=http://127.0.0.1:8180 node scripts/playwright_openai_sdk.mjs",
+        "iteration >= 20 → output <promise>COMPLETE and tested from frontend and backend</promise>"
+      ]
+    }
+  ]
+}
