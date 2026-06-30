@@ -39,6 +39,15 @@ def guard_model_names() -> frozenset[str]:
         # form ("ZeroShield Model"). Both fold to 'zeroshield-model'.
         "zeroshield-model",
         "ZeroShield Model",
+        # Reserved guard/adjudicator aliases. Product-reserved (never org
+        # inference) and already trusted by main.py:_guard_model_names(); listing
+        # them here keeps THIS module the authoritative source so
+        # is_platform_model_name() recognizes them too — otherwise the dedicated
+        # platform guards (routing_isolation reroute-eligibility + the front/final
+        # anti-name-leak 403 paths) silently no-op for these names.
+        "zeroshield-guard-120b",
+        "bedrock-gpt-oss-120b",
+        "bedrock-gpt-oss-120b-long-context",
     }
     return frozenset(c for n in raw if (c := _canonical_model_name(n)))
 

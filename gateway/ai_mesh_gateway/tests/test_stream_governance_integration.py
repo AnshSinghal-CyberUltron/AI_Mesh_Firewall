@@ -115,7 +115,11 @@ def test_injection_block_response_is_json_not_sse():
             detail="Matched injection pattern",
         ),
     )
-    assert resp.status_code == 403
+    # GATEWAY_BLOCK_STATUS contract (main.py:660, default 400): a streaming input
+    # block surfaces as 400 content_filter (the block STILL happens). The CORE
+    # invariant under test is unchanged: a blocked stream is JSON, never a corrupt
+    # SSE body.
+    assert resp.status_code == 400
     content_type = (resp.headers.get("content-type") or resp.media_type or "").lower()
     assert "event-stream" not in content_type
     assert "json" in content_type or resp.body

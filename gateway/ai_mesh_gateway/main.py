@@ -4804,6 +4804,25 @@ async def proxy_chat(
             # client/telemetry-facing string so a malicious model name can't
             # reflect into charts / threat-feed (R4).
             _safe_req = _safe_model_echo(requested_model)
+            # P6-missing-model: an absent/empty ``model`` with routing OFF is a
+            # MALFORMED request, not a forbidden one — return the OpenAI 400
+            # invalid_request_error (param='model') the stock SDK raises as
+            # BadRequestError, NOT the 403 allowlist block below (which leaks
+            # "Model '' is not in your allowlist"). Gate on ``not routing_active``
+            # (same as the 403) so auto-routing — which legitimately omits the
+            # model — is untouched.
+            if not str(requested_model or "").strip() and not routing_active:
+                from responses_adapters import build_openai_error as _boe_missing_model
+                return JSONResponse(
+                    status_code=400,
+                    content=_boe_missing_model(
+                        400,
+                        "Missing required parameter: 'model'.",
+                        error_type="invalid_request_error",
+                        code="missing_required_parameter",
+                        param="model",
+                    ),
+                )
             if allowed_models and requested_model not in allowed_models and not routing_active:
                 METRICS["blocked"] += 1
                 _emit_telemetry(

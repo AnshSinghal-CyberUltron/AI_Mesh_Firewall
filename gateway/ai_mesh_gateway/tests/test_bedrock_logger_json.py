@@ -53,6 +53,18 @@ def reload_logger(monkeypatch, tmp_path):
     def _reload(json_flag: str = "true"):
         monkeypatch.setenv("BEDROCK_LOG_JSON", json_flag)
         monkeypatch.setenv("BEDROCK_LOG_DIR", str(tmp_path))
+        # Pin the preview-emission toggles this suite asserts on. They are
+        # module-level globals read from env at import; another test in the full
+        # suite can leave BEDROCK_LOG_PROMPT_PREVIEW / _OUTPUT_PREVIEW falsy in the
+        # ambient env, so the reload below would silently disable the prompt/output
+        # companion records and this test would fail only in-suite (not in isolation).
+        monkeypatch.setenv("BEDROCK_LOG_PROMPT_PREVIEW", "true")
+        monkeypatch.setenv("BEDROCK_LOG_OUTPUT_PREVIEW", "true")
+        # Pin DEBUG too: the ``bedrock_output`` companion is logged at DEBUG, so an
+        # ambient BEDROCK_LOG_LEVEL=INFO (left by another suite) would filter it and
+        # this test would fail only in-suite. _clear_bedrock_handlers() above forces
+        # _setup_bedrock_logger to re-run setLevel on reload, so this takes effect.
+        monkeypatch.setenv("BEDROCK_LOG_LEVEL", "DEBUG")
         _clear_bedrock_handlers()
         mod = importlib.reload(bedrock_logger_module)
         return mod, tmp_path / "bedrock.log"
@@ -105,8 +117,8 @@ def test_log_bedrock_request_emits_json_with_call_site_fields(reload_logger):
 
     data = entry["data"]
     assert data["request_id"] == "req123abc456"
-    assert data["model"] == "anthropic.claude-3-haiku"
-    assert data["region"] == "ap-south-1"
+    assert data["model"] == "zeroshield-guard"
+    assert "region" not in data
     assert data["payload_bytes"] == 2048
     assert data["prompt_len"] == 900
     assert data["truncated_len"] == 512
@@ -116,7 +128,7 @@ def test_log_bedrock_request_emits_json_with_call_site_fields(reload_logger):
     # New structured attribution fields
     assert data["call_site"] == "bedrock_scanner.scan"
     assert data["api_method"] == "converse"
-    assert data["backend"] == "bedrock"
+    assert "backend" not in data
     # Preview is normalized (newlines collapsed) and present on the request entry
     assert data["prompt_preview"] == "hello world"
 
@@ -158,11 +170,14 @@ def test_log_bedrock_response_emits_json_with_call_site_fields(reload_logger):
     assert data["success"] is True
     assert data["response_keys"] == ["output", "usage"]
     assert data["http_status"] == 200
-    assert data["output_preview"] == "all clear"
+    # The output preview is no longer inlined on the response record — it is
+    # emitted in the companion ``bedrock_output`` event (asserted below), keeping
+    # the response record free of model output text.
+    assert "output_preview" not in data
     # New structured attribution fields
     assert data["call_site"] == "llm_router.completion"
     assert data["api_method"] == "invoke_model"
-    assert data["backend"] == "sagemaker"
+    assert "backend" not in data
 
     outputs = _entries_with_event(log_file, "bedrock_output")
     assert len(outputs) == 1
@@ -192,14 +207,14 @@ def test_call_site_omitted_and_defaults_applied(reload_logger):
     req = _entries_with_event(log_file, "bedrock_request")[0]["data"]
     assert "call_site" not in req
     assert req["api_method"] == "invoke_model"
-    assert req["backend"] == "bedrock"
+    assert "backend" not in req
 
     resp_entry = _entries_with_event(log_file, "bedrock_response")[0]
     assert resp_entry["level"] == "ERROR"  # success=False logs at ERROR
     resp = resp_entry["data"]
     assert "call_site" not in resp
     assert resp["api_method"] == "invoke_model"
-    assert resp["backend"] == "bedrock"
+    assert "backend" not in resp
 
 
 def test_log_json_disabled_uses_readable_formatter(reload_logger):

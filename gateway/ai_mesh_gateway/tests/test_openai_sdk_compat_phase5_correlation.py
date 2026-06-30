@@ -62,10 +62,27 @@ async def _correlate(app, emits, method, path, body=None, *, auth=True):
         jb = resp.json()
     except Exception:
         jb = {}
-    body_rid = (jb.get("request_id") if isinstance(jb, dict) else None) \
-        or (jb.get("zeroshield", {}) if isinstance(jb, dict) else {}).get("request_id")
+    is_resp_success = (
+        isinstance(jb, dict) and jb.get("object") == "response" and resp.status_code < 400
+    )
+    if is_resp_success:
+        # SEAM-C (main.py:8597): a /v1/responses SUCCESS deliberately pins
+        # x-request-id == the response object id (resp_…) so the SDK's
+        # r._request_id == r.id. The zeroshield gateway request id (zs-…) that
+        # telemetry/audit is keyed under is surfaced SEPARATELY in the body's
+        # top-level ``request_id`` (the customer's audit-join handle), NOT the
+        # header. So the JOIN holds via TWO ids: header == body["id"], and the
+        # emit-side rid == body["request_id"].
+        body_rid = jb.get("id")
+        audit_join_rid = (jb.get("request_id")
+                          or (jb.get("zeroshield") or {}).get("request_id")
+                          or header)
+    else:
+        body_rid = (jb.get("request_id") if isinstance(jb, dict) else None) \
+            or (jb.get("zeroshield", {}) if isinstance(jb, dict) else {}).get("request_id")
+        audit_join_rid = header
     emit_rids = {e["rid"] for e in emits if e["rid"]}
-    return resp.status_code, header, body_rid, emit_rids
+    return resp.status_code, header, body_rid, emit_rids, audit_join_rid
 
 
 MATRIX = [
@@ -91,15 +108,18 @@ async def test_request_id_join_invariant_across_v1_matrix(watched):
     app, emits = watched
     gaps: list[str] = []
     for name, method, path, body, auth in MATRIX:
-        status, header, body_rid, emit_rids = await _correlate(app, emits, method, path, body, auth=auth)
+        status, header, body_rid, emit_rids, audit_join_rid = await _correlate(app, emits, method, path, body, auth=auth)
         if not header:
             gaps.append(f"{name} (status={status}): MISSING x-request-id header")
             continue
         if body_rid and body_rid != header:
             gaps.append(f"{name} (status={status}): body request_id={body_rid} != header={header}")
-        bad = {r for r in emit_rids if r != header}
+        # emit-side rid must join to a value the customer RECEIVES: the header for
+        # every surface, except a /v1/responses success where it joins via the
+        # body's ``request_id`` (audit_join_rid) — see _correlate / SEAM-C.
+        bad = {r for r in emit_rids if r != audit_join_rid}
         if bad:
-            gaps.append(f"{name} (status={status}): emit rid(s) {bad} != header={header}")
+            gaps.append(f"{name} (status={status}): emit rid(s) {bad} != audit_join_rid={audit_join_rid}")
     assert not gaps, "request_id correlation gaps:\n  " + "\n  ".join(gaps)
 
 
@@ -108,10 +128,13 @@ async def test_every_block_emits_enforcement_signal(watched):
     """audit-watcher: a 403 content block MUST emit >=1 telemetry/audit signal, all
     carrying the request_id == the header (so e.request_id joins to the audit record)."""
     app, emits = watched
-    status, header, body_rid, emit_rids = await _correlate(
+    status, header, body_rid, emit_rids, _audit_join_rid = await _correlate(
         app, emits, "POST", "/v1/chat/completions",
         {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": INJECTION}]})
-    assert status == 403
+    # GATEWAY_BLOCK_STATUS contract (main.py:660, default 400): a content block now
+    # surfaces as 400 content_filter — the block STILL happens and STILL emits the
+    # enforcement signal joined to the request id.
+    assert status == 400
     assert emits, "a 403 block emitted NO telemetry/audit signal (audit-watcher gap)"
     assert body_rid == header, f"block body request_id {body_rid} != header {header}"
     assert all(e["rid"] == header for e in emits if e["rid"]), \

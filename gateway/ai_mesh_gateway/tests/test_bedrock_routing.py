@@ -49,6 +49,22 @@ from ai_mesh_gateway.platform_models import DEFAULT_HAIKU_45, is_platform_model_
 
 
 class BedrockRoutingAdjudicationTests(unittest.TestCase):
+    def setUp(self):
+        # These tests exercise the Bedrock ADJUDICATOR path specifically. The H5
+        # perf fastpath (llm_router.py:1807) short-circuits the adjudicator for a
+        # single-candidate / low-risk request, so without forcing adjudication
+        # these would silently take the deterministic ``weighted_fastpath`` and the
+        # adjudicator assertions (converse called, decision_source) would never be
+        # exercised. Force the documented operator override so the adjudicator runs.
+        self._prev_adj_always = os.environ.get("ROUTING_ADJUDICATOR_ALWAYS")
+        os.environ["ROUTING_ADJUDICATOR_ALWAYS"] = "true"
+
+    def tearDown(self):
+        if self._prev_adj_always is None:
+            os.environ.pop("ROUTING_ADJUDICATOR_ALWAYS", None)
+        else:
+            os.environ["ROUTING_ADJUDICATOR_ALWAYS"] = self._prev_adj_always
+
     def _mock_bedrock_converse(self, selected_model: str):
         mock_client = MagicMock()
         mock_client.converse.return_value = {
@@ -86,7 +102,7 @@ class BedrockRoutingAdjudicationTests(unittest.TestCase):
         router.acompletion = forbidden_acompletion
         mock_client = self._mock_bedrock_converse("org-haiku")
 
-        with patch.dict(os.environ, {"BEDROCK_ADJUDICATOR_MODEL": DEFAULT_HAIKU_45}, clear=False):
+        with patch.dict(os.environ, {"BEDROCK_ADJUDICATOR_MODEL": DEFAULT_HAIKU_45, "ROUTING_ADJUDICATOR_ALWAYS": "true"}, clear=False):
             with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", return_value=mock_client):
                 selection = asyncio.run(
                     router.adjudicate_model_selection(
@@ -136,9 +152,10 @@ class BedrockRoutingAdjudicationTests(unittest.TestCase):
         router = LLMRouter({"org_only_inference": True})
         mock_client = self._mock_bedrock_converse("bedrock-gpt-oss-120b")
 
-        with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", return_value=mock_client):
-            selection = asyncio.run(
-                router.adjudicate_model_selection(
+        with patch.dict(os.environ, {"ROUTING_ADJUDICATOR_ALWAYS": "true"}, clear=False):
+            with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", return_value=mock_client):
+                selection = asyncio.run(
+                    router.adjudicate_model_selection(
                     routing_models=[
                         {
                             "model_name": "bedrock-gpt-oss-120b",
@@ -200,9 +217,10 @@ class BedrockRoutingAdjudicationTests(unittest.TestCase):
             },
         }
 
-        with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", return_value=mock_client):
-            selection = asyncio.run(
-                router.adjudicate_model_selection(
+        with patch.dict(os.environ, {"ROUTING_ADJUDICATOR_ALWAYS": "true"}, clear=False):
+            with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", return_value=mock_client):
+                selection = asyncio.run(
+                    router.adjudicate_model_selection(
                     routing_models=[
                         {
                             "model_name": "bedrock-gpt-oss-120b",
