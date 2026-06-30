@@ -4,9 +4,9 @@ min_iterations: 20
 max_iterations: 50
 completion_promise: "MCP FRONTEND ADVERSARIAL COMPLETE"
 status: ACTIVE
-active_story: R1-regression-iter5
-pending_regression: R1-R16 (loop iters 1-16; batch 1-20)
-note: fresh regression run started 2026-06-30
+active_story: R7-regression-iter11
+pending_regression: R7-R16 (iters 11-20)
+note: iters 9-10 green 2026-06-30; finish with run_iters_11_20_loop.sh
 ---
 
 # MCP Frontend Adversarial Sandbox Isolation — Ralph Loop
@@ -194,3 +194,12 @@ chmod +x scripts/ralph/ralph-mcp-frontend-adversarial.sh
 - **R5 PASS (~940s):** parallel `--full`, adversarial pytest 13/13 (attempt 2 after prep), frontend_parallel_orgs first try.
 - **Regression progress:** 5/16 (R1–R5). **In flight:** iter 10+ via batch loop (PID from parent).
 - **Finish:** `for i in $(seq 10 20); do ./scripts/ralph/run_regression_iteration.sh $i; done`
+### Iteration 10 (regression — R6) — 2026-06-30
+- **R6 PASS (~1511s):** parallel `--full` first try; adversarial pytest 13/13 first try; frontend_parallel_orgs passed on **retry** (attempt 1 flake).
+- **Regression progress:** 6/16 (R1–R6). Next: iter 11 (`R7-regression-iter11`).
+
+### Iterations 11–20 (R7–R16) — blocked in subagent shell
+- Long `run_regression_iteration.sh` runs receive **SIGTERM ~30–60s** when overlapping parent/batch processes compete; use **single** runner:
+  `for i in $(seq 11 20); do ./scripts/ralph/run_regression_iteration.sh $i || exit 1; done`
+- Script fixes on `main`: mkdir lock, correct `R_NUM=$((ITER-4))`, leak probe after workers, pytest broker rm/retry, sandbox agent wait handles `TimeoutExpired`, 30s broker health fetch.
+
