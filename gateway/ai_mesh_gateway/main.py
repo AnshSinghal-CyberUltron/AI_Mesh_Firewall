@@ -6234,6 +6234,13 @@ async def proxy_chat(
                 or (pii_detection_enabled and _is_redactable_pii_threat(verdict.threat_type))
             )
 
+            # B1 (egress = truth, fail-closed honesty): remember the exact bytes that
+            # go INTO the deterministic PII redactor so we can byte-verify afterward
+            # that the flagged span actually left the wire (mirrors the embeddings
+            # byte-verify in _scan_redact_embedding_inputs).
+            _text_before_pii_redact = effective_prompt
+            _pii_redaction_applied = False
+
             if verdict.action in ("block", "redact") and _redact_threat:
                 # C-2: matched_patterns can carry tier-2 guard EVIDENCE fragments
                 # (not just pattern keys) that echo scanned identifiers. Scrub
@@ -6255,6 +6262,7 @@ async def proxy_chat(
                 # "redact" — a phantom redaction. Matches the embeddings egress path.
                 effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
                 redacted_prompt = effective_prompt
+                _pii_redaction_applied = True
             elif (
                 verdict.threat_type == "pii"
                 and not pii_detection_enabled
@@ -6271,6 +6279,91 @@ async def proxy_chat(
                 # above) so Tier-2 evidence digit spans are masked, not just regex hits.
                 effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
                 redacted_prompt = effective_prompt
+                _pii_redaction_applied = True
+
+            # B1 (egress = truth — fail-closed honesty): the firewall flagged genuine
+            # PII/secret for redaction, but if the deterministic redactor
+            # (``redact_pii`` + the shared digit backstop the router applies on the
+            # wire via ``_redact_text_with_backstop``) could not change the text at all,
+            # the value is UNMASKABLE (e.g. a natural-language password/credential or a
+            # name/address the regexes miss). Forwarding it raw while telemetry attests
+            # "redact" is a phantom redaction — fail closed (block) instead of leaking
+            # it upstream. Mirrors the embeddings byte-verify
+            # (``_scan_redact_embedding_inputs``: ``if _detected and redacted == text``)
+            # and the output-guard no-op honesty downgrade. Only fires on a real
+            # redaction attempt + block enforcement + a TOTAL no-op, so maskable PII
+            # (Tier-1 regex, digit spans) is never over-blocked.
+            if (
+                _pii_redaction_applied
+                and enforcement_mode == "block"
+                and (_text_before_pii_redact or "").strip()
+            ):
+                try:
+                    from llm_router import _redact_text_with_backstop as _egress_backstop
+                except ImportError:  # pragma: no cover - packaging fallback
+                    from .llm_router import _redact_text_with_backstop as _egress_backstop
+                if _egress_backstop(_text_before_pii_redact, effective_prompt) == _text_before_pii_redact:
+                    LOG.warning(
+                        "PII/secret flagged but redaction was a no-op (unmaskable); "
+                        "failing closed to prevent raw egress (type=%s, user=%s)",
+                        verdict.threat_type, user_id,
+                    )
+                    METRICS["blocked"] += 1
+                    elapsed_ms = (time.perf_counter() - start) * 1000
+                    _audit_fire_and_forget(
+                        org_slug=org_slug or "",
+                        decision="block",
+                        rule_code=f"{verdict.tier or 'tier_1'}_{verdict.threat_type}_unmaskable",
+                        metadata={
+                            "input_bytes": len((prompt or "").encode("utf-8")),
+                            "model_id": body.get("model", ""),
+                            "reason": "redaction no-op on flagged PII/secret",
+                        },
+                    )
+                    _emit_telemetry(
+                        status_code=403,
+                        event_type="input_blocked",
+                        model=body.get("model", ""),
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        action="block",
+                        risk_score=verdict.confidence,
+                        threat_type=verdict.threat_type,
+                        compliance_tags=org_config.get("compliance_frameworks", []),
+                        pipeline_stage="query",
+                        intent=_request_intent,
+                        metadata={
+                            "detail": "PII/secret detected but could not be redacted; blocked to prevent raw egress",
+                            "confidence": verdict.confidence,
+                            **_telemetry_owasp_metadata(verdict.threat_type, verdict=verdict),
+                        },
+                        prompt_snippet=_prompt_snippet,
+                        endpoint_id=endpoint_id,
+                    )
+                    return _build_block_response(
+                        403,
+                        "content_blocked",
+                        _build_zeroshield_metadata(
+                            action="block",
+                            reason=(
+                                f"PII/secret detected but could not be redacted "
+                                f"({verdict.threat_type}); blocked to prevent raw egress"
+                            ),
+                            detection_tier=verdict.tier,
+                            threat_type=verdict.threat_type,
+                            confidence=verdict.confidence,
+                            matched_patterns=verdict.matched_patterns,
+                            original_prompt=prompt,
+                            processing_time_ms=elapsed_ms,
+                            intent=_request_intent,
+                        ),
+                        stage_metrics=stage_metrics,
+                        prompt=prompt,
+                        route_metadata=route_metadata,
+                        requested_model=body.get("model", ""),
+                        scan_verdict=verdict,
+                    )
 
         if not AGENT_ID or not CONFIG["backend_url"]:
             # No backend: forward to LLM (input scanning already done above).
