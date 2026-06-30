@@ -264,10 +264,28 @@ async function main() {
     if (await liveTab.count()) { await liveTab.first().click().catch(() => {}); }
     const execBtn = page.getByRole("button", { name: /^Execute$/ }).first();
     await execBtn.waitFor({ state: "visible", timeout: 30000 });
-    const [isoResp] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes("/v1/chat/completions") && r.request().method() === "POST", { timeout: 120000 }),
-      execBtn.click(),
-    ]);
+    // handleLiveChat (IsolationOpsSimulator) early-returns WITHOUT firing a request
+    // until gatewayModels.selectedModel is populated — the useSimulatorGatewayModels
+    // hook loads /api/firewall/models/ then auto-selects asynchronously. Clicking
+    // Execute before then no-ops with a "Select a connected model" error and never
+    // hits /v1/chat/completions, so a plain waitForResponse would hang the full 120s.
+    // Retry the click until the request actually fires, detecting the no-op fast.
+    let isoResp = null;
+    for (let attempt = 0; attempt < 6 && !isoResp; attempt++) {
+      const respP = page
+        .waitForResponse((r) => r.url().includes("/v1/chat/completions") && r.request().method() === "POST", { timeout: 120000 })
+        .catch(() => null);
+      await execBtn.click();
+      const noop = await page
+        .getByText(/Select a connected model/i)
+        .first()
+        .waitFor({ state: "visible", timeout: 4000 })
+        .then(() => true)
+        .catch(() => false);
+      if (noop) { await page.waitForTimeout(2000); continue; }
+      isoResp = await respP;
+    }
+    if (!isoResp) throw new Error("isolation live chat never fired /v1/chat/completions (model selector did not populate)");
     report.notes.push(`isolation live HTTP ${isoResp.status()}`);
     assert(isoResp.status() === 200, `isolation benign prompt allowed (HTTP ${isoResp.status()})`);
     await page.waitForTimeout(800);
