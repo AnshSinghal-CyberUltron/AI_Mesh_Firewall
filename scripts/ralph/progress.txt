@@ -1390,3 +1390,5 @@
 - **Regression:** 5/16 (R1–R5). Pending R6–R16 (iters 10–20). Batch loop may be running iter 10+.
 - **Finish remaining:** `cd /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall && for i in $(seq 10 20); do ./scripts/ralph/run_regression_iteration.sh $i; done`
   Or: `./scripts/ralph/run_iters_8_20.sh` (edit seq to 10–20) / monitor `scripts/ralph/regression_iters_9_20_results.tsv`.
+
+D RESET: cleared locks, killed overlapping runs, R1-R16 reset, starting regression from iter 1
