@@ -91,6 +91,7 @@
 - Gateway tests run with the gateway venv: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`. As of commit 3b81737f the package conftest (gateway/ai_mesh_gateway/conftest.py) prepends gateway/ai_mesh_gateway + repo-root/shared to sys.path, so NO manual PYTHONPATH is needed — the gate is self-contained from a clean shell. (Historically it false-failed with `ModuleNotFoundError: ai_mesh_shared` at fixture setup because main.py->jobs.py imports ai_mesh_shared from ../shared.) Plain `python` (not .venv) still lacks deps.
 - control container: WorkingDir is /app/control/ai_mesh_control (so daphne can import main_app); manage.py lives one level up, so exec it with `-w /app/control -e PYTHONPATH=/app/control/ai_mesh_control`. Recreate control with explicit `-f docker-compose.yml -f docker-compose.override.yml` (default discovery drops the working_dir override).
 - A1 SDK harness already exists at gateway/ai_mesh_gateway/test_openai_sdk_compat.py path (tests/). tests/leakhunt does NOT exist yet (A2 creates it under gateway/).
+- FULL-SUITE-DRIFT (verified 2026-06-30): `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q` is NOT all-green — it's ~990 passed / ~33 FAILED, and has been since before E1 ("952 passed/17 failed pre-existing" earlier). The failures are PRE-EXISTING DRIFT, not regressions/fail-opens (no working-tree gateway source edits): (a) policy_check + stream_governance injection tests expect HTTP403, impl now 400 (openai_content_block_status contract; block still happens); (b) phase6 missing-model expects 400, impl now 403/model_not_allowed; (c) test_org_tpm_rate_limit fail-closed test expects 429 but the limiter is DELIBERATELY fail-OPEN by design (rate_limit_enforcement.py docstring — capacity protection, not a security boundary); (d) ~28 env-gated test_mcp_sandbox_* need the live broker :8311. So treat test_openai_sdk_compat.py (+ leakhunt) as THE deterministic backend gate; the literal "full suite green" needs a separate test-drift cleanup story. Confirm a failing test is real before fixing: READ the impl docstring/rationale — several of these tests are stale against an intentional change.
 
 ## PRIME INVARIANTS (every leak/security story)
 - Egress = truth: a redact/block verdict (or assume_redacted=True) is valid ONLY if the captured outbound bytes reflect it.
@@ -1668,3 +1669,53 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   despite containers Running); playwright_demo_simulators.mjs NOT RUN; openai_sdk_live_gateway.py NOT RUN.
   Next iter: stabilize docker (remove duplicate control containers, force-recreate control+gateway, poll
   auth 200), then re-run live gates; investigate whether full pytest MCP failures are env-gated or regressions.
+- 2026-06-30 E1 iter (this loop) — BROUGHT THE LIVE STACK UP + ran live gates; E1 still passes:false
+  (full-suite backend gate red + demo gate infra-blocked). What I proved GREEN this iter:
+    * (#1a) test_openai_sdk_compat.py -> 46 passed / 2 xpassed.
+    * (#2) frontend `npm run lint` (=test:unit, 26 pass) + `npm run build` (exit 0). NOTE: this repo's
+      frontend DOES define lint -> test:unit in package.json (the global "no npm run lint" caveat does
+      NOT apply here).
+    * (#4) LIVE OpenAI SDK e2e — `cd gateway && CONTROL_URL=http://127.0.0.1:8100
+      GATEWAY_URL=http://127.0.0.1:8300 ./.venv/bin/python ../scripts/openai_sdk_live_gateway.py`
+      -> 6/6 PASS over REAL TCP w/ the stock openai SDK: login, simulator-default key mint, model
+      gemma-free, chat allow "Hello!", content block HTTP400 code=content_filter +request_id,
+      forbidden model HTTP404 code=model_not_configured +request_id. Report runs/openai_sdk_live_gateway.json.
+  STACK RECOVERY (host was in SWAP-DEATH: 16GB RAM, ~27GB swap fully used; control+gateway both 000):
+    1. `docker stop adv-org-{alpha,beta,zeta}-mcp-sandbox mcp-broker-parallel-load-test` (ephemeral
+       adversarial-campaign sandboxes — the contention source; do NOT touch the core stack or the
+       persistent ai_mesh_mcp_broker). 2. `docker restart <gateway>` — workers reach "Application
+       startup complete" only after ~5min under thrash (POLL the logs for it; do NOT give up at 2min —
+       the gate-budget polls were hitting it mid-boot). 3. control auth recovered ~90s after a
+       force-recreate but RE-WEDGES within seconds (single daphne worker saturated by gateway telemetry
+       POSTs) — it oscillates 200<->000, which is why the live Playwright demo gate can't complete.
+  (#3) Playwright demo gate playwright_demo_simulators.mjs -> best run 17/18: only the LAST step
+  (bedrock-test guard-model health) 502'd = control-wedge on the blocking botocore call, NOT a product
+  defect; a 2nd attempt failed at the attack step because I'd just force-recreated control so the
+  GATEWAY was mid config-reload storm (LESSON: confirm `docker logs <gateway> | grep -c "ConfigSync
+  started"` has drained to 0 BEFORE running any live gate).
+  HEADLINE FINDING — full `ai_mesh_gateway/tests -q` = 990 passed / 33 FAILED (so E1 criterion #1's
+  "full suite green" is NOT literally met). Root-caused a representative sample; ALL are PRE-EXISTING
+  test-drift, NOT regressions and NOT security fail-opens (there are NO working-tree gateway SOURCE
+  edits — the failures exist at HEAD c83d0fcb):
+    * policy_check tier1 + messages-body injection AND stream_governance injection_block expect HTTP403
+      but now return 400 — the BLOCK STILL HAPPENS ([SECURITY_BLOCK] is logged; no fail-open to 200);
+      this is the documented openai_content_block_status 403->400 contract evolution -> tests are stale.
+    * phase6 test_missing_model expects 400/invalid_request param=model, impl now returns
+      403/model_not_allowed for an empty model -> contract-direction drift, tests stale.
+    * test_org_tpm_rate_limit::test_fails_closed_on_limiter_exception expects 429 but gets None — read
+      rate_limit_enforcement.py: the helper is DELIBERATELY fail-OPEN (docstring L8-12 + inline L72-78:
+      "rate limiting is best-effort capacity protection, not a security boundary — tier-1/tier-2 scanning
+      still runs — so a transient Redis outage must not mass-block every tenant"). The TEST encodes an
+      old fail-closed expectation that was intentionally reversed -> STALE TEST, NOT a vuln. (Evidence
+      beat the initial fail-open hypothesis.)
+    * remaining ~28 likely include env-gated test_mcp_sandbox_* needing the live broker :8311 (matches
+      the iter-1 note "19 failed, 16 errors — mostly test_mcp_sandbox_*").
+  CONSEQUENCE: E1 #1 ("full ai_mesh_gateway/tests -q green") can NOT be literally green without a
+  SEPARATE test-drift cleanup (update the 403/400 + missing-model + fail-open-by-design tests to the
+  current intended contract, and gate the mcp_sandbox suite on a live broker). Prior iters effectively
+  used test_openai_sdk_compat.py as THE backend gate. RECOMMEND the loop owner either (a) narrow E1 #1
+  to test_openai_sdk_compat.py, or (b) file the test-drift cleanup as its own story before E1 can flip.
+  COORDINATION: a PARALLEL Cursor E1 campaign actively OWNS scripts/openai_sdk_live_gateway.py — it
+  fixed the report error-honesty bug between my run and now (the on-disk `except SystemExit` already
+  stamps error only on non-zero exit). I did NOT clobber it; my earlier report artifact is stale-labeled
+  (error:"gate failed") but every step ok:true. E1 stays passes:false this iter.
