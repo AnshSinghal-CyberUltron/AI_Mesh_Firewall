@@ -80,7 +80,7 @@ def test_registry_idle_entries(clock: MockClock, registry: SandboxRegistry):
 async def test_reaper_stops_idle_container(manager: DockerManager, registry: SandboxRegistry, clock: MockClock):
     running = MagicMock()
     running.id = "abc123"
-    running.name = "mcp-sandbox-acme"
+    running.name = "acme-mcp-sandbox"
     running.status = "running"
     running.attrs = {
         "Created": "2026-06-29T12:00:00.000000000Z",
@@ -131,7 +131,7 @@ async def test_reaper_keeps_active_container(manager: DockerManager, registry: S
 async def test_ensure_registers_running_sandbox(manager: DockerManager, registry: SandboxRegistry):
     created = MagicMock()
     created.id = "new-id"
-    created.name = "mcp-sandbox-beta"
+    created.name = "beta-mcp-sandbox"
     created.status = "running"
     created.attrs = {
         "Created": "2026-06-29T12:00:00.000000000Z",

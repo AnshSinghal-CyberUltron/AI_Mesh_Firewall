@@ -26,7 +26,7 @@ def _mock_container(
     org_net = f"mcp_sandbox_net_{org_slug}"
     container = MagicMock()
     container.id = container_id
-    container.name = f"mcp-sandbox-{org_slug}"
+    container.name = f"{org_slug}-mcp-sandbox"
     container.status = status
     container.attrs = {
         "Created": created,
@@ -135,7 +135,7 @@ def test_ensure_recovers_from_name_conflict(manager: DockerManager):
 
     info = manager.ensure("acme")
 
-    manager.client.containers.get.assert_called_with("mcp-sandbox-acme")
+    manager.client.containers.get.assert_called_with("acme-mcp-sandbox")
     assert info.status == "running"
     assert info.container_id == existing.id
 

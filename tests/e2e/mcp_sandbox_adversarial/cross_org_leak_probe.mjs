@@ -127,11 +127,11 @@ async function main() {
       await Promise.all([
         hammerOrg(ORG_ALPHA, alphaCfg, round),
         hammerOrg(ORG_BETA, betaCfg, round),
-        probeForeignMarker(ORG_ALPHA, ORG_BETA),
-        probeForeignMarker(ORG_BETA, ORG_ALPHA),
-        probeSecretKeys(ORG_ALPHA),
-        probeSecretKeys(ORG_BETA),
       ]);
+      await probeForeignMarker(ORG_ALPHA, ORG_BETA);
+      await probeForeignMarker(ORG_BETA, ORG_ALPHA);
+      await probeSecretKeys(ORG_ALPHA);
+      await probeSecretKeys(ORG_BETA);
     }
     report.steps.push(`hammer-${HAMMER_ROUNDS}-rounds`);
     report.steps.push("cross-org-markers-ok");

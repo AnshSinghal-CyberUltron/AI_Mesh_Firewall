@@ -27,7 +27,7 @@ def _mock_container(
 ) -> MagicMock:
     container = MagicMock()
     container.id = container_id
-    container.name = f"mcp-sandbox-{org_slug}"
+    container.name = f"{org_slug}-mcp-sandbox"
     container.status = status
     container.attrs = {
         "Created": "2026-06-29T12:00:00.000000000Z",

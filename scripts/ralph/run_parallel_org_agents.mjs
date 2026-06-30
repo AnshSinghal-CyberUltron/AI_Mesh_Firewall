@@ -209,6 +209,21 @@ async function resetSandboxes() {
     }
   }
   await waitBrokerDockerOk(30000);
+  for (const org of ORGS) {
+    const ensureRes = await brokerFetch(`/v1/sandbox/${org}/ensure`, {
+      method: "POST",
+      body: JSON.stringify({ warm: true }),
+    });
+    if (!ensureRes.ok) {
+      throw new Error(`re-ensure ${org} after reset failed: ${ensureRes.status}`);
+    }
+    const body = await ensureRes.json();
+    const cid = body.container_id;
+    if (!cid) throw new Error(`no container_id for ${org} after reset`);
+    await waitForAgent(cid);
+    await run("docker", ["cp", STUB_HOST, `${cid}:${STUB_CONTAINER}`]);
+    console.log(`sandbox re-warmed ${org} (${cid.slice(0, 12)})`);
+  }
 }
 
 async function pytestLeakage() {

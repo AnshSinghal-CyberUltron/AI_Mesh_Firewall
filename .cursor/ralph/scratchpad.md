@@ -151,3 +151,9 @@ Output `<promise>COMPLETE and tested from frontend and backend</promise>` only w
 - **Gate 2** (full adversarial pytest): **GREEN** — 13 passed in ~247s
 - **Gate 3** (frontend Playwright): **GREEN** — tools-call-ok
 - **R7-regression-iter11:** `passes:true`; scratchpad bumped to iteration 8
+
+### Iteration 8 (2026-06-30)
+- **Gate 1** (parallel org agents --full): **GREEN** — ~275s
+- **Gate 2** (full adversarial pytest): **GREEN** — 13 passed in ~271s
+- **Gate 3** (frontend Playwright): **GREEN** — tools-call-ok
+- **R8-regression-iter12:** `passes:true`; scratchpad bumped to iteration 9

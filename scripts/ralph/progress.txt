@@ -1647,3 +1647,9 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
 
 ## MCP Frontend Adversarial Ralph Loop
 - 2026-06-30 FULL RESET — user requested restart from logical iter 1; killed regression batches; R1–R16 passes:false; harness scripts + Makefile targets added.
+
+## MCP Frontend Adversarial Ralph Loop
+- 2026-06-30 FULL RESET — user requested restart from logical iter 1; killed regression batches; R1–R16 passes:false.
+
+## Ralph OpenAI SDK campaign 2026-06-30
+- Started headless loop: E1-openai-sdk-frontend-playwright (passes:false); gates = test_openai_sdk_compat.py + full gateway pytest + frontend lint/build + playwright_demo_simulators.mjs + live openai SDK e2e.

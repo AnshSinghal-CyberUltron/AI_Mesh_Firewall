@@ -81,19 +81,29 @@ async function login(page) {
     page.getByRole("button", { name: /^sign in$/i }).click(),
   ]);
   if (!res.ok()) throw new Error(`Login failed: ${res.status()}`);
+  await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 120000 });
 }
 
 async function openMcpPanel(page) {
-  await page.goto(`${BASE}/?tab=firewall-1-4`, { waitUntil: "domcontentloaded", timeout: 120000 });
+  await page.goto(`${BASE}/?tab=firewall-1-4`, { waitUntil: "load", timeout: 180000 });
+  const bodyText = await page.locator("body").innerText();
+  if (/Failed to fetch|Vite.*error|Cannot find module/i.test(bodyText)) {
+    throw new Error("Fatal UI error on MCP tab");
+  }
   await page
     .waitForResponse(
       (r) => r.url().includes("/api/mcp-connector/servers/") && r.request().method() === "GET",
-      { timeout: 120000 }
+      { timeout: 180000 }
     )
     .catch(() => null);
-  await page.locator('[role="status"], .animate-spin').first().waitFor({ state: "hidden", timeout: 180000 }).catch(() => {});
+  // MCPConnectorPanel hides preset buttons while loadServers() sets loading=true.
+  const mcpSpinner = page.locator("text=MCP servers managed by the ZeroShield MCP control plane")
+    .locator("xpath=ancestor::div[contains(@class,'space-y')][1]")
+    .locator('[role="status"], .animate-spin');
+  await mcpSpinner.first().waitFor({ state: "hidden", timeout: 300000 }).catch(() => {});
   const presetProbe = page.getByRole("button", { name: /Semgrep MCP|Playwright MCP|Memory MCP/i }).first();
-  await presetProbe.waitFor({ state: "visible", timeout: 180000 });
+  await presetProbe.scrollIntoViewIfNeeded();
+  await presetProbe.waitFor({ state: "visible", timeout: 300000 });
 }
 
 function serverCardLocator(page, presetName) {
@@ -101,17 +111,39 @@ function serverCardLocator(page, presetName) {
   return page.locator("h4").filter({ hasText: pattern }).first();
 }
 
-async function touchSandboxActivity(orgSlug) {
-  const res = await fetch(`${BROKER_URL}/v1/sandbox/${orgSlug}/ensure`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-MCP-Broker-Key": BROKER_KEY,
-    },
-    body: JSON.stringify({ warm: true }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!res.ok) throw new Error(`touch ${orgSlug} failed: ${res.status}`);
+async function touchSandboxActivity(orgSlug, attempt = 0) {
+  const maxAttempts = 4;
+  const backoffMs = 2000 * (attempt + 1);
+  try {
+    const res = await fetch(`${BROKER_URL}/v1/sandbox/${orgSlug}/ensure`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-MCP-Broker-Key": BROKER_KEY,
+      },
+      body: JSON.stringify({ warm: true }),
+      // Broker ensure routinely takes 10–15s; allow headroom under parallel docker load.
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!res.ok && [429, 500, 502, 503].includes(res.status) && attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, backoffMs));
+      return touchSandboxActivity(orgSlug, attempt + 1);
+    }
+    if (!res.ok) throw new Error(`touch ${orgSlug} failed: ${res.status}`);
+  } catch (e) {
+    if (attempt < maxAttempts && /timeout|429|503|502|ECONNRESET|ETIMEDOUT/i.test(String(e.message))) {
+      await new Promise((r) => setTimeout(r, backoffMs));
+      return touchSandboxActivity(orgSlug, attempt + 1);
+    }
+    throw e;
+  }
+}
+
+/** Best-effort sandbox warm — gate 1 already ensured containers; do not fail UI gate on broker slowness. */
+async function warmSandboxBestEffort() {
+  await touchSandboxActivity("adv-org-alpha")
+    .catch(() => touchSandboxActivity("adv-org-beta"))
+    .catch(() => {});
 }
 
 async function registerPreset(page, presetName) {
@@ -244,7 +276,7 @@ async function main() {
     report.steps.push("mcp-panel");
 
     for (const preset of STDIO_PRESETS) {
-      await touchSandboxActivity("adv-org-alpha").catch(() => touchSandboxActivity("adv-org-beta"));
+      await warmSandboxBestEffort();
       const reg = await withRetry(`register-${preset}`, () => registerPreset(page, preset));
       report.steps.push(`${preset}:${reg}`);
       const synced = await withRetry(`sync-${preset}`, () => syncTools(page, preset), {

@@ -103,7 +103,7 @@ def _cleanup_test_containers() -> None:
 def _inspect_container(org_slug: str) -> dict:
     import json
 
-    name = f"mcp-sandbox-{org_slug}"
+    name = f"{org_slug}-mcp-sandbox"
     proc = subprocess.run(
         ["docker", "inspect", name, "--format", "{{json .}}"],
         capture_output=True,

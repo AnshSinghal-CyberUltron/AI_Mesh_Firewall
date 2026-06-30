@@ -1,0 +1,1253 @@
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+run_parallel_org_agents FAIL: ensure adv-org-alpha failed: 500
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (f5973609fcd5)
+stub copied into adv-org-beta (6b82773e7e02)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+FAIL org_worker adv-org-alpha fetch failed
+run_parallel_org_agents FAIL: node /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/tests/e2e/mcp_sandbox_adversarial/org_worker.mjs exited 1
+FAIL org_worker adv-org-alpha fetch failed
+
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (f5973609fcd5)
+stub copied into adv-org-beta (6b82773e7e02)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+OK org_worker adv-org-alpha broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK org_worker adv-org-beta broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+FAIL cross_org_leak_probe rpc adv-org-beta/tools/call failed: 502 {"detail":"Sandbox agent unreachable: All connection attempts failed"}
+run_parallel_org_agents FAIL: node /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/tests/e2e/mcp_sandbox_adversarial/cross_org_leak_probe.mjs exited 1
+FAIL cross_org_leak_probe rpc adv-org-beta/tools/call failed: 502 {"detail":"Sandbox agent unreachable: All connection attempts failed"}
+
+make: *** [mcp-adversarial-gate] Error 1
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (fa9a6c7b2a83)
+stub copied into adv-org-beta (389799e9ed35)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+FAIL org_worker adv-org-alpha fetch failed
+run_parallel_org_agents FAIL: node /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/tests/e2e/mcp_sandbox_adversarial/org_worker.mjs exited 1
+FAIL org_worker adv-org-alpha fetch failed
+
+make: *** [mcp-adversarial-gate] Error 1
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (fa9a6c7b2a83)
+stub copied into adv-org-beta (389799e9ed35)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+OK org_worker adv-org-beta broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK org_worker adv-org-alpha broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK cross_org_leak_probe hammer-12-rounds → cross-org-markers-ok → secret-denylist-ok
+=== parallel workers OK ===
+=== pytest adversarial leakage subset ===
+....                                                                     [100%]
+4 passed, 9 deselected in 419.74s (0:06:59)
+run_parallel_org_agents OK
+cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q
+EEEEEEEEEEEEE                                                            [100%]
+==================================== ERRORS ====================================
+_______ ERROR at setup of test_denylist_blocks_gateway_secret_injection ________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+_______ ERROR at setup of test_denylist_blocks_mcp_broker_key_injection ________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+_________ ERROR at setup of test_cross_org_volume_secrets_not_readable _________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+__________ ERROR at setup of test_env_foreign_org_marker_not_visible ___________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+_________________ ERROR at setup of test_npm_cache_bleed_probe _________________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+__________ ERROR at setup of test_denylist_secrets_not_in_sandbox_env __________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+____ ERROR at setup of test_host_path_traversal_cannot_read_host_etc_passwd ____
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+__________ ERROR at setup of test_proc_self_environ_no_gateway_secret __________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+________ ERROR at setup of test_docker_sock_not_accessible_from_sandbox ________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+________ ERROR at setup of test_sibling_container_metadata_not_readable ________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+_________ ERROR at setup of test_parallel_2_orgs_5_servers_tools_list __________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+___ ERROR at setup of test_network_sibling_sandbox_agent_port_not_reachable ____
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+________ ERROR at setup of test_network_concurrent_cross_org_rpc_hammer ________
+
+docker_available = None, sandbox_image = 'ai-mesh/mcp-sandbox:adversarial'
+broker_image = 'ai-mesh/mcp-broker:adversarial'
+
+    @pytest.fixture(scope="module")
+    def broker_url(
+        docker_available: None,
+        sandbox_image: str,
+        broker_image: str,
+    ) -> Iterator[str]:
+        _cleanup_test_containers()
+        _ensure_sandbox_network()
+    
+        port = _free_port()
+        run = _start_broker_container(port, sandbox_image, broker_image)
+>       assert run.returncode == 0, run.stderr
+E       AssertionError: docker: Error response from daemon: container is marked for removal and cannot be started
+E         
+E         Run 'docker run --help' for more information
+E         
+E       assert 125 == 0
+E        +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg... from daemon: container is marked for removal and cannot be started\n\nRun 'docker run --help' for more information\n").returncode
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: AssertionError
+=========================== short test summary info ============================
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_denylist_blocks_gateway_secret_injection
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_denylist_blocks_mcp_broker_key_injection
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_cross_org_volume_secrets_not_readable
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_env_foreign_org_marker_not_visible
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_npm_cache_bleed_probe
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_denylist_secrets_not_in_sandbox_env
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_host_path_traversal_cannot_read_host_etc_passwd
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_proc_self_environ_no_gateway_secret
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_docker_sock_not_accessible_from_sandbox
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_sibling_container_metadata_not_readable
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_parallel_2_orgs_5_servers_tools_list
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_network_sibling_sandbox_agent_port_not_reachable
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_network_concurrent_cross_org_rpc_hammer
+13 errors in 91.46s (0:01:31)
+make: *** [mcp-adversarial-gate] Error 1
+EEEEEEEEEEEEE                                                            [100%]
+==================================== ERRORS ====================================
+_______ ERROR at setup of test_denylist_blocks_gateway_secret_injection ________
+E   Failed: mcp-broker /health did not report docker_ok=true
+_______ ERROR at setup of test_denylist_blocks_mcp_broker_key_injection ________
+E   Failed: mcp-broker /health did not report docker_ok=true
+_________ ERROR at setup of test_cross_org_volume_secrets_not_readable _________
+E   Failed: mcp-broker /health did not report docker_ok=true
+__________ ERROR at setup of test_env_foreign_org_marker_not_visible ___________
+E   Failed: mcp-broker /health did not report docker_ok=true
+_________________ ERROR at setup of test_npm_cache_bleed_probe _________________
+E   Failed: mcp-broker /health did not report docker_ok=true
+__________ ERROR at setup of test_denylist_secrets_not_in_sandbox_env __________
+E   Failed: mcp-broker /health did not report docker_ok=true
+____ ERROR at setup of test_host_path_traversal_cannot_read_host_etc_passwd ____
+E   Failed: mcp-broker /health did not report docker_ok=true
+__________ ERROR at setup of test_proc_self_environ_no_gateway_secret __________
+E   Failed: mcp-broker /health did not report docker_ok=true
+________ ERROR at setup of test_docker_sock_not_accessible_from_sandbox ________
+E   Failed: mcp-broker /health did not report docker_ok=true
+________ ERROR at setup of test_sibling_container_metadata_not_readable ________
+E   Failed: mcp-broker /health did not report docker_ok=true
+_________ ERROR at setup of test_parallel_2_orgs_5_servers_tools_list __________
+E   Failed: mcp-broker /health did not report docker_ok=true
+___ ERROR at setup of test_network_sibling_sandbox_agent_port_not_reachable ____
+E   Failed: mcp-broker /health did not report docker_ok=true
+________ ERROR at setup of test_network_concurrent_cross_org_rpc_hammer ________
+E   Failed: mcp-broker /health did not report docker_ok=true
+=========================== short test summary info ============================
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_denylist_blocks_gateway_secret_injection
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_denylist_blocks_mcp_broker_key_injection
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_cross_org_volume_secrets_not_readable
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_env_foreign_org_marker_not_visible
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_npm_cache_bleed_probe
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_denylist_secrets_not_in_sandbox_env
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_host_path_traversal_cannot_read_host_etc_passwd
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_proc_self_environ_no_gateway_secret
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_docker_sock_not_accessible_from_sandbox
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_sibling_container_metadata_not_readable
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_parallel_2_orgs_5_servers_tools_list
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_network_sibling_sandbox_agent_port_not_reachable
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_network_concurrent_cross_org_rpc_hammer
+13 errors in 124.75s (0:02:04)
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+run_parallel_org_agents FAIL: fetch failed
+make: *** [mcp-adversarial-gate] Error 1
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (e33fc9a2107a)
+run_parallel_org_agents FAIL: ensure adv-org-beta failed: 500
+make: *** [mcp-adversarial-gate] Error 1
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (d2c352628434)
+stub copied into adv-org-beta (8e10d00c5f19)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+FAIL org_worker adv-org-beta rpc tools/call failed: 500 Internal Server Error
+run_parallel_org_agents FAIL: node /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/tests/e2e/mcp_sandbox_adversarial/org_worker.mjs exited 1
+FAIL org_worker adv-org-beta rpc tools/call failed: 500 Internal Server Error
+
+make: *** [mcp-adversarial-gate] Error 1
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (d2c352628434)
+stub copied into adv-org-beta (8e10d00c5f19)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+OK org_worker adv-org-alpha broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK org_worker adv-org-beta broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK cross_org_leak_probe hammer-12-rounds → cross-org-markers-ok → secret-denylist-ok
+=== parallel workers OK ===
+=== pytest adversarial leakage subset ===
+EEEE                                                                     [100%]
+==================================== ERRORS ====================================
+_________ ERROR at setup of test_cross_org_volume_secrets_not_readable _________
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: in broker_url
+    assert run.returncode == 0, run.stderr
+E   AssertionError: docker: Error response from daemon: No such container: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654
+E     
+E     Run 'docker run --help' for more information
+E     
+E   assert 125 == 0
+E    +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg...r: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654\n\nRun 'docker run --help' for more information\n").returncode
+__________ ERROR at setup of test_env_foreign_org_marker_not_visible ___________
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: in broker_url
+    assert run.returncode == 0, run.stderr
+E   AssertionError: docker: Error response from daemon: No such container: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654
+E     
+E     Run 'docker run --help' for more information
+E     
+E   assert 125 == 0
+E    +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg...r: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654\n\nRun 'docker run --help' for more information\n").returncode
+_________________ ERROR at setup of test_npm_cache_bleed_probe _________________
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: in broker_url
+    assert run.returncode == 0, run.stderr
+E   AssertionError: docker: Error response from daemon: No such container: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654
+E     
+E     Run 'docker run --help' for more information
+E     
+E   assert 125 == 0
+E    +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg...r: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654\n\nRun 'docker run --help' for more information\n").returncode
+__________ ERROR at setup of test_denylist_secrets_not_in_sandbox_env __________
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: in broker_url
+    assert run.returncode == 0, run.stderr
+E   AssertionError: docker: Error response from daemon: No such container: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654
+E     
+E     Run 'docker run --help' for more information
+E     
+E   assert 125 == 0
+E    +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg...r: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654\n\nRun 'docker run --help' for more information\n").returncode
+=========================== short test summary info ============================
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_cross_org_volume_secrets_not_readable
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_env_foreign_org_marker_not_visible
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_npm_cache_bleed_probe
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_denylist_secrets_not_in_sandbox_env
+9 deselected, 4 errors in 82.41s (0:01:22)
+run_parallel_org_agents FAIL: /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/gateway/.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q -k volume or foreign_org or npm_cache or denylist_secrets --tb=short exited 1
+EEEE                                                                     [100%]
+==================================== ERRORS ====================================
+_________ ERROR at setup of test_cross_org_volume_secrets_not_readable _________
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: in broker_url
+    assert run.returncode == 0, run.stderr
+E   AssertionError: docker: Error response from daemon: No such container: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654
+E     
+E     Run 'docker run --help' for more information
+E     
+E   assert 125 == 0
+E    +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg...r: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654\n\nRun 'docker run --help' for more information\n").returncode
+__________ ERROR at setup of test_env_foreign_org_marker_not_visible ___________
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: in broker_url
+    assert run.returncode == 0, run.stderr
+E   AssertionError: docker: Error response from daemon: No such container: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654
+E     
+E     Run 'docker run --help' for more information
+E     
+E   assert 125 == 0
+E    +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg...r: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654\n\nRun 'docker run --help' for more information\n").returncode
+_________________ ERROR at setup of test_npm_cache_bleed_probe _________________
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: in broker_url
+    assert run.returncode == 0, run.stderr
+E   AssertionError: docker: Error response from daemon: No such container: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654
+E     
+E     Run 'docker run --help' for more information
+E     
+E   assert 125 == 0
+E    +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg...r: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654\n\nRun 'docker run --help' for more information\n").returncode
+__________ ERROR at setup of test_denylist_secrets_not_in_sandbox_env __________
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:295: in broker_url
+    assert run.returncode == 0, run.stderr
+E   AssertionError: docker: Error response from daemon: No such container: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654
+E     
+E     Run 'docker run --help' for more information
+E     
+E   assert 125 == 0
+E    +  where 125 = CompletedProcess(args=['docker', 'run', '-d', '--name', 'mcp-broker-adversarial-test', '--network', 'mcp_sandbox_bridg...r: 96125a9bad9cb167fe39147c2edd593d28dbdd61ad9d0becd4c86e3753034654\n\nRun 'docker run --help' for more information\n").returncode
+=========================== short test summary info ============================
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_cross_org_volume_secrets_not_readable
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_env_foreign_org_marker_not_visible
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_npm_cache_bleed_probe
+ERROR ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_denylist_secrets_not_in_sandbox_env
+9 deselected, 4 errors in 82.41s (0:01:22)
+
+make: *** [mcp-adversarial-gate] Error 1
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (d727a86a2c51)
+stub copied into adv-org-beta (c5171fe45bac)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+OK org_worker adv-org-alpha broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK org_worker adv-org-beta broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK cross_org_leak_probe hammer-12-rounds → cross-org-markers-ok → secret-denylist-ok
+=== parallel workers OK ===
+=== pytest adversarial leakage subset ===
+....                                                                     [100%]
+4 passed, 9 deselected in 140.05s (0:02:20)
+run_parallel_org_agents OK
+cd gateway && MCP_ADVERSARIAL_USE_LIVE_BROKER=true MCP_BROKER_URL=http://127.0.0.1:8311 MCP_BROKER_INTERNAL_KEY=dev-mcp-broker-key-change-me ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q
+..........F.F                                                            [100%]
+=================================== FAILURES ===================================
+__________________ test_parallel_2_orgs_5_servers_tools_list ___________________
+
+broker_url = 'http://127.0.0.1:8311'
+
+    @pytest.mark.docker
+    @pytest.mark.asyncio
+    async def test_parallel_2_orgs_5_servers_tools_list(broker_url: str):
+        """F3 gate: 2 orgs × 5 servers concurrent tools/list."""
+        for org in ORGS:
+            await _prepare_org(org)
+    
+        async def _list_all(org: str) -> None:
+            from ai_mesh_gateway import mcp_sandbox_client as client
+    
+            for idx, cfg in enumerate(_org_server_configs(org), start=1):
+                rpc = await client.broker_send_jsonrpc(
+                    org,
+                    cfg,
+                    "tools/list",
+                    None,
+                    msg_id=idx,
+                )
+                names = {t["name"] for t in rpc["result"]["tools"]}
+                assert {"echo", "get_env"}.issubset(names)
+    
+>       await asyncio.gather(_list_all(ORG_ALPHA), _list_all(ORG_BETA))
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:678: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+org = 'adv-org-beta'
+
+    async def _list_all(org: str) -> None:
+        from ai_mesh_gateway import mcp_sandbox_client as client
+    
+        for idx, cfg in enumerate(_org_server_configs(org), start=1):
+            rpc = await client.broker_send_jsonrpc(
+                org,
+                cfg,
+                "tools/list",
+                None,
+                msg_id=idx,
+            )
+>           names = {t["name"] for t in rpc["result"]["tools"]}
+                                        ^^^^^^^^^^^^^
+E           KeyError: 'result'
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:675: KeyError
+_________________ test_network_concurrent_cross_org_rpc_hammer _________________
+
+broker_url = 'http://127.0.0.1:8311'
+
+    @pytest.mark.docker
+    @pytest.mark.asyncio
+    async def test_network_concurrent_cross_org_rpc_hammer(broker_url: str):
+        """Concurrent tools/call across 2 orgs must not cross-leak env markers."""
+        for org in ORGS:
+            await _prepare_org(org)
+    
+        async def _hammer(org: str, idx: int) -> str:
+            cfg = _org_server_configs(org)[idx % SERVERS_PER_ORG]
+            return await _rpc_get_env(org, cfg, "ORG_ONLY_MARKER", msg_id=f"hammer-{org}-{idx}")
+    
+>       markers = await asyncio.gather(
+            *[_hammer(ORG_ALPHA, i) for i in range(10)],
+            *[_hammer(ORG_BETA, i) for i in range(10)],
+        )
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:749: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:747: in _hammer
+    return await _rpc_get_env(org, cfg, "ORG_ONLY_MARKER", msg_id=f"hammer-{org}-{idx}")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+org_slug = 'adv-org-alpha'
+cfg = {'args': ['/data/mcp-auth/stdio_mcp_stub.py'], 'command': 'python3', 'env_vars': {'ADV_PROBE_TAG': 'probe-adv-org-alph...NLY_MARKER': 'marker-adv-org-alpha', 'ORG_SLUG': 'adv-org-alpha', 'SERVER_IDX': '3', ...}, 'server_slug': 'adv-stub-3'}
+key = 'ORG_ONLY_MARKER'
+
+    async def _rpc_get_env(
+        org_slug: str,
+        cfg: dict,
+        key: str,
+        *,
+        msg_id: int | str | None = None,
+    ) -> str:
+        from ai_mesh_gateway import mcp_sandbox_client as client
+    
+        rid = msg_id if msg_id is not None else hash((org_slug, key, time.time_ns())) % 10_000_000
+        rpc = await client.broker_send_jsonrpc(
+            org_slug,
+            cfg,
+            "tools/call",
+            {"name": "get_env", "arguments": {"key": key}},
+            msg_id=rid,
+        )
+        if "error" in rpc and "result" not in rpc:
+>           raise AssertionError(f"RPC error for {org_slug}/{key}: {rpc['error']}")
+E           AssertionError: RPC error for adv-org-alpha/ORG_ONLY_MARKER: {'code': -32000, 'message': "Org 'adv-org-alpha' reached its concurrent stdio MCP server limit (8). Close an existing server connection and retry."}
+
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:391: AssertionError
+=========================== short test summary info ============================
+FAILED ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_parallel_2_orgs_5_servers_tools_list
+FAILED ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_network_concurrent_cross_org_rpc_hammer
+2 failed, 11 passed in 333.39s (0:05:33)
+make: *** [mcp-adversarial-gate] Error 1
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+=== Ralph iter1 unstuck gate 2026-06-30T09:45:21Z ===
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (6575d2b598e0)
+stub copied into adv-org-alpha (6575d2b598e0)
+stub copied into adv-org-beta (435c13bd9bc8)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+stub copied into adv-org-beta (435c13bd9bc8)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+FAIL org_worker adv-org-alpha ensure failed: 500 Internal Server Error
+run_parallel_org_agents FAIL: node /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/tests/e2e/mcp_sandbox_adversarial/org_worker.mjs exited 1
+FAIL org_worker adv-org-alpha ensure failed: 500 Internal Server Error
+
+make: *** [mcp-adversarial-gate] Error 1
+FAIL org_worker adv-org-alpha ensure failed: 500 Internal Server Error
+run_parallel_org_agents FAIL: node /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/tests/e2e/mcp_sandbox_adversarial/org_worker.mjs exited 1
+FAIL org_worker adv-org-alpha ensure failed: 500 Internal Server Error
+
+make: *** [mcp-adversarial-gate] Error 1
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (9458f4781f52)
+stub copied into adv-org-beta (2ef8a95c63f7)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+OK org_worker adv-org-beta broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK org_worker adv-org-alpha broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK cross_org_leak_probe hammer-12-rounds → cross-org-markers-ok → secret-denylist-ok
+=== parallel workers OK ===
+=== pytest adversarial leakage subset ===
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+__________________ test_cross_org_volume_secrets_not_readable __________________
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:438: in test_cross_org_volume_secrets_not_readable
+    org_containers[org] = await _prepare_org(org)
+                          ^^^^^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:373: in _prepare_org
+    await asyncio.to_thread(_wait_for_sandbox_agent, container_id)
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/concurrent/futures/thread.py:86: in run
+    result = ctx.run(self.task)
+             ^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/concurrent/futures/thread.py:73: in run
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:232: in _wait_for_sandbox_agent
+    pytest.fail(
+E   Failed: sandbox-agent unhealthy in 19e7fcaa206b
+E   
+E   Error response from daemon: No such container: 19e7fcaa206ba8eb94ed571a7b57a827c7debe75897300c978a748fad954bb5d
+___________________ test_env_foreign_org_marker_not_visible ____________________
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:101: in map_httpcore_exceptions
+    yield
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpcore/_exceptions.py:14: in map_exceptions
+    raise to_exc(exc) from exc
+E   httpcore.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/mcp_sandbox_client.py:96: in _request_with_503_retry
+    response = await client.request(method, url, json=json, headers=_auth_headers())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:118: in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+E   httpx.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:497: in test_env_foreign_org_marker_not_visible
+    org_containers = {org: await _prepare_org(org) for org in ORGS}
+                           ^^^^^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:370: in _prepare_org
+    ensure = await client.ensure_sandbox(org_slug)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/mcp_sandbox_client.py:126: in ensure_sandbox
+    response = await _request_with_503_retry(
+ai_mesh_gateway/mcp_sandbox_client.py:100: in _request_with_503_retry
+    raise RuntimeError("MCP sandbox is temporarily unavailable") from exc
+E   RuntimeError: MCP sandbox is temporarily unavailable
+------------------------------ Captured log call -------------------------------
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 1/5): 
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 2/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 3/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 4/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 5/5): All connection attempts failed
+__________________________ test_npm_cache_bleed_probe __________________________
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:101: in map_httpcore_exceptions
+    yield
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpcore/_exceptions.py:14: in map_exceptions
+    raise to_exc(exc) from exc
+E   httpcore.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/mcp_sandbox_client.py:96: in _request_with_503_retry
+    response = await client.request(method, url, json=json, headers=_auth_headers())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:118: in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+E   httpx.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:516: in test_npm_cache_bleed_probe
+    await _prepare_org(org)
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:370: in _prepare_org
+    ensure = await client.ensure_sandbox(org_slug)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/mcp_sandbox_client.py:126: in ensure_sandbox
+    response = await _request_with_503_retry(
+ai_mesh_gateway/mcp_sandbox_client.py:100: in _request_with_503_retry
+    raise RuntimeError("MCP sandbox is temporarily unavailable") from exc
+E   RuntimeError: MCP sandbox is temporarily unavailable
+------------------------------ Captured log call -------------------------------
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 1/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 2/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 3/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 4/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 5/5): All connection attempts failed
+___________________ test_denylist_secrets_not_in_sandbox_env ___________________
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:101: in map_httpcore_exceptions
+    yield
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpcore/_exceptions.py:14: in map_exceptions
+    raise to_exc(exc) from exc
+E   httpcore.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/mcp_sandbox_client.py:96: in _request_with_503_retry
+    response = await client.request(method, url, json=json, headers=_auth_headers())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:118: in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+E   httpx.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:535: in test_denylist_secrets_not_in_sandbox_env
+    await _prepare_org(ORG_ALPHA)
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:370: in _prepare_org
+    ensure = await client.ensure_sandbox(org_slug)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/mcp_sandbox_client.py:126: in ensure_sandbox
+    response = await _request_with_503_retry(
+ai_mesh_gateway/mcp_sandbox_client.py:100: in _request_with_503_retry
+    raise RuntimeError("MCP sandbox is temporarily unavailable") from exc
+E   RuntimeError: MCP sandbox is temporarily unavailable
+------------------------------ Captured log call -------------------------------
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 1/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 2/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 3/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 4/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 5/5): All connection attempts failed
+=========================== short test summary info ============================
+FAILED ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_cross_org_volume_secrets_not_readable
+FAILED ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_env_foreign_org_marker_not_visible
+FAILED ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_npm_cache_bleed_probe
+FAILED ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_denylist_secrets_not_in_sandbox_env
+4 failed, 9 deselected in 233.82s (0:03:53)
+run_parallel_org_agents FAIL: /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/gateway/.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q -k volume or foreign_org or npm_cache or denylist_secrets --tb=short exited 1
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+__________________ test_cross_org_volume_secrets_not_readable __________________
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:438: in test_cross_org_volume_secrets_not_readable
+    org_containers[org] = await _prepare_org(org)
+                          ^^^^^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:373: in _prepare_org
+    await asyncio.to_thread(_wait_for_sandbox_agent, container_id)
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/concurrent/futures/thread.py:86: in run
+    result = ctx.run(self.task)
+             ^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/concurrent/futures/thread.py:73: in run
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:232: in _wait_for_sandbox_agent
+    pytest.fail(
+E   Failed: sandbox-agent unhealthy in 19e7fcaa206b
+E   
+E   Error response from daemon: No such container: 19e7fcaa206ba8eb94ed571a7b57a827c7debe75897300c978a748fad954bb5d
+___________________ test_env_foreign_org_marker_not_visible ____________________
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:101: in map_httpcore_exceptions
+    yield
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpcore/_exceptions.py:14: in map_exceptions
+    raise to_exc(exc) from exc
+E   httpcore.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/mcp_sandbox_client.py:96: in _request_with_503_retry
+    response = await client.request(method, url, json=json, headers=_auth_headers())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:118: in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+E   httpx.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:497: in test_env_foreign_org_marker_not_visible
+    org_containers = {org: await _prepare_org(org) for org in ORGS}
+                           ^^^^^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:370: in _prepare_org
+    ensure = await client.ensure_sandbox(org_slug)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/mcp_sandbox_client.py:126: in ensure_sandbox
+    response = await _request_with_503_retry(
+ai_mesh_gateway/mcp_sandbox_client.py:100: in _request_with_503_retry
+    raise RuntimeError("MCP sandbox is temporarily unavailable") from exc
+E   RuntimeError: MCP sandbox is temporarily unavailable
+------------------------------ Captured log call -------------------------------
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 1/5): 
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 2/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 3/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 4/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 5/5): All connection attempts failed
+__________________________ test_npm_cache_bleed_probe __________________________
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:101: in map_httpcore_exceptions
+    yield
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpcore/_exceptions.py:14: in map_exceptions
+    raise to_exc(exc) from exc
+E   httpcore.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/mcp_sandbox_client.py:96: in _request_with_503_retry
+    response = await client.request(method, url, json=json, headers=_auth_headers())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:118: in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+E   httpx.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:516: in test_npm_cache_bleed_probe
+    await _prepare_org(org)
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:370: in _prepare_org
+    ensure = await client.ensure_sandbox(org_slug)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/mcp_sandbox_client.py:126: in ensure_sandbox
+    response = await _request_with_503_retry(
+ai_mesh_gateway/mcp_sandbox_client.py:100: in _request_with_503_retry
+    raise RuntimeError("MCP sandbox is temporarily unavailable") from exc
+E   RuntimeError: MCP sandbox is temporarily unavailable
+------------------------------ Captured log call -------------------------------
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 1/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 2/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 3/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 4/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 5/5): All connection attempts failed
+___________________ test_denylist_secrets_not_in_sandbox_env ___________________
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:101: in map_httpcore_exceptions
+    yield
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpcore/_exceptions.py:14: in map_exceptions
+    raise to_exc(exc) from exc
+E   httpcore.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/mcp_sandbox_client.py:96: in _request_with_503_retry
+    response = await client.request(method, url, json=json, headers=_auth_headers())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.14/site-packages/httpx/_transports/default.py:118: in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+E   httpx.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:535: in test_denylist_secrets_not_in_sandbox_env
+    await _prepare_org(ORG_ALPHA)
+ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py:370: in _prepare_org
+    ensure = await client.ensure_sandbox(org_slug)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ai_mesh_gateway/mcp_sandbox_client.py:126: in ensure_sandbox
+    response = await _request_with_503_retry(
+ai_mesh_gateway/mcp_sandbox_client.py:100: in _request_with_503_retry
+    raise RuntimeError("MCP sandbox is temporarily unavailable") from exc
+E   RuntimeError: MCP sandbox is temporarily unavailable
+------------------------------ Captured log call -------------------------------
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 1/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 2/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 3/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 4/5): All connection attempts failed
+WARNING  gateway.mcp_sandbox_client:mcp_sandbox_client.py:98 Broker unreachable (attempt 5/5): All connection attempts failed
+=========================== short test summary info ============================
+FAILED ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_cross_org_volume_secrets_not_readable
+FAILED ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_env_foreign_org_marker_not_visible
+FAILED ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_npm_cache_bleed_probe
+FAILED ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py::test_denylist_secrets_not_in_sandbox_env
+4 failed, 9 deselected in 233.82s (0:03:53)
+
+make: *** [mcp-adversarial-gate] Error 1
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+run_parallel_org_agents FAIL: fetch failed
+make: *** [mcp-adversarial-gate] Error 1
+=== Ralph iter1 final gate 2026-06-30T10:04:28Z ===
+node scripts/ralph/run_parallel_org_agents.mjs --full
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (2ee84f3d9d8e)
+stub copied into adv-org-beta (8654c6d20419)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+FAIL org_worker adv-org-alpha fetch failed
+FAIL org_worker adv-org-beta fetch failed
+run_parallel_org_agents FAIL: node /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/tests/e2e/mcp_sandbox_adversarial/org_worker.mjs exited 1
+FAIL org_worker adv-org-alpha fetch failed
+
+make: *** [mcp-adversarial-gate] Error 1

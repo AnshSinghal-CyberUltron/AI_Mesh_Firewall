@@ -85,7 +85,7 @@ class DockerManager:
 
     def container_name(self, org_slug: str) -> str:
         safe = re.sub(r"[^a-zA-Z0-9_.-]", "-", org_slug).strip("-") or "default"
-        return f"mcp-sandbox-{safe}"
+        return f"{safe}-mcp-sandbox"
 
     def volume_name(self, org_slug: str) -> str:
         safe = re.sub(r"[^a-zA-Z0-9_.-]", "_", org_slug).strip("_") or "default"
