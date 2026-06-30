@@ -75,6 +75,17 @@ _PHONES: List[PiiItem] = [
             cue="my mobile is ", covered=True,
             note="5-digit international grouping (India/EU): phone_intl grouped "
                  "branch widened from \\d{1,4} to \\d{1,5}"),
+    # ── CLOSED by B2 rigor (sms/whatsapp direct-adjacency leak): a strong dialing/
+    #    messaging verb placed IMMEDIATELY before the number (no "at/on" connector) leaked
+    #    raw — the imperative branch demanded the connector and Tier-2 did not flag it.
+    #    A curated verb + whitespace/colon-only gap now masks it, order-ids still untouched. ──
+    PiiItem("phone", "sms_direct_5_5", "89295 54991",
+            cue="sms ", covered=True,
+            note="strong cue directly on value, no at/on: phone_us_bare_contextual "
+                 "direct-adjacency branch (call|text|dial|ring|sms|whatsapp|telegram|imessage)"),
+    PiiItem("phone", "whatsapp_direct_bare10", "8929554991",
+            cue="whatsapp ", covered=True,
+            note="messaging-verb direct-adjacency; whatsapp was not even a cue word before"),
     # ── Ambiguous BY DESIGN — kept raw to avoid order-id false positives (NOT a bug) ──
     PiiItem("phone", "bare10_no_cue", "8929554991",
             cue="ref number ", covered=False, intentional=True,
