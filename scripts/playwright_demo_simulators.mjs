@@ -135,10 +135,23 @@ async function runAttackScenario(page, panel, scenarioText) {
   if (await reset.count()) { await reset.first().click(); await page.waitForTimeout(200); }
   await panel.getByRole("button", { name: scenarioText }).first().click();
   await page.waitForTimeout(250);
-  const [resp] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/v1/chat/completions") && r.request().method() === "POST", { timeout: 120000 }),
-    panel.getByRole("button", { name: /Run Pipeline/ }).click(),
-  ]);
+  const runBtn = panel.getByRole("button", { name: /Run Pipeline/ });
+  let resp = null;
+  for (let attempt = 0; attempt < 6 && !resp; attempt++) {
+    const respP = page
+      .waitForResponse((r) => r.url().includes("/v1/chat/completions") && r.request().method() === "POST", { timeout: 120000 })
+      .catch(() => null);
+    await runBtn.click();
+    const noop = await page
+      .getByText(/Select a connected model/i)
+      .first()
+      .waitFor({ state: "visible", timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+    if (noop) { await page.waitForTimeout(2000); continue; }
+    resp = await respP;
+  }
+  if (!resp) throw new Error("attack sim never fired /v1/chat/completions (model selector did not populate)");
   // let React paint the verdict
   await page.waitForTimeout(800);
   return resp.status();
@@ -257,13 +270,22 @@ async function main() {
     // ───────── 4. IsolationOps (1.6) Live gateway test: benign ALLOW ─────────
     CURRENT_PHASE = "isolation-sim";
     await gotoTab(page, "firewall-1-6", "/Isolation/i");
-    await page.waitForResponse((r) => r.url().includes("/api/firewall/models/"), { timeout: 30000 }).catch(() => {});
+    // Simulator lane sits below several control panels — anchor the panel first.
+    const isoPanel = page.locator("text=/Isolation Operations Simulator/i").first();
+    await isoPanel.waitFor({ state: "visible", timeout: 60000 });
+    await isoPanel.scrollIntoViewIfNeeded();
+    await page.waitForResponse((r) => r.url().includes("/api/firewall/models/"), { timeout: 90000 }).catch(() => {});
     await page.waitForTimeout(500);
     // Live gateway test tab is default; ensure it is active.
     const liveTab = page.getByRole("tab", { name: /Live gateway test/i });
     if (await liveTab.count()) { await liveTab.first().click().catch(() => {}); }
-    const execBtn = page.getByRole("button", { name: /^Execute$/ }).first();
-    await execBtn.waitFor({ state: "visible", timeout: 30000 });
+    const execBtn = page
+      .locator(".ai-mesh-card")
+      .filter({ hasText: "Isolation Operations Simulator" })
+      .getByRole("button", { name: /^Execute$/ })
+      .first();
+    await execBtn.scrollIntoViewIfNeeded();
+    await execBtn.waitFor({ state: "visible", timeout: 60000 });
     // handleLiveChat (IsolationOpsSimulator) early-returns WITHOUT firing a request
     // until gatewayModels.selectedModel is populated — the useSimulatorGatewayModels
     // hook loads /api/firewall/models/ then auto-selects asynchronously. Clicking

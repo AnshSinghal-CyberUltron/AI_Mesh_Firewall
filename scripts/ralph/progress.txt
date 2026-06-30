@@ -1728,3 +1728,12 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   fixed the report error-honesty bug between my run and now (the on-disk `except SystemExit` already
   stamps error only on non-zero exit). I did NOT clobber it; my earlier report artifact is stale-labeled
   (error:"gate failed") but every step ok:true. E1 stays passes:false this iter.
+- 2026-06-30 E1 iter 2 (coder subagent): Removed stuck gateway container `5efe65f5090c_ai_mesh_firewall-gateway-1`;
+  recreated control/gateway/frontend. Fixed pytest drift for C1 envelope (403→400 content_filter),
+  B-1 bedrock logger scrub assertions, H5 ROUTING_ADJUDICATOR_ALWAYS in bedrock_routing tests,
+  org_tpm fail-open, phase5 responses `id` correlation. Added attack-sim model-selector retry to
+  playwright_demo_simulators.mjs. Gates: (#1a) test_openai_sdk_compat.py PASS 46+2xp; (#2) frontend
+  build PASS; fixed drift subset PASS; (#3) playwright_demo FAIL (attack 120s timeout, control wedge);
+  (#4) live_sdk PARTIAL (login/key/model OK, chat completion Request timed out — routed-model flake +
+  auth 429 from poll storm). Full pytest -m 'not docker' still ~9 fail (break_regressions, context_guard).
+  E1 passes:false.
