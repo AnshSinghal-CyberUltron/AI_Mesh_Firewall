@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Run one MCP frontend adversarial regression iteration (1–20).
-# Loop iter 1–16 maps to R1–R16; iters 17–20 re-run full gate only.
+# Run one MCP frontend adversarial regression iteration (5–20).
 # Logs to scripts/ralph/regression.log and marks the matching R-story passes:true on success.
 set -uo pipefail
 
@@ -17,18 +16,15 @@ fi
 cleanup_regression_lock() { rmdir "$LOCK_DIR" 2>/dev/null || true; }
 trap cleanup_regression_lock EXIT INT TERM
 BROKER_URL="${MCP_BROKER_URL:-http://127.0.0.1:8311}"
-ITER="${1:?Usage: run_regression_iteration.sh <iteration_number 1-20>}"
+ITER="${1:?Usage: run_regression_iteration.sh <iteration_number 5-20>}"
 
-if (( ITER < 1 || ITER > 20 )); then
-  echo "iteration must be 1–20 (got $ITER)" >&2
+if (( ITER < 5 || ITER > 20 )); then
+  echo "iteration must be 5–20 (got $ITER)" >&2
   exit 1
 fi
 
-R_ID=""
-if (( ITER >= 1 && ITER <= 16 )); then
-  R_NUM=$ITER
-  R_ID="R${R_NUM}-regression-iter$((R_NUM + 4))"
-fi
+R_NUM=$((ITER - 4))
+R_ID="R${R_NUM}-regression-iter${ITER}"
 
 log() {
   echo "$*" | tee -a "$LOG"
@@ -137,18 +133,14 @@ if (( FAILED != 0 )); then
   exit 1
 fi
 
-# Mark R-story passes:true in PRD (loop iters 1–16 only)
-if [[ -n "$R_ID" ]]; then
-  if command -v jq >/dev/null 2>&1; then
-    tmp="$(mktemp)"
-    jq --arg id "$R_ID" '(.userStories[] | select(.id == $id) | .passes) = true' "$PRD" >"$tmp"
-    mv "$tmp" "$PRD"
-    log "Marked $R_ID passes:true in prd-mcp-frontend-adversarial.json"
-  else
-    log "WARN: jq not found — update $R_ID passes:true manually"
-  fi
+# Mark R-story passes:true in PRD
+if command -v jq >/dev/null 2>&1; then
+  tmp="$(mktemp)"
+  jq --arg id "$R_ID" '(.userStories[] | select(.id == $id) | .passes) = true' "$PRD" >"$tmp"
+  mv "$tmp" "$PRD"
+  log "Marked $R_ID passes:true in prd-mcp-frontend-adversarial.json"
 else
-  log "No R-story for loop iter $ITER (extra gate run only)"
+  log "WARN: jq not found — update $R_ID passes:true manually"
 fi
 
 log "=== Regression iteration $ITER OK ==="
