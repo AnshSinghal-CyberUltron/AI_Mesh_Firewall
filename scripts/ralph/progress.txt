@@ -1100,3 +1100,23 @@
 
 ## Rigor round 2026-06-30 (fresh re-verification run — re-prove EVERY story from scratch with independent oracles; the tree changed since the 2026-06-29 round, so do NOT trust the prior passes:true)
 - (instances append "rigor-verified: <id> 2026-06-30 — <how proven>" here; COMPLETE only after all 17 appear under THIS heading)
+- rigor-verified: A1-sdk-harness 2026-06-30 — re-ran the documented gate from a clean shell:
+  `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q`
+  → 46 passed, 2 xpassed (the 2 xpasses are the documented NON-strict D4 models.retrieve +
+  D5 typed-stream cells; fixes in-tree at main.py:11471 / main.py:7815, XPASS expected; `-rX`
+  confirmed no other xfail masking a real failure; grep confirms only those two @xfail(strict=False)).
+  Adversarially inspected the assertions (not just the pass count): the suite drives the STOCK
+  `openai` SDK over the REAL app via httpx.ASGITransport (only the upstream provider stubbed,
+  max_retries=0 so raw status is visible) and asserts the PARSED pydantic objects across every
+  cell — chat (non-stream/stream/tool_calls/json_schema/usage), responses
+  (non-stream/typed-stream/previous_response_id/store-retrieve-delete/input-items), embeddings,
+  models list+retrieve. ERROR dimension is byte-honest: e.code=="content_filter" + e.type +
+  e.message + e.request_id on a content block (test_blocked_request…, _D2, _D3), e.param named on
+  bad model/messages/sampling 400s WITH an honesty counter-check that e.param is NULL on a content
+  block (test_error_param_*_A1), and e.request_id non-empty across 401/403/400/429
+  (test_error_request_id_present_across_error_classes). TYPED responses-stream sequence is asserted
+  as the FULL canonical lifecycle in order (response.created → output_item.added →
+  content_part.added → output_text.delta(s) → output_text.done → output_item.done →
+  response.completed) PLUS a mid-stream upstream failure surfacing as a terminal typed
+  response.failed (.response.error populated) — never a false response.completed. openai PINNED
+  EXACTLY at openai==2.38.0 in gateway/pyproject.toml dev deps. No gap.
