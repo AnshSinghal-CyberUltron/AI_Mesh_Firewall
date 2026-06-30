@@ -1,0 +1,17 @@
+{
+  "base": "http://127.0.0.1:8180",
+  "ok": false,
+  "steps": [
+    "login"
+  ],
+  "asserts": [
+    {
+      "label": "valid creds -> 2xx (got 200)",
+      "pass": true,
+      "phase": "login"
+    }
+  ],
+  "pageErrors": [],
+  "notes": [],
+  "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=/llm model connections/i').first() to be visible\u001b[22m\n"
+}
