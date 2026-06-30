@@ -375,7 +375,7 @@
       "id": "R4-regression-iter8",
       "title": "Regression iter 8 — full adversarial gate re-run",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "R3-regression-iter7"
       ],
@@ -391,7 +391,7 @@
       "id": "R5-regression-iter9",
       "title": "Regression iter 9 — full adversarial gate re-run",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "R4-regression-iter8"
       ],
