@@ -103,6 +103,7 @@ Output `<promise>MCP FRONTEND ADVERSARIAL COMPLETE</promise>` only when all stor
 
 ## Iteration log
 
-### FULL RESET 2026-06-30
-- Cursor Ralph Loop configured; R1–R16 `passes:false`; F0–F20 unchanged.
-- **Next story:** R1-regression-iter5
+### FULL RESET 2026-06-30 (user restart — Cursor Ralph)
+- `make mcp-adversarial-reset` + `mcp-adversarial-reset-prd`; iteration: 1; R1–R16 `passes:false`.
+- Docker stack up; starting **iteration 1** gates (2× org parallel agents → pytest → frontend E2E).
+- **Active story:** R1-regression-iter5
