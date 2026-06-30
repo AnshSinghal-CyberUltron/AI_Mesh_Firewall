@@ -1315,3 +1315,23 @@
   get_model_routing entry needs api_key_set:True, else proxy_embeddings 422s no_provider_configured
   BEFORE the scan (false-fail). Gates green, no source change: leakhunt 152 passed/1 skipped,
   test_embedding_input_redaction.py (within), SDK harness embeddings cells 2 passed.
+- rigor-verified: B4-unify-redaction-paths 2026-06-30 — adversarially re-proved the differential
+  unification invariant (every egress path applies IDENTICAL redaction; divergence IS the leak).
+  GATE GREEN clean-shell: `cd gateway && ./.venv/bin/python -m pytest tests/leakhunt/test_b4_unify_redaction_paths.py -q`
+  → 64 passed/1 skipped; full `tests/leakhunt -q` → 142 passed/1 skipped (0 regression).
+  BEYOND THE GATE (the suite's own oracle is regex-based, so I added an INDEPENDENT oracle):
+  drove BOTH real egress paths for a 6-way multi-PII prompt (phone 415-555-0142, email
+  bob@corp.example, ssn 123-45-6789, key sk-proj-…, cued-phone 8929554991, intl +91 98765 43210)
+  via /tmp/b4_rigor_probe.py, captured the WIRE BYTES, and fed them to mcp__ruflo__aidefence_has_pii:
+  raw prompt → hasPII:true (positive control fires), chat-wire → hasPII:false, embed-wire →
+  hasPII:false; chat==embed byte-identical (***-***-0142 / b***@c***.example / ***-**-6789 /
+  sk-****cdef / ***-***-4991 / ***-***-3210). PRODUCTION-WIRING audit (the suite tests the helper
+  in isolation — I traced the real call sites): /v1/embeddings redacts at main.py:9057 then
+  aembedding at 9095; RAG-INGEST redacts each doc via the SHARED `_scan_redact_embedding_inputs`
+  at main.py:10463, fail-closes unmaskable docs (10464), and REPLACES `doc_strings` with the
+  redacted output at 10480 — so byok_embedder (litellm.embedding/pinecone.embed) only ever embeds
+  CLEANED text, never raw; vector_routes.py:679-680 resolves the same callables via getattr (no
+  divergent copy); `_scan_redact_metadata` recurses through the same helper (main.py:3247);
+  aresponses replaces input with redacted_content directly (llm_router.py:584) and the suite proves
+  that == the chat backstop output for all REDACTABLE. NO source change needed; NO real gap; B4 stays
+  passes:true. (Remaining for this round: B5-rag-at-rest, D1-D6 UI stories.)
