@@ -63,7 +63,7 @@ verify-observability:
 # MCP frontend adversarial — Cursor Ralph Loop (see scripts/ralph/README-CURSOR-RALPH.md)
 mcp-adversarial-gate:
 	node scripts/ralph/run_parallel_org_agents.mjs --full
-	cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q
+	cd gateway && MCP_ADVERSARIAL_USE_LIVE_BROKER=true MCP_BROKER_URL=http://127.0.0.1:8311 MCP_BROKER_INTERNAL_KEY=dev-mcp-broker-key-change-me ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q
 	BASE_URL=http://127.0.0.1:8180 node tests/e2e/mcp_sandbox_adversarial/frontend_parallel_orgs.mjs
 
 mcp-adversarial-reset-prd:

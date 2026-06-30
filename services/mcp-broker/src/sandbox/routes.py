@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from datetime import datetime, timezone
@@ -12,7 +13,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth import require_broker_key
-from sandbox.docker_manager import DockerManager
+from sandbox.docker_health import cached_docker_ok
+from sandbox.docker_manager import DockerManager, SandboxContainerInfo
 
 _AGENT_TIMEOUT = float(os.environ.get("MCP_BROKER_AGENT_TIMEOUT", "130"))
 
@@ -47,14 +49,16 @@ def _max_orgs() -> int:
     return int(os.environ.get("MCP_SANDBOX_MAX_ORGS", "50"))
 
 
-def _require_docker(docker_manager: DockerManager) -> None:
-    if not docker_manager.ping():
+def _require_docker(_docker_manager: DockerManager) -> None:
+    if not cached_docker_ok():
         raise HTTPException(status_code=503, detail="Docker unavailable")
 
 
 def _check_org_quota(docker_manager: DockerManager, org_slug: str) -> None:
     registry = docker_manager._registry  # noqa: SLF001 — lifecycle-owned registry
     if registry is None:
+        return
+    if registry.get(org_slug) is not None:
         return
     if docker_manager.find_container(org_slug) is not None:
         return
@@ -77,6 +81,13 @@ def _ensure_response(docker_manager: DockerManager, org_slug: str) -> dict[str, 
     }
 
 
+async def _resolve_running_sandbox(
+    docker_manager: DockerManager, org_slug: str
+) -> SandboxContainerInfo:
+    """Always refresh from Docker so agent_url stays valid after container restart."""
+    return await asyncio.to_thread(docker_manager.ensure, org_slug)
+
+
 def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
     router = APIRouter(
         prefix="/v1/sandbox",
@@ -94,9 +105,9 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
 
     @router.post("/{org_slug}/stdio/rpc")
     async def stdio_rpc(org_slug: str, body: StdioRpcRequest) -> dict[str, Any]:
-        _require_docker(docker_manager)
-        _check_org_quota(docker_manager, org_slug)
-        info = docker_manager.ensure(org_slug)
+        if not cached_docker_ok():
+            raise HTTPException(status_code=503, detail="Docker unavailable")
+        info = await _resolve_running_sandbox(docker_manager, org_slug)
         if info.status != "running" or not info.agent_url:
             raise HTTPException(status_code=503, detail="Sandbox not running")
 
@@ -134,7 +145,7 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
 
     @router.get("/{org_slug}/status")
     async def sandbox_status(org_slug: str) -> dict[str, Any]:
-        container = docker_manager.find_container(org_slug)
+        container = await asyncio.to_thread(docker_manager.find_container, org_slug)
         info = docker_manager.to_info(org_slug, container)
         processes: list[dict[str, Any]] = []
 

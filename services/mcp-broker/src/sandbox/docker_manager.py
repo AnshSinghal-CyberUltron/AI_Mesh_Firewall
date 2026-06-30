@@ -64,19 +64,24 @@ class DockerManager:
         self.config = config or SandboxDockerConfig.from_env()
         self._registry = registry
 
+    def ping(self) -> bool:
+        try:
+            import docker
+
+            probe = docker.from_env(timeout=5)
+            probe.ping()
+            return True
+        except Exception:
+            return False
+
     @property
     def client(self) -> Any:
         if self._client is None:
             import docker
 
-            self._client = docker.from_env()
+            # Sandbox lifecycle can exceed 10s when Docker is busy with parallel org sandboxes.
+            self._client = docker.from_env(timeout=120)
         return self._client
-
-    def ping(self) -> bool:
-        try:
-            return bool(self.client.ping())
-        except Exception:
-            return False
 
     def container_name(self, org_slug: str) -> str:
         safe = re.sub(r"[^a-zA-Z0-9_.-]", "-", org_slug).strip("-") or "default"
@@ -107,7 +112,16 @@ class DockerManager:
                 ],
             },
         )
-        return containers[0] if containers else None
+        if containers:
+            return containers[0]
+        return self.get_container_by_name(org_slug)
+
+    def get_container_by_name(self, org_slug: str) -> Any | None:
+        """Fallback when label filters miss a container that already owns the name."""
+        try:
+            return self.client.containers.get(self.container_name(org_slug))
+        except Exception:
+            return None
 
     def container_status(self, container: Any | None) -> str:
         if container is None:
@@ -209,11 +223,18 @@ class DockerManager:
         try:
             network = self.client.networks.get(name)
         except Exception:
-            network = self.client.networks.create(
-                name,
-                driver="bridge",
-                check_duplicate=True,
-            )
+            try:
+                network = self.client.networks.create(
+                    name,
+                    driver="bridge",
+                    check_duplicate=True,
+                )
+            except Exception as exc:
+                status = getattr(exc, "status_code", None)
+                if status == 409 or "already exists" in str(exc).lower():
+                    network = self.client.networks.get(name)
+                else:
+                    raise
         self._connect_broker_to_network(network)
         return name
 
@@ -228,6 +249,9 @@ class DockerManager:
             "environment": {
                 "ORG_SLUG": org_slug,
                 "MCP_REMOTE_CONFIG_DIR": "/data/mcp-auth",
+                "MCP_STDIO_MAX_PROCESSES_PER_ORG": os.environ.get(
+                    "MCP_STDIO_MAX_PROCESSES_PER_ORG", "16"
+                ),
                 # Sandbox USER is non-root; npm/uv must cache under writable /tmp (read_only rootfs).
                 "NPM_CONFIG_CACHE": "/tmp/.npm",
                 "UV_CACHE_DIR": "/tmp/.cache/uv",
@@ -253,10 +277,51 @@ class DockerManager:
             kwargs["runtime"] = self.config.runtime
         return kwargs
 
+    @staticmethod
+    def _is_container_name_conflict(exc: Exception) -> bool:
+        try:
+            from docker.errors import APIError
+        except ImportError:
+            return False
+        if isinstance(exc, APIError):
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status == 409:
+                return True
+        msg = str(exc).lower()
+        return "already in use" in msg or "conflict" in msg
+
     def create_container(self, org_slug: str) -> Any:
-        return self.client.containers.run(**self._run_kwargs(org_slug))
+        try:
+            return self.client.containers.run(**self._run_kwargs(org_slug))
+        except Exception as exc:
+            if not self._is_container_name_conflict(exc):
+                raise
+            existing = self.get_container_by_name(org_slug)
+            if existing is not None:
+                return existing
+            raise
+
+    def _recover_broken_container(self, org_slug: str, container: Any) -> Any:
+        try:
+            container.remove(force=True)
+        except Exception:
+            pass
+        return self.create_container(org_slug)
+
+    def _start_or_recreate(self, org_slug: str, container: Any) -> Any:
+        try:
+            container.start()
+            return container
+        except Exception as exc:
+            if not self._is_container_name_conflict(exc) and "marked for removal" not in str(
+                exc
+            ).lower():
+                raise
+            return self._recover_broken_container(org_slug, container)
 
     def ensure(self, org_slug: str) -> SandboxContainerInfo:
+        # Broker must be on the per-org network even when reusing an existing sandbox.
+        self.ensure_org_network(org_slug)
         container = self.find_container(org_slug)
         if container is None:
             container = self.create_container(org_slug)
@@ -266,13 +331,14 @@ class DockerManager:
             return info
         status = self.container_status(container)
         if status != "running":
-            container.start()
+            container = self._start_or_recreate(org_slug, container)
             container.reload()
         info = self.to_info(org_slug, container)
         self._sync_registry(info)
         return info
 
     def start(self, org_slug: str) -> SandboxContainerInfo:
+        self.ensure_org_network(org_slug)
         container = self.find_container(org_slug)
         if container is None:
             container = self.create_container(org_slug)
@@ -281,7 +347,7 @@ class DockerManager:
             self._sync_registry(info)
             return info
         if self.container_status(container) != "running":
-            container.start()
+            container = self._start_or_recreate(org_slug, container)
             container.reload()
         info = self.to_info(org_slug, container)
         self._sync_registry(info)

@@ -124,6 +124,22 @@ def test_ensure_reuses_running_container(manager: DockerManager):
     assert info.agent_url == "http://172.28.0.42:9320"
 
 
+def test_ensure_recovers_from_name_conflict(manager: DockerManager):
+    """When create hits 409, fall back to get-by-name instead of 500."""
+    existing = _mock_container(org_slug="acme")
+    manager.client.containers.list.return_value = []
+    manager.client.containers.get.return_value = existing
+    conflict = Exception("name already in use")
+    conflict.status_code = 409  # type: ignore[attr-defined]
+    manager.client.containers.run.side_effect = conflict
+
+    info = manager.ensure("acme")
+
+    manager.client.containers.get.assert_called_with("mcp-sandbox-acme")
+    assert info.status == "running"
+    assert info.container_id == existing.id
+
+
 def test_start_creates_when_missing(manager: DockerManager):
     created = _mock_container(org_slug="beta")
     manager.client.containers.run.return_value = created

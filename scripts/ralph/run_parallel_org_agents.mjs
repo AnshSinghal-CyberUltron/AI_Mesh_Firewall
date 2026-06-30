@@ -91,15 +91,23 @@ async function waitForAgent(containerId, maxWaitMs = 120000) {
   throw new Error(`sandbox-agent not healthy for ${containerId.slice(0, 12)} within ${maxWaitMs}ms`);
 }
 
+async function waitBrokerDockerOk(maxWaitMs = 60000) {
+  const base = BROKER_URL.replace(/\/$/, "");
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    const brokerHealth = await curlOk(`${base}/health`);
+    if (brokerHealth?.docker_ok) return brokerHealth;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error(
+    `mcp-broker not healthy at ${BROKER_URL} (docker_ok=false after ${maxWaitMs}ms). ` +
+      "Run: docker compose --profile services up -d"
+  );
+}
+
 async function bootstrap() {
   console.log("=== bootstrap: broker + gateway health ===");
-  const brokerHealth = await curlOk(`${BROKER_URL.replace(/\/$/, "")}/health`);
-  if (!brokerHealth?.docker_ok) {
-    throw new Error(
-      `mcp-broker not healthy at ${BROKER_URL} (docker_ok=${brokerHealth?.docker_ok}). ` +
-        "Run: docker compose --profile services up -d"
-    );
-  }
+  const brokerHealth = await waitBrokerDockerOk();
   console.log("broker docker_ok=true");
 
   const gatewayHealth = await curlOk(
@@ -113,16 +121,22 @@ async function bootstrap() {
 
   // Copy stdio stub into org sandboxes after ensure (workers call ensure first)
   for (const org of ORGS) {
-    const ensureRes = await fetch(`${BROKER_URL}/v1/sandbox/${org}/ensure`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-MCP-Broker-Key": BROKER_KEY,
-      },
-      body: JSON.stringify({ warm: true }),
-    });
-    if (!ensureRes.ok) {
-      throw new Error(`ensure ${org} failed: ${ensureRes.status}`);
+    let ensureRes = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      ensureRes = await fetch(`${BROKER_URL}/v1/sandbox/${org}/ensure`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-MCP-Broker-Key": BROKER_KEY,
+        },
+        body: JSON.stringify({ warm: true }),
+      });
+      if (ensureRes.ok) break;
+      if (![429, 500, 502, 503].includes(ensureRes.status)) break;
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+    }
+    if (!ensureRes?.ok) {
+      throw new Error(`ensure ${org} failed: ${ensureRes?.status}`);
     }
     const body = await ensureRes.json();
     const cid = body.container_id;
@@ -158,7 +172,7 @@ async function pytestLeakage() {
   const gatewayDir = path.join(REPO_ROOT, "gateway");
   const venvPy = path.join(gatewayDir, ".venv/bin/python");
   const py = fs.existsSync(venvPy) ? venvPy : "python3";
-  await run(
+    await run(
     py,
     [
       "-m",
@@ -169,7 +183,11 @@ async function pytestLeakage() {
       "volume or foreign_org or npm_cache or denylist_secrets",
       "--tb=short",
     ],
-    { MCP_BROKER_URL: BROKER_URL, MCP_BROKER_INTERNAL_KEY: BROKER_KEY },
+    {
+      MCP_BROKER_URL: BROKER_URL,
+      MCP_BROKER_INTERNAL_KEY: BROKER_KEY,
+      MCP_ADVERSARIAL_USE_LIVE_BROKER: "true",
+    },
     gatewayDir
   );
 }
@@ -183,6 +201,7 @@ async function main() {
       return;
     }
     await parallelWorkers();
+    await waitBrokerDockerOk(90000);
     if (full) {
       await pytestLeakage();
     }
