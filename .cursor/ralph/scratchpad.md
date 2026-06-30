@@ -1,12 +1,12 @@
 ---
-iteration: 3
+iteration: 4
 min_iterations: 20
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 status: ACTIVE
-active_story: R3-regression-iter7
+active_story: R4-regression-iter8
 prd: scripts/ralph/prd-mcp-frontend-adversarial.json
-note: Cursor Ralph Loop — iteration 2 gates green (R2 pass); starting iter 3.
+note: Cursor Ralph Loop — iteration 3 gates green (R3 pass); starting iter 4.
 ---
 
 # MCP Frontend Adversarial — Cursor Ralph Loop
@@ -121,3 +121,9 @@ Output `<promise>COMPLETE and tested from frontend and backend</promise>` only w
 - **Gate 2** (full adversarial pytest): **GREEN** — 13 passed in ~47s
 - **Gate 3** (frontend Playwright): **GREEN** — 5 presets synced + tools-call-ok in ~37s
 - **R2-regression-iter6:** `passes:true`; scratchpad bumped to iteration 3
+
+### Iteration 3 (2026-06-30)
+- **Gate 1** (parallel org agents --full): **GREEN** — ~86s
+- **Gate 2** (full adversarial pytest): **GREEN** — 13 passed in ~81s
+- **Gate 3** (frontend Playwright): **GREEN** — tools-call-ok in ~42s
+- **R3-regression-iter7:** `passes:true`; scratchpad bumped to iteration 4
