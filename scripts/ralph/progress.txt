@@ -33,6 +33,21 @@
   fire the signal). To FIND the culprit, read gateway logs for `Chat routing selected model: X
   (requested=Y, source=weighted_fastpath)` then `No endpoints found` / `Trying to fallback`. This
   landmine RE-SURFACES (re-added active by data imports) — re-check before trusting a routed gate.
+- NOOP-SCRUB-FAIL-CLOSED pattern (B1, both egress surfaces): "verdict=redact" is honest ONLY if the
+  bytes change. Two facts make this subtle on chat: (a) a Tier-2 guard that RECOMMENDS redaction does
+  NOT produce action="redact" — scanner.py:1370 maps it to action="flag"/threat_type="sensitive_content",
+  and `_is_redactable_pii_threat` accepts "sensitive_content", so main.py's FLAG branch redacts;
+  (b) the firewall's authoritative redactor `redact_pii` = redact_all + redact_evidence_digit_spans is
+  DIGIT-ONLY for evidence, so a non-digit unmaskable span (a natural-language credential/password, a
+  name, an address) is a TOTAL no-op and rides RAW while telemetry says redact. FIX = mirror the
+  embeddings byte-verify (`_scan_redact_embedding_inputs`: `if _detected and redacted == text: block`)
+  onto every egress surface: after a redaction ATTEMPT, recompute the egress preview with the SAME shared
+  redactor `_redact_text_with_backstop(pre_text, post_redact_text)`; if it == pre_text (genuinely
+  unmaskable) → fail closed (block) BEFORE the provider call. Guard the block on a real redaction-applied
+  flag + total-no-op so maskable PII (Tier-1 regex, digit spans, partial ***-***-4991 masks) never
+  over-blocks. RIGOR LESSON: a leak-story round that only tests DIGIT spans is incomplete — Tier-2
+  sensitive_content + the flag→redact path is the non-digit attack surface; always pick an oracle-POSITIVE
+  unmaskable value (aidefence flags passwords/keys/SSN/email, NOT bare names/addresses).
 - UI-VERIFICATION pattern (D-stories): ship a DURABLE `scripts/playwright_*.mjs` (real customer POV)
   as the re-runnable gate, not just an ad-hoc MCP click-through. Run node FROM `frontend/` (playwright
   lives in frontend/node_modules); pass SHOT_DIR/E2E_REPORT env so artifacts land at repo-root runs/.
@@ -1215,7 +1230,33 @@
   hasPII:false, while the same detector over the RAW prompt → hasPII:true (positive control, so the
   false is meaningful not vacuous). (5) AT-REST: RecordingVectorStore selfcheck catches the classic
   metadata-only leak. NO source change needed; A2 stays passes:true; no real gap.
-  (Remaining for next round: B1-B5 leak stories, D1-D6 UI stories.)
+  (Remaining for next round: B2-B5 leak stories, D1-D6 UI stories.)
+- rigor-verified: B1-attestation-byte-verify 2026-06-30 — adversarially re-proved egress=truth on the
+  chat input/egress path AND FOUND+FIXED a REAL gap the 2026-06-29 round (digit-only) missed (commit
+  05fea6d2). The 9 router-level cells prove the wire honors a good redacted_content, and the e2e digit
+  cell proves main.py PRODUCES Tier-2 evidence-DIGIT redaction. But acceptance criterion 1 ("if the
+  scrubber is a no-op, fail closed") was UNMET for NON-DIGIT unmaskable spans on chat. ROOT CAUSE
+  (traced, not guessed): a Tier-2 guard recommending redaction surfaces as action="flag" /
+  threat_type="sensitive_content" (scanner.py:1370-1373, NOT action="redact"); _is_redactable_pii_threat
+  accepts "sensitive_content" so main.py's flag branch (main.py:6272) calls redact_pii =
+  redact_all + redact_evidence_digit_spans — BOTH digit-only. A natural-language credential
+  ("the wifi password: correcthorsebatterystaple") is a TOTAL redact no-op, so the raw value egressed to
+  the provider while redacted_prompt was set (telemetry attested redact) = phantom redaction. The
+  EMBEDDINGS path already fails closed on this exact case (_scan_redact_embedding_inputs:
+  `if _detected and redacted == text: block`, comment literally cites "a bare name"); CHAT did not.
+  INDEPENDENT ORACLE: mcp ruflo aidefence_has_pii — hasPII:true on the credential while redact_all
+  leaves it byte-identical (so the leak is real, not a regex artifact under test); aidefence also
+  confirmed bare names/addresses are NOT in its PII set (so I picked an oracle-positive value).
+  FIX (mirrors embeddings, scoped): after a PII/secret redaction attempt on chat, byte-verify via the
+  SAME shared egress redactor `_redact_text_with_backstop(_text_before_pii_redact, effective_prompt)`;
+  if the preview == the pre-redaction text (genuinely unmaskable) and enforcement_mode=="block", fail
+  closed (403/content_blocked) BEFORE acompletion is ever called. Only fires on a real redaction
+  attempt + total no-op, so maskable PII (Tier-1 regex, digit spans, partial phone masks) is never
+  over-blocked. Durable RED→GREEN cell test_b1_chat_endpoint_fails_closed_on_unmaskable_flagged_span
+  (git-stash-confirmed RED without the fix, GREEN with). Gate: leakhunt 121/1 (was 120/1); SDK harness
+  + test_e10_embeddings_scan + test_e10_query_redaction + test_embedding_input_redaction +
+  test_policy_check_input_scan = 76 passed/2 xpassed; the 2 test_policy_check injection FAILs are
+  PRE-EXISTING (fail identically with main.py git-stashed — NOT caused by B1).
 
 ## MCP Frontend Adversarial Ralph loop (prd-mcp-frontend-adversarial.json)
 - 2026-06-30 loop-restart: F0–F20 all passes:true (21/21). Regression R1–R3 pass; R4–R16 were pending.
