@@ -1653,3 +1653,27 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
 
 ## Ralph OpenAI SDK campaign 2026-06-30
 - Started headless loop: E1-openai-sdk-frontend-playwright (passes:false); gates = test_openai_sdk_compat.py + full gateway pytest + frontend lint/build + playwright_demo_simulators.mjs + live openai SDK e2e.
+- 2026-06-30T14:09:06Z Cursor multitask Ralph coordinator start — E1-openai-sdk-frontend-playwright; max_iters=50; min_iters=20
+- 2026-06-30 (this loop iter) E1 PARTIAL — NOT flipped (stays passes:false). Verified GREEN offline,
+  no live stack needed: (#1) SDK compat `cd gateway && PYTHONPATH="../shared:$PWD:$PWD/ai_mesh_gateway"
+  ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q` -> 46 passed/2 xpassed;
+  (#2) frontend `cd frontend && npm run build` -> exit 0. BLOCKED on live-dependent criteria (#3
+  playwright_demo_simulators.mjs, #4 live openai SDK e2e): the local Docker VM is RESOURCE-STARVED
+  (~62MB host pages free; `docker system df`/`docker stats` themselves time out) because a CONCURRENT
+  mcp-adversarial ralph campaign keeps spawning `adv-org-{alpha,beta,zeta}-mcp-sandbox` + broker
+  containers -> control(:8100) and gateway(:8300) both return 000 even 8+ min after restart (control's
+  single daphne worker wedges on blocking botocore Tier-2 calls during/after the ~75s bedrock-health
+  warmup; gateway gunicorn x6 workers each reload all org configs slowly under thrash). This is an
+  INFRA/contention blocker, NOT an E1 code defect. The live e2e SCRIPT is ready:
+  `scripts/openai_sdk_live_gateway.py` (stock `openai` AsyncOpenAI over real TCP, mints the per-org
+  simulator-default key via control, asserts e.request_id + e.code/type/message on forced 400
+  content_filter + 403/404 forbidden-model; I added a streaming happy-path assert + a `GATEWAY_API_KEY`
+  preset env so a pre-minted simulator key decouples the SDK-vs-gateway run from control's flakiness --
+  gateway validates the key from Redis independently of control). NOTE: a PARALLEL Cursor E1 campaign is
+  actively editing this same script (it set CONTROL_URL/GATEWAY_URL defaults to the Vite proxy :8180) --
+  do NOT clobber; single-owner recommended. Key-mint gotcha: HTTP mint flakes with control; minting via
+  `docker exec ... manage.py shell -c 'GatewayAPIKey.ensure_simulator_for_org(org,u)'` ALSO hangs under
+  VM thrash (pays the ~75s app-init bedrock warmup + Redis block). NEXT ITER (calm VM): pause the
+  adv-org-* sandbox campaign, mint one sim key, `GATEWAY_API_KEY=<key> SIM_MODEL=gemma-free
+  cd gateway && ./.venv/bin/python ../scripts/openai_sdk_live_gateway.py`, then run the D6 playwright
+  gate, then flip E1. openai PINNED at openai==2.38.0 (gateway/pyproject.toml dev deps).
