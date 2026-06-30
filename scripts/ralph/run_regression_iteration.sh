@@ -114,9 +114,22 @@ run_gate_with_retry "parallel org agents --full" 2 \
 
 prep_for_pytest
 
-run_gate_with_retry "adversarial pytest full" 2 bash -c \
-  'cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q' \
-  || FAILED=1
+_pytest_full_ok=0
+for _pytest_attempt in 1 2; do
+  if (( _pytest_attempt > 1 )); then
+    log "Retrying adversarial pytest full after prep cooldown..."
+    prep_for_pytest
+    sleep 20
+  fi
+  if run_gate "adversarial pytest full (attempt ${_pytest_attempt}/2)" bash -c \
+    'cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q'; then
+    _pytest_full_ok=1
+    break
+  fi
+done
+if (( _pytest_full_ok == 0 )); then
+  FAILED=1
+fi
 
 prep_for_frontend
 
