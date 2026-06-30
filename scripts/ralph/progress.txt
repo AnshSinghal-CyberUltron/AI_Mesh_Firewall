@@ -1151,6 +1151,29 @@
   app), and POST /v1/responses endpoints == ['proxy_responses']. Gate run: route+responses cells
   15 passed/1 xpassed. No dead duplicate, no shadowing, full handler is the resolved one. No gap.
 
+- rigor-verified: C3-responses-stream 2026-06-30 — adversarially re-proved the Responses typed-stream
+  translator (_translate_chat_stream_to_responses, main.py:8192) beyond the harness pass count.
+  GATE GREEN from a clean shell: `cd gateway && ./.venv/bin/python -m pytest
+  ai_mesh_gateway/tests/test_openai_sdk_compat.py -q` -> 46 passed/2 xpassed (the 2 are the documented
+  non-strict D4/D5 cells); co-ran with test_p2_phase6_holes.py + test_responses_adapters.py = 59
+  passed/2 xpassed; ruff clean. The harness cells drive the STOCK `openai` SDK over the real app
+  (ASGITransport, upstream stubbed): test_responses_streaming_events_and_text asserts the FULL typed
+  lifecycle PRESENT + IN ORDER (response.created -> output_item.added -> content_part.added ->
+  output_text.delta* -> output_text.done -> output_item.done -> response.completed), last delta before
+  output_text.done, terminal == response.completed, completed.response.output_text assembled, zeroshield
+  action in {allow,flag}. FAILURE dimension byte-honest: test_responses_mid_stream_failure_… proves an
+  `error` dict frame -> SDK parses terminal response.failed (status=failed, .response.error populated,
+  output_text=="" so the partial content NEVER leaks, no phantom response.completed); the SECOND failure
+  path (a terminal zeroshield.action=='error' upstream-drop trace frame, main.py:8246) -> response.failed
+  is covered by test_p2_phase6_holes.py::test_responses_stream_zeroshield_error_emits_failed_not_completed.
+  INDEPENDENT ORACLE (separate from the suite's pydantic asserts) — /tmp/c3_adv_probe.py: (1) called the
+  translator directly and parsed the RAW SSE bytes -> every frame is exactly `event: <t>\ndata: {json}\n\n`
+  with body.type==event name, and the emitted order == the canonical lifecycle byte-for-byte; (2) drove
+  the stock SDK on a finish_reason==length stream (an edge the suite doesn't drive via the SDK) ->
+  completed.response.status=='incomplete' + output_text=='Truncated' (length maps to incomplete, not a
+  false completed). Framing helper _responses_sse (main.py:8188) confirmed canonical. NO source change
+  needed; NO real gap; C3 stays passes:true. (Remaining for next round: C4-thin-endpoints.)
+
 ## MCP Frontend Adversarial Ralph loop (prd-mcp-frontend-adversarial.json)
 - 2026-06-30 loop-restart: F0–F20 all passes:true (21/21). Regression R1–R3 pass; R4–R16 were pending.
   Prior batch run_iters_8_20.sh (PID 11642) stalled mid iter-8 parallel workers (2026-06-29T17:48Z).
