@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run one MCP frontend adversarial regression iteration (5–20).
+# Run one MCP frontend adversarial regression iteration (1–20).
+# Loop iter 1–16 maps to R1–R16; iters 17–20 re-run full gate only.
 # Logs to scripts/ralph/regression.log and marks the matching R-story passes:true on success.
 set -uo pipefail
 
@@ -16,15 +17,18 @@ fi
 cleanup_regression_lock() { rmdir "$LOCK_DIR" 2>/dev/null || true; }
 trap cleanup_regression_lock EXIT INT TERM
 BROKER_URL="${MCP_BROKER_URL:-http://127.0.0.1:8311}"
-ITER="${1:?Usage: run_regression_iteration.sh <iteration_number 5-20>}"
+ITER="${1:?Usage: run_regression_iteration.sh <iteration_number 1-20>}"
 
-if (( ITER < 5 || ITER > 20 )); then
-  echo "iteration must be 5–20 (got $ITER)" >&2
+if (( ITER < 1 || ITER > 20 )); then
+  echo "iteration must be 1–20 (got $ITER)" >&2
   exit 1
 fi
 
-R_NUM=$((ITER - 4))
-R_ID="R${R_NUM}-regression-iter${ITER}"
+R_ID=""
+if (( ITER >= 1 && ITER <= 16 )); then
+  R_NUM=$ITER
+  R_ID="R${R_NUM}-regression-iter$((R_NUM + 4))"
+fi
 
 log() {
   echo "$*" | tee -a "$LOG"
@@ -114,22 +118,9 @@ run_gate_with_retry "parallel org agents --full" 2 \
 
 prep_for_pytest
 
-_pytest_full_ok=0
-for _pytest_attempt in 1 2; do
-  if (( _pytest_attempt > 1 )); then
-    log "Retrying adversarial pytest full after prep cooldown..."
-    prep_for_pytest
-    sleep 20
-  fi
-  if run_gate "adversarial pytest full (attempt ${_pytest_attempt}/2)" bash -c \
-    'cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q'; then
-    _pytest_full_ok=1
-    break
-  fi
-done
-if (( _pytest_full_ok == 0 )); then
-  FAILED=1
-fi
+run_gate_with_retry "adversarial pytest full" 2 bash -c \
+  'cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q' \
+  || FAILED=1
 
 prep_for_frontend
 
@@ -146,14 +137,18 @@ if (( FAILED != 0 )); then
   exit 1
 fi
 
-# Mark R-story passes:true in PRD
-if command -v jq >/dev/null 2>&1; then
-  tmp="$(mktemp)"
-  jq --arg id "$R_ID" '(.userStories[] | select(.id == $id) | .passes) = true' "$PRD" >"$tmp"
-  mv "$tmp" "$PRD"
-  log "Marked $R_ID passes:true in prd-mcp-frontend-adversarial.json"
+# Mark R-story passes:true in PRD (loop iters 1–16 only)
+if [[ -n "$R_ID" ]]; then
+  if command -v jq >/dev/null 2>&1; then
+    tmp="$(mktemp)"
+    jq --arg id "$R_ID" '(.userStories[] | select(.id == $id) | .passes) = true' "$PRD" >"$tmp"
+    mv "$tmp" "$PRD"
+    log "Marked $R_ID passes:true in prd-mcp-frontend-adversarial.json"
+  else
+    log "WARN: jq not found — update $R_ID passes:true manually"
+  fi
 else
-  log "WARN: jq not found — update $R_ID passes:true manually"
+  log "No R-story for loop iter $ITER (extra gate run only)"
 fi
 
 log "=== Regression iteration $ITER OK ==="

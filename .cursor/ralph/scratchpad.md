@@ -1,11 +1,12 @@
 ---
-iteration: 10
+iteration: 1
 min_iterations: 20
 max_iterations: 50
 completion_promise: "MCP FRONTEND ADVERSARIAL COMPLETE"
-status: REGRESSION_MODE
-active_story: R6-regression-iter10
-pending_regression: R6-R16 (iters 10-20)
+status: ACTIVE
+active_story: R1-regression-iter5
+pending_regression: R1-R16 (loop iters 1-16; batch 1-20)
+note: fresh regression run started 2026-06-30
 ---
 
 # MCP Frontend Adversarial Sandbox Isolation — Ralph Loop
