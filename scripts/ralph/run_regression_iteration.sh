@@ -18,12 +18,12 @@ fi
 R_NUM=$((ITER - 4))
 R_ID="R${R_NUM}-regression-iter${ITER}"
 
-LOCK_FILE="$SCRIPT_DIR/.regression_iteration.lock"
-exec 200>"$LOCK_FILE"
-if ! flock -n 200; then
-  echo "Another regression iteration is already running (lock: $LOCK_FILE)" >&2
+LOCK_DIR="$SCRIPT_DIR/.regression_iteration.lock.d"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo "Another regression iteration is already running (lock: $LOCK_DIR)" >&2
   exit 2
 fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 log() {
   echo "$*" | tee -a "$LOG"
