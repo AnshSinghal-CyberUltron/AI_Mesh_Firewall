@@ -1380,3 +1380,13 @@
   back to /login; you must drive the real form login. NODE_PATH="$PWD/tests/e2e/node_modules" to resolve
   `import {chromium} from "playwright"` (playwright lives in tests/e2e/node_modules here, not frontend/).
   D1 stays passes:true. (Remaining for this round: D2-D6 UI stories.)
+
+## MCP Frontend Adversarial regression (prd-mcp-frontend-adversarial.json) — 2026-06-30 follow-up
+- Prior subagent 5ee33cc1: PING timeout during iter 8 parallel workers (2026-06-29T17:48Z). Last fully marked OK before resume: **iter 7 (R3)**.
+- Resume 2026-06-30: docker compose --profile services healthy (broker :8311 docker_ok=true, gateway :8300, control :8100).
+- **R4-regression-iter8 PASS:** parallel --full, adversarial pytest 13/13, frontend_parallel_orgs (~6 min).
+- **R5-regression-iter9 PASS (~940s):** failed earlier on overlapping runs / broker container conflict; hardened `run_regression_iteration.sh` (locks, broker cleanup, pytest retry+prep). Final green gate.
+- Commits (no push): ba959aba, 6abf45b0, b6f31030, b767e7ed (+ earlier 44ee03ef flock attempt).
+- **Regression:** 5/16 (R1–R5). Pending R6–R16 (iters 10–20). Batch loop may be running iter 10+.
+- **Finish remaining:** `cd /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall && for i in $(seq 10 20); do ./scripts/ralph/run_regression_iteration.sh $i; done`
+  Or: `./scripts/ralph/run_iters_8_20.sh` (edit seq to 10–20) / monitor `scripts/ralph/regression_iters_9_20_results.tsv`.

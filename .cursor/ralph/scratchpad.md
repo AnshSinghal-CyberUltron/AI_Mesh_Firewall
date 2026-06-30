@@ -1,11 +1,11 @@
 ---
-iteration: 8
+iteration: 10
 min_iterations: 20
 max_iterations: 50
 completion_promise: "MCP FRONTEND ADVERSARIAL COMPLETE"
 status: REGRESSION_MODE
-active_story: R5-regression-iter9
-pending_regression: R5-R16 (iters 9-20)
+active_story: R6-regression-iter10
+pending_regression: R6-R16 (iters 10-20)
 ---
 
 # MCP Frontend Adversarial Sandbox Isolation — Ralph Loop
@@ -19,10 +19,10 @@ pending_regression: R5-R16 (iters 9-20)
 | Metric | Value |
 |--------|-------|
 | Feature stories | **21/21** (F0–F20) pass |
-| Regression stories | **R1–R4 pass**; **R5–R16 pending** (iters 9–20) |
+| Regression stories | **R1–R5 pass**; **R6–R16 pending** (iters 10–20) |
 | Min iterations | 20 (feature work done at iter 4; iters 5–20 = regression) |
 | Completion | Valid only when F0–F20 **and** R1–R16 all `passes:true` |
-| Pending count | 12 stories (`passes:false`) |
+| Pending count | 11 stories (`passes:false`) |
 
 ### Regression mode (iterations 5–20)
 
@@ -185,3 +185,11 @@ chmod +x scripts/ralph/ralph-mcp-frontend-adversarial.sh
 - **R4 PASS (2026-06-30):** all gates green on first attempt (~5.5 min). Parallel `--full`, adversarial pytest 13/13, frontend_parallel_orgs first try.
 - **Regression progress:** 4/16 (R1–R4). Next: iter 9 (`R5-regression-iter9`).
 - **Keep loop running:** `./scripts/ralph/run_iters_8_20.sh` (batch 9–20) OR `./scripts/ralph/ralph-mcp-frontend-adversarial.sh 50`
+
+### Iteration 9 (regression — R5) — 2026-06-30
+- Subagent 5ee33cc1 PING timeout stalled iter 8 (2026-06-29); resumed 2026-06-30.
+- **Root cause (iter 9 flakes):** overlapping `run_regression_iteration.sh` runs + stale `.regression.lockdir` after SIGTERM; isolated pytest broker name conflict (`mcp-broker-adversarial-test`).
+- **Fixes (committed):** mkdir lock + EXIT cleanup; retry `_rm_adversarial_test_broker`; prep between adversarial pytest retries.
+- **R5 PASS (~940s):** parallel `--full`, adversarial pytest 13/13 (attempt 2 after prep), frontend_parallel_orgs first try.
+- **Regression progress:** 5/16 (R1–R5). **In flight:** iter 10+ via batch loop (PID from parent).
+- **Finish:** `for i in $(seq 10 20); do ./scripts/ralph/run_regression_iteration.sh $i; done`
