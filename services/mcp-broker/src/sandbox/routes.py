@@ -84,8 +84,36 @@ def _ensure_response(docker_manager: DockerManager, org_slug: str) -> dict[str, 
 async def _resolve_running_sandbox(
     docker_manager: DockerManager, org_slug: str
 ) -> SandboxContainerInfo:
-    """Always refresh from Docker so agent_url stays valid after container restart."""
+    """Refresh agent_url from live Docker state; fall back to ensure when missing."""
+    container = await asyncio.to_thread(docker_manager.find_container, org_slug)
+    if container is not None:
+        info = docker_manager.to_info(org_slug, container)
+        if info.status == "running" and info.agent_url:
+            docker_manager._sync_registry(info)
+            return info
     return await asyncio.to_thread(docker_manager.ensure, org_slug)
+
+
+async def _post_agent_rpc(
+    docker_manager: DockerManager,
+    org_slug: str,
+    agent_url: str,
+    payload: dict[str, Any],
+    timeout: float,
+) -> httpx.Response:
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            return await client.post(agent_url, json=payload)
+    except httpx.HTTPError as first_exc:
+        try:
+            info = await asyncio.to_thread(docker_manager.ensure, org_slug)
+        except Exception:
+            raise first_exc from None
+        if info.status != "running" or not info.agent_url:
+            raise first_exc from None
+        refreshed = f"{info.agent_url.rstrip('/')}/rpc"
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            return await client.post(refreshed, json=payload)
 
 
 def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
@@ -123,8 +151,9 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
             )
 
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(agent_url, json=payload)
+            response = await _post_agent_rpc(
+                docker_manager, org_slug, agent_url, payload, timeout
+            )
         except httpx.HTTPError as exc:
             raise HTTPException(
                 status_code=502,

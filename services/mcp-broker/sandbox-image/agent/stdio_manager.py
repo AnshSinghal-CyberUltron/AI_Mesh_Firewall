@@ -31,7 +31,7 @@ _MAX_LINE_BYTES = int(os.environ.get("MCP_STDIO_MAX_LINE_BYTES", str(8 * 1024 * 
 _INIT_TIMEOUT = float(os.environ.get("MCP_STDIO_INIT_TIMEOUT", "120"))
 _METHOD_TIMEOUT = float(os.environ.get("MCP_STDIO_METHOD_TIMEOUT", "60"))
 _HUNG_INIT_TIMEOUT = float(os.environ.get("MCP_STDIO_HUNG_INIT_TIMEOUT", "180"))
-_MAX_PROCESSES_PER_ORG = int(os.environ.get("MCP_STDIO_MAX_PROCESSES_PER_ORG", "8"))
+_MAX_PROCESSES_PER_ORG = int(os.environ.get("MCP_STDIO_MAX_PROCESSES_PER_ORG", "16"))
 _MAX_CONCURRENT_INITS = int(os.environ.get("MCP_STDIO_MAX_CONCURRENT_INITS", "4"))
 
 _ALLOWED_COMMANDS = {
@@ -232,13 +232,17 @@ async def _ensure_process(
             oldest_key = min(_processes, key=lambda k: _processes[k].last_used)
             await _kill_process(oldest_key)
 
-        org_count = sum(1 for k in _processes if k.startswith(f"{ORG_SLUG}/"))
-        if org_count >= _MAX_PROCESSES_PER_ORG:
-            raise RuntimeError(
-                f"Org '{ORG_SLUG}' reached its concurrent stdio MCP server "
-                f"limit ({_MAX_PROCESSES_PER_ORG}). Close an existing server "
-                "connection and retry."
+        org_keys = [k for k in _processes if k.startswith(f"{ORG_SLUG}/")]
+        while len(org_keys) >= _MAX_PROCESSES_PER_ORG:
+            oldest = min(org_keys, key=lambda k: _processes[k].last_used)
+            LOG.info(
+                "Evicting LRU stdio process %s (org %s at limit %s)",
+                oldest,
+                ORG_SLUG,
+                _MAX_PROCESSES_PER_ORG,
             )
+            await _kill_process(oldest)
+            org_keys = [k for k in _processes if k.startswith(f"{ORG_SLUG}/")]
 
         proc_env = _build_child_env(
             requested_env,

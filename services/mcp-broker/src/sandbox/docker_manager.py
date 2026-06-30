@@ -103,18 +103,24 @@ class DockerManager:
         }
 
     def find_container(self, org_slug: str) -> Any | None:
-        containers = self.client.containers.list(
-            all=True,
-            filters={
-                "label": [
-                    f"{LABEL_ROLE}={ROLE_VALUE}",
-                    f"{LABEL_ORG_SLUG}={org_slug}",
-                ],
-            },
-        )
-        if containers:
-            return containers[0]
-        return self.get_container_by_name(org_slug)
+        by_name = self.get_container_by_name(org_slug)
+        if by_name is not None:
+            return by_name
+        try:
+            containers = self.client.containers.list(
+                all=True,
+                filters={
+                    "label": [
+                        f"{LABEL_ROLE}={ROLE_VALUE}",
+                        f"{LABEL_ORG_SLUG}={org_slug}",
+                    ],
+                },
+            )
+            if containers:
+                return containers[0]
+        except Exception:
+            pass
+        return None
 
     def get_container_by_name(self, org_slug: str) -> Any | None:
         """Fallback when label filters miss a container that already owns the name."""

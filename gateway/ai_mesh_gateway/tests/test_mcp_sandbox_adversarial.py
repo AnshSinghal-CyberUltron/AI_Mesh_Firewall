@@ -308,16 +308,26 @@ def broker_url(
     if _use_live_broker() and live_url:
         import httpx
 
-        for org in ORGS:
-            _destroy_org_sandbox(org, live_url)
+        if os.environ.get("MCP_ADVERSARIAL_RESET_SANDBOXES", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            for org in ORGS:
+                _destroy_org_sandbox(org, live_url)
 
         for _ in range(60):
             try:
                 health = httpx.get(f"{live_url}/health", timeout=5.0)
                 if health.status_code == 200 and health.json().get("docker_ok"):
                     yield live_url
-                    for org in ORGS:
-                        _destroy_org_sandbox(org, live_url)
+                    if os.environ.get("MCP_ADVERSARIAL_RESET_SANDBOXES", "").lower() in (
+                        "1",
+                        "true",
+                        "yes",
+                    ):
+                        for org in ORGS:
+                            _destroy_org_sandbox(org, live_url)
                     return
             except httpx.HTTPError:
                 pass

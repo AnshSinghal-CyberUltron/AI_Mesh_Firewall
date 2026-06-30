@@ -40,7 +40,7 @@ async def reap_idle_sandboxes(
     stopped: list[str] = []
     for entry in registry.idle_entries(cfg.idle_timeout, now=now):
         LOG.info("Reaping idle sandbox for org=%s", entry.org_slug)
-        docker_manager.stop(entry.org_slug)
+        await asyncio.to_thread(docker_manager.stop, entry.org_slug)
         registry.remove(entry.org_slug)
         stopped.append(entry.org_slug)
     return stopped

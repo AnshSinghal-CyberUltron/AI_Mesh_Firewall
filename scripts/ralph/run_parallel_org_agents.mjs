@@ -59,15 +59,34 @@ async function curlOk(url) {
   return res.ok ? res.json().catch(() => ({})) : null;
 }
 
-async function brokerFetch(pathname, opts = {}) {
-  return fetch(`${BROKER_URL.replace(/\/$/, "")}${pathname}`, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      "X-MCP-Broker-Key": BROKER_KEY,
-      ...(opts.headers || {}),
-    },
-  });
+async function brokerFetch(pathname, opts = {}, attempt = 0) {
+  const maxAttempts = 5;
+  const backoffMs = 1000 * (attempt + 1);
+  try {
+    const res = await fetch(`${BROKER_URL.replace(/\/$/, "")}${pathname}`, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        "X-MCP-Broker-Key": BROKER_KEY,
+        ...(opts.headers || {}),
+      },
+      signal: AbortSignal.timeout(60000),
+    });
+    if (
+      (res.status === 429 || res.status === 500 || res.status === 502 || res.status === 503) &&
+      attempt < maxAttempts
+    ) {
+      await new Promise((r) => setTimeout(r, backoffMs));
+      return brokerFetch(pathname, opts, attempt + 1);
+    }
+    return res;
+  } catch (e) {
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, backoffMs));
+      return brokerFetch(pathname, opts, attempt + 1);
+    }
+    throw e;
+  }
 }
 
 async function waitForAgent(containerId, maxWaitMs = 120000) {
@@ -167,6 +186,17 @@ async function parallelWorkers() {
   console.log("=== parallel workers OK ===");
 }
 
+async function resetSandboxes() {
+  console.log("=== reset org sandboxes (clear stdio server slots) ===");
+  for (const org of ORGS) {
+    const res = await brokerFetch(`/v1/sandbox/${org}`, { method: "DELETE" });
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`destroy ${org} failed: ${res.status}`);
+    }
+  }
+  await waitBrokerDockerOk(30000);
+}
+
 async function pytestLeakage() {
   console.log("=== pytest adversarial leakage subset ===");
   const gatewayDir = path.join(REPO_ROOT, "gateway");
@@ -203,6 +233,7 @@ async function main() {
     await parallelWorkers();
     await waitBrokerDockerOk(90000);
     if (full) {
+      await resetSandboxes();
       await pytestLeakage();
     }
     console.log("run_parallel_org_agents OK");
