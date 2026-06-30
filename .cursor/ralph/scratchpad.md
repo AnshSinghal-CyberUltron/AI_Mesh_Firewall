@@ -1,12 +1,12 @@
 ---
-iteration: 7
+iteration: 8
 min_iterations: 20
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 status: ACTIVE
-active_story: R7-regression-iter11
+active_story: R8-regression-iter12
 prd: scripts/ralph/prd-mcp-frontend-adversarial.json
-note: Cursor Ralph Loop — iteration 6 gates green (R6 pass); starting iter 7.
+note: Cursor Ralph Loop — iteration 7 gates green (R7 pass); starting iter 8.
 ---
 
 # MCP Frontend Adversarial — Cursor Ralph Loop

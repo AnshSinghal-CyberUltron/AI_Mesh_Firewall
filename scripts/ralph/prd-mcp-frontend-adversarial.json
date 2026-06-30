@@ -423,7 +423,7 @@
       "id": "R7-regression-iter11",
       "title": "Regression iter 11 — full adversarial gate re-run",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "R6-regression-iter10"
       ],
