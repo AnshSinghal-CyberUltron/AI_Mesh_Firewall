@@ -1380,6 +1380,32 @@
   back to /login; you must drive the real form login. NODE_PATH="$PWD/tests/e2e/node_modules" to resolve
   `import {chromium} from "playwright"` (playwright lives in tests/e2e/node_modules here, not frontend/).
   D1 stays passes:true. (Remaining for this round: D2-D6 UI stories.)
+- rigor-verified: D2-ui-model-routing 2026-06-30 — re-proved the model/routing/kill-switch UI (modules
+  1.5/1.6) for REAL against the live stack via the durable customer-POV gate
+  scripts/playwright_model_routing.mjs. Build gate green (cd frontend && npm run build OK 49.76s). Browser
+  run GREEN: 19/19 asserts, 0 pageErrors, fresh screenshots runs/d2/ (01..06). EVERY criterion proven from
+  the DOM + REAL API responses, never a flag: 1.5 renders ModelConnections+ModelGovernance+RoutingGovernance+
+  RoutingAudit; backend GET /api/firewall/models/ reports 4 connected (gemma-free shown in panel); Routing
+  Governance toggle FLIP -> PUT /api/firewall/config/ 2xx with savedCfg.routing_enabled==expected AND the
+  on-screen Enabled/Disabled label mirrors it, then RESTORED (side-effect free). 1.6 renders ModelState+
+  KillSwitch; create-kill-switch POST /api/kill-switches/ 2xx, new row's badge MATCHES the create-response
+  is_active (honesty: badge asserted vs backend truth); activate/deactivate each re-checked vs live GET
+  (is_active true<->false both directions); DELETE -> row detached AND final GET shows it gone (cleanup). NO
+  product gap; D2 stays passes:true.
+  ENVIRONMENTAL ROOT-CAUSE + REMEDY (recorded, reusable): the control container (ai_mesh_firewall-control-1)
+  was "unhealthy" after ~14h uptime — daphne's event loop was wedged (data endpoints /api/firewall/models/,
+  /config/, /kill-switches/ hung 12-20s with HTTP 000 + NO request log line, while /api/health/ + token +
+  soc-kpis returned 200). Postgres (5 conns, no locks), Redis (2.7M mem, 78 ops/s, slowlog <=78ms), and the
+  gateway (:8300 /health 56ms) were ALL healthy — the stall was control-side only (continuous telemetry-drain
+  load saturating the sync-view thread pool + the 5-min in-process gateway-key resync daemon, which had hit a
+  transient postgres "server closed the connection unexpectedly" + redis socket-read TimeoutError and entered
+  a blocking retry). A plain `docker restart` cleared it briefly then it re-wedged on the heavy endpoints;
+  the durable remedy was a CLEAN force-recreate:
+    docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --force-recreate control
+  then POLL until /api/firewall/models/ returns 200 (warm — scanner cold-start warmup ~3.6s + pool re-fill)
+  BEFORE running the Playwright gate. PATTERN: when a UI gate fails at PANEL RENDER (not login), first
+  curl the panel's backing endpoint directly — if it 000s while health/token are 200, control's event loop
+  is wedged (an infra issue, NOT a D-story regression); force-recreate control + warm-poll, then re-run.
 
 ## MCP Frontend Adversarial regression (prd-mcp-frontend-adversarial.json) — 2026-06-30 follow-up
 - Prior subagent 5ee33cc1: PING timeout during iter 8 parallel workers (2026-06-29T17:48Z). Last fully marked OK before resume: **iter 7 (R3)**.
@@ -1392,3 +1418,24 @@
   Or: `./scripts/ralph/run_iters_8_20.sh` (edit seq to 10–20) / monitor `scripts/ralph/regression_iters_9_20_results.tsv`.
 
 D RESET: cleared locks, killed overlapping runs, R1-R16 reset, starting regression from iter 1
+
+## 2026-06-30 post-reset regression batch guard
+- pgrep: killed orphan iter-9 run + stale lock; dead batch PID 49277 (seq 1-20 invalid — script requires 5-20).
+- Started single nohup batch PID 54108: seq 5-20 → R1-R16. R passes 0/16 after reset.
+- Current: iter 5 in progress (see regression.log).
+- Guard pass 2: killed overlapping iter-11 (parent 55093); restarted sole batch PID 56049 seq 5-20.
+- Guard pass 3: stopped foreground seq11-20 subagent; sole nohup batch PID 58970 from iter 11 (R7). PRD R passes 6/16.
+
+## 2026-06-30 regression state reconcile (post-reset 29e77267, subagent cleanup)
+- Killed overlapping runners: 12477, 58188, 58203, 58218, 59448, 59790, 60255, 60272, 60290, 61045 (+ pkill run_regression_iteration).
+- Removed scripts/ralph/.regression.lockdir.
+- Fresh regression.log: 0 lines matching `=== Regression iteration N OK ===` (no iters verified complete post-reset).
+- PRD R passes: 6/16 (R1–R6 passes:true stale — NOT confirmed by fresh log; R7–R16 false).
+- NEXT batch: regression iteration **5** (R1; user “iter 1” = first R-story slot; script only accepts 5–20).
+- Single batch: `seq 5 20` → see scripts/ralph/regression_batch.pid and regression_batch.log.
+- Ignored stale 6135c810 / seq 11–20 overlap; authoritative intent = full loop from R1 after reset.
+
+- Reconcile pass 2: killed iter-11 solo (62382/62394/62422); restarted sole batch PID 70276 seq 5-20.
+SOLO_BATCH_11_20 started PID=72075
+
+- Reconcile pass 3: removed stale lock; sole batch PID 73466 seq 5-20 (R1→R16).
