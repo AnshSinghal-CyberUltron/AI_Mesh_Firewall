@@ -1135,6 +1135,21 @@
   into the OpenAI envelope (choke point correctly scoped, not global). FALSE-POSITIVE caught + fixed
   in my OWN probe: an UNauth non-/v1 GET returns 401 (AuthMiddleware fires on all paths) not 404 —
   test now sends valid auth. Full SDK gate + new probe co-run: 53 passed, 2 xpassed, 0 regression. No gap.
+- rigor-verified: C2-dead-route 2026-06-30 — adversarially re-proved exactly-one POST /v1/responses
+  beyond the literal-count test. (1) grep main.py: a SINGLE @app.post("/v1/responses") at main.py:8390,
+  endpoint proxy_responses; confirmed full-featured = streaming (is_stream → StreamingResponse over
+  _translate_chat_stream_to_responses) + store (_ResponseStore(REDIS_CLIENT), raw_body["store"] save).
+  (2) Two regression gates green: test_route_introspection.py (test_exactly_one_post_v1_responses +
+  test_no_duplicate_path_method_registrations — a WHOLE-APP Counter over (path,method) so NO verb is
+  shadowed anywhere, not just /v1/responses) and test_openai_sdk_compat.py
+  test_only_one_post_v1_responses_route + test_v1_responses_first_match_wins_is_full_handler (the
+  latter closes the gap the literal count can't see: it walks app.router.routes calling r.matches() on
+  a POST /v1/responses scope and asserts the SOLE Match.FULL endpoint is proxy_responses, so an
+  EARLIER-registered shadowing regex route like /v1/{rest:path} can't silently intercept). (3)
+  INDEPENDENT runtime audit (separate from the test logic): PYTHONPATH-loaded the app and ran my own
+  Counter over every non-HEAD/OPTIONS (path,method) → duplicate pairs == {} (zero across the entire
+  app), and POST /v1/responses endpoints == ['proxy_responses']. Gate run: route+responses cells
+  15 passed/1 xpassed. No dead duplicate, no shadowing, full handler is the resolved one. No gap.
 
 ## MCP Frontend Adversarial Ralph loop (prd-mcp-frontend-adversarial.json)
 - 2026-06-30 loop-restart: F0–F20 all passes:true (21/21). Regression R1–R3 pass; R4–R16 were pending.
