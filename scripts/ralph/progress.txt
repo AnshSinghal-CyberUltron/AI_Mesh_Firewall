@@ -1359,3 +1359,24 @@
   over the at-rest blob → hasPII:false (content + nested author/note/contact metadata all masked:
   j***@c***.example / ***-***-0142 / ***-**-6789 / ***-***-4991 / sk-****90mn / ****-****-****-1111).
   NO source change; NO real gap; B5 stays passes:true. (Remaining for this round: D1-D6 UI stories.)
+- rigor-verified: D1-ui-auth-keys 2026-06-30 — re-proved auth flows + GatewayKeyPanel from a REAL
+  customer browser session against the live stack (Vite :8180 → control :8100 → gateway :8300), TWO ways:
+  (1) hands-on Playwright-MCP drive — form login (admin@zeroshield.io), navigate /?tab=firewall-1-1, click
+  "Create API Key", fill name+project, submit; hooked window.fetch to CAPTURE the POST /api/gateways/keys/
+  response. PROOF on the actual DOM bytes (not the test's own assertions): the full 48-char secret appears
+  EXACTLY ONCE in document.body.innerHTML in the create modal ("…will not be shown again"); after Done the
+  listing DOM does NOT contain the full secret anywhere (html.includes(full)===false) and shows ONLY the
+  prefix (my7g6Nol…) with an Active badge = the honesty invariant byte-verified; revoke → DELETE returns
+  204 and the row leaves the listing (rowStillPresent===false). (2) the DURABLE re-runnable gate
+  scripts/playwright_auth_keys.mjs (login empty/invalid/valid, OAuth-callback param preservation, key
+  create/copy/honesty/revoke, inactivity-modal clock.fastForward, logout, 0 pageerror) — ran GREEN twice
+  deterministically: 19/19 asserts, all 10 steps, 0 JS errors. NO product source change. FIXED a HARNESS
+  flake only (the gate, not the app): on a loaded host the telemetry-heavy Module-1.1 first paint and the
+  control login response occasionally exceeded the tight 30s timeouts → false failures. Hardened: valid-login
+  waitForResponse 30s→60s + wait for an ENABLED "Sign in" button before re-clicking (kills the in-flight-
+  invalid-submit race); "Gateway API Keys" panel waitFor 30s→60s on both the main and the clock pages. NO
+  assertion weakened. Frontend build gate green (vite build ✓ 24.98s). GOTCHA (recorded): injecting tokens
+  via localStorage + fetch alone does NOT establish a valid session — the AuthContext route-guard bounces
+  back to /login; you must drive the real form login. NODE_PATH="$PWD/tests/e2e/node_modules" to resolve
+  `import {chromium} from "playwright"` (playwright lives in tests/e2e/node_modules here, not frontend/).
+  D1 stays passes:true. (Remaining for this round: D2-D6 UI stories.)

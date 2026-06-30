@@ -1,0 +1,24 @@
+
+=== Regression iteration 8 (R4-regression-iter8) 2026-06-29T17:48:07Z ===
+--- parallel org agents --full (attempt 1/2) ---
+
+=== Regression iteration 8 (R4-regression-iter8) 2026-06-30T04:11:10Z ===
+--- parallel org agents --full (attempt 1/2) ---
+PASS: parallel org agents --full (attempt 1/2)
+--- prep: docker cooldown before isolated pytest broker ---
+live broker healthy at http://127.0.0.1:8311
+--- adversarial pytest full ---
+PASS: adversarial pytest full
+--- prep: warm live sandboxes before frontend e2e ---
+--- frontend_parallel_orgs.mjs (attempt 1/2) ---
+PASS: frontend_parallel_orgs.mjs (attempt 1/2)
+Marked R4-regression-iter8 passes:true in prd-mcp-frontend-adversarial.json
+=== Regression iteration 8 OK ===
+./scripts/ralph/run_regression_iteration.sh: line 13: flock: command not found
+Another MCP regression iteration is already running (lock: /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/scripts/ralph/regression.lock)
+
+=== Regression iteration 9 (R5-regression-iter9) 2026-06-30T05:15:17Z ===
+--- parallel org agents --full (attempt 1/2) ---
+Terminated: 15
+FAIL: parallel org agents --full (attempt 1/2) (exit 143)
+Retrying parallel org agents --full after 20s cooldown...

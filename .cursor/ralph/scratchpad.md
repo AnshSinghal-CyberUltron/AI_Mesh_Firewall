@@ -1,9 +1,11 @@
 ---
-iteration: 7
+iteration: 8
 min_iterations: 20
 max_iterations: 50
 completion_promise: "MCP FRONTEND ADVERSARIAL COMPLETE"
 status: REGRESSION_MODE
+active_story: R5-regression-iter9
+pending_regression: R5-R16 (iters 9-20)
 ---
 
 # MCP Frontend Adversarial Sandbox Isolation — Ralph Loop
@@ -17,9 +19,10 @@ status: REGRESSION_MODE
 | Metric | Value |
 |--------|-------|
 | Feature stories | **21/21** (F0–F20) pass |
-| Regression stories | **R1–R16** (iterations 5–20) — re-run full gate each iter |
+| Regression stories | **R1–R4 pass**; **R5–R16 pending** (iters 9–20) |
 | Min iterations | 20 (feature work done at iter 4; iters 5–20 = regression) |
 | Completion | Valid only when F0–F20 **and** R1–R16 all `passes:true` |
+| Pending count | 12 stories (`passes:false`) |
 
 ### Regression mode (iterations 5–20)
 
@@ -175,3 +178,10 @@ chmod +x scripts/ralph/ralph-mcp-frontend-adversarial.sh
 ### Iteration 7 (regression — R3)
 - **R3 PASS:** all gates green on first attempt.
 - **Regression progress:** 3/16 (R1–R3). Remaining: `for i in $(seq 8 20); do ./scripts/ralph/run_regression_iteration.sh $i; done`
+
+### Iteration 8 (regression — R4) — RESTARTED 2026-06-30
+- Prior batch `run_iters_8_20.sh` (PID 11642) stalled mid parallel workers; no process alive.
+- Docker stack verified: broker `docker_ok=true`, gateway :8300, frontend :8180.
+- **R4 PASS (2026-06-30):** all gates green on first attempt (~5.5 min). Parallel `--full`, adversarial pytest 13/13, frontend_parallel_orgs first try.
+- **Regression progress:** 4/16 (R1–R4). Next: iter 9 (`R5-regression-iter9`).
+- **Keep loop running:** `./scripts/ralph/run_iters_8_20.sh` (batch 9–20) OR `./scripts/ralph/ralph-mcp-frontend-adversarial.sh 50`
