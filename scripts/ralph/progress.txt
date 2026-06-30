@@ -1335,3 +1335,27 @@
   aresponses replaces input with redacted_content directly (llm_router.py:584) and the suite proves
   that == the chat backstop output for all REDACTABLE. NO source change needed; NO real gap; B4 stays
   passes:true. (Remaining for this round: B5-rag-at-rest, D1-D6 UI stories.)
+- rigor-verified: B5-rag-at-rest 2026-06-30 — adversarially re-proved "RAG redaction default + nothing
+  raw at rest" with egress=truth (the store IS the wire) + an INDEPENDENT ML oracle on the REAL
+  chromadb at-rest bytes, and re-traced the LIVE handler at CURRENT line numbers (tree shifted since the
+  06-29 round). GATE GREEN clean-shell: `cd gateway && ./.venv/bin/python -m pytest tests/leakhunt -q`
+  → 142 passed/1 skipped (B5 file 5 passed). PRODUCTION-WIRING re-trace (not just the helpers the gate
+  drives): rag_ingest (main.py:10062) loops each doc at 10462-10483 — content via the SHARED
+  `_scan_redact_embedding_inputs` (10463), fail-CLOSED skip on unmaskable PII (10464-10474; 422
+  all_documents_blocked at 10484 if none survive), metadata via `_scan_redact_metadata` (10479, recurses
+  nested dict/list) — then REASSIGNS doc_strings/normalized_ids/normalized_metas to the REDACTED output
+  (10480-10482). BOTH storage paths then carry only that redacted payload: async enqueue_job (10513-10515)
+  + sync client.add (10562-10566). The async `vector_ingest_task` (workers/.../tasks/telemetry.py:730) is
+  a NO-OP placeholder (logs+returns accepted, stores nothing) and only ever receives the redacted payload.
+  ROBUSTNESS: the redaction choke-point is gated on `input_scan_enabled` (default True, main.py:3179) —
+  NOT `rag_redaction_enabled` — so the at-rest guarantee survives an org turning the B5 default off
+  (rag_redaction_enabled now defaults True at 10302 = typed-placeholder defense-in-depth on top, a strictly
+  stronger lower bound). INDEPENDENT-ORACLE PROOF (beyond the suite's own separate-regex oracle): drove an
+  adversarial 6-case corpus (multi-PII john.doe@corp.example/415-555-0142/123-45-6789, split-5+5 phone
+  "89295 54991" [the G0 leak], e164 +1 4155550142, openai key sk-proj-…, credit card 4111 1111 1111 1111,
+  nested-metadata email alice.smith@bank.example) through the REAL helpers via /tmp/b5_rigor_probe.py,
+  PERSISTED into a real in-process chromadb (EphemeralClient), READ at rest, dumped the bytes: 0 raw
+  substrings; mcp__ruflo__aidefence_has_pii over the RAW prompt → hasPII:true (positive control fires) but
+  over the at-rest blob → hasPII:false (content + nested author/note/contact metadata all masked:
+  j***@c***.example / ***-***-0142 / ***-**-6789 / ***-***-4991 / sk-****90mn / ****-****-****-1111).
+  NO source change; NO real gap; B5 stays passes:true. (Remaining for this round: D1-D6 UI stories.)
