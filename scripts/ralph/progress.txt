@@ -1267,3 +1267,30 @@
   Remaining: R5–R16 (iters 9–20). Next gate: `./scripts/ralph/run_regression_iteration.sh 9`
   Batch: `for i in $(seq 9 20); do ./scripts/ralph/run_regression_iteration.sh $i; done`
   Loop: `./scripts/ralph/ralph-mcp-frontend-adversarial.sh 50`
+
+- rigor-verified: B2-redactor-coverage 2026-06-30 — adversarially re-proved phone/intl
+  context-gated coverage AND FOUND+FIXED a real egress leak (passes flipped false→fixed→true).
+  REAL GAP: a strong dialing/messaging verb placed IMMEDIATELY before the number with NO
+  "at/on" connector ("sms 89295 54991 to confirm", "whatsapp 8929554991 for updates")
+  egressed the raw 5+5 / bare-10 phone to the provider wire — proven via the FULL egress path
+  (InputScanner.redact_pii + LLMRouter backstop + RecordingProvider wire capture), not just
+  redact_all. The imperative cue branch demanded "...<=40 non-digit chars> (at|on)" so a verb
+  sitting directly on the value was missed, and Tier-2 did NOT flag it (wire still raw).
+  ("my number 89295 54991" already masked via the possessive branch — only the verb-direct
+  case leaked.) FIX: added a curated direct-adjacency cue branch to phone_us_bare_contextual:
+  `\b(?:call|text|dial|ring|sms|whatsapp|telegram|imessage)\b[:\s]+` directly before
+  _BARE_PHONE_10_SPLIT. FP-safe BY CONSTRUCTION — the gap is whitespace/colon ONLY (no
+  intervening words/digits) so the 10-digit grouping must start right after the cue; order-id
+  / count phrasings stay verbatim ("call 5000 customers", "text the 1234567890 line",
+  "we will call 89295 customers in batch 54991", and "message/contact <num>" excluded from the
+  verb list on purpose). Verified: 8 MASK + 9 KEEP redact_all cases, 7 end-to-end egress
+  adversarial (raw absent from wire, independent_pii_scan oracle clean), corpus +2 entries
+  (sms_direct_5_5 / whatsapp_direct_bare10 flow into the parametrized wire test) + 12 new
+  regression cases. Gate: leakhunt 142 passed/1 skipped (was 121); broader redaction suites
+  98 passed (test_bare_phone_redaction/policy_redaction_masking/tier2_preserves_tier1/typed_
+  placeholder + e10/e11/e12/embedding_input/guard_fields/vector_upsert) — 0 regression.
+  ORACLE NOTE: independent_pii_scan / aidefence are BLIND to bare/5+5/intl-run phones (only
+  phone_sep "415-555-0142", email, ssn, keys) — documented + intentional; B2's primary egress
+  check is exact-substring of the known raw (regex-independent, the strongest control), so the
+  proof does not depend on the same regexes under test. Did NOT broaden the shared _ORACLE
+  (would risk FPs in B4/B5 where independent_pii_scan(blob)==[] is an assertion).
