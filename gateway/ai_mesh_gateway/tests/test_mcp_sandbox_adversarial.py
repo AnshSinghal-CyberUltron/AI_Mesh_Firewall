@@ -131,6 +131,58 @@ def _cleanup_test_containers() -> None:
             subprocess.run(["docker", "rm", "-f", cid], capture_output=True, timeout=60)
 
 
+
+
+def _force_remove_named_container(name: str, attempts: int = 8) -> None:
+    for _ in range(attempts):
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=60)
+        listed = subprocess.run(
+            ["docker", "ps", "-aq", "-f", f"name=^{name}$"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if not listed.stdout.strip():
+            return
+        time.sleep(1)
+    pytest.fail(f"could not remove docker container {name!r}")
+
+
+def _start_broker_container(port: int, sandbox_image: str, broker_image: str) -> subprocess.CompletedProcess[str]:
+    cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        BROKER_CONTAINER_NAME,
+        "--network",
+        SANDBOX_NETWORK,
+        "-v",
+        "/var/run/docker.sock:/var/run/docker.sock",
+        "-e",
+        f"MCP_BROKER_INTERNAL_KEY={BROKER_KEY}",
+        "-e",
+        f"MCP_SANDBOX_IMAGE={sandbox_image}",
+        "-e",
+        f"MCP_SANDBOX_NETWORK={SANDBOX_NETWORK}",
+        "-e",
+        f"MCP_BROKER_CONTAINER_NAME={BROKER_CONTAINER_NAME}",
+        "-e",
+        "MCP_SANDBOX_IDLE_TIMEOUT=3600",
+        "-p",
+        f"127.0.0.1:{port}:8311",
+        broker_image,
+    ]
+    for attempt in range(4):
+        _force_remove_named_container(BROKER_CONTAINER_NAME)
+        run = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if run.returncode == 0:
+            return run
+        if "already in use" not in (run.stderr or ""):
+            break
+        time.sleep(2)
+    return run
+
 def _ensure_sandbox_network() -> None:
     subprocess.run(
         ["docker", "network", "create", SANDBOX_NETWORK],
@@ -232,43 +284,10 @@ def broker_url(
     broker_image: str,
 ) -> Iterator[str]:
     _cleanup_test_containers()
-    subprocess.run(
-        ["docker", "rm", "-f", BROKER_CONTAINER_NAME],
-        capture_output=True,
-        timeout=30,
-    )
     _ensure_sandbox_network()
 
     port = _free_port()
-    run = subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            BROKER_CONTAINER_NAME,
-            "--network",
-            SANDBOX_NETWORK,
-            "-v",
-            "/var/run/docker.sock:/var/run/docker.sock",
-            "-e",
-            f"MCP_BROKER_INTERNAL_KEY={BROKER_KEY}",
-            "-e",
-            f"MCP_SANDBOX_IMAGE={sandbox_image}",
-            "-e",
-            f"MCP_SANDBOX_NETWORK={SANDBOX_NETWORK}",
-            "-e",
-            f"MCP_BROKER_CONTAINER_NAME={BROKER_CONTAINER_NAME}",
-            "-e",
-            "MCP_SANDBOX_IDLE_TIMEOUT=3600",
-            "-p",
-            f"127.0.0.1:{port}:8311",
-            broker_image,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    run = _start_broker_container(port, sandbox_image, broker_image)
     assert run.returncode == 0, run.stderr
 
     import httpx
@@ -290,11 +309,7 @@ def broker_url(
     for org in ORGS:
         _destroy_org_sandbox(org, url)
     _cleanup_test_containers()
-    subprocess.run(
-        ["docker", "rm", "-f", BROKER_CONTAINER_NAME],
-        capture_output=True,
-        timeout=60,
-    )
+    _force_remove_named_container(BROKER_CONTAINER_NAME)
 
 
 @pytest.fixture(autouse=True)

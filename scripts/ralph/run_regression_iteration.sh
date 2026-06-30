@@ -7,6 +7,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 LOG="$SCRIPT_DIR/regression.log"
 PRD="$SCRIPT_DIR/prd-mcp-frontend-adversarial.json"
+
+LOCK_FILE="$SCRIPT_DIR/regression.lock"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "Another MCP regression iteration is already running (lock: $LOCK_FILE)" >&2
+  exit 1
+fi
 BROKER_URL="${MCP_BROKER_URL:-http://127.0.0.1:8311}"
 ITER="${1:?Usage: run_regression_iteration.sh <iteration_number 5-20>}"
 

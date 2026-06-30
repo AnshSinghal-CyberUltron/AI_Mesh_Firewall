@@ -144,12 +144,12 @@ async function parallelWorkers() {
       WORKER_REPORT: `runs/org_worker_${org}.json`,
     })
   );
-  const leakProbe = run("node", [LEAK_PROBE], {
+  await Promise.all(workers);
+  await run("node", [LEAK_PROBE], {
     MCP_BROKER_URL: BROKER_URL,
     MCP_BROKER_INTERNAL_KEY: BROKER_KEY,
     LEAK_PROBE_REPORT: "runs/cross_org_leak_probe.json",
   });
-  await Promise.all([...workers, leakProbe]);
   console.log("=== parallel workers OK ===");
 }
 
