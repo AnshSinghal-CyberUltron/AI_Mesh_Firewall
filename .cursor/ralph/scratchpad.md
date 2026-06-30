@@ -107,3 +107,9 @@ Output `<promise>MCP FRONTEND ADVERSARIAL COMPLETE</promise>` only when all stor
 - `make mcp-adversarial-reset` + `mcp-adversarial-reset-prd`; iteration: 1; R1–R16 `passes:false`.
 - Docker stack up; starting **iteration 1** gates (2× org parallel agents → pytest → frontend E2E).
 - **Active story:** R1-regression-iter5
+
+### Iteration 1 attempt (2026-06-30) — gates NOT fully green
+- **Gate 1** (`run_parallel_org_agents.mjs --full`): GREEN on best run (2×6 servers, cross-org leak, 4 leakage pytest)
+- **Gate 2** (full pytest): 11 passed / 2 failed (`test_parallel_2_orgs_5_servers_tools_list`, `test_network_concurrent_cross_org_rpc_hammer` — stdio limit 8); fix applied `MCP_STDIO_MAX_PROCESSES_PER_ORG=16`
+- **Gate 3** (frontend Playwright): not reached
+- **R1** remains `passes:false`; **next iteration:** retry full `make mcp-adversarial-gate` after `docker compose build mcp-broker` + fresh sandboxes
