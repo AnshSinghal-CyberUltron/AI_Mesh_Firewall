@@ -194,6 +194,20 @@ async function resetSandboxes() {
       throw new Error(`destroy ${org} failed: ${res.status}`);
     }
   }
+  const deadline = Date.now() + 60000;
+  for (const org of ORGS) {
+    while (Date.now() < deadline) {
+      const st = await brokerFetch(`/v1/sandbox/${org}/status`);
+      if (!st.ok) {
+        break;
+      }
+      const body = await st.json().catch(() => ({}));
+      if (body.status === "missing") {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
   await waitBrokerDockerOk(30000);
 }
 

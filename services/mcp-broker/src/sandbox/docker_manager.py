@@ -297,15 +297,31 @@ class DockerManager:
         return "already in use" in msg or "conflict" in msg
 
     def create_container(self, org_slug: str) -> Any:
-        try:
-            return self.client.containers.run(**self._run_kwargs(org_slug))
-        except Exception as exc:
-            if not self._is_container_name_conflict(exc):
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                return self.client.containers.run(**self._run_kwargs(org_slug))
+            except Exception as exc:
+                last_exc = exc
+                if not self._is_container_name_conflict(exc):
+                    raise
+                existing = self.get_container_by_name(org_slug)
+                if existing is not None:
+                    if self.container_status(existing) == "running":
+                        return existing
+                    try:
+                        existing.remove(force=True)
+                    except Exception:
+                        pass
+                if attempt < 2:
+                    import time
+
+                    time.sleep(0.25 * (attempt + 1))
+                    continue
                 raise
-            existing = self.get_container_by_name(org_slug)
-            if existing is not None:
-                return existing
-            raise
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError(f"failed to create sandbox for {org_slug}")
 
     def _recover_broken_container(self, org_slug: str, container: Any) -> Any:
         try:
