@@ -150,6 +150,16 @@ PII_PATTERNS: Dict[str, str] = {
         # imperative contact: "call/text/dial/ring/sms/reach/contact ...<=40 non-digit
         # chars, same line...> at/on" 8929554991
         r"|\b(?:call|text|dial|ring|sms|reach|contact|phone)\b[^\d\n]{0,40}?\b(?:at|on)\s+"
+        # B2 rigor (sms/whatsapp direct-adjacency leak): a STRONG dialing/messaging verb
+        # placed IMMEDIATELY before the number with no "at/on" connector ("sms 89295 54991",
+        # "whatsapp 8929554991", "dial 4155550142") leaked raw because the at/on branch above
+        # demands the connector and Tier-2 did not flag it. The gap here is whitespace/colon
+        # ONLY (``[:\s]+``) — no intervening words or digits — so the curated phone verb must
+        # sit directly on the value; order-id phrasings ("call 5000 customers", "text the
+        # 1234567890 line") never match because the 10-digit grouping must START right after
+        # the cue. Verbs limited to unambiguous dialing/messaging cues (no "message"/"msg"/
+        # "reach"/"contact" here — those stay gated on at/on) to keep FP near-zero.
+        r"|\b(?:call|text|dial|ring|sms|whatsapp|telegram|imessage)\b[:\s]+"
         # possessive: "my/the [phone/mobile/cell] number/no/# [is]" 8929554991
         r"|\b(?:my|the)\s+(?:phone\s+|mobile\s+|cell\s+)?(?:number|no\.?|#)\s+(?:is\s+)?"
         r")" + _BARE_PHONE_10_SPLIT + r"\b"

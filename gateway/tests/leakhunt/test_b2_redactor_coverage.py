@@ -67,6 +67,36 @@ def test_redact_all_masks_5plus5_behind_cue():
     assert "89295" not in out and "54991" not in out
 
 
+@pytest.mark.parametrize("text,raw", [
+    ("sms 89295 54991 to confirm", "89295 54991"),
+    ("whatsapp 8929554991 for updates", "8929554991"),
+    ("dial 4155550142 now", "4155550142"),
+    ("text 89295.54991", "89295.54991"),
+    ("telegram +919876543210", "919876543210"),
+    ("imessage 8929554991", "8929554991"),
+])
+def test_redact_all_masks_strong_cue_direct_adjacency(text, raw):
+    """B2 rigor (sms/whatsapp direct-adjacency leak): a strong dialing/messaging verb
+    placed IMMEDIATELY before the number (no "at/on" connector) used to ride RAW to the
+    wire — the imperative branch demanded the connector and Tier-2 did not flag it."""
+    out = redact_all(text)
+    assert raw not in out
+    assert "89295" not in out or raw == "4155550142" or raw == "919876543210"
+
+
+@pytest.mark.parametrize("text", [
+    "call 5000 customers about the promo",
+    "text the 1234567890 line tomorrow",
+    "we will call 89295 customers in batch 54991",
+    "message 1234567890 was delivered",   # 'message' is NOT a direct-adjacency cue
+    "contact 1234567890 records",         # 'contact' stays gated on at/on
+])
+def test_direct_adjacency_does_not_over_redact(text):
+    """The direct-adjacency branch requires the 10-digit grouping to start RIGHT after a
+    curated phone verb + whitespace/colon, so order-id / count phrasings are untouched."""
+    assert redact_all(text) == text
+
+
 def test_redact_all_masks_intl_5_5_grouping():
     """B2 rigor: a 5+5 grouped international mobile ("+91 98765 43210", India/EU) is
     masked by phone_intl. The grouped branch previously capped groups at 4 digits, so
