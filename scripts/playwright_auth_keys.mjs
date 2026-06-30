@@ -77,8 +77,13 @@ async function main() {
     CURRENT_PHASE = "login-valid";
     await page.locator("#email").fill(EMAIL);
     await page.locator("#password").fill(PASS);
+    // Settle: the invalid attempt above must have fully resolved (button text returns to
+    // "Sign in", not "Signing in...") before we click again, else the click races an in-flight
+    // submit. The submit also goes through control which can be cold/loaded — use a generous
+    // 60s response timeout so a slow-but-correct login is not mis-reported as a failure.
+    await page.getByRole("button", { name: /^sign in$/i }).and(page.locator("button:not([disabled])")).first().waitFor({ state: "visible", timeout: 30000 });
     const [ok] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes("/api/auth/token/") && r.request().method() === "POST", { timeout: 30000 }),
+      page.waitForResponse((r) => r.url().includes("/api/auth/token/") && r.request().method() === "POST", { timeout: 60000 }),
       page.getByRole("button", { name: /^sign in$/i }).click(),
     ]);
     assert(ok.ok(), `valid creds -> 2xx (got ${ok.status()})`);
@@ -100,7 +105,9 @@ async function main() {
     CURRENT_PHASE = "keys-create";
     page.on("dialog", (d) => d.accept()); // accept the revoke confirm()
     await page.goto(`${BASE}/?tab=firewall-1-1`, { waitUntil: "networkidle", timeout: 120000 });
-    await page.locator("text=/gateway api keys/i").first().waitFor({ state: "visible", timeout: 30000 });
+    // Module 1.1 is a telemetry-heavy dashboard; on a loaded host first paint of the keys panel
+    // can exceed 30s after networkidle. Give it 60s so a slow render is not a false failure.
+    await page.locator("text=/gateway api keys/i").first().waitFor({ state: "visible", timeout: 60000 });
     const keyName = `d1-verify-${Date.now()}`;
     await page.getByRole("button", { name: /create api key/i }).first().click();
     await page.locator("#gateway-key-name").waitFor({ state: "visible", timeout: 15000 });
@@ -164,7 +171,7 @@ async function main() {
     clockPage.on("pageerror", (e) => report.pageErrors.push({ phase: "inactivity-modal", message: String(e.message || e) }));
     await clockPage.clock.install();
     await clockPage.goto(`${BASE}/?tab=firewall-1-1`, { waitUntil: "networkidle", timeout: 120000 });
-    await clockPage.locator("text=/gateway api keys/i").first().waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
+    await clockPage.locator("text=/gateway api keys/i").first().waitFor({ state: "visible", timeout: 60000 }).catch(() => {});
     // 14 min idle -> warning window (>= warningAtMs 14min, < inactivityMs 15min). checkIdle polls every 30s.
     await clockPage.clock.fastForward(14 * 60 * 1000 + 3000);
     const warnDialog = clockPage.getByRole("dialog").filter({ hasText: /session expiring/i });

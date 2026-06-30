@@ -1,14 +1,10 @@
 {
-  "id": "session-1782738630610",
-  "startedAt": "2026-06-29T13:10:30.610Z",
+  "id": "session-1782798546089",
+  "startedAt": "2026-06-30T05:49:06.089Z",
   "cwd": "/Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall",
   "context": {
     "lastMatchedPatterns": [
-      "insight-1782192790800-ef9t",
-      "insight-1782192790800-0pl7",
-      "insight-1782192790800-7geu",
-      "insight-1782192790800-5vvi",
-      "insight-1782192790800-xuuk"
+      "insight-1782192790800-ef9t"
     ]
   },
   "metrics": {
@@ -17,5 +13,5 @@
     "tasks": 0,
     "errors": 0
   },
-  "updatedAt": "2026-06-29T13:10:31.970Z"
+  "updatedAt": "2026-06-30T06:01:04.585Z"
 }
