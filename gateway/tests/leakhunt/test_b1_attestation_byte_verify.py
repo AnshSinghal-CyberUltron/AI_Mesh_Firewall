@@ -202,6 +202,77 @@ async def test_b1_chat_endpoint_honors_tier2_evidence_digit_span(monkeypatch):
     )
 
 
+# ── END-TO-END: an UNMASKABLE flagged span must FAIL CLOSED, never ride raw ──
+# Criterion 1: "if the scrubber is a no-op, fail closed (stronger scrub or block)."
+# A Tier-2 guard recommending redaction surfaces as action="flag" /
+# threat_type="sensitive_content" (scanner.py), which main.py routes through
+# redact_pii. When the flagged value is a natural-language credential the
+# deterministic redactors (redact_all + the digit backstop) cannot touch, the scrub
+# is a TOTAL no-op — without the fail-closed honesty check the raw credential reached
+# the provider while telemetry attested "redact" (a phantom redaction the embeddings
+# path already guards, main.py:_scan_redact_embedding_inputs). This mirrors that
+# guard onto the chat/egress path: the request is blocked and acompletion is never
+# called, so nothing raw egresses.
+@pytest.mark.asyncio
+async def test_b1_chat_endpoint_fails_closed_on_unmaskable_flagged_span(monkeypatch):
+    import sys
+    from openai import APIStatusError
+
+    _gw_root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(_gw_root))
+    sys.path.insert(0, str(_gw_root / "ai_mesh_gateway" / "tests"))
+    import test_openai_sdk_compat as H
+    from ai_mesh_gateway import main as gateway_main
+    from scanner import ScanVerdict
+
+    # Oracle-confirmed PII (mcp aidefence_has_pii -> hasPII:true) that redact_all and
+    # the digit backstop both leave UNCHANGED: a natural-language passphrase.
+    secret = "correcthorsebatterystaple"
+    captured: dict = {}
+
+    async def _capture_completion(body, redacted_prompt=None, **_kw):
+        captured["redacted_prompt"] = redacted_prompt
+        return 200, {
+            "id": "chatcmpl-b1fc", "object": "chat.completion", "created": 1700000000,
+            "model": "gpt-4o-mini",
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"},
+                         "finish_reason": "stop"}],
+        }
+
+    app, auth_redis = await H._make_sdk_app(monkeypatch, redis_client=None)
+
+    async def _scan(text, *a, **k):
+        return ScanVerdict(
+            action="flag", threat_type="sensitive_content",
+            matched_patterns=["password"],
+            scan_meta={"findings": [{"evidence": "credential present"}]},
+        )
+
+    monkeypatch.setattr(gateway_main.INPUT_SCANNER, "scan_prompt", _scan)
+    monkeypatch.setattr(gateway_main.INPUT_SCANNER, "scan_prompt_with_tier2", _scan)
+    monkeypatch.setattr(gateway_main.LLM_ROUTER, "acompletion",
+                        AsyncMock(side_effect=_capture_completion))
+
+    client = H._stock_client(app)
+    blocked = False
+    try:
+        await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": f"the wifi password: {secret}"}],
+        )
+    except APIStatusError:
+        blocked = True
+    finally:
+        await auth_redis.aclose()
+
+    assert blocked, "unmaskable flagged credential must fail closed (block), not forward"
+    # The block happens BEFORE egress — the provider is never called with the raw value.
+    assert captured.get("redacted_prompt") is None, (
+        "phantom redaction: provider was called despite an unmaskable flagged span"
+    )
+
+
 @pytest.mark.asyncio
 async def test_b1_responses_tool_description_masked_span_never_egresses(monkeypatch):
     raw_phone = "89295 54991"
