@@ -147,3 +147,19 @@ Widened to `\d{1,5}`; FP-safe because the whole pattern is `+`-anchored (E.164 m
 order-ids/revenue never carry it). BY-DESIGN pass-throughs to LEAVE (non-phantom + high-FP
 + not-PII-per-oracle): bare 2+4+4 grouping, slash/underscore separators, "whatsapp" cue
 (common word, not a contact verb), and `00`-prefix intl (ambiguous with long account nums).
+
+## B1 — non-digit fail-closed (the chat egress gap the digit round missed)
+Egress=truth on the input/egress path has TWO sub-cases. The 2026-06-29 round closed the
+DIGIT case (Tier-2 evidence digit spans → main.py passes the verdict to redact_pii). The
+2026-06-30 round found the NON-DIGIT case open: a Tier-2 guard that RECOMMENDS redaction
+becomes action="flag"/threat_type="sensitive_content" (scanner.py:1370), main.py's flag
+branch calls redact_pii (= redact_all + redact_evidence_digit_spans, DIGIT-ONLY), and a
+natural-language credential/name/address is a TOTAL redact no-op → raw egressed while
+telemetry said redact. Criterion 1 demands fail-closed. FIX (main.py, after the redact/flag
+branches): byte-verify with `_redact_text_with_backstop(pre, post)`; if == pre and
+enforcement_mode=="block" → 403 block before acompletion. Mirrors the embeddings guard
+exactly. Cell: test_b1_chat_endpoint_fails_closed_on_unmaskable_flagged_span (stub
+scan_prompt → flag/sensitive_content, prompt carries an oracle-positive passphrase
+"correcthorsebatterystaple"; assert APIStatusError raised AND acompletion never called).
+ORACLE: aidefence_has_pii flags passwords/keys/SSN/email but NOT bare names/addresses — pick
+an oracle-positive unmaskable value or the leak proof is vacuous.
