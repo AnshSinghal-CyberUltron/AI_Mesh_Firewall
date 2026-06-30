@@ -1597,6 +1597,25 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   This is a gate-robustness fix, NOT masking — the isolation PRODUCT was independently MCP-proven correct
   (Execute -> 200 -> "allow") before the gate fix. NO frontend/backend product source change; D6 product
   is correct; D6 stays passes:true. ALL 17 stories now rigor-verified THIS round.
+- 2026-06-30 ROUND-CLOSE re-confirmation (fresh iteration, distrust-passes:true policy) — with ALL 17
+  already rigor-verified this round, I did NOT trust the written entries: I re-ran the two fully
+  DETERMINISTIC backend security/SDK gates from a clean shell in the CURRENT working tree (which carries
+  uncommitted parallel-MCP-loop edits to services/mcp-broker + test_mcp_sandbox_adversarial.py — NOT this
+  PRD's files) to prove no cross-loop regression leaked into the e2e-hardening backend core:
+    * `cd gateway && ./.venv/bin/python -m pytest tests/leakhunt -q` -> 142 passed/1 skipped (matches the
+      B-story entries exactly).
+    * `./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q` -> 46 passed/2
+      xpassed (the 2 documented non-strict D4/D5 cells; matches A1/C-story entries).
+  PLUS a fresh EGRESS=TRUTH independent-oracle proof THIS iteration (/tmp/egress_truth_probe.py): drove a
+  6-way multi-PII prompt (415-555-0142, cued 8929554991, bob@corp.example, ssn 123-45-6789, card 4111…,
+  sk-proj-… key, intl +91 98765 43210, order-id 5512347788) through the REAL InputScanner.redact_pii +
+  llm_router._redact_text_with_backstop egress path -> captured wire fully masked (***-***-0142 /
+  ***-***-4991 / b***@c***.example / ***-**-6789 / ****-****-****-1111 / sk-****5pqr / ***-***-3210) with
+  the order-id 5512347788 KEPT (no over-redaction). Cross-checked the EXACT captured bytes with the
+  INDEPENDENT ML oracle mcp__ruflo__aidefence_has_pii (regexes separate from patterns.py under test): RAW
+  prompt -> hasPII:true (positive control fires, so the negative is meaningful), captured egress ->
+  hasPII:false. The egress=truth + attestation-byte-verify Prime Invariants hold in the live tree NOW.
+  No source change; no regression; all 17 stories remain passes:true + rigor-verified this round. COMPLETE.
 
 ## MCP Frontend Adversarial Ralph Loop
 - 2026-06-30 FULL RESET — user requested restart from logical iter 1; killed regression batches; R1–R16 passes:false.
