@@ -1173,6 +1173,27 @@
   completed.response.status=='incomplete' + output_text=='Truncated' (length maps to incomplete, not a
   false completed). Framing helper _responses_sse (main.py:8188) confirmed canonical. NO source change
   needed; NO real gap; C3 stays passes:true. (Remaining for next round: C4-thin-endpoints.)
+- rigor-verified: C4-thin-endpoints 2026-06-30 — adversarially re-proved the 4 thin surfaces beyond
+  the conformance pass count. GATE GREEN clean-shell: SDK harness 46 passed/2 xpassed (the documented
+  non-strict D4 models.retrieve [main.py:12195 retrieve_model] + D5 stream cells); co-run with the NEW
+  durable gate ai_mesh_gateway/tests/test_c4_thin_endpoints_adversarial.py (6 cells) = 52 passed/2
+  xpassed, 0 regression. The new gate proves the C4 CLAIMS the happy-path cells don't assert:
+  (1) /v1/images/generations + /v1/audio/speech 404 carry the NESTED OpenAI envelope (error is a dict
+  with type+message, NOT the raw flat {"error":"not_found"} the _openai_surface_unimplemented handler
+  emits — the universal /v1 compat shim re-nests it) + an x-request-id header, so the stock SDK raises
+  a typed NotFoundError. (2) NO-FORK proof: a RECORDING acompletion stub captures egress; the SAME
+  prompt through /v1/chat/completions and /v1/completions hands the provider a BYTE-IDENTICAL egress
+  (synthesized messages == native user message AND redacted_prompt identical) — completions is a true
+  format adapter over proxy_chat (_dispatch_chat_internally re-enters proxy_chat with the original
+  scope/state, main.py:8170), not a re-implemented firewall. (3) egress-truth: if completions redacted,
+  the raw flagged phone 415-555-0147 is absent from redacted_prompt. (4) the firewall FIRES on
+  completions — an injection prompt blocks (400/403 + request_id) and NOTHING egresses (captured==[]).
+  (5) moderations is a real verdict via a benign/injection CONTRAST pair (benign flagged=False, injection
+  flagged=True + prompt_injection extra True, id modr-… joins _request_id). INDEPENDENT ORACLE (mcp ruflo
+  aidefence_scan, regexes separate from INPUT_SCANNER): injection → safe:false instruction_override
+  critical (matches flagged=True); benign → safe:true (matches flagged=False) — not a same-regex
+  coincidence. NO source change needed; C4 stays passes:true.
+  (Remaining for next round: A2 + B1-B5 leak stories, D1-D6 UI stories.)
 
 ## MCP Frontend Adversarial Ralph loop (prd-mcp-frontend-adversarial.json)
 - 2026-06-30 loop-restart: F0–F20 all passes:true (21/21). Regression R1–R3 pass; R4–R16 were pending.
