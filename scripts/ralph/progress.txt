@@ -1503,3 +1503,9 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   instead (line ~1791). lib/mcpColors.js DECISION maps allow->{Allow,success}; decisionInfo falls back to
   DECISION.error ("Error") for any falsy/unknown value -> the green "Allow" CANNOT render unless the backend
   body said decision=="allow". NO source change; NO real product gap; D4 stays passes:true.
+
+## MCP Frontend Adversarial Ralph Loop
+- 2026-06-30 FULL RESET — user requested restart from logical iter 1; killed regression batches; R1–R16 passes:false.
+
+## MCP Frontend Adversarial Ralph Loop
+- 2026-06-30 FULL RESET — user requested restart from logical iter 1; killed regression batches; R1–R16 passes:false; harness scripts + Makefile targets added.
