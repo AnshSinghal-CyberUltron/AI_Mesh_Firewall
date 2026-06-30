@@ -6,7 +6,7 @@ completion_promise: "COMPLETE and tested from frontend and backend"
 status: ACTIVE
 active_story: R9-regression-iter13
 prd: scripts/ralph/prd-mcp-frontend-adversarial.json
-note: Cursor Ralph Loop — iteration 8 gates green (R8 pass); starting iter 9.
+note: Cursor Ralph Loop — iteration 9 BLOCKED (docker/broker degraded after sustained load); R9 passes:false.
 ---
 
 # MCP Frontend Adversarial — Cursor Ralph Loop
@@ -151,9 +151,3 @@ Output `<promise>COMPLETE and tested from frontend and backend</promise>` only w
 - **Gate 2** (full adversarial pytest): **GREEN** — 13 passed in ~247s
 - **Gate 3** (frontend Playwright): **GREEN** — tools-call-ok
 - **R7-regression-iter11:** `passes:true`; scratchpad bumped to iteration 8
-
-### Iteration 8 (2026-06-30)
-- **Gate 1** (parallel org agents --full): **GREEN** — ~275s
-- **Gate 2** (full adversarial pytest): **GREEN** — 13 passed in ~271s
-- **Gate 3** (frontend Playwright): **GREEN** — tools-call-ok
-- **R8-regression-iter12:** `passes:true`; scratchpad bumped to iteration 9
