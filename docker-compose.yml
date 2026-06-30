@@ -113,7 +113,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 8
-      start_period: 45s
+      start_period: 120s
 
   workers:
     build:
@@ -137,6 +137,7 @@ services:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_started }
       redis: { condition: service_healthy }
+      control: { condition: service_healthy }
 
   workers-beat:
     build:
@@ -158,6 +159,7 @@ services:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_started }
       redis: { condition: service_healthy }
+      control: { condition: service_healthy }
 
   gateway:
     build:

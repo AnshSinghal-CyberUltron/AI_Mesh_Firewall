@@ -1,7 +1,7 @@
 import {
   getGatewayStorageKey,
   getStoredGatewayUrl,
-  isLocalDevBrowser,
+  isLocalBrowserHost,
   resolveBrowserGatewayBaseUrl,
 } from "./environmentUrls";
 
@@ -49,7 +49,7 @@ export function migrateGatewayStorage() {
   const resolved = resolveBrowserGatewayBaseUrl();
   const stored = getStoredGatewayUrl();
 
-  if (isLocalDevBrowser() && stored && stored !== resolved) {
+  if (isLocalBrowserHost() && stored && stored !== resolved) {
     try {
       const storedHost = new URL(stored).hostname.toLowerCase();
       const resolvedHost = new URL(resolved).hostname.toLowerCase();

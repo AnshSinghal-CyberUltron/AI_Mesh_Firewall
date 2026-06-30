@@ -26,5 +26,8 @@ COPY control/ai_mesh_control /app/control/ai_mesh_control
 COPY --from=builder /app/control/.venv /app/control/.venv
 
 WORKDIR /app/control
+COPY control/entrypoint.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 EXPOSE 8000
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "--proxy-headers", "main_app.asgi:application"]

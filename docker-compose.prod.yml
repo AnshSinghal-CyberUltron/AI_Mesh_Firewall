@@ -96,7 +96,7 @@ services:
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://aimeshfirewall.zeroshield.ai}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-https://aimeshgateway.zeroshield.ai}
       BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-https://aimeshbackend.zeroshield.ai}
-      SIMULATOR_DEFAULTS_ENABLED: ${SIMULATOR_DEFAULTS_ENABLED:-true}
+      SIMULATOR_DEFAULTS_ENABLED: ${SIMULATOR_DEFAULTS_ENABLED:-false}
       CHANNEL_LAYERS_REDIS_URL: redis://redis:6379/1
       ASGI_ALLOWED_ORIGINS: ${ASGI_ALLOWED_ORIGINS:-https://aimeshfirewall.zeroshield.ai,http://aimeshfirewall.zeroshield.ai,https://aimeshbackend.zeroshield.ai}
       POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-30}
