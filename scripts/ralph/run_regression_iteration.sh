@@ -9,11 +9,36 @@ LOG="$SCRIPT_DIR/regression.log"
 PRD="$SCRIPT_DIR/prd-mcp-frontend-adversarial.json"
 
 LOCK_DIR="$SCRIPT_DIR/.regression.lockdir"
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  echo "Another MCP regression iteration is already running (lock: $LOCK_DIR)" >&2
-  exit 1
+REGRESSION_LOCK_HELD_BY_BATCH=0
+batch_pid="${REGRESSION_BATCH_PID:-}"
+if [[ -n "$batch_pid" ]] && [[ -f "$LOCK_DIR/owner.pid" ]] && [[ "$(<"$LOCK_DIR/owner.pid")" == "$batch_pid" ]]; then
+  REGRESSION_LOCK_HELD_BY_BATCH=1
+elif mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo $$ >"$LOCK_DIR/owner.pid"
+else
+  stale_owner=""
+  if [[ -f "$LOCK_DIR/owner.pid" ]]; then
+    stale_owner="$(<"$LOCK_DIR/owner.pid")"
+  fi
+  if [[ -n "$stale_owner" ]] && kill -0 "$stale_owner" 2>/dev/null; then
+    echo "Another MCP regression iteration is already running (lock: $LOCK_DIR owner PID $stale_owner)" >&2
+    exit 1
+  fi
+  rm -rf "$LOCK_DIR"
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "Another MCP regression iteration is already running (lock: $LOCK_DIR)" >&2
+    exit 1
+  fi
+  echo $$ >"$LOCK_DIR/owner.pid"
 fi
-cleanup_regression_lock() { rmdir "$LOCK_DIR" 2>/dev/null || true; }
+cleanup_regression_lock() {
+  if (( REGRESSION_LOCK_HELD_BY_BATCH )); then
+    return 0
+  fi
+  if [[ -d "$LOCK_DIR" ]] && [[ -f "$LOCK_DIR/owner.pid" ]] && [[ "$(<"$LOCK_DIR/owner.pid")" == "$$" ]]; then
+    rm -rf "$LOCK_DIR"
+  fi
+}
 trap cleanup_regression_lock EXIT INT TERM
 BROKER_URL="${MCP_BROKER_URL:-http://127.0.0.1:8311}"
 ITER="${1:?Usage: run_regression_iteration.sh <iteration_number 5-20>}"
