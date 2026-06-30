@@ -1,0 +1,243 @@
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:19:03Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+run_parallel_org_agents FAIL: The operation was aborted due to timeout
+FAIL: parallel org agents --full (attempt 1/2) (exit 1)
+Retrying parallel org agents --full after 20s cooldown...
+--- parallel org agents --full (attempt 2/2) ---
+=== bootstrap: broker + gateway health ===
+run_parallel_org_agents FAIL: The operation was aborted due to timeout
+FAIL: parallel org agents --full (attempt 2/2) (exit 1)
+--- prep: docker cooldown before isolated pytest broker ---
+Error response from daemon: No such container: mcp-broker-adversarial-test
+d4ad8e281467
+2c8779b126ee
+live broker healthy at http://127.0.0.1:8311
+
+=== Regression iteration 1 (R1-regression-iter5) 2026-06-30T06:25:02Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:25:44Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+
+=== Regression iteration 1 (R1-regression-iter5) 2026-06-30T06:26:05Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+FAIL: parallel org agents --full (attempt 1/2) (exit 143)
+Retrying parallel org agents --full after 20s cooldown...
+
+=== Regression iteration 1 (R1-regression-iter5) 2026-06-30T06:26:27Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+
+=== Regression iteration 11 (R11-regression-iter15) 2026-06-30T06:26:35Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:27:15Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:27:39Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+
+=== Regression iteration 1 (R1-regression-iter5) 2026-06-30T06:28:11Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+
+=== Regression iteration 1 (R1-regression-iter5) 2026-06-30T06:28:47Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+
+=== Regression iteration 9 (R5-regression-iter9) 2026-06-30T06:29:36Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+
+=== Regression iteration 9 (R5-regression-iter9) 2026-06-30T06:30:00Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+FAIL: parallel org agents --full (attempt 1/2) (exit 143)
+Retrying parallel org agents --full after 20s cooldown...
+
+=== Regression iteration 5 (R1-regression-iter5) 2026-06-30T06:30:29Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:31:05Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+stub copied into adv-org-beta (2e8502fa84db)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+FAIL: parallel org agents --full (attempt 1/2) (exit 143)
+Retrying parallel org agents --full after 20s cooldown...
+
+=== Regression iteration 5 (R1-regression-iter5) 2026-06-30T06:31:31Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:32:14Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:32:44Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+FAIL: parallel org agents --full (attempt 1/2) (exit 143)
+Retrying parallel org agents --full after 20s cooldown...
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:33:14Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:34:07Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:34:34Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+
+=== Regression iteration 5 (R1-regression-iter5) 2026-06-30T06:35:25Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:35:38Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+stub copied into adv-org-beta (2e8502fa84db)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+OK org_worker adv-org-alpha broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK org_worker adv-org-beta broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+
+=== Regression iteration 5 (R1-regression-iter5) 2026-06-30T06:42:09Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:42:59Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+
+=== Regression iteration 5 (R1-regression-iter5) 2026-06-30T06:44:04Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+stub copied into adv-org-beta (2e8502fa84db)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:44:51Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:45:12Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+stub copied into adv-org-beta (2e8502fa84db)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:45:57Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+
+=== Regression iteration 9 (R5-regression-iter9) 2026-06-30T06:46:27Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:47:06Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+
+=== Regression iteration 9 (R5-regression-iter9) 2026-06-30T06:47:56Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+stub copied into adv-org-beta (2e8502fa84db)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+
+=== Regression iteration 9 (R5-regression-iter9) 2026-06-30T06:50:36Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+stub copied into adv-org-beta (2e8502fa84db)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:52:12Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:53:57Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)

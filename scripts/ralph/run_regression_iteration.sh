@@ -41,15 +41,19 @@ cleanup_regression_lock() {
 }
 trap cleanup_regression_lock EXIT INT TERM
 BROKER_URL="${MCP_BROKER_URL:-http://127.0.0.1:8311}"
-ITER="${1:?Usage: run_regression_iteration.sh <iteration_number 5-20>}"
+ITER="${1:?Usage: run_regression_iteration.sh <iteration_number 5-24>}"
 
-if (( ITER < 5 || ITER > 20 )); then
-  echo "iteration must be 5–20 (got $ITER)" >&2
+if (( ITER < 5 || ITER > 24 )); then
+  echo "iteration must be 5–24 (got $ITER)" >&2
   exit 1
 fi
 
 R_NUM=$((ITER - 4))
-R_ID="R${R_NUM}-regression-iter${ITER}"
+# R1–R16 map to regression iters 5–20; iters 21–24 are extra validation (no PRD story).
+R_ID=""
+if (( R_NUM >= 1 && R_NUM <= 16 )); then
+  R_ID="R${R_NUM}-regression-iter${ITER}"
+fi
 
 log() {
   echo "$*" | tee -a "$LOG"
@@ -130,7 +134,13 @@ prep_for_frontend() {
 }
 
 log ""
-log "=== Regression iteration $ITER ($R_ID) $(date -u +%FT%TZ) ==="
+LABEL="regression iter $ITER"
+if [[ -n "$R_ID" ]]; then
+  LABEL="$LABEL ($R_ID)"
+else
+  LABEL="$LABEL (extra validation, no PRD mark)"
+fi
+log "=== Regression iteration $ITER — $LABEL $(date -u +%FT%TZ) ==="
 
 FAILED=0
 
@@ -158,14 +168,18 @@ if (( FAILED != 0 )); then
   exit 1
 fi
 
-# Mark R-story passes:true in PRD
-if command -v jq >/dev/null 2>&1; then
-  tmp="$(mktemp)"
-  jq --arg id "$R_ID" '(.userStories[] | select(.id == $id) | .passes) = true' "$PRD" >"$tmp"
-  mv "$tmp" "$PRD"
-  log "Marked $R_ID passes:true in prd-mcp-frontend-adversarial.json"
+# Mark R-story passes:true in PRD (R1–R16 only)
+if [[ -n "$R_ID" ]]; then
+  if command -v jq >/dev/null 2>&1; then
+    tmp="$(mktemp)"
+    jq --arg id "$R_ID" '(.userStories[] | select(.id == $id) | .passes) = true' "$PRD" >"$tmp"
+    mv "$tmp" "$PRD"
+    log "Marked $R_ID passes:true in prd-mcp-frontend-adversarial.json"
+  else
+    log "WARN: jq not found — update $R_ID passes:true manually"
+  fi
 else
-  log "WARN: jq not found — update $R_ID passes:true manually"
+  log "Extra validation iter $ITER — no PRD story to mark"
 fi
 
 log "=== Regression iteration $ITER OK ==="

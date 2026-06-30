@@ -59,3 +59,15 @@ observability-apply:
 
 verify-observability:
 	bash scripts/verify-observability-local.sh
+
+# MCP frontend adversarial Ralph regression (run long loops in Terminal — see START_IN_TERMINAL.md)
+mcp-adversarial-reset:
+	bash scripts/ralph/mcp-adversarial-reset.sh
+
+mcp-adversarial-iter:
+	@test -n "$(ITER)" || (echo "Usage: make mcp-adversarial-iter ITER=1" && exit 1)
+	bash scripts/ralph/run_logical_iteration.sh $(ITER)
+
+mcp-adversarial-loop:
+	@echo "Run in Terminal (not Cursor subagent):"
+	@echo "  cd $(CURDIR) && for i in \$$(seq 1 20); do ./scripts/ralph/run_logical_iteration.sh \$$i || exit 1; done"

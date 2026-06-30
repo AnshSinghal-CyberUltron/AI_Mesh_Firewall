@@ -7,10 +7,11 @@ ultrathink. Work fully autonomously — never ask for confirmation (you run head
 ## Campaign rules (NON-NEGOTIABLE)
 
 1. **Minimum 20 iterations** before completion promise is valid; max 50.
-2. **Every iteration MUST run 2 parallel org agents** before marking ANY story `passes:true`:
+2. **Every iteration MUST run 2 parallel org agents FIRST** before marking ANY story `passes:true`:
    ```bash
-   node scripts/ralph/run_parallel_org_agents.mjs
+   node scripts/ralph/run_parallel_org_agents.mjs --full
    ```
+   Then adversarial pytest, then `frontend_parallel_orgs.mjs` (see Step 2).
 3. Frontend stories MUST verify via Playwright/browser (MCPConnectorPanel), not API-only.
 4. Use all available tools: ruflo MCP, Playwright MCP, browser skills, gateway venv pytest.
 5. Security: egress bytes = truth; never inject gateway/broker secrets into sandboxes.
@@ -20,25 +21,26 @@ ultrathink. Work fully autonomously — never ask for confirmation (you run head
 2. Read `scripts/ralph/prd-mcp-frontend-adversarial.json`. Pick the SINGLE highest-priority story
    with `passes:false` whose dependencies are all `passes:true`.
 3. If F0 not passing, start with F0-bootstrap.
-4. **Regression mode (iterations 5–20):** When F0–F20 all have `passes:true`, do NOT emit the
-   completion promise until R1–R16 also pass. Pick the lowest-numbered R-story with `passes:false`
-   (R1 = iteration 5 … R16 = iteration 20). Each R-story runs the **full gate** even when no new
-   feature work is needed:
+4. **Regression mode (logical iters 1–16 → R1–R16):** When F0–F20 all have `passes:true`, do NOT
+   emit the completion promise until R1–R16 also pass. Pick the lowest-numbered R-story with
+   `passes:false`. Each R-story runs the **full gate**:
    ```bash
-   ./scripts/ralph/run_regression_iteration.sh <iteration_number>
+   ./scripts/ralph/run_logical_iteration.sh <logical_1-20>
+   # maps logical 1 → regression iter 5 (R1) … logical 16 → iter 20 (R16)
    ```
-   Or manually: `--full` parallel org agents, full adversarial pytest, `frontend_parallel_orgs.mjs`.
+   **Operator note:** run long loops in a real Terminal (`scripts/ralph/START_IN_TERMINAL.md`), not
+   subagent shells (SIGTERM kills gates mid-run).
 
-## Step 2 — Parallel gate FIRST (before marking pass)
+## Step 2 — Full gate order (before marking pass)
 ```bash
-# Always run before flipping any story to passes:true:
-node scripts/ralph/run_parallel_org_agents.mjs
-# For F5/F6/F20 also:
+# 1) ALWAYS first — 2 parallel org workers (6 MCP servers each) + leak probe:
 node scripts/ralph/run_parallel_org_agents.mjs --full
+# 2) Backend adversarial pytest:
 cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_adversarial.py -q
-# Frontend stories:
-cd frontend && npm run lint && npm run build
+# 3) Frontend Playwright (MCPConnectorPanel per org):
 BASE_URL=http://127.0.0.1:8180 node tests/e2e/mcp_sandbox_adversarial/frontend_parallel_orgs.mjs
+# 4) R16 / logical iter 16 only:
+cd frontend && npm run lint && npm run build
 ```
 
 ## Step 3 — Implement that ONE story

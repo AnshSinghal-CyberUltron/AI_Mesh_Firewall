@@ -54,12 +54,12 @@
       "phase": "register"
     },
     {
-      "label": "new server card \"d4-probe-mqzemfsb\" appears in the list",
+      "label": "new server card \"d4-probe-mr0arloz\" appears in the list",
       "pass": true,
       "phase": "register"
     },
     {
-      "label": "backend GET lists the registered server \"d4-probe-mqzemfsb\"",
+      "label": "backend GET lists the registered server \"d4-probe-mr0arloz\"",
       "pass": true,
       "phase": "register"
     },
@@ -69,7 +69,7 @@
       "phase": "delete"
     },
     {
-      "label": "backend GET no longer lists \"d4-probe-mqzemfsb\" (side-effect free)",
+      "label": "backend GET no longer lists \"d4-probe-mr0arloz\" (side-effect free)",
       "pass": true,
       "phase": "delete"
     },

@@ -1,21 +1,12 @@
 {
-  "id": "session-1782799972372",
-  "startedAt": "2026-06-30T06:12:52.372Z",
-  "cwd": "/Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall",
   "context": {
     "lastMatchedPatterns": [
       "insight-1782192790800-ef9t",
       "insight-1782192790800-0pl7",
       "insight-1782192790800-7geu",
-      "insight-1782192790800-5vvi",
-      "insight-1782192790800-xuuk"
+      "insight-1782192790800-5r0f",
+      "insight-1782192790800-x17c"
     ]
   },
-  "metrics": {
-    "edits": 0,
-    "commands": 0,
-    "tasks": 0,
-    "errors": 0
-  },
-  "updatedAt": "2026-06-30T06:17:22.736Z"
+  "updatedAt": "2026-06-30T07:04:05.276Z"
 }

@@ -1477,3 +1477,29 @@ SOLO_BATCH_11_20 started PID=72075
 - Reconcile pass 3: removed stale lock; sole batch PID 73466 seq 5-20 (R1→R16).
 SOLO_BATCH_11_20 started PID=75266
 SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
+- rigor-verified: D4-ui-mcp 2026-06-30 — re-proved the MCP Guardrails UI (module 1.4, ?tab=firewall-1-4)
+  for REAL against the live stack (Vite :8180 -> control :8100 + gateway :8300; control healthy, gateway
+  /health 200, chromadb up). Build gate GREEN (cd frontend && npm run build, exit 0, 25.77s; only the
+  benign >500kB chunk-size hint). (1) DURABLE GATE LIVE: scripts/playwright_mcp_panels.mjs -> 27/27
+  asserts, 9 steps, 0 pageErrors, fresh screenshots runs/d4/ (01-module-1-4..06-observability). POSITIVE-
+  PATH honesty proven from DOM + REAL API (every assert cross-checks backend truth, never a flag):
+  rendered cards (21) == GET /api/mcp-connector/servers/ count (21); on-screen "Connected" badges (17) ==
+  backend connected (17); Register CRUD side-effect-free (POST 201 -> card+backend GET appear -> DELETE
+  204 -> both gone); scan-default Select PATCH backend-verified BOTH directions (tag->block->tag, 200/200);
+  Tool Discovery renders 207 backend-discovered tools (sample "echo"); Tool Execution live echo POST 200
+  -> backend decision=="allow" AND on-screen "Allow" badge + echoed "Echo: hello" preview mirror it;
+  Scan Controls + Security Policies + Observability tabs all render. INDEPENDENT BACKEND CROSS-CHECK
+  (separate from the gate's asserts): direct superuser curl of /api/mcp-connector/servers/ = 21 servers /
+  17 connected, warm.
+  (2) ADVERSARIAL NEGATIVE-PATH honesty (the gate covers only ALLOW; the invariant also forbids a phantom
+  "Allow" on a non-allow outcome): drove the SAME tools/call endpoint with the EXACT UI payload shape
+  ({name,arguments,server_slug}) for two non-allow cases — schema-invalid echo ({"WRONG":"x"}) -> HTTP 400
+  reason=invalid_arguments with NO `decision` field; nonexistent tool -> HTTP 403 reason=tool_not_registered
+  with NO `decision` field. Control case (valid echo) -> HTTP 200 decision="allow".
+  (3) CODE-PROOF the badge cannot lie (tree unchanged): MCPConnectorPanel.jsx:1783-1785 renders the verdict
+  badge ONLY inside `{executeResult.decision && (...)}` (guarded on a truthy decision); on `!res.ok` the
+  handler (line ~908) sets executeResult={...body,error:true,status} and the adversarial 400/403 bodies
+  carry no `decision` -> the verdict badge is skipped and an honest "HTTP <status>" warning badge renders
+  instead (line ~1791). lib/mcpColors.js DECISION maps allow->{Allow,success}; decisionInfo falls back to
+  DECISION.error ("Error") for any falsy/unknown value -> the green "Allow" CANNOT render unless the backend
+  body said decision=="allow". NO source change; NO real product gap; D4 stays passes:true.
