@@ -1616,6 +1616,31 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   prompt -> hasPII:true (positive control fires, so the negative is meaningful), captured egress ->
   hasPII:false. The egress=truth + attestation-byte-verify Prime Invariants hold in the live tree NOW.
   No source change; no regression; all 17 stories remain passes:true + rigor-verified this round. COMPLETE.
+- 2026-06-30 FRESH ADVERSARIAL HUNT (distrust-passes:true; new attack angle not covered by the written
+  entries) — targeted the ONE residual the B-stories proved only at the router/helper level: PII-egress
+  redaction on the /v1/responses SDK surface. Re-ran both deterministic backend gates from a clean shell
+  in the CURRENT tree (parallel-MCP-loop edits to services/mcp-broker present but untouched): leakhunt 142
+  passed/1 skipped; SDK harness 46 passed/2 xpassed (the documented non-strict D4/D5 cells). Then TRACED
+  the LIVE /v1/responses HTTP handler at current line numbers and found a STRUCTURAL proof STRONGER than
+  B4's `test_b4_responses_input_redaction_matches_chat_egress` (which asserts only at the helper level):
+    * proxy_responses (main.py:8484) builds chat_body via responses_to_chat (responses_adapters.py:229),
+      which routes ALL user-supplied text into chat["messages"] — `instructions`→system message,
+      `input`(str)→user message, `input`(list)→typed messages via _input_item_to_message — then dispatches
+      via _dispatch_chat_internally (main.py:8263), which RE-ENTERS the UNCHANGED proxy_chat with the
+      ORIGINAL scope/state (path rewritten to /v1/chat/completions). So the responses surface egresses via
+      the CHAT path (LLM_ROUTER.acompletion), NOT via aresponses at all — its egress bytes ARE chat egress
+      bytes, produced by the identical proxy_chat→real-router→_redact_text_with_backstop pipeline that
+      B1/B2/B4 already capture and prove honest. There is literally no separate responses redaction code
+      that could diverge or leak (corrects the B4 comment block's premise that aresponses funnels the
+      responses input — the HTTP handler uses the chat path).
+    * DIFFERENTIAL invariant holds for the passthrough fields too: responses_to_chat's _RESP_DIRECT_PASSTHROUGH
+      (tools, metadata, temperature, …) is forwarded into chat_body, and these are the SAME passthrough
+      fields the direct /v1/chat/completions path forwards — so /v1/responses can egress NOTHING that
+      /v1/chat/completions wouldn't; any tool-definition/metadata scanning question is a chat concern,
+      identical on both paths, and outside the B1-B5 message/embedding/RAG egress scope.
+  CONCLUSION: no responses-specific leak gap; the existing chat egress captures + the re-entrant-dispatch
+  structural proof fully cover the responses surface. NO source change; no regression; all 17 stories
+  remain passes:true + rigor-verified this round. COMPLETE.
 
 ## MCP Frontend Adversarial Ralph Loop
 - 2026-06-30 FULL RESET — user requested restart from logical iter 1; killed regression batches; R1–R16 passes:false.
