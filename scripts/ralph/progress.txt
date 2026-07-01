@@ -1887,3 +1887,7 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   pinecone policy + compile_and_push (version 6 → `3::docs custom allow`). Competing ralph.sh PIDs 33458/33544
   noted (Docker contention). Re-ran ALL gates GREEN: backend 46p/2xp + 1005p; frontend lint+build; stack
   8180/8100/8300; playwright_demo 23/23; live_sdk 6/6. E1 passes:true confirmed.
+- 2026-07-01 E1 iter 5 ROUND-CLOSE (distrust passes:true): re-ran FULL E1 gate stack from clean shell.
+  ALL GREEN — test_openai_sdk_compat 46p/2xp; full pytest 1005p/18sk/7xf/2xp; frontend build OK; stack
+  :8180/:8100/api/health/:8300 200; playwright_demo 23/23 asserts 6/6 steps 0 pageErrors (~95s);
+  live_gateway_sdk 6/6 PASS (e.request_id + typed errors on 400/404). No product gap; E1 passes:true.
