@@ -12,6 +12,9 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 # shellcheck disable=SC1091
 set -a && source .env && set +a
 
+# Container-only cache paths from .env/docker-compose must not leak into local npm ci.
+unset NPM_CONFIG_CACHE UV_CACHE_DIR XDG_CACHE_HOME
+
 export VITE_FRONTEND_BASE_URL="${VITE_FRONTEND_BASE_URL:-${FRONTEND_ORIGIN:-https://aimeshfirewall.zeroshield.ai}}"
 export VITE_BACKEND_BASE_URL="${VITE_BACKEND_BASE_URL:-${BACKEND_PUBLIC_URL:-https://aimeshbackend.zeroshield.ai}}"
 export VITE_GATEWAY_SAME_ORIGIN="${VITE_GATEWAY_SAME_ORIGIN:-false}"
