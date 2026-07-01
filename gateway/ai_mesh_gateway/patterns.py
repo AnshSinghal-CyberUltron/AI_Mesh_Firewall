@@ -24,6 +24,26 @@ def compile_pattern(pattern: str) -> re.Pattern[str]:
     return re.compile(pattern, re.IGNORECASE)
 
 
+# B2-redactor-coverage: a trailing 10-digit US phone that may carry a SINGLE
+# separator (space / dot / hyphen) between groups. Used ONLY in the
+# context-gated ``phone_us_bare_contextual`` pattern below, so a phone cue
+# always precedes it — keeping order-id / revenue runs (which never carry a
+# phone cue) untouched. The branches enumerate every realistic grouping whose
+# digits sum to exactly 10 (contiguous, 5+5, 4+6, 3-3-4, 3+7); the trailing
+# ``\b`` plus the fixed total prevents swallowing a longer numeric id (an
+# 11+ digit run fails ``\b`` after 10 contiguous digits and has no matching
+# split branch, so it is left raw rather than partially masked). Every
+# quantifier is fixed and each separator is mandatory in its branch — no
+# ambiguous optional-repeat, so it stays LINEAR-time (no ReDoS).
+_BARE_PHONE_10_SPLIT = (
+    r"(?:\d{10}"
+    r"|\d{5}[\s.\-]\d{5}"
+    r"|\d{4}[\s.\-]\d{6}"
+    r"|\d{3}[\s.\-]\d{3}[\s.\-]\d{4}"
+    r"|\d{3}[\s.\-]\d{7})"
+)
+
+
 PII_PATTERNS: Dict[str, str] = {
     "credit_card": r"\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b",
     "ssn": r"\b\d{3}-\d{2}-\d{4}\b",
@@ -79,7 +99,14 @@ PII_PATTERNS: Dict[str, str] = {
     # run-together (`\d{10,15}` right after `+`) or separator-grouped numbers, so an
     # international number with the country code split off by a single dash leaked —
     # incl. through redact_all (the scrubber used on guard-model evidence/advisory).
-    "phone_intl": r"\+(?:\d{10,15}|\d{1,4}[\s\-]?\d{6,12}|\d{1,3}(?:[\s\-]\d{1,4}){2,6})\b",
+    # B2 rigor: the grouped branch capped each group at 4 digits, so the extremely
+    # common 5-digit grouping ("+91 98765 43210", Indian/EU mobiles) escaped while the
+    # docstring claimed to cover separated international numbers. The cap is now {1,5}
+    # so 5+5 groupings are masked too. FP-safety is structural — the leading '+' is a
+    # distinctive E.164 marker (order-id / revenue runs never carry it) and every group
+    # is a fixed bounded quantifier under a single non-nested repeat, so it stays
+    # LINEAR-time (no ReDoS).
+    "phone_intl": r"\+(?:\d{10,15}|\d{1,4}[\s\-]?\d{6,12}|\d{1,3}(?:[\s\-]\d{1,5}){2,6})\b",
     # Dotted phone ("415.555.0142"). The 3.3.4 dotted grouping is distinctive;
     # fixed quantifiers keep it linear and the \b bounds avoid swallowing
     # adjacent digits. Version strings ("1.2.3") and dotted-quad IPs do not fit
@@ -87,12 +114,55 @@ PII_PATTERNS: Dict[str, str] = {
     "phone_dotted": r"\b\d{3}\.\d{3}\.\d{4}\b",
     # Contextual bare 10-digit US phone. Tier-2 detects these semantically, but
     # phone_us intentionally skips separatorless runs (order IDs, revenue figures).
-    # Only match when explicit phone/contact context immediately precedes the digits
-    # (e.g. "my phone number is 8929554991") so enforcement redaction and the
-    # upstream LLM never see raw PII the guard model already flagged.
+    # Only match when an explicit phone/contact lead-in immediately precedes the
+    # digits so enforcement redaction and the upstream LLM never see raw PII the
+    # guard model already flagged — while order ids ("order 8929554991") never match.
+    #
+    # WIRE-CAPTURE LEAK FIX: the original branch covered only "phone/mobile/cell/tel
+    # [number] is/:" and MISSED the most common phrasing — an imperative contact verb
+    # ("call/text/reach me at 8929554991"). A real-fleet mitmproxy capture caught the
+    # bare phone forwarded RAW to OpenRouter: detect_pii saw only a co-occurring SSN,
+    # so redacted_content kept the phone raw, and _apply_redaction's digit backstop
+    # (which preserves any run already present in redacted_content as a value the
+    # firewall chose to keep) let it ride. Detecting it HERE masks it everywhere
+    # downstream — verdict, redact_pii/redacted_content, redact_all, and the backstop.
+    # B2: the trailing value broadened from contiguous ``\d{10}`` to
+    # ``_BARE_PHONE_10_SPLIT`` so separator-split 10-digit phones behind a phone
+    # cue ("please call me at 89295 54991" — the G0 5+5 leak) are also masked.
+    # Context-gating is unchanged, so order-id / revenue runs (no phone cue) are
+    # still untouched.
+    # B4 (path-divergence leak): the imperative branch required the contact verb to
+    # IMMEDIATELY precede "at/on" (optionally "me/us back"), so natural object words
+    # ("call THE CUSTOMER BACK at 8929554991", "call BACK THE CUSTOMER at ...") and a
+    # cue split across the sentence ("reach me at bob@corp.example OR ON 8929554991")
+    # slipped through — the bare phone then egressed RAW at the RAG-ingest / embeddings
+    # path (whose backstop only masks runs the firewall already removed) while the
+    # QUERY path's blanket digit backstop masked it, a redaction DIVERGENCE between the
+    # two embedding paths. The gap is now a BOUNDED, DIGIT-FREE, single-line lazy run
+    # (``[^\d\n]{0,40}?``): still gated on a contact verb + "at/on" + a 10-digit value,
+    # so order-id / revenue runs (no contact verb) stay untouched, and because the gap
+    # contains no digits the trailing phone is the only maskable run in the span. The
+    # quantifier is bounded over a negated char class (no nested repeat) — LINEAR-time.
     "phone_us_bare_contextual": (
+        r"(?:"
+        # "phone/mobile/cell/tel [number] is/:" 8929554991
         r"\b(?:phone|mobile|cell|tel(?:ephone)?)\s*(?:number|no\.?|#)?\s*(?:is|:)\s*"
-        r"\d{10}\b"
+        # imperative contact: "call/text/dial/ring/sms/reach/contact ...<=40 non-digit
+        # chars, same line...> at/on" 8929554991
+        r"|\b(?:call|text|dial|ring|sms|reach|contact|phone)\b[^\d\n]{0,40}?\b(?:at|on)\s+"
+        # B2 rigor (sms/whatsapp direct-adjacency leak): a STRONG dialing/messaging verb
+        # placed IMMEDIATELY before the number with no "at/on" connector ("sms 89295 54991",
+        # "whatsapp 8929554991", "dial 4155550142") leaked raw because the at/on branch above
+        # demands the connector and Tier-2 did not flag it. The gap here is whitespace/colon
+        # ONLY (``[:\s]+``) — no intervening words or digits — so the curated phone verb must
+        # sit directly on the value; order-id phrasings ("call 5000 customers", "text the
+        # 1234567890 line") never match because the 10-digit grouping must START right after
+        # the cue. Verbs limited to unambiguous dialing/messaging cues (no "message"/"msg"/
+        # "reach"/"contact" here — those stay gated on at/on) to keep FP near-zero.
+        r"|\b(?:call|text|dial|ring|sms|whatsapp|telegram|imessage)\b[:\s]+"
+        # possessive: "my/the [phone/mobile/cell] number/no/# [is]" 8929554991
+        r"|\b(?:my|the)\s+(?:phone\s+|mobile\s+|cell\s+)?(?:number|no\.?|#)\s+(?:is\s+)?"
+        r")" + _BARE_PHONE_10_SPLIT + r"\b"
     ),
     # N-CRED FIX: the original r"\bsk-[a-zA-Z0-9]{32,}\b" required an UNBROKEN
     # alphanumeric run, so it MISSED every modern hyphenated key format —
@@ -488,12 +558,13 @@ def _mask_secret_assignment(m: re.Match) -> str:
 
 
 def _mask_phone_bare_contextual(m: re.Match) -> str:
-    """Mask only the trailing 10-digit run in a contextual phone phrase."""
+    """Mask only the trailing 10-digit phone (contiguous OR separator-split) in a
+    contextual phone phrase, preserving the cue prefix."""
     s = m.group(0)
-    digits_match = re.search(r"\d{10}\b", s)
+    digits_match = compile_pattern(_BARE_PHONE_10_SPLIT + r"\b").search(s)
     if not digits_match:
         return s
-    digits = digits_match.group(0)
+    digits = re.sub(r"\D", "", digits_match.group(0))
     masked = f"***-***-{digits[-4:]}"
     return s[: digits_match.start()] + masked + s[digits_match.end() :]
 
@@ -577,6 +648,28 @@ def redact_all(text: str) -> str:
             result = compiled.sub(masker, result)
         else:
             result = compiled.sub(f"[{cred_type.upper()}_REDACTED]", result)
+    # E15: internal infrastructure leakage — surgically mask a REAL internal
+    # NETWORK address (private IPv4 / internal hostname / internal URL) so it can
+    # never egress raw on the client channel, matching PII's always-redact-when-
+    # detected behaviour. Canonical example/gateway addresses (the textbook
+    # 192.168.0.1) are exempt so benign educational answers aren't degraded. File
+    # paths are intentionally NOT masked here — they are far too false-positive-
+    # prone (legitimate in code answers) and stay at the softer 'flag' tier.
+    for _infra_type in ("internal_ipv4", "internal_hostname", "internal_url"):
+        _infra_pat = IP_LEAKAGE_PATTERNS.get(_infra_type)
+        if not _infra_pat:
+            continue
+        _infra_compiled = compile_pattern(_infra_pat)
+
+        def _infra_sub(m, lt=_infra_type):
+            val = m.group(0)
+            if lt == "internal_ipv4" and val in _IP_LEAKAGE_EXAMPLE_ADDRS:
+                return val
+            if lt == "internal_url" and _ip_url_host(val) in _IP_LEAKAGE_EXAMPLE_ADDRS:
+                return val
+            return f"[{lt.upper()}_REDACTED]"
+
+        result = _infra_compiled.sub(_infra_sub, result)
     return result
 
 

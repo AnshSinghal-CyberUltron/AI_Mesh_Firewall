@@ -11,7 +11,36 @@ preserving the upstream model slug the gateway operator configured.
 """
 from __future__ import annotations
 
+import os
 from urllib.parse import urlparse
+
+# Llama 3.1 70B is not offered in every Bedrock region (e.g. ap-south-1).
+_REGION_BEDROCK_MODEL_FALLBACKS: dict[str, dict[str, str]] = {
+    "ap-south-1": {
+        "bedrock/meta.llama3-1-70b-instruct-v1:0": "bedrock/meta.llama3-70b-instruct-v1:0",
+    },
+}
+
+
+def resolve_bedrock_model_id(model_id: str, *, region: str = "") -> str:
+    """
+    Map a configured Bedrock model id to one that exists in *region*.
+
+    Honors ``BEDROCK_LLAMA_MODEL_ID`` when set (full LiteLLM model slug).
+    """
+    mid = (model_id or "").strip()
+    if not mid:
+        return mid
+    env_override = os.environ.get("BEDROCK_LLAMA_MODEL_ID", "").strip()
+    if env_override:
+        return env_override
+    region_key = (
+        (region or "").strip().lower()
+        or os.environ.get("BEDROCK_REGION", "").strip().lower()
+        or os.environ.get("AWS_DEFAULT_REGION", "").strip().lower()
+    )
+    fallback = (_REGION_BEDROCK_MODEL_FALLBACKS.get(region_key) or {}).get(mid)
+    return fallback or mid
 
 # Providers that always use their own SDK — never force OpenAI compat.
 _NATIVE_SDK_PROVIDERS = frozenset(
@@ -89,3 +118,95 @@ def normalize_litellm_params(params: dict, *, provider: str = "") -> dict:
         return out
     out["custom_llm_provider"] = "openai"
     return out
+
+
+def _apply_bedrock_aws_fields(
+    params: dict,
+    *,
+    access_id: str = "",
+    secret: str = "",
+    default_region: str = "",
+) -> dict:
+    """Map IAM credentials into LiteLLM Bedrock boto3 fields (never ``api_key``)."""
+    out = dict(params or {})
+    out.pop("api_key", None)
+    if access_id:
+        out["aws_access_key_id"] = access_id
+    if secret:
+        out["aws_secret_access_key"] = secret
+    region = str(out.get("aws_region_name") or "").strip() or (default_region or "").strip()
+    if region:
+        out["aws_region_name"] = region
+    return out
+
+
+def apply_bedrock_env_credentials(
+    params: dict,
+    *,
+    env_access_key: str = "",
+    env_secret_key: str = "",
+    default_region: str = "",
+) -> dict:
+    """
+    Apply gateway ``.env`` AWS credentials for Bedrock models (development default).
+
+    Bedrock inference uses ``AWS_ACCESS_KEY_ID``, ``AWS_SECRET_ACCESS_KEY``, and
+    ``BEDROCK_REGION`` from the gateway environment — not a generic LiteLLM
+    ``api_key`` field.
+    """
+    return _apply_bedrock_aws_fields(
+        params,
+        access_id=(env_access_key or "").strip(),
+        secret=(env_secret_key or "").strip(),
+        default_region=default_region,
+    )
+
+
+def apply_bedrock_byok_credentials(
+    params: dict,
+    raw_credential: str,
+    *,
+    env_access_key: str = "",
+    env_secret_key: str = "",
+    default_region: str = "",
+) -> dict:
+    """
+    Map org BYOK credentials into LiteLLM Bedrock boto3 fields.
+
+    Supported ``raw_credential`` formats:
+    - ``AKIA...:secret`` — access key id and secret access key
+    - ``AKIA...`` only — access key id; secret taken from *env_secret_key* when set
+
+    Passing only an access key id as LiteLLM ``api_key`` makes Bedrock return
+    "Invalid API Key format: Must start with pre-defined prefix".
+    """
+    raw = (raw_credential or "").strip()
+    if not raw:
+        return apply_bedrock_env_credentials(
+            params,
+            env_access_key=env_access_key,
+            env_secret_key=env_secret_key,
+            default_region=default_region,
+        )
+
+    access_id = ""
+    secret = ""
+
+    if ":" in raw:
+        left, right = raw.split(":", 1)
+        access_id = left.strip()
+        secret = right.strip()
+    elif raw.startswith("AKIA"):
+        access_id = raw
+        secret = (env_secret_key or "").strip()
+    else:
+        out = dict(params or {})
+        out["api_key"] = raw
+        return out
+
+    return _apply_bedrock_aws_fields(
+        params,
+        access_id=access_id,
+        secret=secret,
+        default_region=default_region,
+    )

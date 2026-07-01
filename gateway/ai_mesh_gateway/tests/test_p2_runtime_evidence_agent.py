@@ -183,9 +183,11 @@ async def test_header_present_models_retrieve_404(appctx):
 
 @pytest.mark.asyncio
 async def test_header_present_catchall_404(appctx):
+    # /v1/completions is now implemented (C4), so probe a surface that is STILL
+    # unimplemented (/v1/images) to assert the catch-all 404 carries x-request-id.
     app, _ = appctx
     async with _raw(app) as rc:
-        r = await rc.post("/v1/completions", json={"model": "gpt-4o-mini", "prompt": "hi"})
+        r = await rc.post("/v1/images/generations", json={"model": "dall-e-3", "prompt": "hi"})
     assert r.status_code == 404, r.text
     assert _RID_RE.match(_hdr(r) or ""), f"catch-all 404 header missing: {dict(r.headers)}"
 

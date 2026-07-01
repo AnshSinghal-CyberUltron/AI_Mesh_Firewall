@@ -424,6 +424,7 @@ CONFIG_SYNC = None
 AGENT_ID = None
 LLM_ROUTER = None
 POLICY_SYNC = None
+THREAT_INTEL_SYNC = None
 RATE_LIMITER = None
 INPUT_SCANNER = None
 VECTOR_POLICY_SYNC = None
@@ -2506,8 +2507,25 @@ def _launch_chat_stream_response(
     # the original requested name; fall back to the resolved body model.
     _stream_echo_model = (getattr(route_selection, "requested_model", "") or model or "")
 
+    # E13: re-check the ACTIVE model's live kill-switch / model-state DURING the
+    # stream (throttled inside the router chunk loop) so an operator who trips the
+    # kill-switch mid-stream stops the remainder, not just future requests. The
+    # active model is body["model"] (post-reroute) and key_prefix is the caller's
+    # credential prefix — the same inputs the request-gate kill-switch check uses.
+    _midstream_state_check = _build_midstream_state_check(
+        str(body.get("model", "") or ""),
+        org_slug or "default",
+        getattr(auth_ctx, "prefix", "") if auth_ctx else "",
+    )
+
     async def _provider_stream():
-        async for chunk in LLM_ROUTER.acompletion_stream(body, redacted_prompt, metrics=stream_metrics, echo_model=_stream_echo_model):
+        async for chunk in LLM_ROUTER.acompletion_stream(
+            body,
+            redacted_prompt,
+            metrics=stream_metrics,
+            echo_model=_stream_echo_model,
+            state_check=_midstream_state_check,
+        ):
             yield chunk
 
     inner = _provider_stream()
@@ -2704,14 +2722,33 @@ def _chat_capable_models(routing_models: list[dict] | None) -> list[dict]:
 
 def _filter_inference_eligible_models(routing_models: list[dict] | None) -> list[dict]:
     """Org-connected customer models only — not ZeroShield guard / internal scan models."""
+    eligible, _reserved = _partition_inference_eligible_models(routing_models)
+    return eligible
+
+
+def _partition_inference_eligible_models(
+    routing_models: list[dict] | None,
+) -> tuple[list[dict], list[str]]:
+    """Return (eligible models, reserved model names dropped from stale routing pools)."""
+    try:
+        from platform_models import is_platform_model_name as _is_reserved_name
+    except ImportError:
+        from .platform_models import is_platform_model_name as _is_reserved_name  # type: ignore
+
     models = routing_models or []
     eligible: list[dict] = []
+    reserved_dropped: list[str] = []
     for model in models:
         if _is_guard_only_model(model):
             continue
         if not model.get("is_active", True):
             continue
-        if not (model.get("model_name") or model.get("model_id")):
+        name = str(model.get("model_name") or "").strip()
+        model_id = str(model.get("model_id") or "").strip()
+        if not name and not model_id:
+            continue
+        if _is_reserved_name(name) or (model_id and _is_reserved_name(model_id)):
+            reserved_dropped.append(name or model_id)
             continue
         provider = str(model.get("provider") or "").strip().lower()
         api_key_set = bool(model.get("api_key_set"))
@@ -2732,7 +2769,27 @@ def _filter_inference_eligible_models(routing_models: list[dict] | None) -> list
         ):
             continue
         eligible.append(model)
-    return eligible
+    return eligible, reserved_dropped
+
+
+def _filter_router_serviceable_models(
+    inference_models: list[dict],
+    active_model_names: list[str] | None,
+) -> tuple[list[dict], list[str]]:
+    """Keep only models present in the LiteLLM router's active model groups."""
+    active = {str(n).strip() for n in (active_model_names or []) if n}
+    if not active:
+        return inference_models, []
+    serviceable: list[dict] = []
+    excluded: list[str] = []
+    for model in inference_models:
+        name = str(model.get("model_name") or "").strip()
+        model_id = str(model.get("model_id") or name).strip()
+        if name in active or model_id in active:
+            serviceable.append(model)
+        else:
+            excluded.append(name or model_id)
+    return serviceable, excluded
 
 
 async def _drop_isolated_or_killed_candidates(models, org_slug: str, key_prefix: str):
@@ -2780,6 +2837,64 @@ async def _drop_isolated_or_killed_candidates(models, org_slug: str, key_prefix:
             excluded, org_slug,
         )
     return kept, excluded
+
+
+def _build_midstream_state_check(model: str, org_slug: str, key_prefix: str):
+    """E13: build the async state-check callback handed to
+    ``LLM_ROUTER.acompletion_stream``.
+
+    A stream that has STARTED has no per-chunk policy gate, so if an operator
+    trips the kill-switch (or model-state isolation) for the ACTIVE model DURING
+    an active stream, the gateway would keep streaming the remainder from the
+    now-disabled model. The router calls this callback THROTTLED inside the chunk
+    loop; we return ``True`` ONLY on a DEFINITIVE kill/isolate verdict so the
+    router halts the stream with a terminal error SSE.
+
+    FAIL-OPEN: any error (Redis down, import failure, REDIS unavailable, missing
+    model) returns ``False`` — a transient hiccup must never terminate a
+    legitimate live stream. Only a concrete ``is_killed`` / ``isolated`` /
+    ``suspended`` verdict ends the stream. Mirrors the dual-check the
+    kill-switch reroute path performs at the request gate (check_kill_switch +
+    check_model_state) so mid-stream and pre-stream enforcement agree.
+    """
+    if not model or REDIS_CLIENT is None:
+        return None
+
+    async def _check() -> bool:
+        try:
+            try:
+                from model_state import check_model_state as _cms
+                from kill_switch import check_kill_switch as _cks
+            except ImportError:
+                from .model_state import check_model_state as _cms
+                from .kill_switch import check_kill_switch as _cks
+            ks = await _cks(REDIS_CLIENT, model, org_slug or "", key_prefix or "")
+            # FAIL-OPEN mid-stream: check_kill_switch fails CLOSED on a Redis error
+            # by RETURNING is_killed=True with scope='redis_unavailable' (correct for
+            # the request gate). But a transient Redis blip must NOT tear down an
+            # ALREADY-ADMITTED live stream, so the redis-unavailable artifact is NOT
+            # treated as a kill here. A REAL operator kill (scope credential/org_model)
+            # still halts the stream.
+            if getattr(ks, "is_killed", False) and \
+                    str(getattr(ks, "scope", "")) != "redis_unavailable":
+                return True
+            ms = await _cms(REDIS_CLIENT, model, org_slug or "default")
+            # Mirror _drop_isolated_or_killed_candidates: an 'alert'-only degraded
+            # model is NOT disabled, so do not terminate on it. Also fail-OPEN on the
+            # model-state Redis-error/malformed artifact (status 'suspended' with a
+            # 'Redis unavailable' / 'Malformed state data' reason) — only a REAL
+            # isolate/suspend halts the stream.
+            _ms_reason = str(getattr(ms, "reason", "") or "")
+            if str(getattr(ms, "status", "active")) in ("isolated", "suspended") and \
+                    str(getattr(ms, "action", "")) != "alert" and \
+                    not _ms_reason.startswith(("Redis unavailable", "Malformed state data")):
+                return True
+        except Exception:
+            # FAIL-OPEN: never kill a legitimate stream on a check error.
+            return False
+        return False
+
+    return _check
 
 
 def _filter_embedding_eligible_models(routing_models: list[dict] | None) -> list[dict]:
@@ -3074,6 +3189,114 @@ def _output_guard_telemetry_meta(verdict, *, raw_output: str, sanitized_output: 
     return output_guard_telemetry_meta(verdict, raw_output=raw_output, sanitized_output=sanitized_output)
 
 
+async def _scan_redact_embedding_inputs(
+    texts: list[str],
+    org_config: dict,
+) -> tuple[list[str], dict | None]:
+    """G1/G3/G4: scan + redact PII/secrets in embedding inputs before they leave
+    the gateway, mirroring the chat path's pre-LLM input redaction.
+
+    Both ``/v1/embeddings`` (proxy_embeddings) and RAG-ingest send raw text to an
+    upstream embedding provider. Unlike ``/v1/chat``, that text was NEVER scanned
+    or redacted, so a customer email/SSN/API-key was embedded verbatim by the
+    third-party provider. This helper closes that gap with the SAME tier-1 input
+    scanner + verdict-aware redactor the chat path uses, gated by the SAME
+    ``input_scan_enabled`` config so there is no behavior change when input
+    scanning is disabled.
+
+    Tier-1 only (``scan_prompt`` — NOT ``scan_prompt_with_tier2``): embeddings are
+    batched/large, so the per-item ML round-trip of Tier-2 is intentionally NOT run
+    here (parity with the moderations surface).
+
+    Returns ``(redacted_texts, None)`` on success. When an input carries PII/secret
+    that genuinely CANNOT be masked (redaction was a no-op AND the fail-closed digit
+    backstop also can't mask it), returns ``(partial_texts, block_meta)`` where
+    ``block_meta`` is ``{"blocked": True, "reason": ..., "index": i}`` so the caller
+    fails closed rather than embedding the raw value (G4).
+    """
+    # No-op (and therefore NO behavior change) when scanning is disabled or the
+    # scanner is unavailable. This is REQUIRED for the no-regression guarantee.
+    if INPUT_SCANNER is None or not org_config.get("input_scan_enabled", True):
+        return texts, None
+
+    # B4 (egress parity / one redaction implementation): redact embedding inputs with
+    # the SAME deterministic egress redactor the chat & operator-simulator path uses
+    # (``LLMRouter._apply_redaction`` -> ``llm_router._redact_text_with_backstop``), so
+    # /v1/embeddings and RAG-ingest egress are BYTE-IDENTICAL to chat for the same
+    # input. ``redact_pii`` (== ``redact_all`` + Tier-2 evidence-digit-spans) is the
+    # firewall's authoritative "what must never reach the provider"; the shared
+    # backstop then masks ONLY digit runs the firewall removed — so an order-id the
+    # firewall deliberately KEPT stays intact (no over-redaction divergence) while any
+    # separator-split phone the firewall masked can never ride raw (egress = truth).
+    try:
+        from llm_router import _redact_text_with_backstop  # type: ignore[no-redef]
+    except ImportError:  # pragma: no cover - packaging fallback
+        from .llm_router import _redact_text_with_backstop  # type: ignore[no-redef]
+
+    redacted_texts: list[str] = []
+    for i, text in enumerate(texts):
+        if not isinstance(text, str) or not text.strip():
+            redacted_texts.append(text)
+            continue
+
+        verdict = await INPUT_SCANNER.scan_prompt(text)
+        red_pii = INPUT_SCANNER.redact_pii(text, verdict=verdict)
+
+        _detected = (
+            getattr(verdict, "threat_type", "") in ("pii", "secret")
+            or bool(getattr(verdict, "matched_patterns", None))
+            or bool(getattr(verdict, "matched_values", None))
+        )
+        # Shared egress redactor — identical to the chat/simulator wire path. Uses the
+        # firewall-authoritative ``red_pii`` as the egress-truth reference so the
+        # masked output matches chat byte-for-byte (Tier-2 evidence spans are already
+        # folded into ``red_pii`` and so are honored transitively).
+        redacted = _redact_text_with_backstop(text, red_pii)
+
+        # BYTE-VERIFY FAIL-CLOSED (G4): the scanner detected PII/secret but the
+        # redaction (incl. the digit backstop above) could not change the input.
+        # Masking is genuinely impossible (e.g. a detected value with no
+        # deterministic mask, like a bare name), so this input cannot be safely
+        # embedded — fail closed instead of leaking the raw value to the provider.
+        if _detected and redacted == text:
+            return redacted_texts, {
+                "blocked": True,
+                "reason": "PII detected in embedding input could not be redacted",
+                "index": i,
+            }
+
+        redacted_texts.append(redacted)
+
+    return redacted_texts, None
+
+
+async def _scan_redact_metadata(meta: dict, org_config: dict) -> dict:
+    """Redact PII/secrets in metadata string VALUES at ingest, at PARITY with the
+    document content — gated by the SAME ``input_scan_enabled`` config. Caller
+    metadata was previously only redacted under ``rag_redaction_enabled`` (off by
+    default), so PII in a metadata field was stored RAW in the vector store (proven
+    live on Pinecone: author_email/owner_phone/owner_ssn persisted verbatim).
+    Recurses into nested dict/list so a value can't hide one level deep; uses the
+    same INPUT_SCANNER redactor + digit backstop as ``_scan_redact_embedding_inputs``.
+    """
+    if not isinstance(meta, dict) or INPUT_SCANNER is None or not org_config.get("input_scan_enabled", True):
+        return meta
+
+    async def _r(v):
+        if isinstance(v, str) and v.strip():
+            red, _blk = await _scan_redact_embedding_inputs([v], org_config)
+            # ``red`` is non-empty for clean/maskable values; it is empty only when
+            # the value carried PII that could not be masked -> never persist raw.
+            return red[0] if red else "[REDACTED]"
+        if isinstance(v, dict):
+            return {k: await _r(vv) for k, vv in v.items()}
+        if isinstance(v, (list, tuple)):
+            return [await _r(item) for item in v]
+        return v
+
+    return {k: await _r(v) for k, v in meta.items()}
+
+
 def _merge_output_enforcement_state(existing: dict | None, candidate: dict | None) -> dict | None:
     if candidate is None:
         return existing
@@ -3267,7 +3490,14 @@ _REQUEST_METHOD: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_method", d
 # These are security-critical and MUST always be recorded, even when an org
 # has disabled audit logging — otherwise a tenant could silence its own
 # containment trail.
-_ALWAYS_AUDIT_EVENT_TYPES = ("kill_switch", "model_isolation", "circuit_breaker")
+_ALWAYS_AUDIT_EVENT_TYPES = (
+    "kill_switch",
+    "model_isolation",
+    "circuit_breaker",
+    "model_remap",
+    "routing_no_serviceable_candidate",
+    "reserved_model_in_pool",
+)
 
 
 def _org_audit_logging_enabled() -> bool:
@@ -3493,7 +3723,7 @@ async def _telemetry_loop():
 
 @app.on_event("startup")
 async def startup():
-    global CONFIG, CONFIG_SYNC, LLM_ROUTER, POLICY_SYNC, RATE_LIMITER, INPUT_SCANNER
+    global CONFIG, CONFIG_SYNC, LLM_ROUTER, POLICY_SYNC, THREAT_INTEL_SYNC, RATE_LIMITER, INPUT_SCANNER
     global VECTOR_POLICY_SYNC, VECTOR_CLIENTS, CONTEXT_GUARD, VECTOR_PROVIDER_SYNC
     global REDIS_CLIENT, TELEMETRY, OUTPUT_GUARD, CIRCUIT_BREAKER
     global BEDROCK_EMBEDDER, GROUNDING_GUARD
@@ -3543,6 +3773,23 @@ async def startup():
     from llm_router import LLMRouter
 
     LLM_ROUTER = LLMRouter(CONFIG)
+
+    def _on_model_remap(*, requested_model: str, resolved_model: str, body: dict) -> None:
+        _emit_telemetry(
+            event_type="model_remap",
+            model=resolved_model,
+            action="reroute",
+            risk_score=0.0,
+            threat_type="none",
+            pipeline_stage="model_routing",
+            metadata={
+                "requested_model": requested_model,
+                "resolved_model": resolved_model,
+                "org_slug": str(body.get("_zs_org_slug") or ""),
+            },
+        )
+
+    LLM_ROUTER.set_remap_telemetry_hook(_on_model_remap)
     # Ensure Redis-backed model routes are active immediately at startup.
     if CONFIG_SYNC is not None:
         await CONFIG_SYNC.reload_models_now()
@@ -3681,6 +3928,15 @@ async def startup():
         POLICY_SYNC = PolicySync(redis_url=CONFIG["redis_url"])
         await POLICY_SYNC.start()
 
+    if CONFIG.get("redis_url"):
+        try:
+            from threat_intel_sync import ThreatIntelSync
+
+            THREAT_INTEL_SYNC = ThreatIntelSync(redis_url=CONFIG["redis_url"])
+            await THREAT_INTEL_SYNC.start()
+        except Exception as exc:
+            LOG.warning("ThreatIntelSync failed to start: %s", exc)
+
     if CONFIG.get("rag_enabled", False):
         from vector_policy_sync import VectorPolicySync
         from vector_client import PineconeClient, MilvusClient
@@ -3742,7 +3998,7 @@ async def startup():
         _llm_judge = None
         if CONFIG.get("llm_judge_enabled", True):
             from llm_judge import LLMJudge
-            _bedrock_model = CONFIG.get("llm_judge_model") or os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0")
+            _bedrock_model = CONFIG.get("llm_judge_model") or os.getenv("BEDROCK_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
             _llm_judge = LLMJudge(model=_bedrock_model)
             LOG.info("LLM Judge initialized (bedrock_model=%s)", _bedrock_model)
 
@@ -4157,6 +4413,7 @@ async def proxy_chat(
                 content={
                     "error": "invalid_request",
                     "message": "'model' must be a string.",
+                    "param": "model",
                     "code": "invalid_model",
                 },
             )
@@ -4304,6 +4561,7 @@ async def proxy_chat(
                 content={
                     "error": "invalid_request",
                     "message": "'messages' must be an array.",
+                    "param": "messages",
                     "code": "invalid_messages",
                 },
             )
@@ -4316,6 +4574,7 @@ async def proxy_chat(
                 content={
                     "error": "invalid_request",
                     "message": "'messages' must contain at least one message with content.",
+                    "param": "messages",
                     "code": "invalid_messages",
                 },
             )
@@ -4339,6 +4598,7 @@ async def proxy_chat(
                         content={
                             "error": "invalid_request",
                             "message": f"messages[{idx}] must be an object.",
+                            "param": f"messages[{idx}]",
                             "code": "invalid_messages",
                         },
                     )
@@ -4354,6 +4614,7 @@ async def proxy_chat(
                         content={
                             "error": "invalid_request",
                             "message": f"messages[{idx}].content must be a string or an array.",
+                            "param": f"messages[{idx}].content",
                             "code": "invalid_messages",
                         },
                     )
@@ -4403,6 +4664,7 @@ async def proxy_chat(
                                 content={
                                     "error": "invalid_request",
                                     "message": f"messages[{idx}].content[{pidx}] {_bad}.",
+                                    "param": f"messages[{idx}].content[{pidx}]",
                                     "code": "invalid_messages",
                                 },
                             )
@@ -4447,6 +4709,7 @@ async def proxy_chat(
                     content={
                         "error": "invalid_request",
                         "message": "'messages' must contain at least one message with content.",
+                        "param": "messages",
                         "code": "invalid_messages",
                     },
                 )
@@ -4493,6 +4756,7 @@ async def proxy_chat(
                     status_code=400,
                     content={"error": "invalid_request",
                              "message": f"'{_p}' must be a finite number.",
+                             "param": _p,
                              "code": "invalid_sampling_param"},
                 )
             if not _math.isfinite(_pf):
@@ -4500,6 +4764,7 @@ async def proxy_chat(
                     status_code=400,
                     content={"error": "invalid_request",
                              "message": f"'{_p}' must be a finite number (not NaN/Infinity).",
+                             "param": _p,
                              "code": "invalid_sampling_param"},
                 )
 
@@ -4562,7 +4827,7 @@ async def proxy_chat(
         if not routing_models and CONFIG_SYNC is not None:
             await CONFIG_SYNC.reload_models_now(org_slug=org_slug)
             routing_models = CONFIG_SYNC.get_model_routing(org_slug)
-        inference_models = _filter_inference_eligible_models(routing_models)
+        inference_models, _reserved_in_pool = _partition_inference_eligible_models(routing_models)
         scan_verdict = None
         routing_prefs = _extract_chat_routing_preferences(body, org_config, auth_ctx, scan_verdict)
         routing_active = bool(
@@ -5436,6 +5701,66 @@ async def proxy_chat(
                             matched_kw, user_id,
                         )
 
+        # ── IOC threat-intel match (tier-0, synced from control plane Redis) ──
+        if (
+            not firewall_disabled
+            and not _skip_threat_intel
+            and org_config.get("threat_intel_enabled", True)
+            and THREAT_INTEL_SYNC is not None
+            and org_slug
+            and prompt
+        ):
+            _ioc_hit = THREAT_INTEL_SYNC.match(
+                org_slug,
+                prompt if isinstance(prompt, str) else str(prompt),
+            )
+            if _ioc_hit:
+                _ioc_threat = str(_ioc_hit.get("threat_type") or "threat_intel_match")
+                _ioc_conf = float(_ioc_hit.get("confidence") or 0.8)
+                if _ioc_hit.get("auto_block") and enforcement_mode == "block":
+                    METRICS["blocked"] += 1
+                    elapsed_ms = (time.perf_counter() - start) * 1000
+                    _emit_telemetry(
+                        status_code=403,
+                        event_type="input_blocked",
+                        model=body.get("model", ""),
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        action="block",
+                        risk_score=max(_ioc_conf, 0.85),
+                        threat_type=_ioc_threat,
+                        metadata={
+                            "source": "threat_intel",
+                            "detail": f"IOC match: {_ioc_threat}",
+                            "indicator": _ioc_hit.get("indicator"),
+                            "owasp_code": _ioc_hit.get("owasp_code"),
+                            "threat_type": _ioc_threat,
+                        },
+                        prompt_snippet=_prompt_snippet,
+                        endpoint_id=endpoint_id,
+                    )
+                    return _build_block_response(
+                        403,
+                        "threat_intel_blocked",
+                        _build_zeroshield_metadata(
+                            action="block",
+                            reason=f"Blocked by threat intelligence (IOC match: {_ioc_threat}).",
+                            detection_tier="threat_intel",
+                            threat_type=_ioc_threat,
+                            confidence=_ioc_conf,
+                            matched_patterns=[str(_ioc_hit.get("indicator") or "")],
+                            original_prompt=prompt,
+                            processing_time_ms=elapsed_ms,
+                        ),
+                    )
+                LOG.warning(
+                    "MONITOR: IOC match threat_type=%s indicator=%s (user=%s)",
+                    _ioc_threat,
+                    (_ioc_hit.get("indicator") or "")[:80],
+                    user_id,
+                )
+
         # ── Max response tokens enforcement ──
         max_tokens_config = org_config.get("max_response_tokens", 4096)
         if max_tokens_config and not firewall_disabled:
@@ -6042,6 +6367,13 @@ async def proxy_chat(
                 or (pii_detection_enabled and _is_redactable_pii_threat(verdict.threat_type))
             )
 
+            # B1 (egress = truth, fail-closed honesty): remember the exact bytes that
+            # go INTO the deterministic PII redactor so we can byte-verify afterward
+            # that the flagged span actually left the wire (mirrors the embeddings
+            # byte-verify in _scan_redact_embedding_inputs).
+            _text_before_pii_redact = effective_prompt
+            _pii_redaction_applied = False
+
             if verdict.action in ("block", "redact") and _redact_threat:
                 # C-2: matched_patterns can carry tier-2 guard EVIDENCE fragments
                 # (not just pattern keys) that echo scanned identifiers. Scrub
@@ -6055,8 +6387,15 @@ async def proxy_chat(
                     "PII/secret detected, redacting before LLM call (type=%s, patterns=%s, user=%s)",
                     verdict.threat_type, _safe_patterns, user_id,
                 )
-                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt)
+                # B1 (egress = truth): pass the VERDICT so redact_pii applies its
+                # authoritative redaction (redact_all + redact_evidence_digit_spans for
+                # Tier-2 evidence digit runs the regexes miss). Without it, redact_pii
+                # degrades to plain redact_all (scanner.py:854) and a Tier-2-flagged
+                # bare digit span would ride RAW to the provider while the verdict says
+                # "redact" — a phantom redaction. Matches the embeddings egress path.
+                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
                 redacted_prompt = effective_prompt
+                _pii_redaction_applied = True
             elif (
                 verdict.threat_type == "pii"
                 and not pii_detection_enabled
@@ -6069,8 +6408,95 @@ async def proxy_chat(
 
             if verdict.action == "flag" and _redact_threat:
                 LOG.info("PII/secret flagged in prompt, redacting before LLM call (user=%s)", user_id)
-                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt)
+                # B1 (egress = truth): pass the verdict (see the redact-action branch
+                # above) so Tier-2 evidence digit spans are masked, not just regex hits.
+                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
                 redacted_prompt = effective_prompt
+                _pii_redaction_applied = True
+
+            # B1 (egress = truth — fail-closed honesty): the firewall flagged genuine
+            # PII/secret for redaction, but if the deterministic redactor
+            # (``redact_pii`` + the shared digit backstop the router applies on the
+            # wire via ``_redact_text_with_backstop``) could not change the text at all,
+            # the value is UNMASKABLE (e.g. a natural-language password/credential or a
+            # name/address the regexes miss). Forwarding it raw while telemetry attests
+            # "redact" is a phantom redaction — fail closed (block) instead of leaking
+            # it upstream. Mirrors the embeddings byte-verify
+            # (``_scan_redact_embedding_inputs``: ``if _detected and redacted == text``)
+            # and the output-guard no-op honesty downgrade. Only fires on a real
+            # redaction attempt + block enforcement + a TOTAL no-op, so maskable PII
+            # (Tier-1 regex, digit spans) is never over-blocked.
+            if (
+                _pii_redaction_applied
+                and enforcement_mode == "block"
+                and (_text_before_pii_redact or "").strip()
+            ):
+                try:
+                    from llm_router import _redact_text_with_backstop as _egress_backstop
+                except ImportError:  # pragma: no cover - packaging fallback
+                    from .llm_router import _redact_text_with_backstop as _egress_backstop
+                if _egress_backstop(_text_before_pii_redact, effective_prompt) == _text_before_pii_redact:
+                    LOG.warning(
+                        "PII/secret flagged but redaction was a no-op (unmaskable); "
+                        "failing closed to prevent raw egress (type=%s, user=%s)",
+                        verdict.threat_type, user_id,
+                    )
+                    METRICS["blocked"] += 1
+                    elapsed_ms = (time.perf_counter() - start) * 1000
+                    _audit_fire_and_forget(
+                        org_slug=org_slug or "",
+                        decision="block",
+                        rule_code=f"{verdict.tier or 'tier_1'}_{verdict.threat_type}_unmaskable",
+                        metadata={
+                            "input_bytes": len((prompt or "").encode("utf-8")),
+                            "model_id": body.get("model", ""),
+                            "reason": "redaction no-op on flagged PII/secret",
+                        },
+                    )
+                    _emit_telemetry(
+                        status_code=403,
+                        event_type="input_blocked",
+                        model=body.get("model", ""),
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        action="block",
+                        risk_score=verdict.confidence,
+                        threat_type=verdict.threat_type,
+                        compliance_tags=org_config.get("compliance_frameworks", []),
+                        pipeline_stage="query",
+                        intent=_request_intent,
+                        metadata={
+                            "detail": "PII/secret detected but could not be redacted; blocked to prevent raw egress",
+                            "confidence": verdict.confidence,
+                            **_telemetry_owasp_metadata(verdict.threat_type, verdict=verdict),
+                        },
+                        prompt_snippet=_prompt_snippet,
+                        endpoint_id=endpoint_id,
+                    )
+                    return _build_block_response(
+                        403,
+                        "content_blocked",
+                        _build_zeroshield_metadata(
+                            action="block",
+                            reason=(
+                                f"PII/secret detected but could not be redacted "
+                                f"({verdict.threat_type}); blocked to prevent raw egress"
+                            ),
+                            detection_tier=verdict.tier,
+                            threat_type=verdict.threat_type,
+                            confidence=verdict.confidence,
+                            matched_patterns=verdict.matched_patterns,
+                            original_prompt=prompt,
+                            processing_time_ms=elapsed_ms,
+                            intent=_request_intent,
+                        ),
+                        stage_metrics=stage_metrics,
+                        prompt=prompt,
+                        route_metadata=route_metadata,
+                        requested_model=body.get("model", ""),
+                        scan_verdict=verdict,
+                    )
 
         if not AGENT_ID or not CONFIG["backend_url"]:
             # No backend: forward to LLM (input scanning already done above).
@@ -6340,6 +6766,25 @@ async def proxy_chat(
                     },
                 )
         if routing_active:
+            if _reserved_in_pool and TELEMETRY is not None:
+                _emit_telemetry(
+                    event_type="reserved_model_in_pool",
+                    model=_reserved_in_pool[0],
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_prefix=auth_ctx.prefix if auth_ctx else "",
+                    action="drop",
+                    risk_score=0.0,
+                    threat_type="none",
+                    pipeline_stage="routing",
+                    intent=_request_intent,
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    metadata={
+                        "reserved_models": _reserved_in_pool,
+                        "org_slug": org_slug,
+                    },
+                    endpoint_id=endpoint_id,
+                )
             # B1 FIX (CRITICAL): exclude runtime-ISOLATED (model_state) and KILL-SWITCHED
             # models from the routing candidate set BEFORE adjudication. The scorer
             # (_score_routing_models) only hard-filters on LLMModelConfig.is_active and
@@ -6353,6 +6798,37 @@ async def proxy_chat(
             inference_models, _zs_excluded = await _drop_isolated_or_killed_candidates(
                 inference_models, org_slug, auth_ctx.prefix if auth_ctx else "",
             )
+            _pre_serviceable = list(inference_models)
+            inference_models, _non_serviceable = _filter_router_serviceable_models(
+                inference_models,
+                LLM_ROUTER.get_active_model_names() if LLM_ROUTER is not None else [],
+            )
+            if _pre_serviceable and not inference_models:
+                LOG.warning(
+                    "No router-serviceable routing candidates for org=%s after intersecting "
+                    "active model groups; excluded=%s",
+                    org_slug,
+                    _non_serviceable,
+                )
+                if TELEMETRY is not None:
+                    _emit_telemetry(
+                        event_type="routing_no_serviceable_candidate",
+                        model=_safe_model_echo(body.get("model")) or "auto",
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        action="block",
+                        risk_score=routing_prefs["request_risk_score"],
+                        threat_type="none",
+                        pipeline_stage="routing",
+                        intent=_request_intent,
+                        latency_ms=(time.perf_counter() - start) * 1000,
+                        metadata={
+                            "excluded_models": _non_serviceable,
+                            "org_slug": org_slug,
+                        },
+                        endpoint_id=endpoint_id,
+                    )
             selection = await LLM_ROUTER.adjudicate_model_selection(
                 routing_models=inference_models,
                 request_messages=body.get("messages") or [],
@@ -8483,6 +8959,7 @@ async def proxy_embeddings(request: Request):
                 content={
                     "error": "invalid_request",
                     "message": "'model' must be a string.",
+                    "param": "model",
                     "code": "invalid_model",
                 },
             )
@@ -8493,6 +8970,7 @@ async def proxy_embeddings(request: Request):
                 content={
                     "error": "invalid_request_error",
                     "message": "`input` is required.",
+                    "param": "input",
                 },
             )
 
@@ -8513,6 +8991,7 @@ async def proxy_embeddings(request: Request):
                 content={
                     "error": "invalid_request_error",
                     "message": "`input` must be a string or an array of strings.",
+                    "param": "input",
                     "code": "invalid_embedding_input",
                 },
             )
@@ -8749,6 +9228,53 @@ async def proxy_embeddings(request: Request):
         # ({org}::{model}) and uses THIS org's BYOK key — never a same-named peer.
         body["_zs_org_slug"] = org_slug
 
+        # G1/G3/G4: scan + redact PII/secrets in the embedding inputs BEFORE they
+        # leave the gateway, with the SAME tier-1 scanner + verdict-aware redactor
+        # the chat path uses (gated by the SAME input_scan_enabled config). Without
+        # this, a raw email/SSN/API-key was embedded verbatim by the upstream
+        # provider — the chat path never had that gap. ``input`` was already shape-
+        # validated above to a non-empty str or list[str].
+        _emb_input_raw = body.get("input")
+        _emb_was_str = isinstance(_emb_input_raw, str)
+        _emb_texts = [_emb_input_raw] if _emb_was_str else list(_emb_input_raw)
+        _emb_redacted, _emb_block = await _scan_redact_embedding_inputs(_emb_texts, org_config)
+        if _emb_block is not None:
+            METRICS["blocked"] += 1
+            _emit_telemetry(
+                status_code=403,
+                event_type="embedding_blocked",
+                model=requested_model,
+                user_id=user_id,
+                project_id=str(project_id or ""),
+                key_prefix=auth_ctx.prefix if auth_ctx else "",
+                organization_id=getattr(auth_ctx, "organization_id", None) if auth_ctx else None,
+                action="block",
+                risk_score=0.85,
+                threat_type="pii",
+                compliance_tags=org_config.get("compliance_frameworks", []),
+                pipeline_stage="query",
+                metadata={
+                    "reason": _emb_block.get("reason"),
+                    "module": "1.3",
+                    "module_id": "1.3",
+                },
+            )
+            return _build_block_response(
+                403,
+                "tier_1_pii",
+                _build_zeroshield_metadata(
+                    action="block",
+                    reason="Embedding input blocked: PII detected could not be redacted.",
+                    detection_tier="tier_1",
+                    threat_type="pii",
+                    confidence=0.85,
+                    detail=_emb_block.get("reason"),
+                ),
+                requested_model=requested_model,
+            )
+        # Write the redacted texts back, preserving the original str-vs-list shape.
+        body["input"] = _emb_redacted[0] if _emb_was_str else _emb_redacted
+
         status, result = await LLM_ROUTER.aembedding(body)
 
         # Never reflect raw LiteLLM exception text (fallback topology + OpenRouter
@@ -8910,6 +9436,55 @@ def _alert_vector_policy_miss(*, project_id, collection_name, organization_id, u
         )
     except Exception:  # noqa: BLE001
         LOG.debug("vector policy-miss telemetry emit failed", exc_info=True)
+
+
+def _emit_rag_policy_block_telemetry(
+    *,
+    auth_ctx,
+    collection_name: str,
+    project_id,
+    operation: str,
+    code: str,
+    detail: str,
+    vector_db_type: str = "",
+    start_time: float | None = None,
+    pipeline_stage: str = "policy",
+) -> None:
+    """Emit block telemetry for early RAG policy denials (M2.1 rag lane attribution)."""
+    if auth_ctx is None:
+        return
+    event_type = "rag_query_blocked" if operation == "query" else "rag_ingest_blocked"
+    if operation == "delete":
+        event_type = "rag_delete_blocked"
+    kwargs: dict = {
+        "status_code": 403,
+        "event_type": event_type,
+        "model": "",
+        "user_id": getattr(auth_ctx, "user_id", ""),
+        "project_id": str(project_id or ""),
+        "key_prefix": getattr(auth_ctx, "prefix", ""),
+        "organization_id": getattr(auth_ctx, "organization_id", None),
+        "action": "block",
+        "risk_score": 0.0,
+        "threat_type": "policy_violation",
+        "pipeline_stage": pipeline_stage,
+        "metadata": {
+            "collection": collection_name,
+            "vector_db_type": vector_db_type,
+            "operation": operation,
+            "code": code,
+            "detail": detail,
+            "source": "rag",
+            "module": "1.3",
+            "module_id": "1.3",
+        },
+    }
+    if start_time is not None:
+        kwargs["latency_ms"] = (time.perf_counter() - start_time) * 1000
+    try:
+        _emit_telemetry(**kwargs)
+    except Exception:  # noqa: BLE001
+        LOG.debug("rag policy-block telemetry emit failed", exc_info=True)
 
 
 def _normalize_collection_name(name: str) -> str:
@@ -9234,6 +9809,16 @@ async def rag_query(request: Request):
             # could quietly bypass a deny / block_sensitive policy (R10).
             if collection_name != "default":
                 METRICS["blocked"] += 1
+                _emit_rag_policy_block_telemetry(
+                    auth_ctx=auth_ctx,
+                    collection_name=collection_name,
+                    project_id=project_id,
+                    operation="query",
+                    code="rag_access_denied",
+                    detail=f"Access denied: no policy for collection '{collection_name}'.",
+                    vector_db_type=vector_db_type,
+                    start_time=start_rag,
+                )
                 return JSONResponse(
                     status_code=403,
                     content={
@@ -9262,6 +9847,16 @@ async def rag_query(request: Request):
 
         if not policy.get("enabled", False):
             METRICS["blocked"] += 1
+            _emit_rag_policy_block_telemetry(
+                auth_ctx=auth_ctx,
+                collection_name=collection_name,
+                project_id=project_id,
+                operation="query",
+                code="rag_policy_disabled",
+                detail=f"Policy for collection '{collection_name}' is disabled.",
+                vector_db_type=vector_db_type,
+                start_time=start_rag,
+            )
             return JSONResponse(
                 status_code=403,
                 content={
@@ -9287,7 +9882,7 @@ async def rag_query(request: Request):
             if _default_action in ("deny", "block"):
                 _emit_telemetry(
                     status_code=403,
-                    event_type="rag_query",
+                    event_type="rag_query_blocked",
                     model="",
                     user_id=getattr(auth_ctx, "user_id", ""),
                     project_id=str(project_id),
@@ -9302,7 +9897,9 @@ async def rag_query(request: Request):
                         "collection": collection_name,
                         "vector_db_type": vector_db_type,
                         "default_action": _default_action,
+                        "code": "rag_access_denied",
                         "detail": "Collection access denied by vector policy default_action.",
+                        "source": "rag",
                         "module": "1.3",
                         "module_id": "1.3",
                     },
@@ -9564,12 +10161,129 @@ async def rag_query(request: Request):
                     _detail = _detail.replace(str(result.model_downgrade), "zeroshield-safe")
                 _client_scan_verdict["detail"] = _detail
 
+        # ── E11: client-egress retrieved-context PII backstop ──
+        # The generation-time PII backstop (``_redact_retrieved_pii``) lives in the
+        # GeneratorStage, which is gated by ``rag_generator_enabled`` (default OFF).
+        # On the DEFAULT guardrails-only / ranker-only paths the generator never
+        # runs, so a document whose PII the ranker did not drop — especially a
+        # scanner-missed bare phone — would reach the client RAW. Re-run the SAME
+        # GATED helper here, at the single client-egress choke point, over every
+        # returned document's content (and any returned context_chunks). This
+        # covers ALL pipeline paths uniformly and is idempotent: the helper only
+        # fires its bare-digit backstop when the typed redactor already found PII
+        # in the chunk, so legitimate document/order numbers in clean citations are
+        # NOT mangled, and a chunk the generator already redacted is left unchanged.
+        from rag_pipeline.generator_stage import (
+            _redact_retrieved_pii as _egress_redact_pii,
+            _redact_metadata_values as _egress_redact_meta,
+        )
+
+        # ── E11b: UNCONDITIONAL client-egress indirect-injection backstop ──
+        # Retrieved-document injection ("ignore all previous instructions",
+        # hidden HTML/ChatML directives, persona-reassignment) is otherwise only
+        # scanned in the RANKER stage (context_guard.scan_documents), which is OFF
+        # by default (rag_ranker_enabled=False) and only forced on by certain
+        # policies. So a pre-poisoned vector in a collection WITHOUT that policy is
+        # returned to the client UNSCANNED. Run the SAME detector the ranker uses
+        # (CONTEXT_GUARD.scan_single_document → INDIRECT_INJECTION_PATTERNS +
+        # HIDDEN_INSTRUCTION_PATTERNS) here, at the single client-egress choke
+        # point, over EVERY returned document — regardless of rag_ranker_enabled /
+        # policy. A document the detector flags as injection / hidden-instruction
+        # is DROPPED (never served); secret/PII/toxicity stay the responsibility of
+        # the PII-redaction backstop below (toxicity is a flag, not a drop). The
+        # scan is sync (ThreadPoolExecutor-backed); call it via asyncio.to_thread to
+        # keep the async handler non-blocking. Fail-safe: if CONTEXT_GUARD is None,
+        # skip entirely (no crash, no behaviour change).
+        _egress_dropped_injection: list[dict] = []
+        _egress_documents = result.documents
+        if CONTEXT_GUARD is not None and isinstance(_egress_documents, list):
+            _kept_after_injection: list = []
+            for _doc in _egress_documents:
+                if not isinstance(_doc, dict):
+                    _kept_after_injection.append(_doc)
+                    continue
+                _scan_text = _doc.get("content")
+                if isinstance(_scan_text, str) and _scan_text:
+                    try:
+                        _inj_verdict = await asyncio.to_thread(
+                            CONTEXT_GUARD._scan_single_document_sync, _scan_text
+                        )
+                    except Exception:  # noqa: BLE001 — a scanner error must not 500 the egress
+                        LOG.warning(
+                            "Egress injection scan failed (fail-safe: doc kept) doc_id=%s",
+                            _doc.get("_doc_id") or _doc.get("id") or "",
+                        )
+                        _inj_verdict = None
+                    if (
+                        _inj_verdict is not None
+                        and getattr(_inj_verdict, "action", "allow") == "block"
+                        and getattr(_inj_verdict, "threat_type", "")
+                        in ("indirect_injection", "hidden_instruction")
+                    ):
+                        _did = _doc.get("_doc_id") or _doc.get("id") or ""
+                        _egress_dropped_injection.append({
+                            "id": _did,
+                            "threat_type": getattr(_inj_verdict, "threat_type", ""),
+                            "detail": getattr(_inj_verdict, "detail", ""),
+                        })
+                        LOG.warning(
+                            "Egress backstop DROPPED retrieved doc for %s (id=%s)",
+                            getattr(_inj_verdict, "threat_type", ""), _did,
+                        )
+                        continue  # do NOT serve this document
+                _kept_after_injection.append(_doc)
+            _egress_documents = _kept_after_injection
+            result.documents = _egress_documents
+
+        if isinstance(_egress_documents, list):
+            for _doc in _egress_documents:
+                if not isinstance(_doc, dict):
+                    continue
+                _content = _doc.get("content")
+                if isinstance(_content, str) and _content:
+                    _doc["content"] = _egress_redact_pii(_content)
+                # E11 fail-open fix: also mask PII in metadata VALUES (not just the
+                # ranker's declared sensitive_fields) before client egress — PII in
+                # an undeclared metadata field otherwise returns raw to the client.
+                _meta = _doc.get("metadata")
+                if isinstance(_meta, (dict, list)):
+                    _doc["metadata"] = _egress_redact_meta(_meta)
+                # Redact any per-document context_chunks (list[str]) if a path
+                # surfaces them on the document object.
+                _doc_chunks = _doc.get("context_chunks")
+                if isinstance(_doc_chunks, list):
+                    _doc["context_chunks"] = [
+                        _egress_redact_pii(_c) if isinstance(_c, str) and _c else _c
+                        for _c in _doc_chunks
+                    ]
+
+        _egress_context_chunks = getattr(result, "context_chunks", None)
+        if isinstance(_egress_context_chunks, list):
+            _egress_context_chunks = [
+                _egress_redact_pii(_c) if isinstance(_c, str) and _c else _c
+                for _c in _egress_context_chunks
+            ]
+
+        # When the egress backstop dropped injection-bearing documents, reflect the
+        # drop in the response: bump filtered_count and surface the dropped set in
+        # the client-facing scan_verdict (matching the existing partial-success
+        # shape: a flagged/filtered list alongside the documents/ids that survived).
+        _egress_filtered_count = result.filtered_count
+        if _egress_dropped_injection:
+            _egress_filtered_count = (result.filtered_count or 0) + len(_egress_dropped_injection)
+            if isinstance(_client_scan_verdict, dict):
+                _client_scan_verdict.setdefault("flagged_documents", [])
+                _client_scan_verdict["egress_filtered"] = _egress_dropped_injection
+                _client_scan_verdict["egress_filtered_count"] = len(_egress_dropped_injection)
+                if not _client_scan_verdict.get("threat_type"):
+                    _client_scan_verdict["threat_type"] = _egress_dropped_injection[0]["threat_type"]
+
         response_content = {
             "collection": collection_name,
             "query": query_text,
-            "documents": result.documents,
+            "documents": _egress_documents,
             "total_retrieved": result.total_retrieved,
-            "filtered_count": result.filtered_count,
+            "filtered_count": _egress_filtered_count,
             "scan_verdict": _client_scan_verdict,
             "pipeline_audit": result.pipeline_audit,
             "context_binding_id": result.context_binding_id or "",
@@ -9762,6 +10476,15 @@ async def rag_ingest(request: Request):
             # meant to guard (R10).
             if collection_name != "default":
                 METRICS["blocked"] += 1
+                _emit_rag_policy_block_telemetry(
+                    auth_ctx=auth_ctx,
+                    collection_name=collection_name,
+                    project_id=project_id,
+                    operation="insert",
+                    code="rag_access_denied",
+                    detail=f"Access denied: no policy for collection '{collection_name}'.",
+                    vector_db_type=vector_db_type,
+                )
                 return JSONResponse(
                     status_code=403,
                     content={
@@ -9779,6 +10502,15 @@ async def rag_ingest(request: Request):
 
         if not policy.get("enabled", False):
             METRICS["blocked"] += 1
+            _emit_rag_policy_block_telemetry(
+                auth_ctx=auth_ctx,
+                collection_name=collection_name,
+                project_id=project_id,
+                operation="insert",
+                code="rag_policy_disabled",
+                detail="Policy disabled for this collection.",
+                vector_db_type=vector_db_type,
+            )
             return JSONResponse(status_code=403, content={"error": "Policy disabled for this collection."})
 
         # Per-operation access decision: ``default_action`` governs operations
@@ -9791,6 +10523,15 @@ async def rag_ingest(request: Request):
         if "insert" not in allowed_ops:
             METRICS["blocked"] += 1
             if _default_action in ("deny", "block"):
+                _emit_rag_policy_block_telemetry(
+                    auth_ctx=auth_ctx,
+                    collection_name=collection_name,
+                    project_id=project_id,
+                    operation="insert",
+                    code="rag_access_denied",
+                    detail="Collection access denied by vector policy default_action.",
+                    vector_db_type=vector_db_type,
+                )
                 return JSONResponse(
                     status_code=403,
                     content={
@@ -9832,7 +10573,14 @@ async def rag_ingest(request: Request):
             if (CONFIG_SYNC is not None and org_slug)
             else {}
         ) or {}
-        rag_redaction_enabled = bool(org_config.get("rag_redaction_enabled", False))
+        # B5 (RAG redaction default / nothing raw at rest): the typed-placeholder
+        # pass is SAFE-BY-DEFAULT. The PII-safety guarantee at rest is already
+        # policy-forced by ``input_scan_enabled`` (default True) via the unified
+        # ``_scan_redact_embedding_inputs`` / ``_scan_redact_metadata`` pass below,
+        # but defaulting this toggle ON adds structure-preserving typed redaction
+        # ([EMAIL]/[SSN]) as defense-in-depth so an org that never set the flag
+        # still never embeds/stores raw PII. An org may still explicitly disable it.
+        rag_redaction_enabled = bool(org_config.get("rag_redaction_enabled", True))
         rag_tier2_enabled = bool(org_config.get("rag_tier2_enabled", False))
 
         # R12 (#2/#6): gate the RAG ingest embedding model on operator kill-switch
@@ -9955,7 +10703,76 @@ async def rag_ingest(request: Request):
                 # signals and must be server-stamped, never honored from inbound
                 # metadata.
                 meta = {k: v for k, v in meta.items() if k not in ("verified_source", "created_by")}
+                # G2b: document CONTENT is typed-redacted above, but caller-supplied
+                # METADATA VALUES were NOT — a PII/secret hidden in a metadata field
+                # (e.g. {"author": "ssn 123-45-6789"}) was stored verbatim AND
+                # round-trips back to RAG-query callers and into downstream prompts.
+                # When the org enabled rag_redaction, mask string metadata values
+                # with the SAME deterministic typed redactor, recursing into nested
+                # dict/list values so a secret can't hide one level deep.
+                if rag_redaction_enabled:
+                    def _redact_meta_value(_v):
+                        if isinstance(_v, str):
+                            _mr = detect_and_redact_typed(_v)
+                            if _mr.redacted:
+                                nonlocal redacted_count
+                                redacted_count += 1
+                            return _mr.text
+                        if isinstance(_v, dict):
+                            return {_k: _redact_meta_value(_vv) for _k, _vv in _v.items()}
+                        if isinstance(_v, (list, tuple)):
+                            return [_redact_meta_value(_item) for _item in _v]
+                        return _v
+                    meta = {k: _redact_meta_value(v) for k, v in meta.items()}
             normalized_metas.append(meta if meta else {"source": "gateway"})
+
+        # G3: UNIFY the embedding-input redaction with /v1/embeddings. The docs
+        # above were scanned by CONTEXT_GUARD (+ optional Tier-2) and optionally
+        # typed-placeholder-redacted, but those run only when their toggles are on
+        # and do NOT use the SAME deterministic INPUT_SCANNER redactor that the
+        # /v1/embeddings path now applies — so a PII/secret value could still be
+        # embedded verbatim by the upstream provider on ingest. Run the IDENTICAL
+        # helper here (same input_scan_enabled gate, same byte-verified fail-closed)
+        # so both surfaces redact identically. A doc whose PII genuinely cannot be
+        # masked is SKIPPED (not embedded) — matching the existing partial-success
+        # contract (parallel ids/metas/strings stay aligned).
+        _emb_redacted_docs: list[str] = []
+        _emb_kept_ids: list = []
+        _emb_kept_metas: list = []
+        _emb_blocked_count = 0
+        for _di, _dtext in enumerate(doc_strings):
+            _red, _blk = await _scan_redact_embedding_inputs([_dtext], org_config)
+            if _blk is not None:
+                _emb_blocked_count += 1
+                _bidx = allowed_indices[_di] if _di < len(allowed_indices) else _di
+                blocked_indices.add(_bidx)
+                scan_results.append({
+                    "index": _bidx,
+                    "action": "block",
+                    "threats": ["pii"],
+                    "reason": _blk.get("reason"),
+                })
+                continue
+            _emb_redacted_docs.append(_red[0])
+            _emb_kept_ids.append(normalized_ids[_di])
+            # G2-metadata: redact metadata VALUES at the same input_scan_enabled gate
+            # as the content above (not only under the off-by-default rag_redaction).
+            _emb_kept_metas.append(await _scan_redact_metadata(normalized_metas[_di], org_config))
+        doc_strings = _emb_redacted_docs
+        normalized_ids = _emb_kept_ids
+        normalized_metas = _emb_kept_metas
+        allowed_indices = [i for i in allowed_indices if i not in blocked_indices]
+        if not allowed_indices:
+            METRICS["blocked"] += 1
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": "all_documents_blocked",
+                    "message": "All document(s) were blocked by content scanning.",
+                    "code": "rag_content_blocked",
+                    "scan_results": scan_results,
+                },
+            )
 
         # ── Async upsert (decision: implement the worker) ──
         # The documents are ALREADY scanned + redacted above, so guardrails ran
@@ -10184,6 +11001,15 @@ async def rag_delete_documents(request: Request):
             # (R10) — a case-variant name must not bypass a deny policy.
             if collection_name != "default":
                 METRICS["blocked"] += 1
+                _emit_rag_policy_block_telemetry(
+                    auth_ctx=auth_ctx,
+                    collection_name=collection_name,
+                    project_id=project_id,
+                    operation="delete",
+                    code="rag_access_denied",
+                    detail=f"Access denied: no policy for collection '{collection_name}'.",
+                    vector_db_type=vector_db_type,
+                )
                 return JSONResponse(
                     status_code=403,
                     content={
@@ -11820,10 +12646,115 @@ async def create_moderations(request: Request):
         "results": results})
 
 
+@app.post("/v1/completions", summary="Legacy text completions (OpenAI-compatible)", tags=["Completions"])
+async def create_legacy_completion(
+    request: Request,
+    x_user_id: str | None = Header(None),
+    x_endpoint_id: str | None = Header(None),
+    x_agent_data: str | None = Header(None),
+):
+    """C4 (D4): ``client.completions.create(prompt=...)``. The legacy text-completion surface
+    is a FORMAT ADAPTER over ``proxy_chat`` — exactly like /v1/responses — so the prompt is
+    routed prompt->messages through the UNCHANGED firewall chain (auth, kill-switch, Tier-1/2
+    scan, output guard, redaction, telemetry) and the chat result is translated back into a
+    ``text_completion`` object. The firewall is inherited, never forked."""
+    auth_ctx = getattr(request.state, "auth_context", None)
+    if auth_ctx is None:
+        return JSONResponse(status_code=401, content=_build_oai_error(
+            401, "A valid API key is required.", error_type="authentication_error"))
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "Invalid JSON body.", code="invalid_request"))
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "Request body must be a JSON object.", code="invalid_request"))
+    model = body.get("model")
+    if not model or not isinstance(model, str):
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "Missing required parameter: 'model'.", code="missing_required_parameter", param="model"))
+    if body.get("stream"):
+        # Streaming legacy text_completion chunks are not yet implemented; fail fast with a
+        # clean, SDK-parseable error rather than a silent hang. (Chat + Responses stream.)
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "Streaming is not supported on /v1/completions; use /v1/chat/completions.",
+            code="invalid_request", param="stream"))
+    prompt = body.get("prompt")
+    if prompt is None:
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "Missing required parameter: 'prompt'.", code="missing_required_parameter", param="prompt"))
+    # OpenAI accepts str | list[str] | token-id arrays. We can only firewall-scan TEXT, so a
+    # str -> one prompt, a list[str] -> a batch (one indexed choice each). Token-id arrays are
+    # rejected (cannot be scanned) rather than silently forwarded raw.
+    if isinstance(prompt, str):
+        prompts = [prompt]
+    elif isinstance(prompt, list) and prompt and all(isinstance(p, str) for p in prompt):
+        prompts = prompt
+    else:
+        return JSONResponse(status_code=400, content=_build_oai_error(
+            400, "'prompt' must be a string or a non-empty list of strings.", code="invalid_request", param="prompt"))
+
+    # Sampling params that are valid on BOTH surfaces flow through to chat unchanged.
+    _passthrough = {k: body[k] for k in (
+        "max_tokens", "temperature", "top_p", "stop", "seed", "user",
+        "presence_penalty", "frequency_penalty", "logit_bias",
+    ) if k in body}
+
+    cmpl_id = f"cmpl-{_uuid.uuid4().hex[:24]}"
+    request.state.gw_request_id = cmpl_id
+    created = int(time.time())
+    choices: list[dict] = []
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    resolved_model = model
+    zeroshield = None
+
+    for idx, text_prompt in enumerate(prompts):
+        chat_body = {"model": model, "messages": [{"role": "user", "content": text_prompt}], **_passthrough}
+        chat_response = await _dispatch_chat_internally(
+            request, chat_body, x_user_id, x_endpoint_id, x_agent_data)
+        status = getattr(chat_response, "status_code", 500)
+        try:
+            chat_json = json.loads(bytes(getattr(chat_response, "body", b"") or b"{}"))
+        except (TypeError, ValueError):
+            chat_json = {}
+        if status >= 400:
+            # Any sub-prompt block/error aborts the whole completion (the firewall fired) —
+            # surface the inner OpenAI error envelope verbatim so e.code/e.type/request_id hold.
+            return JSONResponse(status_code=status, content=_coerce_chat_error(status, chat_json))
+        _choice = (chat_json.get("choices") or [{}])[0]
+        _msg = _choice.get("message") or {}
+        choices.append({
+            "text": _msg.get("content") or "",
+            "index": idx,
+            "logprobs": None,
+            "finish_reason": _choice.get("finish_reason") or "stop",
+        })
+        _u = chat_json.get("usage") or {}
+        for _k in usage:
+            usage[_k] += int(_u.get(_k) or 0)
+        resolved_model = chat_json.get("model") or resolved_model
+        if zeroshield is None and isinstance(chat_json.get("zeroshield"), dict):
+            zeroshield = chat_json["zeroshield"]
+
+    result = {
+        "id": cmpl_id,
+        "object": "text_completion",
+        "created": created,
+        "model": resolved_model,
+        "choices": choices,
+        "usage": usage,
+    }
+    if zeroshield is not None:
+        # Mirror the ZeroShield trace top-level (parity with chat/responses; SDK extra=allow).
+        result["zeroshield"] = zeroshield
+    return JSONResponse(status_code=200, content=result, headers={"x-request-id": cmpl_id})
+
+
 # D4: surfaces a firewall gateway does not implement. Return a clean nested 404 (via the
 # compat shim) so the stock SDK raises NotFoundError instead of hanging or 500-ing.
-# (/v1/completions legacy + /v1/files + /v1/batches + /v1/images/* + /v1/audio/* are
-#  candidates for future thin implementations; today they fail fast and correctly.)
+# (/v1/files + /v1/batches + /v1/images/* + /v1/audio/* are candidates for future thin
+#  implementations; today they fail fast and correctly. /v1/completions is now implemented.)
 async def _openai_surface_unimplemented(request: Request):
     return JSONResponse(status_code=404, content={
         "error": "not_found",
@@ -11831,7 +12762,6 @@ async def _openai_surface_unimplemented(request: Request):
         "code": "endpoint_not_found"})
 
 for _p, _methods in (
-    ("/v1/completions", ["POST"]),
     ("/v1/files", ["POST", "GET"]),
     ("/v1/files/{rest:path}", ["GET", "POST", "DELETE"]),
     ("/v1/batches", ["POST", "GET"]),

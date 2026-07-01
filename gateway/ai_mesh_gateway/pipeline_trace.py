@@ -57,6 +57,31 @@ def _format_decision_source(source: str) -> str:
     return DECISION_SOURCE_LABELS.get(key, key.replace("_", " ").title())
 
 
+_ROUTINE_ROUTING_SOURCES = frozenset({
+    "policy_adjudicator",
+    "weighted",
+    "weighted_fastpath",
+    "weighted_fallback",
+    "routing_disabled",
+    "no_routing_models",
+    "simulator_bedrock_boto3_global",
+    "",
+})
+
+
+def _should_show_routing_reroute(routing: dict, requested: str, selected: str) -> bool:
+    trigger = str(routing.get("trigger_source") or routing.get("decision_source") or "").lower()
+    if trigger in ("kill_switch", "model_state", "isolation"):
+        return False
+    req = str(requested or "").strip()
+    sel = str(selected or "").strip()
+    if not req or not sel or req.lower() == "auto" or req == sel:
+        return False
+    if trigger in _ROUTINE_ROUTING_SOURCES:
+        return False
+    return bool(routing.get("rerouted"))
+
+
 def _routing_stage_action(
     requested: str,
     selected: str,
@@ -69,11 +94,7 @@ def _routing_stage_action(
         return "block"
     if final_action == "needs_model":
         return "needs_model"
-    if routing.get("rerouted"):
-        return "reroute"
-    req = str(requested or "").strip()
-    sel = str(selected or "").strip()
-    if req and sel and req.lower() != "auto" and req != sel:
+    if _should_show_routing_reroute(routing, requested, selected):
         return "reroute"
     return "allow"
 

@@ -12,7 +12,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, TYPE_CHECKING
+from typing import Any, AsyncGenerator, Awaitable, Callable, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from stream_orchestration import StreamRunMetrics
@@ -21,7 +21,12 @@ import litellm
 from litellm import Router as LiteLLMRouter
 
 from ai_mesh_shared.llm_model_crypto import decrypt_api_key
-from ai_mesh_shared.litellm_byok import normalize_litellm_params
+from ai_mesh_shared.litellm_byok import (
+    apply_bedrock_byok_credentials,
+    apply_bedrock_env_credentials,
+    normalize_litellm_params,
+    resolve_bedrock_model_id,
+)
 
 from ai_mesh_gateway.platform_models import (
     is_platform_model_name,
@@ -64,6 +69,32 @@ except Exception:  # pragma: no cover - litellm version drift
     pass
 
 LOG = logging.getLogger("gateway.llm_router")
+
+# E13 mid-stream kill-switch re-check throttle. Once a stream is live there is no
+# per-chunk policy gate, so an operator who trips the kill-switch (or model-state
+# isolation) DURING an active stream would otherwise keep getting the remainder
+# from a disabled model. We re-check the ACTIVE model's live kill/isolate state
+# inside the chunk loop, but THROTTLED so the Redis read does not run on every
+# token: at most once per ``_MIDSTREAM_KS_CHECK_EVERY_CHUNKS`` chunks AND no more
+# often than every ``_MIDSTREAM_KS_CHECK_INTERVAL_S`` seconds of wall-clock. The
+# check FAILS OPEN — a Redis hiccup / callback exception never terminates a live,
+# legitimate stream; only a DEFINITIVE kill/isolate verdict ends the stream.
+_MIDSTREAM_KS_CHECK_EVERY_CHUNKS = 16
+_MIDSTREAM_KS_CHECK_INTERVAL_S = 1.0
+
+
+class _MidStreamKillSwitch(Exception):
+    """Internal sentinel: the ACTIVE model was kill-switched / isolated mid-stream.
+
+    Raised from the throttled state-check wrapper so the prefix already emitted to
+    the client stays, the upstream generator is aclose()'d (so upstream generation
+    halts too), and ``acompletion_stream`` ends the stream with a terminal error
+    SSE rather than streaming the remainder from a now-disabled model.
+    """
+
+    def __init__(self, reason: str = "") -> None:
+        super().__init__(reason or "model disabled by operator mid-stream")
+        self.reason = reason
 
 # Map LiteLLM exceptions to HTTP status codes
 _EXCEPTION_STATUS_MAP = {
@@ -211,6 +242,73 @@ class ModelSelection:
     decision_factors: list[str] = field(default_factory=list)
     candidate_count: int = 0
 
+# B1 (egress = truth): a digit-bearing sensitive run, possibly split by separators
+# (spaces / dots / dashes / parens) — a 5+5 spaced phone ("89295 54991"), a spaced
+# SSN, a grouped card. A contiguous ``\d{7,}`` match misses any separator-split
+# format, so the byte-verify below considers these wider runs too.
+_DIGIT_RUN_RE = re.compile(r"\d[\d .()\-]{5,}\d")
+
+
+def _redact_text_with_backstop(text, redacted_content):
+    """Deterministic redactor shared by the chat (_apply_redaction) and Responses
+    (aresponses) paths so a value is masked identically wherever it appears.
+
+    ``redact_all`` is, by construction, WEAKER than the verdict-aware
+    ``InputScanner.redact_pii`` that produced ``redacted_content`` (the authoritative
+    redacted display / input — what the firewall decided must never reach the model):
+    redact_all only masks a 10-digit phone when an adjacent label disambiguates it
+    and only as a CONTIGUOUS run, whereas a Tier-2 / policy detector flags the same
+    number from ANY phrasing. That asymmetry once forwarded the RAW value upstream
+    while the trace showed it masked — a silent PII leak.
+
+    B1 closes it with a FAIL-CLOSED egress byte-verify: any digit-bearing run this
+    text carries that the firewall's authoritative ``redacted_content`` REMOVED
+    (absent there) but ``redact_all`` left raw is masked too — so the bytes on the
+    wire always reflect the verdict (egress = truth), never a phantom redaction.
+    FP-safety is structural: we mask ONLY runs the firewall already removed, so a run
+    it deliberately KEPT (a legit order id, still present in ``redacted_content``)
+    stays intact. Partial masks like ``***-***-4991`` keep only 4 digits and are
+    derived from ``text`` (not the masked ``out``), so they never re-trigger."""
+    try:
+        from patterns import redact_all
+    except ImportError:
+        from .patterns import redact_all
+    out = redact_all(text)
+    if not text or redacted_content is None:
+        return out
+    # Candidate runs: contiguous 7+ digit runs AND separator-split digit groups.
+    candidates = set(re.findall(r"\d{7,}", text))
+    candidates.update(m.group(0) for m in _DIGIT_RUN_RE.finditer(text))
+    # Longest first so a full split run is masked before any contiguous sub-run.
+    for run in sorted(candidates, key=len, reverse=True):
+        digits = re.sub(r"\D", "", run)
+        if len(digits) < 7:
+            continue
+        # Egress = truth: mask iff the firewall removed this run yet it still rides raw.
+        if run not in redacted_content and run in out:
+            out = out.replace(run, f"***-***-{digits[-4:]}")
+    return out
+
+
+def _redact_tool_descriptions(obj, redactor):
+    """Recursively mask free-text ``description`` strings in a tool definition,
+    leaving every structural schema key (name, type, enum, required, properties …)
+    intact so the function-calling contract still resolves. ``redactor`` is the same
+    deterministic redactor ``LLMRouter._apply_redaction`` applies to message content,
+    so a PII value masked in a message is masked identically in a tool description."""
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if k == "description" and isinstance(v, str) and v:
+                out[k] = redactor(v)
+            else:
+                out[k] = _redact_tool_descriptions(v, redactor)
+        return out
+    if isinstance(obj, list):
+        return [_redact_tool_descriptions(x, redactor) for x in obj]
+    return obj
+
+
 class LLMRouter:
     """Async LLM router backed by LiteLLM."""
 
@@ -220,6 +318,7 @@ class LLMRouter:
         self._active_model_names: list[str] = []
         self._qualified_model_names: set[str] = set()  # H7: org::model routing keys
         self._deployment_params: dict[str, dict] = {}   # Responses API: name -> resolved litellm_params (BYOK)
+        self._remap_telemetry_hook: Callable[..., None] | None = None
 
         #global litellm settings
         litellm.drop_params = config.get("litellm_drop_params", True)
@@ -240,6 +339,14 @@ class LLMRouter:
                 "Org-only inference disabled without upstream URL; "
                 "router starts empty until Redis model reload."
             )
+
+    def set_remap_telemetry_hook(self, hook: Callable[..., None] | None) -> None:
+        """Optional callback invoked when a requested model is remapped at runtime."""
+        self._remap_telemetry_hook = hook
+
+    def get_active_model_names(self) -> list[str]:
+        """Bare model names currently loaded in the LiteLLM router model groups."""
+        return list(self._active_model_names)
 
     def _set_active_model_names(self, model_list: list[dict]) -> None:
         # H7: use the BARE name (model_info.base_model_name) — clients send bare
@@ -399,6 +506,12 @@ class LLMRouter:
         if not isinstance(entry, dict):
             return entry
         params = dict(entry.get("litellm_params") or {})
+        provider = str(entry.get("provider") or params.get("provider") or "")
+        bedrock_region = (
+            str(params.get("aws_region_name") or "").strip()
+            or os.environ.get("BEDROCK_REGION", "")
+            or os.environ.get("AWS_DEFAULT_REGION", "")
+        )
         encrypted = params.pop("api_key_encrypted", None)
         if encrypted and not params.get("api_key"):
             fallback_secret = os.environ.get("DJANGO_SECRET_KEY", "") or os.environ.get(
@@ -409,7 +522,28 @@ class LLMRouter:
                 fallback_secret=fallback_secret,
             )
             if decrypted:
-                params["api_key"] = decrypted
+                if provider.lower() == "aws_bedrock":
+                    params = apply_bedrock_byok_credentials(
+                        params,
+                        decrypted,
+                        env_access_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                        env_secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                        default_region=bedrock_region,
+                    )
+                else:
+                    params["api_key"] = decrypted
+        elif provider.lower() == "aws_bedrock":
+            params = apply_bedrock_env_credentials(
+                params,
+                env_access_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                env_secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                default_region=bedrock_region,
+            )
+        if provider.lower() == "aws_bedrock" and params.get("model"):
+            params["model"] = resolve_bedrock_model_id(
+                str(params.get("model") or ""),
+                region=bedrock_region,
+            )
         provider = str(entry.get("provider") or params.pop("provider", "") or "")
         params = normalize_litellm_params(params, provider=provider)
         return {**entry, "litellm_params": params}
@@ -505,6 +639,17 @@ class LLMRouter:
         for p in _RESPONSES_PASSTHROUGH_PARAMS:
             if p in body and body[p] is not None:
                 kwargs[p] = body[p]
+        # Tools are a passthrough param here too — mask their free-text descriptions
+        # when redaction fired, mirroring the chat path (_apply_redaction). Without
+        # this, PII smuggled in a Responses tool definition reaches the model raw
+        # while the trace shows the input masked (same silent-leak class).
+        if redacted_content is not None and isinstance(kwargs.get("tools"), list):
+            kwargs["tools"] = [
+                _redact_tool_descriptions(
+                    t, lambda s: _redact_text_with_backstop(s, redacted_content)
+                )
+                for t in kwargs["tools"]
+            ]
         try:
             resp = await litellm.aresponses(**kwargs)
             return 200, (resp.model_dump() if hasattr(resp, "model_dump") else dict(resp))
@@ -535,32 +680,12 @@ class LLMRouter:
         """
         if redacted_content is None or not body.get("messages"):
             return body
-        try:
-            from patterns import redact_all
-        except ImportError:
-            from .patterns import redact_all
 
         def _redact_msg_text(text: str) -> str:
-            # ``redact_all`` here is, by construction, WEAKER than the verdict-aware
-            # ``InputScanner.redact_pii`` that produced ``redacted_content`` (the
-            # authoritative display / pipeline-trace string): redact_all only masks a
-            # 10-digit phone when an adjacent label disambiguates it, whereas a
-            # Tier-2 / policy detector flags the same number from ANY phrasing
-            # ("call me at 8929554991", "8929554991 is my number"). That asymmetry
-            # forwarded the RAW value to the upstream LLM while the pipeline trace
-            # showed it masked — a silent PII leak. ``redacted_content`` is the source
-            # of truth for "what the firewall decided must never reach the model", so
-            # after redact_all we run a FAIL-CLOSED digit backstop: any run of 7+
-            # digits that ``redacted_content`` masked (i.e. it is absent there) but
-            # this message still carries raw is masked here too. Partial masks like
-            # ``***-***-4991`` keep only 4 digits, so they never re-trigger the rule,
-            # and a value left intact in ``redacted_content`` (a legitimate order id
-            # the firewall did NOT redact) stays intact here.
-            out = redact_all(text)
-            for run in set(re.findall(r"\d{7,}", text)):
-                if run not in redacted_content and run in out:
-                    out = out.replace(run, f"***-***-{run[-4:]}")
-            return out
+            # Shared chat/Responses redactor: redact_all + a fail-closed digit backstop
+            # keyed off ``redacted_content`` (the firewall's "what must never reach the
+            # model"). See _redact_text_with_backstop for the full rationale.
+            return _redact_text_with_backstop(text, redacted_content)
 
         new_messages = []
         for m in body["messages"]:
@@ -580,7 +705,23 @@ class LLMRouter:
                 new_messages.append({**m, "content": parts})
             else:
                 new_messages.append(m)
-        return {**body, "messages": new_messages}
+        result = {**body, "messages": new_messages}
+
+        # Tool-definition free text reaches the upstream LLM too. ``_extract_tool_definitions_text``
+        # (G7) already FOLDS tools[].function.{name,description} into the scanned prompt,
+        # so PII/secrets smuggled in a tool definition trigger the same verdict — but
+        # redaction historically masked only ``messages``, forwarding the tool-def text
+        # RAW on a redact-and-forward path (the verdict said "mask it", the wire showed
+        # it raw — the exact leak class this method was created to close for messages).
+        # Mask every free-text ``description`` string at any depth (function.description
+        # + nested JSON-Schema parameter descriptions) with the SAME redactor. Structural
+        # identifiers (name, type, enum, required, …) are intentionally left intact so the
+        # function-calling contract still resolves; a description is pure natural language
+        # where PII realistically hides and masking it never breaks a tool call.
+        tools = body.get("tools")
+        if isinstance(tools, list):
+            result["tools"] = [_redact_tool_descriptions(t, _redact_msg_text) for t in tools]
+        return result
 
     def _build_kwargs(
         self,
@@ -621,6 +762,15 @@ class LLMRouter:
                 requested_model,
                 model,
             )
+            if self._remap_telemetry_hook is not None:
+                try:
+                    self._remap_telemetry_hook(
+                        requested_model=requested_model,
+                        resolved_model=model,
+                        body=body,
+                    )
+                except Exception:  # pragma: no cover - telemetry must never break routing
+                    LOG.debug("model_remap telemetry hook failed", exc_info=True)
         messages = body.get("messages") or body.get("input") or []
         # H7: org-qualify the routing key so litellm selects THIS org's deployment
         # (and its BYOK key), never a same-named peer from another tenant. The
@@ -686,7 +836,7 @@ class LLMRouter:
         try:
             response = await self._execute_completion(kwargs)
             return 200, response.model_dump()
-        except (BadRequestError, NotFoundError) as exc:
+        except (BadRequestError, NotFoundError, APIConnectionError) as exc:
             if allowlist and compliant_chain:
                 primary = kwargs.get("model")
                 for candidate in compliant_chain:
@@ -709,7 +859,7 @@ class LLMRouter:
                             resolve_exc,
                         )
                         continue
-                    except (BadRequestError, NotFoundError):
+                    except (BadRequestError, NotFoundError, APIConnectionError):
                         continue
                     except tuple(_EXCEPTION_STATUS_MAP.keys()):
                         continue
@@ -796,6 +946,86 @@ class LLMRouter:
                 }
             }
 
+    async def _stream_with_state_check(
+        self,
+        response,
+        client_model: str = "",
+        state_check: "Callable[[], Awaitable[bool]] | None" = None,
+    ) -> AsyncGenerator[str, None]:
+        """Wrap ``_stream_chunks_from_response`` with a THROTTLED mid-stream
+        kill-switch / model-state re-check (E13).
+
+        ``state_check`` is an async callback that returns ``True`` ONLY on a
+        DEFINITIVE kill/isolate verdict for the active model, and ``False``
+        otherwise — including on any Redis/exception error (the caller fails open).
+        It is called at most once every ``_MIDSTREAM_KS_CHECK_EVERY_CHUNKS`` chunks
+        AND no more than once per ``_MIDSTREAM_KS_CHECK_INTERVAL_S`` seconds, so the
+        per-token streaming hot path stays cheap.
+
+        On a ``True`` verdict we STOP yielding, aclose() the upstream chunk
+        generator (so upstream generation halts) and raise ``_MidStreamKillSwitch``
+        — ``acompletion_stream`` catches it and emits the terminal error SSE. The
+        prefix already yielded to the client is preserved; the remainder is not
+        emitted. When ``state_check`` is None this is a transparent passthrough.
+        """
+        inner = self._stream_chunks_from_response(response, client_model=client_model)
+        if state_check is None:
+            async for chunk in inner:
+                yield chunk
+            return
+
+        chunks_since_check = 0
+        last_check_ts = time.perf_counter()
+        try:
+            async for chunk in inner:
+                yield chunk
+                chunks_since_check += 1
+                now = time.perf_counter()
+                if (
+                    chunks_since_check >= _MIDSTREAM_KS_CHECK_EVERY_CHUNKS
+                    or (now - last_check_ts) >= _MIDSTREAM_KS_CHECK_INTERVAL_S
+                ):
+                    chunks_since_check = 0
+                    last_check_ts = now
+                    killed = False
+                    try:
+                        killed = bool(await state_check())
+                    except Exception:
+                        # FAIL-OPEN: never terminate a legitimate live stream
+                        # because the re-check (Redis/callback) hiccuped. Only a
+                        # definitive kill/isolate verdict ends the stream.
+                        killed = False
+                    if killed:
+                        # Halt upstream generation, then signal the terminal-SSE
+                        # path. The remainder is NOT yielded. Close BOTH the
+                        # wrapper generator AND the raw upstream response: throwing
+                        # GeneratorExit into the wrapper does not reliably finalize
+                        # a hand-rolled async-iterator upstream, so close it
+                        # directly too (if it exposes aclose()) so upstream token
+                        # generation actually stops.
+                        await self._aclose_quietly(inner)
+                        await self._aclose_quietly(response)
+                        raise _MidStreamKillSwitch()
+        finally:
+            # Ensure the upstream is closed on ANY exit (normal completion, early
+            # return, client disconnect, or the kill-switch raise) so we never
+            # leak an open upstream stream.
+            await self._aclose_quietly(inner)
+            await self._aclose_quietly(response)
+
+    @staticmethod
+    async def _aclose_quietly(obj) -> None:
+        """Best-effort aclose() of an async generator / streaming response. A
+        finalization failure must never propagate (it would mask the real
+        terminal verdict / completion path)."""
+        aclose = getattr(obj, "aclose", None)
+        if aclose is None:
+            return
+        try:
+            await aclose()
+        except Exception:
+            pass
+
     async def _stream_chunks_from_response(self, response, client_model: str = "") -> AsyncGenerator[str, None]:
         """Emit SSE chunks from an active LiteLLM streaming response.
 
@@ -859,11 +1089,20 @@ class LLMRouter:
             redacted_content: str | None = None,
             metrics: "StreamRunMetrics | None" = None,
             echo_model: str | None = None,
+            state_check: "Callable[[], Awaitable[bool]] | None" = None,
     ) -> AsyncGenerator[str, None]:
         """Streaming completion. Yields SSE-formatted chunks.
 
         Optional ``metrics`` (from stream_orchestration) records provider start,
         first-token time, and fallback-before-first-token (no mid-stream switch).
+
+        E13: optional ``state_check`` is an async callback returning ``True`` ONLY
+        on a DEFINITIVE kill-switch / model-state-isolation verdict for the ACTIVE
+        model. When provided it is invoked THROTTLED inside the chunk loop (see
+        ``_stream_with_state_check``); on a kill verdict the stream STOPS emitting
+        the remainder, the upstream generator is aclose()'d, and a terminal error
+        SSE is emitted. It FAILS OPEN on any error, so a Redis hiccup never
+        terminates a legitimate stream.
         """
         try:
             from stream_orchestration import StreamRunMetrics
@@ -926,9 +1165,25 @@ class LLMRouter:
 
         try:
             response = await self._execute_completion(kwargs)
-            async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
+            async for chunk in self._stream_with_state_check(response, client_model=_client_model, state_check=state_check):
                 yield _track_chunk(chunk)
             local_metrics.completed = True
+        except _MidStreamKillSwitch as ks_exc:
+            # E13: the ACTIVE model was kill-switched / model-state-isolated mid-
+            # stream. The prefix already emitted stays; we stop here and end the
+            # stream with a terminal error SSE (the upstream gen was aclose()'d).
+            LOG.warning("Mid-stream kill-switch: halting active stream (%s)", ks_exc.reason or "model disabled")
+            error_chunk = {
+                "error": {
+                    "message": "Model disabled by operator kill-switch; stream terminated.",
+                    "type": "ServiceUnavailableError",
+                    "code": 503,
+                }
+            }
+            yield f"data: {json.dumps(error_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+            local_metrics.had_error = True
+            return
         except (BadRequestError, NotFoundError) as exc:
             if allowlist and compliant_chain and not emitted:
                 primary = kwargs.get("model")
@@ -939,9 +1194,16 @@ class LLMRouter:
                         retry_kwargs = {**kwargs, "model": self._qualify_like_primary(candidate, primary)}
                         local_metrics.fallback_before_first_token = True
                         response = await self._execute_completion(retry_kwargs)
-                        async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
+                        async for chunk in self._stream_with_state_check(response, client_model=_client_model, state_check=state_check):
                             yield _track_chunk(chunk)
                         local_metrics.completed = True
+                        return
+                    except _MidStreamKillSwitch as ks_exc:
+                        # E13: fallback model killed mid-stream — terminate cleanly.
+                        LOG.warning("Mid-stream kill-switch on compliant fallback: halting (%s)", ks_exc.reason or "model disabled")
+                        yield f"data: {json.dumps({'error': {'message': 'Model disabled by operator kill-switch; stream terminated.', 'type': 'ServiceUnavailableError', 'code': 503}})}\n\n"
+                        yield "data: [DONE]\n\n"
+                        local_metrics.had_error = True
                         return
                     except ValueError as resolve_exc:
                         LOG.warning(
@@ -979,9 +1241,18 @@ class LLMRouter:
                 retry_kwargs = {**kwargs, "model": fallback_model}
                 try:
                     response = await self._execute_completion(retry_kwargs)
-                    async for chunk in self._stream_chunks_from_response(response, client_model=_client_model):
+                    async for chunk in self._stream_with_state_check(response, client_model=_client_model, state_check=state_check):
                         yield _track_chunk(chunk)
                     local_metrics.completed = True
+                    return
+                except _MidStreamKillSwitch as ks_exc:
+                    # E13: fallback model killed mid-stream — terminate cleanly
+                    # (must precede the generic `except Exception` below, which a
+                    # _MidStreamKillSwitch would otherwise be swallowed by).
+                    LOG.warning("Mid-stream kill-switch on default fallback: halting (%s)", ks_exc.reason or "model disabled")
+                    yield f"data: {json.dumps({'error': {'message': 'Model disabled by operator kill-switch; stream terminated.', 'type': 'ServiceUnavailableError', 'code': 503}})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    local_metrics.had_error = True
                     return
                 except tuple(_EXCEPTION_STATUS_MAP.keys()) as retry_exc:
                     status = _EXCEPTION_STATUS_MAP.get(type(retry_exc), 502)

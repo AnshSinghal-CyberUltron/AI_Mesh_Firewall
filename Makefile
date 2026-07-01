@@ -1,4 +1,4 @@
-.PHONY: up down ps logs migrate extract-plan frontend-build
+.PHONY: up down ps logs migrate extract-plan test-control-pg frontend-build
 
 up:
 	docker compose up -d postgres redis rabbitmq control gateway frontend
@@ -20,6 +20,9 @@ logs:
 
 migrate:
 	docker compose exec control python manage.py migrate
+
+test-control-pg:
+	powershell -ExecutionPolicy Bypass -File scripts/run-control-tests-postgres.ps1 $(TEST_LABEL)
 
 rebuild-control:
 	docker compose build control

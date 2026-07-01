@@ -352,6 +352,22 @@ class KillSwitchCreateSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+        if model_name == KillSwitch.SCOPE_CREDENTIAL and not api_key_prefix:
+            raise serializers.ValidationError(
+                {
+                    "api_key_prefix": (
+                        "API key prefix is required when model_name is '__credential__'."
+                    )
+                }
+            )
+        if model_name == KillSwitch.SCOPE_CREDENTIAL and action == "reroute":
+            raise serializers.ValidationError(
+                {
+                    "action": (
+                        "Credential-wide kill-switches cannot use reroute; use disable."
+                    )
+                }
+            )
         request = self.context.get("request")
         # Duplicate guard: the DB has unique_together (organization, model_name,
         # api_key_prefix), but `organization` is NOT a serializer field (it is
@@ -370,18 +386,18 @@ class KillSwitchCreateSerializer(serializers.ModelSerializer):
                     model_name=model_name,
                     api_key_prefix=api_key_prefix,
                 )
-                if self.instance is not None:
-                    dup_qs = dup_qs.exclude(pk=self.instance.pk)
-                if dup_qs.exists():
-                    _scope = f' (key prefix "{api_key_prefix}")' if api_key_prefix else ""
-                    raise serializers.ValidationError(
-                        {
-                            "model_name": (
-                                f'A kill-switch already exists for "{model_name}"{_scope}. '
-                                "Edit or delete the existing kill-switch instead of creating a duplicate."
-                            )
-                        }
-                    )
+        if self.instance is not None:
+            dup_qs = dup_qs.exclude(pk=self.instance.pk)
+            if dup_qs.exists():
+                _scope = f' (key prefix "{api_key_prefix}")' if api_key_prefix else ""
+                raise serializers.ValidationError(
+                    {
+                        "model_name": (
+                            f'A kill-switch already exists for "{model_name}"{_scope}. '
+                            "Edit or delete the existing kill-switch instead of creating a duplicate."
+                        )
+                    }
+                )
         # Warning is advisory-only: keep it gated on a model_name actually
         # supplied in the payload (always true on create) so a PATCH that
         # does not touch model_name never injects the warning sentinel.

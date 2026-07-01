@@ -10,6 +10,55 @@ import {
   isRoutingReroute,
 } from "../constants/zeroshieldBrand.js";
 
+/** Distinguish gateway-key 401 (middleware) from upstream provider 401 (LiteLLM). */
+export function describeGatewayHttp401(data, { modelName = "" } = {}) {
+  if (data?.error === "unauthorized") {
+    return "Authentication failed. Your Gateway API Key is invalid or expired.";
+  }
+  const providerMsg = String(data?.error?.message || data?.message || "").trim();
+  if (
+    data?.error?.type === "AuthenticationError"
+    || /incorrect api key|invalid api key|authenticationerror/i.test(providerMsg)
+  ) {
+    const modelHint = modelName ? ` (${modelName})` : "";
+    return (
+      `Provider API key rejected${modelHint}. The gateway accepted your request, but the `
+      + "OpenAI/Anthropic key stored under Model Connection is invalid. Edit that model and save a real API key."
+    );
+  }
+  return providerMsg || "Authentication failed (HTTP 401).";
+}
+
+/** Gateway middleware 403 — disabled/expired key (not input scan or kill switch). */
+export function describeGatewayHttp403(data) {
+  const message = String(data?.message || extractErrorPayload(data).message || "").trim();
+  const code = String(data?.code || "").toLowerCase();
+  if (code === "forbidden" && /api key is disabled/i.test(message)) {
+    return "Gateway API key is disabled. Re-enable it under API Keys or M2.2 UEBA Fleet.";
+  }
+  if (code === "forbidden" && /api key has expired/i.test(message)) {
+    return "Gateway API key has expired. Create a new key or extend expiry.";
+  }
+  return message || "Request forbidden (HTTP 403).";
+}
+
+function resolveResponseCode(data) {
+  const err = extractErrorPayload(data);
+  return String(data?.code || err.code || "").toLowerCase();
+}
+
+export function isGatewayAuthForbidden(data, httpStatus) {
+  if (httpStatus === 401 || data?.error === "unauthorized") return true;
+  const message = String(data?.message || extractErrorPayload(data).message || "").toLowerCase();
+  const code = resolveResponseCode(data);
+  const errField = typeof data?.error === "string" ? data.error.toLowerCase() : "";
+  return (
+    httpStatus === 403
+    && (code === "forbidden" || errField === "forbidden")
+    && (message.includes("api key is disabled") || message.includes("api key has expired"))
+  );
+}
+
 export function chatCompletionBody({
   prompt,
   model = "auto",
@@ -259,9 +308,39 @@ const INFERENCE_SETUP_CODES = new Set([
   "bedrock_model_not_configured",
 ]);
 
+// Codes the gateway returns when a firewall POLICY/CONTENT decision (not a system
+// fault) stops the request. OpenAI-SDK-compat maps a policy block to HTTP 400 with
+// code "content_filter"/"content_blocked" (see C1 error-envelope work), so a naive
+// `httpStatus >= 400 -> error` would mislabel a real BLOCK as a system ERROR.
+const POLICY_BLOCK_CODES = new Set(["content_blocked", "content_filter", "blocked"]);
+
+/**
+ * True when a 4xx body is a deliberate firewall content/policy block rather than a
+ * malformed-request / system error. Gated on the gateway's own block markers
+ * (code, nested error.code, blocked_by, policy-violation category) so a genuine
+ * validation 400 (e.g. missing model param) still resolves to "error".
+ */
+function isContentPolicyBlock(data, httpStatus) {
+  if (!data || httpStatus < 400 || httpStatus >= 500) return false;
+  const err = extractErrorPayload(data);
+  const code = String(data?.code || "").toLowerCase();
+  const errCode = String(err.code || "").toLowerCase();
+  const category = String(data?.category || "").toLowerCase();
+  const blockedBy = String(data?.blocked_by || "").toLowerCase();
+  return (
+    POLICY_BLOCK_CODES.has(code)
+    || POLICY_BLOCK_CODES.has(errCode)
+    || (blockedBy && blockedBy !== "rate_limit")
+    || category.includes("policy")
+    || category.includes("violation")
+  );
+}
+
 function inferFinalAction(data, httpStatus, zs) {
   if (data?.final_action) return data.final_action;
-  const code = String(data?.code || "").toLowerCase();
+  const code = resolveResponseCode(data);
+  if (code === "kill_switch_active") return "block";
+  if (isGatewayAuthForbidden(data, httpStatus)) return "block";
   if (httpStatus === 422 && INFERENCE_SETUP_CODES.has(code)) return "needs_model";
   if (isUpstreamProviderError(data, httpStatus)) return "error";
   if (zs?.action) return zs.action;
@@ -269,6 +348,9 @@ function inferFinalAction(data, httpStatus, zs) {
   if (httpStatus === 429) {
     return isUpstreamProviderRateLimit(data, httpStatus) ? "error" : "block";
   }
+  // A firewall content/policy block surfaced as a 4xx (OpenAI content_filter) is a
+  // BLOCK verdict, not a system error — honor it before the generic 4xx fallthrough.
+  if (isContentPolicyBlock(data, httpStatus)) return "block";
   if (httpStatus >= 400) return "error";
   return "allow";
 }
@@ -300,7 +382,7 @@ export function inferDetectionCheckpoint(data, zs) {
 
 /** Map gateway response to the pipeline stage where processing stopped. */
 function inferBlockedStage(data, httpStatus, zs) {
-  const code = String(data?.code || "").toLowerCase();
+  const code = resolveResponseCode(data);
   const category = String(data?.category || zs?.threat_type || "").toLowerCase();
   const tier = String(data?.detection_tier || data?.pipeline_stage || zs?.detection_tier || "").toLowerCase();
 
@@ -316,6 +398,7 @@ function inferBlockedStage(data, httpStatus, zs) {
     return "rate_limit";
   }
   if (code === "kill_switch_active") return "kill_switch";
+  if (isGatewayAuthForbidden(data, httpStatus)) return "auth";
   if (INFERENCE_SETUP_CODES.has(code) || data?.category === "inference_not_configured") {
     return "model_routing";
   }
@@ -361,7 +444,7 @@ function inferBlockedStage(data, httpStatus, zs) {
   if (code === "content_blocked" && category === "blocked_keyword") return "policy";
   if (code === "content_blocked" && tier) return tier.startsWith("tier") ? "input_scan" : "policy";
 
-  if (httpStatus === 403) return "input_scan";
+  if (httpStatus === 403 && !isGatewayAuthForbidden(data, httpStatus)) return "input_scan";
   if (httpStatus === 429) return "rate_limit";
   if (httpStatus >= 500 || (httpStatus >= 400 && data?.error)) return "model_output";
   return "";
@@ -579,6 +662,17 @@ function enrichStages(stages, data, zs, context) {
       if (!enriched.detail && enriched.routing_reason) {
         enriched.detail = enriched.routing_reason;
       }
+      const reqModel = enriched.requested_model || "";
+      const selModel = enriched.selected_model || "";
+      const routingMeta = {
+        ...routing,
+        decision_source: rawSource,
+        trigger_source: routing.trigger_source,
+        rerouted: routing.rerouted ?? enriched.action === "reroute",
+      };
+      if (enriched.action === "reroute" && !isRoutingReroute(reqModel, selModel, routingMeta)) {
+        enriched.action = "allow";
+      }
     }
     if (stage.name === "kill_switch" && enriched.action === "reroute" && enriched.routing_reason) {
       enriched.detail = formatRoutingReason(enriched.routing_reason, {
@@ -607,6 +701,7 @@ function skipDetail(stageName, blockedStage) {
 
 function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, context = {}) {
   const routing = { ...(zs.routing || {}), ...(context.routingHeaders || {}) };
+  const ksTrigger = String(routing.trigger_source || routing.decision_source || "").toLowerCase();
   const stageMetrics = metricsFromPayload(data, context);
   const promptPreview = truncateText(context.prompt || "");
   const blockedIdx = blockedStage ? stageIndex(blockedStage) : -1;
@@ -639,7 +734,11 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       name: "auth",
       action: at === "blocked" ? "block" : "allow",
       latency_ms: latencyForStage("auth", stageMetrics, zs, context),
-      detail: at === "blocked" ? "Gateway API key invalid or missing" : "Gateway API key accepted",
+      detail: at === "blocked"
+        ? (isGatewayAuthForbidden(data, httpStatus)
+          ? describeGatewayHttp403(data)
+          : "Gateway API key invalid or missing")
+        : "Gateway API key accepted",
     });
   }
 
@@ -761,15 +860,13 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
   {
     const at = stageAt("kill_switch");
     const ksBlocked = blockedStage === "kill_switch";
-    const ksRerouted = Boolean(
-      routing.rerouted && String(routing.trigger_source || routing.decision_source || "").toLowerCase() === "kill_switch",
-    );
+    const ksRerouted = Boolean(routing.rerouted && ksTrigger === "kill_switch");
     stages.push({
       name: "kill_switch",
       action: ksBlocked ? "block" : ksRerouted ? "reroute" : at === "after" ? "skip" : "allow",
       latency_ms: latencyForStage("kill_switch", stageMetrics, zs, context),
       detail: ksBlocked
-        ? (data?.message || "Model kill-switch is active")
+        ? (data?.message || "Kill-switch is active for this API key or model.")
         : ksRerouted
           ? formatRoutingReason(routing.routing_reason || routing.reason || "", {
             decisionSource: routing.decision_source,
@@ -793,7 +890,8 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     const rawRoutingReason = routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "";
     const rawDecisionSource = routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "";
     const formattedReason = formatRoutingReason(rawRoutingReason, { decisionSource: rawDecisionSource });
-    const rerouted = isRoutingReroute(reqModel, selModel, routing);
+    const ksRerouteActive = Boolean(routing.rerouted && ksTrigger === "kill_switch");
+    const rerouted = !ksRerouteActive && isRoutingReroute(reqModel, selModel, routing);
     stages.push({
       name: "model_routing",
       action: needsModel
@@ -984,7 +1082,10 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     const zs = mergeScanFieldsFromTrace(data.zeroshield || {}, data.pipeline_trace);
     const finalAction = inferFinalAction(data, httpStatus, zs);
     const blockedStage = inferTerminalBlockedStage(data, httpStatus, zs, finalAction);
-    const stages = enrichStages(data.pipeline_trace.stages, data, zs, mergedContext);
+    const stageSource = blockedStage || httpStatus >= 400
+      ? buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, mergedContext)
+      : data.pipeline_trace.stages;
+    const stages = enrichStages(stageSource, data, zs, mergedContext);
     const totalLatency = data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs;
     const guardSummary = data.pipeline_trace.guard_summary || null;
     // Hoist stages/guard_summary/total_latency to the top level (the single

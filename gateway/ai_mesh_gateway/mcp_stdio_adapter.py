@@ -26,6 +26,12 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
+from ai_mesh_shared.mcp_stdio_common import (
+    _args_have_oauth_header,
+    _build_child_env,
+    _looks_like_oauth_prompt,
+)
+
 LOG = logging.getLogger("gateway.mcp_stdio_adapter")
 
 # How long an idle process lives before being reaped (seconds)
@@ -76,37 +82,15 @@ _PACKAGE_ALLOWLIST = {
 _REQUIRE_PINNED_PACKAGES = os.environ.get(
     "MCP_STDIO_REQUIRE_PINNED_PACKAGES", "false"
 ).lower() in ("1", "true", "yes")
+# Dev default true (in-gateway spawn); compose/prod sets MCP_STDIO_IN_PROCESS=false.
+_STDIO_IN_PROCESS_DEFAULT = "true"
 
-# Substrings that, when seen on a child's stdout/stderr during startup, signal
-# the server is trying to run an INTERACTIVE OAuth/login flow that cannot
-# complete headless. We surface this as needs_reauth and fail fast instead of
-# blocking for the full init timeout (root cause of the linear-mcp hang).
-_OAUTH_HINT_SUBSTRINGS = (
-    "please visit", "open the following url", "open this url",
-    "authorize this app", "authorization required", "to authenticate",
-    "log in to your", "visit the following", "press any key to open",
-    "waiting for authentication", "sign in to continue",
-    # mcp-remote (Linear/Asana/Atlassian/etc. BYOK OAuth) actual phrasing —
-    # close to the above but not identical, which previously slipped past
-    # detection and caused the full-init-timeout hang (linear-mcp).
-    "please authorize", "by visiting", "authentication required",
-    "waiting for authorization", "browser opened automatically",
-    "oauth callback server running",
-)
 
-# mcp-remote stderr when a Bearer token is already injected — informational only.
-_MCP_REMOTE_HEADLESS_OAUTH_INFO = (
-    "discovering oauth server configuration",
-    "discovered authorization server",
-    "using custom headers",
-    "connecting to remote server",
-    "connected to remote server",
-    "proxy established successfully",
-    "local stdio server running",
-    "using transport strategy",
-    "using automatically selected callback port",
-    "press ctrl+c to exit",
-)
+def _stdio_in_process() -> bool:
+    """True when stdio MCP servers run in the gateway process (dev fallback)."""
+    raw = os.environ.get("MCP_STDIO_IN_PROCESS", _STDIO_IN_PROCESS_DEFAULT)
+    return raw.lower() in ("1", "true", "yes")
+
 
 # Init concurrency limiter (lazily bound to the running loop).
 _init_semaphore: "asyncio.Semaphore | None" = None
@@ -129,30 +113,6 @@ _ALLOWED_COMMANDS = {
     ).split(",")
     if c.strip()
 }
-
-# Gateway-internal secrets that must NEVER be inherited by a spawned MCP
-# subprocess. A poisoned npm package would otherwise read the gateway↔control
-# shared key and impersonate the backend for OTHER orgs.
-_SECRET_ENV_DENYLIST = {
-    "GATEWAY_INTERNAL_API_KEY", "AGENT_API_KEY",
-    "BACKEND_URL", "AIGUARDX_BACKEND_URL", "AI_MESH_CONTROL_URL",
-    "MCP_FIREWALL_URL", "SECURE_MCP_GATEWAY_URL",
-    "SECRET_KEY", "DJANGO_SECRET_KEY", "FIELD_ENCRYPTION_KEY",
-    "DATABASE_URL", "REDIS_URL", "POSTGRES_PASSWORD",
-    "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
-    "PYTHONPATH",
-}
-
-# Host env vars that are safe (and sometimes necessary) to pass through so
-# npx/node/python/uvx can resolve binaries, TLS certs, locale and the shared
-# on-demand package caches (mounted as docker volumes for warm reuse).
-_SAFE_ENV_PASSTHROUGH = {
-    "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR",
-    "NODE_PATH", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR",
-    "NPM_CONFIG_CACHE", "NPM_CONFIG_PREFIX",
-    "UV_CACHE_DIR", "UV_PYTHON_INSTALL_DIR", "XDG_CACHE_HOME",
-}
-
 
 def _command_basename(command: str) -> str:
     return os.path.basename(command).lower()
@@ -202,48 +162,6 @@ def _is_pinned(spec: str) -> bool:
             ver = spec.split(sep, 1)[1]
             return bool(ver) and ver != "latest"
     return False
-
-
-def _args_have_oauth_header(args: list[str]) -> bool:
-    for idx, arg in enumerate(args):
-        if arg == "--header" and idx + 1 < len(args):
-            if args[idx + 1].lower().startswith("authorization:"):
-                return True
-    return False
-
-
-def _looks_like_oauth_prompt(text: str, *, oauth_header_injected: bool = False) -> bool:
-    """Heuristic: does this child output indicate an interactive login flow?"""
-    t = text.lower()
-    if oauth_header_injected and any(info in t for info in _MCP_REMOTE_HEADLESS_OAUTH_INFO):
-        return False
-    if not any(h in t for h in _OAUTH_HINT_SUBSTRINGS):
-        return False
-    return ("http://" in t or "https://" in t
-            or "authenticat" in t or "authoriz" in t)
-
-
-def _build_child_env(env: dict[str, str] | None, org_slug: str) -> dict[str, str]:
-    """Construct a sandboxed environment for a spawned MCP subprocess.
-
-    Allowlist host vars (never gateway secrets) + per-org BYOK env, then pin a
-    per-org MCP_REMOTE_CONFIG_DIR so OAuth tokens cannot leak across orgs.
-    """
-    child: dict[str, str] = {
-        k: os.environ[k] for k in _SAFE_ENV_PASSTHROUGH if k in os.environ
-    }
-    for k, v in (env or {}).items():
-        if k in _SECRET_ENV_DENYLIST:
-            LOG.warning("Refusing to pass denylisted env var %s to stdio child", k)
-            continue
-        child[k] = v
-    # Defense-in-depth: strip injection vectors and any secret that slipped in.
-    for dangerous in ("LD_PRELOAD", "DYLD_INSERT_LIBRARIES"):
-        child.pop(dangerous, None)
-    for secret in _SECRET_ENV_DENYLIST:
-        child.pop(secret, None)
-    child["MCP_REMOTE_CONFIG_DIR"] = f"/tmp/mcp-orgs/{org_slug}/mcp-auth"
-    return child
 
 
 @dataclass
@@ -482,7 +400,7 @@ async def _ensure_process(key: str, command: str, args: list[str],
                 "connection and retry."
             )
 
-        proc_env = _build_child_env(requested_env, org_slug)
+        proc_env = _build_child_env(requested_env, org_slug, log=LOG)
 
         LOG.info("Starting stdio MCP process: %s %s (key=%s)", command, args, key)
         try:
@@ -650,15 +568,62 @@ async def _ensure_initialized(proc: StdioProcess):
         proc.initialized = True
 
 
-async def send_jsonrpc(org_slug: str, server_slug: str,
-                       command: str, args: list[str],
-                       env: dict[str, str] | None,
-                       method: str, params: dict | None,
-                       msg_id: int | str | None) -> dict:
-    """Send a JSON-RPC message to a stdio MCP server and return the response.
+def _server_config_for_broker(
+    org_slug: str,
+    server_slug: str,
+    command: str,
+    args: list[str],
+    env: dict[str, str] | None,
+    server_config: dict | None,
+) -> tuple[str, dict]:
+    """Build broker server_config; org_slug may be overridden via server_config."""
+    cfg = dict(server_config or {})
+    cfg.setdefault("org_slug", org_slug)
+    cfg.setdefault("server_slug", server_slug)
+    cfg.setdefault("command", command)
+    cfg.setdefault("args", list(args))
+    if env is not None:
+        cfg.setdefault("env_vars", env)
+    effective_org = str(cfg.get("org_slug") or org_slug)
+    return effective_org, cfg
 
-    This is the main entry point called by the gateway JSON-RPC handler.
-    """
+
+async def _send_jsonrpc_broker(
+    org_slug: str,
+    server_slug: str,
+    command: str,
+    args: list[str],
+    env: dict[str, str] | None,
+    method: str,
+    params: dict | None,
+    msg_id: int | str | None,
+    server_config: dict | None,
+) -> dict:
+    from ai_mesh_gateway.mcp_sandbox_client import broker_send_jsonrpc
+
+    effective_org, cfg = _server_config_for_broker(
+        org_slug, server_slug, command, args, env, server_config,
+    )
+    return await broker_send_jsonrpc(
+        effective_org,
+        cfg,
+        method,
+        params,
+        msg_id=msg_id,
+    )
+
+
+async def _send_jsonrpc_in_process(
+    org_slug: str,
+    server_slug: str,
+    command: str,
+    args: list[str],
+    env: dict[str, str] | None,
+    method: str,
+    params: dict | None,
+    msg_id: int | str | None,
+) -> dict:
+    """In-gateway stdio spawn + line-protocol JSON-RPC (dev / MCP_STDIO_IN_PROCESS=true)."""
     key = _process_key(org_slug, server_slug)
     proc = await _ensure_process(key, command, args, env)
     await _ensure_initialized(proc)
@@ -696,6 +661,29 @@ async def send_jsonrpc(org_slug: str, server_slug: str,
     if msg_id is not None:
         resp["id"] = msg_id
     return resp
+
+
+async def send_jsonrpc(org_slug: str, server_slug: str,
+                       command: str, args: list[str],
+                       env: dict[str, str] | None,
+                       method: str, params: dict | None,
+                       msg_id: int | str | None,
+                       *,
+                       server_config: dict | None = None) -> dict:
+    """Send a JSON-RPC message to a stdio MCP server and return the response.
+
+    When ``MCP_STDIO_IN_PROCESS=false``, delegates to the mcp-broker sandbox
+    (per-org Docker container). Otherwise spawns the child in-process.
+    """
+    if not _stdio_in_process():
+        return await _send_jsonrpc_broker(
+            org_slug, server_slug, command, args, env,
+            method, params, msg_id, server_config,
+        )
+    return await _send_jsonrpc_in_process(
+        org_slug, server_slug, command, args, env,
+        method, params, msg_id,
+    )
 
 
 async def shutdown_all():

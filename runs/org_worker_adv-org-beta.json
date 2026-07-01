@@ -1,0 +1,58 @@
+{
+  "org": "adv-org-beta",
+  "ok": true,
+  "steps": [
+    "broker-health",
+    "sandbox-running",
+    "servers-6",
+    "adversarial-probes-ok"
+  ],
+  "servers": [
+    {
+      "slug": "stub-1",
+      "tools": 2,
+      "echo": "adv-org-beta:stub-1"
+    },
+    {
+      "slug": "stub-2",
+      "tools": 2,
+      "echo": "adv-org-beta:stub-2"
+    },
+    {
+      "slug": "stub-3",
+      "tools": 2,
+      "echo": "adv-org-beta:stub-3"
+    },
+    {
+      "slug": "stub-4",
+      "tools": 2,
+      "echo": "adv-org-beta:stub-4"
+    },
+    {
+      "slug": "stub-5",
+      "tools": 2,
+      "echo": "adv-org-beta:stub-5"
+    },
+    {
+      "slug": "stub-6",
+      "tools": 2,
+      "echo": "adv-org-beta:stub-6"
+    }
+  ],
+  "probes": [
+    {
+      "key": "GATEWAY_INTERNAL_API_KEY",
+      "leaked": false
+    },
+    {
+      "key": "MCP_BROKER_INTERNAL_KEY",
+      "leaked": false
+    },
+    {
+      "key": "DATABASE_URL",
+      "leaked": false
+    }
+  ],
+  "error": null,
+  "container_id": "2c8779b126ee"
+}

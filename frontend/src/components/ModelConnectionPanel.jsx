@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
+import { syncModule2AfterTelemetryChange } from "../utils/crossModuleSync";
 import {
   ZEROSHIELD_GUARD_MODEL,
   ZEROSHIELD_GUARD_MODEL_LABEL,
@@ -490,6 +491,7 @@ export function ModelConnectionPanel({
         setEditingModel(null);
         await fetchModels();
         onConnectionsMutated?.();
+        syncModule2AfterTelemetryChange("model-connection-save");
       } else {
         const errData = await res.json().catch(() => ({}));
         setError(
@@ -519,6 +521,7 @@ export function ModelConnectionPanel({
       }
       await fetchModels();
       onConnectionsMutated?.();
+      syncModule2AfterTelemetryChange("model-connection-toggle");
     } finally {
       setActionLoading(null);
     }
@@ -537,6 +540,7 @@ export function ModelConnectionPanel({
       }
       await fetchModels();
       onConnectionsMutated?.();
+      syncModule2AfterTelemetryChange("model-connection-delete");
     } finally {
       setActionLoading(null);
     }

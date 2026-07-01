@@ -246,18 +246,21 @@ class OutputGuard:
         if _enabled("output_ip_leakage_enabled", True):
             ip_action = _action(
                 "output_ip_leakage_action",
-                "block" if self._config.get("output_block_on_ip_leakage", False) else "flag",
+                "block" if self._config.get("output_block_on_ip_leakage", False) else "redact",
             )
-            # R2: ip_leakage is a heuristic, false-positive-prone signal (a single
-            # private/example IP in an educational answer is benign). It must
-            # never DESTROY the whole response on the heuristic alone: downgrade a
-            # whole-response "rewrite" to "flag" (observe), and only allow a hard
-            # "block" when the org EXPLICITLY opted in via output_block_on_ip_leakage.
-            # (PII/secret/credential detectors keep their stronger actions.)
-            if ip_action == "rewrite":
-                ip_action = "flag"
+            # R2/E15: ip_leakage is a heuristic, false-positive-prone signal (a single
+            # private/example IP in an educational answer is benign), so it must never
+            # DESTROY the whole response: a whole-response "rewrite" is softened, and a
+            # hard "block" is only honoured when the org EXPLICITLY opted in via
+            # output_block_on_ip_leakage. BUT a REAL internal address that survives FP
+            # suppression (the example-address carve-out + the tier-2 guard_rated_clean
+            # drop below) must be NEUTRALISED, not egressed raw — so the floor is now
+            # "redact" (surgical mask of the infra token), matching PII's always-redact
+            # behaviour, instead of the old "flag" that let it leak in monitor-mode orgs.
+            if ip_action in ("rewrite", "flag"):
+                ip_action = "redact"
             elif ip_action == "block" and not self._config.get("output_block_on_ip_leakage", False):
-                ip_action = "flag"
+                ip_action = "redact"
             if ip_action != "allow":
                 ip_verdict = self._check_ip_leakage(text, ip_action)
                 if ip_verdict.action != "allow":
@@ -892,6 +895,17 @@ def sanitize_output_for_verdict(
         if redact_pii_fn is not None:
             return redact_pii_fn(response_text)
         return "[REDACTED]"
+    # E15: internal infrastructure leakage (internal IP / hostname / URL) is
+    # surgically masked via the deterministic redactor — never whole-response
+    # rewritten — so a REAL internal address that survived FP suppression cannot
+    # egress raw on the client channel, regardless of the configured action
+    # (flag/redact). Kept OUT of _REDACTABLE_OUTPUT_CATEGORIES so an org's explicit
+    # opt-in hard 'block' is preserved (that set also drives the block->redact
+    # downgrade, which must NOT fire for an opt-in IP block).
+    if threat == "ip_leakage":
+        if redact_pii_fn is not None:
+            return redact_pii_fn(response_text)
+        return response_text
     if action == "rewrite":
         return rewrite_output_response_text(threat, verdict.detail or None)
     if action != "redact":

@@ -59,12 +59,33 @@ export function formatDecisionSource(source) {
   return DECISION_SOURCE_LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** True when requested and selected models differ (non-auto). */
+/** Routing sources that pick a model without operator intervention reroute. */
+const ROUTINE_ROUTING_SOURCES = new Set([
+  "policy_adjudicator",
+  "weighted",
+  "weighted_fastpath",
+  "weighted_fallback",
+  "routing_disabled",
+  "no_routing_models",
+  "simulator_bedrock_boto3_global",
+]);
+
+/** True when Model Routing should show REROUTE (forced intervention), not routine selection. */
 export function isRoutingReroute(requested, selected, routing = {}) {
-  if (routing.rerouted) return true;
+  const source = String(routing.decision_source || routing.trigger_source || "").toLowerCase();
+  // Kill-switch / isolation reroutes are rendered on the kill_switch stage.
+  if (["kill_switch", "model_state", "isolation"].includes(source)) {
+    return false;
+  }
   const req = String(requested || "").trim();
   const sel = String(selected || "").trim();
-  return Boolean(req && sel && req.toLowerCase() !== "auto" && req !== sel);
+  if (!req || !sel || req.toLowerCase() === "auto" || req === sel) {
+    return false;
+  }
+  if (!source || ROUTINE_ROUTING_SOURCES.has(source)) {
+    return false;
+  }
+  return Boolean(routing.rerouted);
 }
 
 /** Log viewer service filter label (maps to gateway log service name internally).
@@ -144,7 +165,14 @@ export function filterUserManagedModels(models) {
  * "API key missing" / "No inference model connected".
  */
 export function modelHasUsableKey(m) {
-  return Boolean(m && (m.api_key_set || m.api_key_env_var));
+  if (!m) return false;
+  const provider = String(m.provider || "").toLowerCase();
+  // Mirror gateway inference eligibility: Ollama and Bedrock can run without a
+  // stored encrypted key (local daemon / gateway AWS credential chain).
+  if (provider === "ollama" || provider === "aws_bedrock" || provider === "bedrock") {
+    return true;
+  }
+  return Boolean(m.api_key_set || m.api_key_env_var);
 }
 
 /** Substrings of any reserved platform/guard/BYOK upstream id or codename. A

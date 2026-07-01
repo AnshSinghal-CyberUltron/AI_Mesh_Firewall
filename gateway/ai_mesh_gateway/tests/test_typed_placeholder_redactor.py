@@ -96,3 +96,21 @@ def test_no_redos_on_pathological_long_run():
     elapsed = time.perf_counter() - start
     assert isinstance(out, str)
     assert elapsed < 3.0, f"redaction took {elapsed:.1f}s — possible ReDoS regression"
+
+
+def test_bare_contextual_phone_does_not_swallow_nested_email():
+    """B4 span-unification regression: a contextual bare-phone whose cue is split
+    from the value by an email ("contact <email>, call back on <phone>") must
+    redact to BOTH [EMAIL] and [PHONE]. Before the fix the broadened phone match
+    SPAN (cue..value) overlap-swallowed the nested email, dropping [EMAIL] — a
+    divergence from patterns.redact_all (which masks only the trailing digits).
+    The typed redactor now narrows the phone span to its value, mirroring
+    _mask_phone_bare_contextual, so both engines redact structurally identically."""
+    text = "Customer record: contact bob@corp.example, call back on 8929554991."
+    r = detect_and_redact_typed(text)
+    assert "8929554991" not in r.text, f"raw phone survived: {r.text!r}"
+    assert "bob@corp.example" not in r.text, f"raw email survived: {r.text!r}"
+    assert "[EMAIL]" in r.text, f"email placeholder swallowed by phone span: {r.text!r}"
+    assert "[PHONE]" in r.text, f"phone not redacted: {r.text!r}"
+    # The cue/gap text between the two placeholders is preserved (not consumed).
+    assert "call back on" in r.text

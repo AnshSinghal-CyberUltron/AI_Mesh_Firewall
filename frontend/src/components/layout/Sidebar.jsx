@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Shield,
   ShieldAlert,
+  LayoutDashboard,
   ChevronLeft,
   ChevronRight,
   User,
@@ -31,6 +32,21 @@ const menuItems = [
       { id: "firewall-1-6", label: "Model Isolation & Kill-Switch" },
       { id: "firewall-1-7", label: "Output Guardrails" },
       { id: "firewall-config", label: "Inputs" },
+    ],
+  },
+  {
+    id: "module2",
+    label: "Gateway Behaviour Intelligence",
+    icon: LayoutDashboard,
+    section: "Module 2",
+    offering: "platform",
+    subItems: [
+      { id: "m2-dashboard", label: "M2.1 Gateway Intelligence Hub", route: "/dashboard" },
+      { id: "m2-ueba-api-keys", label: "M2.2 API Key & Identity Risk", route: "/ueba/api-keys" },
+      { id: "m2-models-exposure", label: "M2.3 Model & RAG Health", route: "/models/exposure" },
+      { id: "m2-mcp-risk", label: "M2.4 MCP & Context Risk", route: "/mcp/risk" },
+      { id: "m2-threat-intel", label: "M2.5 Threat Intelligence Ops", route: "/threat-intel" },
+      { id: "m2-incidents", label: "M2.6 Incidents & Forensics", route: "/incidents" },
     ],
   },
 ];
@@ -68,7 +84,11 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
         new Set([
           ...expandedModules,
           ...visibleMenuItems
-            .filter((item) => item.subItems && (activeTab === item.id || activeTab.startsWith(item.id)))
+            .filter((item) => item.subItems && (
+              activeTab === item.id
+              || activeTab.startsWith(item.id)
+              || (item.id === "module2" && activeTab.startsWith("m2-"))
+            ))
             .map((item) => item.id),
         ])
       );
@@ -115,13 +135,23 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
     navigate('/login');
   };
 
-  const handleMenuItemClick = (id) => {
-    onTabChange(id);
+  const handleMenuItemClick = (id, route) => {
+    if (route) {
+      navigate(route);
+    } else if (id === "firewall") {
+      navigate("/");
+      onTabChange?.(id);
+    } else if (id.startsWith("firewall")) {
+      navigate(`/?tab=${id}`);
+      onTabChange?.(id);
+    } else {
+      onTabChange?.(id);
+    }
     setShowAccountMenu(false);
     onCloseMobile?.();
   };
 
-  const overviewModules = ['firewall'];
+  const overviewModules = ['firewall', 'module2'];
 
   const toggleModule = (id) => {
     setHasCustomizedExpansion(true);
@@ -215,7 +245,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                   onClick={() => toggleModule(item.id)}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group relative",
-                    (activeTab === item.id || activeTab.startsWith(item.id))
+                    (activeTab === item.id || activeTab.startsWith(item.id) || (item.id === "module2" && activeTab.startsWith("m2-")))
                       ? "bg-gradient-to-r from-cyan-50 dark:from-cyan-900/20 to-teal-50 dark:to-teal-900/20 dark:from-teal-900/30 dark:to-cyan-900/20 text-teal-700 dark:text-teal-400 font-medium shadow-sm"
                       : "text-slate-600 dark:text-slate-400 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100 dark:hover:text-slate-100"
                   )}
@@ -223,9 +253,9 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                   <item.icon
                     className={cn(
                       "flex-shrink-0 transition-transform group-hover:scale-110",
-                      (activeTab === item.id || activeTab.startsWith(item.id)) ? "w-5 h-5" : "w-4 h-4"
+                      (activeTab === item.id || activeTab.startsWith(item.id) || (item.id === "module2" && activeTab.startsWith("m2-"))) ? "w-5 h-5" : "w-4 h-4"
                     )}
-                    strokeWidth={(activeTab === item.id || activeTab.startsWith(item.id)) ? 2.5 : 2}
+                    strokeWidth={(activeTab === item.id || activeTab.startsWith(item.id) || (item.id === "module2" && activeTab.startsWith("m2-"))) ? 2.5 : 2}
                   />
                   <span className="truncate flex-1 text-left">{item.label}</span>
                   <ChevronDown
@@ -243,7 +273,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                       .map((subItem) => (
                       <button
                         key={subItem.id}
-                        onClick={() => handleMenuItemClick(subItem.id)}
+                        onClick={() => handleMenuItemClick(subItem.id, subItem.route)}
                         className={cn(
                           "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 border-l-2",
                           activeTab === subItem.id
@@ -308,7 +338,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                       .map((subItem) => (
                       <button
                         key={subItem.id}
-                        onClick={() => { handleMenuItemClick(subItem.id); setFlyoutModule(null); }}
+                        onClick={() => { handleMenuItemClick(subItem.id, subItem.route); setFlyoutModule(null); }}
                         className={cn(
                           "w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors",
                           activeTab === subItem.id

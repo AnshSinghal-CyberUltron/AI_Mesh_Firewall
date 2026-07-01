@@ -50,13 +50,20 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management
+    restart: unless-stopped
     ports: ["5772:5672", "15772:15672"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 10s
-      timeout: 5s
-      retries: 8
-      start_period: 25s
+      # Cold start on Windows Docker can exceed 2 min; allow enough grace before marking unhealthy.
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 180s
 
   mongo:
     image: mongo:7
@@ -68,6 +75,12 @@ services:
     build:
       context: .
       dockerfile: control/Dockerfile
+    # The image WORKDIR is /app/control, but the Django project (manage.py +
+    # main_app/) lives one level deeper at /app/control/ai_mesh_control. Pin
+    # working_dir there so the image Cmd `daphne main_app.asgi:application`
+    # (and `docker exec ... manage.py`) can import main_app. Without this the
+    # container exits with ModuleNotFoundError: No module named 'main_app'.
+    working_dir: /app/control/ai_mesh_control
     ports: ["8100:8000"]
     env_file:
       - .env
@@ -106,13 +119,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 8
-      start_period: 45s
+      start_period: 120s
 
   workers:
-    profiles: ["workers"]
     build:
       context: .
       dockerfile: workers/Dockerfile
+    restart: unless-stopped
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
@@ -128,14 +141,15 @@ services:
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
     depends_on:
       postgres: { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
+      rabbitmq: { condition: service_started }
       redis: { condition: service_healthy }
+      control: { condition: service_healthy }
 
   workers-beat:
-    profiles: ["workers"]
     build:
       context: .
       dockerfile: workers/Dockerfile
+    restart: unless-stopped
     command: celery -A ai_mesh_workers.celery_app beat --loglevel=info
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
@@ -149,8 +163,9 @@ services:
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
     depends_on:
       postgres: { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
+      rabbitmq: { condition: service_started }
       redis: { condition: service_healthy }
+      control: { condition: service_healthy }
 
   gateway:
     build:
@@ -247,21 +262,31 @@ services:
   frontend:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install && npm run dev"
-    volumes: ["./frontend:/app", "/app/node_modules"]
-    ports: ["8180:5173"]
+    # Use entrypoint placeholder so :8180 responds during npm install (avoids ERR_EMPTY_RESPONSE).
+    command: ["sh", "/app/docker-entrypoint.sh"]
+    volumes: ["./frontend:/app", "frontend_node_modules:/app/node_modules"]
+    ports: ["127.0.0.1:8180:5173"]
+    env_file:
+      - .env
     environment:
       VITE_CONTROL_PROXY: http://control:8000
       VITE_GATEWAY_PROXY: http://gateway:8300
       VITE_GATEWAY_BASE_URL: ${VITE_GATEWAY_BASE_URL:-http://127.0.0.1:8180}
       VITE_BACKEND_BASE_URL: ${VITE_BACKEND_BASE_URL:-http://127.0.0.1:8180}
-    depends_on:
-      control: { condition: service_healthy }
+      VITE_ENABLE_REALTIME_NOTIFICATIONS: ${VITE_ENABLE_REALTIME_NOTIFICATIONS:-true}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:5173/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 120s
 
 volumes:
   postgres_data:
   redis_data:
+  rabbitmq_data:
   mongo_data:
   chroma_data:
   npm_cache:
   uv_cache:
+  frontend_node_modules:

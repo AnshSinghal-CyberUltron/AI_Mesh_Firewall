@@ -169,13 +169,17 @@ done
 
 echo "==> Control + migrations"
 "${COMPOSE[@]}" up -d --no-build control
-for _ in $(seq 1 45); do
+for _ in $(seq 1 60); do
   curl -sf "http://127.0.0.1:8100/api/health/" >/dev/null 2>&1 && break
   sleep 2
 done
+# Entrypoint already runs migrate + ensure_zeroshield_admin; keep explicit migrate for older images.
 "${COMPOSE[@]}" exec -T control python manage.py migrate --noinput
 
 if [[ "${SKIP_ADMIN:-}" != "1" ]]; then
+  if [[ -z "${ZEROSHIELD_ADMIN_PASSWORD:-}" ]]; then
+    echo "WARNING: ZEROSHIELD_ADMIN_PASSWORD unset — admin may use dev default on first create only."
+  fi
   "${COMPOSE[@]}" exec -T control python manage.py ensure_zeroshield_admin \
     ${ZEROSHIELD_ADMIN_PASSWORD:+--password "$ZEROSHIELD_ADMIN_PASSWORD"} || true
 fi

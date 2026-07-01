@@ -91,6 +91,72 @@ async def test_list_collections_for_clients_normalizes_namespace():
     assert result == {"pinecone": ["docs", "other"]}
 
 
+class _HangingClient:
+    """A provider whose list_collections blacks-holes (e.g. stale URL)."""
+
+    async def list_collections(self, project_id: str):
+        import asyncio
+
+        await asyncio.sleep(30)
+        return ["never"]
+
+
+@pytest.mark.asyncio
+async def test_list_collections_one_slow_provider_does_not_stall_others(monkeypatch):
+    """D3 root cause: a single unreachable provider must NOT hang or fail the
+    whole listing — it degrades to [] within the per-provider timeout while the
+    healthy provider still returns its collections."""
+    import time
+
+    from ai_mesh_gateway.rag_collections import list_collections_for_clients
+
+    # tiny timeout so the test is fast but still exercises the bound
+    monkeypatch.setenv("RAG_LIST_COLLECTIONS_TIMEOUT", "0.3")
+
+    healthy = _FakeClient(["demo__docs"])
+    hanging = _HangingClient()
+
+    start = time.monotonic()
+    result = await list_collections_for_clients(
+        "demo", [("chroma", healthy), ("pinecone", hanging)]
+    )
+    elapsed = time.monotonic() - start
+
+    # healthy provider's data survives; dead provider degrades to empty
+    assert result == {"chroma": ["docs"], "pinecone": []}
+    # concurrent + bounded: well under the 30s hang and the proxy's 10s budget
+    assert elapsed < 2.0, f"listing should be bounded by the per-provider timeout, took {elapsed:.1f}s"
+
+
+@pytest.mark.asyncio
+async def test_list_collections_runs_providers_concurrently(monkeypatch):
+    """Two slow-but-OK providers run concurrently, so total ~= one provider's
+    latency, not the sum."""
+    import asyncio
+    import time
+
+    from ai_mesh_gateway.rag_collections import list_collections_for_clients
+
+    monkeypatch.setenv("RAG_LIST_COLLECTIONS_TIMEOUT", "5")
+
+    class _SlowOk:
+        def __init__(self, name):
+            self._name = name
+
+        async def list_collections(self, project_id: str):
+            await asyncio.sleep(0.4)
+            return [f"{project_id}__{self._name}"]
+
+    start = time.monotonic()
+    result = await list_collections_for_clients(
+        "demo", [("a", _SlowOk("aa")), ("b", _SlowOk("bb"))]
+    )
+    elapsed = time.monotonic() - start
+
+    assert result == {"a": ["aa"], "b": ["bb"]}
+    assert elapsed < 0.7, f"providers must run concurrently (~0.4s), took {elapsed:.2f}s"
+
+
 @pytest.mark.asyncio
 async def test_admin_list_soft_empty_via_helpers():
     """Regression: empty VECTOR_CLIENTS + no org providers must not imply 503."""

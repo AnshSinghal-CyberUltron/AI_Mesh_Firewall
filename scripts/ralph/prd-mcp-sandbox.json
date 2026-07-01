@@ -1,0 +1,203 @@
+{
+  "feature": "MCP per-tenant Docker sandbox (Phase 1 runc)",
+  "branchName": "ralph/mcp-sandbox",
+  "sourcePlan": ".skill-workspace/implementation_plan.md",
+  "userStories": [
+    {
+      "id": "S1-sandbox-dockerfile",
+      "title": "Sandbox image Dockerfile (Node 20 + Python + uv/npx)",
+      "priority": 0,
+      "passes": true,
+      "dependencies": [],
+      "userStory": "As platform I need a reproducible sandbox image so each org container can run arbitrary npx MCP servers.",
+      "acceptanceCriteria": [
+        "Create services/mcp-broker/sandbox-image/Dockerfile mirroring gateway Node/Python versions",
+        "Image builds with docker build; exposes sandbox-agent on port 9320",
+        "Gate: docker build -t ai-mesh/mcp-sandbox:latest services/mcp-broker/sandbox-image succeeds"
+      ]
+    },
+    {
+      "id": "S2-sandbox-agent",
+      "title": "In-container sandbox-agent (stdio JSON-RPC over HTTP)",
+      "priority": 1,
+      "passes": true,
+      "dependencies": ["S1-sandbox-dockerfile"],
+      "userStory": "As broker I need an in-container agent that spawns and talks to stdio MCP children.",
+      "acceptanceCriteria": [
+        "services/mcp-broker/sandbox-image/agent/main.py with POST /rpc and GET /health",
+        "Extract/refactor spawn+line-protocol logic from mcp_stdio_adapter.py",
+        "Gate: pytest services/mcp-broker/tests/test_agent_rpc.py -q green"
+      ]
+    },
+    {
+      "id": "S3-shared-stdio-common",
+      "title": "Shared env denylist and OAuth heuristics",
+      "priority": 1,
+      "passes": true,
+      "dependencies": ["S2-sandbox-agent"],
+      "userStory": "As security I need identical denylist/OAuth rules in gateway and sandbox-agent.",
+      "acceptanceCriteria": [
+        "shared/mcp_stdio_common.py or equivalent with _SECRET_ENV_DENYLIST, _OAUTH_HINT_SUBSTRINGS, _build_child_env",
+        "Unit tests prove denylist blocks GATEWAY_INTERNAL_API_KEY in child env",
+        "Gate: pytest services/mcp-broker/tests/test_stdio_common.py -q green"
+      ]
+    },
+    {
+      "id": "S4-docker-manager",
+      "title": "Broker Docker SDK lifecycle manager",
+      "priority": 2,
+      "passes": true,
+      "dependencies": ["S1-sandbox-dockerfile"],
+      "userStory": "As broker I need to create/stop/destroy per-org sandbox containers.",
+      "acceptanceCriteria": [
+        "services/mcp-broker/src/sandbox/docker_manager.py with ensure/start/stop/destroy",
+        "Container labels ai_mesh.role=mcp-sandbox, ai_mesh.org_slug={org}",
+        "Gate: pytest services/mcp-broker/tests/test_sandbox_lifecycle.py -q (docker mock)"
+      ]
+    },
+    {
+      "id": "S5-registry-reaper",
+      "title": "Sandbox registry and idle reaper",
+      "priority": 2,
+      "passes": true,
+      "dependencies": ["S4-docker-manager"],
+      "userStory": "As ops I need idle sandboxes stopped after MCP_SANDBOX_IDLE_TIMEOUT.",
+      "acceptanceCriteria": [
+        "services/mcp-broker/src/sandbox/registry.py and reaper.py",
+        "Reaper stops container after idle timeout (mock clock in tests)",
+        "Gate: pytest services/mcp-broker/tests/test_sandbox_reaper.py -q green"
+      ]
+    },
+    {
+      "id": "S6-broker-routes",
+      "title": "Sandbox Controller REST API routes",
+      "priority": 2,
+      "passes": true,
+      "dependencies": ["S4-docker-manager", "S2-sandbox-agent"],
+      "userStory": "As gateway I need broker endpoints for ensure, stdio/rpc, status, destroy.",
+      "acceptanceCriteria": [
+        "POST /v1/sandbox/{org_slug}/ensure, POST .../stdio/rpc, GET .../status, DELETE .../sandbox/{org_slug}",
+        "stdio/rpc forwards to sandbox-agent POST /rpc",
+        "Gate: pytest services/mcp-broker/tests/test_sandbox_routes.py -q green"
+      ]
+    },
+    {
+      "id": "S7-broker-auth",
+      "title": "Broker internal auth middleware",
+      "priority": 2,
+      "passes": true,
+      "dependencies": ["S6-broker-routes"],
+      "userStory": "As security I need MCP_BROKER_INTERNAL_KEY on all sandbox API calls.",
+      "acceptanceCriteria": [
+        "services/mcp-broker/src/auth.py validates X-MCP-Broker-Key",
+        "401 without key; fail closed",
+        "Gate: pytest services/mcp-broker/tests/test_broker_auth.py -q green"
+      ]
+    },
+    {
+      "id": "S8-broker-wire",
+      "title": "Wire sandbox module into FastAPI + health docker check",
+      "priority": 2,
+      "passes": true,
+      "dependencies": ["S6-broker-routes", "S7-broker-auth", "S5-registry-reaper"],
+      "userStory": "As deployer I need /health to report Docker connectivity.",
+      "acceptanceCriteria": [
+        "Update services/mcp-broker/src/main.py with sandbox router",
+        "GET /health includes docker_ok field",
+        "Gate: pytest services/mcp-broker/tests -q green"
+      ]
+    },
+    {
+      "id": "S9-docker-compose",
+      "title": "Broker Dockerfile and docker-compose sandbox wiring",
+      "priority": 3,
+      "passes": true,
+      "dependencies": ["S8-broker-wire", "S1-sandbox-dockerfile"],
+      "userStory": "As dev I need compose profile to run broker with Docker socket and sandbox network.",
+      "acceptanceCriteria": [
+        "services/mcp-broker/Dockerfile; docker-compose mounts /var/run/docker.sock on mcp-broker only",
+        "mcp_sandbox_bridge network; MCP_BROKER_INTERNAL_KEY, MCP_STDIO_IN_PROCESS=false on gateway",
+        "Gate: docker compose --profile services config validates"
+      ]
+    },
+    {
+      "id": "S10-sandbox-client",
+      "title": "Gateway mcp_sandbox_client.py HTTP client",
+      "priority": 3,
+      "passes": true,
+      "dependencies": ["S6-broker-routes"],
+      "userStory": "As gateway I need HTTP client wrapping broker stdio/rpc and ensure.",
+      "acceptanceCriteria": [
+        "gateway/ai_mesh_gateway/mcp_sandbox_client.py with broker_send_jsonrpc, ensure_sandbox",
+        "Retries on 503 with backoff; timeouts from MCP_STDIO_* env",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_client.py -q"
+      ]
+    },
+    {
+      "id": "S11-stdio-adapter-branch",
+      "title": "Branch mcp_stdio_adapter on MCP_STDIO_IN_PROCESS",
+      "priority": 3,
+      "passes": true,
+      "dependencies": ["S10-sandbox-client"],
+      "userStory": "As dev I need in-process fallback; as prod I need broker delegation.",
+      "acceptanceCriteria": [
+        "send_jsonrpc routes to broker when MCP_STDIO_IN_PROCESS=false",
+        "Existing in-process tests still pass with MCP_STDIO_IN_PROCESS=true",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q green"
+      ]
+    },
+    {
+      "id": "S12-rate-limit-mcp",
+      "title": "MCP path rate limiting (TPM + burst/RPM)",
+      "priority": 3,
+      "passes": true,
+      "dependencies": ["S11-stdio-adapter-branch"],
+      "userStory": "As operator I need MCP JSON-RPC rate limited like chat paths.",
+      "acceptanceCriteria": [
+        "org_mcp_jsonrpc calls enforce_org_tpm_rate_limit + burst/RPM",
+        "429 maps to JSON-RPC error envelope",
+        "Gate: new test in gateway tests proves 429 on exceed"
+      ]
+    },
+    {
+      "id": "T1-integration-docker",
+      "title": "Docker integration test (single org, single server)",
+      "priority": 4,
+      "passes": true,
+      "dependencies": ["S9-docker-compose", "S11-stdio-adapter-branch"],
+      "userStory": "As CI I need one real Docker integration test before load gate.",
+      "acceptanceCriteria": [
+        "gateway/ai_mesh_gateway/tests/test_mcp_sandbox_integration.py marked @pytest.mark.docker",
+        "Assert process runs in labeled container; no cross-org file leakage",
+        "Gate: runs green when Docker available"
+      ]
+    },
+    {
+      "id": "E1-parallel-load",
+      "title": "5x5 parallel sandbox load test",
+      "priority": 5,
+      "passes": true,
+      "dependencies": ["T1-integration-docker"],
+      "userStory": "As platform I need proof that 5 orgs x 5 MCP servers run concurrently without leakage.",
+      "acceptanceCriteria": [
+        "test_mcp_sandbox_parallel_load.py: sandbox-org-1..5, 5 stdio servers each",
+        "Concurrent tools/list + tools/call across 25 endpoints",
+        "MCP_STDIO_IN_PROCESS=false, real Docker; no cross-tenant leakage",
+        "Gate: cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_sandbox_parallel_load.py -q"
+      ]
+    },
+    {
+      "id": "E2-frontend-mcp-sandbox",
+      "title": "MCPConnectorPanel sandbox path verification",
+      "priority": 5,
+      "passes": true,
+      "dependencies": ["S11-stdio-adapter-branch"],
+      "userStory": "As user I can register stdio MCP via UI with sandbox backend.",
+      "acceptanceCriteria": [
+        "cd frontend && npm run lint && npm run build green",
+        "Playwright or browser: stdio preset registration, tools/list, tools/call",
+        "Update MCPConnectorPanel comment re per-org sandbox"
+      ]
+    }
+  ]
+}

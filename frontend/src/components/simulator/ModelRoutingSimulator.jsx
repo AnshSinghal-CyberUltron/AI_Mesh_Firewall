@@ -41,7 +41,7 @@ const SCENARIOS = [
   },
   {
     id: "failover",
-    label: "Model Disabled",
+    label: "Failover (gpt-4o-mini off)",
     badge: "attack",
     preferences: { cost_weight: 0.25, latency_weight: 0.25, quality_weight: 0.25, risk_weight: 0.25 },
     disabled_models: ["gpt-4o-mini"],

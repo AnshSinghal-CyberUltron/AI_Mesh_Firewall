@@ -14,6 +14,7 @@ import {
   normalizeChatPipelineResult,
   normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
+import { notifyTelemetryActivity } from "../utils/telemetryEvents";
 import { formatZeroshieldScanSummary, formatRoutingReason, ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
 
 // Upstream provider/model literals that must never reach the operator UI.
@@ -145,10 +146,14 @@ function getStatusConfig(httpStatus, action) {
       text: "text-violet-700 dark:text-violet-300",
     };
   }
-  if (action === "error" || (httpStatus >= 400 && httpStatus !== 403 && httpStatus !== 429 && httpStatus !== 422)) {
+  if (
+    action === "error"
+    || (httpStatus >= 400 && httpStatus !== 403 && httpStatus !== 429 && httpStatus !== 422
+        && !["block", "redact", "flag"].includes(action))
+  ) {
     return { color: "amber", label: "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700" };
   }
-  if (httpStatus === 403 || action === "block") {
+  if (httpStatus === 403 || httpStatus === 503 || action === "block") {
     return { color: "red", label: "BLOCKED", icon: AlertTriangle, bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800", text: "text-red-700" };
   }
   if (action === "redact") {
@@ -396,6 +401,10 @@ export function AttackSimulatorPanel() {
           action: normalized.final_action || (res.status === 403 ? "block" : res.status >= 400 ? "error" : "allow"),
         });
       }
+      notifyTelemetryActivity("attack-simulator", {
+        mode: useStreamMode ? "stream" : "single",
+        http_status: res.status,
+      });
     } catch (err) {
       setError(
         err.message === "Failed to fetch"
@@ -506,6 +515,13 @@ export function AttackSimulatorPanel() {
       errors: normalized.filter((r) => r.action === "error").length,
       rate_limited: normalized.filter((r) => r.rate_limited).length,
       allowed: normalized.filter((r) => r.action === "allow").length,
+    });
+    notifyTelemetryActivity("attack-simulator", {
+      mode: "burst",
+      request_count: requestCount,
+      blocked: normalized.filter((r) => r.action === "block").length,
+      redacted: normalized.filter((r) => r.action === "redact").length,
+      rate_limited: normalized.filter((r) => r.rate_limited).length,
     });
     setBurstRunning(false);
     // gatewayModels added so the burst captures the CURRENTLY-selected model,
@@ -954,6 +970,24 @@ export function AttackSimulatorPanel() {
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Model response: on a clean ALLOW the model's actual answer was only
+                reachable by hovering the model_output pipeline stage — a customer
+                running a prompt saw the verdict but never the response. Surface it
+                directly (delivered completion, already output-guard-processed by the
+                gateway). When the guard rewrote/redacted, the blocks below show that
+                transformed delivery instead, so this is suppressed to avoid dupes. */}
+            {!result.zeroshield?.rewritten_response && !result.zeroshield?.redacted_response &&
+              (result.choices?.[0]?.message?.content ||
+                result.stages?.find((s) => s.name === "model_output")?.content) && (
+              <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-800/70 dark:bg-emerald-900/20">
+                <div className="text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Model Response</div>
+                <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-emerald-900 dark:text-emerald-100">
+                  {result.choices?.[0]?.message?.content ||
+                    result.stages?.find((s) => s.name === "model_output")?.content}
+                </p>
               </div>
             )}
 

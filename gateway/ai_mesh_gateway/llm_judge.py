@@ -80,7 +80,7 @@ class LLMJudge:
         thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,
         enabled: bool = True,
     ) -> None:
-        self._model = model or os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0")
+        self._model = model or os.getenv("BEDROCK_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
         self._region = os.getenv("BEDROCK_REGION", "ap-south-1")
         self._timeout = timeout
         self._enabled = enabled

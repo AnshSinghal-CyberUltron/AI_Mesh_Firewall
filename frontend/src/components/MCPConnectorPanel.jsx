@@ -2,6 +2,8 @@
  * MCPConnectorPanel — ZeroShield MCP integration management.
  *
  * Backend proxy: /api/mcp-connector/*
+ * Stdio transport: production delegates to per-org Docker sandbox (mcp-broker);
+ * dev may use in-process gateway spawn when MCP_STDIO_IN_PROCESS=true.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -33,6 +35,7 @@ import { useAuth } from "../context/AuthContext";
 import { toAbsoluteGatewayUrl, resolveGatewayBaseUrl } from "../utils/environmentUrls";
 import { MCPScanControlMatrix } from "./MCPScanControlMatrix";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
+import { syncModule2AfterTelemetryChange } from "../utils/crossModuleSync";
 
 import { Card, CardContent } from "./ui/Card";
 import { Button } from "./ui/Button";
@@ -61,13 +64,12 @@ import {
 const TRANSPORT_OPTIONS = [
   { value: "streamable-http", label: "Streamable HTTP", supported: true },
   { value: "sse", label: "SSE", supported: true },
-  // stdio spawns a subprocess INSIDE the gateway container. The gateway now
-  // ships node/npx/python/python3, so npx-based servers (Linear/Playwright)
-  // launch. The command must be one of the allow-listed interpreters and the
-  // package's own runtime dependency must be present in the container (e.g.
-  // Semgrep MCP needs the `semgrep` binary). Failures surface a clear
-  // actionable error in last_sync_error rather than a silent "disconnected".
-  { value: "stdio", label: "Stdio (subprocess)", supported: true },
+  // Stdio MCP servers run in a per-org Docker sandbox (mcp-broker → sandbox-agent)
+  // when MCP_STDIO_IN_PROCESS=false (production default). Dev may use in-process
+  // spawn inside the gateway container (MCP_STDIO_IN_PROCESS=true). Command must be
+  // an allow-listed interpreter (npx/node/python/python3); package runtime deps must
+  // exist in the sandbox image. Failures surface in last_sync_error, not silent disconnect.
+  { value: "stdio", label: "Stdio (sandbox)", supported: true },
   { value: "websocket", label: "WebSocket", supported: true },
 ];
 
@@ -104,6 +106,11 @@ const MCP_PRESETS = [
 
   { name: "Playwright MCP", transport: "stdio", description: "Browser automation via Playwright MCP", command: "npx", args: ["-y", "@playwright/mcp@latest"] },
   { name: "Semgrep MCP", transport: "stdio", description: "Code security scanning via Semgrep MCP", command: "npx", args: ["-y", "mcp-server-semgrep"] },
+  { name: "Memory MCP", transport: "stdio", description: "Knowledge graph memory via official MCP memory server", command: "npx", args: ["-y", "@modelcontextprotocol/server-memory"] },
+  { name: "Filesystem MCP", transport: "stdio", description: "Official MCP filesystem server (sandbox /data/mcp-auth scope)", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/data/mcp-auth"] },
+  { name: "Fetch MCP", transport: "stdio", description: "HTTP fetch MCP server (mcp-server-fetch)", command: "npx", args: ["-y", "mcp-server-fetch"] },
+  { name: "Everything MCP", transport: "stdio", description: "Official MCP reference/test server (tools echo, add, etc.)", command: "npx", args: ["-y", "@modelcontextprotocol/server-everything"] },
+  { name: "Vibe Check MCP", transport: "stdio", description: "Vibe Check MCP for plan/goal alignment", command: "npx", args: ["-y", "@pv-bhat/vibe-check-mcp", "start", "--stdio"] },
 ];
 
 const makeEmptyAddForm = () => ({
@@ -496,6 +503,7 @@ function MCPConnectorPanelInner() {
       setAddOpen(false);
       setAddForm(makeEmptyAddForm());
       await loadServers();
+      syncModule2AfterTelemetryChange("mcp-server-add");
       toast(`Registered "${payload.name}"`, { tone: "success" });
     } catch (e) {
       setError(`Add server failed: ${e.message}`);
@@ -511,6 +519,7 @@ function MCPConnectorPanelInner() {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${pk}/`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
       await loadServers();
+      syncModule2AfterTelemetryChange("mcp-server-delete");
       toast("Server deleted", { tone: "success" });
     } catch (e) {
       setError(`Delete failed: ${e.message}`);
@@ -734,9 +743,14 @@ function MCPConnectorPanelInner() {
         throw new Error("Gateway URL is not configured.");
       }
 
+      // oauth/start now requires a gateway key whose org matches the URL (it used
+      // to be unauthenticated — a cross-org breach). Send the org gateway key.
       const res = await fetch(`${gwBase}/gateway/${orgSlug}/mcp/${srv.server_slug}/oauth/start`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(orgGatewayKey?.key ? { Authorization: `Bearer ${orgGatewayKey.key}` } : {}),
+        },
         body: JSON.stringify({ server_url: serverUrl }),
       });
       const data = await res.clone().json().catch(async () => ({
@@ -1309,8 +1323,8 @@ function MCPConnectorPanelInner() {
                 ))}
               </Select>
               <p className="text-xs text-slate-500 mt-1">
-                Supports HTTP, SSE, WebSocket, and Stdio (subprocess) transports.
-                Stdio runs the command inside the gateway container.
+                Supports HTTP, SSE, WebSocket, and Stdio (per-org sandbox) transports.
+                Stdio delegates to the mcp-broker sandbox in production; dev may use in-process gateway spawn.
               </p>
             </div>
             <div>
@@ -1331,8 +1345,9 @@ function MCPConnectorPanelInner() {
               <h4 className="text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">Stdio Transport Settings</h4>
               <p className="text-xs text-teal-700/80 dark:text-teal-300/80">
                 Command must be an allow-listed interpreter (<code>npx</code>, <code>node</code>,
-                <code> python</code>, <code>python3</code>) — not a path. The package's own
-                runtime dependency must also be installed in the gateway container
+                <code> python</code>, <code>python3</code>) — not a path. Production runs the
+                command inside your org&apos;s Docker sandbox (not a gateway subprocess); the
+                package&apos;s runtime dependency must be present in the sandbox image
                 (e.g. Semgrep MCP requires the <code>semgrep</code> binary). Missing
                 dependencies surface a clear error below the server.
               </p>

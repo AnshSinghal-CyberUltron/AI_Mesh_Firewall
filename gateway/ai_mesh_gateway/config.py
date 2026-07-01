@@ -107,6 +107,18 @@ def load_config():
     output_scan_enabled = get_env("GATEWAY_OUTPUT_SCAN_ENABLED", "true").lower() in ("true", "1", "yes")
     scan_block_on_injection = get_env("GATEWAY_SCAN_BLOCK_ON_INJECTION", "true").lower() in ("true", "1", "yes")
     scan_block_on_pii = get_env("GATEWAY_SCAN_BLOCK_ON_PII", "false").lower() in ("true", "1", "yes")
+    # E12: hard-block a credential/secret detected in MCP tool ARGUMENTS (outbound
+    # to the MCP server), regardless of the per-tool scan_action default ("tag").
+    # Only credentials/secrets force-block here (not generic PII), to limit false
+    # positives. Default ON; a per-tool MCPScanControl set to "monitor" still wins.
+    mcp_block_on_credential = get_env("GATEWAY_MCP_BLOCK_ON_CREDENTIAL", "true").lower() in ("true", "1", "yes")
+    # E12: force-REDACT an MCP tool RESULT (outbound back to the LLM/client) when
+    # the output scan DETECTS a secret/credential or PII but the resolved
+    # scan_action defaults to "tag"/"monitor" (detect-but-allow). Symmetric to
+    # mcp_block_on_credential for tool ARGUMENTS: without this, a secret/PII in a
+    # tool RESULT egresses RAW under the safe default. Redact (mask), never block.
+    # Default ON; a per-tool MCPScanControl set to "monitor" still wins (observe-only).
+    mcp_redact_result_on_detect = get_env("GATEWAY_MCP_REDACT_RESULT_ON_DETECT", "true").lower() in ("true", "1", "yes")
     tier2_fail_closed_enabled = get_env("GATEWAY_TIER2_FAIL_CLOSED_ENABLED", "true").lower() in ("true", "1", "yes")
     # When a Tier-2 INPUT scan returns a degraded/unparseable verdict (the case
     # reached by prompts that evade Tier-1 signatures), block instead of
@@ -260,6 +272,8 @@ def load_config():
         "output_scan_enabled": output_scan_enabled,
         "scan_block_on_injection": scan_block_on_injection,
         "scan_block_on_pii": scan_block_on_pii,
+        "mcp_block_on_credential": mcp_block_on_credential,
+        "mcp_redact_result_on_detect": mcp_redact_result_on_detect,
         "tier2_fail_closed_enabled": tier2_fail_closed_enabled,
         "tier2_input_fail_closed": tier2_input_fail_closed,
         "tier2_execution_mode": tier2_execution_mode,

@@ -20,6 +20,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
@@ -56,6 +57,58 @@ embedding_operations_total: Dict[str, int] = {
 
 def _bump(result: str) -> None:
     embedding_operations_total[result] = embedding_operations_total.get(result, 0) + 1
+
+
+# --- G4: byte-verify the ``assume_redacted`` attestation (fail-closed) ------- #
+# High-confidence RAW PII patterns. If a caller attests ``assume_redacted=True``
+# but the text still contains one of these UNMASKED tokens, the scrub was a
+# no-op / incomplete (classically: ``redact_all`` misses a bare 10-digit phone),
+# so we MUST fail closed rather than embed raw PII under a true attestation flag.
+# Redaction placeholders ([EMAIL], ***-**-, e***@) do not match these patterns.
+_RESIDUAL_PII_PATTERNS: Dict[str, "re.Pattern[str]"] = {
+    "email": re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
+    "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+    "credit_card": re.compile(r"\b\d(?:[ -]?\d){12,15}\b"),
+    "phone10": re.compile(r"(?<!\d)\d{10}(?!\d)"),
+    "openai_key": re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"),
+    "aws_key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    # E14 grounding fix: the byte-verify backstop was NARROWER than the
+    # gateway's own secret/credential inventory (patterns.SECRET_PATTERNS /
+    # CREDENTIAL_EXPOSURE_PATTERNS). A secret class the gateway redacts from the
+    # CLIENT response (e.g. a JWT) still sailed past assert_no_residual_pii and
+    # was embedded RAW to AWS Bedrock during semantic grounding. Unify the two
+    # inventories so every category the gateway treats as a leak fail-closes
+    # here too (assert_no_residual_pii runs BEFORE the boto3 call, so a covered
+    # pattern blocks egress and grounding falls back to lexical). Regexes are
+    # the verbatim gateway forms (patterns.py:160-162, 268, 272-278).
+    "jwt": re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
+    "slack_token": re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{10,}\b"),
+    "github_token": re.compile(r"\bghp_[a-zA-Z0-9]{36}\b"),
+    "github_fine_grained_pat": re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}\b"),
+    "stripe_key": re.compile(r"\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b"),
+    "sendgrid_key": re.compile(r"\bSG\.[\w-]{22}\.[\w-]{43}\b"),
+    "bearer_token": re.compile(r"Bearer\s+[A-Za-z0-9_\-\.]{20,}"),
+    "private_key_block": re.compile(
+        r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"
+    ),
+}
+
+
+def assert_no_residual_pii(text: str) -> None:
+    """Fail-closed byte-verification of the ``assume_redacted`` attestation.
+
+    Raises :class:`PIIRedactionRequiredError` if ``text`` still contains a raw
+    high-confidence PII token after the caller claimed it was scrubbed — turning
+    ``assume_redacted`` from a *trusted flag* into a *byte-verified contract*
+    (leak-hunt Invariant II / G4). A no-op scrub can no longer leak raw PII to
+    the embedding provider under a true attestation.
+    """
+    for label, rx in _RESIDUAL_PII_PATTERNS.items():
+        if rx.search(text):
+            raise PIIRedactionRequiredError(
+                f"assume_redacted=True but raw {label} is still present in the "
+                "input; the scrubber was a no-op. Refusing to embed (fail-closed)."
+            )
 
 
 class BedrockEmbedder:
@@ -174,6 +227,11 @@ class BedrockEmbedder:
                 "BedrockEmbedder.embed requires assume_redacted=True. "
                 "Run the PII scrubber chain on the input first."
             )
+
+        # G4: byte-verify the attestation. assume_redacted=True is no longer
+        # blindly trusted — if the scrub was a no-op (raw PII still present),
+        # fail closed rather than embed it to Bedrock.
+        assert_no_residual_pii(text)
 
         # Truncate (and warn-once) BEFORE keying so cache key matches what we send.
         truncated = False

@@ -4,10 +4,11 @@ import {
   ArrowRight, ShieldAlert, AlertTriangle, ChevronDown, Zap,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, Legend,
   PieChart, Pie, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
 import { InfoTooltip } from "./InfoTooltip";
+import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { useAuth } from "../context/AuthContext";
 
 const TIME_RANGES = ["1h", "6h", "24h", "7d", "30d"];
@@ -25,45 +26,9 @@ const STAGE_DESCRIPTIONS = {
 };
 const FUNNEL_COLORS = ["#8b5cf6", "#14b8a6", "#f59e0b"];
 
-function SafeResponsiveChart({ className, children }) {
-  const containerRef = useRef(null);
-  const [isReady, setIsReady] = useState(false);
-
-  useEffect(() => {
-    const element = containerRef.current;
-    if (!element) return undefined;
-
-    let rafId = 0;
-    const update = () => {
-      const rect = element.getBoundingClientRect();
-      setIsReady(rect.width > 24 && rect.height > 24);
-    };
-
-    update();
-    const observer = new ResizeObserver(() => {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(update);
-    });
-    observer.observe(element);
-
-    return () => {
-      observer.disconnect();
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-  }, []);
-
-  return (
-    <div ref={containerRef} className={className}>
-      {isReady ? (
-        <ResponsiveContainer width="100%" height="100%">
-          {children}
-        </ResponsiveContainer>
-      ) : (
-        <div className="h-full flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">Preparing chart...</div>
-      )}
-    </div>
-  );
-}
+// Local duplicate of SafeResponsiveChart removed — it carried the same
+// width(-1)/height(-1) recharts warning bug. Now using the shared, fixed
+// component (passes explicit measured px to ResponsiveContainer).
 
 function StageHealthHeatmap({ stages }) {
   const metrics = ["total", "blocked", "flagged", "rewritten", "allowed"];

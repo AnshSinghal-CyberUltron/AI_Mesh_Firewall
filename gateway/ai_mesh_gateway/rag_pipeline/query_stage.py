@@ -52,6 +52,10 @@ class QueryStage:
         llm_judge_result: dict[str, Any] = {}
         vault_result: dict[str, Any] = {}
         intent_result: dict[str, Any] = {}
+        # FIX G3: the query text that proceeds to retrieval is PII-redacted before
+        # it is embedded (set once the scanner verdict is known, below). Blocked
+        # paths never reach the embedder so they keep the raw query for telemetry.
+        embed_query = inp.query_text
 
         # ── Basic validation ──
         if not inp.query_text.strip():
@@ -144,6 +148,11 @@ class QueryStage:
         if self._scanner is not None:
             verdict = await self._scanner.scan_prompt(inp.query_text, is_rag=True)
             scan_tier = getattr(verdict, "tier", "tier_1") or "tier_1"
+            # FIX G3 (path unification): PII-redact the query with the SAME
+            # verdict-aware redactor the ingest/embeddings path uses, BEFORE it
+            # flows downstream to the retriever (where it is embedded). Computed
+            # off the injection verdict we already have so there is no extra scan.
+            embed_query = self._redact_pii(inp.query_text, verdict)
             threshold = self._config.get("prompt_injection_threshold", 0.80)
             rewrite_threshold = self._config.get("prompt_rewrite_threshold", 0.50)
             downgrade_threshold = self._config.get("prompt_downgrade_threshold", 0.40)
@@ -185,6 +194,9 @@ class QueryStage:
             ):
                 rewritten = self._attempt_rewrite(inp.query_text, verdict.matched_patterns)
                 if rewritten and rewritten != inp.query_text:
+                    # FIX G3: the rewritten text is what proceeds to embedding —
+                    # PII-redact it too so the rewrite path matches ingest.
+                    rewritten = self._redact_pii(rewritten, verdict)
                     LOG.info(
                         "Query rewritten: removed %d injection patterns (confidence=%.2f)",
                         len(verdict.matched_patterns),
@@ -214,7 +226,7 @@ class QueryStage:
                 verdict.action in ("block", "flag")
                 and downgrade_threshold <= verdict.confidence < rewrite_threshold
             ):
-                downgrade_model = self._config.get("rag_downgrade_model", os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0"))
+                downgrade_model = self._config.get("rag_downgrade_model", os.getenv("BEDROCK_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0"))
                 LOG.info(
                     "Model downgrade recommended: confidence=%.2f → model=%s",
                     verdict.confidence, downgrade_model,
@@ -227,7 +239,7 @@ class QueryStage:
                         detail=f"Medium-risk query: downgrade to {downgrade_model}",
                         downgrade_model=downgrade_model,
                     ),
-                    sanitized_query=inp.query_text,
+                    sanitized_query=embed_query,
                     original_query=inp.query_text,
                     injection_flags=[verdict.threat_type],
                     scan_tier=scan_tier,
@@ -291,7 +303,10 @@ class QueryStage:
                 threat_type=injection_flags[0] if injection_flags else "",
                 confidence=0.0,
             ),
-            sanitized_query=inp.query_text,
+            # FIX G3: the allow/flag path proceeds to retrieval, so the query that
+            # gets embedded is the PII-redacted ``embed_query`` (== raw text when
+            # input scanning is disabled or nothing matched).
+            sanitized_query=embed_query,
             original_query=inp.query_text,
             injection_flags=injection_flags,
             scan_tier=scan_tier,
@@ -300,6 +315,51 @@ class QueryStage:
             embedding_vault_verdict=vault_result,
             intent_verdict=intent_result,
         )
+
+    def _redact_pii(self, text: str, verdict: Any) -> str:
+        """PII-redact the RAG query BEFORE it is embedded/sent to the retriever.
+
+        FIX G3 (path unification): RAG ingest (``_scan_redact_embedding_inputs``)
+        and ``/v1/embeddings`` already redact PII/secrets with the verdict-aware
+        ``InputScanner.redact_pii`` + a fail-closed 7+-digit backstop before the
+        text leaves the gateway to the embedding provider. The RAG QUERY path
+        scanned for injection but embedded the raw query verbatim, so a customer
+        email/SSN/phone in the query was sent to the third-party embedding
+        provider unredacted. This applies the SAME redaction the ingest path uses
+        so all three embedding paths converge (no divergence).
+
+        Gated by the SAME ``input_scan_enabled`` config as the ingest/embeddings
+        helper, so there is NO behavior change when input scanning is disabled.
+        Best-effort: any failure returns the original text (the injection scan
+        above is the security-critical gate; redaction is defense-in-depth and
+        must never crash the query path).
+        """
+        scanner = self._scanner
+        if scanner is None or not self._config.get("input_scan_enabled", True):
+            return text
+        if not isinstance(text, str) or not text.strip():
+            return text
+        try:
+            redacted = scanner.redact_pii(text, verdict=verdict)
+        except Exception as e:  # noqa: BLE001
+            LOG.debug("Query PII redaction failed: %s", e)
+            return text
+        # Fail-closed digit backstop (mirrors _scan_redact_embedding_inputs and
+        # llm_router._apply_redaction): mask any run of 7+ digits the original
+        # carried that the verdict-aware redactor did not remove, using the SAME
+        # ``***-***-####`` shape so the query and ingest paths redact identically.
+        #
+        # UNCONDITIONAL on the query path (unlike generator_stage, which gates on
+        # detected-PII to protect benign document numbers in user-facing answers):
+        # a query is short and user-typed, a bare 7+-digit run is far more likely a
+        # phone/ID than prose, and masking only the embedded RETRIEVAL query has no
+        # answer-corruption cost. This catches BOTH a bare-phone-only query AND a
+        # bare phone co-occurring with other PII — the mixed email+phone leak the
+        # old ``== text`` gate missed — matching the embeddings/ingest path.
+        for run in set(re.findall(r"\d{7,}", text)):
+            if run in redacted:
+                redacted = redacted.replace(run, f"***-***-{run[-4:]}")
+        return redacted
 
     @staticmethod
     def _attempt_rewrite(query: str, patterns: list[str]) -> str:

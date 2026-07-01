@@ -132,7 +132,7 @@ class _FakeBedrockScanner:
         self._recommended = recommended_action
         self._score = score
 
-    def scan(self, text: str, context: str | None = None) -> dict:
+    def scan(self, text: str, context: str | None = None, request_id: str | None = None) -> dict:
         return {
             "meta": {
                 "recommended_action": self._recommended,

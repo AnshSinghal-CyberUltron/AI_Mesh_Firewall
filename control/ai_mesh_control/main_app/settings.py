@@ -125,6 +125,7 @@ INSTALLED_APPS = [
     "ws.apps.WsConfig",
     "security_engines.apps.SecurityEnginesConfig",
     "mcp_connector.apps.McpConnectorConfig",
+    "module2.apps.Module2Config",
     # "console.apps.ConsoleConfig",
 ]
 
@@ -435,6 +436,17 @@ TELEMETRY_DRAIN_INTERVAL_SEC = float(os.environ.get("TELEMETRY_DRAIN_INTERVAL_SE
 TELEMETRY_GATEWAY_JOB_DRAIN_INTERVAL_SEC = float(os.environ.get("TELEMETRY_GATEWAY_JOB_DRAIN_INTERVAL_SEC", "1.0"))
 TELEMETRY_DRAIN_MODE = os.environ.get("TELEMETRY_DRAIN_MODE", "beat").strip().lower()
 
+MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC = float(os.environ.get("MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC", "300"))
+MODULE2_TELEMETRY_REPAIR_BATCH_SIZE = int(os.environ.get("MODULE2_TELEMETRY_REPAIR_BATCH_SIZE", "250"))
+MODULE2_TELEMETRY_REPAIR_LOOKBACK_HOURS = int(os.environ.get("MODULE2_TELEMETRY_REPAIR_LOOKBACK_HOURS", "720"))
+MODULE2_UEBA_AUTO_KILL_ENABLED = os.environ.get("MODULE2_UEBA_AUTO_KILL_ENABLED", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS = int(os.environ.get("MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS", "24"))
+
 CELERY_BEAT_SCHEDULE = {
     "process-telemetry-batch": {
         "task": "core.tasks.process_telemetry_batch",
@@ -458,6 +470,18 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.tasks.generate_compliance_report",
         "schedule": crontab(hour=2, minute=0),
     },
+    "module2-evaluate-alerts": {
+        "task": "module2.tasks.evaluate_all_org_alerts",
+        "schedule": 60.0,
+    },
+    "module2-anomaly-detection": {
+        "task": "module2.tasks.run_all_anomaly_detection",
+        "schedule": 300.0,
+    },
+    "module2-repair-telemetry": {
+        "task": "module2.tasks.repair_telemetry_metadata",
+        "schedule": MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC,
+    },
     # Reconcile active gateway API keys into Redis so a Redis flush / container
     # recycle cannot leave the data plane returning 401 for every /v1/* request.
     "resync-gateway-keys": {
@@ -472,6 +496,12 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": float(os.environ.get("ROUTING_RECONCILE_INTERVAL_SEC", "120")),
     },
 }
+
+if MODULE2_UEBA_AUTO_KILL_ENABLED:
+    CELERY_BEAT_SCHEDULE["module2-ueba-auto-kill"] = {
+        "task": "module2.tasks.evaluate_ueba_auto_kill_switches",
+        "schedule": 300.0,
+    }
 
 # Redis
 REDIS_URL = _redis_url

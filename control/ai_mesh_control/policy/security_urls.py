@@ -7,6 +7,7 @@ from .review_views import (
     ReviewQueueListView,
     ReviewRejectView,
     SecurityIncidentEscalateView,
+    SecurityIncidentInvestigateView,
     SecurityIncidentListView,
     SecurityIncidentResolveView,
 )
@@ -64,6 +65,7 @@ urlpatterns = [
     path("review-queue/<int:pk>/reject/", ReviewRejectView.as_view(), name="security-review-reject"),
     path("incidents/", SecurityIncidentListView.as_view(), name="security-incident-list"),
     path("incidents/<int:pk>/escalate-incident/", SecurityIncidentEscalateView.as_view(), name="security-incident-escalate"),
+    path("incidents/<int:pk>/investigate-incident/", SecurityIncidentInvestigateView.as_view(), name="security-incident-investigate"),
     path("incidents/<int:pk>/resolve-incident/", SecurityIncidentResolveView.as_view(), name="security-incident-resolve"),
     path("user-blockage-kpis/", UserBlockageKpisView.as_view(), name="security-user-blockage-kpis"),
     path("blockage-trend/", BlockageTrendView.as_view(), name="security-blockage-trend"),

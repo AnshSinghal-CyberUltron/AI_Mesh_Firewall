@@ -12,7 +12,16 @@ const noKeepAlive = { agent: false };
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    host: "0.0.0.0",
     port: 5173,
+    strictPort: true,
+    allowedHosts: true,
+    // Docker Desktop on Windows bind-mounts need polling for reliable HMR.
+    watch: {
+      usePolling: true,
+      interval: 1000,
+      ignored: ["**/node_modules/**", "**/.git/**"],
+    },
     proxy: {
       "/api": { target: process.env.VITE_CONTROL_PROXY || "http://127.0.0.1:8100", changeOrigin: true, ...noKeepAlive },
       "/v1": { target: process.env.VITE_GATEWAY_PROXY || "http://127.0.0.1:8300", changeOrigin: true, ...noKeepAlive },

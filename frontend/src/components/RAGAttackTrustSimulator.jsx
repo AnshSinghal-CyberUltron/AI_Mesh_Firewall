@@ -245,6 +245,18 @@ function CustomPayloadEditor({ value, onChange }) {
 
 // ── Merged component ─────────────────────────────────────────────────────────
 
+// Gateway block/error bodies carry `error` as either a plain string OR a nested
+// OpenAI-style envelope ({message,type,param,code}). Rendering that object directly
+// as a React child throws ("Objects are not valid as a React child") and crashes the
+// result subtree — so a real RAG injection BLOCK (HTTP 403) would show nothing instead
+// of an honest verdict. Always coerce to display text.
+function errorToText(err) {
+  if (!err) return "";
+  if (typeof err === "string") return err;
+  if (typeof err === "object") return err.message || err.detail || JSON.stringify(err);
+  return String(err);
+}
+
 export function RAGAttackTrustSimulator() {
   const { hasConfiguredProvider, primaryProvider } = useVectorProviders();
   const { collections, loading: collectionsLoading, refresh: refreshCollections } = useCollections({
@@ -406,7 +418,7 @@ export function RAGAttackTrustSimulator() {
       if (res.status < 400 && body) {
         setTrustResult({ ...body, stages: body?.pipeline_audit?.stages || body?.stages || [] });
       } else {
-        setTrustResult({ error: body?.message || body?.error || `Request failed (HTTP ${res.status})`, success: false });
+        setTrustResult({ error: body?.message || errorToText(body?.error) || `Request failed (HTTP ${res.status})`, success: false });
       }
     } catch (err) {
       setTrustError(`Cannot reach gateway at ${gatewayUrl}. ${err.message}`);
@@ -677,7 +689,7 @@ export function RAGAttackTrustSimulator() {
               {/* Error message from gateway */}
               {result.body?.error && (
                 <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3 font-mono">
-                  {result.body.error}
+                  {errorToText(result.body.error)}
                 </div>
               )}
 

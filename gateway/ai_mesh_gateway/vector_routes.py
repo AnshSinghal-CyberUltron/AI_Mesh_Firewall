@@ -307,6 +307,10 @@ async def _resolve_org_from_token(authorization: Optional[str]) -> Optional[dict
             "org_id": org_id,
             "project_id": payload.get("project_id") or None,
             "user_id": payload.get("user_id"),
+            # org_slug is the key CONFIG_SYNC.get_config(org_slug) is indexed by;
+            # surfacing it here lets the data-plane handlers resolve per-org
+            # guardrail config (e.g. input_scan_enabled) without re-reading Redis.
+            "org_slug": payload.get("org_slug") or "",
         }
     except Exception as exc:
         LOG.warning("Token resolution failed: %s", exc)
@@ -628,6 +632,129 @@ async def query_vector_db(
         )
 
 
+async def _scan_redact_upsert_documents(
+    doc_ids: list,
+    doc_texts: list,
+    doc_metas: list,
+    org_slug: str,
+) -> tuple[list, list, list, list, bool]:
+    """Apply the SAME content-scan + PII-redaction the /v1/rag/ingest path applies,
+    to the documents/text/metadata of a /v1/vector/upsert batch — closing the gap
+    where the portable vector endpoint wrote vectors directly with NO scan and NO
+    redaction (unlike rag_ingest).
+
+    For each document, in lockstep over the parallel id/text/metadata lists:
+      (a) CONTEXT_GUARD.scan_single_document(text) — DROP the doc when the guard
+          BLOCKS it (credentials / injection / hidden-instruction), mirroring
+          rag_ingest's per-doc block;
+      (b) redact PII in the text via main._scan_redact_embedding_inputs (gated by
+          input_scan_enabled). When a value carries PII that genuinely cannot be
+          masked, the helper returns a block — DROP that doc (fail-closed), exactly
+          like rag_ingest's partial-success contract;
+      (c) redact PII in metadata VALUES via main._scan_redact_metadata.
+
+    Returns ``(kept_ids, kept_texts, kept_metas, scan_results, all_blocked)`` with
+    the three surviving lists index-aligned. ``scan_results`` records the per-index
+    decision (parity with rag_ingest). ``all_blocked`` is True when every document
+    was dropped, so the caller can return the same 422 rag_ingest uses.
+
+    Fail-safe: when the gateway scanners are unavailable (None) or main cannot be
+    imported, the batch passes through UNCHANGED (no crash) — the upstream
+    embedding-validity guard in vector_client still applies.
+    """
+    # Lazy, function-local import of the gateway singletons (same idiom as
+    # mcp_proxy / mcp_scan_orchestrator) — avoids a circular import at module load
+    # (main imports vector_routes at startup).
+    try:
+        import main as gateway_main
+    except Exception:  # noqa: BLE001 — never let an import error block a write path
+        try:
+            from ai_mesh_gateway import main as gateway_main  # type: ignore[no-redef]
+        except Exception:
+            return doc_ids, doc_texts, doc_metas, [], False
+
+    context_guard = getattr(gateway_main, "CONTEXT_GUARD", None)
+    config_sync = getattr(gateway_main, "CONFIG_SYNC", None)
+    base_config = getattr(gateway_main, "CONFIG", None)
+    scan_redact_text = getattr(gateway_main, "_scan_redact_embedding_inputs", None)
+    scan_redact_meta = getattr(gateway_main, "_scan_redact_metadata", None)
+
+    # Resolve per-org guardrail config (input_scan_enabled lives here). Falls back
+    # to the base CONFIG so the input-scan gate still resolves before per-org sync.
+    org_config: dict = {}
+    if config_sync is not None and org_slug:
+        try:
+            org_config = config_sync.get_config(org_slug) or {}
+        except Exception:  # noqa: BLE001
+            org_config = {}
+    if not org_config and isinstance(base_config, dict):
+        org_config = base_config
+
+    kept_ids: list = []
+    kept_texts: list = []
+    kept_metas: list = []
+    scan_results: list = []
+
+    for i in range(len(doc_texts)):
+        text = doc_texts[i]
+        text_str = text if isinstance(text, str) else ("" if text is None else str(text))
+        meta = doc_metas[i] if i < len(doc_metas) else {}
+        action = "allow"
+        threats: list[str] = []
+
+        # (a) Content scan — DROP on guard block (credentials/injection/hidden).
+        if context_guard is not None and text_str:
+            try:
+                verdict = await context_guard.scan_single_document(text_str)
+            except TypeError:
+                verdict = context_guard.scan_single_document(text_str)  # type: ignore[assignment]
+            except Exception:  # noqa: BLE001 — a scanner error must not 500 the write
+                LOG.warning("Upsert content scan failed (fail-open) for doc index %d", i)
+                verdict = None
+            if verdict is not None:
+                if getattr(verdict, "threat_type", ""):
+                    threats.append(verdict.threat_type)
+                if getattr(verdict, "action", "allow") == "block":
+                    action = "block"
+
+        if action == "block":
+            scan_results.append({"index": i, "action": "block", "threats": threats})
+            continue
+
+        # (b) Redact PII in the text (gated by input_scan_enabled inside the helper).
+        if scan_redact_text is not None and text_str:
+            try:
+                _red, _blk = await scan_redact_text([text_str], org_config)
+            except Exception:  # noqa: BLE001
+                LOG.warning("Upsert text redaction failed (fail-open) for doc index %d", i)
+                _red, _blk = [text_str], None
+            if _blk is not None:
+                # PII detected but could not be masked → fail-closed (drop the doc),
+                # matching rag_ingest's partial-success contract.
+                scan_results.append({
+                    "index": i, "action": "block", "threats": ["pii"],
+                    "reason": _blk.get("reason"),
+                })
+                continue
+            if _red:
+                text_str = _red[0]
+
+        # (c) Redact PII in metadata VALUES.
+        if scan_redact_meta is not None and isinstance(meta, dict) and meta:
+            try:
+                meta = await scan_redact_meta(meta, org_config)
+            except Exception:  # noqa: BLE001
+                LOG.warning("Upsert metadata redaction failed (fail-open) for doc index %d", i)
+
+        kept_ids.append(doc_ids[i] if i < len(doc_ids) else f"doc-{i}")
+        kept_texts.append(text_str)
+        kept_metas.append(meta)
+        scan_results.append({"index": i, "action": action, "threats": threats})
+
+    all_blocked = len(doc_texts) > 0 and not kept_texts
+    return kept_ids, kept_texts, kept_metas, scan_results, all_blocked
+
+
 # ────────────────────────────────────────────────────────────────────────────
 #  POST /v1/vector/upsert — Insert/update documents (through firewall)
 # ────────────────────────────────────────────────────────────────────────────
@@ -819,6 +946,40 @@ async def upsert_vector_documents(
             doc_ids = [d.get("id", f"doc-{i}") for i, d in enumerate(documents)]
             doc_texts = [d.get("text", "") for d in documents]
             doc_metas = [d.get("metadata", {}) for d in documents]
+
+            # ── Parity with /v1/rag/ingest: content scan + PII redaction ──
+            # The portable vector endpoint previously wrote vectors directly with
+            # NO content scan and NO redaction. Apply the SAME guard rag_ingest
+            # applies before embedding/writing: drop guard-blocked docs
+            # (credentials/injection), redact PII in text + metadata. Surviving
+            # ids/texts/metas stay index-aligned (partial-success contract).
+            doc_ids, doc_texts, doc_metas, _scan_results, _all_blocked = (
+                await _scan_redact_upsert_documents(
+                    doc_ids, doc_texts, doc_metas,
+                    org_slug=str(auth_context.get("org_slug") or ""),
+                )
+            )
+            if _all_blocked:
+                if TELEMETRY:
+                    TELEMETRY.emit({
+                        "event_type": "vector_upsert",
+                        "action": "block",
+                        "org_id": org_id,
+                        "user_id": user_id,
+                        "provider_type": provider_type,
+                        "collection_name": collection_name,
+                        "document_count": 0,
+                        "status_code": 422,
+                    })
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={
+                        "error": "all_documents_blocked",
+                        "message": "All document(s) were blocked by content scanning.",
+                        "code": "vector_content_blocked",
+                        "scan_results": _scan_results,
+                    },
+                )
 
             if hasattr(vector_client, "upsert"):
                 count = await vector_client.upsert(

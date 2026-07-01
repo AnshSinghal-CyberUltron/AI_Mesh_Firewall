@@ -76,6 +76,8 @@ class AuthContext:
         "rate_limit_tpm",
         "risk_score",
         "max_context_tokens",
+        "mcp_allowed_tools",
+        "mcp_max_tool_calls",
         "roles",
         "is_active",
         "expires_at",
@@ -94,6 +96,12 @@ class AuthContext:
         self.rate_limit_tpm: int = payload.get("rate_limit_tpm", 100_000)
         self.risk_score: float = payload.get("risk_score", 0.0)
         self.max_context_tokens: int = payload.get("max_context_tokens", 0)
+        # E12 least-privilege MCP controls (control GatewayAPIKey.build_redis_payload):
+        #   mcp_allowed_tools — tool allowlist; EMPTY list = all tools allowed.
+        #   mcp_max_tool_calls — per-request tool-call cap; 0 = unlimited.
+        # These sync to Redis but were never extracted, so they were unenforced.
+        self.mcp_allowed_tools: list = payload.get("mcp_allowed_tools", []) or []
+        self.mcp_max_tool_calls: int = payload.get("mcp_max_tool_calls", 0) or 0
         # G8: role names (RBAC labels) used by mcp_connector policy filtering.
         # Populated by GatewayAPIKey.build_redis_payload from owner.profile.roles.
         self.roles: list = payload.get("roles", []) or []
@@ -294,11 +302,18 @@ class AuthMiddleware:
                     await self.app(scope, receive, send)
                     return
 
-        # Allow upstream OAuth proxy routes without auth (user auth happens
-        # at the external OAuth provider; callback is a redirect).
-        if "/oauth/start" in path or "/oauth/status" in path:
-            await self.app(scope, receive, send)
-            return
+        # NOTE: oauth/start and oauth/status are NO LONGER unauthenticated.
+        # They previously bypassed auth here on a substring match, but both take
+        # ``org_slug`` from the URL path and operate on that org's token namespace
+        # (mcp:oauth:token:{org_slug}|...) — so ANY caller could, with no key,
+        # probe a victim org's token existence (status oracle) or initiate an OAuth
+        # flow that stores a token under the victim org (start). Cross-org breach
+        # confirmed by a live Org-B→Org-A probe. These are APP-initiated calls (the
+        # MCP panel holds the org gateway key), so they go through normal auth now
+        # and the handlers additionally enforce auth.org_slug == path org_slug.
+        # ONLY the provider→gateway redirect ``/gateway/oauth/callback`` stays
+        # unauthenticated — it carries no key and is validated by its signed flow
+        # state — and it is exempted separately via EXCLUDED_PATHS above.
 
         is_soft_auth = path in SOFT_AUTH_PATHS
 
