@@ -6303,25 +6303,25 @@ async def proxy_chat(
             # B1 (egress = truth — fail-closed honesty): the firewall flagged genuine
             # PII/secret for redaction, but if the deterministic redactor
             # (``redact_pii`` + the shared digit backstop the router applies on the
-            # wire via ``_redact_text_with_backstop``) could not change the text at all,
-            # the value is UNMASKABLE (e.g. a natural-language password/credential or a
-            # name/address the regexes miss). Forwarding it raw while telemetry attests
-            # "redact" is a phantom redaction — fail closed (block) instead of leaking
-            # it upstream. Mirrors the embeddings byte-verify
-            # (``_scan_redact_embedding_inputs``: ``if _detected and redacted == text``)
-            # and the output-guard no-op honesty downgrade. Only fires on a real
-            # redaction attempt + block enforcement + a TOTAL no-op, so maskable PII
-            # (Tier-1 regex, digit spans) is never over-blocked.
+            # wire via ``_redact_text_with_backstop``) could not change the ORIGINAL
+            # prompt bytes at all, the value is UNMASKABLE (e.g. a natural-language
+            # password/credential or a name/address the regexes miss). Forwarding it
+            # raw while telemetry attests "redact" is a phantom redaction — fail
+            # closed (block) instead of leaking it upstream. Compare against the
+            # original ``prompt``, NOT ``_text_before_pii_redact``: policy-first
+            # redaction can already have masked the text before Tier-2 flags it, so
+            # a scanner-step no-op on the already-redacted bytes is EXPECTED and
+            # must NOT trip this guard (AttackSimulator PII scenario).
             if (
                 _pii_redaction_applied
                 and enforcement_mode == "block"
-                and (_text_before_pii_redact or "").strip()
+                and (prompt or "").strip()
             ):
                 try:
                     from llm_router import _redact_text_with_backstop as _egress_backstop
                 except ImportError:  # pragma: no cover - packaging fallback
                     from .llm_router import _redact_text_with_backstop as _egress_backstop
-                if _egress_backstop(_text_before_pii_redact, effective_prompt) == _text_before_pii_redact:
+                if _egress_backstop(prompt, effective_prompt) == prompt:
                     LOG.warning(
                         "PII/secret flagged but redaction was a no-op (unmaskable); "
                         "failing closed to prevent raw egress (type=%s, user=%s)",

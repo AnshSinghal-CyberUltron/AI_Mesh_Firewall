@@ -240,7 +240,7 @@
       "id": "E1-openai-sdk-frontend-playwright",
       "title": "Demo app: stock OpenAI SDK + Playwright frontend gate (Ruflo)",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "A1-sdk-harness",
         "D6-ui-demo-simulators"

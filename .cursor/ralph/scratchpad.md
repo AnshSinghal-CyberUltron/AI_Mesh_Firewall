@@ -1,5 +1,5 @@
 ---
-iteration: 2
+iteration: 3
 min_iterations: 20
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
@@ -7,26 +7,25 @@ status: ACTIVE
 active_story: E1-openai-sdk-frontend-playwright
 prd: scripts/ralph/prd.json
 campaign: openai-sdk-frontend
-note: Ralph iter 2 — offline gates green; live gates blocked by Docker daemon contention
+note: E1 all gates green iter3 — chroma up + disabled duplicate pinecone docs policy
 ---
 
 # OpenAI SDK Frontend — Cursor Ralph Loop
 
-Campaign `openai-sdk-frontend`. Story E1-openai-sdk-frontend-playwright (passes:false).
+Campaign `openai-sdk-frontend`. Story **E1-openai-sdk-frontend-playwright** passes:true (iter 3).
 
-## Gates (full order)
-1. `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_openai_sdk_compat.py -q && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`
-2. `cd frontend && npm run build`
-3. `docker compose --profile services up -d` then health :8180 :8100 :8300
-4. `cd frontend && BASE_URL=http://127.0.0.1:8180 E2E_REPORT=../runs/playwright_demo_simulators.json node ../scripts/playwright_demo_simulators.mjs`
-5. `cd gateway && ./.venv/bin/python ../tests/e2e/openai_sdk/live_gateway_sdk.py`
+## Gates reference
+
+**E1:** backend test_openai_sdk_compat.py + full pytest; frontend build; playwright_demo_simulators.mjs; live_gateway_sdk.py
+
+**Stack:** Vite :8180, control :8100, gateway :8300 — login admin@zeroshield.io / Adm1n!Pass#2024
 
 ## Iteration log
 
-### Iteration 2 — 2026-07-01
-- OFFLINE GREEN: test_openai_sdk_compat.py 46p/2xp; full suite 1005p/18sk/7xf/2xp; frontend build PASS
-- LIVE BLOCKED: Docker daemon instability — parallel Ralph loops (openai-sdk + mcp-adversarial) fight compose;
-  all core containers Dead; compose fails on ghost container IDs (63086e55af4e, bf480d201b44);
-  daemon socket missing until `open -a Docker`; stack never reached auth=200/gw=200/fe=200
-- Playwright demo: NOT RUN; live_sdk: NOT RUN
-- E1 passes:false — next iter: stop adversarial sandboxes, Docker Desktop restart, minimal stack only, fire #5 then #4 in clean window
+### Iteration 3 — 2026-07-01
+- Infra: aimesh_gate stack healthy; chromadb profile (aimesh_gate-chromadb-1 :8001); competing ralph.sh PIDs 33458/33544 noted (not started).
+- RAG 422 root cause: duplicate org-3 `docs` vector policies — seed pinecone/deny overwrote custom/chroma in compile (same `{org_id}::{collection}` key); disabled 535ed962 pinecone policy, recompiled → `3::docs custom allow`.
+- Gates ALL GREEN: test_openai_sdk_compat 46p/2xp; full pytest 1005p; frontend lint+build OK; stack :8180/:8100/:8300; playwright_demo 23/23; live_sdk 6/6 PASS.
+
+### Iteration 4 — 2026-07-01 (prior campaign)
+- O3/O4 Playwright gates green on aimesh_gate stack.

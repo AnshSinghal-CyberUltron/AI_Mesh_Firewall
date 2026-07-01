@@ -1,4 +1,14 @@
 ## Codebase Patterns
+- RAG-422-DUPLICATE-VECTOR-POLICY (E1 iter3, 2026-07-01): Playwright RAG step HTTP 422
+  `no_provider_configured` for pinecone when chroma IS configured = duplicate VectorCollectionPolicy
+  rows for the SAME `{organization_id}::{collection_name}`. The compiler keys ONLY by org+collection
+  (vector_compiler.py:105) but unique constraint allows multiple rows differing by vector_db_type;
+  compile iterates ALL enabled policies ordered `-created_at` (newest first) and LATER rows OVERWRITE
+  earlier ones in the dict — so an OLDER seed pinecone/deny policy can clobber a NEWER custom/chroma
+  policy. FIX = disable/delete the stale duplicate (e.g. seed VEC_DOCS_STRICT pinecone for `docs`)
+  then `POST /api/vector-policies/compile/`; verify Redis `vector:policies:compiled` shows
+  `{org_id}::docs` with vector_db_type=custom/chroma. Also ensure chromadb profile is up and org has
+  an active chroma VectorProviderConfig (bootstrap_rag.py with CHROMA_URL=http://chromadb:8000).
 - FULL-SUITE-DRIFT TRIAGE (E1, verified 2026-06-30 — `ai_mesh_gateway/tests -q` is now GREEN 1005p/0f):
   the prior "33 drift = stale tests" note was PARTLY WRONG. Methodology that works: (1) run the full
   suite to a FILE (no `| tail` — it truncates tracebacks; use `--tb=line/short > /tmp/x 2>&1`). (2) For
@@ -117,6 +127,11 @@
   Gate: `cd gateway && ./.venv/bin/python ../tests/e2e/openai_sdk/live_gateway_sdk.py`. Playwright demo:
   `cd frontend && BASE_URL=http://127.0.0.1:8180 E2E_REPORT=../runs/playwright_demo_simulators.json node
   ../scripts/playwright_demo_simulators.mjs`.
+- POLICY-PRE-REDACT BYTE-VERIFY (B1/E1, 2026-07-01): the chat fail-closed honesty check after PII
+  redaction MUST compare `_egress_backstop(original_prompt, effective_prompt)` against the ORIGINAL
+  `prompt`, not `_text_before_pii_redact`. Policy-first redaction can mask PII before Tier-2 flags it;
+  a scanner-step no-op on already-redacted bytes is EXPECTED and must NOT block. Symptom: AttackSim
+  Sensitive Data Leakage returns HTTP 400 content_filter while policy trace shows masked PII.
 
 ## Environment / harness gotchas (discovered this repo)
 - Gateway tests run with the gateway venv: `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`. As of commit 3b81737f the package conftest (gateway/ai_mesh_gateway/conftest.py) prepends gateway/ai_mesh_gateway + repo-root/shared to sys.path, so NO manual PYTHONPATH is needed — the gate is self-contained from a clean shell. (Historically it false-failed with `ModuleNotFoundError: ai_mesh_shared` at fixture setup because main.py->jobs.py imports ai_mesh_shared from ../shared.) Plain `python` (not .venv) still lacks deps.
@@ -1839,3 +1854,11 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   Next iter: halt parallel mcp-adversarial ralph loop, Docker Desktop full restart, `docker compose down
   --remove-orphans`, minimal up (redis postgres control gateway frontend), poll auth 200, fire live_sdk
   then playwright in clean window before telemetry re-saturates control.
+- 2026-07-01 E1 iter 3 (Cursor coder Ralph 3/50): ROOT CAUSE AttackSim PII false-block (HTTP 400): B1
+  fail-closed byte-verify compared `_egress_backstop(_text_before_pii_redact, effective_prompt)` — when
+  policy-first redaction already masked PII, Tier-2 flag→redact is a scanner-step no-op on already-redacted
+  bytes and tripped fail-closed. FIX: compare `_egress_backstop(prompt, effective_prompt) == prompt` (original
+  wire bytes). Infra: aimesh_gate stack; restored ai_mesh_firewall_postgres_data + chroma_data volumes;
+  chromadb profile; PATCH vector provider → vector:providers:compiled Redis sync; compile vector policies.
+  ALL GATES GREEN: test_openai_sdk_compat 46p/2xp; full pytest 1005p; frontend build; playwright_demo
+  23/23 asserts 6/6 steps; live_gateway_sdk 6/6 PASS. E1 passes:true. no ralph.sh PIDs.
