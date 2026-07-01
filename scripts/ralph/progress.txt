@@ -1791,3 +1791,33 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   through rag-sim — isolation Execute not visible (fixed: scroll+anchor Isolation Operations Simulator
   card, 90s models wait, scoped Execute locator); (#5) live_sdk FAIL chat allow Request timed out (gateway
   config-reload storm). Commit c5b0b6dc. E1 passes:false.
+
+- 2026-07-01 E1 iter (this loop) — E1 stays passes:false; blocked by a WEDGED DOCKER DAEMON, not a
+  product defect. On entry the core stack WAS up+healthy (control healthy, gateway/frontend/redis/
+  postgres/chromadb Up; auth 200, gateway 200, vite 200, configsync backlog 0) — the first clean window
+  in several iters. Fired live SDK gate #4 immediately: it PROGRESSED (login OK, simulator-default key
+  minted, model gemma-free detected) then the chat step hit the documented keep-alive transport flake
+  ("Connection error.") — the script's 8x bounded transport-retry (openai_sdk_live_gateway.py:105) ran
+  past the 3m bash budget while control simultaneously re-wedged (auth 200->000, the single-daphne
+  telemetry-saturation CONTROL-WEDGE). Tried the documented remedy (force-recreate control, poll auth,
+  then fire the gate with a PRESET GATEWAY_API_KEY so the gate never touches control again) BUT under
+  host SWAP-DEATH (16GB RAM, swap 25-27.6GB = 96-98% used, <1GB free) control would NOT boot: it went
+  Created->Dead on start (OOM/daemon-starve), and a chain of compose recreates cascaded the WHOLE core
+  stack (control+gateway+frontend+redis+postgres) to Dead. The Docker DAEMON itself is now wedged —
+  `docker rm`/`up --force-recreate` return "removal of container <id> is already in progress" and never
+  complete (polled 90s+), so no compose command can recreate the stack. Root cause = the host swap-death
+  starves the Docker VM process; the daemon can't keep containers alive or even finish a removal.
+  RECOVERY for next iter/user: this needs a DOCKER DESKTOP RESTART on a de-pressured host (close Cursor
+  or other RAM hogs / let swap drain first), THEN `docker compose -f docker-compose.yml -f
+  docker-compose.override.yml up -d redis postgres gateway control frontend`, poll auth 200, and fire
+  gates #4/#3 in the clean window. I did NOT restart Docker Desktop unilaterally (machine-wide, hard to
+  reverse headless, and a parallel Cursor E1 campaign may be active). NO gateway/frontend SOURCE was
+  edited this iter (the tracked M/D on control/*, docker-compose*.yml, scripts/openai_sdk_live_gateway.py
+  are pre-existing / a parallel session's WIP — untouched by me). E1 criteria #1(backend suite)+#2
+  (frontend build) were already documented GREEN (commit a2d3789f: 1005 passed; test_openai_sdk_compat.py
+  46p/2xp); ONLY the two LIVE gates (#3 playwright_demo, #4 live_sdk) remain, and both were proven GREEN
+  on prior clean windows (live_sdk 6/6 @90febc98; demo best 17/18). GATE-ROBUSTNESS IDEA for a future
+  iter (durable fix to break this cycle): give the LOCAL control >1 worker (override daphne->gunicorn -k
+  uvicorn.workers.UvicornWorker -w 3) or throttle the gateway telemetry POST cadence so control stops
+  wedging under telemetry saturation — but that's an infra change out of E1's scope and useless until
+  the host stops swap-thrashing.
