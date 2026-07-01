@@ -1783,3 +1783,11 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   defect (prior iters 90febc98 proved live_sdk 6/6 GREEN + demo 17/18). E1 stays passes:false until the
   live gates RE-RUN green on a non-contended host. Next iter: free RAM hard (stop workers/rabbitmq/mcp-
   stub/brokers/chromadb/frontend, leave only control+gateway+redis+postgres), let swap drain, then fire #4.
+- 2026-06-30 E1 iter 2 (Cursor coder): Stabilized duplicate control containers via force-rm+recreate.
+  Gates: (#1a) test_openai_sdk_compat.py PASS 46+2xp; (#1b) full ai_mesh_gateway/tests FAIL 996p/14f/13e
+  (test_mcp_sandbox_* ERRORS need live broker :8311; test_context_guard deep-secret flake); (#2) frontend
+  build PASS; (#3) docker FLAP — parallel compose races leave gateway/frontend `Created` / "marked for
+  removal"; control healthy then wedges (auth 000/429 from poll storm); (#4) playwright FAIL 15/15 asserts
+  through rag-sim — isolation Execute not visible (fixed: scroll+anchor Isolation Operations Simulator
+  card, 90s models wait, scoped Execute locator); (#5) live_sdk FAIL chat allow Request timed out (gateway
+  config-reload storm). Commit c5b0b6dc. E1 passes:false.
