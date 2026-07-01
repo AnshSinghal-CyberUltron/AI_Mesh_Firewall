@@ -1821,3 +1821,12 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   uvicorn.workers.UvicornWorker -w 3) or throttle the gateway telemetry POST cadence so control stops
   wedging under telemetry saturation — but that's an infra change out of E1's scope and useless until
   the host stops swap-thrashing.
+- 2026-07-01 E1 iter 2 (Cursor coder Ralph): Duplicate control cleaned (single ai_mesh_firewall-control-1).
+  Offline gates GREEN: test_openai_sdk_compat.py 46p/2xp; full ai_mesh_gateway/tests 1005p/18sk/7xf/2xp;
+  frontend build PASS. Live gates PARTIAL: playwright_demo 10/10 asserts through attack PII, FAIL on clean-
+  prompt Run Pipeline (SPA navigation race after slow PII LLM round); live_sdk 3/6 (login/key/model OK,
+  chat allow Connection error under control wedge). Gate-robustness edits: playwright runAttackScenario
+  re-resolves attack panel + waitFor Run Pipeline; live_sdk chat transport retries 4→8. Docker daemon then
+  corrupted during compose down/up ("marked for removal", stale container IDs) — stack empty, cannot
+  recreate without Docker Desktop restart. E1 passes:false. Next: restart Docker Desktop, minimal stack
+  (redis+postgres+control+gateway+frontend only), poll auth 200, fire #4 then #3 in clean window.

@@ -102,6 +102,33 @@ def _assert_typed_error(err: openai.APIStatusError, *, expect_status: int, label
         raise AssertionError(f"{label}: e.message empty")
 
 
+async def _chat_allow_with_retry(client: "openai.AsyncOpenAI", model: str, *, attempts: int = 8):
+    """Happy-path chat completion with a bounded retry on TRANSPORT flakes only.
+
+    Under a contended host (swap thrash) the gateway's keep-alive connection can be
+    reset mid-request → the SDK raises ``openai.APIConnectionError`` ("Connection
+    error.")/``APITimeoutError`` even though the model answers fine on a clean window
+    (proven via direct curl, ~15s). Retrying ONLY these transport errors is gate-
+    robustness, NOT a product/security relaxation: a real verdict is an
+    ``APIStatusError`` (400/403/404) and is NEVER swallowed here — it propagates so the
+    error-envelope assertions still run deterministically with ``max_retries=0``.
+    """
+    last_exc: Exception | None = None
+    for i in range(attempts):
+        try:
+            return await client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": "Say hi in one word."}],
+                max_tokens=8,
+            )
+        except (openai.APIConnectionError, openai.APITimeoutError) as exc:
+            last_exc = exc
+            print(f"  [retry] chat allow transport flake ({type(exc).__name__}) "
+                  f"attempt {i + 1}/{attempts}; backing off")
+            await asyncio.sleep(3.0 * (i + 1))
+    raise last_exc if last_exc else RuntimeError("chat allow failed without exception")
+
+
 async def main() -> int:
     print(f"live OpenAI SDK e2e — control={CONTROL_URL} gateway={GATEWAY_URL}")
     preset_key = os.environ.get("GATEWAY_API_KEY", "").strip()
@@ -128,11 +155,7 @@ async def main() -> int:
         timeout=120.0,
     )
     try:
-        resp = await client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": "Say hi in one word."}],
-            max_tokens=8,
-        )
+        resp = await _chat_allow_with_retry(client, model)
         content = (resp.choices[0].message.content or "").strip()
         if not content:
             step("chat allow", False, "empty model content")
