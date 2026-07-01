@@ -44,7 +44,8 @@ else \
   rm -rf '${REMOTE_DIR}/frontend' '${REMOTE_DIR}/control' '${REMOTE_DIR}/gateway' '${REMOTE_DIR}/workers'; \
 fi" || true
 
-RSYNC_SSH=(rsync -az -e ssh)
+# Use scp -C (available in Git for Windows / OpenSSH) instead of rsync.
+_scp() { scp -C "$@"; }
 
 echo "==> Sync compose files"
 COMPOSE_FILES=(
@@ -52,7 +53,7 @@ COMPOSE_FILES=(
   "${ROOT}/docker-compose.prod.yml"
 )
 [[ -f "${ROOT}/docker-compose.observability.yml" ]] && COMPOSE_FILES+=("${ROOT}/docker-compose.observability.yml")
-"${RSYNC_SSH[@]}" "${COMPOSE_FILES[@]}" "${SSH_HOST}:${REMOTE_DIR}/"
+_scp "${COMPOSE_FILES[@]}" "${SSH_HOST}:${REMOTE_DIR}/"
 
 echo "==> Sync deploy / observability scripts and agent config"
 ssh "${SSH_HOST}" "mkdir -p '${REMOTE_DIR}/scripts' '${REMOTE_DIR}/deploy/observability'"
@@ -66,10 +67,10 @@ OBS_SCRIPTS=(
 )
 for s in "${OBS_SCRIPTS[@]}"; do
   [[ -f "${ROOT}/scripts/${s}" ]] || continue
-  "${RSYNC_SSH[@]}" "${ROOT}/scripts/${s}" "${SSH_HOST}:${REMOTE_DIR}/scripts/"
+  _scp "${ROOT}/scripts/${s}" "${SSH_HOST}:${REMOTE_DIR}/scripts/"
 done
 if [[ -f "${ROOT}/deploy/observability/cloudwatch-agent-config.json" ]]; then
-  "${RSYNC_SSH[@]}" \
+  _scp \
     "${ROOT}/deploy/observability/cloudwatch-agent-config.json" \
     "${ROOT}/deploy/observability/alarm-email-example.html" \
     "${ROOT}/deploy/observability/alarm-runbooks.json" \
@@ -81,7 +82,7 @@ echo "==> Sync .env (strips static AWS keys — EC2 uses instance role for ECR p
 ENV_SYNC="$(mktemp)"
 grep -vE '^(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)=' "${ROOT}/.env" > "${ENV_SYNC}"
 grep -q '^USE_EC2_INSTANCE_ROLE=' "${ENV_SYNC}" || echo 'USE_EC2_INSTANCE_ROLE=true' >> "${ENV_SYNC}"
-"${RSYNC_SSH[@]}" "${ENV_SYNC}" "${SSH_HOST}:${REMOTE_DIR}/.env"
+_scp "${ENV_SYNC}" "${SSH_HOST}:${REMOTE_DIR}/.env"
 rm -f "${ENV_SYNC}"
 
 ssh "${SSH_HOST}" "chmod +x '${REMOTE_DIR}/scripts/'*.sh 2>/dev/null || true"
