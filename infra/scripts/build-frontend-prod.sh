@@ -30,9 +30,10 @@ else
   # npm not on PATH (common on Windows/Git Bash) — run the build inside a Node container.
   echo "    npm not found on PATH; building via Docker (node:20-alpine)"
   command -v docker >/dev/null 2>&1 || die "Neither npm nor docker is available — install Node.js or Docker."
-  docker run --rm \
-    -v "${ROOT}/frontend:/app" \
-    -w /app \
+  # MSYS_NO_PATHCONV=1 prevents Git Bash from mangling /app → C:/Program Files/Git/app.
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" docker run --rm \
+    -v "$(cygpath -m "${ROOT}/frontend"):/app" \
+    -w "/app" \
     -e "VITE_FRONTEND_BASE_URL=${VITE_FRONTEND_BASE_URL}" \
     -e "VITE_BACKEND_BASE_URL=${VITE_BACKEND_BASE_URL}" \
     -e "VITE_GATEWAY_SAME_ORIGIN=${VITE_GATEWAY_SAME_ORIGIN}" \
