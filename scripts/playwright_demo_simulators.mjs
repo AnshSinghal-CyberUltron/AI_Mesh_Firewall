@@ -131,17 +131,33 @@ async function gotoTab(page, tab, anchorText) {
 
 // Run an AttackSimulator scenario; returns the captured /v1/chat/completions status.
 async function runAttackScenario(page, panel, scenarioText) {
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+  // Re-resolve the panel — a prior LLM round can remount the card and stale locators
+  // stall on mid-navigation clicks (CONTROL-WEDGE / slow-model flakes).
+  panel = page.locator("div.ai-mesh-card").filter({ has: page.getByRole("heading", { name: /Attack Simulator/i }) }).first();
+  await panel.waitFor({ state: "visible", timeout: 30000 });
   const reset = panel.getByRole("button", { name: /^Reset$/ });
   if (await reset.count()) { await reset.first().click(); await page.waitForTimeout(200); }
   await panel.getByRole("button", { name: scenarioText }).first().click();
   await page.waitForTimeout(250);
   const runBtn = panel.getByRole("button", { name: /Run Pipeline/ });
+  await runBtn.waitFor({ state: "visible", timeout: 30000 });
   let resp = null;
   for (let attempt = 0; attempt < 6 && !resp; attempt++) {
     const respP = page
       .waitForResponse((r) => r.url().includes("/v1/chat/completions") && r.request().method() === "POST", { timeout: 120000 })
       .catch(() => null);
-    await runBtn.click();
+    // Bound the click: under host contention the SPA can be mid-navigation, which
+    // stalls the default 30s action timeout and aborts the whole gate. A stalled
+    // click is a transient race, not a product defect — let the page settle and
+    // retry instead of throwing.
+    try {
+      await runBtn.click({ timeout: 10000 });
+    } catch {
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForTimeout(1500);
+      continue;
+    }
     const noop = await page
       .getByText(/Select a connected model/i)
       .first()
