@@ -883,3 +883,97 @@ remaining: 9 story(ies)
   broker#2 unrecoverable; sleep 60 + retry iter
 ----- iter 2/30 2026-07-01T09:43:59Z -----
   host load 14.71 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T09:46:37Z -----
+  host load 13.21 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T09:49:13Z -----
+  host load 8.74 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T09:51:48Z -----
+  host load 9.70 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T09:54:23Z -----
+  host load 9.98 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T09:56:57Z -----
+  host load 10.67 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T09:59:35Z -----
+  host load 18.84 >= 16 — waiting for headroom (parallel session active)…
+  host load 15.97 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:02:39Z -----
+  host load 9.87 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:05:15Z -----
+  host load 9.14 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:07:49Z -----
+  host load 11.26 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:10:24Z -----
+  host load 8.75 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:12:58Z -----
+  host load 11.50 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:15:32Z -----
+  host load 9.20 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:18:08Z -----
+  host load 12.55 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:20:43Z -----
+  host load 8.80 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:23:17Z -----
+  host load 10.32 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:25:52Z -----
+  host load 8.10 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:28:25Z -----
+  host load 10.36 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:31:00Z -----
+  host load 10.81 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:33:34Z -----
+  host load 9.44 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:36:09Z -----
+  host load 9.69 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:38:43Z -----
+  host load 12.43 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:41:17Z -----
+  host load 12.32 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:43:52Z -----
+  host load 10.96 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:46:26Z -----
+  host load 8.67 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:49:02Z -----
+  host load 8.90 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:51:37Z -----
+  host load 12.67 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:54:11Z -----
+  host load 8.53 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:56:46Z -----
+  host load 9.87 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T10:59:20Z -----
+  host load 10.27 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T11:01:55Z -----
+  host load 10.08 < 16 — go
+  broker#2 unrecoverable; sleep 60 + retry iter
+----- iter 2/30 2026-07-01T11:04:31Z -----
+  host load 25.51 >= 16 — waiting for headroom (parallel session active)…
