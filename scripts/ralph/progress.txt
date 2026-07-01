@@ -1659,7 +1659,25 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   120s. FIX = retry the Execute click until /v1/chat/completions actually fires, detecting the no-op fast.
   This is a gate-robustness fix, NOT masking — the isolation PRODUCT was independently MCP-proven correct
   (Execute -> 200 -> "allow") before the gate fix. NO frontend/backend product source change; D6 product
-  is correct; D6 stays passes:true. ALL 17 stories now rigor-verified THIS round.
+  is correct; D6 stays passes:true.
+- rigor-verified: E1-openai-sdk-frontend-playwright 2026-07-01 — adversarially re-proved the FULL E1
+  gate stack from a clean shell against the LIVE aimesh_gate stack (Vite :8180 → control :8100 → gateway
+  :8300; all /health 200). BACKEND: `cd gateway && ./.venv/bin/python -m pytest
+  ai_mesh_gateway/tests/test_openai_sdk_compat.py -q` → 46 passed/2 xpassed (documented non-strict D4
+  models.retrieve + D5 stream cells); co-run `ai_mesh_gateway/tests -q` → 1005 passed/0 failed. FRONTEND:
+  `cd frontend && npm run build` → exit 0 (~10s). PLAYWRIGHT DEMO (D6 surfaces + /v1/chat/completions
+  honesty): `cd frontend && BASE_URL=http://127.0.0.1:8180 E2E_REPORT=../runs/playwright_demo_simulators.json
+  node ../scripts/playwright_demo_simulators.mjs` → 23/23 asserts, 6/6 steps (login, howtouse, attack-sim,
+  rag-sim, isolation-sim, bedrock-test), 0 pageErrors (~107s). LIVE STOCK SDK (real TCP, NOT ASGITransport):
+  `cd gateway && ./.venv/bin/python ../tests/e2e/openai_sdk/live_gateway_sdk.py` → 6/6 PASS — login,
+  simulator-default key provisioned via control /api/gateways/simulator-default/, chat allow (gemma-free →
+  "Hello!"), content block 400 with e.code==content_filter + non-empty e.request_id (zs-…), forbidden
+  model with HTTP 404 + e.code==model_not_configured + typed e.type/e.message/e.request_id (accepts 403/404).
+  Adversarial byte-check: _assert_typed_error enforces e.request_id, e.code, e.type, e.message on BOTH
+  error paths with max_retries=0 (no transport swallow). Report lands at gateway/runs/openai_sdk_live_gateway.json
+  (cwd-relative); repo-root runs/ may be stale from prior failed runs — trust the gate exit code + the
+  gateway/runs/ artifact. Infra preconditions confirmed: chromadb profile up (:8001), org-3 docs vector policy
+  compiled to custom/chroma (no duplicate pinecone overwrite). NO product gap; E1 stays passes:true.
 - 2026-06-30 ROUND-CLOSE re-confirmation (fresh iteration, distrust-passes:true policy) — with ALL 17
   already rigor-verified this round, I did NOT trust the written entries: I re-ran the two fully
   DETERMINISTIC backend security/SDK gates from a clean shell in the CURRENT working tree (which carries
