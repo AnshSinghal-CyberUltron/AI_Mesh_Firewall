@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from core.models import LLMModelConfig
 from policy.constants import ACTION_BLOCK, ACTION_REDACT
 from policy.models import EnforcementEvent, SecurityIncident
 
@@ -26,6 +27,41 @@ class Module2PagesApiTests(TestCase):
 
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
+        LLMModelConfig.objects.create(
+            organization=self.org,
+            provider="openai",
+            model_name="gpt-4o",
+            model_id="openai/gpt-4o",
+            is_active=True,
+        )
+        LLMModelConfig.objects.create(
+            organization=self.org,
+            provider="anthropic",
+            model_name="claude-3.5-haiku",
+            model_id="anthropic/claude-3.5-haiku",
+            is_active=True,
+        )
+        LLMModelConfig.objects.create(
+            organization=self.org,
+            provider="openai",
+            model_name="gpt-4.1-mini",
+            model_id="openai/gpt-4.1-mini",
+            is_active=True,
+        )
+        LLMModelConfig.objects.create(
+            organization=self.org,
+            provider="internal",
+            model_name="zeroshield-guard-120b",
+            model_id="bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            is_active=True,
+        )
+        LLMModelConfig.objects.create(
+            organization=self.org,
+            provider="openai",
+            model_name="deprecated-model",
+            model_id="openai/deprecated-model",
+            is_active=False,
+        )
 
     def _event(self, org, action, **meta):
         return EnforcementEvent.objects.create(
@@ -56,6 +92,7 @@ class Module2PagesApiTests(TestCase):
         )
         EnforcementEvent.objects.filter(pk=ev.pk).update(created_at=since)
         self._event(self.org, ACTION_REDACT, model="gpt-4o", key_prefix="zs_test", threat_type="pii_ssn")
+        self._event(self.org, ACTION_BLOCK, model="not-connected-model", key_prefix="zs_test", threat_type="prompt_injection")
 
         resp = self.client.get("/api/module2/models/exposure/?period=24h")
         self.assertEqual(resp.status_code, 200)
@@ -63,10 +100,25 @@ class Module2PagesApiTests(TestCase):
         self.assertIn("summary", data)
         self.assertIn("exposure_by_model", data)
         self.assertIn("models", data)
-        self.assertGreaterEqual(data["summary"]["active_models"], 1)
-        self.assertGreaterEqual(data["summary"]["total_requests"], 2)
+        self.assertEqual(data["summary"]["active_models"], 3)
+        self.assertEqual(data["summary"]["total_requests"], 2)
         self.assertEqual(data["models"][0]["model"], "gpt-4o")
+        self.assertEqual(len(data["models"]), 1)
         self.assertIn("exposure_score", data["models"][0])
+
+    def test_model_exposure_accepts_model_id_alias_from_gateway_metadata(self):
+        self._event(
+            self.org,
+            ACTION_BLOCK,
+            model="anthropic/claude-3.5-haiku",
+            key_prefix="zs_test",
+            threat_type="prompt_injection",
+        )
+
+        resp = self.client.get("/api/module2/models/exposure/?period=24h")
+        self.assertEqual(resp.status_code, 200)
+        rows = resp.json()["models"]
+        self.assertTrue(any(row["model"] == "claude-3.5-haiku" for row in rows))
 
     def test_threat_intel_telemetry_returns_timeline_and_vectors(self):
         since = timezone.now() - timedelta(hours=1)
@@ -119,6 +171,13 @@ class Module2PagesApiTests(TestCase):
         self.assertGreaterEqual(data["count"], 1)
         self.assertTrue(all(row["severity"] == "high" for row in data["results"]))
 
+        critical_high_resp = self.client.get("/api/module2/incidents/?severity=critical_high")
+        self.assertEqual(critical_high_resp.status_code, 200)
+        self.assertEqual(critical_high_resp.json()["count"], 2)
+        self.assertTrue(
+            all(row["severity"] in {"critical", "high"} for row in critical_high_resp.json()["results"])
+        )
+
         status_resp = self.client.get("/api/module2/incidents/?status=investigating")
         self.assertEqual(status_resp.status_code, 200)
         results = status_resp.json()["results"]
@@ -141,6 +200,10 @@ class Module2PagesApiTests(TestCase):
         self.assertEqual(ti_resp.status_code, 200)
         ti_ids = [row["id"] for row in ti_resp.json()["results"]]
         self.assertIn(extra_inc.id, ti_ids)
+        chat_resp = self.client.get("/api/module2/incidents/?source=chat")
+        self.assertEqual(chat_resp.status_code, 200)
+        chat_sources = {row["source"] for row in chat_resp.json()["results"]}
+        self.assertNotIn("threat_intel", chat_sources)
 
         search_resp = self.client.get("/api/module2/incidents/?search=UEBA")
         self.assertEqual(search_resp.status_code, 200)
@@ -226,6 +289,20 @@ class Module2PagesApiTests(TestCase):
         self.assertIn("extra", meta)
         self.assertEqual(meta["extra"].get("detail"), "nested detail")
         self.assertNotIn("secret", meta["extra"])
+
+    def test_investigate_incident_endpoint_claims_open_case(self):
+        incident = self._incident(self.org, "Investigate me", severity="medium", status="open")
+        resp = self.client.post(
+            f"/api/security/incidents/{incident.id}/investigate-incident/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertEqual(data["status"], "investigating")
+        self.assertEqual(data["assigned_to_username"], self.user.username)
+        incident.refresh_from_db()
+        self.assertEqual(incident.status, "investigating")
 
     def test_resolve_incident_endpoint_updates_security_incident(self):
         incident = self._incident(self.org, "Resolvable case", severity="medium", status="open")

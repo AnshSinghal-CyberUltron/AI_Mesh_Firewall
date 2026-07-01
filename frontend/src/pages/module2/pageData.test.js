@@ -90,8 +90,7 @@ test("buildTelemetryKpis renders telemetry summary cards", () => {
 
 test("badge helpers return expected class fragments", () => {
   assert.ok(exposureBandClass("high").includes("red"));
-  assert.ok(sourceBadgeClass("ueba").includes("cyan"));
-  assert.ok(sourceBadgeClass("threat_intel").includes("violet"));
+  assert.ok(sourceBadgeClass("chat").includes("sky"));
 });
 
 test("sourceBadgeClass covers all four enforcement lanes", () => {
@@ -261,7 +260,7 @@ test("buildIncidentKpiItems wires critical/high severity toggle", () => {
   const items = buildIncidentKpiItems(
     { active: 3, open: 2, escalated: 1, resolved: 0, critical_high: 2 },
     {
-      severityFilter: "critical",
+      severityFilter: "critical_high",
       onSeverityFilter: (v) => calls.push(v),
     },
   );
@@ -269,4 +268,19 @@ test("buildIncidentKpiItems wires critical/high severity toggle", () => {
   assert.equal(criticalHigh.active, true);
   criticalHigh.onClick();
   assert.deepEqual(calls, [""]);
+});
+
+test("buildIncidentKpiItems sets composite severity filter when inactive", () => {
+  const calls = [];
+  const items = buildIncidentKpiItems(
+    { active: 1, open: 1, escalated: 0, resolved: 0, critical_high: 1 },
+    {
+      severityFilter: "",
+      onSeverityFilter: (v) => calls.push(v),
+    },
+  );
+  const criticalHigh = items.find((k) => k.key === "critical-high");
+  assert.equal(criticalHigh.active, false);
+  criticalHigh.onClick();
+  assert.deepEqual(calls, ["critical_high"]);
 });

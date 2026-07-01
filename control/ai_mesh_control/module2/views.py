@@ -15,7 +15,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from auth.utils import get_request_organization
 from core.admin_views import IsAdminOrSuperuser
-from core.models import GatewayAPIKey, KillSwitch, LLMModelConfig
+from core.models import FirewallConfig, GatewayAPIKey, KillSwitch, LLMModelConfig
 from module2.analytics import (
     build_incident_queue_summary,
     build_lane_summary,
@@ -41,6 +41,7 @@ from module2.serializers import ThreatIntelEntrySerializer
 from module2.tasks import sync_threat_intel_to_redis
 from policy.constants import ACTION_BLOCK, ACTION_REDACT
 from policy.models import EnforcementEvent, SecurityIncident
+from policy.request_scoped_metrics import collapse_events_by_request, iter_rows_from_queryset, summarize_request_scoped_events
 from policy.review_views import SecurityIncidentSerializer
 from policy.security_views import _enforcement_events_for_request
 
@@ -113,8 +114,8 @@ _TIMELINE_EXTRA_ALLOWLIST = {
 }
 
 _VALID_INCIDENT_STATUSES = {"open", "investigating", "escalated", "resolved"}
-_VALID_INCIDENT_SEVERITIES = {"low", "medium", "high", "critical"}
-_VALID_INCIDENT_SOURCES = {"threat_intel", "ueba", "rag", "mcp", "vector", "chat", "generic"}
+_VALID_INCIDENT_SEVERITIES = {"low", "medium", "high", "critical", "critical_high"}
+_VALID_INCIDENT_SOURCES = {"threat_intel", "rag", "mcp", "vector", "chat", "generic"}
 _VALID_INCIDENT_QUEUES = {"active"}
 
 
@@ -149,11 +150,13 @@ def _build_event_trend(events_qs, since, hours, bucket_hours):
 
     window_end = since + timedelta(hours=bucket_count * bucket_hours)
     rows = list(
-        events_qs.filter(created_at__gte=since, created_at__lt=window_end).values("created_at", "action")
+        events_qs.filter(created_at__gte=since, created_at__lt=window_end).values(
+            "created_at", "action", "metadata"
+        )
     )
     bucket_seconds = bucket_hours * 3600
-    for row in rows:
-        ts = row.get("created_at")
+    for item in collapse_events_by_request(rows):
+        ts = item.created_at
         if not ts:
             continue
         idx = int((ts - since).total_seconds() // bucket_seconds)
@@ -161,9 +164,9 @@ def _build_event_trend(events_qs, since, hours, bucket_hours):
             continue
         target = timeline[idx]
         target["total"] += 1
-        if row.get("action") == ACTION_BLOCK:
+        if item.action == "block":
             target["blocked"] += 1
-        if row.get("action") == ACTION_REDACT:
+        if item.action == "redact":
             target["redacted"] += 1
     return timeline
 
@@ -185,30 +188,51 @@ def _collect_key_metrics(keys_qs, events_qs):
         }
     )
 
-    for ev in events_qs.values("created_at", "action", "endpoint_id", "metadata"):
-        meta = ev.get("metadata") or {}
+    raw_rows = list(
+        events_qs.values("created_at", "action", "endpoint_id", "metadata")
+    )
+    prepared = []
+    for ev in raw_rows:
+        meta = dict(ev.get("metadata") or {})
+        if ev.get("endpoint_id"):
+            meta.setdefault("endpoint_id", ev["endpoint_id"])
+        prepared.append(
+            {
+                "created_at": ev.get("created_at"),
+                "action": ev.get("action"),
+                "metadata": meta,
+            }
+        )
+    for item in collapse_events_by_request(prepared):
+        meta = item.metadata or {}
         prefix = _key_prefix_from_meta(meta)
         if not prefix:
             continue
         canonical = prefix_lookup.get(prefix.lower())
         if not canonical:
             continue
-        hour_bucket = ev["created_at"].replace(minute=0, second=0, microsecond=0).isoformat()
+        created_at = item.created_at
+        hour_bucket = (
+            created_at.replace(minute=0, second=0, microsecond=0).isoformat()
+            if created_at is not None
+            else ""
+        )
         m = metrics[canonical]
         m["total"] += 1
-        if ev["action"] == ACTION_BLOCK:
+        if item.action == "block":
             m["blocked"] += 1
-        if ev["action"] == ACTION_REDACT:
+        if item.action == "redact":
             m["redacted"] += 1
-        if ev.get("endpoint_id"):
-            m["endpoint_ids"].add(ev["endpoint_id"])
+        if meta.get("endpoint_id"):
+            m["endpoint_ids"].add(meta["endpoint_id"])
         if meta.get("model"):
             model_name = str(meta["model"])
             m["models"].add(model_name)
             m["model_counts"][model_name] += 1
         threat = str(meta.get("threat_type") or "unknown")
         m["threat_types"][threat] += 1
-        m["hourly"][hour_bucket] += 1
+        if hour_bucket:
+            m["hourly"][hour_bucket] += 1
 
     return key_by_prefix, metrics
 
@@ -509,19 +533,23 @@ class UebaApiKeyTimelineView(APIView):
             bucket_seconds = bucket_size * 3600
             bucket_count = len(timeline)
             window_end = since + timedelta(hours=bucket_count * bucket_size)
-            for ev in events.filter(created_at__gte=since, created_at__lt=window_end).values(
-                "created_at",
-                "metadata",
-            ):
-                ts = ev.get("created_at")
+            timeline_rows = list(
+                events.filter(created_at__gte=since, created_at__lt=window_end).values(
+                    "created_at", "action", "metadata"
+                )
+            )
+            for item in collapse_events_by_request(timeline_rows):
+                ts = item.created_at
                 if not ts:
                     continue
                 idx = int((ts - since).total_seconds() // bucket_seconds)
                 if idx < 0 or idx >= bucket_count:
                     continue
-                prefix = _key_prefix_from_meta(ev.get("metadata") or {})
-                if prefix in tracked_prefixes:
-                    timeline[idx]["keys"][prefix] += 1
+                prefix = _key_prefix_from_meta(item.metadata or {})
+                canonical = prefix.lower()
+                matched = next((p for p in tracked_prefixes if p.lower() == canonical), None)
+                if matched:
+                    timeline[idx]["keys"][matched] += 1
 
         elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
         logger.info(
@@ -561,11 +589,27 @@ class UebaApiKeyBehaviorView(APIView):
         )
         from module2.telemetry_health import normalize_enforcement_metadata
 
-        events = []
+        prepared = []
         for raw in events_qs.values("id", "created_at", "action", "endpoint_id", "metadata"):
             meta, _ = normalize_enforcement_metadata(raw.get("metadata") or {})
-            if prefixes_match(key.prefix, key_prefix_from_meta(meta)):
-                events.append({**raw, "metadata": meta})
+            if raw.get("endpoint_id"):
+                meta.setdefault("endpoint_id", raw["endpoint_id"])
+            prepared.append({**raw, "metadata": meta})
+
+        events = []
+        for item in collapse_events_by_request(prepared):
+            meta = item.metadata or {}
+            if not prefixes_match(key.prefix, key_prefix_from_meta(meta)):
+                continue
+            events.append(
+                {
+                    "id": meta.get("event_id") or meta.get("request_id"),
+                    "created_at": item.created_at,
+                    "action": item.action,
+                    "endpoint_id": meta.get("endpoint_id"),
+                    "metadata": meta,
+                }
+            )
 
         endpoint_counts = defaultdict(int)
         model_counts = defaultdict(int)
@@ -579,8 +623,8 @@ class UebaApiKeyBehaviorView(APIView):
 
         metric = {
             "total": len(events),
-            "blocked": sum(1 for e in events if e["action"] == ACTION_BLOCK),
-            "redacted": sum(1 for e in events if e["action"] == ACTION_REDACT),
+            "blocked": sum(1 for e in events if e["action"] in (ACTION_BLOCK, "block")),
+            "redacted": sum(1 for e in events if e["action"] in (ACTION_REDACT, "redact")),
             "endpoint_ids": set(endpoint_counts.keys()),
             "models": set(model_counts.keys()),
             "threat_types": threat_counts,
@@ -637,11 +681,40 @@ class ModelExposureView(APIView):
         )
 
         llm_map = {}
+        model_aliases = {}
+        active_model_count = 0
         if org:
-            for cfg in LLMModelConfig.objects.filter(organization=org):
+            # M2.3 should mirror Module 1 "connected user models", not internal
+            # guard/runtime entries. Keep only active non-internal models.
+            active_cfgs = LLMModelConfig.objects.filter(
+                organization=org,
+                is_active=True,
+            ).exclude(provider="internal")
+            active_model_count = active_cfgs.count()
+            for cfg in active_cfgs:
                 llm_map[cfg.model_name] = cfg.provider
+                model_aliases[str(cfg.model_name).strip().lower()] = cfg.model_name
+                if cfg.model_id:
+                    model_aliases[str(cfg.model_id).strip().lower()] = cfg.model_name
 
-        return Response(build_model_exposure_payload(events, llm_map, period))
+        normalized_events = []
+        if model_aliases:
+            for ev in events:
+                meta = dict(ev.get("metadata") or {})
+                raw_model = str(meta.get("model") or "").strip().lower()
+                canonical_model = model_aliases.get(raw_model)
+                if not canonical_model:
+                    continue
+                meta["model"] = canonical_model
+                normalized_events.append({"metadata": meta, "action": ev.get("action")})
+        else:
+            normalized_events = events
+
+        payload = build_model_exposure_payload(normalized_events, llm_map, period)
+        if org:
+            payload.setdefault("summary", {})
+            payload["summary"]["active_models"] = active_model_count
+        return Response(payload)
 
 
 class ThreatIntelTelemetryView(APIView):
@@ -687,9 +760,11 @@ class UnifiedDashboardView(APIView):
         events = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
-        total = events.count()
-        blocked = events.filter(action=ACTION_BLOCK).count()
-        redacted = events.filter(action=ACTION_REDACT).count()
+        req_rows = list(events.values("action", "metadata", "created_at"))
+        req_summary = summarize_request_scoped_events(req_rows)
+        total = req_summary["requests_inspected"]
+        blocked = req_summary["requests_blocked"]
+        redacted = req_summary["requests_redacted"]
         monitored = count_monitored_events(events)
         rerouted = count_rerouted_events(events)
 
@@ -729,12 +804,24 @@ class UnifiedDashboardView(APIView):
             for i in open_incidents.select_related("enforcement_event").order_by("-created_at")[:10]
         ]
         containment = _build_key_containment_payload(org, keys_qs)
+        telemetry_enabled = True
+        if org:
+            cfg = FirewallConfig.objects.filter(organization=org).order_by("-updated_at").first()
+            if cfg is not None:
+                telemetry_enabled = bool(cfg.audit_logging_enabled)
 
         response = Response(
             {
                 "period": period,
+                "data_health": {
+                    "telemetry_enabled": telemetry_enabled,
+                },
                 "kpis": {
                     "total_events": total,
+                    "requests_inspected": total,
+                    "requests_blocked": blocked,
+                    "requests_redacted": redacted,
+                    "requests_allowed": req_summary["requests_allowed"],
                     "blocked": blocked,
                     "redacted": redacted,
                     "monitored": monitored,
@@ -856,7 +943,10 @@ class IncidentListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if severity_filter:
-            qs = qs.filter(severity=severity_filter)
+            if severity_filter == "critical_high":
+                qs = qs.filter(severity__in=("critical", "high"))
+            else:
+                qs = qs.filter(severity=severity_filter)
 
         # NULL-safety: ``NOT (metadata->'key' = ...)`` evaluates to NULL (and
         # drops the row) in Postgres when the JSON key is missing, so every
@@ -898,11 +988,6 @@ class IncidentListView(APIView):
 
         if source_filter == "threat_intel":
             qs = qs.filter(_threat_intel_q)
-        elif source_filter == "ueba":
-            qs = qs.filter(
-                Q(enforcement_event__metadata__has_key="key_prefix")
-                | Q(enforcement_event__metadata__has_key="api_key_prefix")
-            ).exclude(_threat_intel_q)
         elif source_filter == "rag":
             qs = qs.filter(enforcement_event__metadata__event_type="rag_pipeline")
         elif source_filter == "mcp":
@@ -920,6 +1005,7 @@ class IncidentListView(APIView):
             qs = qs.exclude(
                 _lane_event_type_q
                 | _mcp_metadata_fallback_q
+                | _threat_intel_q
                 | Q(enforcement_event__metadata__has_key="collection")
                 | Q(enforcement_event__metadata__has_key="vector_collection")
                 | Q(enforcement_event__metadata__has_key="vector_namespace")

@@ -264,7 +264,7 @@ export function buildContainmentKpiItems({
 
 export function buildExposureKpis(summary = {}) {
   return [
-    { key: "active-models", label: "Active Models", value: summary.active_models ?? 0, helpText: "Distinct LLM targets observed in enforcement telemetry for this period." },
+    { key: "active-models", label: "Active Models", value: summary.active_models ?? 0, helpText: "Currently enabled Model Connection entries for this organization." },
     { key: "high-exposure", label: "High Exposure", value: summary.high_exposure_models ?? 0, color: "text-red-600", helpText: "Models in the high exposure band—prioritize for policy review or routing changes." },
     { key: "total-requests", label: "Total Requests", value: summary.total_requests ?? 0, helpText: "Aggregate request volume across all monitored models." },
     { key: "avg-block-rate", label: "Avg Block Rate", value: `${summary.avg_block_rate_pct ?? 0}%`, helpText: "Fleet-wide mean block rate; sudden lifts may signal active attack campaigns." },
@@ -323,9 +323,9 @@ export function buildTelemetryKpis(summary = {}) {
   return [
     {
       key: "total-events",
-      label: "Total Events",
-      value: summary.total_events ?? 0,
-      helpText: "Every enforcement event in this time window (blocks, redactions, monitors). Broader than the category KPIs below.",
+      label: "Gateway Requests (Deduped)",
+      value: summary.total_events ?? summary.requests_inspected ?? 0,
+      helpText: "Distinct gateway requests in this window (aligned with Module 1.1 — one count per request_id, not per enforcement row).",
     },
     {
       key: "injection-attempts",
@@ -383,17 +383,17 @@ export function formatRiskDistributionChart(distribution = {}) {
   })).filter((row) => row.value > 0);
 }
 
-/** Derive enforcement lane (chat/rag/vector/mcp/ueba/threat_intel) from WS or incident payloads. */
+/** Derive enforcement lane (chat/rag/vector/mcp/threat_intel) from WS or incident payloads. */
 export function resolveEventLane(item = {}) {
   if (item.source && item.source !== "policy" && item.source !== "gateway") {
     return item.source;
   }
   const meta = item.metadata || {};
   const eventType = String(meta.event_type || "").toLowerCase();
-  if (eventType === "mcp_tool_call" || meta.tools_invoked || meta.mcp_server || meta.server_slug) {
+  if (eventType === "mcp_tool_call" || eventType.startsWith("mcp_") || meta.tools_invoked || meta.mcp_server || meta.server_slug) {
     return "mcp";
   }
-  if (eventType === "rag_pipeline") return "rag";
+  if (eventType === "rag_pipeline" || eventType.startsWith("rag_")) return "rag";
   if (meta.collection || meta.vector_collection || meta.vector_namespace) return "vector";
   const detail = String(meta.detail || "").toLowerCase();
   const src = String(meta.source || item.source || "").toLowerCase();
@@ -401,7 +401,6 @@ export function resolveEventLane(item = {}) {
   if (detail.includes("threat intel") || src.includes("threat_intel") || threatType.startsWith("threat_intel")) {
     return "threat_intel";
   }
-  if (meta.key_prefix || meta.api_key_prefix) return "ueba";
   return "chat";
 }
 
@@ -450,7 +449,6 @@ export function mergeTickerFeed(liveFeed = [], incidents = [], limit = 12) {
 
 export function sourceBadgeClass(source) {
   if (source === "threat_intel") return "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
-  if (source === "ueba") return "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300";
   if (source === "rag") return "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300";
   if (source === "mcp") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
   if (source === "vector") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
@@ -472,7 +470,6 @@ const INCIDENT_LANE_DRILL_DOWN = {
   rag: { to: "/models/exposure?tab=rag", label: "M2.3 RAG health" },
   vector: { to: "/models/exposure?tab=rag", label: "M2.3 Vectors" },
   mcp: { to: "/mcp/risk", label: "M2.4 MCP risk" },
-  ueba: { to: "/ueba/api-keys", label: "M2.2 UEBA" },
   threat_intel: { to: "/threat-intel", label: "M2.5 Threat intel" },
 };
 
@@ -480,7 +477,7 @@ export function incidentLaneDrillDown(source) {
   return INCIDENT_LANE_DRILL_DOWN[source] || null;
 }
 
-const INCIDENT_SOURCE_ORDER = ["chat", "rag", "vector", "mcp", "ueba", "threat_intel", "generic"];
+const INCIDENT_SOURCE_ORDER = ["chat", "rag", "vector", "mcp", "threat_intel", "generic"];
 
 export function formatIncidentsBySourceChart(bySource = {}) {
   const map = bySource && typeof bySource === "object" ? bySource : {};
@@ -538,6 +535,10 @@ export function patchIncidentSummaryForMutation(summary, { action, previousStatu
     if (prev) next[prev] = decCount(next[prev]);
     next.escalated = incCount(next.escalated);
   }
+  if (action === "investigate" && prev === "open") {
+    next.open = decCount(next.open);
+    next.investigating = incCount(next.investigating);
+  }
   return next;
 }
 
@@ -577,6 +578,16 @@ export function applyIncidentListMutation(data, { incidentId, action, previousSt
     } else {
       next.results = (next.results || []).map((r) =>
         r.id === incidentId ? { ...r, status: "escalated" } : r,
+      );
+    }
+  } else if (action === "investigate") {
+    const statusFilter = filters.status || "";
+    if (statusFilter === "open") {
+      next.results = (next.results || []).filter((r) => r.id !== incidentId);
+      next.count = Math.max(0, (next.count ?? 0) - 1);
+    } else {
+      next.results = (next.results || []).map((r) =>
+        r.id === incidentId ? { ...r, status: "investigating" } : r,
       );
     }
   }
@@ -631,15 +642,15 @@ export function buildIncidentKpiItems(summary = {}, handlers = {}) {
       value: criticalHigh,
       color: criticalHigh > 0 ? "text-red-600" : undefined,
       clickable: !!onSeverityFilter,
-      active: severityFilter === "high" || severityFilter === "critical",
+      active: severityFilter === "critical_high",
       onClick: () => {
-        if (severityFilter === "high" || severityFilter === "critical") {
+        if (severityFilter === "critical_high") {
           onSeverityFilter?.("");
         } else {
-          onSeverityFilter?.("high");
+          onSeverityFilter?.("critical_high");
         }
       },
-      helpText: "Active incidents at high or critical severity among open work.",
+      helpText: "Active incidents at high or critical severity among open work. Click to filter to both severities.",
     },
     {
       key: "resolved",

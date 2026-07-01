@@ -17,6 +17,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api, INCIDENT_QUEUE_MUTATED_EVENT } from "../../api/module2";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
+import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { formatRiskBandLabel } from "../../utils/riskLabels";
 import { PageHeader } from "../../components/module2/PageHeader";
@@ -49,8 +50,8 @@ const SOURCE_CHIPS = [
   { value: "rag", label: "RAG" },
   { value: "vector", label: "Vector" },
   { value: "mcp", label: "MCP" },
-  { value: "ueba", label: "UEBA" },
   { value: "threat_intel", label: "Threat Intel" },
+  { value: "generic", label: "Generic" },
 ];
 
 const SEVERITY_CLASS = {
@@ -72,8 +73,8 @@ const SOURCE_LABELS = {
   rag: "RAG",
   vector: "Vector",
   mcp: "MCP",
-  ueba: "UEBA",
   threat_intel: "Threat Intel",
+  generic: "Generic",
 };
 
 function filtersToSearchParams({ status, severity, source, queue, search }) {
@@ -98,7 +99,10 @@ function readIncidentFilters(searchParams) {
 
 function formatStatusLabel(status) {
   if (!status) return "";
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  return status
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function buildActiveFilterChips({ statusFilter, severityFilter, sourceFilter, queueFilter, search }) {
@@ -312,9 +316,11 @@ function IncidentsPageInner() {
   useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
 
   const { connected: wsConnected } = useRealtimeNotifications({
+    onEnforcementEvent: refreshLive,
     onEscalationEvent: refreshLive,
     onResolutionEvent: refreshLive,
   });
+  useContainmentPolling(refreshLive, { enabled: !!data });
 
   useEffect(() => {
     const onMutated = () => refreshLive();
@@ -411,6 +417,9 @@ function IncidentsPageInner() {
         if (action === "escalate") {
           await api.escalateIncident(incidentId);
           setActionNotice({ type: "success", text: `Incident #${incidentId} escalated.` });
+        } else if (action === "investigate") {
+          await api.investigateIncident(incidentId);
+          setActionNotice({ type: "success", text: `Incident #${incidentId} marked investigating.` });
         } else {
           await api.resolveIncident(incidentId);
           setActionNotice({ type: "success", text: `Incident #${incidentId} resolved.` });
@@ -634,6 +643,7 @@ function IncidentsPageInner() {
             title={INCIDENTS_GUIDE.filterHelp.severity}
           >
             <option value="">All severities</option>
+            <option value="critical_high">Critical + High</option>
             <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
@@ -797,10 +807,22 @@ function IncidentsPageInner() {
                   helpText: "Escalate for senior review, Resolve when investigation is complete, or open the case for forensics.",
                   render: (r) => {
                     const busy = rowActionId === r.id;
+                    const canInvestigate = r.status === "open";
                     const canEscalate = r.status !== "escalated" && r.status !== "resolved";
                     const canResolve = r.status !== "resolved";
                     return (
                       <div className="flex min-w-[9rem] flex-wrap gap-1">
+                        {canInvestigate && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleRowAction(r, "investigate")}
+                            className="rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-50 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-200"
+                            title="Claim case and begin triage"
+                          >
+                            {busy ? "…" : "Investigate"}
+                          </button>
+                        )}
                         {canEscalate && (
                           <button
                             type="button"
