@@ -1830,3 +1830,12 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   corrupted during compose down/up ("marked for removal", stale container IDs) — stack empty, cannot
   recreate without Docker Desktop restart. E1 passes:false. Next: restart Docker Desktop, minimal stack
   (redis+postgres+control+gateway+frontend only), poll auth 200, fire #4 then #3 in clean window.
+- 2026-07-01 E1 iter 2 (Cursor coder subagent, Ralph loop 2/50): Re-ran offline gates — all GREEN
+  (test_openai_sdk_compat.py 46p/2xp; full suite 1005p/18sk/7xf/2xp; frontend build PASS). Attempted
+  docker stack stabilization: stopped ai_mesh_mcp_broker adversarial containers; pruned Dead containers;
+  `open -a Docker` recovered daemon after socket missing; compose up still fails on ghost IDs from parallel
+  compose races (63086e55af4e/bf480d201b44 "No such container" / "marked for removal"). All core containers
+  Dead at exit; ports 8180/8100/8300 unreachable. Playwright demo + live_sdk NOT RUN. E1 passes:false.
+  Next iter: halt parallel mcp-adversarial ralph loop, Docker Desktop full restart, `docker compose down
+  --remove-orphans`, minimal up (redis postgres control gateway frontend), poll auth 200, fire live_sdk
+  then playwright in clean window before telemetry re-saturates control.
