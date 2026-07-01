@@ -1862,3 +1862,10 @@ SOLO_BATCH_11_20 started PID=76918 (reconcile after stale lock)
   chromadb profile; PATCH vector provider → vector:providers:compiled Redis sync; compile vector policies.
   ALL GATES GREEN: test_openai_sdk_compat 46p/2xp; full pytest 1005p; frontend build; playwright_demo
   23/23 asserts 6/6 steps; live_gateway_sdk 6/6 PASS. E1 passes:true. no ralph.sh PIDs.
+- 2026-07-01 E1 iter 3 RE-VERIFY (coder subagent, same loop): Playwright initially failed RAG clean HTTP 422
+  `no_provider_configured` pinecone despite chroma VectorProviderConfig active. Root cause = TWO enabled
+  org-3 `docs` policies (seed pinecone/deny 535ed962 + new custom/allow 11267ed9); vector_compiler keys
+  `{org_id}::{collection}` only so older pinecone row overwrote custom during compile. FIX = disable stale
+  pinecone policy + compile_and_push (version 6 → `3::docs custom allow`). Competing ralph.sh PIDs 33458/33544
+  noted (Docker contention). Re-ran ALL gates GREEN: backend 46p/2xp + 1005p; frontend lint+build; stack
+  8180/8100/8300; playwright_demo 23/23; live_sdk 6/6. E1 passes:true confirmed.
