@@ -1,26 +1,8 @@
-# LOCAL-ONLY email kill-switch.
-# This dev stack pulls the PRODUCTION Microsoft Graph / Outlook creds from .env,
-# so it was sending real critical-alert emails (sender support@zeroshield.ai) to
-# whatever address sat in alert_recipients — bad addresses bounced and flooded the
-# inbox. A local/dev stack must never send real email. This override blanks the
-# Graph creds (so graph_mail_configured() -> False) and routes Django mail to the
-# dummy backend (SMTP becomes a no-op) for the email-sending services.
-#
-# Reversible: delete this file, then `docker compose --profile workers up -d control workers`.
+# LOCAL-ONLY overrides (see docker-compose.yml for base stack).
 services:
   control:
     environment:
-      EMAIL_BACKEND: "django.core.mail.backends.dummy.EmailBackend"
-      TENANT_ID: ""
-      CLIENT_ID: ""
-      CLIENT_SECRET: ""
       VECTOR_PROVIDER_ALLOW_PRIVATE: "1"
-  workers:
-    environment:
-      EMAIL_BACKEND: "django.core.mail.backends.dummy.EmailBackend"
-      TENANT_ID: ""
-      CLIENT_ID: ""
-      CLIENT_SECRET: ""
   gateway:
     environment:
       # Demo/local: synchronous RAG ingest so documents are queryable without

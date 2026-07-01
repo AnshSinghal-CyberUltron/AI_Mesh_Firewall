@@ -38,4 +38,5 @@ crash.log
 .env.bak
 .playwright-mcp/
 /tmp/
-.skill-workspace/
+.skill-workspace/scripts/ralph/mcp_sandbox/.pw-profile/
+scripts/ralph/mcp_sandbox/runs/

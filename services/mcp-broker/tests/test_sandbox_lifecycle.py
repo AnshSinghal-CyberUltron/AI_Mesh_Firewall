@@ -88,6 +88,11 @@ def test_ensure_creates_container_when_missing(manager: DockerManager):
     assert run_kwargs["ports"] == {"9320/tcp": None}
     assert run_kwargs["network"] == "mcp_sandbox_bridge"
     assert run_kwargs["environment"]["ORG_SLUG"] == "acme"
+    assert run_kwargs["environment"]["NPM_CONFIG_CACHE"] == "/var/npm-cache"
+    assert "/var/npm-cache" in run_kwargs["tmpfs"]
+    assert "noexec" in run_kwargs["tmpfs"]["/tmp"]
+    assert "exec" in run_kwargs["tmpfs"]["/var/npm-cache"]
+    assert "noexec" not in run_kwargs["tmpfs"]["/var/npm-cache"]
     assert info.status == "running"
     assert info.container_id == created.id
     assert info.agent_url == "http://172.28.0.42:9320"

@@ -99,16 +99,9 @@ services:
       # Phase 1 Fx-2b: server-to-server admin proxy (control -> gateway)
       GATEWAY_URL: http://gateway:8300
       GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
-      # Security alerting email (Microsoft Graph application permissions)
-      TENANT_ID: ${TENANT_ID:-}
-      CLIENT_ID: ${CLIENT_ID:-}
-      CLIENT_SECRET: ${CLIENT_SECRET:-}
-      GRAPH_SENDER_EMAIL: ${GRAPH_SENDER_EMAIL:-support@zeroshield.ai}
-      # Drain telemetry + send alert emails without requiring --profile workers
       TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-thread}
       TELEMETRY_DRAIN_INTERVAL_SEC: ${TELEMETRY_DRAIN_INTERVAL_SEC:-1.0}
       TELEMETRY_DRAIN_BATCH_SIZE: ${TELEMETRY_DRAIN_BATCH_SIZE:-250}
-      ALERT_EMAIL_USE_CELERY: ${ALERT_EMAIL_USE_CELERY:-false}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -130,11 +123,6 @@ services:
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       REDIS_URL: redis://redis:6379/0
       TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-beat}
-      TENANT_ID: ${TENANT_ID:-}
-      CLIENT_ID: ${CLIENT_ID:-}
-      CLIENT_SECRET: ${CLIENT_SECRET:-}
-      GRAPH_SENDER_EMAIL: ${GRAPH_SENDER_EMAIL:-support@zeroshield.ai}
-      ALERT_EMAIL_USE_CELERY: ${ALERT_EMAIL_USE_CELERY:-true}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
     depends_on:

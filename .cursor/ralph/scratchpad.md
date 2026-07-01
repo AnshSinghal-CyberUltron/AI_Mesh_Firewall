@@ -1,5 +1,5 @@
 ---
-iteration: 5
+iteration: 6
 min_iterations: 20
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
@@ -7,12 +7,12 @@ status: ACTIVE
 active_story: E1-openai-sdk-frontend-playwright
 prd: scripts/ralph/prd.json
 campaign: openai-sdk-frontend
-note: E1 round-close iter5 — all 5 gates green, distrust re-confirmation
+note: E1 min-floor iter6 — all 5 gates green, re-confirmation (iter 6 < 20)
 ---
 
 # OpenAI SDK Frontend — Cursor Ralph Loop
 
-Campaign `openai-sdk-frontend`. Story **E1-openai-sdk-frontend-playwright** passes:true, round-close verified iter 5.
+Campaign `openai-sdk-frontend`. Story **E1-openai-sdk-frontend-playwright** passes:true, min-floor verified iter 6.
 
 ## Gates reference
 
@@ -21,6 +21,11 @@ Campaign `openai-sdk-frontend`. Story **E1-openai-sdk-frontend-playwright** pass
 **Stack:** Vite :8180, control :8100, gateway :8300 — login admin@zeroshield.io / Adm1n!Pass#2024
 
 ## Iteration log
+
+### Iteration 6 — 2026-07-01 (min-floor re-confirmation)
+- MIN-FLOOR: iter 6 < 20; distrusted passes:true; re-ran ALL E1 gates from clean shell.
+- Gates ALL GREEN: test_openai_sdk_compat 46p/2xp; full pytest 1005p; frontend build OK; stack :8180/:8100/api/health/:8300 200; playwright_demo 23/23 asserts 6/6 steps (~108s); live_gateway_sdk 6/6 PASS.
+- No product fixes needed; no gap found.
 
 ### Iteration 5 — 2026-07-01 (round-close re-confirmation)
 - ROUND-CLOSE: distrusted passes:true; re-ran ALL E1 gates from clean shell.

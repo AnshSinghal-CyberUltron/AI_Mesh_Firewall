@@ -258,10 +258,11 @@ class DockerManager:
                 "MCP_STDIO_MAX_PROCESSES_PER_ORG": os.environ.get(
                     "MCP_STDIO_MAX_PROCESSES_PER_ORG", "16"
                 ),
-                # Sandbox USER is non-root; npm/uv must cache under writable /tmp (read_only rootfs).
-                "NPM_CONFIG_CACHE": "/tmp/.npm",
-                "UV_CACHE_DIR": "/tmp/.cache/uv",
-                "XDG_CACHE_HOME": "/tmp/.cache",
+                # Sandbox USER is non-root; npm/uv caches need writable tmpfs (read_only rootfs).
+                # npm cache MUST NOT live on noexec /tmp — npx bin symlinks are executed directly.
+                "NPM_CONFIG_CACHE": "/var/npm-cache",
+                "UV_CACHE_DIR": "/var/cache/uv",
+                "XDG_CACHE_HOME": "/var/cache",
             },
             "volumes": {volume: {"bind": "/data/mcp-auth", "mode": "rw"}},
             "network": org_net,
@@ -271,8 +272,8 @@ class DockerManager:
             "read_only": True,
             "tmpfs": {
                 "/tmp": "rw,noexec,nosuid,size=512m",
-                "/root/.npm": "rw,size=1g",
-                "/root/.cache/uv": "rw,size=512m",
+                "/var/npm-cache": "rw,exec,nosuid,size=1g,mode=1777",
+                "/var/cache": "rw,exec,nosuid,size=512m,mode=1777",
             },
         }
         # Host-run broker (no container ref) needs published agent port on shared bridge.

@@ -1,0 +1,12 @@
+{
+  "org": "adv-org-zeta",
+  "ok": false,
+  "steps": [
+    "broker-health",
+    "sandbox-running"
+  ],
+  "servers": [],
+  "probes": [],
+  "error": "stub-1 tools/list missing echo/get_env: ",
+  "container_id": "93dc84e21d24"
+}

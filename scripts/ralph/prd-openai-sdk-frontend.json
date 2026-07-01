@@ -52,7 +52,7 @@
       "id": "O3-frontend-streaming-sse",
       "title": "Frontend Playwright — streaming SSE chat completions",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependencies": ["O2-frontend-chat-playwright"],
       "userStory": "As an SDK user I can toggle stream mode in the demo and receive chunked SSE honestly.",
       "acceptanceCriteria": [
@@ -65,7 +65,7 @@
       "id": "O4-error-rate-limit-ui",
       "title": "Frontend Playwright — SDK error envelope + rate-limit honesty",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "dependencies": ["O2-frontend-chat-playwright"],
       "userStory": "As an SDK user blocked requests show typed errors (not generic ERROR) and rate-limit stress is honest.",
       "acceptanceCriteria": [

@@ -90,3 +90,34 @@ its OWN sandbox and actively trying to break out / read the sibling org's data.
   OOM-exit). Derived the recreate config by READ-ONLY inspect of the live :8311 broker template.
 - DECISION: M1 stays passes:false. Next fresh iteration retries when host has headroom (parallel
   session's :8311 load was the saturation source; nothing isolation-related to fix here).
+
+## COMPLETE ISOLATION CONTRACT (playwright + docker + everything — user requires full isolation from parallel sessions)
+- Docker: broker :8312 (ai_mesh_mcp_broker_2), base net mcp_sandbox_bridge_2, orgs epsilon/zeta,
+  per-org nets, org-scoped reaper. NEVER :8311 / alpha-beta-gamma-delta / mcp_sandbox_bridge.
+- Playwright: use the DEDICATED profile `scripts/ralph/mcp_sandbox/.pw-profile` (launchPersistentContext)
+  + a UNIQUE CDP/debug port + headless, launched by THIS loop only. Never reuse the default profile —
+  parallel sessions' playwright holds it ("Browser is already in use"). Every frontend probe sets:
+  PW_USER_DATA_DIR=scripts/ralph/mcp_sandbox/.pw-profile, PW_CDP_PORT=<unique e.g. 9555>.
+- Output: own runs/iso_*.json + own logs. Git: ADDITIVE paths only; commit with index.lock retry.
+- Ports: broker :8312 only. Do NOT bind :8311/:8180/:8300/:8100 (shared with the stack/parallel).
+
+## REAL MCP SERVERS + OAuth (user provides tokens/OAuth in-browser; e.g. Linear) — beyond the stdio stub
+- Each org must exercise >=5 REAL MCP servers, not only the echo/get_env stub. Two classes:
+  1. stdio npx MCP servers inside the sandbox: @modelcontextprotocol/server-everything / -memory /
+     -filesystem, playwright-mcp, semgrep-mcp (MCPConnectorPanel stdio presets). Registered via broker
+     stdio rpc (command "npx", args ["-y","<pkg>"]). Needs npx in ai-mesh/mcp-sandbox image — verify;
+     if absent, that is a sandbox-image gap -> ruflo handoff (don't edit services/mcp-broker).
+  2. remote OAuth MCP (Linear/GitHub/etc.): connected via the frontend MCPConnectorPanel OAuth flow.
+     The USER does the browser OAuth (loop prints the connect URL and PAUSES for it, per user: "i will
+     do on browser the oauth"). Token stored per-org; loop then drives tools/list + tools/call and
+     asserts org epsilon CANNOT reach zeta's OAuth-connected server (the real-server isolation test).
+- Tokens/OAuth are FRONTEND-only / per-org — NEVER commit them (env/DB/file/code).
+- Requires FULL stack up: frontend :8180 + control :8100 + gateway :8300 + broker :8312. If down,
+  frontend/real-MCP stories are BLOCKED — record + retry when up. (stack was DOWN as of 2026-07-01T03:57Z.)
+
+## HOST CAPACITY IS THE HARD BLOCKER (not isolation)
+- 8-core / 8 GB Docker VM shared by MANY parallel claude sessions. Observed load 26-61; at ~46+ the
+  Docker DAEMON itself returns HTTP 500 on /containers/json + /networks (overloaded), and broker#2 gets
+  removed. No isolation trick adds CPU/RAM. Loop is load-gated (LOAD_MAX=16) and PARKS until headroom.
+  To actually RUN: (a) raise Docker Desktop resources (mem+CPU), and/or (b) reduce concurrent sessions,
+  and/or (c) give this loop a dedicated window. Then the parked loop auto-proceeds.
