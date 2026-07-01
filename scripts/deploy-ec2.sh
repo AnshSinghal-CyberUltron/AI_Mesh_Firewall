@@ -174,21 +174,20 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 # Entrypoint already runs migrate + ensure_zeroshield_admin; keep explicit migrate for older images.
-"${COMPOSE[@]}" exec -T control python manage.py migrate --noinput
+# Use 'sh -c cd ...' so this works regardless of the compose working_dir setting (which may be
+# /app/control/ai_mesh_control in the merged dev+prod config) — manage.py lives in /app/control.
+"${COMPOSE[@]}" exec -T control sh -c 'cd /app/control && python manage.py migrate --noinput'
 
 if [[ "${SKIP_ADMIN:-}" != "1" ]]; then
   if [[ -z "${ZEROSHIELD_ADMIN_PASSWORD:-}" ]]; then
     echo "WARNING: ZEROSHIELD_ADMIN_PASSWORD unset — admin may use dev default on first create only."
   fi
-  "${COMPOSE[@]}" exec -T control python manage.py ensure_zeroshield_admin \
-    ${ZEROSHIELD_ADMIN_PASSWORD:+--password "$ZEROSHIELD_ADMIN_PASSWORD"} || true
+  "${COMPOSE[@]}" exec -T control sh -c "cd /app/control && python manage.py ensure_zeroshield_admin ${ZEROSHIELD_ADMIN_PASSWORD:+--password '$ZEROSHIELD_ADMIN_PASSWORD'}" || true
 fi
 
 if [[ "${SKIP_PII_SEED:-}" != "1" ]] && [[ -n "${SEED_PII_POLICY_ORG_SLUG:-}" ]]; then
   echo "==> PII policy package (org slug=${SEED_PII_POLICY_ORG_SLUG})"
-  "${COMPOSE[@]}" exec -T control python manage.py seed_pii_policy_package \
-    --org-slug "${SEED_PII_POLICY_ORG_SLUG}" \
-    ${RESET_PII_SEED:+--reset} || true
+  "${COMPOSE[@]}" exec -T control sh -c "cd /app/control && python manage.py seed_pii_policy_package --org-slug '${SEED_PII_POLICY_ORG_SLUG}' ${RESET_PII_SEED:+--reset}" || true
 fi
 
 echo "==> Gateway, workers, nginx (restart: unless-stopped)"

@@ -71,6 +71,9 @@ services:
   control:
     <<: [*restart_unless_stopped, *ecr_control_image]
     ports: !override ["127.0.0.1:8100:8000"]
+    # manage.py lives in /app/control — override the dev compose working_dir so
+    # `docker compose exec control python manage.py ...` resolves correctly on EC2.
+    working_dir: /app/control
     # ECR images built before ASGI switch may still use gunicorn; override until image is rebuilt.
     command:
       [
