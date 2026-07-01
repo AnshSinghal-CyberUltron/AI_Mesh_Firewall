@@ -13,6 +13,7 @@
       "passes": true,
       "dependencies": [],
       "userStory": "As Ralph I need Vite :8180, control :8100, and gateway :8300 up before SDK testing.",
+      "acceptanceCriteria": [
         "docker compose --profile services ps shows gateway, control, frontend Up",
         "curl -sf http://127.0.0.1:8180/ returns 200",
         "curl -sf http://127.0.0.1:8100/api/health/ returns 200",
@@ -23,7 +24,7 @@
       "id": "O1-backend-sdk-compat",
       "title": "Backend OpenAI SDK compat + live gateway SDK e2e",
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependencies": ["O0-bootstrap"],
       "userStory": "As a maintainer I need stock openai SDK green in-process and against the live gateway.",
       "acceptanceCriteria": [
@@ -37,7 +38,7 @@
       "id": "O2-frontend-chat-playwright",
       "title": "Frontend Playwright — chat completion via gateway proxy",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependencies": ["O1-backend-sdk-compat"],
       "userStory": "As a customer I run the demo Attack Simulator and see an honest ALLOW via /v1/chat/completions.",
       "acceptanceCriteria": [

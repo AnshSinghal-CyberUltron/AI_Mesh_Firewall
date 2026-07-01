@@ -1,0 +1,66 @@
+{
+  "base": "http://127.0.0.1:8180",
+  "phase": "all",
+  "ok": true,
+  "steps": [
+    "login",
+    "howto",
+    "chat",
+    "stream",
+    "errors"
+  ],
+  "asserts": [
+    {
+      "label": "seed admin auth (token mint 2xx, got ok)",
+      "pass": true,
+      "phase": "login"
+    },
+    {
+      "label": "HowTo cURL targets /v1/chat/completions",
+      "pass": true,
+      "phase": "howto"
+    },
+    {
+      "label": "clean chat allowed (HTTP 200)",
+      "pass": true,
+      "phase": "chat"
+    },
+    {
+      "label": "clean ALLOW surfaces model answer",
+      "pass": true,
+      "phase": "chat"
+    },
+    {
+      "label": "stream chat allowed (HTTP 200)",
+      "pass": true,
+      "phase": "stream"
+    },
+    {
+      "label": "stream response is SSE (text/event-stream; charset=utf-8)",
+      "pass": true,
+      "phase": "stream"
+    },
+    {
+      "label": "injection blocked (HTTP 400 4xx)",
+      "pass": true,
+      "phase": "errors"
+    },
+    {
+      "label": "injection banner reads BLOCKED, never ERROR",
+      "pass": true,
+      "phase": "errors"
+    },
+    {
+      "label": "no page JS errors (0)",
+      "pass": true,
+      "phase": "errors"
+    }
+  ],
+  "pageErrors": [],
+  "notes": [
+    "clean chat HTTP 200",
+    "stream HTTP 200 ctype=text/event-stream; charset=utf-8",
+    "injection HTTP 400"
+  ],
+  "error": null
+}

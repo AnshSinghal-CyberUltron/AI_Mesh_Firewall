@@ -1,0 +1,23 @@
+{
+  "ok": false,
+  "control": "http://127.0.0.1:8100",
+  "gateway": "http://127.0.0.1:8300",
+  "steps": [
+    {
+      "label": "login",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "simulator-default key",
+      "ok": true,
+      "detail": "prefix=ZRlDoRa7..."
+    },
+    {
+      "label": "detect model",
+      "ok": true,
+      "detail": "gemma-free"
+    }
+  ],
+  "error": "Connection error."
+}

@@ -1,10 +1,10 @@
 ---
-iteration: 2
+iteration: 3
 min_iterations: 20
 max_iterations: 50
 completion_promise: "COMPLETE and tested from frontend and backend"
 status: ACTIVE
-active_story: O1-backend-sdk-compat
+active_story: O3-frontend-streaming-sse
 prd: scripts/ralph/prd-openai-sdk-frontend.json
 campaign: openai-sdk-frontend
 note: OpenAI SDK frontend testing via ruflo + Playwright — Cursor multitask Ralph
@@ -47,40 +47,24 @@ NODE_PATH=$PWD/tests/e2e/node_modules BASE_URL=http://127.0.0.1:8180 \
 
 **Stack:** Vite :8180, control :8100, gateway :8300 — login admin@zeroshield.io / Adm1n!Pass#2024
 
-## Multitask spawn (parent agent)
+## Stack recovery (shared with MCP campaign)
 
-```
-Iteration N agent:
-  1. Read scratchpad + PRD
-  2. Run gates for active_story
-  3. Fix → re-run
-  4. Mark story passes:true, bump iteration, set next active_story
-  5. If iteration < max_iterations → spawn iteration N+1
-  6. All stories pass AND iteration >= 20 → <promise>COMPLETE and tested from frontend and backend</promise>
-```
-
-**Parent spawn command (iteration N+1):**
-```
-Task(subagent_type="generalPurpose", prompt="Ralph openai-sdk-frontend iteration N+1. Read .cursor/ralph/scratchpad.md + scripts/ralph/prd-openai-sdk-frontend.json. Execute ONE story gate, fix, mark pass, bump iteration. NO claude CLI. NO git push.")
-```
-
----
+- Poll 8180/8100/8300 health; `docker compose --profile services up -d control gateway frontend mcp-broker`
+- Control can flap after cold start (~13–14 min recovery observed iter3); retry Playwright with `NODE_PATH=$PWD/tests/e2e/node_modules`
 
 ## Iteration log
 
 ### Iteration 1 — 2026-06-30
 - Created campaign PRD, Playwright gate, live SDK script
 - **O0-bootstrap** green (health 200/200/200)
-- **O1** partial: `test_openai_sdk_compat.py` + `openai_sdk_live_gateway.py` green; full pytest blocked by MCP sandbox docker failures (17 failed)
-- **O2** Playwright gate green (pre-validated; blocked on O1 dependency in PRD)
+- **O1** partial: compat pytest + live script green; full pytest blocked by MCP sandbox docker failures
+- **O2** Playwright pre-validated; blocked on O1 in PRD
 
 ### Iteration 2 — 2026-06-30
-- **O1-backend-sdk-compat** — scoped gate (removed full pytest from PRD; pre-existing MCP/bedrock failures documented)
-- PASS: `test_openai_sdk_compat.py` → 46 passed, 2 xpassed
-- PASS: `frontend npm run lint && npm run build`
-- FAIL: `openai_sdk_live_gateway.py` — stack degraded (Docker exhaustion; control unhealthy; gateway /health hangs)
-- FAIL: `playwright_openai_sdk.mjs` — login page timeout (frontend :8180 unreachable)
-- Fix: `openai_sdk_live_gateway.py` defaults CONTROL_URL→8100, GATEWAY_URL→8300; SystemExit(0) no longer marks gate failed
-- Full pytest (excl MCP sandbox): 8 failed / 997 passed — bedrock_logger (2), bedrock_routing (4), context_guard (1)
-- **O1 still passes:false** — live gateway gate required and red this iteration
-- **Next:** recover Docker (`make up`); wait control healthy; rerun live + playwright gates
+- Scoped O1 gate; compat pytest 46 passed, 2 xpassed; frontend lint/build green; blocked on stack/control hang
+
+### Iteration 3 — 2026-06-30
+- Poll ~14m until 8180/8100/8300 all 200 (<5s)
+- **O1-backend-sdk-compat** `passes:true` — compat pytest + `openai_sdk_live_gateway.py` green
+- **O2-frontend-chat-playwright** `passes:true` — lint/build + Playwright (NODE_PATH) all phases green
+- Log: `scripts/ralph/cursor_ralph_openai_iter3.log`
