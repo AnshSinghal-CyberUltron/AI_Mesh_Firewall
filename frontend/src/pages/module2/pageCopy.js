@@ -4,7 +4,7 @@ export const ANALYST_BRIEF_TITLE = "Page Objective";
 
 export const PAGE_BRIEFS = {
   dashboard:
-    "SOC command view across Chat, RAG, Vector, and MCP enforcement lanes. Scan live pressure, risky API keys, and open incidents—then open M2.3 (Model & RAG) or M2.4 (MCP) for lane-specific drill-down.",
+    "SOC command view across Chat, RAG, Vector, and MCP enforcement lanes. Scan live gateway pressure and lane totals—then open M2.2 (API keys), M2.3 (Model & RAG), or M2.4 (MCP) for deep dives.",
   ueba:
     "Identity-centric UEBA for API keys. Baseline normal usage, surface anomaly flags, and correlate key activity to vector collections and MCP tools when investigating compromise or data harvesting.",
   modelRag:
@@ -30,7 +30,7 @@ export const INCIDENTS_GUIDE = {
   resolveDefinition:
     "Resolve closes a case when investigation is complete and the threat is contained or deemed a false positive. Resolved incidents stay in history for audit but leave the active workload.",
   tableSummary:
-    "Each row is one incident case. You will see where it came from (chat, RAG, MCP, UEBA, threat intel, etc.), how severe it is, who it is assigned to, and the model or API key involved. Use the case ID to open full timeline and evidence, or use Escalate / Resolve directly from the table.",
+    "Each row is one incident case. You will see where it came from (chat, RAG, MCP, threat intel, etc.), how severe it is, who it is assigned to, and the model or API key involved. Use the case ID to open full timeline and evidence, or use Escalate / Resolve directly from the table.",
   kpiHelp:
     "The KPI cards at the top count your entire org queue (they do not shrink when you filter the table). Click a card to filter the table to that slice — for example Open or Escalated. Click again to clear.",
   filterHelp: {

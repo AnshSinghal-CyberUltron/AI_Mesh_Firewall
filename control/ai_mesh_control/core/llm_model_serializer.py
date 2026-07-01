@@ -8,13 +8,14 @@ from core.models import (
     LLMModelConfig,
     is_platform_managed_llm_model_name,
     is_platform_managed_llm_provider,
+    is_reserved_inference_model_name,
 )
 
 
 class LLMModelConfigSerializer(serializers.ModelSerializer):
     provider_display = serializers.CharField(source="get_provider_display", read_only=True)
     api_key = serializers.CharField(write_only=True, required=False, allow_blank=True, trim_whitespace=True)
-    api_key_set = serializers.BooleanField(read_only=True)
+    api_key_set = serializers.SerializerMethodField()
     api_key_last4 = serializers.CharField(read_only=True)
     cost_per_1k_input_tokens = serializers.DecimalField(
         max_digits=10,
@@ -62,6 +63,10 @@ class LLMModelConfigSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
+    def get_api_key_set(self, obj) -> bool:
+        """Usability-aware: undecryptable blobs must read as disconnected (matches gateway Redis sync)."""
+        return obj.has_usable_api_key()
+
     def validate_model_name(self, value: str) -> str:
         if not value or not value.strip():
             raise serializers.ValidationError("Model name cannot be empty.")
@@ -98,8 +103,16 @@ class LLMModelConfigSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "ZeroShield guard models are platform-managed and cannot be added or edited here."
             )
+        model_id = str(attrs.get("model_id") or getattr(self.instance, "model_id", "")).strip()
+        will_be_active = attrs.get("is_active", getattr(self.instance, "is_active", True))
+        if will_be_active and is_reserved_inference_model_name(model_name, model_id):
+            raise serializers.ValidationError(
+                "This model uses a reserved Bedrock foundation ID and cannot be activated for "
+                "organization inference. Connect a user-facing alias (for example bedrock-llama-3) "
+                "with a non-reserved LiteLLM model id instead."
+            )
         submitted_key = str(attrs.get("api_key") or "").strip()
-        has_existing_key = bool(getattr(self.instance, "api_key_set", False))
+        has_existing_key = bool(self.instance and self.instance.has_usable_api_key())
         if provider == "aws_bedrock":
             # Development default: gateway .env AWS credentials (no per-model API key required).
             attrs["api_key_env_var"] = "AWS_ACCESS_KEY_ID"

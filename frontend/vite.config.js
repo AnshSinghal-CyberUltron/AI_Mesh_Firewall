@@ -15,6 +15,7 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     strictPort: true,
+    allowedHosts: true,
     // Docker Desktop on Windows bind-mounts need polling for reliable HMR.
     watch: {
       usePolling: true,

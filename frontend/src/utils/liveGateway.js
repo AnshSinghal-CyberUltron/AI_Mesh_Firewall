@@ -42,13 +42,19 @@ export function describeGatewayHttp403(data) {
   return message || "Request forbidden (HTTP 403).";
 }
 
+function resolveResponseCode(data) {
+  const err = extractErrorPayload(data);
+  return String(data?.code || err.code || "").toLowerCase();
+}
+
 export function isGatewayAuthForbidden(data, httpStatus) {
   if (httpStatus === 401 || data?.error === "unauthorized") return true;
   const message = String(data?.message || extractErrorPayload(data).message || "").toLowerCase();
-  const code = String(data?.code || "").toLowerCase();
+  const code = resolveResponseCode(data);
+  const errField = typeof data?.error === "string" ? data.error.toLowerCase() : "";
   return (
     httpStatus === 403
-    && code === "forbidden"
+    && (code === "forbidden" || errField === "forbidden")
     && (message.includes("api key is disabled") || message.includes("api key has expired"))
   );
 }
@@ -332,7 +338,9 @@ function isContentPolicyBlock(data, httpStatus) {
 
 function inferFinalAction(data, httpStatus, zs) {
   if (data?.final_action) return data.final_action;
-  const code = String(data?.code || "").toLowerCase();
+  const code = resolveResponseCode(data);
+  if (code === "kill_switch_active") return "block";
+  if (isGatewayAuthForbidden(data, httpStatus)) return "block";
   if (httpStatus === 422 && INFERENCE_SETUP_CODES.has(code)) return "needs_model";
   if (isUpstreamProviderError(data, httpStatus)) return "error";
   if (zs?.action) return zs.action;
@@ -374,7 +382,7 @@ export function inferDetectionCheckpoint(data, zs) {
 
 /** Map gateway response to the pipeline stage where processing stopped. */
 function inferBlockedStage(data, httpStatus, zs) {
-  const code = String(data?.code || "").toLowerCase();
+  const code = resolveResponseCode(data);
   const category = String(data?.category || zs?.threat_type || "").toLowerCase();
   const tier = String(data?.detection_tier || data?.pipeline_stage || zs?.detection_tier || "").toLowerCase();
 
@@ -654,6 +662,17 @@ function enrichStages(stages, data, zs, context) {
       if (!enriched.detail && enriched.routing_reason) {
         enriched.detail = enriched.routing_reason;
       }
+      const reqModel = enriched.requested_model || "";
+      const selModel = enriched.selected_model || "";
+      const routingMeta = {
+        ...routing,
+        decision_source: rawSource,
+        trigger_source: routing.trigger_source,
+        rerouted: routing.rerouted ?? enriched.action === "reroute",
+      };
+      if (enriched.action === "reroute" && !isRoutingReroute(reqModel, selModel, routingMeta)) {
+        enriched.action = "allow";
+      }
     }
     if (stage.name === "kill_switch" && enriched.action === "reroute" && enriched.routing_reason) {
       enriched.detail = formatRoutingReason(enriched.routing_reason, {
@@ -682,6 +701,7 @@ function skipDetail(stageName, blockedStage) {
 
 function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, context = {}) {
   const routing = { ...(zs.routing || {}), ...(context.routingHeaders || {}) };
+  const ksTrigger = String(routing.trigger_source || routing.decision_source || "").toLowerCase();
   const stageMetrics = metricsFromPayload(data, context);
   const promptPreview = truncateText(context.prompt || "");
   const blockedIdx = blockedStage ? stageIndex(blockedStage) : -1;
@@ -840,15 +860,13 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
   {
     const at = stageAt("kill_switch");
     const ksBlocked = blockedStage === "kill_switch";
-    const ksRerouted = Boolean(
-      routing.rerouted && String(routing.trigger_source || routing.decision_source || "").toLowerCase() === "kill_switch",
-    );
+    const ksRerouted = Boolean(routing.rerouted && ksTrigger === "kill_switch");
     stages.push({
       name: "kill_switch",
       action: ksBlocked ? "block" : ksRerouted ? "reroute" : at === "after" ? "skip" : "allow",
       latency_ms: latencyForStage("kill_switch", stageMetrics, zs, context),
       detail: ksBlocked
-        ? (data?.message || "Model kill-switch is active")
+        ? (data?.message || "Kill-switch is active for this API key or model.")
         : ksRerouted
           ? formatRoutingReason(routing.routing_reason || routing.reason || "", {
             decisionSource: routing.decision_source,
@@ -872,7 +890,8 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     const rawRoutingReason = routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "";
     const rawDecisionSource = routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "";
     const formattedReason = formatRoutingReason(rawRoutingReason, { decisionSource: rawDecisionSource });
-    const rerouted = isRoutingReroute(reqModel, selModel, routing);
+    const ksRerouteActive = Boolean(routing.rerouted && ksTrigger === "kill_switch");
+    const rerouted = !ksRerouteActive && isRoutingReroute(reqModel, selModel, routing);
     stages.push({
       name: "model_routing",
       action: needsModel
@@ -1063,7 +1082,10 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     const zs = mergeScanFieldsFromTrace(data.zeroshield || {}, data.pipeline_trace);
     const finalAction = inferFinalAction(data, httpStatus, zs);
     const blockedStage = inferTerminalBlockedStage(data, httpStatus, zs, finalAction);
-    const stages = enrichStages(data.pipeline_trace.stages, data, zs, mergedContext);
+    const stageSource = blockedStage || httpStatus >= 400
+      ? buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, mergedContext)
+      : data.pipeline_trace.stages;
+    const stages = enrichStages(stageSource, data, zs, mergedContext);
     const totalLatency = data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs;
     const guardSummary = data.pipeline_trace.guard_summary || null;
     // Hoist stages/guard_summary/total_latency to the top level (the single

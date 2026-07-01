@@ -2,6 +2,8 @@
 set -e
 
 cd /app/control
+# Keep Django package importable regardless of compose working_dir overrides.
+export PYTHONPATH="/app/shared:/app/control/ai_mesh_control:/app/control:${PYTHONPATH:-}"
 
 if echo "$*" | grep -qE "daphne|gunicorn|uvicorn"; then
   attempt=1

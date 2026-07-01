@@ -5,6 +5,7 @@ import {
   buildAnalystKillSwitchReason,
   createKillSwitchApi,
   filterKillSwitchesForPrefix,
+  findKillSwitchForPayload,
 } from "./killSwitch.js";
 
 test("buildCredentialKillSwitchPayload defaults to credential-wide scope", () => {
@@ -58,6 +59,9 @@ test("createKillSwitchApi createAndActivateKillSwitch posts then activates", asy
   const fetchWithAuth = async (url, opts = {}) => {
     calls.push({ url, method: opts.method || "GET", body: opts.body });
     if (url === "/api/kill-switches/") {
+      if ((opts.method || "GET") === "GET" || !opts.method) {
+        return { ok: true, json: async () => ([]) };
+      }
       return { ok: true, json: async () => ({ id: 99, model_name: "gpt-4o" }) };
     }
     if (url === "/api/kill-switches/99/activate/") {
@@ -74,8 +78,43 @@ test("createKillSwitchApi createAndActivateKillSwitch posts then activates", asy
     }),
   );
   assert.equal(created.id, 99);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].url, "/api/kill-switches/");
   assert.equal(calls[1].method, "POST");
+  assert.equal(calls[2].method, "POST");
+});
+
+test("createAndActivateKillSwitch reactivates existing credential scope instead of creating duplicate", async () => {
+  const calls = [];
+  const payload = buildCredentialKillSwitchPayload({
+    apiKeyPrefix: "abc12345",
+    reason: "reactivate",
+  });
+  const fetchWithAuth = async (url, opts = {}) => {
+    calls.push({ url, method: opts.method || "GET", body: opts.body });
+    if (url === "/api/kill-switches/") {
+      return { ok: true, json: async () => ([{ id: 7, model_name: "__credential__", api_key_prefix: "abc12345", is_active: false }]) };
+    }
+    if (url === "/api/kill-switches/7/activate/") {
+      return { ok: true, json: async () => ({ id: 7, is_active: true }) };
+    }
+    return { ok: false, json: async () => ({ detail: "unexpected" }) };
+  };
+  const api = createKillSwitchApi(fetchWithAuth);
+  const activated = await api.createAndActivateKillSwitch(payload);
+  assert.equal(activated.id, 7);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, "/api/kill-switches/");
+  assert.equal(calls[1].url, "/api/kill-switches/7/activate/");
+});
+
+test("findKillSwitchForPayload matches credential scope", () => {
+  const payload = buildCredentialKillSwitchPayload({ apiKeyPrefix: "abc12345" });
+  const match = findKillSwitchForPayload(
+    [{ id: 1, model_name: "__credential__", api_key_prefix: "abc12345" }],
+    payload,
+  );
+  assert.equal(match?.id, 1);
 });
 
 test("createAndActivateKillSwitch rolls back created switch when activate fails", async () => {
@@ -83,6 +122,9 @@ test("createAndActivateKillSwitch rolls back created switch when activate fails"
   const fetchWithAuth = async (url, opts = {}) => {
     calls.push({ url, method: opts.method || "GET", body: opts.body });
     if (url === "/api/kill-switches/") {
+      if ((opts.method || "GET") === "GET" || !opts.method) {
+        return { ok: true, json: async () => ([]) };
+      }
       return { ok: true, json: async () => ({ id: 42, model_name: "gpt-4o" }) };
     }
     if (url === "/api/kill-switches/42/activate/") {
@@ -103,10 +145,11 @@ test("createAndActivateKillSwitch rolls back created switch when activate fails"
     })),
     /activation failed/,
   );
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   assert.deepEqual(
     calls.map((c) => `${c.method} ${c.url}`),
     [
+      "GET /api/kill-switches/",
       "POST /api/kill-switches/",
       "POST /api/kill-switches/42/activate/",
       "DELETE /api/kill-switches/42/",

@@ -35,6 +35,7 @@ import { useAuth } from "../context/AuthContext";
 import { toAbsoluteGatewayUrl, resolveGatewayBaseUrl } from "../utils/environmentUrls";
 import { MCPScanControlMatrix } from "./MCPScanControlMatrix";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
+import { syncModule2AfterTelemetryChange } from "../utils/crossModuleSync";
 
 import { Card, CardContent } from "./ui/Card";
 import { Button } from "./ui/Button";
@@ -502,6 +503,7 @@ function MCPConnectorPanelInner() {
       setAddOpen(false);
       setAddForm(makeEmptyAddForm());
       await loadServers();
+      syncModule2AfterTelemetryChange("mcp-server-add");
       toast(`Registered "${payload.name}"`, { tone: "success" });
     } catch (e) {
       setError(`Add server failed: ${e.message}`);
@@ -517,6 +519,7 @@ function MCPConnectorPanelInner() {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${pk}/`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
       await loadServers();
+      syncModule2AfterTelemetryChange("mcp-server-delete");
       toast("Server deleted", { tone: "success" });
     } catch (e) {
       setError(`Delete failed: ${e.message}`);

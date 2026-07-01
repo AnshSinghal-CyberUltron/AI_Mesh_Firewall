@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from module2.analytics import (
     build_model_exposure_payload,
+    build_rag_pipeline_kpis,
     build_threat_telemetry_payload,
     classify_telemetry_bucket,
     event_source,
@@ -16,9 +17,9 @@ from policy.constants import ACTION_BLOCK, ACTION_REDACT
 
 
 class Module2AnalyticsTests(SimpleTestCase):
-    def test_event_source_ueba(self):
+    def test_event_source_keyed_gateway_is_chat(self):
         meta = {"key_prefix": "zs_abcd", "model": "gpt-4o"}
-        self.assertEqual(event_source(meta), "ueba")
+        self.assertEqual(event_source(meta), "chat")
 
     def test_event_source_threat_intel(self):
         meta = {"source": "threat_intel", "threat_type": "threat_intel_injection"}
@@ -93,3 +94,47 @@ class Module2AnalyticsTests(SimpleTestCase):
             classify_telemetry_bucket(meta, ACTION_BLOCK),
             "threat_intel_matches",
         )
+
+    def test_build_rag_pipeline_kpis_dedupes_same_request_stage_rows(self):
+        class _Events:
+            def values(self, *_args):
+                return [
+                    {
+                        "action": ACTION_BLOCK,
+                        "metadata": {
+                            "event_type": "rag_pipeline",
+                            "pipeline_stage": "query",
+                            "request_id": "req-12345678",
+                            "latency_ms": 50,
+                            "escalation_level": 1,
+                        },
+                    },
+                    {
+                        "action": ACTION_BLOCK,
+                        "metadata": {
+                            "event_type": "rag_pipeline",
+                            "pipeline_stage": "query",
+                            "request_id": "req-12345678",
+                            "latency_ms": 75,
+                            "escalation_level": 2,
+                        },
+                    },
+                    {
+                        "action": "allow",
+                        "metadata": {
+                            "event_type": "rag_pipeline",
+                            "pipeline_stage": "retriever",
+                            "request_id": "req-99999999",
+                            "latency_ms": 120,
+                            "escalation_level": 0,
+                        },
+                    },
+                ]
+
+        payload = build_rag_pipeline_kpis(_Events())
+        self.assertEqual(payload["stages"]["query"]["total"], 1)
+        self.assertEqual(payload["stages"]["query"]["blocked"], 1)
+        self.assertEqual(payload["stages"]["query"]["avg_latency_ms"], 50)
+        self.assertEqual(payload["stages"]["retriever"]["total"], 1)
+        self.assertEqual(payload["escalation_distribution"]["strict"], 1)
+        self.assertEqual(payload["escalation_distribution"]["normal"], 1)

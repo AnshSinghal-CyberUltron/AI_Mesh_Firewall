@@ -637,6 +637,37 @@ class GatewayAPIKey(models.Model):
         return instance, raw_key
 
     @classmethod
+    def promote_as_org_simulator(
+        cls, organization, key: "GatewayAPIKey"
+    ) -> tuple["GatewayAPIKey", str | None]:
+        """Bind an existing key as the org's single active simulator credential."""
+        if key.organization_id != organization.pk:
+            raise ValueError("Key does not belong to organization")
+        project_id = f"simulator-{organization.slug}"
+        with transaction.atomic():
+            type(organization).objects.select_for_update().get(pk=organization.pk)
+            simulator_filter = (
+                models.Q(project_id=project_id)
+                | models.Q(name="simulator")
+                | models.Q(name__startswith="simulator-")
+                | models.Q(project_id__startswith="simulator-")
+            )
+            for other in (
+                cls.objects.select_for_update()
+                .filter(organization=organization, is_active=True)
+                .filter(simulator_filter)
+                .exclude(pk=key.pk)
+            ):
+                other.is_active = False
+                other.save(update_fields=["is_active"])
+            key.project_id = project_id
+            if not str(key.name or "").strip():
+                key.name = "simulator"
+            key.is_active = True
+            key.save(update_fields=["project_id", "name", "is_active"])
+            return key, key.recover_secret()
+
+    @classmethod
     def ensure_isolation_playground_for_org(
         cls, organization, owner
     ) -> tuple["GatewayAPIKey", str | None]:
@@ -1487,6 +1518,39 @@ def is_platform_managed_llm_model_name(model_name: str) -> bool:
     # separator/whitespace variants ("ZeroShield Model", "zeroshield_model")
     # are caught, not just case variants.
     return _canonical_guard_model_name(model_name) in platform_guard_model_names()
+
+
+_BEDROCK_FOUNDATION_PREFIXES = (
+    "anthropic.",
+    "global.anthropic",
+    "global.amazon",
+    "amazon.",
+    "meta.",
+    "openai.",
+    "cohere.",
+    "ai21.",
+    "mistral.",
+)
+
+
+def is_bedrock_foundation_model_id(name: str) -> bool:
+    """True for AWS Bedrock foundation model IDs (mirrors gateway platform_models)."""
+    normalized = (name or "").strip().lower()
+    return any(normalized.startswith(p) for p in _BEDROCK_FOUNDATION_PREFIXES)
+
+
+def is_reserved_inference_model_name(model_name: str, model_id: str = "") -> bool:
+    """True when a model must never enter org routing pools (mirrors gateway is_platform_model_name)."""
+    if is_platform_managed_llm_model_name(model_name):
+        return True
+    for candidate in (model_name, model_id):
+        normalized = (candidate or "").strip().lower()
+        if not normalized:
+            continue
+        bare = normalized.split("/", 1)[1] if normalized.startswith("bedrock/") else normalized
+        if is_bedrock_foundation_model_id(bare):
+            return True
+    return False
 
 
 LLM_PROVIDER_CHOICES = [

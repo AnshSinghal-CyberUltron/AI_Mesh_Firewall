@@ -74,7 +74,7 @@ export function createModule2Api(fetchWithAuth) {
     getMcpRisk: (period = "24h", opts = {}) => get("/mcp/risk/", { period }, opts),
     getThreatTelemetry: (period = "7d", opts = {}) => get("/threat-intel/telemetry/", { period }, opts),
 
-    listThreatIntel: () => get("/threat-intel/"),
+    listThreatIntel: (opts = {}) => get("/threat-intel/", {}, opts),
     createThreatIntel: (data) => mutate("/threat-intel/", "POST", data),
     updateThreatIntel: (id, data) => mutate(`/threat-intel/${id}/`, "PATCH", data),
     deleteThreatIntel: (id) => mutate(`/threat-intel/${id}/`, "DELETE"),
@@ -100,6 +100,19 @@ export function createModule2Api(fetchWithAuth) {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `Escalate failed (${res.status})`);
+      }
+      clearModule2Cache();
+      notifyIncidentQueueMutated();
+      return res.json();
+    },
+    investigateIncident: async (id) => {
+      const res = await fetchWithAuth(`/api/security/incidents/${id}/investigate-incident/`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Investigate failed (${res.status})`);
       }
       clearModule2Cache();
       notifyIncidentQueueMutated();

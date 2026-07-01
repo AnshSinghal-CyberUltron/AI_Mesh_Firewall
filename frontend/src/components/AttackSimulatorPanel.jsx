@@ -14,6 +14,7 @@ import {
   normalizeChatPipelineResult,
   normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
+import { notifyTelemetryActivity } from "../utils/telemetryEvents";
 import { formatZeroshieldScanSummary, formatRoutingReason, ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
 
 // Upstream provider/model literals that must never reach the operator UI.
@@ -145,9 +146,6 @@ function getStatusConfig(httpStatus, action) {
       text: "text-violet-700 dark:text-violet-300",
     };
   }
-  // A firewall verdict (block/redact/flag) must win over the generic 4xx->ERROR
-  // mapping: an OpenAI content_filter block returns HTTP 400 but is a real BLOCK,
-  // not a system error. Only treat a 4xx as ERROR when no verdict claims it.
   if (
     action === "error"
     || (httpStatus >= 400 && httpStatus !== 403 && httpStatus !== 429 && httpStatus !== 422
@@ -155,7 +153,7 @@ function getStatusConfig(httpStatus, action) {
   ) {
     return { color: "amber", label: "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700" };
   }
-  if (httpStatus === 403 || action === "block") {
+  if (httpStatus === 403 || httpStatus === 503 || action === "block") {
     return { color: "red", label: "BLOCKED", icon: AlertTriangle, bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800", text: "text-red-700" };
   }
   if (action === "redact") {
@@ -403,6 +401,10 @@ export function AttackSimulatorPanel() {
           action: normalized.final_action || (res.status === 403 ? "block" : res.status >= 400 ? "error" : "allow"),
         });
       }
+      notifyTelemetryActivity("attack-simulator", {
+        mode: useStreamMode ? "stream" : "single",
+        http_status: res.status,
+      });
     } catch (err) {
       setError(
         err.message === "Failed to fetch"
@@ -513,6 +515,13 @@ export function AttackSimulatorPanel() {
       errors: normalized.filter((r) => r.action === "error").length,
       rate_limited: normalized.filter((r) => r.rate_limited).length,
       allowed: normalized.filter((r) => r.action === "allow").length,
+    });
+    notifyTelemetryActivity("attack-simulator", {
+      mode: "burst",
+      request_count: requestCount,
+      blocked: normalized.filter((r) => r.action === "block").length,
+      redacted: normalized.filter((r) => r.action === "redact").length,
+      rate_limited: normalized.filter((r) => r.rate_limited).length,
     });
     setBurstRunning(false);
     // gatewayModels added so the burst captures the CURRENTLY-selected model,

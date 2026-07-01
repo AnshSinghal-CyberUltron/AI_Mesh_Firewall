@@ -136,8 +136,6 @@ function RecentRequestsSection({ requests, requestCount }) {
     });
   }, [requests]);
 
-  if (!requestCount && !requests?.length) return null;
-
   const safeIndex = Math.min(selectedIndex, Math.max(0, (requests?.length || 1) - 1));
   const selected = requests?.[safeIndex];
   const canGoNewer = safeIndex > 0;

@@ -10,6 +10,12 @@ from django.db.models import Q
 from django.utils import timezone
 
 from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
+from policy.request_scoped_metrics import (
+    collapse_events_by_request,
+    iter_rows_from_queryset,
+    merge_request_action,
+    request_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +120,18 @@ def _meta_detail(meta: dict) -> str:
     return str(meta.get("detail") or "").strip()
 
 
+def _is_rag_event_type(event_type: str) -> bool:
+    """Gateway emits rag_pipeline, rag_query, rag_query_blocked, rag_ingest_*, etc."""
+    et = str(event_type or "").lower()
+    return et == "rag_pipeline" or et.startswith("rag_")
+
+
+def _is_mcp_event_type(event_type: str) -> bool:
+    """Gateway emits mcp_tool_call, mcp_blocked, and other mcp_* telemetry classes."""
+    et = str(event_type or "").lower()
+    return et == "mcp_tool_call" or et.startswith("mcp_")
+
+
 def event_source(meta: dict) -> str:
     event_type = str(meta.get("event_type") or "").lower()
     detail = _meta_detail(meta).lower()
@@ -121,14 +139,12 @@ def event_source(meta: dict) -> str:
     threat_type = str(meta.get("threat_type") or "").lower()
     if "threat intel" in detail or "threat_intel" in src or threat_type.startswith("threat_intel"):
         return "threat_intel"
-    if event_type == "mcp_tool_call" or _looks_like_mcp_event(meta):
+    if _is_mcp_event_type(event_type) or _looks_like_mcp_event(meta):
         return "mcp"
-    if event_type == "rag_pipeline":
+    if _is_rag_event_type(event_type):
         return "rag"
     if meta.get("collection") or meta.get("vector_collection") or meta.get("vector_namespace"):
         return "vector"
-    if key_prefix_from_meta(meta):
-        return "ueba"
     return "chat"
 
 
@@ -194,11 +210,13 @@ def is_rerouted_metadata(meta: dict) -> bool:
 
 
 def count_monitored_events(events_qs) -> int:
-    return events_qs.filter(action=ACTION_MONITOR).count()
+    rows = iter_rows_from_queryset(events_qs, fields=("action", "metadata"))
+    return sum(1 for item in collapse_events_by_request(rows) if item.had_monitor)
 
 
 def count_rerouted_events(events_qs) -> int:
-    return events_qs.filter(ROUTING_EVENT_Q & REROUTED_FLAG_Q).count()
+    rows = iter_rows_from_queryset(events_qs, fields=("action", "metadata"))
+    return sum(1 for item in collapse_events_by_request(rows) if item.had_reroute)
 
 
 def build_time_buckets(hours: int, since):
@@ -224,13 +242,13 @@ def build_model_exposure_payload(events: list[dict], llm_map: dict[str, str], pe
         }
     )
 
-    for ev in events:
-        meta = ev.get("metadata") or {}
+    for item in collapse_events_by_request(events):
+        meta = item.metadata or {}
         model = str(meta.get("model") or "unknown")
         stats[model]["requests"] += 1
-        if ev.get("action") == ACTION_BLOCK:
+        if item.action == "block":
             stats[model]["blocked"] += 1
-        if ev.get("action") == ACTION_REDACT:
+        if item.action == "redact":
             stats[model]["redacted"] += 1
         if meta.get("latency_ms"):
             stats[model]["latencies"].append(float(meta["latency_ms"]))
@@ -304,16 +322,17 @@ def build_threat_telemetry_payload(events: list[dict], period: str, since) -> di
 
     vector_counts: Counter[str] = Counter()
     totals = {key: 0 for key in series_keys}
-    totals["total_events"] = len(events)
+    collapsed = collapse_events_by_request(events)
+    totals["total_events"] = len(collapsed)
 
-    for ev in events:
-        meta = ev.get("metadata") or {}
-        bucket_key = classify_telemetry_bucket(meta, ev.get("action") or "")
+    for item in collapsed:
+        meta = item.metadata or {}
+        bucket_key = classify_telemetry_bucket(meta, item.action)
         if bucket_key in totals:
             totals[bucket_key] += 1
         vector_counts[attack_vector_key(meta)] += 1
 
-        created_at = ev.get("created_at")
+        created_at = item.created_at
         if created_at is None:
             continue
         for idx, (start, end) in enumerate(buckets):
@@ -349,19 +368,20 @@ def build_threat_telemetry_payload(events: list[dict], period: str, since) -> di
 
 
 def build_lane_summary(events) -> dict:
-    """Count events by lane (chat, rag, vector, mcp, threat_intel, ueba) for dashboard grid."""
+    """Count events by lane (chat, rag, vector, mcp, threat_intel) for dashboard grid."""
     lanes = {
         "chat": {"total": 0, "blocked": 0},
         "rag": {"total": 0, "blocked": 0},
         "vector": {"total": 0, "blocked": 0},
         "mcp": {"total": 0, "blocked": 0},
+        "threat_intel": {"total": 0, "blocked": 0},
     }
-    for ev in events.values("action", "metadata"):
-        meta = ev.get("metadata") or {}
+    for item in collapse_events_by_request(iter_rows_from_queryset(events, fields=("action", "metadata"))):
+        meta = item.metadata or {}
         src = event_source(meta)
         lane = src if src in lanes else "chat"
         lanes[lane]["total"] += 1
-        if ev.get("action") == ACTION_BLOCK:
+        if item.action == "block":
             lanes[lane]["blocked"] += 1
     result = {}
     for lane, counts in lanes.items():
@@ -377,45 +397,59 @@ def build_lane_summary(events) -> dict:
 
 def build_rag_pipeline_kpis(events) -> dict:
     """Per-stage breakdown for RAG pipeline funnel — mirrors RAGPipelineStageKpisView scoped to org."""
-    stages = {
-        s: {"total": 0, "blocked": 0, "flagged": 0, "rewritten": 0, "allowed": 0, "_latencies": []}
-        for s in ("query", "retriever", "ranker", "generator")
-    }
-    escalation_dist = {"normal": 0, "elevated": 0, "strict": 0}
+    stage_names = ("query", "retriever", "ranker", "generator")
+    stage_entries: dict[str, dict[str, dict]] = {stage: {} for stage in stage_names}
+    escalation_by_request: dict[str, int] = {}
 
-    for ev in events.values("action", "metadata"):
+    for idx, ev in enumerate(events.values("action", "metadata")):
         meta = ev.get("metadata") or {}
         if meta.get("event_type") != "rag_pipeline":
             continue
-        stage = meta.get("pipeline_stage", "")
-        if stage not in stages:
+        stage = str(meta.get("pipeline_stage") or "").strip()
+        if stage not in stage_entries:
             continue
-        stages[stage]["total"] += 1
-        action = ev.get("action", "allow")
-        if action == ACTION_BLOCK:
-            stages[stage]["blocked"] += 1
-        elif action == "flag":
-            stages[stage]["flagged"] += 1
-        elif action == "rewrite":
-            stages[stage]["rewritten"] += 1
+
+        req_id = request_key(meta, idx)
+        action = str(ev.get("action") or "allow").lower()
+        current = stage_entries[stage].get(req_id)
+        latency = float(meta.get("latency_ms") or 0)
+        if current is None:
+            stage_entries[stage][req_id] = {
+                "action": merge_request_action(None, action),
+                "latency_ms": latency if latency > 0 else 0.0,
+            }
         else:
-            stages[stage]["allowed"] += 1
-        lat = meta.get("latency_ms", 0)
-        if lat:
-            stages[stage]["_latencies"].append(float(lat))
-        level = meta.get("escalation_level", 0)
-        if level == 0:
+            current["action"] = merge_request_action(current.get("action"), action)
+            if current.get("latency_ms", 0) <= 0 and latency > 0:
+                current["latency_ms"] = latency
+
+        try:
+            level = int(meta.get("escalation_level", 0) or 0)
+        except (TypeError, ValueError):
+            level = 0
+        escalation_by_request[req_id] = max(level, escalation_by_request.get(req_id, 0))
+
+    result_stages = {}
+    for stage, entries in stage_entries.items():
+        actions = [entry.get("action") for entry in entries.values()]
+        latencies = [entry.get("latency_ms", 0) for entry in entries.values() if entry.get("latency_ms", 0) > 0]
+        result_stages[stage] = {
+            "total": len(entries),
+            "blocked": sum(1 for a in actions if a == ACTION_BLOCK),
+            "flagged": sum(1 for a in actions if a == "flag"),
+            "rewritten": sum(1 for a in actions if a == "rewrite"),
+            "allowed": sum(1 for a in actions if a not in {ACTION_BLOCK, "flag", "rewrite"}),
+            "avg_latency_ms": round(sum(latencies) / len(latencies), 2) if latencies else 0,
+        }
+
+    escalation_dist = {"normal": 0, "elevated": 0, "strict": 0}
+    for level in escalation_by_request.values():
+        if level <= 0:
             escalation_dist["normal"] += 1
         elif level == 1:
             escalation_dist["elevated"] += 1
         else:
             escalation_dist["strict"] += 1
-
-    result_stages = {}
-    for stage, data in stages.items():
-        lats = data.pop("_latencies")
-        data["avg_latency_ms"] = round(sum(lats) / len(lats), 2) if lats else 0
-        result_stages[stage] = data
 
     return {
         "stages": result_stages,
@@ -430,26 +464,30 @@ def build_rag_pipeline_kpis(events) -> dict:
 
 def build_mcp_activity_payload(events, top_n: int = 10) -> dict:
     """Aggregate MCP tool call events for the MCP Risk page."""
-    tool_counts: Counter = Counter()
+    tool_violation_counts: Counter = Counter()
+    tool_total_counts: Counter = Counter()
     server_counts: Counter = Counter()
-    direction_counts = {"inbound": {"total": 0, "blocked": 0}, "outbound": {"total": 0, "blocked": 0}}
-    total = 0
-    blocked = 0
-    redacted = 0
+    direction_counts = {
+        "inbound": {"total": 0, "blocked": 0},
+        "outbound": {"total": 0, "blocked": 0},
+        "unknown": {"total": 0, "blocked": 0},
+    }
     unique_tools: set = set()
 
-    for ev in events.values("action", "metadata"):
-        meta = ev.get("metadata") or {}
-        if not _looks_like_mcp_event(meta) and str(meta.get("event_type") or "").lower() != "mcp_tool_call":
-            continue
-        total += 1
-        action = ev.get("action", "allow")
-        if action == ACTION_BLOCK:
-            blocked += 1
-        elif action == ACTION_REDACT:
-            redacted += 1
+    mcp_rows = [
+        row
+        for row in iter_rows_from_queryset(events, fields=("action", "metadata"))
+        if _looks_like_mcp_event(row.get("metadata") or {})
+        or str((row.get("metadata") or {}).get("event_type") or "").lower() == "mcp_tool_call"
+    ]
+    collapsed = collapse_events_by_request(mcp_rows)
+    total = len(collapsed)
+    blocked = sum(1 for item in collapsed if item.action == "block")
+    redacted = sum(1 for item in collapsed if item.action == "redact")
 
-        is_violation = action in (ACTION_BLOCK, ACTION_REDACT)
+    for item in collapsed:
+        meta = item.metadata or {}
+        is_violation = item.action in ("block", "redact")
         tools = meta.get("tools_invoked") or []
         if isinstance(tools, str):
             tools = [tools]
@@ -457,22 +495,36 @@ def build_mcp_activity_payload(events, top_n: int = 10) -> dict:
             if not tool:
                 continue
             unique_tools.add(str(tool))
+            tool_name = str(tool)
+            tool_total_counts[tool_name] += 1
             if is_violation:
-                tool_counts[str(tool)] += 1
+                tool_violation_counts[tool_name] += 1
 
         server = str(meta.get("mcp_server") or meta.get("server_slug") or "unknown")
         server_counts[server] += 1
 
-        direction = str(meta.get("mcp_direction") or meta.get("scan_direction") or "inbound").lower()
+        direction = str(meta.get("mcp_direction") or meta.get("scan_direction") or "").lower()
         if direction not in direction_counts:
-            direction = "inbound"
+            direction = "unknown"
         direction_counts[direction]["total"] += 1
-        if action in (ACTION_BLOCK, ACTION_REDACT):
+        if is_violation:
             direction_counts[direction]["blocked"] += 1
 
+    sorted_tools = sorted(
+        tool_total_counts,
+        key=lambda tool: (
+            -tool_violation_counts[tool],
+            -tool_total_counts[tool],
+            str(tool),
+        ),
+    )
     tool_ledger = [
-        {"tool": tool, "violations": count}
-        for tool, count in tool_counts.most_common(top_n)
+        {
+            "tool": tool,
+            "total_calls": tool_total_counts[tool],
+            "violations": tool_violation_counts[tool],
+        }
+        for tool in sorted_tools[:top_n]
     ]
     top_servers = [
         {"server": server, "total": count}
@@ -483,6 +535,8 @@ def build_mcp_activity_payload(events, top_n: int = 10) -> dict:
         "summary": {
             "total_events": total,
             "blocked_tool_calls": blocked,
+            "redacted_calls": redacted,
+            # Backward-compatible alias used by older clients.
             "redacted_arguments": redacted,
             "unique_tools": len(unique_tools),
         },
@@ -496,24 +550,24 @@ def build_vector_exposure_payload(events, top_n: int = 12) -> dict:
     """Aggregate vector DB events by collection/namespace for RAG Health page."""
     collection_stats: dict = defaultdict(lambda: {"total": 0, "blocked": 0, "redacted": 0})
 
-    for ev in events.values("action", "metadata"):
-        meta = ev.get("metadata") or {}
-        if not (
-            meta.get("collection")
-            or meta.get("vector_collection")
-            or meta.get("vector_namespace")
-        ):
-            continue
+    vector_rows = [
+        row
+        for row in iter_rows_from_queryset(events, fields=("action", "metadata"))
+        if (row.get("metadata") or {}).get("collection")
+        or (row.get("metadata") or {}).get("vector_collection")
+        or (row.get("metadata") or {}).get("vector_namespace")
+    ]
+    for item in collapse_events_by_request(vector_rows):
+        meta = item.metadata or {}
         collection = (
             str(meta.get("collection") or meta.get("vector_collection") or "").strip()
             or str(meta.get("vector_namespace") or "").strip()
             or "unknown"
         )
         collection_stats[collection]["total"] += 1
-        action = ev.get("action", "allow")
-        if action == ACTION_BLOCK:
+        if item.action == "block":
             collection_stats[collection]["blocked"] += 1
-        elif action == ACTION_REDACT:
+        elif item.action == "redact":
             collection_stats[collection]["redacted"] += 1
 
     rows = []
@@ -536,8 +590,8 @@ def build_vector_exposure_payload(events, top_n: int = 12) -> dict:
 def build_stage_hit_distribution(events) -> list:
     """Count threat-intel matched events grouped by pipeline_stage."""
     stage_counts: Counter = Counter()
-    for ev in events.values("metadata"):
-        meta = ev.get("metadata") or {}
+    for item in collapse_events_by_request(iter_rows_from_queryset(events, fields=("metadata",))):
+        meta = item.metadata or {}
         src = event_source(meta)
         if src != "threat_intel":
             continue

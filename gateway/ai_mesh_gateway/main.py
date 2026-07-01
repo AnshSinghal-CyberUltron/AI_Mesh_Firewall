@@ -424,6 +424,7 @@ CONFIG_SYNC = None
 AGENT_ID = None
 LLM_ROUTER = None
 POLICY_SYNC = None
+THREAT_INTEL_SYNC = None
 RATE_LIMITER = None
 INPUT_SCANNER = None
 VECTOR_POLICY_SYNC = None
@@ -2721,14 +2722,33 @@ def _chat_capable_models(routing_models: list[dict] | None) -> list[dict]:
 
 def _filter_inference_eligible_models(routing_models: list[dict] | None) -> list[dict]:
     """Org-connected customer models only — not ZeroShield guard / internal scan models."""
+    eligible, _reserved = _partition_inference_eligible_models(routing_models)
+    return eligible
+
+
+def _partition_inference_eligible_models(
+    routing_models: list[dict] | None,
+) -> tuple[list[dict], list[str]]:
+    """Return (eligible models, reserved model names dropped from stale routing pools)."""
+    try:
+        from platform_models import is_platform_model_name as _is_reserved_name
+    except ImportError:
+        from .platform_models import is_platform_model_name as _is_reserved_name  # type: ignore
+
     models = routing_models or []
     eligible: list[dict] = []
+    reserved_dropped: list[str] = []
     for model in models:
         if _is_guard_only_model(model):
             continue
         if not model.get("is_active", True):
             continue
-        if not (model.get("model_name") or model.get("model_id")):
+        name = str(model.get("model_name") or "").strip()
+        model_id = str(model.get("model_id") or "").strip()
+        if not name and not model_id:
+            continue
+        if _is_reserved_name(name) or (model_id and _is_reserved_name(model_id)):
+            reserved_dropped.append(name or model_id)
             continue
         provider = str(model.get("provider") or "").strip().lower()
         api_key_set = bool(model.get("api_key_set"))
@@ -2749,7 +2769,27 @@ def _filter_inference_eligible_models(routing_models: list[dict] | None) -> list
         ):
             continue
         eligible.append(model)
-    return eligible
+    return eligible, reserved_dropped
+
+
+def _filter_router_serviceable_models(
+    inference_models: list[dict],
+    active_model_names: list[str] | None,
+) -> tuple[list[dict], list[str]]:
+    """Keep only models present in the LiteLLM router's active model groups."""
+    active = {str(n).strip() for n in (active_model_names or []) if n}
+    if not active:
+        return inference_models, []
+    serviceable: list[dict] = []
+    excluded: list[str] = []
+    for model in inference_models:
+        name = str(model.get("model_name") or "").strip()
+        model_id = str(model.get("model_id") or name).strip()
+        if name in active or model_id in active:
+            serviceable.append(model)
+        else:
+            excluded.append(name or model_id)
+    return serviceable, excluded
 
 
 async def _drop_isolated_or_killed_candidates(models, org_slug: str, key_prefix: str):
@@ -3450,7 +3490,14 @@ _REQUEST_METHOD: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_method", d
 # These are security-critical and MUST always be recorded, even when an org
 # has disabled audit logging — otherwise a tenant could silence its own
 # containment trail.
-_ALWAYS_AUDIT_EVENT_TYPES = ("kill_switch", "model_isolation", "circuit_breaker")
+_ALWAYS_AUDIT_EVENT_TYPES = (
+    "kill_switch",
+    "model_isolation",
+    "circuit_breaker",
+    "model_remap",
+    "routing_no_serviceable_candidate",
+    "reserved_model_in_pool",
+)
 
 
 def _org_audit_logging_enabled() -> bool:
@@ -3676,7 +3723,7 @@ async def _telemetry_loop():
 
 @app.on_event("startup")
 async def startup():
-    global CONFIG, CONFIG_SYNC, LLM_ROUTER, POLICY_SYNC, RATE_LIMITER, INPUT_SCANNER
+    global CONFIG, CONFIG_SYNC, LLM_ROUTER, POLICY_SYNC, THREAT_INTEL_SYNC, RATE_LIMITER, INPUT_SCANNER
     global VECTOR_POLICY_SYNC, VECTOR_CLIENTS, CONTEXT_GUARD, VECTOR_PROVIDER_SYNC
     global REDIS_CLIENT, TELEMETRY, OUTPUT_GUARD, CIRCUIT_BREAKER
     global BEDROCK_EMBEDDER, GROUNDING_GUARD
@@ -3726,6 +3773,23 @@ async def startup():
     from llm_router import LLMRouter
 
     LLM_ROUTER = LLMRouter(CONFIG)
+
+    def _on_model_remap(*, requested_model: str, resolved_model: str, body: dict) -> None:
+        _emit_telemetry(
+            event_type="model_remap",
+            model=resolved_model,
+            action="reroute",
+            risk_score=0.0,
+            threat_type="none",
+            pipeline_stage="model_routing",
+            metadata={
+                "requested_model": requested_model,
+                "resolved_model": resolved_model,
+                "org_slug": str(body.get("_zs_org_slug") or ""),
+            },
+        )
+
+    LLM_ROUTER.set_remap_telemetry_hook(_on_model_remap)
     # Ensure Redis-backed model routes are active immediately at startup.
     if CONFIG_SYNC is not None:
         await CONFIG_SYNC.reload_models_now()
@@ -3863,6 +3927,15 @@ async def startup():
 
         POLICY_SYNC = PolicySync(redis_url=CONFIG["redis_url"])
         await POLICY_SYNC.start()
+
+    if CONFIG.get("redis_url"):
+        try:
+            from threat_intel_sync import ThreatIntelSync
+
+            THREAT_INTEL_SYNC = ThreatIntelSync(redis_url=CONFIG["redis_url"])
+            await THREAT_INTEL_SYNC.start()
+        except Exception as exc:
+            LOG.warning("ThreatIntelSync failed to start: %s", exc)
 
     if CONFIG.get("rag_enabled", False):
         from vector_policy_sync import VectorPolicySync
@@ -4754,7 +4827,7 @@ async def proxy_chat(
         if not routing_models and CONFIG_SYNC is not None:
             await CONFIG_SYNC.reload_models_now(org_slug=org_slug)
             routing_models = CONFIG_SYNC.get_model_routing(org_slug)
-        inference_models = _filter_inference_eligible_models(routing_models)
+        inference_models, _reserved_in_pool = _partition_inference_eligible_models(routing_models)
         scan_verdict = None
         routing_prefs = _extract_chat_routing_preferences(body, org_config, auth_ctx, scan_verdict)
         routing_active = bool(
@@ -5627,6 +5700,66 @@ async def proxy_chat(
                             "MONITOR: blocked keyword(s) found: %s (user=%s)",
                             matched_kw, user_id,
                         )
+
+        # ── IOC threat-intel match (tier-0, synced from control plane Redis) ──
+        if (
+            not firewall_disabled
+            and not _skip_threat_intel
+            and org_config.get("threat_intel_enabled", True)
+            and THREAT_INTEL_SYNC is not None
+            and org_slug
+            and prompt
+        ):
+            _ioc_hit = THREAT_INTEL_SYNC.match(
+                org_slug,
+                prompt if isinstance(prompt, str) else str(prompt),
+            )
+            if _ioc_hit:
+                _ioc_threat = str(_ioc_hit.get("threat_type") or "threat_intel_match")
+                _ioc_conf = float(_ioc_hit.get("confidence") or 0.8)
+                if _ioc_hit.get("auto_block") and enforcement_mode == "block":
+                    METRICS["blocked"] += 1
+                    elapsed_ms = (time.perf_counter() - start) * 1000
+                    _emit_telemetry(
+                        status_code=403,
+                        event_type="input_blocked",
+                        model=body.get("model", ""),
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        action="block",
+                        risk_score=max(_ioc_conf, 0.85),
+                        threat_type=_ioc_threat,
+                        metadata={
+                            "source": "threat_intel",
+                            "detail": f"IOC match: {_ioc_threat}",
+                            "indicator": _ioc_hit.get("indicator"),
+                            "owasp_code": _ioc_hit.get("owasp_code"),
+                            "threat_type": _ioc_threat,
+                        },
+                        prompt_snippet=_prompt_snippet,
+                        endpoint_id=endpoint_id,
+                    )
+                    return _build_block_response(
+                        403,
+                        "threat_intel_blocked",
+                        _build_zeroshield_metadata(
+                            action="block",
+                            reason=f"Blocked by threat intelligence (IOC match: {_ioc_threat}).",
+                            detection_tier="threat_intel",
+                            threat_type=_ioc_threat,
+                            confidence=_ioc_conf,
+                            matched_patterns=[str(_ioc_hit.get("indicator") or "")],
+                            original_prompt=prompt,
+                            processing_time_ms=elapsed_ms,
+                        ),
+                    )
+                LOG.warning(
+                    "MONITOR: IOC match threat_type=%s indicator=%s (user=%s)",
+                    _ioc_threat,
+                    (_ioc_hit.get("indicator") or "")[:80],
+                    user_id,
+                )
 
         # ── Max response tokens enforcement ──
         max_tokens_config = org_config.get("max_response_tokens", 4096)
@@ -6633,6 +6766,25 @@ async def proxy_chat(
                     },
                 )
         if routing_active:
+            if _reserved_in_pool and TELEMETRY is not None:
+                _emit_telemetry(
+                    event_type="reserved_model_in_pool",
+                    model=_reserved_in_pool[0],
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_prefix=auth_ctx.prefix if auth_ctx else "",
+                    action="drop",
+                    risk_score=0.0,
+                    threat_type="none",
+                    pipeline_stage="routing",
+                    intent=_request_intent,
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    metadata={
+                        "reserved_models": _reserved_in_pool,
+                        "org_slug": org_slug,
+                    },
+                    endpoint_id=endpoint_id,
+                )
             # B1 FIX (CRITICAL): exclude runtime-ISOLATED (model_state) and KILL-SWITCHED
             # models from the routing candidate set BEFORE adjudication. The scorer
             # (_score_routing_models) only hard-filters on LLMModelConfig.is_active and
@@ -6646,6 +6798,37 @@ async def proxy_chat(
             inference_models, _zs_excluded = await _drop_isolated_or_killed_candidates(
                 inference_models, org_slug, auth_ctx.prefix if auth_ctx else "",
             )
+            _pre_serviceable = list(inference_models)
+            inference_models, _non_serviceable = _filter_router_serviceable_models(
+                inference_models,
+                LLM_ROUTER.get_active_model_names() if LLM_ROUTER is not None else [],
+            )
+            if _pre_serviceable and not inference_models:
+                LOG.warning(
+                    "No router-serviceable routing candidates for org=%s after intersecting "
+                    "active model groups; excluded=%s",
+                    org_slug,
+                    _non_serviceable,
+                )
+                if TELEMETRY is not None:
+                    _emit_telemetry(
+                        event_type="routing_no_serviceable_candidate",
+                        model=_safe_model_echo(body.get("model")) or "auto",
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        action="block",
+                        risk_score=routing_prefs["request_risk_score"],
+                        threat_type="none",
+                        pipeline_stage="routing",
+                        intent=_request_intent,
+                        latency_ms=(time.perf_counter() - start) * 1000,
+                        metadata={
+                            "excluded_models": _non_serviceable,
+                            "org_slug": org_slug,
+                        },
+                        endpoint_id=endpoint_id,
+                    )
             selection = await LLM_ROUTER.adjudicate_model_selection(
                 routing_models=inference_models,
                 request_messages=body.get("messages") or [],
@@ -9255,6 +9438,55 @@ def _alert_vector_policy_miss(*, project_id, collection_name, organization_id, u
         LOG.debug("vector policy-miss telemetry emit failed", exc_info=True)
 
 
+def _emit_rag_policy_block_telemetry(
+    *,
+    auth_ctx,
+    collection_name: str,
+    project_id,
+    operation: str,
+    code: str,
+    detail: str,
+    vector_db_type: str = "",
+    start_time: float | None = None,
+    pipeline_stage: str = "policy",
+) -> None:
+    """Emit block telemetry for early RAG policy denials (M2.1 rag lane attribution)."""
+    if auth_ctx is None:
+        return
+    event_type = "rag_query_blocked" if operation == "query" else "rag_ingest_blocked"
+    if operation == "delete":
+        event_type = "rag_delete_blocked"
+    kwargs: dict = {
+        "status_code": 403,
+        "event_type": event_type,
+        "model": "",
+        "user_id": getattr(auth_ctx, "user_id", ""),
+        "project_id": str(project_id or ""),
+        "key_prefix": getattr(auth_ctx, "prefix", ""),
+        "organization_id": getattr(auth_ctx, "organization_id", None),
+        "action": "block",
+        "risk_score": 0.0,
+        "threat_type": "policy_violation",
+        "pipeline_stage": pipeline_stage,
+        "metadata": {
+            "collection": collection_name,
+            "vector_db_type": vector_db_type,
+            "operation": operation,
+            "code": code,
+            "detail": detail,
+            "source": "rag",
+            "module": "1.3",
+            "module_id": "1.3",
+        },
+    }
+    if start_time is not None:
+        kwargs["latency_ms"] = (time.perf_counter() - start_time) * 1000
+    try:
+        _emit_telemetry(**kwargs)
+    except Exception:  # noqa: BLE001
+        LOG.debug("rag policy-block telemetry emit failed", exc_info=True)
+
+
 def _normalize_collection_name(name: str) -> str:
     """Canonicalize a user-facing collection identifier.
 
@@ -9577,6 +9809,16 @@ async def rag_query(request: Request):
             # could quietly bypass a deny / block_sensitive policy (R10).
             if collection_name != "default":
                 METRICS["blocked"] += 1
+                _emit_rag_policy_block_telemetry(
+                    auth_ctx=auth_ctx,
+                    collection_name=collection_name,
+                    project_id=project_id,
+                    operation="query",
+                    code="rag_access_denied",
+                    detail=f"Access denied: no policy for collection '{collection_name}'.",
+                    vector_db_type=vector_db_type,
+                    start_time=start_rag,
+                )
                 return JSONResponse(
                     status_code=403,
                     content={
@@ -9605,6 +9847,16 @@ async def rag_query(request: Request):
 
         if not policy.get("enabled", False):
             METRICS["blocked"] += 1
+            _emit_rag_policy_block_telemetry(
+                auth_ctx=auth_ctx,
+                collection_name=collection_name,
+                project_id=project_id,
+                operation="query",
+                code="rag_policy_disabled",
+                detail=f"Policy for collection '{collection_name}' is disabled.",
+                vector_db_type=vector_db_type,
+                start_time=start_rag,
+            )
             return JSONResponse(
                 status_code=403,
                 content={
@@ -9630,7 +9882,7 @@ async def rag_query(request: Request):
             if _default_action in ("deny", "block"):
                 _emit_telemetry(
                     status_code=403,
-                    event_type="rag_query",
+                    event_type="rag_query_blocked",
                     model="",
                     user_id=getattr(auth_ctx, "user_id", ""),
                     project_id=str(project_id),
@@ -9645,7 +9897,9 @@ async def rag_query(request: Request):
                         "collection": collection_name,
                         "vector_db_type": vector_db_type,
                         "default_action": _default_action,
+                        "code": "rag_access_denied",
                         "detail": "Collection access denied by vector policy default_action.",
+                        "source": "rag",
                         "module": "1.3",
                         "module_id": "1.3",
                     },
@@ -10222,6 +10476,15 @@ async def rag_ingest(request: Request):
             # meant to guard (R10).
             if collection_name != "default":
                 METRICS["blocked"] += 1
+                _emit_rag_policy_block_telemetry(
+                    auth_ctx=auth_ctx,
+                    collection_name=collection_name,
+                    project_id=project_id,
+                    operation="insert",
+                    code="rag_access_denied",
+                    detail=f"Access denied: no policy for collection '{collection_name}'.",
+                    vector_db_type=vector_db_type,
+                )
                 return JSONResponse(
                     status_code=403,
                     content={
@@ -10239,6 +10502,15 @@ async def rag_ingest(request: Request):
 
         if not policy.get("enabled", False):
             METRICS["blocked"] += 1
+            _emit_rag_policy_block_telemetry(
+                auth_ctx=auth_ctx,
+                collection_name=collection_name,
+                project_id=project_id,
+                operation="insert",
+                code="rag_policy_disabled",
+                detail="Policy disabled for this collection.",
+                vector_db_type=vector_db_type,
+            )
             return JSONResponse(status_code=403, content={"error": "Policy disabled for this collection."})
 
         # Per-operation access decision: ``default_action`` governs operations
@@ -10251,6 +10523,15 @@ async def rag_ingest(request: Request):
         if "insert" not in allowed_ops:
             METRICS["blocked"] += 1
             if _default_action in ("deny", "block"):
+                _emit_rag_policy_block_telemetry(
+                    auth_ctx=auth_ctx,
+                    collection_name=collection_name,
+                    project_id=project_id,
+                    operation="insert",
+                    code="rag_access_denied",
+                    detail="Collection access denied by vector policy default_action.",
+                    vector_db_type=vector_db_type,
+                )
                 return JSONResponse(
                     status_code=403,
                     content={
@@ -10720,6 +11001,15 @@ async def rag_delete_documents(request: Request):
             # (R10) — a case-variant name must not bypass a deny policy.
             if collection_name != "default":
                 METRICS["blocked"] += 1
+                _emit_rag_policy_block_telemetry(
+                    auth_ctx=auth_ctx,
+                    collection_name=collection_name,
+                    project_id=project_id,
+                    operation="delete",
+                    code="rag_access_denied",
+                    detail=f"Access denied: no policy for collection '{collection_name}'.",
+                    vector_db_type=vector_db_type,
+                )
                 return JSONResponse(
                     status_code=403,
                     content={

@@ -6,13 +6,15 @@ import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import {
   fetchSimulatorDefaultContext,
+  readOrgScopedGatewayKey,
   readStoredGatewayKeyContext,
   resolveGatewayKeyContext,
+  SIMULATOR_KEY_CHANGED_EVENT,
 } from "../../api/gatewayContext";
-import { getGatewayApiKey } from "../../utils/gatewayStorage";
 import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { TELEMETRY_ACTIVITY_EVENT, TELEMETRY_STORAGE_KEY } from "../../utils/telemetryEvents";
+import { CONTAINMENT_CHANGED_EVENT, CONTAINMENT_STORAGE_KEY } from "../../utils/containmentEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { module2TooltipProps } from "../../components/module2/module2Chart";
@@ -40,7 +42,8 @@ export function UebaApiKeysPage() {
 }
 
 function UebaApiKeysPageInner() {
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, user } = useAuth();
+  const orgId = user?.organization?.id;
   const [searchParams] = useSearchParams();
   const api = useMemo(() => createModule2Api(fetchWithAuth), [fetchWithAuth]);
   const [period, setPeriod] = useState("24h");
@@ -100,10 +103,18 @@ function UebaApiKeysPageInner() {
     load();
   }, [load]);
 
+  const refreshSimulatorCtx = useCallback(async () => {
+    const storedKey = readOrgScopedGatewayKey(orgId);
+    const ctx = storedKey
+      ? await resolveGatewayKeyContext(fetchWithAuth, storedKey)
+      : await fetchSimulatorDefaultContext(fetchWithAuth);
+    if (ctx) setSimulatorCtx(ctx);
+  }, [fetchWithAuth, orgId]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const storedKey = getGatewayApiKey();
+      const storedKey = readOrgScopedGatewayKey(orgId);
       const ctx = storedKey
         ? await resolveGatewayKeyContext(fetchWithAuth, storedKey)
         : await fetchSimulatorDefaultContext(fetchWithAuth);
@@ -112,7 +123,45 @@ function UebaApiKeysPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, orgId]);
+
+  useEffect(() => {
+    const onKeyOrContainment = () => {
+      refreshSimulatorCtx();
+    };
+    const onSimulatorKeyChanged = (event) => {
+      const detail = event?.detail || {};
+      if (detail.prefix || detail.keyId) {
+        setSimulatorCtx((prev) => ({
+          ...prev,
+          prefix: detail.prefix || prev.prefix,
+          keyId: detail.keyId || prev.keyId,
+          name: detail.name || prev.name,
+        }));
+      } else {
+        refreshSimulatorCtx();
+      }
+    };
+    const onStorage = (event) => {
+      if (
+        event.key === TELEMETRY_STORAGE_KEY
+        || event.key === CONTAINMENT_STORAGE_KEY
+        || (event.key && event.key.startsWith("zeroshield_gateway_key"))
+      ) {
+        onKeyOrContainment();
+      }
+    };
+    window.addEventListener(TELEMETRY_ACTIVITY_EVENT, onKeyOrContainment);
+    window.addEventListener(CONTAINMENT_CHANGED_EVENT, onKeyOrContainment);
+    window.addEventListener(SIMULATOR_KEY_CHANGED_EVENT, onSimulatorKeyChanged);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(TELEMETRY_ACTIVITY_EVENT, onKeyOrContainment);
+      window.removeEventListener(CONTAINMENT_CHANGED_EVENT, onKeyOrContainment);
+      window.removeEventListener(SIMULATOR_KEY_CHANGED_EVENT, onSimulatorKeyChanged);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [refreshSimulatorCtx]);
 
   useEffect(() => {
     if (initialSelectDone.current) return;
@@ -354,6 +403,11 @@ function UebaApiKeysPageInner() {
           refreshSignal={refreshSignal}
           simulatorKeyId={simulatorCtx.keyId}
           simulatorKeyPrefix={simulatorCtx.prefix}
+          orgId={orgId}
+          onSimulatorKeyAdopted={(ctx) => {
+            setSimulatorCtx(ctx);
+            if (ctx?.keyId) selectKey(ctx.keyId);
+          }}
           onActionComplete={handleActionComplete}
           loading={loading}
           liveConnected={wsConnected}

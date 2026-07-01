@@ -103,3 +103,49 @@ class SimulatorGatewayKeyTests(TestCase):
             key_b = client_b.post("/api/gateways/simulator-default/").json()["key"]
 
             self.assertNotEqual(key_a, key_b)
+
+    def test_gateway_key_context_resolves_plaintext_to_fleet_identity(self):
+        from core.models import GatewayAPIKey
+        from rest_framework.test import APIClient
+
+        inst, raw = GatewayAPIKey.generate_key(
+            name="ueba-test",
+            owner=self.user_a,
+            project_id="ueba-e2e",
+        )
+        inst.organization = self.org_a
+        inst.save(update_fields=["organization"])
+
+        client = APIClient()
+        client.force_authenticate(user=self.user_a)
+        resp = client.post("/api/gateways/keys/context/", {"api_key": raw}, format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertEqual(data["prefix"], inst.prefix)
+        self.assertEqual(data["key_id"], str(inst.id))
+        self.assertFalse(data["is_simulator_default"])
+
+    def test_adopt_simulator_promotes_existing_key(self):
+        from core.models import GatewayAPIKey
+        from rest_framework.test import APIClient
+
+        inst, raw = GatewayAPIKey.generate_key(
+            name="fleet-key",
+            owner=self.user_a,
+            project_id="custom-app",
+        )
+        inst.organization = self.org_a
+        inst.store_secret(raw)
+        inst.save(update_fields=["organization"])
+
+        client = APIClient()
+        client.force_authenticate(user=self.user_a)
+        resp = client.post(f"/api/gateways/keys/{inst.id}/adopt-simulator/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertEqual(data["prefix"], inst.prefix)
+        self.assertTrue(data["is_simulator_default"])
+        self.assertEqual(data["key"], raw)
+
+        inst.refresh_from_db()
+        self.assertTrue(inst.project_id.startswith("simulator-"))

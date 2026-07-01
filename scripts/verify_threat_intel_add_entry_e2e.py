@@ -123,6 +123,8 @@ def main() -> None:
     sync_cmd = [
         "docker",
         "exec",
+        "-w",
+        "/app/control",
         "ai_mesh_firewall-control-1",
         "python",
         "manage.py",
@@ -183,14 +185,19 @@ def main() -> None:
         body=gw_body,
     )
     print(f"Gateway response ({code}): {json.dumps(gw_resp)[:300]}")
-    if code not in (403, 503):
-        fail(f"expected gateway block 403/503 for IOC match, got {code}")
+    blocked = code in (403, 503) or (
+        code == 400 and str(gw_resp.get("code") or "").lower() == "threat_intel_blocked"
+    )
+    if not blocked:
+        fail(f"expected gateway block for IOC match, got {code}")
     ok("gateway blocked prompt containing IOC indicator")
 
     # Ensure telemetry is drained (dev uses TELEMETRY_DRAIN_MODE=thread; nudge drain).
     drain_cmd = [
         "docker",
         "exec",
+        "-w",
+        "/app/control",
         "ai_mesh_firewall-control-1",
         "python",
         "manage.py",

@@ -14,6 +14,8 @@ import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
+import { useContainmentPolling } from "../../hooks/useContainmentPolling";
+import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { copyToClipboard } from "../../lib/clipboard";
 import { formatRiskBandLabel } from "../../utils/riskLabels";
 import { PageHeader } from "../../components/module2/PageHeader";
@@ -152,9 +154,17 @@ function IncidentDetailPageInner() {
   useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
 
   useRealtimeNotifications({
+    onEnforcementEvent: refreshLive,
     onEscalationEvent: refreshLive,
     onResolutionEvent: refreshLive,
   });
+  useContainmentPolling(refreshLive, { enabled: !!data });
+
+  useEffect(() => {
+    const onTelemetry = () => refreshLive();
+    window.addEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
+    return () => window.removeEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
+  }, [refreshLive]);
 
   useEffect(() => {
     load();
@@ -188,6 +198,19 @@ function IncidentDetailPageInner() {
       detail: meta.detail || extra.detail || null,
     };
   }, [selectedEvent, data?.source]);
+
+  const investigate = async () => {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await api.investigateIncident(id);
+      await load({ silent: true });
+    } catch (e) {
+      setActionError(e.message || "Investigation claim failed.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const escalate = async () => {
     setActionLoading(true);
@@ -288,6 +311,16 @@ function IncidentDetailPageInner() {
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
+            {incident.status === "open" && (
+              <button
+                type="button"
+                onClick={investigate}
+                disabled={actionLoading}
+                className="rounded-lg border border-violet-300 px-3 py-1.5 text-sm text-violet-700 disabled:opacity-50"
+              >
+                Investigate
+              </button>
+            )}
             {incident.status !== "escalated" && incident.status !== "resolved" && (
               <button
                 type="button"

@@ -38,6 +38,7 @@ from core.models import (
     LLMModelConfig,
     ModelState,
     is_platform_managed_llm_model_name,
+    is_reserved_inference_model_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -492,8 +493,18 @@ def _sync_all_llm_models(instance: LLMModelConfig | None = None) -> None:
             qs = LLMModelConfig.queryset_user_managed(
                 LLMModelConfig.objects.filter(is_active=True, organization=org)
             )
-            entries = [m.build_litellm_entry() for m in qs]
-            routing_entries = [m.build_routing_payload() for m in qs]
+            entries = []
+            routing_entries = []
+            for m in qs:
+                if is_reserved_inference_model_name(m.model_name, m.model_id):
+                    logger.info(
+                        "Excluding reserved inference model %r from Redis sync for org=%s",
+                        m.model_name,
+                        slug,
+                    )
+                    continue
+                entries.append(m.build_litellm_entry())
+                routing_entries.append(m.build_routing_payload())
             from core.routing_fallback import build_compliant_fallback_chains
 
             fallback_chains = build_compliant_fallback_chains(routing_entries)

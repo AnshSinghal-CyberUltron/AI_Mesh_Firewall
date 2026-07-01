@@ -5,6 +5,8 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { copyToClipboard } from "../lib/clipboard";
 import { InfoTooltip } from "./InfoTooltip";
+import { syncModule2AfterGatewayKeyChange } from "../utils/crossModuleSync";
+import { adoptSimulatorKeyById } from "../api/gatewayContext";
 import { createPortal } from "react-dom";
 
 export function GatewayKeyPanel() {
@@ -14,6 +16,7 @@ export function GatewayKeyPanel() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [newKeyValue, setNewKeyValue] = useState(null);
+  const [createdKeyId, setCreatedKeyId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     project_id: "",
@@ -26,6 +29,8 @@ export function GatewayKeyPanel() {
   const [actionLoading, setActionLoading] = useState(null);
   const [copied, setCopied] = useState(false);
   const [formError, setFormError] = useState("");
+  const [adoptingSimulator, setAdoptingSimulator] = useState(false);
+  const [simulatorAdopted, setSimulatorAdopted] = useState(false);
 
   const fetchKeys = useCallback(async () => {
     setLoading(true);
@@ -48,6 +53,8 @@ export function GatewayKeyPanel() {
 
   const openCreateModal = () => {
     setNewKeyValue(null);
+    setCreatedKeyId(null);
+    setSimulatorAdopted(false);
     setFormError("");
     setFormData({
       name: "",
@@ -85,7 +92,25 @@ export function GatewayKeyPanel() {
       if (res.ok) {
         const data = await res.json();
         setNewKeyValue(data.key || null);
+        setCreatedKeyId(data.id || null);
         await fetchKeys();
+        if (data.key && userOrg?.id && data.id) {
+          try {
+            const ctx = await adoptSimulatorKeyById(fetchWithAuth, data.id, userOrg.id, {
+              plaintext: data.key,
+            });
+            setSimulatorAdopted(true);
+            syncModule2AfterGatewayKeyChange("adopt-simulator", {
+              prefix: ctx.prefix,
+              key_id: ctx.keyId,
+            });
+          } catch (adoptErr) {
+            setFormError(adoptErr.message || "Key created but simulator binding failed.");
+            syncModule2AfterGatewayKeyChange("create");
+          }
+        } else {
+          syncModule2AfterGatewayKeyChange("create");
+        }
       } else {
         const errorText = await res.text();
         setFormError(errorText || `Failed to create key (${res.status})`);
@@ -103,8 +128,28 @@ export function GatewayKeyPanel() {
     try {
       await fetchWithAuth(`/api/gateways/keys/${id}/`, { method: "DELETE" });
       await fetchKeys();
+      syncModule2AfterGatewayKeyChange("revoke");
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleUseInSimulator = async () => {
+    if (!newKeyValue || !userOrg?.id || !createdKeyId) return;
+    setAdoptingSimulator(true);
+    try {
+      const ctx = await adoptSimulatorKeyById(fetchWithAuth, createdKeyId, userOrg.id, {
+        plaintext: newKeyValue,
+      });
+      setSimulatorAdopted(true);
+      syncModule2AfterGatewayKeyChange("adopt-simulator", {
+        prefix: ctx.prefix,
+        key_id: ctx.keyId,
+      });
+    } catch (error) {
+      setFormError(error.message || "Failed to adopt key for simulator.");
+    } finally {
+      setAdoptingSimulator(false);
     }
   };
 
@@ -280,16 +325,36 @@ export function GatewayKeyPanel() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                    <Key className="w-4 h-4 text-teal-600 flex-shrink-0" />
-                    <code className="text-xs text-slate-800 dark:text-slate-200 font-mono break-all flex-1">{newKeyValue}</code>
-                    <button
-                      onClick={handleCopyKey}
-                      className="p-1.5 hover:bg-slate-200 rounded transition-colors flex-shrink-0"
-                      title="Copy"
-                    >
-                      {copied ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
-                    </button>
-                  </div>
+                  <Key className="w-4 h-4 text-teal-600 flex-shrink-0" />
+                  <code className="text-xs text-slate-800 dark:text-slate-200 font-mono break-all flex-1">{newKeyValue}</code>
+                  <button
+                    onClick={handleCopyKey}
+                    className="p-1.5 hover:bg-slate-200 rounded transition-colors flex-shrink-0"
+                    title="Copy"
+                  >
+                    {copied ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
+                  </button>
+                </div>
+                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                  This key is now the active Attack Simulator credential for your org.
+                  M2.2 UEBA marks the matching fleet row as <strong>Simulator</strong>.
+                </p>
+                {!simulatorAdopted && (
+                  <button
+                    type="button"
+                    onClick={handleUseInSimulator}
+                    disabled={adoptingSimulator}
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-teal-300 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60 dark:border-teal-700 dark:bg-teal-950/30 dark:text-teal-200"
+                  >
+                    {adoptingSimulator ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    Retry simulator binding
+                  </button>
+                )}
+                {simulatorAdopted && (
+                  <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+                    Active simulator key updated. Open M2.2 UEBA to see the matching row marked Simulator.
+                  </p>
+                )}
                 </div>
 
                 {/* Footer for success state */}

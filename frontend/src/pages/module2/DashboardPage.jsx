@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Area, AreaChart, CartesianGrid,
-  ResponsiveContainer, Tooltip, XAxis, YAxis, PieChart, Pie, Cell, Legend,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { RefreshCw, MessageSquare, BookOpen, Database, Wrench, Radio, ArrowRight } from "lucide-react";
+import { RefreshCw, MessageSquare, BookOpen, Database, Wrench, Shield, Radio, ArrowRight } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
@@ -14,15 +14,11 @@ import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { module2TooltipProps } from "../../components/module2/module2Chart";
 import { ChartCard } from "../../components/module2/ChartCard";
-import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import { InfoTooltip } from "../../components/module2/InfoTooltip";
-import { RiskBandBadge } from "../../components/module2/RiskBandBadge";
 import { Module2EmptyState, Module2ErrorState, Module2PageSkeleton } from "../../components/module2/PageStates";
 import {
-  buildContainmentKpiItems,
-  formatRiskDistributionChart,
   formatTickerDetail,
   formatTickerHeadline,
   mergeTickerFeed,
@@ -71,9 +67,16 @@ const LANE_META = {
     helpText: "Model Context Protocol tool-call enforcement events.",
     drillDown: { to: "/mcp/risk", label: "M2.4 MCP risk" },
   },
+  threat_intel: {
+    label: "Threat Intel",
+    icon: Shield,
+    color: "text-red-500",
+    bg: "bg-red-50 dark:bg-red-900/20",
+    border: "border-red-200 dark:border-red-700",
+    helpText: "Threat intelligence matches and indicator enforcement events.",
+    drillDown: { to: "/threat-intel", label: "M2.5 Threat intel" },
+  },
 };
-
-const RISK_COLORS = { low: "#10b981", medium: "#f59e0b", high: "#ef4444" };
 
 const PERIOD_LABELS = { "1h": "1 hour", "24h": "24 hours", "7d": "7 days", "30d": "30 days" };
 
@@ -83,12 +86,11 @@ const LANE_BADGE = {
   vector:     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
   mcp:        "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   threat_intel: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-  ueba:       "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
 };
 
 function LaneSummaryGrid({ laneSummary, period = "24h" }) {
   return (
-    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {Object.entries(LANE_META).map(([key, meta]) => {
         const stats = laneSummary?.[key] || { total: 0, blocked: 0, block_rate_pct: 0 };
         const Icon = meta.icon;
@@ -193,11 +195,6 @@ export function DashboardPage() {
     return () => window.removeEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
   }, [refreshLive]);
 
-  const riskDistribution = useMemo(
-    () => formatRiskDistributionChart(data?.key_risk_distribution),
-    [data?.key_risk_distribution],
-  );
-
   const tickerItems = useMemo(
     () => mergeTickerFeed(feed, data?.incidents_snapshot || [], TICKER_DISPLAY_LIMIT),
     [feed, data?.incidents_snapshot],
@@ -225,9 +222,8 @@ export function DashboardPage() {
   }
 
   const kpis = data?.kpis || {};
-  const containment = data?.containment || {};
   const kpiItems = [
-    { key: "total-events", label: "Total Events", value: kpis.total_events ?? 0, helpText: "All gateway enforcement events in the selected time window." },
+    { key: "total-events", label: "Gateway Requests", value: kpis.total_events ?? kpis.requests_inspected ?? 0, helpText: "Distinct gateway requests in the selected window (same count as Module 1.1 Requests inspected — one per request_id, not per pipeline stage)." },
     { key: "blocked", label: "Blocked", value: kpis.blocked ?? 0, color: "text-red-600", helpText: "Requests hard-stopped by policy (deny / kill-switch)." },
     { key: "redacted", label: "Redacted", value: kpis.redacted ?? 0, color: "text-amber-600", helpText: "Requests allowed after PII or sensitive fields were masked." },
     {
@@ -248,25 +244,8 @@ export function DashboardPage() {
       clickable: true,
       onClick: () => { window.location.href = "/?tab=firewall-1-5"; },
     },
-    { key: "open-incidents", label: "Open Incidents", value: kpis.open_incidents ?? 0, color: "text-orange-600", helpText: "Cases still open, investigating, or escalated in the incident queue." },
-    { key: "risky-keys", label: "High behavioral risk keys", value: kpis.risky_keys ?? 0, color: "text-red-600", helpText: "API keys in the high UEBA behavioral band (fleet with activity in window)." },
-    ...buildContainmentKpiItems({
-      disabledKeys: kpis.disabled_keys ?? containment.disabled_keys ?? 0,
-      activeKillSwitches: kpis.active_kill_switches ?? containment.active_kill_switches ?? 0,
-      clickable: false,
-    }),
-    { key: "block-rate", label: "Block Rate", value: `${kpis.block_rate ?? 0}%`, helpText: "Hard-block rate across all events—useful for spotting enforcement spikes." },
+    { key: "block-rate", label: "Block Rate", value: `${kpis.block_rate ?? 0}%`, helpText: "Block rate across gateway requests in this window." },
   ];
-
-  const violatorCols = [
-    { key: "prefix", label: "Key Prefix", helpText: "Truncated API key ID for attribution without exposing the secret." },
-    { key: "project_id", label: "Project", helpText: "Application or project scope tied to this key." },
-    { key: "risk_band", label: "Behavioral risk", helpText: "UEBA behavioral tier from velocity, violations, and anomaly signals.", render: (r) => <RiskBandBadge type="behavioral" band={r.risk_band} score={r.risk_score} /> },
-    { key: "request_count", label: "Requests", helpText: "Event count for this key in the selected period." },
-    { key: "velocity_spike", label: "Velocity x", helpText: "Traffic multiplier vs. this key's baseline; spikes may indicate compromise." },
-  ];
-
-  const topRiskyKeys = data?.top_risky_keys || [];
 
   return (
     <div>
@@ -372,52 +351,6 @@ export function DashboardPage() {
               />
             )}
           </div>
-        </ChartCard>
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <ChartCard
-          title="Top Risky API Keys"
-          titleHelpText="Keys with activity in this period, ranked by UEBA risk score."
-        >
-          {topRiskyKeys.length > 0 ? (
-            <DataTable columns={violatorCols} rows={topRiskyKeys} />
-          ) : (
-            <p className="py-12 text-center text-sm text-slate-400">
-              No key-attributed traffic in this period — events need key_prefix metadata.
-            </p>
-          )}
-        </ChartCard>
-        <ChartCard
-          title="Key Risk Distribution"
-          titleHelpText="Fleet-wide UEBA risk bands for all registered API keys (includes keys with zero activity)."
-        >
-          {riskDistribution.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={riskDistribution}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                >
-                  {riskDistribution.map((entry) => (
-                    <Cell key={entry.band} fill={RISK_COLORS[entry.band] || "#94a3b8"} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  {...module2TooltipProps}
-                  formatter={(value, name) => [`${value} keys`, name]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="py-16 text-center text-sm text-slate-400">
-              No API keys registered for this organization.
-            </p>
-          )}
         </ChartCard>
       </div>
     </div>

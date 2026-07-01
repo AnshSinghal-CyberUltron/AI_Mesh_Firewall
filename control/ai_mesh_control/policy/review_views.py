@@ -167,6 +167,46 @@ class SecurityIncidentEscalateView(APIView):
         return Response(SecurityIncidentSerializer(incident).data)
 
 
+class SecurityIncidentInvestigateView(APIView):
+    """POST /api/security/incidents/{id}/investigate-incident/ — claim case for triage."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        incident = _security_incident_for_request(request, pk)
+        if incident is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if incident.status == "resolved":
+            return Response({"detail": "Resolved incidents cannot be reopened via investigate."}, status=status.HTTP_400_BAD_REQUEST)
+        if incident.status != "open":
+            return Response(SecurityIncidentSerializer(incident).data)
+
+        incident.status = "investigating"
+        if incident.assigned_to_id is None:
+            incident.assigned_to = request.user
+        incident.notes = request.data.get("notes", incident.notes)
+        incident.save(update_fields=["status", "assigned_to", "notes", "updated_at"])
+        from module2.analytics import invalidate_incident_summary_cache
+        from ws.notify import send_enforcement_notification
+
+        invalidate_incident_summary_cache(incident.organization_id)
+        try:
+            send_enforcement_notification(
+                {
+                    "type": "investigation_event",
+                    "security_incident_id": str(incident.id),
+                    "incident_id": str(incident.enforcement_event_id or incident.id),
+                    "incident_status": "investigating",
+                    "assigned_to_id": request.user.id,
+                    "organization_id": incident.organization_id,
+                },
+                organization_id=incident.organization_id,
+            )
+        except Exception:
+            logger.warning("Failed to broadcast investigation for security incident %s", incident.id)
+        return Response(SecurityIncidentSerializer(incident).data)
+
+
 class SecurityIncidentResolveView(APIView):
     """POST /api/security/incidents/{id}/resolve-incident/"""
 

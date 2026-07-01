@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { RefreshCw, ArrowDown, ArrowUp, Radio } from "lucide-react";
+import { RefreshCw, ArrowDown, ArrowUp, HelpCircle, Radio } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
+import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
@@ -43,12 +44,20 @@ const DIRECTION_META = {
     color: "text-emerald-500",
     bg: "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700",
   },
+  unknown: {
+    label: "Unknown",
+    subtitle: "Direction missing",
+    help: "Events missing scan direction metadata. These are excluded from inbound/outbound hit-rate calculations until telemetry is normalized.",
+    Icon: HelpCircle,
+    color: "text-slate-500",
+    bg: "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700",
+  },
 };
 
 function buildMcpKpiItems(summary = {}) {
   const totalEvents = summary.total_events ?? 0;
   const blocked = summary.blocked_tool_calls ?? 0;
-  const redacted = summary.redacted_arguments ?? 0;
+  const redacted = summary.redacted_calls ?? summary.redacted_arguments ?? 0;
   const violationRate = totalEvents
     ? Math.min(100, Math.round(((blocked + redacted) / totalEvents) * 100))
     : 0;
@@ -102,8 +111,9 @@ function McpRiskDashboard({ data }) {
   const dirSplit = data?.direction_split || {
     inbound: { total: 0, blocked: 0 },
     outbound: { total: 0, blocked: 0 },
+    unknown: { total: 0, blocked: 0 },
   };
-  const hasToolViolations = toolLedger.some((row) => (row.violations ?? 0) > 0);
+  const hasToolActivity = toolLedger.length > 0;
 
   return (
     <>
@@ -117,23 +127,24 @@ function McpRiskDashboard({ data }) {
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
-          title="Tools With the Most Violations"
-          titleHelpText="Each bar counts blocks and redactions for that tool name (allowed-only calls are not included). Focus remediation on the tallest bars."
+          title="Tool Activity vs Policy Hits"
+          titleHelpText="Compares total calls against policy-hit calls (block + redact) for each tool. Use this to spot noisy high-volume tools and high-risk tools."
         >
-          {hasToolViolations ? (
+          {hasToolActivity ? (
             <ResponsiveContainer width="100%" height={TOOL_CHART_HEIGHT}>
               <BarChart data={toolLedger} layout="vertical" margin={{ left: 10, right: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis type="number" fontSize={11} allowDecimals={false} />
                 <YAxis dataKey="tool" type="category" fontSize={10} width={130} />
                 <Tooltip {...module2TooltipProps} />
+                <Bar dataKey="total_calls" fill="#0ea5e9" radius={[0, 4, 4, 0]} name="Total calls" />
                 <Bar dataKey="violations" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Policy hits" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
             <p className="py-8 text-center text-sm text-slate-400">
-              MCP events were recorded, but none included a tool name on a blocked or redacted call.
-              Ensure telemetry sets <span className="font-mono">tools_invoked</span> on violations.
+              MCP events were recorded, but telemetry did not include tool names.
+              Ensure events set <span className="font-mono">tools_invoked</span>.
             </p>
           )}
         </ChartCard>
@@ -142,8 +153,8 @@ function McpRiskDashboard({ data }) {
           title="Inbound vs Outbound Scans"
           titleHelpText="Inbound counts argument scans on the way into the model. Outbound counts response scans on the way back. Violations include both hard blocks and redactions."
         >
-          <div className="mt-2 grid grid-cols-2 gap-4">
-            {["inbound", "outbound"].map((dir) => {
+          <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {["inbound", "outbound", "unknown"].map((dir) => {
               const stats = dirSplit[dir] || { total: 0, blocked: 0 };
               const meta = DIRECTION_META[dir];
               const Icon = meta.Icon;
@@ -167,7 +178,7 @@ function McpRiskDashboard({ data }) {
             })}
           </div>
           <p className="mt-4 text-xs text-slate-400">
-            If inbound hit rate is high, review tool argument policies. If outbound is high, tighten what tool results may return to the model.
+            If inbound hit rate is high, review tool argument policies. If outbound is high, tighten what tool results may return to the model. Unknown should stay near zero after telemetry normalization.
           </p>
         </ChartCard>
       </div>
@@ -255,6 +266,7 @@ function McpRiskPageInner() {
   const { connected: wsConnected } = useRealtimeNotifications({
     onEnforcementEvent: refreshLive,
   });
+  useContainmentPolling(refreshLive, { enabled: !!data });
 
   useEffect(() => {
     const onTelemetry = () => refreshLive();

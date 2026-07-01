@@ -12,7 +12,7 @@ test("listIncidents builds query params for filters and pagination", async () =>
   await api.listIncidents({
     status: "open",
     severity: "high",
-    source: "ueba",
+    source: "chat",
     search: "injection",
     page: 2,
     page_size: 25,
@@ -22,7 +22,7 @@ test("listIncidents builds query params for filters and pagination", async () =>
   assert.ok(url.includes("/api/module2/incidents/"));
   assert.ok(url.includes("status=open"));
   assert.ok(url.includes("severity=high"));
-  assert.ok(url.includes("source=ueba"));
+  assert.ok(url.includes("source=chat"));
   assert.ok(url.includes("search=injection"));
   assert.ok(url.includes("page=2"));
   assert.ok(url.includes("page_size=25"));

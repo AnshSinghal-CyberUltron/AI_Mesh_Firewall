@@ -12,7 +12,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, Awaitable, Callable, TYPE_CHECKING
+from typing import Any, AsyncGenerator, Awaitable, Callable, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from stream_orchestration import StreamRunMetrics
@@ -318,6 +318,7 @@ class LLMRouter:
         self._active_model_names: list[str] = []
         self._qualified_model_names: set[str] = set()  # H7: org::model routing keys
         self._deployment_params: dict[str, dict] = {}   # Responses API: name -> resolved litellm_params (BYOK)
+        self._remap_telemetry_hook: Callable[..., None] | None = None
 
         #global litellm settings
         litellm.drop_params = config.get("litellm_drop_params", True)
@@ -338,6 +339,14 @@ class LLMRouter:
                 "Org-only inference disabled without upstream URL; "
                 "router starts empty until Redis model reload."
             )
+
+    def set_remap_telemetry_hook(self, hook: Callable[..., None] | None) -> None:
+        """Optional callback invoked when a requested model is remapped at runtime."""
+        self._remap_telemetry_hook = hook
+
+    def get_active_model_names(self) -> list[str]:
+        """Bare model names currently loaded in the LiteLLM router model groups."""
+        return list(self._active_model_names)
 
     def _set_active_model_names(self, model_list: list[dict]) -> None:
         # H7: use the BARE name (model_info.base_model_name) — clients send bare
@@ -753,6 +762,15 @@ class LLMRouter:
                 requested_model,
                 model,
             )
+            if self._remap_telemetry_hook is not None:
+                try:
+                    self._remap_telemetry_hook(
+                        requested_model=requested_model,
+                        resolved_model=model,
+                        body=body,
+                    )
+                except Exception:  # pragma: no cover - telemetry must never break routing
+                    LOG.debug("model_remap telemetry hook failed", exc_info=True)
         messages = body.get("messages") or body.get("input") or []
         # H7: org-qualify the routing key so litellm selects THIS org's deployment
         # (and its BYOK key), never a same-named peer from another tenant. The
@@ -818,7 +836,7 @@ class LLMRouter:
         try:
             response = await self._execute_completion(kwargs)
             return 200, response.model_dump()
-        except (BadRequestError, NotFoundError) as exc:
+        except (BadRequestError, NotFoundError, APIConnectionError) as exc:
             if allowlist and compliant_chain:
                 primary = kwargs.get("model")
                 for candidate in compliant_chain:
@@ -841,7 +859,7 @@ class LLMRouter:
                             resolve_exc,
                         )
                         continue
-                    except (BadRequestError, NotFoundError):
+                    except (BadRequestError, NotFoundError, APIConnectionError):
                         continue
                     except tuple(_EXCEPTION_STATUS_MAP.keys()):
                         continue

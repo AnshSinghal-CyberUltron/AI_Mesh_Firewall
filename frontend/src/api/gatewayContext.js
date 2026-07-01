@@ -2,6 +2,38 @@
 
 export const GATEWAY_PREFIX_STORAGE_KEY = "zeroshield_gateway_key_prefix";
 export const GATEWAY_KEY_ID_STORAGE_KEY = "zeroshield_gateway_key_id";
+export const SIMULATOR_KEY_CHANGED_EVENT = "ai-mesh:simulator-key-changed";
+const ORG_KEY_PREFIX = "zeroshield_gateway_key";
+const LEGACY_KEY = "zeroshield_gateway_key";
+
+export function orgGatewayKeyStorageKey(orgId) {
+  return orgId ? `${ORG_KEY_PREFIX}:${orgId}` : LEGACY_KEY;
+}
+
+/** Same lookup order as Attack Simulator (org-scoped, then legacy). */
+export function readOrgScopedGatewayKey(orgId) {
+  if (typeof window === "undefined") return "";
+  try {
+    const scoped = orgId ? localStorage.getItem(orgGatewayKeyStorageKey(orgId)) : "";
+    if (scoped?.trim()) return scoped.trim();
+    return localStorage.getItem(LEGACY_KEY)?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+export function writeOrgScopedGatewayKey(apiKey, orgId, storageKey) {
+  if (typeof window === "undefined") return;
+  const target = storageKey || orgGatewayKeyStorageKey(orgId);
+  try {
+    localStorage.setItem(target, apiKey);
+    if (target !== LEGACY_KEY) {
+      localStorage.removeItem(LEGACY_KEY);
+    }
+  } catch {
+    /* private mode */
+  }
+}
 
 export function readStoredGatewayKeyContext() {
   if (typeof window === "undefined") {
@@ -21,6 +53,11 @@ export function writeStoredGatewayKeyContext({ prefix, keyId, name }) {
   if (name) localStorage.setItem("zeroshield_gateway_key_name", name);
 }
 
+export function notifySimulatorKeyChanged(detail = {}) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(SIMULATOR_KEY_CHANGED_EVENT, { detail }));
+}
+
 export async function resolveGatewayKeyContext(fetchWithAuth, apiKey) {
   const trimmed = String(apiKey || "").trim();
   if (!trimmed) return null;
@@ -36,8 +73,48 @@ export async function resolveGatewayKeyContext(fetchWithAuth, apiKey) {
     keyId: data.key_id || "",
     name: data.name || "",
     isSimulatorDefault: !!data.is_simulator_default,
+    storageKey: data.storage_key || "",
   };
   writeStoredGatewayKeyContext(ctx);
+  return ctx;
+}
+
+export async function adoptGatewayKeyForSimulator(fetchWithAuth, apiKey, orgId) {
+  const trimmed = String(apiKey || "").trim();
+  if (!trimmed) return null;
+  const ctx = await resolveGatewayKeyContext(fetchWithAuth, trimmed);
+  if (!ctx) return null;
+  writeOrgScopedGatewayKey(trimmed, orgId, ctx.storageKey);
+  notifySimulatorKeyChanged(ctx);
+  return ctx;
+}
+
+/**
+ * Promote an existing fleet key as the org simulator credential (backend + browser).
+ * Pass `plaintext` when available (e.g. right after key creation).
+ */
+export async function adoptSimulatorKeyById(fetchWithAuth, keyId, orgId, { plaintext = "" } = {}) {
+  const res = await fetchWithAuth(`/api/gateways/keys/${keyId}/adopt-simulator/`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to adopt simulator key (${res.status})`);
+  }
+  const data = await res.json();
+  const apiKey = data.key || plaintext;
+  if (apiKey) {
+    writeOrgScopedGatewayKey(apiKey, orgId, data.storage_key);
+  }
+  const ctx = {
+    prefix: data.prefix || "",
+    keyId: data.key_id || String(keyId),
+    name: data.name || "",
+    isSimulatorDefault: true,
+    storageKey: data.storage_key || orgGatewayKeyStorageKey(orgId),
+  };
+  writeStoredGatewayKeyContext(ctx);
+  notifySimulatorKeyChanged(ctx);
   return ctx;
 }
 

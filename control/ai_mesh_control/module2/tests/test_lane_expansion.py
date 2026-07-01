@@ -51,6 +51,11 @@ class EventSourceLaneTests(SimpleTestCase):
 
     def test_rag_lane(self):
         self.assertEqual(event_source({"event_type": "rag_pipeline"}), "rag")
+        self.assertEqual(event_source({"event_type": "rag_query_blocked"}), "rag")
+        self.assertEqual(event_source({"event_type": "rag_query", "collection": "docs"}), "rag")
+
+    def test_mcp_lane_event_types(self):
+        self.assertEqual(event_source({"event_type": "mcp_blocked"}), "mcp")
 
     def test_vector_lane_via_collection(self):
         self.assertEqual(event_source({"collection": "docs"}), "vector")
@@ -61,8 +66,8 @@ class EventSourceLaneTests(SimpleTestCase):
         self.assertEqual(event_source({"source": "threat_intel"}), "threat_intel")
         self.assertEqual(event_source({"threat_type": "threat_intel_match"}), "threat_intel")
 
-    def test_ueba_lane(self):
-        self.assertEqual(event_source({"key_prefix": "zs_abc"}), "ueba")
+    def test_keyed_gateway_traffic_classifies_as_chat(self):
+        self.assertEqual(event_source({"key_prefix": "zs_abc"}), "chat")
 
     def test_chat_default(self):
         self.assertEqual(event_source({}), "chat")
@@ -82,21 +87,26 @@ class LaneHelperUnitTests(SimpleTestCase):
             _row(ACTION_BLOCK, event_type="rag_pipeline", pipeline_stage="query"),
             _row("allow", collection="docs"),
             _row("allow"),
-            # ueba/threat_intel lanes fold into chat in the dashboard grid
             _row("allow", key_prefix="zs_x"),
+            _row(ACTION_BLOCK, source="threat_intel"),
         ])
         summary = build_lane_summary(qs)
-        self.assertEqual(set(summary.keys()), {"chat", "rag", "vector", "mcp"})
+        self.assertEqual(
+            set(summary.keys()),
+            {"chat", "rag", "vector", "mcp", "threat_intel"},
+        )
         self.assertEqual(summary["mcp"]["total"], 2)
         self.assertEqual(summary["mcp"]["blocked"], 1)
         self.assertEqual(summary["mcp"]["block_rate_pct"], 50.0)
         self.assertEqual(summary["rag"]["total"], 1)
         self.assertEqual(summary["vector"]["total"], 1)
         self.assertEqual(summary["chat"]["total"], 2)
+        self.assertEqual(summary["threat_intel"]["total"], 1)
+        self.assertEqual(summary["threat_intel"]["blocked"], 1)
 
     def test_build_lane_summary_zero_events_has_zero_block_rate(self):
         summary = build_lane_summary(FakeQS([]))
-        for lane in ("chat", "rag", "vector", "mcp"):
+        for lane in ("chat", "rag", "vector", "mcp", "threat_intel"):
             self.assertEqual(summary[lane]["total"], 0)
             self.assertEqual(summary[lane]["blocked"], 0)
             self.assertEqual(summary[lane]["block_rate_pct"], 0.0)
@@ -140,18 +150,23 @@ class LaneHelperUnitTests(SimpleTestCase):
         payload = build_mcp_activity_payload(qs)
         self.assertEqual(payload["summary"]["total_events"], 4)
         self.assertEqual(payload["summary"]["blocked_tool_calls"], 1)
+        self.assertEqual(payload["summary"]["redacted_calls"], 1)
         self.assertEqual(payload["summary"]["redacted_arguments"], 1)
         self.assertEqual(payload["summary"]["unique_tools"], 2)
 
-        ledger = {r["tool"]: r["violations"] for r in payload["tool_ledger"]}
-        self.assertEqual(ledger["execute_sql"], 1)
-        self.assertEqual(ledger["read_file"], 1)
+        ledger = {r["tool"]: r for r in payload["tool_ledger"]}
+        self.assertEqual(ledger["execute_sql"]["violations"], 1)
+        self.assertEqual(ledger["read_file"]["violations"], 1)
+        self.assertEqual(ledger["execute_sql"]["total_calls"], 2)
+        self.assertEqual(ledger["read_file"]["total_calls"], 2)
 
         direction = payload["direction_split"]
-        self.assertEqual(direction["inbound"]["total"], 3)  # explicit + default + legacy
+        self.assertEqual(direction["inbound"]["total"], 1)
         self.assertEqual(direction["inbound"]["blocked"], 1)
         self.assertEqual(direction["outbound"]["total"], 1)
         self.assertEqual(direction["outbound"]["blocked"], 1)  # redact counts
+        self.assertEqual(direction["unknown"]["total"], 2)
+        self.assertEqual(direction["unknown"]["blocked"], 0)
 
         servers = {r["server"]: r["total"] for r in payload["top_servers"]}
         self.assertEqual(servers["srv-a"], 2)
@@ -260,6 +275,7 @@ class LaneExpansionApiTests(TestCase):
         data = resp.json()
         self.assertEqual(data["summary"]["total_events"], 2)
         self.assertEqual(data["summary"]["blocked_tool_calls"], 1)
+        self.assertEqual(data["summary"]["redacted_calls"], 1)
         self.assertEqual(data["summary"]["redacted_arguments"], 1)
         tools = {r["tool"] for r in data["tool_ledger"]}
         self.assertEqual(tools, {"execute_sql", "read_file"})
@@ -275,8 +291,9 @@ class LaneExpansionApiTests(TestCase):
         resp = self.client.get("/api/module2/dashboard/?period=24h")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        for key in ("lane_summary", "incidents_snapshot", "threat_trend", "key_risk_distribution"):
+        for key in ("lane_summary", "incidents_snapshot", "threat_trend", "key_risk_distribution", "data_health"):
             self.assertIn(key, data)
+        self.assertIn("threat_intel", data["lane_summary"])
         self.assertGreaterEqual(data["lane_summary"]["mcp"]["total"], 1)
         self.assertGreaterEqual(data["lane_summary"]["rag"]["total"], 1)
         self.assertNotIn("mcp_summary", data)

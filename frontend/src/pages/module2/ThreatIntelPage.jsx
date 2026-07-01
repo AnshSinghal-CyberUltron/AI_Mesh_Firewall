@@ -16,6 +16,7 @@ import { AlertTriangle, BookOpen, Loader2, Plus, Radio, RefreshCw, Shield, Trash
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
+import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
@@ -308,6 +309,7 @@ function ThreatIntelTelemetryDashboard({ telemetry, period }) {
                   formatter={(value) => [value, "Events"]}
                   labelFormatter={(label) => `Label: ${label}`}
                 />
+                <Bar dataKey="count" fill="#f59e0b" name="Events" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -334,6 +336,7 @@ function ThreatIntelTelemetryDashboard({ telemetry, period }) {
                   formatter={(value) => [value, "IOC matches"]}
                   labelFormatter={(_, payload) => payload?.[0]?.payload?.stage || ""}
                 />
+                <Bar dataKey="count" fill="#8b5cf6" name="IOC matches" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -403,11 +406,11 @@ function ThreatIntelPageInner() {
     }
   }, [api, period]);
 
-  const loadEntries = useCallback(async ({ silent = false } = {}) => {
+  const loadEntries = useCallback(async ({ silent = false, useCache = true } = {}) => {
     const seq = ++entriesSeqRef.current;
     if (!silent) setEntriesLoading(true);
     try {
-      const data = await api.listThreatIntel();
+      const data = await api.listThreatIntel({ useCache });
       if (seq !== entriesSeqRef.current) return;
       setEntries(normalizeThreatIntelRows(data));
       setEntriesError(null);
@@ -423,7 +426,7 @@ function ThreatIntelPageInner() {
     clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => {
       loadTelemetry({ silent: true });
-      loadEntries({ silent: true });
+      loadEntries({ silent: true, useCache: false });
     }, REFRESH_DEBOUNCE_MS);
   }, [loadTelemetry, loadEntries]);
 
@@ -432,6 +435,7 @@ function ThreatIntelPageInner() {
   const { connected: wsConnected } = useRealtimeNotifications({
     onEnforcementEvent: refreshLive,
   });
+  useContainmentPolling(refreshLive, { enabled: !!(telemetry || entries.length) });
 
   useEffect(() => {
     const onTelemetry = () => refreshLive();

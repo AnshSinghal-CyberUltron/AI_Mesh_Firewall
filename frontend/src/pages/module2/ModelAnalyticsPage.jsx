@@ -10,6 +10,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
+import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
@@ -231,6 +232,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                 <XAxis dataKey="stage" fontSize={11} />
                 <YAxis fontSize={11} unit="%" domain={[0, 100]} />
                 <Tooltip content={<RagStageTooltip />} />
+                <Bar dataKey="block_rate" fill="#ef4444" name="Block %" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -260,6 +262,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                       return [value, name];
                     }}
                   />
+                  <Bar dataKey="value" fill="#0ea5e9" name="Documents" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
@@ -324,6 +327,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                   formatter={(v, name) => (name === "Block %" ? `${v}%` : v)}
                   labelFormatter={(label) => `Collection: ${label}`}
                 />
+                <Bar dataKey="blockRate" fill="#f97316" name="Block %" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -344,6 +348,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                 <XAxis dataKey="stage" fontSize={11} />
                 <YAxis fontSize={11} unit="ms" />
                 <Tooltip {...module2TooltipProps} formatter={(v) => [`${v} ms`, "Avg latency"]} />
+                <Bar dataKey="avg_latency_ms" fill="#6366f1" name="Avg latency (ms)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -462,6 +467,7 @@ function ModelExposurePageInner() {
   useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
 
   useRealtimeNotifications({ onEnforcementEvent: refreshActiveTab });
+  useContainmentPolling(refreshActiveTab, { enabled: !!(data || ragData) });
 
   useEffect(() => {
     const onTelemetry = () => refreshActiveTab();

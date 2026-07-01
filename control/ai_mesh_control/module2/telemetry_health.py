@@ -218,7 +218,7 @@ def audit_event_metadata(
                 )
             )
 
-    if not prefix and lane in {"chat", "ueba"} and not _looks_like_mcp_event(meta):
+    if not prefix and lane == "chat" and not _looks_like_mcp_event(meta):
         issues.append(
             TelemetryIssue(
                 code=ISSUE_UEBA_BLIND_SPOT,

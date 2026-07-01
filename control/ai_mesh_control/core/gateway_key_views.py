@@ -5,8 +5,10 @@ import logging
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
 from core.gateway_serializers import (
@@ -336,6 +338,11 @@ class GatewayAPIKeyViewSet(ModelViewSet):
             instance.organization = org
             instance.save(update_fields=["organization"])
 
+        try:
+            instance.store_secret(plaintext_key)
+        except Exception:  # noqa: BLE001 — provisioning must not fail if cipher is unavailable
+            logger.warning("Could not persist recoverable secret for prefix=%s", instance.prefix)
+
         logger.info(
             "GatewayAPIKey created: prefix=%s user_id=%s project=%s",
             instance.prefix,
@@ -349,6 +356,53 @@ class GatewayAPIKeyViewSet(ModelViewSet):
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="adopt-simulator",
+        permission_classes=[IsAuthenticated],
+    )
+    def adopt_simulator(self, request, id=None):
+        """Promote this key as the org's Attack Simulator credential."""
+        from auth.utils import get_request_organization
+
+        org = get_request_organization(request)
+        if org is None:
+            return Response(
+                {"detail": "Organization membership required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        key = self.get_object()
+        if key.organization_id != org.id:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not key.is_active:
+            return Response(
+                {"detail": "Cannot adopt a disabled API key as simulator credential."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            promoted, raw_key = GatewayAPIKey.promote_as_org_simulator(org, key)
+        except ValueError:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        storage_key = f"zeroshield_gateway_key:{org.id}"
+        payload = {
+            "prefix": promoted.prefix,
+            "key_id": str(promoted.id),
+            "name": promoted.name,
+            "project_id": promoted.project_id,
+            "org_id": org.id,
+            "org_slug": org.slug,
+            "storage_key": storage_key,
+            "is_simulator_default": True,
+            "has_plaintext": bool(raw_key),
+        }
+        if raw_key:
+            payload["key"] = raw_key
+        return Response(payload)
+
     def perform_destroy(self, instance):
         logger.info(
             "GatewayAPIKey revoked: prefix=%s user_id=%s project=%s",
@@ -357,3 +411,42 @@ class GatewayAPIKeyViewSet(ModelViewSet):
             instance.project_id,
         )
         instance.delete()
+
+
+class GatewayKeyContextView(APIView):
+    """POST /api/gateways/keys/context/ — resolve plaintext key to UEBA fleet identity."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        raw = str(request.data.get("api_key") or "").strip()
+        if not raw:
+            return Response({"detail": "api_key is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from auth.utils import get_request_organization
+
+        org = get_request_organization(request.user)
+        key_hash = GatewayAPIKey.hash_raw_key(raw)
+        qs = GatewayAPIKey.objects.filter(key_hash=key_hash, is_active=True)
+        if org:
+            qs = qs.filter(organization=org)
+        elif not getattr(request.user, "is_superuser", False):
+            qs = qs.filter(owner=request.user)
+
+        key = qs.first()
+        if key is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        project_id = str(key.project_id or "")
+        is_simulator = project_id.startswith("simulator-") or key.name == "simulator"
+        storage_key = f"zeroshield_gateway_key:{key.organization_id}" if key.organization_id else "zeroshield_gateway_key"
+        return Response(
+            {
+                "prefix": key.prefix,
+                "key_id": str(key.id),
+                "name": key.name,
+                "project_id": key.project_id,
+                "is_simulator_default": is_simulator,
+                "storage_key": storage_key,
+            }
+        )
