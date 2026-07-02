@@ -1126,6 +1126,30 @@
         FOURTEEN confirmed-live leaks fixed (G40-G46, G49-G55) + G48 defense-in-depth + 2 documented tradeoffs.
         Obfuscation-canonicalization now symmetric across all four detector families on BOTH the unicode AND
         the base64/hex transport axes, on input and output.
+    - 🔴 G56 confusable-map COMPLETENESS — single-homoglyph PII/secret/credential evasion (2026-07-02):
+        _CONFUSABLE_MAP (the Cyrillic/Greek->Latin fold that G1/G54/G55 all rely on) covered only ~14 chars
+        (lowercase Cyrillic а/е/о/р/с/х/у/і/ј/ѕ + Greek CAPS). MISSING: the classic Cyrillic UPPERCASE
+        homoglyphs (А/В/Е/К/М/Н/О/Р/С/Т/У/Х/Ѕ/Ј/І — visually identical to Latin caps), Cyrillic lowercase
+        ԁ/һ/ӏ/ԛ/ԝ, and Greek ρ/κ/τ/μ + lunate sigma. PROBED: 26 confusables didn't fold -> a SINGLE homoglyph
+        substituted into a value (sk_live_abcԁ… komi-de, exampӏe.com palochka, githμb_pat_… Greek mu) broke
+        the raw regex AND wasn't canonicalized -> evaded detect_pii/detect_secrets/detect_credential_exposure
+        AND masking (redact_all shares the canonicalizer), on input and output. FIX (owned patterns.py):
+        expanded _CONFUSABLE_MAP with the standard Unicode Latin-lookalike set (native DATA, not vendored
+        code — homoglyph correspondences are facts like the alphabet). NFKC runs BEFORE the map, so lunate ϲ
+        folds to final-sigma ς first -> mapped ς->c (not ϲ); micro-sign µ NFKC-folds to μ -> μ->u covers both.
+        Each fold is 1->1 position-preserving so redact_all still masks the ORIGINAL obfuscated bytes.
+        VERIFY: homoglyph secrets/emails now detected+masked; FP FLOOR 0 (Russian/Greek prose, micro-units
+        50μg/5μF, Cyrillic-caps words СОВЕТ РОСТ, Greek math ρ=0.5). ORACLE: aidefence ALSO misses the
+        homoglyph email (hasPII=false) but flags the reconstruction (true) — independent corroboration the
+        evasion is real+general and the canonicalization is the value-add. Deliberately NOT folding weak/
+        ambiguous ones beyond the tested leak set. FROZEN: 29 G56 golden cases (18 fold-checks + 6 leak+mask +
+        5 FP-floor). GATE: golden 406×3 in-process (was 377; +29); gateway suite 1366 pass. commit 41144ae6
+        (my own msg — pathspec `git commit -- <paths>` was fast enough to dodge the shared-index sweep this
+        time). ⚠ control was UNHEALTHY pre-redeploy (recurring hang) -> restarted control FIRST (healthy),
+        THEN recreated gateway (rollback gateway-rollback-pre-g56) — avoids the register-fail unhealthy cascade.
+        FIFTEEN confirmed-live leaks fixed (G40-G46, G49-G56) + G48 defense-in-depth + 2 documented tradeoffs.
+        The obfuscation-canonicalization FOUNDATION (unicode fold + transport decode + confusables) is now
+        complete + symmetric across pii/secret/credential/ip on input and output.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
