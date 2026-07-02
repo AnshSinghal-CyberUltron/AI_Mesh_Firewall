@@ -19,12 +19,13 @@ from functools import lru_cache
 import jsonschema
 import requests
 from django.conf import settings
+from django.core.cache import cache
 from django.db import IntegrityError
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny, BasePermission
+from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -492,15 +493,52 @@ def _classify_sync_error(low: str) -> tuple[str, str]:
                                  "error. Verify the configuration and retry.")
 
 
+# Developer diagnostic channel (CP18). The raw cause behind a sanitized client
+# error is written here keyed by the correlation ref, so a developer/staff user
+# can retrieve it via MCPDiagnosticDetailView WITHOUT it ever reaching a client.
+MCP_DIAG_CACHE_PREFIX = "mcp:diag:"
+MCP_DIAG_TTL_SECONDS = 7 * 24 * 3600  # 7 days
+
+
+def _diag_cache_key(ref: str) -> str:
+    return f"{MCP_DIAG_CACHE_PREFIX}{ref}"
+
+
+def _store_sync_diagnostic(ref, code, raw, *, org_slug="", server_slug="") -> None:
+    """Persist the REAL cause behind a sanitized client error, keyed by ``ref``.
+
+    Best-effort (a cache outage must never break the sync path): the client has
+    already been given the sanitized message + code + ref; this only powers the
+    staff-only debug view. Raw is truncated to a safe bound.
+    """
+    try:
+        cache.set(
+            _diag_cache_key(ref),
+            {
+                "ref": ref,
+                "code": code,
+                "kind": "mcp_sync_error",
+                "org_slug": org_slug,
+                "server_slug": server_slug,
+                "raw_cause": str(raw)[:4000],
+                "created_at": timezone.now().isoformat(),
+            },
+            timeout=MCP_DIAG_TTL_SECONDS,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to persist MCP diagnostic [ref=%s]: %s", ref, exc)
+
+
 def _sanitize_sync_error(raw, *, org_slug: str = "", server_slug: str = "") -> "SyncError":
     """Map a raw internal MCP error to a clean, branded, NON-revealing client error.
 
     The raw detail (exit codes, upstream response bodies, sandbox-agent internals,
-    host-dependency hints, server keys) is kept ONLY in the SERVER logs under a
-    short correlation ``ref``; the client sees an actionable, brand-safe summary,
-    a stable error ``code``, and the ``ref``. Returns a :class:`SyncError` (a
-    ``str`` carrying ``.code`` + ``.ref``). (CP16 sanitize + CP17 code/mapping;
-    dev debug view keyed by ref = CP18.)
+    host-dependency hints, server keys) is kept ONLY server-side under a short
+    correlation ``ref`` — in the structured logs AND the staff-only diagnostic
+    channel (:func:`_store_sync_diagnostic`); the client sees an actionable,
+    brand-safe summary, a stable error ``code``, and the ``ref``. Returns a
+    :class:`SyncError` (a ``str`` carrying ``.code`` + ``.ref``). (CP16 sanitize +
+    CP17 code/mapping + CP18 dev diagnostic channel keyed by ref.)
     """
     ref = uuid_mod.uuid4().hex[:12]
     code, summary = _classify_sync_error(str(raw).lower())
@@ -508,6 +546,7 @@ def _sanitize_sync_error(raw, *, org_slug: str = "", server_slug: str = "") -> "
         "MCP sync error [ref=%s code=%s] org=%s server=%s: %s",
         ref, code, org_slug, server_slug, str(raw)[:1000],
     )
+    _store_sync_diagnostic(ref, code, raw, org_slug=org_slug, server_slug=server_slug)
     return SyncError(f"{summary} (Ref: {ref})", code, ref)
 
 
@@ -2031,6 +2070,35 @@ class MCPServerToolListView(APIView):
             "connection_status": server.connection_status,
             "tools": MCPToolRegistrationSerializer(tools, many=True).data,
         })
+
+
+class MCPDiagnosticDetailView(APIView):
+    """DEV-ONLY diagnostic lookup by correlation ref (CP18).
+
+    Staff/superuser ONLY (``IsAdminUser`` → ``request.user.is_staff``); an org
+    client — even an org *admin* — is never staff, so this is never exposed to
+    clients. Returns the REAL cause (stable code, raw error text, org/server)
+    that the sanitized client message + ``(Ref: …)`` deliberately withholds, so
+    a developer can debug the exact failure (exit code, upstream body, sandbox
+    reason) using only the correlation id the client reported.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, ref):
+        if not re.fullmatch(r"[0-9a-f]{6,32}", ref or ""):
+            return Response(
+                {"error": "Invalid correlation ref."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        record = cache.get(_diag_cache_key(ref))
+        if not record:
+            return Response(
+                {"error": "No diagnostic for this correlation ref (expired or unknown).",
+                 "ref": ref},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(record)
 
 
 class MCPToolControlView(APIView):

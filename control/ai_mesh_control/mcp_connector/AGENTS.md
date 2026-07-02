@@ -91,3 +91,16 @@ imports `ai_mesh_shared` (repo `shared/` on path). DB falls back to sqlite only 
   the response reads its attributes.
 - The OAuth refresh-fail path (`_ensure_oauth_token_fresh`) must route its `{exc}` through
   `_sanitize_sync_error` — never interpolate the raw exception into `last_sync_error`.
+
+## Developer diagnostic channel (CP18)
+- The REAL cause behind a sanitized client error is written by `_store_sync_diagnostic(ref, code, raw,
+  ...)` to the Django cache (`django_redis`; locmem in tests) at key `mcp:diag:<ref>` with a 7-day TTL.
+  It is best-effort — a cache outage must NOT break the sync path (the client already has message+code+ref).
+- `MCPDiagnosticDetailView` (`GET /api/mcp-connector/diagnostics/<ref>/`, `permission_classes=[IsAdminUser]`)
+  returns that record for **staff/superuser only**. An org client — even an org admin — is never Django
+  `is_staff`, so the raw cause is never client-exposed. `ref` is validated `^[0-9a-f]{6,32}$`
+  (invalid→400, expired/unknown→404).
+- To debug a client-reported failure you only need the `(Ref: …)` they saw → GET the diagnostics endpoint
+  as staff. VERIFY: `python3 scripts/ralph/mcp_page_cp18_diag_channel.py` (staff 200 sees raw cause;
+  non-staff 403; edges 400/404). The script self-mints a non-staff JWT via `docker exec` — do NOT commit
+  any token file.
