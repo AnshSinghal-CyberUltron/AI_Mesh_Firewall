@@ -16,6 +16,10 @@ subsystem map you need. Every anchor was read from the tree and spot-verified wh
   the B1 registration guard (`serializers.py:177`) and the B1 bypass (`views.py:2582`).
 - `frontend-panel-flow.md` — `MCPConnectorPanel.jsx`: register/authorize/list/execute + B1/B2/B4 bug
   sites and their **substantial prior fixes** (fix items are verification-first).
+- `oss-research-stdio-patterns.md` — official MCP stdio server start/handshake (`modelcontextprotocol/
+  servers`): npx launch, initialize handshake, stdout=JSON-RPC-only/no-ready-banner (→B3 readiness =
+  initialize probe; cold-start = npx fetch), Everything echo/`get-sum`(≠`add`, version-dependent) +
+  Filesystem canary for P8/P9.
 
 Nearby subsystem AGENTS.md: `services/mcp-broker/AGENTS.md`,
 `control/ai_mesh_control/mcp_connector/AGENTS.md`, `frontend/AGENTS.md` (MCP panels section).

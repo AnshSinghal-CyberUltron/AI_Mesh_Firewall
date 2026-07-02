@@ -87,6 +87,20 @@
   WS SSRF guard(mcp_ws_adapter.py:124), broker fail-closed key auth(auth.py:17-23)+per-org quota(routes.py:66),
   ext proxy egress allowlist(mcp_proxy.py:97/939), OAuth PKCE-S256(mcp_oauth.py:527)+SSRF re-guard on derived endpoints.
 
+- OSS STDIO PATTERNS (item#6, docs/mcp/oss-research-stdio-patterns.md): official stdio MCP servers launch
+  `npx -y @modelcontextprotocol/server-<name> [stdio]` (stdio default); handshake = initialize(protocolVersion
+  "2024-11-05", capabilities) -> server result -> notifications/initialized. INVARIANT: stdout = JSON-RPC ONLY,
+  logs to stderr, NO ready banner -> readiness can only be detected by completing an initialize probe (repo does
+  this in _ensure_initialized gateway mcp_stdio_adapter.py:548 / agent stdio_manager.py:369). Cold-start latency =
+  npx package FETCH (network+disk) => the dominant B3 first-call delay; mitigate via npm-cache tmpfs warm +
+  eager-provision + initialize-probe readiness poll (B3 #19-21).
+- ⚠️ P8/P9 HARNESS GOTCHA (items#26-31): Everything server sum tool was RENAMED add->get-sum (name is
+  VERSION-DEPENDENT: older npm='add', current main='get-sum', both schema {a:number,b:number}). echo is stable
+  (echo{message}->"Echo: <message>"). Harness must tools/list and pick the sum tool by name-in{add,get-sum}/schema
+  OR pin @modelcontextprotocol/server-everything@<ver>. Do NOT hardcode 'add'. Filesystem canary (item#30):
+  npx -y @modelcontextprotocol/server-filesystem <dir> (needs >=1 allowed dir); write canary in Org B dir, prove
+  Org A read_text_file/list_directory/search_files never sees it (3 iso layers: allowed-dir + per-org sandbox+vol + gateway org-scope).
+
 ## P0 — Analysis
 - [x] 1. Map gateway MCP request path (proxy→oauth→adapter→sandbox_client→broker) with file:line
       EVIDENCE: docs/mcp/request-path-map.md (spine=mcp_proxy.py org_mcp_jsonrpc:1848; transport@:1898-1899;
@@ -120,7 +134,13 @@
       Also docs/mcp/AGENTS.md index. P0 ANALYSIS (items 1-5) COMPLETE.
 
 ## P1 — OSS exploration (GitHub MCP)
-- [ ] 6. Study modelcontextprotocol/servers stdio server patterns (how official stdio servers start/handshake)
+- [x] 6. Study modelcontextprotocol/servers stdio server patterns (how official stdio servers start/handshake)
+      EVIDENCE: docs/mcp/oss-research-stdio-patterns.md (fetched real files via GitHub MCP from modelcontextprotocol/
+      servers main). Launch npx -y @modelcontextprotocol/server-<name> [stdio]; handshake=initialize(protocolVersion
+      2024-11-05)+notifications/initialized; stdout=JSON-RPC ONLY (logs->stderr), NO ready banner => readiness=answer
+      initialize; cold-start latency=npx package fetch (B3 root). Everything echo{message}->"Echo: msg" (stable); sum
+      tool RENAMED add->get-sum{a,b:number} (version-dependent!). Filesystem npx -y @mcp/server-filesystem <dir> (needs
+      >=1 allowed dir) for P9 canary.
 - [ ] 7. Study MCP auth spec + OAuth 2.1 (PKCE, RFC 9728 protected-resource + RFC 8414 AS metadata discovery)
 - [ ] 8. Study mcp-remote (how it wraps a remote HTTP MCP over stdio + does OAuth) — clarifies Linear's stdio+remote case
 - [ ] 9. Study Docker sandboxing hardening (seccomp/gVisor/read-only rootfs/no-new-privileges/limits) + multi-tenant patterns
