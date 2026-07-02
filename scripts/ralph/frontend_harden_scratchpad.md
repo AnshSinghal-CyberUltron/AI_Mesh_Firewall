@@ -184,7 +184,16 @@
       honest empty states verified ("no per-stage trace → no chart"), real timestamp/method/endpoint shown.
       Deferred-LOW: LogViewerPanel dead-code cleanup (coordinate); get12 synthetic-fallback compute still runs
       but is guard-dropped (never rendered).
-- [ ] 17. VERIFY-ONLY (log, don't edit): MCPConnectorPanel, ModelConnectionPanel, pipeline-trace cards
+- [x] 17. VERIFY-ONLY (log, don't edit): MCPConnectorPanel, ModelConnectionPanel, pipeline-trace cards
+      item17 DONE (VERIFY-ONLY, NO EDITS — claude-ralph-stress-iter1-R0 claim ACTIVE, owns all 3). Live sweep
+      module 1.4 (MCPConnector) + 1.5 (ModelConnection) both themes @1440/1024/768/375 (16 combos):
+      overflow=0 ALL 16, DOM leak-scan (sk-/AKIA/JWT) = 0 hits ALL 16, console errors only 2 combos = F3
+      transient 500s (env). Read-only code scan: ModelConnectionPanel + OutputPipelineTimeline = fully clean
+      (0 inverted-slate / dark-on-dark / bare-400 / non-responsive-grid / focus-none / recharts / raw-key
+      render). MCPConnectorPanel = 1 minor theme spot L304 inverted `text-slate-400 dark:text-slate-500`
+      (subtitle) — LOGGED for stress session, NOT edited (L1381/L2330 red-700 are hover states, not defects).
+      OutputPipelineTimeline live-render needs a real output-guard event (env has 0) → folds with item 10.
+      Findings logged to FRONTEND_AUDIT.md for the owning session. No files changed (verify-only).
 - [ ] 18. Shared ui/* primitives (Button/Card/Dialog/Input/Select/Table/Tabs/Badge/Toast/Tooltip/…): both themes, API-compatible restyle
 
 ## Cross-cutting hardening
