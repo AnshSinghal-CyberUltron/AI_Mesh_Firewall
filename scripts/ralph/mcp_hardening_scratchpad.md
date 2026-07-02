@@ -117,6 +117,17 @@
       redaction (item 2) + per-actor authz (item 3). minimize_context (context_assembler.py) is the chat/LLM
       path only. Live-verified via the per-call chain evidence.
       Evidence: mcp-parallel/findings/backstop-p6-per-call-chain/per_call_chain_evidence.txt.
+      CHG-0033 (2026-07-02, HIGH): NEW least-privilege/credential-leak finding on the ext-proxy path (distinct
+      from the MCP tool-call minimize, which is N-A). ext_mcp_proxy forwarded the caller's request headers
+      verbatim (only host/content-length/transfer-encoding stripped) to the third-party external MCP server —
+      so the caller's Authorization: Bearer <gateway-API-key>, Cookie, and X-Api-Key egressed to the external
+      domain (replayable against the gateway). The sandbox-routed path (broker_send_rpc) already built a clean
+      header set + injected only the server's OWN OAuth token, so this was ext-proxy-only. FIX: new
+      _ext_proxy_forward_headers strips hop-by-hop + credential/identity headers (authorization/proxy-
+      authorization/cookie/set-cookie/x-api-key) + any x-gateway-* header, and injects the gateway's stored
+      OAuth bearer for the upstream (if any) as the SOLE Authorization. +2 tests; test_mcp_bare_proxy_scan.py
+      20 passed, broad sweep 1077 passed. Now the external server receives ONLY safe/protocol headers + its own
+      token; the caller's gateway key never leaves the gateway.
 - [ ] 5. Compliance tagging: extend mcp_compliance_tags.py to PII/IP/regulated; tag inputs + results; enforce by tag; audit.
       LIVE VERIFIED (mostly done) — CHG-0017 (2026-07-02): sent PII through the live gateway + queried
       MCPEvents. Redaction comprehensive (ssn/card/email all masked, combined too, 0 leak). compliance_tags

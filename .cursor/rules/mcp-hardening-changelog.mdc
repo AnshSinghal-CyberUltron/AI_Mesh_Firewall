@@ -275,3 +275,13 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   per-org limiter. Files: mcp_proxy.py, test_mcp_rate_limit.py (+3: ext-proxy TPM/burst → 429 before forward;
   disallowed domain still 403 first). Gate: 10 rate-limit + 1075 broad sweep passed. Code-level rate-limit
   coverage complete; item 9 REMAINING: live threshold probe + adversarial policy + audit-completeness.
+- **CHG-0033** (2026-07-02, HIGH) — 1.4 least-privilege / credential leak: `ext_mcp_proxy` forwarded the
+  caller's request headers verbatim (only host/content-length/transfer-encoding stripped) to the third-party
+  external MCP server, so the caller's `Authorization: Bearer <gateway-API-key>`, `Cookie`, and `X-Api-Key`
+  egressed to the external domain (replayable against the gateway). The sandbox-routed path already built a
+  clean header set + injected only the server's own OAuth token — an ext-proxy-only regression. Fix: new
+  `_ext_proxy_forward_headers` strips hop-by-hop + credential/identity headers (authorization / proxy-
+  authorization / cookie / set-cookie / x-api-key) + any `x-gateway-*`, and injects the gateway's stored OAuth
+  bearer for the upstream (if any) as the SOLE Authorization. Files: mcp_proxy.py,
+  test_mcp_bare_proxy_scan.py (+2). Gate: 20 bare-proxy + 1077 broad sweep passed. Now the external server
+  receives only safe/protocol headers + its own token; the caller's gateway key never leaves the gateway.

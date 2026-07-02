@@ -1071,3 +1071,35 @@ the prod compose/manifests is tracked under G3 item 12.
   403 before the rate-limit gate). Broad sweep `ai_mesh_gateway/tests` → 1075 passed, 0 failed.
 - **REMAINING for G3 item 9:** live threshold probe; adversarial policy-enforcement + audit-completeness. All
   three tenant-facing MCP entry points now rate-limited — the code-level rate-limit coverage is complete.
+
+### CHG-0033 — Stop leaking the caller's gateway credential to external MCP servers (1.4 least-privilege; HIGH)
+- **Date:** 2026-07-02
+- **Severity:** HIGH (credential exposure to third parties).
+- **Scratchpad item:** G2 item 4 (context minimization / least-privilege) + the 1.4 "prevent MCP data
+  leakage" mandate. A NEW finding (not previously tracked).
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (new `_ext_proxy_forward_headers` + `_EXT_*_HEADERS`;
+  `ext_mcp_proxy` header build rewritten); `gateway/ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py` (+2).
+- **WHAT:** `ext_mcp_proxy` (`/v1/mcp/ext-proxy/{host}/{path}`, the transparent proxy to allowlisted EXTERNAL
+  MCP servers) forwarded the caller's request headers verbatim — stripping only `host`/`content-length`/
+  `transfer-encoding` — to the third-party upstream. So the caller's `Authorization: Bearer <gateway-API-key>`,
+  `Cookie`, and `X-Api-Key` were sent to the external MCP domain. A third-party server (even allowlisted) thus
+  received the caller's GATEWAY credential, which it could log, exfiltrate, or REPLAY against the gateway.
+  Meanwhile the sandbox-routed path (`broker_send_rpc`) already built a CLEAN header set and injected only the
+  server's own OAuth token — so this was an ext-proxy-only least-privilege regression. Now
+  `_ext_proxy_forward_headers` strips hop-by-hop + all credential/identity headers (`authorization`,
+  `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`) + any gateway-internal `X-Gateway-*` header, and
+  injects the gateway's stored OAuth bearer for the upstream domain (if any) as the SOLE `Authorization`.
+- **WHY:** forwarding the caller's gateway credential to an arbitrary external host is a direct
+  credential-exfiltration / least-privilege violation and squarely a 1.4 "prevent MCP data leakage" defect —
+  the caller's key is data that must never egress to the tool host.
+- **NOW DOES:** the external MCP server receives ONLY safe/protocol headers (Content-Type, Accept,
+  Mcp-Session-Id, …) plus its OWN OAuth token when the gateway holds one; the caller's gateway key/cookies
+  never leave the gateway. Parity with the sandbox-routed transport.
+- **Touched whose work:** the gateway external-proxy path (CHG-0004/0005 SSE-scan author); complements the
+  sandbox-path header hygiene in `broker_send_rpc`.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q`
+  → 20 passed (+2: `_ext_proxy_forward_headers` strips Authorization/Cookie/X-Api-Key/X-Gateway-* + hop-by-hop
+  and the caller-key value never survives; a stored upstream OAuth token is injected as the sole
+  Authorization). Broad sweep `ai_mesh_gateway/tests` → 1077 passed, 0 failed.
+- **REMAINING:** none for the ext-proxy header hygiene. (Follow-up idea: enforce a per-key tool allowlist on
+  ext_mcp_proxy too, if that transport is meant to be tool-scoped — currently transport-level only.)

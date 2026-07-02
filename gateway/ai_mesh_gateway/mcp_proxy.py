@@ -1025,6 +1025,39 @@ async def mcp_health():
 # MCP servers through the gateway's working TLS stack.
 
 
+# CHG-0033: hop-by-hop + credential/identity headers that must NOT be forwarded
+# from the caller to a third-party external MCP server. The caller authenticates
+# to the GATEWAY (Authorization/Cookie/X-Api-Key); forwarding those verbatim would
+# LEAK the caller's gateway credential (replayable against the gateway) to the
+# upstream. Mirrors the sandbox-routed path (broker_send_rpc builds a clean header
+# set + injects only the server's own OAuth token).
+_EXT_HOP_BY_HOP_HEADERS = frozenset({"host", "content-length", "transfer-encoding"})
+_EXT_CREDENTIAL_HEADERS = frozenset({
+    "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key",
+})
+
+
+def _ext_proxy_forward_headers(inbound, *, oauth_token: str | None = None) -> dict:
+    """Least-privilege outbound header set for the external MCP proxy forward.
+
+    Drops hop-by-hop headers, the caller's credential/identity headers, and any
+    gateway-internal ``X-Gateway-*`` header, so the caller's gateway credential
+    never egresses to the external server. Injects the gateway's stored OAuth
+    bearer for the upstream (if provided) as the sole ``Authorization``.
+    """
+    out: dict = {}
+    for k, v in inbound.items():
+        kl = str(k).lower()
+        if kl in _EXT_HOP_BY_HOP_HEADERS or kl in _EXT_CREDENTIAL_HEADERS:
+            continue
+        if kl.startswith("x-gateway-"):
+            continue
+        out[k] = v
+    if oauth_token:
+        out["Authorization"] = f"Bearer {oauth_token}"
+    return out
+
+
 @router.api_route(
     "/ext-proxy/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -1061,11 +1094,21 @@ async def ext_mcp_proxy(path: str, request: Request):
 
     target_url = f"https://{hostname}/{remaining}"
 
-    headers = {
-        k: v
-        for k, v in request.headers.items()
-        if k.lower() not in ("host", "content-length", "transfer-encoding")
-    }
+    # CHG-0033: strip the caller's gateway credentials before forwarding to the
+    # third-party external server (least-privilege / no credential leak). Inject
+    # the upstream's OWN stored OAuth token if the gateway holds one for this
+    # domain — parity with the sandbox-routed path (broker_send_rpc).
+    _ext_oauth = None
+    try:
+        from mcp_oauth_proxy import get_stored_token
+        _ext_org = getattr(_get_auth_context(request), "org_slug", "") or ""
+        if _ext_org:
+            _ext_oauth = await get_stored_token(_ext_org, target_url)
+    except Exception:  # noqa: BLE001 — no token store / not authed → no injection
+        _ext_oauth = None
+    headers = _ext_proxy_forward_headers(
+        dict(request.headers.items()), oauth_token=_ext_oauth,
+    )
     body = await request.body()
 
     # ── Inbound credential hard-block on the transparent external proxy.

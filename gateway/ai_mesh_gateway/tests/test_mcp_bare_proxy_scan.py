@@ -509,3 +509,49 @@ async def test_ext_non_toolscall_sse_passthrough(caplog):
             resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 200
     assert any("streaming_egress_unscanned" in r.message for r in caplog.records)
+
+
+# ── CHG-0033: ext_mcp_proxy must NOT forward the caller's gateway credentials to
+# the third-party external MCP server (credential-leak / least-privilege). The
+# outbound header set strips Authorization/Cookie/X-Api-Key + gateway-internal
+# headers, and injects only the upstream's OWN stored OAuth token (if any).
+
+
+def test_ext_proxy_forward_headers_strips_caller_credentials():
+    inbound = {
+        "Host": "gateway.internal",
+        "Content-Length": "42",
+        "Transfer-Encoding": "chunked",
+        "Authorization": "Bearer caller-gateway-key",
+        "Cookie": "session=supersecret",
+        "X-Api-Key": "another-gw-key",
+        "X-Gateway-User-Id": "1",
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "Mcp-Session-Id": "abc123",
+    }
+    out = mcp_proxy._ext_proxy_forward_headers(inbound)
+    lower = {k.lower() for k in out}
+    # credential / identity / hop-by-hop / gateway-internal headers all stripped
+    assert "authorization" not in lower
+    assert "cookie" not in lower
+    assert "x-api-key" not in lower
+    assert not any(k.startswith("x-gateway-") for k in lower)
+    assert "host" not in lower and "content-length" not in lower and "transfer-encoding" not in lower
+    # the caller's gateway key value must not survive anywhere
+    assert "caller-gateway-key" not in json.dumps(out)
+    assert "supersecret" not in json.dumps(out)
+    # safe / protocol headers preserved
+    assert out["Content-Type"] == "application/json"
+    assert out["Accept"] == "text/event-stream"
+    assert out["Mcp-Session-Id"] == "abc123"
+
+
+def test_ext_proxy_forward_headers_injects_only_upstream_oauth():
+    out = mcp_proxy._ext_proxy_forward_headers(
+        {"Authorization": "Bearer caller-gateway-key", "Content-Type": "application/json"},
+        oauth_token="upstream-oauth-token",
+    )
+    # the injected Authorization is the UPSTREAM's token, never the caller's key
+    assert out["Authorization"] == "Bearer upstream-oauth-token"
+    assert "caller-gateway-key" not in out["Authorization"]

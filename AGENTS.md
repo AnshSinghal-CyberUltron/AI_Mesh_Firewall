@@ -177,6 +177,13 @@
     org_mcp_tool_call, ext_mcp_proxy) enforce the per-org TPM/burst/RPM ceiling. Files mcp_proxy.py +
     test_mcp_rate_limit.py (+3). Gate: 10 rate-limit + 1075 broad sweep passed. Code-level rate-limit coverage
     complete; item 9 REMAINING: live threshold probe + adversarial policy + audit-completeness.
+  - CHG-0033 (2026-07-02, HIGH) — 1.4 least-privilege/credential leak: ext_mcp_proxy forwarded the caller's
+    request headers verbatim (only host/content-length/transfer-encoding stripped) to the third-party external
+    MCP server — so the caller's Authorization: Bearer <gateway-API-key>, Cookie, and X-Api-Key egressed to the
+    external domain (replayable against the gateway). The sandbox path already built a clean header set. Fix:
+    new _ext_proxy_forward_headers strips hop-by-hop + credential/identity headers (authorization/cookie/
+    x-api-key/x-gateway-*) and injects ONLY the upstream's own stored OAuth token (if any) as Authorization.
+    Files mcp_proxy.py + test_mcp_bare_proxy_scan.py (+2). Gate: 20 bare-proxy + 1077 broad sweep passed.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
