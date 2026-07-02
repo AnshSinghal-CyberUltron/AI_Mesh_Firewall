@@ -111,6 +111,15 @@
       route gateway http/sse (org_mcp_jsonrpc else-branch / internal_tools_call direct-httpx) + websocket
       (mcp_ws_adapter.py) through broker_send_rpc (unified route already exists); prove NO transport's
       outbound call runs in the gateway/control backend.
+      UPDATE — CHG-0018 (2026-07-02): the http/sse part of my CHG-0011 finding is RESOLVED by P4.13/P6.18.
+      Gateway now routes stdio + streamable-http/sse via the sandbox: _is_sandbox_routed (mcp_proxy.py:1918)
+      + _adapter_forward streamable-http/sse branch (1953-1978) uses broker_send_rpc (gateway builds
+      upstream block, SANDBOX dials; gateway never connects). MCP_HTTP_VIA_SANDBOX default=true AND set true
+      on the live gateway container. stdio live-verified (echo calls via sandbox). RESIDUAL: websocket STILL
+      connects in-gateway (mcp_ws_adapter.py:135 websockets.client.connect, not migrated) — so
+      "4-transport isolation active" OVERSTATES (3/4; ws unused live). REMAINING before [x]: migrate ws to
+      broker_send_rpc (unified /{org}/rpc handles ws) OR document ws as legacy; independent live
+      http-via-sandbox drive (register a streamable-http server, assert 0 direct upstream dials).
 - [ ] 8. No unknown npm on host — proven.
 - [ ] 9. Gateway auth/authz/validation/rate-limit/policy/audit — verified + hardened.
       LIVE VERIFIED (auth/authz/validation) — CHG-0016 (2026-07-02): probed the live gateway. Auth ENFORCED

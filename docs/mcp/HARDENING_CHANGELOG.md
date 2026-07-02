@@ -563,3 +563,36 @@ the prod compose/manifests is tracked under G3 item 12.
 - **REMAINING for G2 item 5:** unify the tag vocabularies onto a single set keyed on `ComplianceTag.code`
   (or extend the catalog to include the gateway codes) so `MCPEvent.compliance_tags` joins the catalog;
   update the 8 gateway tests + any dashboard filters accordingly.
+
+### CHG-0018 — RE-VERIFY G3 item 7: CHG-0011 http/sse gap RESOLVED; websocket residual + "4-transport" overclaim
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 7 (all transports in the per-org sandbox; nothing in the backend) — updates
+  the CHG-0011 verification. Read-only re-verification; no code changed (hot P4.13/P6.18 migration zone).
+- **Files:** docs only (this changelog · `.cursor/rules` · `AGENTS.md` · scratchpad · Ruflo).
+- **WHAT:** Re-verified item 7 after the P4.13/P6.18 migration (`826d9908` "enable HTTP-via-sandbox by
+  default", `d225aceb` "P4.13/P6.18 complete — 4-transport isolation active"). Current gateway wiring
+  (`mcp_proxy.py:_is_sandbox_routed:1918`, `_adapter_forward:1939`):
+    - **stdio** → sandbox adapter (`MCP_STDIO_IN_PROCESS=false` live) — LIVE-verified (my echo calls route
+      via the sandbox).
+    - **streamable-http / sse** → `broker_send_rpc` (gateway builds the upstream block, the SANDBOX dials
+      the upstream; gateway never connects). Gated by `MCP_HTTP_VIA_SANDBOX` (default `true`, and **set
+      `true` on the live gateway container**). This RESOLVES the main CHG-0011 finding (http/sse used to go
+      to the control backend / direct httpx).
+    - **websocket** → still `mcp_ws_adapter.send_jsonrpc`, which connects IN-GATEWAY via
+      `websockets.client.connect` (`mcp_ws_adapter.py:135`, last touched by an old commit — NOT migrated to
+      the broker). So ws egress does NOT route through the sandbox.
+- **WHY:** closing the loop on my own CHG-0011 finding, and correcting a slight overclaim — "4-transport
+  isolation active" is accurate for stdio + streamable-http + sse (the transports actually in use), but
+  websocket still dials in-gateway. Low severity (no ws servers are registered live; MCP in practice is
+  stdio + streamable-http), but "4-transport" literally includes ws.
+- **NOW DOES:** records that item 7's http/sse gap is closed (verified via code + live flag) and pins the
+  remaining ws residual so item 7 isn't marked fully done and the overclaim is corrected.
+- **Touched whose work:** verifies the P4.13/P6.18 transport migration (active). No files edited.
+- **VERIFY:** `grep -n 'broker_send_rpc\|MCP_HTTP_VIA_SANDBOX' gateway/ai_mesh_gateway/mcp_proxy.py`
+  (http/sse→broker); `docker inspect ai_mesh_firewall-gateway-1 --format '{{.Config.Env}}' | tr ' ' '\n' |
+  grep MCP_HTTP_VIA_SANDBOX` → `true`; `grep -n 'websockets.client.connect' gateway/ai_mesh_gateway/mcp_ws_adapter.py`
+  → :135 (ws still in-gateway).
+- **REMAINING for G3 item 7:** migrate the websocket adapter to route via the broker (the unified
+  `/{org}/rpc` route already handles ws) OR document ws as an unsupported/legacy transport; then the
+  "4-transport in sandbox" claim is fully accurate. Also worth an independent LIVE http-via-sandbox drive
+  (register a streamable-http server + assert 0 direct upstream dials) beyond the owning session's harness.

@@ -80,6 +80,10 @@
     ['GDPR','HIPAA','PII']); decision=redact under tag posture. ONLY gap: gateway codes ≠ catalog codes so
     MCPEvent.compliance_tags joins 0 catalog rows. Fix = unify vocab (cross-plane) — owning session.
     Evidence mcp-parallel/findings/backstop-p5-compliance-tags/.
+  - CHG-0018 (2026-07-02) — RE-VERIFY G3 item 7: my CHG-0011 http/sse-in-backend finding RESOLVED by
+    P4.13/P6.18 (gateway routes stdio + streamable-http/sse via sandbox `broker_send_rpc`, never dials
+    upstream; MCP_HTTP_VIA_SANDBOX=true live). RESIDUAL: websocket still in-gateway (mcp_ws_adapter.py:135),
+    so "4-transport" overstates (3/4; ws unused live). Remaining: migrate ws to broker or mark ws legacy.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

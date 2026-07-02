@@ -138,3 +138,9 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   gateway codes (GDPR/HIPAA/PII…) ≠ catalog codes (GDPR-PII/HIPAA-PHI…), so MCPEvent.compliance_tags joins
   ZERO catalog rows. Fix = unify vocab (cross-plane, breaks 8 gateway tests) — owning-session decision.
   Evidence: mcp-parallel/findings/backstop-p5-compliance-tags/.
+- **CHG-0018** (2026-07-02) — RE-VERIFY G3 item 7: my CHG-0011 http/sse-in-backend finding is RESOLVED by
+  P4.13/P6.18. Gateway now routes stdio + streamable-http/sse via the sandbox (`broker_send_rpc`, gateway
+  never dials upstream; `MCP_HTTP_VIA_SANDBOX=true` default+live). RESIDUAL: websocket still connects
+  in-gateway (`mcp_ws_adapter.py:135 websockets.client.connect`, not migrated to broker) — so the
+  "4-transport isolation active" claim overstates (3/4; ws not sandboxed, but no ws servers live). REMAINING:
+  migrate ws to broker or document ws as legacy; independent live http-via-sandbox drive.
