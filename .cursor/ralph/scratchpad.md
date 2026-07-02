@@ -29,8 +29,9 @@ status: ACTIVE
       logs (5× broker unreachable); see `mcp-parallel/findings/p1-4/`.
 
 ## P2 — OSS + internet research (better approaches for ALL-transport sandboxing)
-- [ ] 5. GitHub MCP: study modelcontextprotocol/servers + how remote (http/sse/ws) MCPs are proxied;
+- [x] 5. GitHub MCP: study modelcontextprotocol/servers + how remote (http/sse/ws) MCPs are proxied;
       study mcp-remote (stdio-wraps-remote + OAuth) — clarifies Linear.
+      **Done 2026-07-02:** `docs/mcp/oss-research-remote-transport-proxies.md` + `mcp-parallel/findings/p2-5/`.
 - [ ] 6. GitHub MCP: study gVisor (google/gvisor runsc) + Docker sandbox hardening for untrusted code
       (seccomp, no-new-privileges, cap_drop, read-only rootfs, egress allow-listing) + per-tenant patterns.
 - [ ] 7. Web research: MCP OAuth 2.1 (PKCE, RFC 9728/8414) + why oauth needs an HTTP URL; correct UX for
