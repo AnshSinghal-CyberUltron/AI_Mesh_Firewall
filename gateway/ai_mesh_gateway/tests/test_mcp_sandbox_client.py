@@ -212,3 +212,66 @@ async def test_broker_send_requires_server_slug():
 
     with pytest.raises(ValueError, match="server_slug"):
         await client.broker_send_jsonrpc(ORG, bad_config, "tools/list", None)
+
+
+@pytest.mark.asyncio
+async def test_broker_send_rpc_stdio_routes_to_unified_endpoint():
+    # P4.13/P6.18 §2: stdio goes through the unified /rpc route with transport=stdio
+    # and legacy flat command/args/env for the agent.
+    mock_http = AsyncMock()
+    mock_http.request.return_value = _response(200, json_body={"jsonrpc": "2.0", "id": 1, "result": {}})
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with patch.object(client.httpx, "AsyncClient", return_value=mock_http):
+        await client.broker_send_rpc(ORG, SERVER_CONFIG, "tools/list", None)
+
+    args, kwargs = mock_http.request.call_args
+    assert args[1].endswith(f"/v1/sandbox/{ORG}/rpc")  # unified route
+    body = kwargs["json"]
+    assert body["transport"] == "stdio"
+    assert body["command"] == SERVER_CONFIG["command"]
+    assert "upstream" not in body
+
+
+@pytest.mark.asyncio
+async def test_broker_send_rpc_remote_builds_upstream_and_injects_bearer():
+    # A remote transport (streamable-http) must NOT be dialed by the gateway: the
+    # payload carries an `upstream` block (url + egress allowlist + injected Bearer)
+    # so the sandbox agent does the dial. The gateway route is still …/rpc.
+    remote_config = {
+        "server_slug": "remote-http",
+        "transport": "streamable-http",
+        "url": "https://mcp.linear.app/mcp",
+        "allowed_hosts": ["extra.example.com"],
+    }
+    mock_http = AsyncMock()
+    mock_http.request.return_value = _response(200, json_body={"jsonrpc": "2.0", "id": 1, "result": {}})
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with patch.object(client.httpx, "AsyncClient", return_value=mock_http):
+        await client.broker_send_rpc(
+            ORG, remote_config, "tools/list", None, oauth_token="tok-123"
+        )
+
+    args, kwargs = mock_http.request.call_args
+    assert args[1].endswith(f"/v1/sandbox/{ORG}/rpc")
+    body = kwargs["json"]
+    assert body["transport"] == "streamable-http"
+    up = body["upstream"]
+    assert up["url"] == "https://mcp.linear.app/mcp"
+    assert up["headers"]["Authorization"] == "Bearer tok-123"
+    assert "mcp.linear.app" in up["allowed_hosts"]  # upstream host allowlisted
+    assert "extra.example.com" in up["allowed_hosts"]  # declared extra host
+    assert up["oauth_client_role"] == "forbidden_in_sandbox"
+    # gateway sent NO direct upstream dial — only the broker route was called
+    assert mock_http.request.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_broker_send_rpc_remote_requires_url():
+    with pytest.raises(ValueError, match="url"):
+        await client.broker_send_rpc(
+            ORG, {"server_slug": "x", "transport": "sse"}, "tools/list", None
+        )

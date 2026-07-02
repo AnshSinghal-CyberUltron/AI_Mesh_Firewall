@@ -13,6 +13,7 @@ import logging
 import os
 import random
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -173,6 +174,81 @@ async def broker_send_jsonrpc(
     }
 
     url = f"{_BROKER_URL}/v1/sandbox/{org_slug}/stdio/rpc"
+    async with httpx.AsyncClient(timeout=_http_timeout(timeout)) as client:
+        response = await _request_with_503_retry(client, "POST", url, json=payload)
+
+    _raise_for_broker_error(response)
+    return response.json()
+
+
+def _upstream_allowed_hosts(url: str, server_config: dict[str, Any]) -> list[str]:
+    """Egress allowlist for a remote-transport server: the upstream host plus any
+    explicitly-declared extra hosts (SANDBOX_TRANSPORT_CONTRACT §4). Exact hosts
+    only — never a wildcard; the sandbox may connect ONLY to these."""
+    hosts: list[str] = []
+    parsed = urlparse(url)
+    if parsed.hostname:
+        hosts.append(parsed.hostname)
+    for extra in server_config.get("allowed_hosts") or []:
+        h = str(extra).strip()
+        if h and h not in hosts:
+            hosts.append(h)
+    return hosts
+
+
+async def broker_send_rpc(
+    org_slug: str,
+    server_config: dict[str, Any],
+    method: str,
+    params: dict | list | None,
+    timeout: float | None = None,
+    *,
+    msg_id: int | str | None = None,
+    oauth_token: str | None = None,
+) -> dict[str, Any]:
+    """Forward one JSON-RPC exchange to an MCP server inside the org sandbox — for
+    ANY transport (stdio, streamable-http, sse, websocket).
+
+    P4.13/P6.18 unified path: the gateway NEVER dials the upstream MCP URL directly.
+    For remote transports the gateway builds the ``upstream`` block (url +
+    egress-allowlist + injected Bearer) and the per-org sandbox agent does the dial,
+    so all egress is org-scoped and allowlisted. ``oauth_token`` (if the gateway
+    holds one for this server) is injected as the upstream ``Authorization`` bearer —
+    the sandbox never runs the OAuth client itself (``oauth_client_role`` forbidden).
+    """
+    server_slug = server_config.get("server_slug")
+    if not server_slug:
+        raise ValueError("server_config must include server_slug")
+    transport = (server_config.get("transport") or "stdio").strip().lower()
+
+    payload: dict[str, Any] = {
+        "server_slug": server_slug,
+        "transport": transport,
+        "method": method,
+        "params": params,
+        "jsonrpc_id": next(_RPC_ID_SEQ) if msg_id is None else msg_id,
+        "timeouts": _timeouts_payload(timeout),
+    }
+
+    if transport == "stdio":
+        payload["command"] = server_config.get("command")
+        payload["args"] = list(server_config.get("args") or [])
+        payload["env"] = dict(server_config.get("env_vars") or server_config.get("env") or {})
+    else:
+        upstream_url = server_config.get("url") or server_config.get("upstream_url")
+        if not upstream_url:
+            raise ValueError(f"{transport} server_config must include a url for the sandbox upstream")
+        headers = dict(server_config.get("headers") or {})
+        if oauth_token:
+            headers["Authorization"] = f"Bearer {oauth_token}"
+        payload["upstream"] = {
+            "url": upstream_url,
+            "allowed_hosts": _upstream_allowed_hosts(upstream_url, server_config),
+            "headers": headers,
+            "oauth_client_role": "forbidden_in_sandbox",
+        }
+
+    url = f"{_BROKER_URL}/v1/sandbox/{org_slug}/rpc"
     async with httpx.AsyncClient(timeout=_http_timeout(timeout)) as client:
         response = await _request_with_503_retry(client, "POST", url, json=payload)
 
