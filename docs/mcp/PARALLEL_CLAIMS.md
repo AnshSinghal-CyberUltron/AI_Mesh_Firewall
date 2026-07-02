@@ -54,7 +54,7 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 
 | cursor-ralph-iter24 | `scripts/mcp_p10_recursive_gate.py`, `mcp-parallel/findings/p10-32/**`, `mcp-parallel/findings/p4-13/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P10.32 recursive P3-P9 verification + P4.13/P6.18 recheck | 2026-07-02T11:00:00Z | released |
 
-| cursor-ralph-iter25 | `scripts/mcp_sandbox_transport_verify.py`, `mcp-parallel/findings/p4-13/**`, `docs/mcp/gateway-integration-checklist.md`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P4.13/P6.18 recheck + transport verify prep | 2026-07-02T11:30:00Z | active |
+| cursor-ralph-iter25 | `scripts/mcp_sandbox_transport_verify.py`, `mcp-parallel/findings/p4-13/**`, `docs/mcp/gateway-integration-checklist.md`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P4.13/P6.18 recheck + transport verify prep | 2026-07-02T11:30:00Z | released |
 
 > **New program — chat-pipeline adversarial stress (`claude-ralph-stress`).** Separate from the MCP-hardening work above. Owns gateway **chat** modules (a Claude-Code-owned area), the golden suite, and a **narrow** frontend carve-out of only `ModelConnectionPanel.jsx` + `OutputPipelineTimeline.jsx` (Cursor's broad `frontend/**` is otherwise respected). Never touches `MCPConnectorPanel.jsx`, `mcp_*` gateway files, or `services/mcp-broker/**`. A pre-commit secret-scan guard (`scripts/ralph/precommit-secret-scan.sh`, installed at `.git/hooks/pre-commit`) blocks any commit containing the runtime OpenRouter key (one-way fingerprint) or a real-shape `sk-or-` token outside vetted redaction fixtures — this protects **all** sessions.
 
