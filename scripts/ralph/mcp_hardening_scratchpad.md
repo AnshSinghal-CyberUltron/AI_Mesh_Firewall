@@ -349,6 +349,17 @@
       "not websocket" 108 passed. Evidence: mcp-parallel/findings/backstop-p2-obfuscated-cred-in-pii/finding.md.
       RESIDUAL: aws_access_key etc. really belong in SECRET_PATTERNS (future cleanup); obfuscated SSN/CC still
       not blocked by the encoded path (raw masks).
+      CHG-0084 (2026-07-02, MEDIUM — ARCH item 11 Redis correctness / soak item 16; found by a
+      Redis-correctness sweep applying the CHG-0062 lens): leakage_detector.py LeakageDetector.
+      track_cross_request tracked cross-request fragment hashes in a Redis SET (leakage:cross:{key}) but did
+      per-fragment await sadd then a SEPARATE await expire → a cancellation (client disconnect under load) or
+      transient error between them ORPHANED the SET with NO TTL → unbounded Redis growth under soak (same
+      class as CHG-0062). FIX (leakage_detector.py): one MULTI/EXEC (pipeline transaction=True) sets members +
+      window TTL atomically (also 1 round-trip not N+1); sliding-window preserved; fail-safe unchanged. +3
+      tests (one transaction=True pipeline w/ SADD+EXPIRE; key ALWAYS has TTL; no-redis→0.0; benign→no writes).
+      Gate: 3 + 1421 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence:
+      mcp-parallel/findings/backstop-p11-leakage-detector-ttl-leak/finding.md. RESIDUAL: circuit_breaker.py
+      uses transaction=False pipelines for INCR+EXPIRE (batched, small orphan window) — lower priority.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

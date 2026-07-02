@@ -711,6 +711,16 @@
     passed. Evidence mcp-parallel/findings/backstop-p2-obfuscated-cred-in-pii/. RESIDUAL: aws_access_key etc.
     really belong in SECRET_PATTERNS (future cleanup); obfuscated SSN/CC still not blocked by the encoded path
     (raw masks).
+  - CHG-0084 (2026-07-02) — ARCH item 11 (Redis correctness) / soak item 16 (found by a Redis-correctness
+    sweep applying the CHG-0062 lens), MEDIUM: leakage_detector.py LeakageDetector.track_cross_request tracked
+    cross-request fragment hashes in a Redis SET (leakage:cross:{key}) but did per-fragment await sadd then a
+    SEPARATE await expire → a cancellation (client disconnect under load) or transient error between them
+    ORPHANED the SET with NO TTL → unbounded Redis growth under soak (same class as CHG-0062). FIX
+    (leakage_detector.py): one MULTI/EXEC (pipeline transaction=True) sets members + window TTL atomically
+    (also 1 round-trip not N+1); sliding-window preserved; fail-safe unchanged. +3 tests. Gate: 3 + 1421
+    gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
+    mcp-parallel/findings/backstop-p11-leakage-detector-ttl-leak/. RESIDUAL: circuit_breaker.py uses
+    transaction=False pipelines for INCR+EXPIRE (batched, small orphan window) — lower priority.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

@@ -1113,6 +1113,23 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   semantics + tag map across sessions); obfuscated SSN/credit-card still not blocked by the encoded path
   (SECRET-tagged only; raw forms mask).
 
+- **CHG-0084** (2026-07-02) — ARCH item 11 (**PostgreSQL + Redis correctness**) / soak item 16 (found by a
+  Redis-correctness sweep applying the CHG-0062 lens), MEDIUM: `leakage_detector.py`
+  `LeakageDetector.track_cross_request` tracks cross-request sensitive-fragment hashes in a Redis SET
+  (`leakage:cross:{key_hash}`) with a window TTL, but did per-fragment `await sadd(...)` (N round-trips)
+  then a **SEPARATE** `await expire(...)`. A coroutine cancellation (client disconnect under load — routine
+  at scale) or a transient Redis error between the last sadd and the expire leaves the SET populated with
+  **NO TTL** → orphaned forever → unbounded Redis memory under soak (item 16) → exhaustion. Same class as
+  CHG-0062's non-atomic INCR+EXPIRE. FIX (`leakage_detector.py`): one `MULTI/EXEC`
+  (`pipeline(transaction=True)`) sets all fragment members + the window TTL **atomically** → the key can
+  never be left without a TTL (and 1 round-trip, not N+1). Sliding-window semantics preserved (EXPIRE re-set
+  each call, no `nx`); fail-safe unchanged (0.0 when `_redis is None` / no fragments; benign text → no
+  writes). +3 tests (exactly one `transaction=True` pipeline carrying SADD+EXPIRE; the set key ALWAYS has a
+  TTL; no-redis → 0.0; benign → no writes). Gate: 3 + 1421 gateway passed, 0 failed; broker
+  `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p11-leakage-detector-ttl-leak/`.
+  **RESIDUAL:** `circuit_breaker.py` uses `pipeline(transaction=False)` for INCR+EXPIRE (batched in one
+  write, small orphan window) — lower priority; other MCP Redis keys already carry TTLs (CHG-0023/0062).
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

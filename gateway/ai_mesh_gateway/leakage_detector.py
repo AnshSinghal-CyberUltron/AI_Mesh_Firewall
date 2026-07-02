@@ -114,10 +114,21 @@ class SemanticLeakageDetector:
                 return 0.0
 
             redis_key = f"leakage:cross:{key_hash}"
-            for fragment in fragments:
-                frag_hash = hashlib.sha256(fragment.encode()).hexdigest()[:16]
-                await self._redis.sadd(redis_key, frag_hash)
-            await self._redis.expire(redis_key, self._cross_request_window)
+            frag_hashes = [
+                hashlib.sha256(fragment.encode()).hexdigest()[:16]
+                for fragment in fragments
+            ]
+            # CHG-0084: atomic SADD(s)+EXPIRE. Previously the per-fragment sadd(s) and the
+            # expire were SEPARATE awaited round-trips, so a coroutine cancellation (client
+            # disconnect under load) or a transient error between the last sadd and the
+            # expire ORPHANED the leakage:cross:{key} SET with NO TTL — an unbounded Redis
+            # memory leak under soak (same class as CHG-0062's rate-limit fix). One
+            # MULTI/EXEC sets the members + window TTL atomically (also 1 round-trip, not
+            # N+1). Sliding-window semantics preserved (EXPIRE re-set each call).
+            async with self._redis.pipeline(transaction=True) as pipe:
+                pipe.sadd(redis_key, *frag_hashes)
+                pipe.expire(redis_key, self._cross_request_window)
+                await pipe.execute()
 
             unique_count = await self._redis.scard(redis_key)
             risk = min(unique_count / self._cross_request_threshold, 1.0)
