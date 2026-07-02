@@ -382,6 +382,12 @@ if transport == "stdio" and mcp_remote_url_in_args:
 
 ## 11. Gateway migration checklist (Claude session)
 
+> **Full step-by-step:** `docs/mcp/gateway-integration-checklist.md` (P4.11 deliverable).
+
+**Cursor agent side: COMPLETE** (P4.9–P4.11). Single `POST /rpc` handles all transports.
+
+Claude session must still implement broker + gateway wiring below before P4.13/P6.18.
+
 - [ ] `broker_send_jsonrpc` → `broker_send_rpc` with full `SandboxRpcRequest`
 - [ ] Remove direct `_adapter_forward` HTTP branch for streamable-http/sse (P4.11)
 - [ ] Remove `mcp_ws_adapter` direct dial (P4.11)

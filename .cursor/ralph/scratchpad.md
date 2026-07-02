@@ -53,8 +53,10 @@ status: ACTIVE
       **Done 2026-07-02:** `upstream_manager.py` + transport-aware `/rpc` in `main.py`; 7 agent tests green.
 - [x] 10. Extend sandbox-image/agent to proxy WEBSOCKET MCP servers (in-sandbox ws client) — per the contract.
       **Done 2026-07-02:** `ws_manager.py` + websocket in `upstream_manager`/`main.py`; 21 agent tests green.
-- [ ] 11. Keep stdio as-is but unify: the agent exposes one transport-agnostic /rpc so the gateway calls
+- [x] 11. Keep stdio as-is but unify: the agent exposes one transport-agnostic /rpc so the gateway calls
        the sandbox for EVERY transport; the gateway never dials upstream directly.
+       **Cursor done 2026-07-02:** agent unified (`main.py`); tests in `test_rpc_unified.py`;
+       gateway/broker wiring spec in `docs/mcp/gateway-integration-checklist.md` (Claude-owned, P6.18).
 - [ ] 12. Enforce gVisor: docker_manager requires runtime=runsc in prod (fail-closed if unavailable);
        add security_opt (seccomp, no-new-privileges), cap_drop=ALL, tmpfs-only writes, egress lockdown.
 - [ ] 13. Verify (Playwright + harness): with the gateway pointed only at the sandbox, an http, an sse, a
