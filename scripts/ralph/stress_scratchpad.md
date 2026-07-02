@@ -200,6 +200,30 @@
         model reaches a redactable email, OR make 09 a deterministic PII-injection output_guard case. NOT
         touched this iteration (one-item rule + shared-harness ownership). Still gates R5 "no PII/redactions
         hold" only in the sense of test determinism, not a real leak.
+      R6 INCREMENT 2026-07-02 (commit 667cd8ce): broader a11y polish of the OWNED ModelConnectionPanel
+        (the pending "1140-line file, broader sweep" increment from the earlier R6 note). ARIA-only, zero
+        visual/behavioral change: (a) Add/Edit modal now role=dialog + aria-modal=true + aria-labelledby ->
+        h3 (id=model-config-dialog-title), backdrop aria-hidden, close button aria-label="Close dialog";
+        (b) Enable/Disable toggle got an explicit aria-label (was title-only); (c) disclosure buttons
+        (gateway catalog + routing config) expose aria-expanded; (d) gateway search input + provider-filter
+        select got aria-label names; (e) decorative chevron/power/search/X icons marked aria-hidden. Build
+        ✓, impeccable detector clean (verified it fires: caught a planted bounce-easing, so clean == real,
+        though the regex engine is weak on Tailwind class colours -> a11y needs the manual+Playwright pass I
+        did). PLAYWRIGHT LIVE-VERIFIED at ?tab=firewall-1-5 (logged in admin@zeroshield.io): DOM assertions
+        show 11 toggle aria-labels rendered; opened the dialog -> role=dialog/aria-modal/aria-labelledby->
+        "Add Model Configuration"/close-labeled/routing aria-expanded/5 named inputs (0 unnamed). Search+
+        select+gateway-disclosure live in the showGatewayCatalog sub-section (off on this mount) -> source+
+        build+served-verified, render on the LlmConnectionsCard mount. The 1 unnamed button on the tab is a
+        chevron under "Model Routing Simulator"/"Gateway API Keys" = a SIBLING panel, NOT mine (left alone).
+      CONTROL-PLANE 500 STORM observed 2026-07-02 (NOT mine, NOT this item, OUTSIDE ownership): during R6
+        Playwright the control plane (container Up ~6min) returned intermittent 500s across MANY endpoints —
+        /api/firewall/models|config, /api/gateways/keys|stats, /api/security/soc-kpis|threat-feed|attack-
+        vector-trends, AND /api/auth/token|me|token/refresh. This is what caused the earlier login flakiness
+        (auth/token 500 -> "Invalid email or password"); a direct curl to :8100/api/auth/token/ AND via the
+        :8180 proxy BOTH returned 200 with valid JWTs seconds later, so the 500s are intermittent (warmup or
+        another session mid-deploy/rebuild of control), not a hard outage. An ARIA-only frontend diff cannot
+        cause API 500s. Impact: degrades LIVE app + is a NEW transient live blocker for R5/R6 full-page
+        verification. Owner = backend/control session; a settled control plane clears it. Flagged for coord.
       R2 PROBE + INDEPENDENT-ORACLE VALIDATION 2026-07-02: probed base64url(-_)/tool-role/monospace/double-
         struck/fraktur — ALL handled (no new gap; English text base64url == base64, no -_; NFKC folds the math-
         alphanumeric variants). Cross-checked my redact_all egress with the INDEPENDENT aidefence_has_pii oracle
