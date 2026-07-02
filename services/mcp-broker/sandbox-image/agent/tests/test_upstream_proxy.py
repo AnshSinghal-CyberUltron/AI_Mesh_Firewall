@@ -183,6 +183,117 @@ def test_streamable_http_stale_session_recovers(agent_client):
     assert state["real_method_calls"] == 2  # first rejected, second (post re-init) succeeded
 
 
+def test_streamable_http_empty_tools_list_retries(agent_client):
+    """Cold/stale upstream sessions can return tools=[] once; agent must re-init + retry."""
+    calls = {"n": 0}
+
+    def _stream(self, _method, _url, *, json=None, headers=None, timeout=None):  # noqa: A002
+        calls["n"] += 1
+        req = json or {}
+        rid = req.get("id")
+        method = req.get("method")
+        if method == "initialize":
+            return _FakeStreamCtx(
+                headers={"content-type": "text/event-stream", "mcp-session-id": "sess-retry"},
+                sse_frames=[{"jsonrpc": "2.0", "id": rid, "result": {"protocolVersion": "2024-11-05"}}],
+            )
+        tools = [] if calls["n"] <= 2 else [{"name": "echo"}]
+        return _FakeStreamCtx(
+            headers={"content-type": "text/event-stream", "mcp-session-id": "sess-retry"},
+            sse_frames=[{"jsonrpc": "2.0", "id": rid, "result": {"tools": tools}}],
+        )
+
+    with patch("httpx.AsyncClient.stream", new=_stream), \
+         patch("httpx.AsyncClient.post", new=AsyncMock(return_value=httpx.Response(202))):
+        resp = agent_client.post("/rpc", json=_http_payload())
+
+    body = resp.json()
+    assert body["result"]["tools"][0]["name"] == "echo"
+    assert calls["n"] >= 3  # init + empty list + re-init + populated list
+
+
+def test_sse_cold_tools_list_auto_inits(agent_client):
+    """SSE must auto-initialize on the first tools/list (same as streamable-http)."""
+    pending: list[dict] = []
+    init_seen = {"n": 0}
+
+    class _FakeSseGet:
+        status_code = 200
+        headers = {"content-type": "text/event-stream"}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+        async def aiter_lines(self):
+            yield "event: endpoint"
+            yield "data: /messages?sessionId=sess-sse-cold"
+            yield ""
+            delivered = 0
+            while delivered < 4:
+                if pending:
+                    payload = pending.pop(0)
+                    yield "event: message"
+                    yield "data: " + json.dumps(payload)
+                    yield ""
+                    delivered += 1
+                else:
+                    import asyncio
+                    await asyncio.sleep(0.01)
+
+    class _FakePostStream:
+        status_code = 202
+        headers = {"content-type": "text/plain"}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+        async def aread(self):
+            return b"Accepted"
+
+    def _stream(method, *_a, **kw):
+        req = kw.get("json") or {}
+        rid = req.get("id")
+        m = req.get("method")
+        if method == "GET":
+            return _FakeSseGet()
+        if m == "initialize":
+            init_seen["n"] += 1
+            pending.append(
+                {"jsonrpc": "2.0", "id": rid, "result": {"protocolVersion": "2024-11-05"}}
+            )
+        else:
+            pending.append(
+                {"jsonrpc": "2.0", "id": rid, "result": {"tools": [{"name": "sse-echo"}]}}
+            )
+        return _FakePostStream()
+
+    with patch("httpx.AsyncClient.stream", side_effect=_stream):
+        resp = agent_client.post(
+            "/rpc",
+            json={
+                "server_slug": "sse-cold",
+                "transport": "sse",
+                "method": "tools/list",
+                "jsonrpc_id": 55,
+                "upstream": {
+                    "url": "https://mcp.example.com/sse",
+                    "allowed_hosts": ["mcp.example.com"],
+                    "headers": {},
+                },
+            },
+        )
+
+    body = resp.json()
+    assert body["result"]["tools"][0]["name"] == "sse-echo"
+    assert init_seen["n"] == 1
+
+
 def _ws_payload(**overrides):
     base = {
         "server_slug": "ws-server",

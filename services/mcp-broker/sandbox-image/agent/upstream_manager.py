@@ -393,6 +393,20 @@ async def _post_streamable_http(
         raise UpstreamError(-32000, f"upstream HTTP error: {exc}") from exc
 
 
+_AUTO_INIT_TRANSPORTS = frozenset({"streamable-http", "sse", "websocket"})
+
+
+def _tools_list_is_empty(response: dict[str, Any]) -> bool:
+    """True when a tools/list response succeeded but carried zero tools."""
+    if response.get("error") is not None:
+        return False
+    result = response.get("result")
+    if not isinstance(result, dict):
+        return False
+    tools = result.get("tools")
+    return isinstance(tools, list) and len(tools) == 0
+
+
 async def _initialize_session(
     session: UpstreamSession, connect_timeout: float, init_timeout: float
 ) -> None:
@@ -416,15 +430,25 @@ async def _initialize_session(
         from agent.sse_manager import send_sse_jsonrpc
 
         await send_sse_jsonrpc(session, init_msg, connect_timeout, init_timeout, "_agent_init")
+    elif session.transport == "websocket":
+        from agent.ws_manager import send_ws_jsonrpc
+
+        await send_ws_jsonrpc(session, init_msg, connect_timeout, init_timeout, "_agent_init")
     # Best-effort notifications/initialized (a notification — no response expected).
+    notif = {"jsonrpc": "2.0", "method": "notifications/initialized"}
     try:
-        notif = {"jsonrpc": "2.0", "method": "notifications/initialized"}
-        headers = {**session.headers, "Content-Type": "application/json"}
-        if session.session_id:
-            headers["Mcp-Session-Id"] = session.session_id
-        assert session.client is not None
-        target = session.sse_messages_url or session.url
-        await session.client.post(target, json=notif, headers=headers, timeout=connect_timeout)
+        if session.transport == "websocket":
+            from agent.ws_manager import ensure_ws_connected
+
+            ws = await ensure_ws_connected(session, connect_timeout)
+            await ws.send(json.dumps(notif))
+        else:
+            headers = {**session.headers, "Content-Type": "application/json"}
+            if session.session_id:
+                headers["Mcp-Session-Id"] = session.session_id
+            assert session.client is not None
+            target = session.sse_messages_url or session.url
+            await session.client.post(target, json=notif, headers=headers, timeout=connect_timeout)
     except Exception:  # noqa: BLE001 — notification delivery is best-effort
         pass
     session.initialized = True
@@ -486,14 +510,14 @@ async def send_upstream_jsonrpc(
     if params is not None:
         message["params"] = params
 
-    async def _dispatch() -> dict[str, Any]:
-        # Auto-handshake: initialize the upstream session on first real method.
-        # streamable-http ONLY — SSE establishes its session via the GET event-stream
-        # endpoint event in `_ensure_sse_endpoint`; websocket manages its own.
+    async def _dispatch(*, force_init: bool = False) -> dict[str, Any]:
+        # Auto-handshake: initialize the upstream on the first real method for every
+        # sandbox-routed HTTP transport. Without this, a cold tools/list after stub or
+        # sandbox recreate can return tools=[] (R1 flake in transport verify).
         if (
-            not session.initialized
-            and transport == "streamable-http"
+            transport in _AUTO_INIT_TRANSPORTS
             and method not in ("initialize", "notifications/initialized")
+            and (force_init or not session.initialized)
         ):
             await _initialize_session(session, connect_timeout, init_timeout)
         if transport == "streamable-http":
@@ -512,23 +536,48 @@ async def send_upstream_jsonrpc(
             session.initialized = True
         return r
 
+    def _should_retry_after(exc: UpstreamError) -> bool:
+        if transport not in ("streamable-http", "sse"):
+            return False
+        if method in ("initialize", "notifications/initialized"):
+            return False
+        msg = str(getattr(exc, "message", exc)).lower()
+        return "session" in msg or "connection" in msg
+
     async with session.lock:
         try:
-            return await _dispatch()
+            result = await _dispatch()
+            if (
+                method == "tools/list"
+                and transport in _AUTO_INIT_TRANSPORTS
+                and _tools_list_is_empty(result)
+            ):
+                LOG.info(
+                    "tools/list returned empty for %s (%s) — re-initializing and retrying once",
+                    server_slug,
+                    transport,
+                )
+                await _invalidate_upstream_session(session)
+                result = await _dispatch(force_init=True)
+            return result
         except UpstreamError as exc:
             # Stale-session recovery: an upstream that restarted / expired the session
             # rejects our cached Mcp-Session-Id ("No valid session ID provided").
-            # Invalidate the session and re-handshake ONCE (streamable-http/sse only)
-            # so a long-lived sandbox survives upstream restarts without operator action.
-            if (
-                transport in ("streamable-http", "sse")
-                and method not in ("initialize", "notifications/initialized")
-                and "session" in str(getattr(exc, "message", exc)).lower()
-            ):
+            # Invalidate the session and re-handshake ONCE so a long-lived sandbox
+            # survives upstream restarts without operator action.
+            if _should_retry_after(exc):
                 LOG.info("upstream session rejected (%s) — re-initializing and retrying", server_slug)
                 await _invalidate_upstream_session(session)
                 try:
-                    return await _dispatch()
+                    result = await _dispatch(force_init=True)
+                    if (
+                        method == "tools/list"
+                        and transport in _AUTO_INIT_TRANSPORTS
+                        and _tools_list_is_empty(result)
+                    ):
+                        await _invalidate_upstream_session(session)
+                        result = await _dispatch(force_init=True)
+                    return result
                 except UpstreamError as exc2:
                     exc = exc2
             return _error_response(

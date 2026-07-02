@@ -1,9 +1,19 @@
 ---
-iteration: 34
+iteration: 35
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter35 (2026-07-02) — cold-run flake fix + 3-transport ROUNDS=3
+- **P4.13/P6.18 RECHECK:** ws blockers **unchanged** — gateway ws still `mcp_ws_adapter`
+  (`mcp_proxy.py:2016-2026`), NOT `broker_send_rpc`; control `URLField` (`models.py:41`) still
+  rejects `ws://`. **Cursor fix:** agent auto-init for sse+ws + empty `tools/list` retry
+  (`upstream_manager.py`); rebuilt `ai-mesh/mcp-sandbox:latest`. **3/3** gateway transports PASS
+  **ROUNDS=3 including R1** (stdio+http+sse; cold tools=0 flake closed). ws BLOCKED. ss: no
+  gateway :443. Playwright **12/12**; broker **85 passed**. **Cannot `[x]`** until Claude lands
+  both ws seams. Evidence: `RECHECK_ITER35.md`.
+- Hive: `cursor-ralph-iter35` on `hive-1782991737290-ylo911`.
 
 ## iter34 (2026-07-02) — ws blockers recheck + 3-transport verify
 - **P4.13/P6.18 RECHECK:** **No change** since iter33 — gateway ws still `mcp_ws_adapter`
@@ -242,6 +252,8 @@ status: ACTIVE
        **e2e PARTIAL 2026-07-02 (iter32):** stdio + streamable-http + sse PASS 3× via gateway→broker→
        sandbox; ws BLOCKED (`mcp_ws_adapter` + no ws stub). Agent SSE fix (`sse_manager.py`) + stale-
        session invalidation. Playwright PASS; ss no gateway :443. Cannot `[x]` until 4/4. `RECHECK_ITER32.md`.
+       **iter35:** cold R1 tools=0 flake FIXED (agent sse/ws auto-init + empty tools/list retry);
+       3-transport ROUNDS=3 PASS incl. R1 after sandbox image rebuild. `RECHECK_ITER35.md`.
        **iter33 update:** ws stub live; broker-direct ws PASS; URLField blocks ws registration; gateway
        ws still Claude-owned. 3/4 R2–3. `RECHECK_ITER33.md`.
 
