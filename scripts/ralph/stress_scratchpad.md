@@ -1218,6 +1218,27 @@
         EIGHTEEN confirmed-live leaks fixed (G40-G46, G49-G59) + G48 defense-in-depth + 2 documented tradeoffs.
         The tool-call channel is now symmetric: SCANNED (G7 input fold, G58 output extract) AND ENFORCED
         (G58 output neutralize, G59 input redact) for str AND dict arguments, on input and output.
+    - 🔴 G60 message participant `name` field carried unscanned PII to the model (2026-07-02):
+        Continued the input-channel-coverage vein. A chat message's `name` (participant id) reaches the model
+        but was NOT folded into the scan NOR redacted — only content + tool_calls were. An SSN/phone/CC fits
+        the OpenAI name charset [a-zA-Z0-9_-], so digit-PII in `name` bypassed the firewall ENTIRELY. PROBED:
+        {'role':'user','name':'123-45-6789','content':'hi'} -> _extract_prompt_from_messages did NOT include
+        the SSN -> scan verdict=ALLOW -> raw egress (and _apply_redaction never touched name). FIX (owned
+        main.py + llm_router.py): fold `name` into the scanned label ([role/name]: — injection-FP-safe since a
+        short id is never an imperative injection, and a name that IS an SSN is a true positive); and in
+        _apply_redaction DROP a name carrying real PII/secret/credential. Drop decision uses the DETECTORS
+        (_name_carries_pii) NOT the digit-backstop redactor (which over-fires on any 7+ digit run) — so a
+        benign id with a digit run ('session-2024-001','order-2024-12345','id-1234567') is PRESERVED even on a
+        request that redacts PII elsewhere, while a real-SSN name is dropped. A redacted name would be charset-
+        INVALID (provider 400) so dropping (name is optional) is the correct enforcement. VERIFY (hermetic wire
+        capture): SSN name scanned=False/allow before -> now scanned -> redact verdict -> DROPPED on the exact
+        upstream bytes; 6 benign digit/id names preserved; content PII still redacted alongside. FROZEN 2 wire-
+        capture tests. GATE: golden 406×3; gateway suite 1455 pass. commit e8c77b68 (own msg, pathspec).
+        REDEPLOYING (rollback gateway-rollback-pre-g60; both healthy).
+        NINETEEN confirmed-live leaks fixed (G40-G46, G49-G60) + G48 defense-in-depth + 2 documented tradeoffs.
+        INPUT SCAN now folds EVERY model-visible text channel (content str/list, tool_calls, tool defs,
+        function_call, participant name) and ENFORCEMENT redacts/drops each — no model-visible channel is
+        scanned-but-not-enforced. (Structural identifiers tool/function NAMEs stay intact by design.)
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
