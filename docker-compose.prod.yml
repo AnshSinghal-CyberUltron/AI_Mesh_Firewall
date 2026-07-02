@@ -43,7 +43,11 @@ services:
       - -c
       - effective_cache_size=1536MB
       - -c
-      - max_connections=100
+      # Raised from 100: control opens a DB conn per request (CONN_MAX_AGE) + celery;
+      # under multi-tenant MCP load 100 exhausts ("too many clients") -> bogus login-401s
+      # + control wedge. 200 doubles headroom while staying within the 2560M cap
+      # (~7.5MB/backend). Bump the memory limit before raising further.
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-200}
       - -c
       - work_mem=4MB
     deploy:

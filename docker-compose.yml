@@ -12,6 +12,15 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     ports: ["5432:5432"]
+    # max_connections raised from the pg default (100): the control plane opens a DB
+    # connection per request (CONN_MAX_AGE=60 keeps them ~60s) and celery adds more;
+    # under multi-tenant MCP load (15 sandboxes + parallel harnesses) 100 exhausts
+    # ("FATAL: too many clients"), which surfaces as bogus login-401s + a control-plane
+    # wedge. 400 gives headroom (~4GB RAM). Overridable via POSTGRES_MAX_CONNECTIONS.
+    command:
+      - postgres
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-400}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ai_mesh_firewall}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_mesh_firewall}
