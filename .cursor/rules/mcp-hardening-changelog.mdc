@@ -844,6 +844,23 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   [CHG-0061], response-too-large [CHG-0064]) still not audited (transport errors already logged). Evidence:
   `mcp-parallel/findings/backstop-p9-ext-proxy-audit-complete/`.
 
+- **CHG-0071** (2026-07-02) — G2 item 2 / 1.4 (provider secret-format detection gap, HIGH; found via an
+  adversarial `redact_all` secret-format sweep of ~20 real credential formats): 4 egressed UNMASKED AND were
+  not flagged by `detect_secrets` — Anthropic API key `sk-ant-…` (the OpenAI `sk-` family was caught but
+  `ant` wasn't in the alternation and `sk-[A-Za-z0-9]{32,}` fails on the hyphens), SendGrid `SG.<seg>.<seg>`,
+  GitLab PAT `glpat-…` (GitHub PATs were covered), Slack incoming-webhook `https://hooks.slack.com/services/…`.
+  SUBTLE: adding them only to `CREDENTIAL_EXPOSURE_PATTERNS` masks via `redact_all` but does NOT make
+  `detect_secrets` flag them — and the MCP tier1 scan (`_scan_text_tier1`, CHG-0057) uses `detect_secrets` to
+  DECIDE redact/block, so a result whose ONLY sensitive content is such a key triggers NO enforcement and
+  egresses raw. FIX (`patterns.py`): added all 4 to `SECRET_PATTERNS` (iterated by both `detect_secrets` via
+  `_detect_secrets_core` AND `redact_all` via `_redact_all_raw`) + `COMPLIANCE_TAG_MAP` (→ SECRET). Regexes:
+  `\bsk-ant-[A-Za-z0-9_-]{20,}\b`, `\bSG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{32,}\b`,
+  `\bglpat-[A-Za-z0-9_-]{20,}\b`, `https://hooks\.slack\.com/services/[A-Za-z0-9/_+-]+`. Near-zero FP (highly
+  specific prefixes/structures); default masker names the mask by the pattern key. Additive; no golden-case
+  change. Files: patterns.py, test_provider_secret_formats.py (+10). Gate: 10 (each format detect_secrets-
+  flagged + tagged SECRET + masked; benign battery no-FP) + 1266 gateway passed, 0 failed. Evidence:
+  `mcp-parallel/findings/backstop-p2-provider-secret-formats/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

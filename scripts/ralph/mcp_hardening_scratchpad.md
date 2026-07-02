@@ -164,6 +164,16 @@
       zero-changed. Integrates with CHG-0057 byte-verify (ip_leak union fails closed on a survivor). +13 tests.
       Gate: 13 encoded-infra + 1176 gateway passed, 0 failed. Evidence:
       mcp-parallel/findings/backstop-p2-encoded-infra-leak/finding.md.
+      CHG-0071 (2026-07-02, HIGH — provider secret-format DETECTION gap, found via an adversarial
+      redact_all secret-format sweep of ~20 real credential formats): 4 egressed UNMASKED AND weren't
+      flagged by detect_secrets — Anthropic sk-ant-… (OpenAI sk- family caught but ant not in the
+      alternation), SendGrid SG.x.y, GitLab glpat-…, Slack webhook hooks.slack.com/services/…. SUBTLE:
+      adding to CREDENTIAL_EXPOSURE_PATTERNS masks (redact_all) but does NOT make detect_secrets flag them,
+      and the MCP tier1 scan uses detect_secrets to DECIDE enforcement -> a result whose only sensitive
+      content is such a key triggers NO redaction and egresses raw. FIX: added all 4 to SECRET_PATTERNS
+      (iterated by both detect_secrets + redact_all) + COMPLIANCE_TAG_MAP (SECRET). Near-zero FP. +10 tests.
+      Gate: 10 + 1266 gateway passed, 0 failed. Evidence:
+      mcp-parallel/findings/backstop-p2-provider-secret-formats/finding.md.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

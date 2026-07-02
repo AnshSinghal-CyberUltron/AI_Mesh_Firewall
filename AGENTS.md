@@ -556,6 +556,16 @@
     _ext_tool_name so protocol overhead (initialize/list) doesn't flood the audit. +2 tests. Gate: 51 ext +
     1256 gateway passed, 0 failed. Additive. RESIDUAL: infra-error withholds (non-200/non-JSON, response-
     too-large) still not audited. Evidence mcp-parallel/findings/backstop-p9-ext-proxy-audit-complete/.
+  - CHG-0071 (2026-07-02) — G2 item 2 / 1.4 (provider secret-format detection gap, HIGH; found via an
+    adversarial redact_all secret-format sweep): 4 real credential formats egressed UNMASKED and weren't
+    flagged by detect_secrets — Anthropic sk-ant-… (OpenAI sk- family was caught but ant wasn't in the
+    alternation), SendGrid SG.x.y, GitLab glpat-…, Slack webhook https://hooks.slack.com/services/…. SUBTLE:
+    adding to CREDENTIAL_EXPOSURE_PATTERNS masks (redact_all) but does NOT make detect_secrets flag them —
+    and the MCP tier1 scan uses detect_secrets to DECIDE enforcement, so a result whose only sensitive
+    content is such a key triggers NO redaction and egresses raw. FIX: added all 4 to SECRET_PATTERNS
+    (iterated by both detect_secrets + redact_all) + COMPLIANCE_TAG_MAP (SECRET). Near-zero FP (specific
+    prefixes). +10 tests. Gate: 10 + 1266 gateway passed, 0 failed. Evidence
+    mcp-parallel/findings/backstop-p2-provider-secret-formats/.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

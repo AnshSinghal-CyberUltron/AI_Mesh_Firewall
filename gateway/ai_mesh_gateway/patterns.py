@@ -511,6 +511,15 @@ SECRET_PATTERNS: Dict[str, str] = {
     # (env var / config label) to stay low-FP; the standard AKIA access key is already
     # covered by aws_access_key above.
     "aws_secret_access_key": r'aws_secret_access_key["\s]*[:=][\s"\']*([A-Za-z0-9/+]{40})\b',
+    # CHG-0071: real-world provider credential formats that egressed UNMASKED and were NOT
+    # flagged by detect_secrets (found via an adversarial redact_all secret-format sweep).
+    # Anthropic keys were missed while the OpenAI ``sk-`` family (api_key_openai) was caught;
+    # SendGrid / GitLab PAT / Slack incoming-webhook had no inventory entry at all. All have
+    # highly specific prefixes/structures => near-zero false-positive.
+    "anthropic_key": r"\bsk-ant-[A-Za-z0-9_-]{20,}\b",
+    "sendgrid_key": r"\bSG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{32,}\b",
+    "gitlab_pat": r"\bglpat-[A-Za-z0-9_-]{20,}\b",
+    "slack_webhook": r"https://hooks\.slack\.com/services/[A-Za-z0-9/_+-]+",
 }
 
 PHI_PATTERNS: Dict[str, str] = {
@@ -652,6 +661,10 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "secret_assignment": ["SECRET"],
     "token_assignment": ["SECRET"],
     "api_key_assignment": ["SECRET"],
+    "anthropic_key": ["SECRET"],
+    "sendgrid_key": ["SECRET"],
+    "gitlab_pat": ["SECRET"],
+    "slack_webhook": ["SECRET"],
     "medical_license": ["PHI", "HIPAA"],
     "medical_record": ["PHI", "HIPAA"],
     "insurance_id": ["PHI", "HIPAA"],
