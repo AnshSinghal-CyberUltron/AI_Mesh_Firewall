@@ -119,3 +119,15 @@ imports `ai_mesh_shared` (repo `shared/` on path). DB falls back to sqlite only 
 - CP23 fix: at the gateway, map a control 403/404 carrying an enforcement `reason` in the body
   → `decision="block"` with that reason; keep genuine errors (backend 500, sandbox-unavailable,
   stdio crash) as `error`.
+
+## Observability 500 → graceful 503 (CP25/CP26)
+- The MCP Observability tab 500 was NOT a bug in `MCPEventListView`/`MCPEventSummaryView`
+  (they return 200 for every org + edge param when the DB pool has headroom). It was
+  Postgres **connection-pool exhaustion** ("FATAL: sorry, too many clients already") under
+  peak load, raised in DRF `perform_authentication` (needs a DB connection) BEFORE the view
+  body — so it surfaces on ANY authenticated endpoint.
+- Fix (`main_app/exception_handlers.py`): the project exception handler maps
+  `django.db.OperationalError`/`InterfaceError` → **503** `{code: db_unavailable}` + `Retry-After`,
+  never a raw 500. The frontend (`MCPConnectorPanel.jsx` `fetchWithRetry`) retries the
+  observability loads once on 503. Prefer this graceful degradation over raising
+  `max_connections` (env `POSTGRES_CONN_MAX_AGE`/`POSTGRES_MAX_CONNECTIONS` remain the tuning knobs).

@@ -436,25 +436,38 @@ function MCPConnectorPanelInner() {
     }
   }, [fetchWithAuth]);
 
+  // Fetch that retries once on a transient 503 (db_unavailable) — the control
+  // plane returns 503 + Retry-After when the Postgres pool is briefly exhausted
+  // under load, instead of a hard 500, so the tab recovers real data on retry. (CP26)
+  const fetchWithRetry = useCallback(async (url) => {
+    let res = await fetchWithAuth(url);
+    if (res.status === 503) {
+      const wait = Math.min(5, Number(res.headers.get("Retry-After")) || 2) * 1000;
+      await new Promise((r) => setTimeout(r, wait));
+      res = await fetchWithAuth(url);
+    }
+    return res;
+  }, [fetchWithAuth]);
+
   const loadEvents = useCallback(async (hours = obsHours) => {
     try {
       const qs = hours > 0 ? `?limit=500&hours=${hours}` : `?limit=500`;
-      const res = await fetchWithAuth(`/api/mcp-connector/events/${qs}`);
+      const res = await fetchWithRetry(`/api/mcp-connector/events/${qs}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setEvents(Array.isArray(data) ? data : data.results ?? []);
       setEventsVisible(EVENTS_PAGE_SIZE); // BUG FIX (c): reset paging on reload
     } catch { setEvents([]); }
-  }, [fetchWithAuth, obsHours]);
+  }, [fetchWithRetry, obsHours]);
 
   const loadEventSummary = useCallback(async (hours = obsHours) => {
     try {
       const qs = hours > 0 ? `?hours=${hours}` : ``;
-      const res = await fetchWithAuth(`/api/mcp-connector/events/summary/${qs}`);
+      const res = await fetchWithRetry(`/api/mcp-connector/events/summary/${qs}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setEventSummary(await res.json());
     } catch { setEventSummary(null); }
-  }, [fetchWithAuth, obsHours]);
+  }, [fetchWithRetry, obsHours]);
 
   const loadServerTools = useCallback(async (serverId) => {
     try {
