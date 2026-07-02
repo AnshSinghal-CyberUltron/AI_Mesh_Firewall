@@ -18,6 +18,10 @@
   - CHG-0003 (2026-07-02) — G2 item 2 (partial): `_scan_tool_result_floor` now fails CLOSED on result-scan
     error (was fail-OPEN, forwarding raw RESULTS). +2 byte-level tests; 323 passed. Remaining: SSE
     buffer-and-scan, string/structuredContent shapes, main-path inline audit.
+  - CHG-0004 (2026-07-02) — G2 item 2 (closes HIGH SSE leak): `ext_mcp_proxy` now buffers+scans finite
+    tools/call SSE results (`_scan_reframe_sse_tool_result`), re-emits masked or blocks; non-tools/call SSE
+    passes through. 12 + 342 tests pass; aidefence oracle confirms clean egress. Remaining: string/
+    structuredContent shapes, main-path inline audit.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

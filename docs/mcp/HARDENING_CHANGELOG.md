@@ -124,3 +124,32 @@ the prod compose/manifests is tracked under G3 item 12.
   (`streaming_egress_unscanned`) — needs buffer-and-scan like `internal_tools_call`; (2) non-streaming
   result shapes other than dict `result.content` (plain string / `structuredContent`) are not scanned;
   (3) audit the main `org_mcp_jsonrpc` inline result path (~2265/2451) for the same fail-open on scan error.
+
+### CHG-0004 — SSE tool-RESULT buffer-and-scan on ext_mcp_proxy (G2 item 2, closes the HIGH leak)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 2 (field-level redaction of RESULTS, byte-verified, fail-closed) — advances it.
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (`ext_mcp_proxy` SSE branch; new module helper
+  `_scan_reframe_sse_tool_result`; `_ext_is_tools_call` flag) ·
+  `gateway/ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py` (replaced the leak-pinning streaming test
+  with 3 SSE tests).
+- **WHAT:** `ext_mcp_proxy` now BUFFERS a finite `tools/call` SSE (`text/event-stream`) response, runs the
+  outbound result floor on every `data:` frame's `result.content`, and re-emits as SSE (masked) — or
+  returns a JSON-RPC block error. Non-`tools/call` SSE (notifications / long-lived) still passes through
+  live (no tool result to scan; buffering could hang).
+- **WHY (gap):** BACKSTOP_FINDINGS G2 item 2 **HIGH** — SSE is the DEFAULT MCP Streamable-HTTP result mode
+  and the branch forwarded `resp.aiter_bytes()` verbatim with only a `streaming_egress_unscanned` warning,
+  so raw PII/secret tool RESULTS egressed. The repo's own `test_ext_streaming_egress_unscanned_but_flagged`
+  pinned the leak.
+- **NOW DOES:** PII/secret in an SSE tool result is masked or blocked (fail-closed via the CHG-0003 floor);
+  the raw result never egresses on the SSE path. SSE framing + content-type preserved for the client.
+- **Touched whose work:** extends `ext_mcp_proxy` (built across prior sessions); replaced the test that
+  asserted the old leak. No other in-flight code altered.
+- **VERIFY:** `cd gateway && PYTHONPATH="$PWD/../shared:$PWD/ai_mesh_gateway" ./.venv/bin/python -m pytest
+  ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q` → 12 passed
+  (`test_ext_sse_tool_result_redacted`, `test_ext_sse_result_scan_error_fails_closed`,
+  `test_ext_non_toolscall_sse_passthrough`). Broad sweep → 342 passed / 18 skipped. **Independent leak
+  oracle** over the captured reframed egress bytes: `aidefence_has_pii(raw)` = true (oracle works),
+  `aidefence_has_pii(masked SSE egress)` = false — the egress is verified clean by a detector other than
+  the scanner under test.
+- **REMAINING for G2 item 2:** (2) plain-string / `structuredContent` result shapes in the ext
+  non-streaming branch; (3) audit the main `org_mcp_jsonrpc` inline result path for the same fail-open.

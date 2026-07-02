@@ -33,8 +33,13 @@
       (mcp_proxy.py ~690-780) now blocks (SCAN_ERROR + result_scan_failclosed) instead of forwarding RAW
       on a scan exception — BOTH the primary output scan AND the redaction-floor re-scan. +2 byte-level
       tests (scanner patched to raise → raw PII absent + blocked); test_mcp_bare_proxy_scan.py 10 passed,
-      broad sweep 323 passed. REMAINING before [x]: (a) SSE ext_mcp_proxy buffer-and-scan (still raw,
-      streaming_egress_unscanned); (b) non-streaming string/structuredContent result shapes unscanned;
+      broad sweep 323 passed.
+      CHG-0004 (2026-07-02): (a) SSE buffer-and-scan DONE — ext_mcp_proxy buffers finite tools/call SSE,
+      scans/redacts each data-frame result (_scan_reframe_sse_tool_result), re-emits masked or blocks;
+      non-tools/call SSE passes through (no hang). 3 SSE tests replace the leak-pinning test;
+      test_mcp_bare_proxy_scan.py 12 passed, broad sweep 342 passed; independent aidefence oracle:
+      masked egress hasPII=false, raw hasPII=true.
+      REMAINING before [x]: (b) non-streaming string/structuredContent result shapes unscanned;
       (c) audit main org_mcp_jsonrpc inline result path (~2265/2451) for the same fail-open.
 - [ ] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
 - [ ] 4. Context minimization / least-privilege assembly.

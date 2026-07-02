@@ -342,24 +342,67 @@ async def test_ext_result_scan_error_fails_closed():
     assert "error" in _decode(resp)             # returned as a JSON-RPC block error
 
 
-@pytest.mark.asyncio
-async def test_ext_streaming_egress_unscanned_but_flagged(caplog):
-    """SSE responses are NOT buffered/blocked (would break streaming) — instead
-    a warning flags the unscanned egress. Inbound args were still scanned."""
-    import logging
+def _sse_resp(json_body, *, status=200):
+    """A buffered SSE (text/event-stream) response stand-in: aread() yields one
+    ``data:`` frame carrying ``json_body`` (mirrors an MCP tools/call SSE result)."""
+    r = _ext_send_resp({}, content_type="text/event-stream", status=status)
+    frame = f"data: {json.dumps(json_body)}\n\n".encode()
+    r.aread = AsyncMock(return_value=frame)
+    return r
 
+
+@pytest.mark.asyncio
+async def test_ext_sse_tool_result_redacted():
+    """CHG-0004 (G2 item 2): a tools/call SSE result with PII is now BUFFERED,
+    scanned, and re-emitted with the PII masked — no longer forwarded raw."""
     req = _ext_request({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
                         "params": {"name": "fetch", "arguments": _BENIGN_ARG}})
+    sse = _sse_resp({"jsonrpc": "2.0", "id": 7, "result": {"content": _PII_RESULT}})
+    client = _ext_client(sse)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 200
+    body = bytes(resp.body).decode()
+    assert "john.doe@example.com" not in body   # raw PII no longer egresses via SSE
+    assert "j***@e***.com" in body              # masked form present in the re-emitted SSE
+    assert resp.media_type == "text/event-stream"
+    assert body.lstrip().startswith("data:")    # SSE framing preserved
+
+
+@pytest.mark.asyncio
+async def test_ext_sse_result_scan_error_fails_closed():
+    """A scanner error on a tools/call SSE result WITHHOLDS it (fail-closed),
+    never forwarding the raw frame."""
+    req = _ext_request({"jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                        "params": {"name": "fetch", "arguments": _BENIGN_ARG}})
+    sse = _sse_resp({"jsonrpc": "2.0", "id": 9, "result": {"content": _PII_RESULT}})
+    client = _ext_client(sse)
+    with (
+        patch.object(mcp_proxy, "_mcp_security_scan", side_effect=_output_scan_raises()),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client),
+    ):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    blob = json.dumps(_decode(resp))
+    assert "john.doe@example.com" not in blob   # withheld
+    assert "error" in _decode(resp)             # returned as a JSON-RPC block error
+
+
+@pytest.mark.asyncio
+async def test_ext_non_toolscall_sse_passthrough(caplog):
+    """Non-tools/call SSE (notifications / long-lived) is NOT buffered — it
+    passes through live (there is no tool result to scan; buffering could hang)."""
+    import logging
+
+    req = _ext_request({"jsonrpc": "2.0", "id": 1, "method": "notifications/subscribe"})
     sse = _ext_send_resp({}, content_type="text/event-stream")
 
     async def _aiter():
-        yield b"data: {\"result\": 1}\n\n"
+        yield b"data: {\"jsonrpc\": \"2.0\", \"method\": \"notify\"}\n\n"
 
     sse.aiter_bytes = _aiter
     client = _ext_client(sse)
     with caplog.at_level(logging.WARNING):
         with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
             resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
-    # It still streams (does not 500 or buffer-block).
     assert resp.status_code == 200
     assert any("streaming_egress_unscanned" in r.message for r in caplog.records)

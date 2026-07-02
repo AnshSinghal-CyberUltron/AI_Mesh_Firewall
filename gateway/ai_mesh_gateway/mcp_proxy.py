@@ -785,6 +785,78 @@ async def _scan_tool_result_floor(
     return scanned, False, tags, findings, meta
 
 
+async def _scan_reframe_sse_tool_result(
+    sse_text: str,
+    *,
+    tool_name: str,
+    org_slug: str = "",
+    server_slug: str = "",
+    enabled_info: dict | None = None,
+    actor: dict | None = None,
+) -> tuple[str, dict | None]:
+    """Scan the tool RESULT(s) inside a BUFFERED SSE (text/event-stream) body.
+
+    MCP Streamable-HTTP delivers a tools/call result as one or more ``data:``
+    frames, each carrying a JSON-RPC message. This walks the buffered SSE text
+    line-by-line; for every ``data:`` frame that is a JSON-RPC response with a
+    ``result.content`` it runs the outbound result floor (mask/redact via
+    ``_scan_tool_result_floor``, which fails CLOSED on scan error). Non-JSON
+    frames, keep-alives, and non-result frames pass through verbatim so the SSE
+    framing is preserved.
+
+    Returns ``(reframed_sse_text, block_info)``. ``block_info`` is None when
+    nothing was hard-blocked; otherwise ``{"tags", "id", "jsonrpc"}`` which the
+    caller turns into a JSON-RPC block error — the RAW result never egresses.
+
+    Only call this for a FINITE tools/call SSE response that is already buffered;
+    never for a long-lived notification stream (that would need unbounded
+    buffering and could hang). Closes the SSE raw-egress leak
+    (BACKSTOP_FINDINGS G2 item 2 — the previous branch forwarded SSE verbatim).
+    """
+    out_lines: list[str] = []
+    for raw_line in sse_text.split("\n"):
+        stripped = raw_line.strip()
+        if not stripped.startswith("data:"):
+            out_lines.append(raw_line)
+            continue
+        data_str = stripped[5:].strip()
+        if not data_str:
+            out_lines.append(raw_line)
+            continue
+        try:
+            obj = json.loads(data_str)
+        except Exception:
+            out_lines.append(raw_line)  # not JSON — leave the frame verbatim
+            continue
+        result_obj = obj.get("result") if isinstance(obj, dict) else None
+        content = result_obj.get("content") if isinstance(result_obj, dict) else None
+        if content is None:
+            out_lines.append(raw_line)  # no tool result in this frame
+            continue
+        scanned, blocked, tags, _findings, _meta = await _scan_tool_result_floor(
+            content,
+            tool_name=tool_name,
+            enabled_info=enabled_info,
+            org_slug=org_slug,
+            server_slug=server_slug,
+            actor=actor,
+        )
+        if blocked:
+            # Hard block (policy block OR fail-closed scan error): withhold the
+            # entire result — do not emit any further frames.
+            return "", {
+                "tags": list(tags),
+                "id": obj.get("id") if isinstance(obj, dict) else None,
+                "jsonrpc": obj.get("jsonrpc", "2.0") if isinstance(obj, dict) else "2.0",
+            }
+        if scanned is not content:
+            result_obj["content"] = scanned
+            out_lines.append(f"data: {json.dumps(obj)}")
+        else:
+            out_lines.append(raw_line)
+    return "\n".join(out_lines), None
+
+
 def _tool_allowed_by_key(tool_name: str, auth) -> bool:
     """E12 FIX 3: enforce per-key ``mcp_allowed_tools`` allowlist.
 
@@ -976,12 +1048,14 @@ async def ext_mcp_proxy(path: str, request: Request):
     # is blocked before it egresses to the external MCP server. Best-effort —
     # if the body is not a tools/call JSON-RPC, this is a no-op. ──
     _ext_tool_name = ""
+    _ext_is_tools_call = False
     if body:
         try:
             _ext_req = json.loads(body)
         except Exception:
             _ext_req = None
         if isinstance(_ext_req, dict) and _ext_req.get("method") == "tools/call":
+            _ext_is_tools_call = True
             _ext_params = _ext_req.get("params") or {}
             if isinstance(_ext_params, dict):
                 _ext_tool_name = str(_ext_params.get("name") or "")
@@ -1037,15 +1111,60 @@ async def ext_mcp_proxy(path: str, request: Request):
 
         # For SSE / streaming responses, stream through
         if "text/event-stream" in content_type:
-            # TODO(mcp-egress-scan): streaming (SSE) egress on the transparent
-            # external proxy is NOT scanned — buffering the stream to scan it
-            # would break MCP Streamable HTTP semantics (progressive delivery,
-            # long-lived connections). Inbound request args ARE credential-scanned
-            # above; outbound stream content is passed through verbatim. A future
-            # streaming-aware scanner (chunk-boundary tolerant) should close this.
+            if _ext_is_tools_call:
+                # Finite tools/call SSE result — BUFFER, scan/redact each data
+                # frame, and re-emit as SSE (parity with the non-streaming JSON
+                # branch and internal_tools_call). Closes the raw-egress leak
+                # (BACKSTOP_FINDINGS G2 item 2). Bounded: a tools/call response
+                # is finite, so aread() cannot hang on an open stream.
+                sse_bytes = await resp.aread()
+                await resp.aclose()
+                await client.aclose()
+                _reframed, _block_info = await _scan_reframe_sse_tool_result(
+                    sse_bytes.decode("utf-8", "replace"),
+                    tool_name=_ext_tool_name,
+                    org_slug="",
+                    server_slug="",
+                    enabled_info=None,
+                    actor=None,
+                )
+                _sse_headers = {
+                    k: v for k, v in resp.headers.items()
+                    if k.lower() not in ("transfer-encoding", "content-encoding", "content-length")
+                }
+                if _block_info is not None:
+                    LOG.warning(
+                        "ext_mcp_proxy.sse_result_blocked host=%s tool=%s tags=%s",
+                        hostname, _ext_tool_name or "?", _block_info.get("tags"),
+                    )
+                    return JSONResponse(
+                        content={
+                            "jsonrpc": _block_info.get("jsonrpc", "2.0"),
+                            "id": _block_info.get("id"),
+                            "error": {
+                                "code": -32000,
+                                "message": (
+                                    f"Response from '{_ext_tool_name or 'call'}' matched compliance "
+                                    f"tags: {', '.join(_block_info.get('tags') or []) or 'PII'}."
+                                ),
+                            },
+                        },
+                        status_code=200,
+                    )
+                from starlette.responses import Response as _SSEResponse
+                return _SSEResponse(
+                    content=_reframed.encode("utf-8"),
+                    status_code=resp.status_code,
+                    media_type=content_type,
+                    headers=_sse_headers,
+                )
+
+            # Non-tools/call SSE (e.g. notifications / long-lived streams): there
+            # is no tool RESULT to scan, and buffering could hang an open stream,
+            # so pass it through live (inbound args, if any, were still scanned).
             LOG.warning(
-                "ext_mcp_proxy.streaming_egress_unscanned host=%s tool=%s — SSE "
-                "response passed through without outbound result scan",
+                "ext_mcp_proxy.streaming_egress_unscanned host=%s tool=%s — non-tools/call "
+                "SSE response passed through (no tool result to scan)",
                 hostname, _ext_tool_name or "?",
             )
             async def stream_gen():

@@ -48,3 +48,10 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   byte-assert raw PII absent with the scanner patched to raise. `pytest test_mcp_bare_proxy_scan.py` → 10
   passed; broad sweep 323 passed. REMAINING: SSE buffer-and-scan; string/`structuredContent` shapes; main
   `org_mcp_jsonrpc` inline path audit.
+- **CHG-0004** (2026-07-02) — G2 item 2 (closes the HIGH SSE leak): `ext_mcp_proxy` now BUFFERS a finite
+  tools/call SSE response, scans/redacts each `data:` frame's `result.content` (new helper
+  `_scan_reframe_sse_tool_result`), and re-emits as SSE (or blocks); non-tools/call SSE still passes
+  through live. Was `aiter_bytes()` verbatim = raw PII/secret egress. 3 SSE tests replace the old
+  leak-pinning test; `test_mcp_bare_proxy_scan.py` 12 passed, broad sweep 342 passed. Independent oracle:
+  aidefence_has_pii(masked egress)=false, (raw)=true. REMAINING: string/`structuredContent` shapes; main
+  inline path audit.
