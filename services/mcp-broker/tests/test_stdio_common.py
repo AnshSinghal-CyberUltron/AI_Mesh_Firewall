@@ -91,3 +91,116 @@ def test_build_child_env_honors_remote_config_dir_override():
 )
 def test_oauth_prompt_heuristics(line, oauth_header_injected, expected):
     assert _looks_like_oauth_prompt(line, oauth_header_injected=oauth_header_injected) is expected
+
+
+# P7.25 — Per-org credential/env isolation adversarial tests
+
+
+def test_cross_org_env_isolation():
+    # Org A's BYOK secret must NOT appear in Org B's child env, even if
+    # both are built from the same (shared) host environment.
+    host = {"PATH": "/usr/bin", "HOME": "/home/sandbox"}
+    env_org_a = {"LINEAR_API_KEY": "org-a-secret", "GITHUB_TOKEN": "tok-orgA"}
+    env_org_b = {"NOTION_API_KEY": "org-b-secret"}
+
+    child_a = _build_child_env(env_org_a, "org-a", host_environ=host)
+    child_b = _build_child_env(env_org_b, "org-b", host_environ=host)
+
+    # Org A's secrets must not appear in Org B's env
+    assert "LINEAR_API_KEY" not in child_b
+    assert "GITHUB_TOKEN" not in child_b
+    # Org B's secrets must not appear in Org A's env
+    assert "NOTION_API_KEY" not in child_a
+    # Each org gets its own MCP_REMOTE_CONFIG_DIR
+    assert child_a["MCP_REMOTE_CONFIG_DIR"] != child_b["MCP_REMOTE_CONFIG_DIR"]
+    assert "org-a" in child_a["MCP_REMOTE_CONFIG_DIR"]
+    assert "org-b" in child_b["MCP_REMOTE_CONFIG_DIR"]
+
+
+def test_ld_preload_stripped_from_requested_env():
+    # An attacker-controlled MCP server supplying LD_PRELOAD must have it stripped
+    # so it cannot hijack shared libraries in the sandbox process.
+    child = _build_child_env(
+        {"LD_PRELOAD": "/evil/lib.so", "LINEAR_API_KEY": "ok"},
+        "acme",
+        host_environ={"PATH": "/usr/bin"},
+    )
+    assert "LD_PRELOAD" not in child
+    assert child["LINEAR_API_KEY"] == "ok"
+
+
+def test_ld_preload_stripped_from_host_env():
+    # Host environment LD_PRELOAD must also be blocked — it is not in
+    # _SAFE_ENV_PASSTHROUGH so it is excluded from the allowlist path.
+    child = _build_child_env(
+        None,
+        "acme",
+        host_environ={"PATH": "/usr/bin", "LD_PRELOAD": "/host/evil.so"},
+    )
+    assert "LD_PRELOAD" not in child
+
+
+def test_dyld_insert_libraries_stripped():
+    # macOS-style library injection must be blocked in the same way.
+    child = _build_child_env(
+        {"DYLD_INSERT_LIBRARIES": "/evil/lib.dylib"},
+        "acme",
+        host_environ={"PATH": "/usr/bin"},
+    )
+    assert "DYLD_INSERT_LIBRARIES" not in child
+
+
+def test_all_denylist_vars_absent_in_child():
+    # Every variable in the denylist must be stripped even when the caller
+    # attempts to pass all of them in the `env` dict simultaneously.
+    poison = {k: f"secret-{k}" for k in _SECRET_ENV_DENYLIST}
+    child = _build_child_env(poison, "acme", host_environ={"PATH": "/usr/bin"})
+    for key in _SECRET_ENV_DENYLIST:
+        assert key not in child, f"{key!r} leaked into child env"
+
+
+def test_all_denylist_vars_absent_even_in_host_env():
+    # Denylist vars present in the host environment must not appear in the child.
+    host_with_secrets = {k: f"host-{k}" for k in _SECRET_ENV_DENYLIST}
+    host_with_secrets["PATH"] = "/usr/bin"
+    child = _build_child_env(None, "acme", host_environ=host_with_secrets)
+    for key in _SECRET_ENV_DENYLIST:
+        assert key not in child, f"host {key!r} leaked into child env"
+
+
+def test_remote_config_dir_unique_per_org():
+    # Two calls with different org_slugs must produce different MCP_REMOTE_CONFIG_DIR
+    # values — OAuth token stores for different orgs must not overlap.
+    host = {"PATH": "/usr/bin"}
+    orgs = ["alpha", "beta", "gamma-corp", "zeroshield"]
+    dirs = [
+        _build_child_env(None, org, host_environ=host)["MCP_REMOTE_CONFIG_DIR"]
+        for org in orgs
+    ]
+    assert len(set(dirs)) == len(orgs), "MCP_REMOTE_CONFIG_DIR must be unique per org"
+
+
+def test_build_child_env_cross_org_byok_isolation():
+    # item #25: Org A's per-server BYOK credentials must NEVER appear in Org B's
+    # child env, and a denylisted broker secret never reaches either child. Each
+    # org gets its OWN MCP_REMOTE_CONFIG_DIR so OAuth tokens can't cross orgs.
+    host = {"PATH": "/usr/bin"}
+    a = _build_child_env(
+        {"LINEAR_API_KEY": "lin_A_secret", "MCP_BROKER_INTERNAL_KEY": "broker-secret"},
+        "org-a",
+        host_environ=host,
+    )
+    b = _build_child_env({"GITHUB_TOKEN": "ghp_B_secret"}, "org-b", host_environ=host)
+
+    # A's BYOK only in A; B's BYOK only in B — no cross-tenant credential bleed.
+    assert a.get("LINEAR_API_KEY") == "lin_A_secret"
+    assert "LINEAR_API_KEY" not in b
+    assert b.get("GITHUB_TOKEN") == "ghp_B_secret"
+    assert "GITHUB_TOKEN" not in a
+    # Denylisted broker/infra secret never reaches ANY child.
+    assert "MCP_BROKER_INTERNAL_KEY" not in a
+    assert "MCP_BROKER_INTERNAL_KEY" not in b
+    # Per-org OAuth token dirs are distinct.
+    assert a["MCP_REMOTE_CONFIG_DIR"] == "/tmp/mcp-orgs/org-a/mcp-auth"
+    assert b["MCP_REMOTE_CONFIG_DIR"] == "/tmp/mcp-orgs/org-b/mcp-auth"
+    assert a["MCP_REMOTE_CONFIG_DIR"] != b["MCP_REMOTE_CONFIG_DIR"]

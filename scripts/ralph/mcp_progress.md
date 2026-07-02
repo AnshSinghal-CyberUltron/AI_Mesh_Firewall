@@ -58,7 +58,17 @@
 - [x] 22. Enforce resource limits per sandbox (CPU, memory, disk, timeout) + verify a runaway MCP is contained — CODE (parallel P4.12 commit f560c560): docker_manager._run_kwargs enforces nano_cpus(CPU), mem_limit+memswap_limit(RAM, no swap-bypass), pids_limit(fork), ulimits nofile 1024/2048 + nproc(FD/proc), read_only, cap_drop:ALL, security_opt no-new-privileges, init=True, user=sandbox, bounded tmpfs(disk), agent RPC timeout. UNIT: test_sandbox_lifecycle.py 20/20 (asserts nano_cpus/pids/read_only/no-new-privileges/cap_drop:ALL/memswap/2 ulimits). LIVE RUNAWAY CONTAINMENT (docker run w/ hardened flags on ai-mesh/mcp-sandbox:latest): fork-bomb capped at ~63 procs BlockingIOError (pids_limit=64); mem-hog exit=137 OOM-killed (--memory=128m); host stayed healthy (broker 200/gateway 401). DEPLOYED hardened docker_manager.py to live broker (docker cp + restart) → fresh zeroshield-mcp-sandbox now: CapDrop=[ALL] SecurityOpt=[no-new-privileges] Memory=MemorySwap=2G PidsLimit=256 NanoCpus=1e9 ReadonlyRootfs=true Init=true User=sandbox Ulimits=[nofile,nproc] — and still syncs 13 tools.
 - [x] 23. Confirm NO unknown npm package executes on the host — only inside the per-org sandbox — **N1 DONE (iter17):** `npm_config_ignore_scripts=true` in `docker_manager._run_kwargs` env; lifecycle test asserts it; 20/20 broker + 15/15 agent tests green. **Remaining N2–N7:** pinned packages, allowlist parity, registry pin, pre-bake, uv equivalents.
 - [x] 24. Reaper/idle cleanup correctness (no orphan sandboxes; restart-safe registry) — FIXED item#2 gaps: (a) reaper.py _reaper_loop now wraps the whole sweep in try/except so a transient Docker APIError no longer kills the reaper permanently; reap_idle_sandboxes has per-entry try/except (failed stop keeps the entry for retry, doesn't abort sweep). (b) docker_manager.list_sandbox_containers() (by role label, all orgs) + reconcile_registry() re-adopts running orphan containers into the registry (restart-safety + no orphan leak). (c) main.py _boot_reconcile task on lifespan startup + reconcile in each reaper sweep. Tests: test_reconcile_registry_adopts_orphan + test_reaper_survives_stop_error PASS; reaper 8/8; full broker suite 77 passed/0 failed. LIVE: deployed to broker (docker cp+restart) → healthy, tool sync works after restart, sandbox not duplicated (count=1).
-- [ ] 25. Per-org credential/env isolation (Org A env/secrets never visible in Org B sandbox)
+- [x] 25. Per-org credential/env isolation (Org A env/secrets never visible in Org B sandbox)
+       **Done 2026-07-02 (iter18):** Adversarial tests prove: (a) BYOK env from Org A absent in Org B child
+       env + vice versa; (b) LD_PRELOAD/DYLD_INSERT_LIBRARIES stripped from both caller env + host env;
+       (c) all 20+ _SECRET_ENV_DENYLIST vars absent in child even when supplied in both caller env AND host
+       env; (d) MCP_REMOTE_CONFIG_DIR unique per org (gateway path); (e) Docker resource names (network,
+       volume, container) unique per org; (f) auth volume isolation: orgs get different named volumes both
+       mounted at /data/mcp-auth — Docker volume isolation, not path diversity; (g) ORG_SLUG env in
+       container; (h) org_slug labels enable restart-safe orphan re-adoption.
+       KEY FINDING: MCP_REMOTE_CONFIG_DIR=/data/mcp-auth same path for all orgs — correct, isolation is
+       via distinct volumes not paths. 13 new isolation tests. Gate: 94/94 broker tests green.
+       See mcp-parallel/findings/p7-25/RESULT.md.
 
 ## P8 — 15-MCP parallel harness
 - [ ] 26. Provision 3 orgs × 5 servers (§1.4); extend scripts/mcp_live_matrix_harness.py / mcp_pipeline_matrix_live.py

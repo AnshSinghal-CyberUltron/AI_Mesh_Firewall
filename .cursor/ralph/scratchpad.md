@@ -1,5 +1,5 @@
 ---
-iteration: 0
+iteration: 18
 max_iterations: 50
 completion_promise: COMPLETE
 status: ACTIVE
@@ -104,3 +104,5 @@ status: ACTIVE
        **PARTIAL 2026-07-02 (iter17):** P1 B1/B2/B4 re-run 12/12 PASS (`playwright_mcp_b1_b2_b4_e2e.mjs` →
        `mcp-parallel/findings/p6-19/`). P4.13/P6.18 still blocked (broker `/{org}/rpc` 404). P7.23 N1
        (`npm_config_ignore_scripts`) landed in `docker_manager.py`.
+       P7.24 (iter18): reaper loop + boot reconcile adversarial tests; 94/94 broker tests.
+       P7.25 (iter18): 13 cross-org credential/env isolation adversarial tests all green; 94/94.

@@ -318,3 +318,82 @@ def test_security_opts_includes_seccomp_when_profile_set(monkeypatch: pytest.Mon
         "no-new-privileges:true",
         "seccomp=/etc/docker/seccomp.json",
     ]
+
+
+# P7.25 — Per-org credential/env isolation: Docker resource naming invariants
+
+
+def test_per_org_network_names_are_distinct():
+    # Org A and Org B must get DIFFERENT network names — sharing a network
+    # allows containers to reach sibling agent ports (isolation failure).
+    manager = DockerManager(client=_mock_client(), config=SandboxDockerConfig())
+    orgs = ["alpha", "beta", "gamma-corp", "zeroshield"]
+    names = [manager.org_network_name(org) for org in orgs]
+    assert len(set(names)) == len(orgs), "Per-org network names must be unique"
+    for org, name in zip(orgs, names):
+        assert org.replace("-", "-") in name or org.replace("-", "_") in name or org in name
+
+
+def test_per_org_volume_names_are_distinct():
+    # Each org's auth volume must have a unique name to prevent credential
+    # cross-contamination via the /data/mcp-auth mount point.
+    manager = DockerManager(client=_mock_client(), config=SandboxDockerConfig())
+    orgs = ["alpha", "beta", "gamma-corp", "zeroshield"]
+    vol_names = [manager.volume_name(org) for org in orgs]
+    assert len(set(vol_names)) == len(orgs), "Per-org volume names must be unique"
+
+
+def test_per_org_container_names_are_distinct():
+    # Each org gets a different container name; a naming collision would cause
+    # Docker to refuse the create (name-in-use 409) — verify the naming formula
+    # produces unique identifiers.
+    manager = DockerManager(client=_mock_client(), config=SandboxDockerConfig())
+    orgs = ["alpha", "beta", "gamma-corp", "zeroshield"]
+    container_names = [manager.container_name(org) for org in orgs]
+    assert len(set(container_names)) == len(orgs), "Per-org container names must be unique"
+
+
+def test_org_slug_in_sandbox_environment():
+    # The sandbox container must receive ORG_SLUG in its env so the in-container
+    # agent can enforce per-org resource boundaries (e.g. process caps).
+    manager = DockerManager(client=_mock_client(), config=SandboxDockerConfig())
+    manager.client.containers.run.return_value = _mock_container(org_slug="acme")
+
+    manager.ensure("acme")
+
+    env = manager.client.containers.run.call_args.kwargs["environment"]
+    assert env.get("ORG_SLUG") == "acme"
+
+
+def test_auth_volume_is_org_specific_for_credential_isolation():
+    # OAuth tokens are stored on a per-org named volume (mcp_sandbox_{org}_auth)
+    # mounted at /data/mcp-auth.  Two orgs must use DIFFERENT volume names even
+    # though the mount path is the same — Docker volume isolation ensures Org A
+    # cannot read Org B's credential store.
+    manager = DockerManager(client=_mock_client(), config=SandboxDockerConfig())
+    manager.client.containers.run.return_value = _mock_container(org_slug="acme")
+    manager.ensure("acme")
+    volumes_acme = manager.client.containers.run.call_args.kwargs["volumes"]
+
+    manager.client.containers.run.reset_mock()
+    manager.client.containers.run.return_value = _mock_container(org_slug="beta")
+    manager.ensure("beta")
+    volumes_beta = manager.client.containers.run.call_args.kwargs["volumes"]
+
+    # Different volume names → different filesystems (Docker isolation)
+    vol_name_acme = list(volumes_acme.keys())[0]
+    vol_name_beta = list(volumes_beta.keys())[0]
+    assert vol_name_acme != vol_name_beta
+    # Both mount to the same well-known path inside each container
+    assert volumes_acme[vol_name_acme]["bind"] == "/data/mcp-auth"
+    assert volumes_beta[vol_name_beta]["bind"] == "/data/mcp-auth"
+
+
+def test_sandbox_labels_include_org_slug_for_isolation():
+    # Sandbox containers are labeled with their org_slug so the reconciler and
+    # reaper can identify which org a container belongs to — without this, orphan
+    # re-adoption is impossible after a broker restart.
+    manager = DockerManager(client=_mock_client(), config=SandboxDockerConfig())
+    labels = manager.labels("zeroshield")
+    assert labels[LABEL_ORG_SLUG] == "zeroshield"
+    assert labels[LABEL_ROLE] == ROLE_VALUE
