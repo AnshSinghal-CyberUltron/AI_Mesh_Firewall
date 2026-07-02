@@ -857,6 +857,25 @@
         preserve current behavior; that is a product/policy choice, not a safe unilateral code change.
         => R5 "no PII reaches models" holds for USER content (verified live: benign-intent PII redacted,
         exfil blocked); system-message content is trusted-by-design and is the documented exception.
+      G48 — RESPONSES-API LIST-FORM INPUT PII LEAK FIXED 2026-07-02 (from the G47 "input path" lead):
+        THREAT: the OpenAI Responses API carries the prompt in body["input"] (a STRING or a STRUCTURED
+        LIST of turns: [{role, content:[{type:input_text, text}]}]). llm_router.aresponses redacted the
+        input ONLY when isinstance(input, str) (line 583); a LIST-form input — the modern shape, incl.
+        multimodal input_text parts — was forwarded RAW at kwargs["input"]=body.get("input") -> model
+        received PII despite a redact verdict. Same silent-leak class _apply_redaction closed for chat
+        `messages` (str+list content), and aresponses even masked Responses TOOLS (line 605) but MISSED
+        list input. NOT a deliberate design decision (unlike G47's system skip) — an incomplete impl.
+        Verified: aresponses input_list [{content:[{input_text: "ssn 123-45-6789 bob@example.com"}]}] ->
+        raw_ssn=True raw_email=True (leak). FIX: added _redact_responses_input_list(items, redactor) —
+        masks each non-system turn's content (str + list text parts) with _redact_text_with_backstop,
+        keeps role==system turns for PARITY with the chat path (G47 trusted-instructions decision).
+        Wired into aresponses for both str (existing) and list (new). VERIFY: list/multi-turn/str-content
+        all redact SSN+email; system agent-id 8929554991 preserved. FROZEN: G48 (test_g48_responses_list_
+        input_redacted + test_g48_responses_input_leaves_system_untouched). Gate: router/responses/redact/
+        streaming 514 green; golden+redaction 325 passed × 3 in-process; no regression. commit 1700ff8a.
+        REDEPLOYED (rollback-pre-g48; marker _redact_responses_input_list present; health 200) — LIVE.
+        EIGHT real leaks fixed (G40; G41-G43 exfil-URL; G44-G46 md-split/semantic-span; G48 Responses
+        input) + two documented design tradeoffs (tier-2 FP; G47 system-message).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
