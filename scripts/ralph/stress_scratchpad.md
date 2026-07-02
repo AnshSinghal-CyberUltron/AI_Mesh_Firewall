@@ -91,6 +91,14 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      G21 DONE 2026-07-02: RAG-ingest obfuscation parity. context_guard matched INDIRECT_INJECTION/toxicity
+        patterns on RAW doc text only, so obfuscated indirect injections (tags/small-caps/homoglyph/zero-width/
+        fullwidth) in a retrieved RAG doc bypassed ingest and reached the LLM. Fixed: context_guard also matches
+        the canonical form (patterns.canonicalize_for_detection) as a fallback (raw first -> plain evidence
+        unchanged; canonical only when it differs -> no-op on ASCII). Extended patterns._canonicalize_with_map
+        with small-caps folding (1->1) so canonicalization is the single obfuscation source (bonus: small-caps
+        PII now detected). HIDDEN patterns stay raw-only (detect obfuscation structure). G9/M-19/G12 preserved.
+        6 golden frozen. Full gateway 1064 passed; golden 98 passed/7 skipped 3x.
       G10 DONE 2026-07-02: tier-2 semantic redact was a byte no-op. Guard model flags PII/secret with no
         deterministic regex (free-text names, non-standard card/ID, passphrases) -> redact_all no-op ->
         redacted==original -> value egressed verbatim (relabeled flag). Fixed in output_guard.py:
