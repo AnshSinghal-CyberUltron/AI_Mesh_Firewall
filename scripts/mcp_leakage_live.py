@@ -41,18 +41,59 @@ CONTROL = _mf.get("base", "http://127.0.0.1:8180").rstrip("/")
 ORGS = _mf["orgs"]
 
 
+import pathlib
+import re as _re
+import time as _time
+
+# File token cache — the DRF token endpoint throttles rapid logins and multiple
+# ralph loops share it. A JWT is stateless (~60 min); cache it and reuse across
+# runs so only the FIRST login hits the endpoint (throttle-immune thereafter).
+_TOKCACHE = pathlib.Path(os.environ.get("MCP_TOKEN_CACHE", "/tmp/.mcp_login_cache.json"))
+_TOK_TTL = 2400  # 40 min < 60 min JWT exp
+
+
+def _cache_get(email):
+    try:
+        e = json.loads(_TOKCACHE.read_text()).get(email)
+        if e and (_time.time() - e["ts"] < _TOK_TTL):
+            return e["token"]
+    except Exception:
+        return None
+    return None
+
+
+def _cache_put(email, token):
+    try:
+        d = json.loads(_TOKCACHE.read_text()) if _TOKCACHE.exists() else {}
+    except Exception:
+        d = {}
+    d[email] = {"token": token, "ts": _time.time()}
+    try:
+        _TOKCACHE.write_text(json.dumps(d))
+    except Exception:
+        pass
+
+
 async def _login(client, email):
-    # Retry: the DRF token endpoint throttles rapid logins — back off so a token
-    # is never empty (empty Bearer -> httpx LocalProtocolError / spurious 401s).
-    for attempt in range(6):
+    cached = _cache_get(email)
+    if cached:
+        return cached
+    # honor the throttle wait (bounded) so a token is never empty
+    for attempt in range(8):
         r = await client.post(f"{CONTROL}/api/auth/token/", json={"email": email, "password": PASSWORD}, timeout=30)
         try:
             tok = r.json().get("access", "")
         except Exception:
             tok = ""
         if tok:
+            _cache_put(email, tok)
             return tok
-        await asyncio.sleep(0.5 * (attempt + 1))
+        wait = 0.5 * (attempt + 1)
+        if r.status_code == 429:
+            ra = r.headers.get("retry-after")
+            m = _re.search(r"in (\d+) second", r.text)
+            wait = min(float(ra) if ra else (int(m.group(1)) if m else 32), 60) + 1
+        await asyncio.sleep(wait)
     raise RuntimeError(f"login failed for {email}: status={r.status_code} body={r.text[:160]}")
 
 
