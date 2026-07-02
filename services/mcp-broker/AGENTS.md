@@ -50,3 +50,22 @@ here. Map + evidence: `docs/mcp/broker-sandbox-lifecycle.md`.
 `cd services/mcp-broker && python -m pytest tests -q` — key suites: `test_sandbox_lifecycle.py`,
 `test_sandbox_routes.py`, `test_sandbox_reaper.py`, `test_agent_ready_retry.py`, `test_broker_auth.py`,
 `test_agent_rpc.py`, `test_sandbox_image.py`, `test_stdio_common.py`.
+
+## Sandbox memory / graceful OOM (CP20)
+- Per-org sandbox `mem_limit == memswap_limit` (swap disabled). Without a Node heap
+  cap, a heavy Node MCP server (Ruflo-class) that exceeds `MCP_SANDBOX_MEMORY_MB`
+  (default 2048) is kernel-SIGKILLed (exit -9 / 137) with no graceful signal.
+- `docker_manager._run_kwargs` sets `NODE_OPTIONS=--max-old-space-size=<node_heap_mb>`
+  in the sandbox env — default `max(256, memory_mb*0.75)` (1536 for 2048), overridable
+  via `MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB` / `SandboxDockerConfig.node_max_old_space_mb`;
+  any operator `MCP_SANDBOX_NODE_OPTIONS` is preserved (appended). This makes a hungry
+  Node server hit a graceful V8 "JavaScript heap out of memory" abort BELOW the cgroup
+  cap (headroom for the Python agent + co-tenant servers) instead of a silent SIGKILL.
+  To run genuinely heavy servers, raise `MCP_SANDBOX_MEMORY_MB` (compose broker env).
+- `stdio_manager._classify_exit_reason(rc, stderr_tail, *, oversized_line)` is the pure,
+  unit-tested exit-reason builder. It categorizes OOM FIRST from the stderr signature
+  ("heap out of memory" / "reached heap limit") OR a kernel OOM code (-9/137) so the text
+  contains "ran out of memory" → the control-plane classifier maps it to
+  `MCP_OUT_OF_MEMORY` (a bare 134/SIGABRT would otherwise read as a generic crash). The
+  gateway `mcp_stdio_adapter` mirrors this. Tests: `tests/test_stdio_exit_reason.py`,
+  `tests/test_sandbox_lifecycle.py::test_run_kwargs_set_node_heap_cap_*`.

@@ -65,6 +65,37 @@ _registry_lock = asyncio.Lock()
 _reaper_task: asyncio.Task | None = None
 
 
+# CHG-0053: stdio server args are logged for debuggability, but a configured
+# credential passed as ``--token XYZ`` / ``--api-key=XYZ`` must NOT land in operator
+# logs in plaintext. Mask the VALUE of any secret-looking flag before logging. (The
+# normal secret location is ``env``, which the agent never logs — this covers the
+# arg edge case; tool-call results/params are never logged either.)
+_SECRET_ARG_HINTS = (
+    "token", "key", "secret", "password", "passwd", "auth", "credential", "apikey",
+)
+
+
+def _safe_args_for_log(args: list[str]) -> list[str]:
+    out: list[str] = []
+    mask_next = False
+    for a in args:
+        s = str(a)
+        if mask_next:
+            out.append("***")
+            mask_next = False
+            continue
+        low = s.lower()
+        if s.startswith("-") and any(h in low for h in _SECRET_ARG_HINTS):
+            if "=" in s:
+                out.append(s.split("=", 1)[0] + "=***")
+            else:
+                out.append(s)       # keep the flag name itself
+                mask_next = True     # ...but mask the following value
+        else:
+            out.append(s)
+    return out
+
+
 def _command_basename(command: str) -> str:
     return os.path.basename(command).lower()
 
@@ -167,6 +198,48 @@ def _flag_needs_reauth(proc: StdioProcess, evidence: str) -> None:
     asyncio.create_task(_kill_process(proc.key))
 
 
+def _classify_exit_reason(rc, stderr_tail: str, *, oversized_line: bool) -> str:
+    """Human-readable reason a spawned stdio MCP server terminated.
+
+    Pure + unit-testable. OOM (CP20) is detected FIRST from the stderr signature
+    (a V8 heap-limit abort prints "JavaScript heap out of memory" but exits 134,
+    which would otherwise read as a generic crash) OR from a kernel OOM-kill exit
+    code (-9 / 137). The word "out of memory" / "exit code -9" is kept in the text
+    so the control-plane classifier maps it to MCP_OUT_OF_MEMORY. (CP20)
+    """
+    oom_in_stderr = any(
+        s in (stderr_tail or "").lower()
+        for s in ("heap out of memory", "out of memory", "fatal error: reached heap limit")
+    )
+    if oversized_line:
+        return (
+            f"the MCP server sent a response larger than the {_MAX_LINE_BYTES}-byte "
+            "line buffer (raise MCP_STDIO_MAX_LINE_BYTES for very large tool catalogs)"
+        )
+    if oom_in_stderr or rc in (-9, 137):
+        return (
+            f"the MCP server ran out of memory (exit code {rc}; exceeded the per-org "
+            "sandbox memory limit). Raise MCP_SANDBOX_MEMORY_MB for heavy servers or "
+            "reduce its footprint"
+        )
+    if rc is None:
+        return "stdout stream closed unexpectedly"
+    if rc == 0:
+        return (
+            "the MCP server exited immediately without responding "
+            "(likely a missing host dependency or wrong package name)"
+        )
+    if rc in (-6, 134):
+        return (
+            f"the MCP server crashed on startup (exit code {rc} / SIGABRT). "
+            "Verify the command and package are compatible"
+        )
+    return (
+        f"the MCP server process exited with code {rc} "
+        "(check the command and its host dependencies)"
+    )
+
+
 async def _exit_code(proc: StdioProcess) -> int | None:
     p = proc.process
     if not p:
@@ -227,23 +300,7 @@ async def _start_reader(proc: StdioProcess):
         stderr_tail = "\n".join(str(line) for line in proc.stderr_tail).strip()
         if stderr_tail:
             LOG.warning("Stdio %s stderr tail (rc=%s):\n%s", proc.key, rc, stderr_tail[-2000:])
-        if proc.oversized_line:
-            reason = (
-                f"the MCP server sent a response larger than the {_MAX_LINE_BYTES}-byte "
-                "line buffer (raise MCP_STDIO_MAX_LINE_BYTES for very large tool catalogs)"
-            )
-        elif rc is None:
-            reason = "stdout stream closed unexpectedly"
-        elif rc == 0:
-            reason = (
-                "the MCP server exited immediately without responding "
-                "(likely a missing host dependency or wrong package name)"
-            )
-        else:
-            reason = (
-                f"the MCP server process exited with code {rc} "
-                "(check the command and its host dependencies)"
-            )
+        reason = _classify_exit_reason(rc, stderr_tail, oversized_line=proc.oversized_line)
         safe_msg = (
             f"Stdio MCP server '{proc.key}' failed to start: {reason}. "
             "See sandbox-agent logs for details."
@@ -331,7 +388,10 @@ async def _ensure_process(
             log=LOG,
         )
 
-        LOG.info("Starting stdio MCP process: %s %s (key=%s)", command, args, key)
+        LOG.info(
+            "Starting stdio MCP process: %s %s (key=%s)",
+            command, _safe_args_for_log(args), key,
+        )
         try:
             process = await asyncio.create_subprocess_exec(
                 command,

@@ -75,6 +75,13 @@ class SandboxDockerConfig:
     network: str = "mcp_sandbox_bridge"
     agent_port: int = 9320
     memory_mb: int = 2048
+    # Node/V8 old-space heap cap for spawned MCP servers (MB). Set BELOW the
+    # container mem_limit so a memory-hungry Node server (e.g. a heavy stdio MCP)
+    # hits a graceful, catchable V8 "heap out of memory" instead of the kernel
+    # OOM-killing the whole cgroup with SIGKILL (exit -9 / 137). 0 = derive as
+    # ~75% of memory_mb. Also stops one runaway process starving the shared
+    # per-org sandbox. (CP20)
+    node_max_old_space_mb: int = 0
     cpus: float = 1.0
     pids_limit: int = 256
     runtime: str | None = None
@@ -95,6 +102,7 @@ class SandboxDockerConfig:
             network=os.environ.get("MCP_SANDBOX_NETWORK", "mcp_sandbox_bridge"),
             agent_port=int(os.environ.get("MCP_SANDBOX_AGENT_PORT", "9320")),
             memory_mb=int(os.environ.get("MCP_SANDBOX_MEMORY_MB", "2048")),
+            node_max_old_space_mb=int(os.environ.get("MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB", "0")),
             cpus=float(os.environ.get("MCP_SANDBOX_CPUS", "1.0")),
             pids_limit=int(os.environ.get("MCP_SANDBOX_PIDS_LIMIT", "256")),
             runtime=runtime,
@@ -403,11 +411,26 @@ class DockerManager:
         org_net = self.ensure_org_network(org_slug)
         volume = self.volume_name(org_slug)
         mem_limit = f"{self.config.memory_mb}m"
+        # Cap the Node/V8 old-space heap of spawned MCP servers BELOW the cgroup
+        # mem_limit so a heavy Node server fails GRACEFULLY (catchable V8 "heap
+        # out of memory") instead of the kernel SIGKILL-ing the whole sandbox
+        # (exit -9 / 137). Default: ~75% of the container memory, min 256MB. This
+        # is what turns Ruflo-class OOM crashes into a clean per-server error and
+        # protects co-tenant servers in the shared per-org sandbox. (CP20)
+        node_heap_mb = self.config.node_max_old_space_mb or max(
+            256, int(self.config.memory_mb * 0.75)
+        )
         volumes = {volume: {"bind": "/data/mcp-auth", "mode": "rw"}}
         self._assert_no_docker_socket_mount(volumes)
         environment = {
             "ORG_SLUG": org_slug,
             "MCP_REMOTE_CONFIG_DIR": "/data/mcp-auth",
+            # Graceful-OOM heap cap for spawned Node MCP servers (CP20). Appended
+            # (not overwritten) so any operator-supplied NODE_OPTIONS is preserved.
+            "NODE_OPTIONS": (
+                f"{os.environ.get('MCP_SANDBOX_NODE_OPTIONS', '').strip()} "
+                f"--max-old-space-size={node_heap_mb}"
+            ).strip(),
             "MCP_STDIO_MAX_PROCESSES_PER_ORG": os.environ.get(
                 "MCP_STDIO_MAX_PROCESSES_PER_ORG", "16"
             ),

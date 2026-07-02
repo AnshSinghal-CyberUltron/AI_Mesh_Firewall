@@ -258,6 +258,12 @@ services:
       MCP_SANDBOX_IMAGE: ai-mesh/mcp-sandbox:latest
       MCP_SANDBOX_NETWORK: mcp_sandbox_bridge
       MCP_SANDBOX_IDLE_TIMEOUT: ${MCP_SANDBOX_IDLE_TIMEOUT:-3600}
+      # Per-org sandbox memory limit + Node/V8 old-space heap cap (CP20). The heap
+      # cap defaults to ~75% of the memory limit so heavy Node MCP servers fail with
+      # a graceful V8 OOM instead of a kernel SIGKILL. Raise MEMORY_MB for heavy
+      # servers; leave NODE_MAX_OLD_SPACE_MB=0 to keep the auto-derived cap.
+      MCP_SANDBOX_MEMORY_MB: ${MCP_SANDBOX_MEMORY_MB:-2048}
+      MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB: ${MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB:-0}
       MCP_BROKER_CONTAINER_NAME: ai_mesh_mcp_broker
     container_name: ai_mesh_mcp_broker
     networks:

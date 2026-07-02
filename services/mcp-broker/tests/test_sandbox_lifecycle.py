@@ -253,6 +253,35 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch):
     assert config.http_proxy == "http://proxy.test:3128"
 
 
+def test_run_kwargs_set_node_heap_cap_derived_from_memory(manager: DockerManager):
+    """CP20: NODE_OPTIONS caps the Node/V8 old-space heap BELOW the cgroup
+    mem_limit (default ~75% of memory_mb) so a heavy Node MCP server fails with a
+    graceful V8 OOM instead of a kernel SIGKILL that takes down the sandbox."""
+    run_kwargs = manager._run_kwargs("acme")
+    node_options = run_kwargs["environment"]["NODE_OPTIONS"]
+    # memory_mb=1024 → 75% = 768, strictly below the 1024m mem_limit.
+    assert "--max-old-space-size=768" in node_options
+    assert run_kwargs["mem_limit"] == "1024m"
+
+
+def test_run_kwargs_node_heap_cap_explicit_and_preserves_operator_options(monkeypatch: pytest.MonkeyPatch):
+    """CP20: an explicit heap cap wins, and any operator NODE_OPTIONS is preserved
+    (appended, not overwritten)."""
+    monkeypatch.setenv("MCP_SANDBOX_NODE_OPTIONS", "--dns-result-order=ipv4first")
+    config = SandboxDockerConfig(
+        image="ai-mesh/mcp-sandbox:test", memory_mb=2048, node_max_old_space_mb=1536,
+    )
+    manager = DockerManager(client=_mock_client(), config=config)
+    node_options = manager._run_kwargs("acme")["environment"]["NODE_OPTIONS"]
+    assert "--dns-result-order=ipv4first" in node_options
+    assert "--max-old-space-size=1536" in node_options
+
+
+def test_config_from_env_node_max_old_space(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB", "3072")
+    assert SandboxDockerConfig.from_env().node_max_old_space_mb == 3072
+
+
 def test_run_kwargs_include_runtime_when_configured():
     config = SandboxDockerConfig(
         image="ai-mesh/mcp-sandbox:test",

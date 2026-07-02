@@ -290,6 +290,14 @@ async def _start_reader(proc: StdioProcess):
         if stderr_tail:
             LOG.warning("Stdio %s stderr tail (rc=%s):\n%s",
                         proc.key, rc, stderr_tail[-2000:])
+        # A V8 heap OOM (NODE_OPTIONS --max-old-space-size cap, CP20) aborts with
+        # SIGABRT (134) but prints "JavaScript heap out of memory"; a kernel
+        # OOM-kill is -9/137. Detect the stderr signature FIRST so it is
+        # categorized as OOM (→ MCP_OUT_OF_MEMORY) not a generic crash.
+        _oom_in_stderr = any(
+            s in stderr_tail.lower()
+            for s in ("heap out of memory", "out of memory", "fatal error: reached heap limit")
+        )
         if proc.oversized_line:
             reason = (
                 "the MCP server sent a response larger than the gateway's "
@@ -297,11 +305,18 @@ async def _start_reader(proc: StdioProcess):
                 "MCP_STDIO_MAX_LINE_BYTES for servers with very large tool "
                 "catalogs)"
             )
+        elif _oom_in_stderr or rc in (-9, 137):
+            reason = (f"the MCP server ran out of memory (exit code {rc}; exceeded the "
+                      "per-org sandbox memory limit). Raise MCP_SANDBOX_MEMORY_MB for "
+                      "heavy servers or reduce its footprint")
         elif rc is None:
             reason = "stdout stream closed unexpectedly"
         elif rc == 0:
             reason = ("the MCP server exited immediately without responding "
                       "(likely a missing host dependency or wrong package name)")
+        elif rc in (-6, 134):
+            reason = (f"the MCP server crashed on startup (exit code {rc} / SIGABRT). "
+                      "Verify the command and package are compatible")
         else:
             reason = (f"the MCP server process exited with code {rc} "
                       "(check the command and its host dependencies)")
