@@ -7,6 +7,7 @@
 - frontend: MCPConnectorPanel(Inner) register/authorize/list/execute; Dialog = createPortal, returns null when closed
 - INVARIANT: OAuth requires an HTTP URL; stdio has none → oauth+stdio is invalid, must be blocked in the form
 - INVARIANT (leak): one sandbox per org; no cross-tenant tool/data/credential visibility; egress bytes are truth
+- B1/B2 UX decision table (item#10, full in docs/mcp/oss-research-oauth-transport-ux.md): MCP has exactly 2 transports — stdio(subprocess/NO url/env-creds/NO oauth) + Streamable HTTP(single url endpoint/oauth applies); sse=deprecated HTTP variant. oauth is HTTP-only (RFC8707 resource=canonical HTTP URI, PRM/AS discovery is HTTP). RULES: oauth selectable ONLY for streamable-http|sse; BLOCK oauth on url-less stdio (that's B1's "block oauth+stdio") but stdio+mcp-remote is the LEGIT exception (row stays auth_type=none, gateway owns OAuth via serverNeedsOAuth→startOAuth). ≤1 Authorize button/card (gateway-cond vs http-oauth-cond are mutually exclusive). Fresh oauth server = PENDING badge, never a ready 0-tools card (B2); tools only after oauth_authorized+sync. B1 remaining defect = the CONTROL authorize path (views.py:2513) still reachable, emits 400 "Server has no URL" (:2526) + sets auth_type=oauth bypassing guard (:2582) → #13 must make it structurally unreachable (recommend: unify HTTP-oauth onto gateway oauth/start path). Industry norm (VS Code/Claude): "Needs Auth" status + ONE Authenticate btn that opens browser (guard the #42359 silent-no-op bug in #14).
 - P7 hardening (item#9): _run_kwargs (docker_manager.py:247) is the only create-time knob. Cheap adds w/ ~0 compat risk: security_opt=['no-new-privileges:true'], cap_drop=['ALL'], ulimits=[Ulimit(nofile),Ulimit(nproc)], init=True, user='4000:4000'. memswap_limit=mem_limit closes swap-bypass. storage_opt={'size':..} ONLY on quota-capable FS (overlay2+xfs pquota) else it hard-errors create → gate on FS detect or reap-by-usage. runtime='runsc' (gVisor, hook already at :283) = biggest untrusted-code isolation win. EGRESS is the exfil channel: per-org bridge has full NAT (needed for npx) → needs host default-deny allowlist proxy (npm/PyPI + declared remote-MCP hosts only); exact-host match, no wildcards. Command allowlist (stdio_manager.py:37) ≠ package allowlist — broker path lacks _PACKAGE_ALLOWLIST that the in-proc path has (mcp_stdio_adapter.py:362). Details: docs/mcp/oss-research-docker-hardening.md
 
 ## P0 — Analysis
@@ -23,7 +24,7 @@
 - [x] 9. Study Docker sandboxing hardening (seccomp/gVisor/read-only rootfs/no-new-privileges/limits) + multi-tenant patterns — docs/mcp/oss-research-docker-hardening.md
 
 ## P2 — Deep research (web)
-- [ ] 10. OAuth-for-MCP + transport rules: why oauth needs an HTTP URL; correct UX for stdio-wrapped-remote
+- [x] 10. OAuth-for-MCP + transport rules: why oauth needs an HTTP URL; correct UX for stdio-wrapped-remote — docs/mcp/oss-research-oauth-transport-ux.md (B1/B2 decision table)
 - [ ] 11. Docker multi-tenant isolation hardening checklist for running untrusted npm packages
 - [ ] 12. Concurrency/load patterns for sandboxed subprocess MCP servers (pooling, warm start, backpressure)
 

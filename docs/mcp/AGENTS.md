@@ -28,6 +28,12 @@ subsystem map you need. Every anchor was read from the tree and spot-verified wh
   the `--header` Bearer pre-injection that keeps mcp-remote headless (`mcp_proxy.py:1732/1759`); per-org
   `MCP_REMOTE_CONFIG_DIR` token isolation. **B1 nuance: "block oauth+stdio" = block `auth_type="oauth"`
   on a URL-less local stdio row, NOT block stdio-via-mcp-remote.**
+- `oss-research-oauth-transport-ux.md` — **the B1/B2 (transport × auth_type) UX decision table** the fix
+  items #13–16 implement/verify against. MCP has exactly 2 transports (stdio=no-url/no-oauth/env-creds;
+  Streamable HTTP=url/oauth; sse=deprecated HTTP). oauth selectable ONLY for streamable-http/sse; stdio+
+  mcp-remote is the legit gateway-owned-OAuth exception. ≤1 Authorize button; fresh oauth = pending badge
+  not 0-tools card. B1 remaining = delete/hard-gate the reachable control authorize path (views.py:2513
+  "Server has no URL" + guard-bypass); recommend unifying HTTP-oauth onto the gateway path.
 - `oss-research-docker-hardening.md` — sourced Docker multi-tenant hardening checklist (OWASP/gVisor/
   Docker AI-sandbox/iron-proxy) mapped to `docker_manager.py:_run_kwargs`: H1–H15 controls each with the
   exact `docker-py` kwarg, present/absent-in-repo, and the P7 item (#22–25) that implements it. Priority
