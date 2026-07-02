@@ -60,9 +60,11 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 
 | cursor-ralph-iter27 | `mcp-parallel/findings/p4-13/RECHECK_ITER27.md`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md`, `mcp-parallel/claims/cursor-ralph-iter27-P4.13.claim` | P4.13/P6.18 iter27 recheck + Cursor-owned gates | 2026-07-02T12:00:00Z | released |
 
+| cursor-ralph-iter28 | `scripts/mcp_sandbox_transport_verify.py`, `mcp-parallel/findings/p4-13/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md`, `mcp-parallel/claims/cursor-ralph-iter28-P4.13.claim` | P4.13/P6.18 iter28 recheck + transport manifest prep + P10 3× | 2026-07-02T12:15:00Z | released |
+
 > **New program — chat-pipeline adversarial stress (`claude-ralph-stress`).** Separate from the MCP-hardening work above. Owns gateway **chat** modules (a Claude-Code-owned area), the golden suite, and a **narrow** frontend carve-out of only `ModelConnectionPanel.jsx` + `OutputPipelineTimeline.jsx` (Cursor's broad `frontend/**` is otherwise respected). Never touches `MCPConnectorPanel.jsx`, `mcp_*` gateway files, or `services/mcp-broker/**`. A pre-commit secret-scan guard (`scripts/ralph/precommit-secret-scan.sh`, installed at `.git/hooks/pre-commit`) blocks any commit containing the runtime OpenRouter key (one-way fingerprint) or a real-shape `sk-or-` token outside vetted redaction fixtures — this protects **all** sessions.
 
 ## Hive
 
 - Hive ID: `hive-1782991737290-ylo911` (re-init iter26; prior `hive-1782976205971-u1gav1`)
-- Cursor agents: `cursor-ralph-iter27` (iter 27), `cursor-ralph-iter26` (iter 26), `cursor-ralph-iter1` (iter 1)
+- Cursor agents: `cursor-ralph-iter28` (iter 28), `cursor-ralph-iter27` (iter 27), `cursor-ralph-iter26` (iter 26), `cursor-ralph-iter1` (iter 1)

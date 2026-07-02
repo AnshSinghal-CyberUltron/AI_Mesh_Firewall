@@ -66,6 +66,10 @@ MCP_PROXY = REPO / "gateway" / "ai_mesh_gateway" / "mcp_proxy.py"
 BROKER_ROUTES = REPO / "services" / "mcp-broker" / "src" / "sandbox" / "routes.py"
 
 
+def _count_proxy_httpx_sites(proxy_src: str) -> int:
+    return proxy_src.count("httpx.AsyncClient")
+
+
 @dataclass
 class WiringCheck:
     broker_send_rpc_present: bool = False
@@ -74,6 +78,8 @@ class WiringCheck:
     broker_unified_rpc_http: int = 0
     broker_stdio_rpc_http: int = 0
     mcp_proxy_direct_httpx: bool = True
+    mcp_proxy_httpx_sites: int = 0
+    mcp_proxy_broker_send_rpc_refs: int = 0
 
     @property
     def landed(self) -> bool:
@@ -132,6 +138,8 @@ def check_wiring() -> WiringCheck:
     routes_src = _read_text(BROKER_ROUTES)
     proxy_src = _read_text(MCP_PROXY)
 
+    broker_refs = proxy_src.count("broker_send_rpc")
+    httpx_sites = _count_proxy_httpx_sites(proxy_src)
     wc = WiringCheck(
         broker_send_rpc_present="async def broker_send_rpc" in client_src
         or "def broker_send_rpc" in client_src,
@@ -139,10 +147,12 @@ def check_wiring() -> WiringCheck:
         or "@router.post(\"/{org_slug}/rpc\")" in routes_src,
         broker_stdio_rpc_exists="/stdio/rpc" in routes_src,
         mcp_proxy_direct_httpx=(
-            "httpx.AsyncClient" in proxy_src
+            httpx_sites > 0
             and "server_config" in proxy_src
-            and "broker_send_rpc" not in proxy_src
+            and broker_refs == 0
         ),
+        mcp_proxy_httpx_sites=httpx_sites,
+        mcp_proxy_broker_send_rpc_refs=broker_refs,
     )
     probe_body = {
         "server_slug": "wiring-probe",
@@ -252,6 +262,24 @@ def run_transport_round(targets: dict, rnd: int) -> list[TransportCall]:
     return out
 
 
+def print_registration_guide() -> None:
+    if SKIP_NETWORK_DOC:
+        return
+    reg_doc = FINDINGS / "TRANSPORT_REGISTRATION.md"
+    manifest = Path(TRANSPORT_MANIFEST)
+    print("\n--- Post-§3 transport registration ---")
+    print(
+        "When Claude lands mcp_proxy §3, register one server per transport in zeroshield,\n"
+        "fill TRANSPORT_MANIFEST (see example + hints), then re-run this script with ROUNDS=3."
+    )
+    print(f"  Guide:    {reg_doc.relative_to(REPO)}")
+    print(f"  Example:  {manifest.relative_to(REPO)}")
+    print("  Slugs:    stdio=everything-1 | streamable-http=http-everything-stub")
+    print("            sse=sse-everything-stub | websocket=ws-everything-stub")
+    print("  gateway_key: scripts/ralph/.mcp_scale_manifest.json → orgs[0].gateway_key")
+    print("--- end registration guide ---\n")
+
+
 def print_network_assertion_guide() -> None:
     if SKIP_NETWORK_DOC:
         return
@@ -326,11 +354,16 @@ def main() -> int:
     print(f"  broker /{{org}}/rpc route in source: {'YES' if wiring.broker_unified_rpc_route else 'NO'}")
     print(f"  broker POST /rpc live HTTP: {wiring.broker_unified_rpc_http}")
     print(f"  broker POST /stdio/rpc live HTTP: {wiring.broker_stdio_rpc_http}")
+    print(
+        f"  mcp_proxy broker_send_rpc refs: {wiring.mcp_proxy_broker_send_rpc_refs} "
+        f"(httpx.AsyncClient sites: {wiring.mcp_proxy_httpx_sites})"
+    )
     print(f"  mcp_proxy still direct httpx (no broker_send_rpc): {'YES' if wiring.mcp_proxy_direct_httpx else 'NO'}")
     print(f"  wiring landed: {'YES' if wiring.landed else 'NO'}")
 
     if not wiring.landed and not FORCE_E2E:
         print("\nSANDBOX_TRANSPORT: BLOCKED — Claude must land gateway-integration-checklist §1–3.")
+        print_registration_guide()
         print_network_assertion_guide()
         report = {
             "verdict": "BLOCKED",

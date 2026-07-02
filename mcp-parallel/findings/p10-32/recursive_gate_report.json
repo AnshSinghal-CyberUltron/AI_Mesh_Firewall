@@ -1,7 +1,7 @@
 {
-  "rounds_required": 1,
+  "rounds_required": 3,
   "all_green": true,
-  "elapsed_s": 168.1,
+  "elapsed_s": 573.2,
   "rounds": [
     {
       "round": 1,
@@ -10,12 +10,104 @@
         {
           "gate": "broker-pytest",
           "ok": true,
-          "summary": "97 passed, 3 warnings in 2.12s"
+          "summary": "97 passed, 3 warnings in 2.42s"
         },
         {
           "gate": "agent-pytest",
           "ok": true,
-          "summary": "41 passed, 1 warning in 0.40s"
+          "summary": "41 passed, 1 warning in 0.41s"
+        },
+        {
+          "gate": "multi-org",
+          "ok": true,
+          "summary": "HARNESS: GREEN"
+        },
+        {
+          "gate": "concurrency",
+          "ok": true,
+          "summary": "CONCURRENCY: PASS"
+        },
+        {
+          "gate": "load",
+          "ok": true,
+          "summary": "LOAD: PASS"
+        },
+        {
+          "gate": "leakage",
+          "ok": true,
+          "summary": "LEAKAGE: PASS (26/26 checks)"
+        },
+        {
+          "gate": "oauth",
+          "ok": true,
+          "summary": "OAUTH_TRANSPORT: PASS (67/67 checks)"
+        },
+        {
+          "gate": "playwright",
+          "ok": true,
+          "summary": "skipped"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "ok": true,
+      "gates": [
+        {
+          "gate": "broker-pytest",
+          "ok": true,
+          "summary": "97 passed, 3 warnings in 2.20s"
+        },
+        {
+          "gate": "agent-pytest",
+          "ok": true,
+          "summary": "41 passed, 1 warning in 0.44s"
+        },
+        {
+          "gate": "multi-org",
+          "ok": true,
+          "summary": "HARNESS: GREEN"
+        },
+        {
+          "gate": "concurrency",
+          "ok": true,
+          "summary": "CONCURRENCY: PASS"
+        },
+        {
+          "gate": "load",
+          "ok": true,
+          "summary": "LOAD: PASS"
+        },
+        {
+          "gate": "leakage",
+          "ok": true,
+          "summary": "LEAKAGE: PASS (26/26 checks)"
+        },
+        {
+          "gate": "oauth",
+          "ok": true,
+          "summary": "OAUTH_TRANSPORT: PASS (67/67 checks)"
+        },
+        {
+          "gate": "playwright",
+          "ok": true,
+          "summary": "skipped"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "ok": true,
+      "gates": [
+        {
+          "gate": "broker-pytest",
+          "ok": true,
+          "summary": "97 passed, 3 warnings in 2.32s"
+        },
+        {
+          "gate": "agent-pytest",
+          "ok": true,
+          "summary": "41 passed, 1 warning in 0.38s"
         },
         {
           "gate": "multi-org",

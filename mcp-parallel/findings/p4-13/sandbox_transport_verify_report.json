@@ -1,13 +1,98 @@
 {
-  "verdict": "BLOCKED",
+  "verdict": "FAIL",
   "wiring": {
     "broker_send_rpc_present": true,
     "broker_unified_rpc_route": true,
     "broker_stdio_rpc_exists": true,
     "broker_unified_rpc_http": 401,
     "broker_stdio_rpc_http": 401,
-    "mcp_proxy_direct_httpx": true
+    "mcp_proxy_direct_httpx": false,
+    "mcp_proxy_httpx_sites": 14,
+    "mcp_proxy_broker_send_rpc_refs": 2
   },
-  "rounds": [],
-  "note": "Re-run after broker_send_rpc + POST /{org}/rpc + mcp_proxy sandbox routing."
+  "rounds": [
+    {
+      "round": 1,
+      "calls": [
+        {
+          "transport": "stdio",
+          "server": "everything-1",
+          "method": "tools/list",
+          "ok": false,
+          "http_status": 401,
+          "detail": "tools=0",
+          "latency_ms": 2.6990519982064143
+        },
+        {
+          "transport": "stdio",
+          "server": "everything-1",
+          "method": "tools/call",
+          "ok": false,
+          "http_status": 401,
+          "detail": "echo_ok=False",
+          "latency_ms": 1.943209001183277
+        },
+        {
+          "transport": "streamable-http",
+          "server": "http-everything-stub",
+          "method": "tools/list",
+          "ok": false,
+          "http_status": 401,
+          "detail": "tools=0",
+          "latency_ms": 1.699144999292912
+        },
+        {
+          "transport": "streamable-http",
+          "server": "http-everything-stub",
+          "method": "tools/call",
+          "ok": false,
+          "http_status": 401,
+          "detail": "echo_ok=False",
+          "latency_ms": 1.584939000167651
+        },
+        {
+          "transport": "sse",
+          "server": "sse-everything-stub",
+          "method": "tools/list",
+          "ok": false,
+          "http_status": 401,
+          "detail": "tools=0",
+          "latency_ms": 1.8642959985299967
+        },
+        {
+          "transport": "sse",
+          "server": "sse-everything-stub",
+          "method": "tools/call",
+          "ok": false,
+          "http_status": 401,
+          "detail": "echo_ok=False",
+          "latency_ms": 1.7149479972431436
+        },
+        {
+          "transport": "websocket",
+          "server": "ws-everything-stub",
+          "method": "tools/list",
+          "ok": false,
+          "http_status": 401,
+          "detail": "tools=0",
+          "latency_ms": 2.072504001262132
+        },
+        {
+          "transport": "websocket",
+          "server": "ws-everything-stub",
+          "method": "tools/call",
+          "ok": false,
+          "http_status": 401,
+          "detail": "echo_ok=False",
+          "latency_ms": 1.620892002392793
+        }
+      ],
+      "failures": 8
+    }
+  ],
+  "gateway_443_snapshot": {
+    "before": [],
+    "after": [],
+    "new": []
+  }
 }
