@@ -162,6 +162,13 @@
         folded); detect_pii/detect_secrets/_redact_obfuscated transport loops also match the canonical decode
         so the OUTER blob is masked. Binary garbage still dropped; FP floor holds. 7 golden frozen. Full
         gateway 1077 passed; golden 144 passed/7 skipped 3x.
+      R2 PROBE + INDEPENDENT-ORACLE VALIDATION 2026-07-02: probed base64url(-_)/tool-role/monospace/double-
+        struck/fraktur — ALL handled (no new gap; English text base64url == base64, no -_; NFKC folds the math-
+        alphanumeric variants). Cross-checked my redact_all egress with the INDEPENDENT aidefence_has_pii oracle
+        (prompt's recommended leak oracle): "John Doe ssn ***-**-6789 card ****-****-****-1111 email a***@c***.com"
+        -> hasPII=false; "my ssn is ***-**-6789 and call me at ***-***-0132" -> hasPII=false. So my redaction
+        leaves NO residual PII per an INDEPENDENT detector (partial last-4 masks + free-text names not flagged).
+        Input surface is saturated (27 fixes); further R2 yields theoretical/marginal gaps only.
       G27 DONE 2026-07-02: multi-turn split injection across the DEVELOPER role. G6 reassembled user turns
         only; the OpenAI developer role is also client-controlled + instruction-bearing, so a developer-turn-
         split (or mixed user+developer) injection bypassed. Fixed in scanner._reassemble_user_turns: now
