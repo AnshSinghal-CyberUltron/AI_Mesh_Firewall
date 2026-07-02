@@ -67,7 +67,7 @@ sessions rebase cleanly. Commit small, per surface. Pull main frequently.
 
 - **R1 — Chart wrapper API nuance (blocks naive item 1).** `SafeResponsiveChart` is NOT chart-lib-agnostic: it wraps recharts' `<ResponsiveContainer>` and its `children` are **recharts JSX trees passed by each panel** (`<LineChart>…`, `<XAxis/>`, …). 13 panels import `recharts` directly. So "migrate internals, panels unchanged" is not a literal drop-in — ECharts has a different component model. The migration must define a new **data-driven, API-shaped** contract (e.g. wrapper accepts a chart `spec`/`option` + typed series) and update call sites, OR ship ECharts/uPlot-backed drop-in components with matching prop shapes. Decide deliberately in items 1–2; do NOT hand-wave. Panels `OutputPipelineTimeline.jsx` (verify-only) constrain how far the shared change can reach.
 - **R2 — Light muted-foreground contrast.** `--muted-foreground: oklch(0.5 0.03 255)` on near-white bg is near/under 4.5:1 for body & likely fails for placeholders. Verify + fix in item 21 (token-only, both themes).
-- **R3 — Bundle size** (see baseline) — track as an item-24 exit check, expect improvement post-recharts-removal.
+- **R3 — Bundle size** (see baseline) — **recharts fully removed** (item 24, cf7ee848): its whole subtree (recharts + @reduxjs/toolkit + immer + all d3-* + es-toolkit + decimal.js-light + eventemitter3 + internmap) is gone from the dep graph and the bundle (all charts are ECharts/uPlot now). ECharts is imported via `echarts/core` (tree-shakeable) + uPlot is tiny.
 - **R4 — Verify-only churn.** Stress session actively edits `ModelConnectionPanel`/`OutputPipelineTimeline`; re-pull before verifying them and never edit.
 
 ---
@@ -146,6 +146,12 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ---
 
 ## Per-surface finding log (append-only)
+
+**Item 24 (part 3) — recharts FULLY REMOVED (iter resumed loop, 2026-07-02):** commit cf7ee848; lint 62/62, build clean. The chart migration is complete — recharts is gone from source AND dependencies.
+- **Deleted 2 orphaned dead-code files** — `components/SubmoduleDetailPage.jsx` (878 L) and `components/module-specific-charts.jsx` (218 L) — imported nowhere repo-wide, never rendered, superseded by the live `SubModuleResultsPage` / `module-specific-log-charts`. These were the last recharts-`children` consumers.
+- **SafeResponsiveChart** — dropped the legacy recharts `<ResponsiveContainer>` `children` fallback and its import; the wrapper is now **option (ECharts) / uplot only**. Verified beforehand that every live `<SafeResponsiveChart>` uses `option=`/`uplot=`.
+- **Dependency removal (R3 win):** removed `recharts` from `package.json` and synced `package-lock.json`, which cascaded out recharts' entire transitive subtree — `@reduxjs/toolkit`, `immer`, all `d3-*`, `es-toolkit`, `decimal.js-light`, `eventemitter3`, `internmap`, `@standard-schema/*` — none of which the app imports directly (verified 0 direct imports/deps). Since nothing imported recharts, Vite already tree-shook it out of the bundle; this removes the now-dead dependency declarations + install weight.
+- **Static gate hardened:** `SafeResponsiveChart` added to the no-recharts-import guard, plus a new assertion that `recharts` is **not** a declared dependency (unit suite 60 → 62). 0 recharts imports remain in `src` (only historical migration comments).
 
 **Item 24 (part 2) — AIMeshFirewallOverview recharts→ECharts DONE (iter resumed loop, 2026-07-02):** commit 691e58ce; gated lint 59/59, build clean, detector 0-new.
 - **CHART MIGRATION (3 charts — the last LIVE recharts consumer):** the Attack-vector distribution donut (raw `ResponsiveContainer`+`PieChart`) and the Enforcement-posture donut (`PieChart`) → ECharts **donut** (in-slice % label hidden under 5-6%, per-slice fill colors, keeps the No-data-yet guard); the "Traffic and interventions by module" grouped `BarChart` → ECharts **grouped bar** (teal Total / rose Interventions). All via the identical `SafeResponsiveChart option=` API; theme-aware via zs-light/zs-dark. Removed the `recharts` import, the shared `ChartTooltip`, and both `renderCustomLabel` helpers. (The three uPlot dense time-series — pressure curve, threat areas, enforcement stack — were already migrated in items 1-2.)

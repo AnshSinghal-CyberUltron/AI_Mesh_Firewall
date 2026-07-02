@@ -310,11 +310,16 @@
         grouped bar); removed recharts import + ChartTooltip + renderCustomLabel helpers. Live-verified both
         themes @1440/375: recharts 4→0, echarts 9-11 canvases, 0 overflow/leak, clean console. (uPlot
         time-series were already migrated.) Added to static no-recharts guard (18 tests).
-      · [ ] SafeResponsiveChart.jsx — recharts is the FALLBACK for un-migrated children. NO LIVE component
-        passes recharts children anymore (verified: only orphaned SubmoduleDetailPage:138 does). Safe to
-        remove the recharts import/children path once the 2 orphaned files below are handled. NEXT.
-      · [ ] Orphaned dead code w/ recharts (imported NOWHERE, never rendered): SubmoduleDetailPage.jsx,
-        module-specific-charts.jsx — migrate or remove-as-dead-code (verify no importer first).
-      Remaining before COMPLETE: handle the 2 orphaned files → remove SafeResponsiveChart's recharts fallback
-      → full re-verify sweep (all surfaces both themes 4 widths, console/network clean) → confirm
-      FRONTEND_AUDIT.md fully resolved.
+      · [x] SafeResponsiveChart.jsx — DONE (commit cf7ee848): removed the recharts <ResponsiveContainer>
+        children fallback + import; now option(ECharts)/uplot only. Verified no live component passes
+        recharts children first.
+      · [x] Orphaned dead code — DONE (cf7ee848): DELETED SubmoduleDetailPage.jsx (878L) +
+        module-specific-charts.jsx (218L) — provably dead (0 importers repo-wide; superseded by live
+        SubModuleResultsPage / module-specific-log-charts).
+      · [x] recharts DEPENDENCY REMOVED (cf7ee848): dropped from package.json + synced package-lock.json →
+        cascaded out recharts' whole transitive tree (@reduxjs/toolkit, immer, all d3-*, es-toolkit,
+        decimal.js-light, eventemitter3, internmap — none imported directly). R3 bundle/install win.
+        Static gate now asserts recharts is not a dep (62 tests). RECHARTS IS FULLY GONE from the frontend.
+      Remaining before COMPLETE: (a) full re-verify sweep — run the item-23 harness across ALL surfaces both
+      themes 4 widths + spot-check console/network clean; (b) confirm FRONTEND_AUDIT.md status matrix has no
+      pending ⬜ for owned surfaces (verify-only ⚠ MCP items are stress-owned, logged not resolvable by me).
