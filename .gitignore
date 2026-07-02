@@ -36,6 +36,12 @@ crash.log
 # Local env with secrets (never commit)
 .env
 .env.bak
+.env*
+!.env.example
+# Chat-stress session: runtime secrets must never be committed. The pre-commit
+# guard scripts/ralph/precommit-secret-scan.sh is the active enforcement.
+*.key
+*.secret
 .playwright-mcp/
 /tmp/
 .skill-workspace/scripts/ralph/mcp_sandbox/.pw-profile/

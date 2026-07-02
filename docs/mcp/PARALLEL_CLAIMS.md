@@ -40,7 +40,13 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 
 | cursor-ralph-iter18 | `services/mcp-broker/sandbox-image/agent/stdio_manager.py`, `services/mcp-broker/sandbox-image/agent/tests/test_stdio_manager_packages.py`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P7.23 N2+N3 package allowlist + pinned-pkg parity | 2026-07-02T09:16:00Z | released |
 
+| cursor-ralph-iter19 | `scripts/mcp_multi_org_harness.py`, `mcp-parallel/findings/p8-26/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P8.26 3-org × 5-server provisioning + multi-org harness | 2026-07-02T09:27:00Z | active |
+
+| claude-ralph-stress | `gateway/ai_mesh_gateway/{policy_engine,output_guard,bedrock_scanner,scanner,patterns,typed_placeholder_redactor,context_guard}.py`, `gateway/tests/golden/**`, `frontend/src/components/{ModelConnectionPanel,OutputPipelineTimeline}.jsx`, `scripts/ralph/stress_scratchpad.md`, `scripts/ralph/precommit-secret-scan.sh`, `docs/stress/**` | R0–R7 chat-pipeline adversarial stress + client E2E + trace-card polish | 2026-07-02T09:30:43Z | active |
+
+> **New program — chat-pipeline adversarial stress (`claude-ralph-stress`).** Separate from the MCP-hardening work above. Owns gateway **chat** modules (a Claude-Code-owned area), the golden suite, and a **narrow** frontend carve-out of only `ModelConnectionPanel.jsx` + `OutputPipelineTimeline.jsx` (Cursor's broad `frontend/**` is otherwise respected). Never touches `MCPConnectorPanel.jsx`, `mcp_*` gateway files, or `services/mcp-broker/**`. A pre-commit secret-scan guard (`scripts/ralph/precommit-secret-scan.sh`, installed at `.git/hooks/pre-commit`) blocks any commit containing the runtime OpenRouter key (one-way fingerprint) or a real-shape `sk-or-` token outside vetted redaction fixtures — this protects **all** sessions.
+
 ## Hive
 
 - Hive ID: `hive-1782976205971-u1gav1`
-- Cursor agents: `cursor-ralph-iter1` (iter 1), `cursor-ralph-iter2` (iter 2), `cursor-ralph-iter17` (iter 17), `cursor-ralph-iter18` (iter 18)
+- Cursor agents: `cursor-ralph-iter1` (iter 1), `cursor-ralph-iter2` (iter 2), `cursor-ralph-iter17` (iter 17), `cursor-ralph-iter18` (iter 18), `cursor-ralph-iter19` (iter 19)
