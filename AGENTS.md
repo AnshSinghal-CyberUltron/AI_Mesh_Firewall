@@ -377,8 +377,8 @@
     egressed (trivially recoverable). FIX: percent-decode pass in _redact_obfuscated — unquote each %XX-token
     (bounded _MAX_URL_DECODE_TOKENS=32) and mask the whole token as [ENCODED_SECRET_REDACTED] when the decoded
     form matches PII/secret; benign percent text (50%20off / C%3A%5Cpath / 95%) untouched. patterns.py + 11
-    tests. Gate: 11 url-enc + 1158 gateway passed. RESIDUAL (perf/security tradeoff, NOT changed):
-    _MAX_DECODE_TOKENS=12 base64 cap lets a crafted result hide an encoded secret past 12 decoy tokens.
+    tests. Gate: 11 url-enc + 1158 gateway passed. RESIDUAL (CLOSED by CHG-0060 2026-07-02):
+    _MAX_DECODE_TOKENS=12 base64 cap let a crafted result hide an encoded secret past 12 decoy tokens.
     Evidence mcp-parallel/findings/backstop-p2-url-encoding-obfuscation/.
   - CHG-0057 (2026-07-02) — G2 item 2 / 1.4 (fail-closed byte-truth + E2E verification): VERIFIED the MCP
     tool-result redaction path (scan_mcp_payload -> _scan_text_tier1 PII/secret branch) uses
@@ -422,6 +422,21 @@
     pytest/fakeredis dev deps absent). Residuals: ITAR/FERPA have no detector; gateway still emits
     granular at source (consistency enforced at the audit write boundary by design).
     Evidence mcp-parallel/findings/backstop-p5-compliance-vocab-normalize/.
+  - CHG-0060 (2026-07-02) — G2 / 1.4 (decode-scan decoy-padding bypass, HIGH; CLOSES the CHG-0056
+    residual): the base64/hex/url decode passes in _redact_obfuscated stopped after a fixed token COUNT
+    (base64/hex _MAX_DECODE_TOKENS=12, url _MAX_URL_DECODE_TOKENS=32), so a result could hide an encoded
+    secret PAST the cap (<12 benign base64 blobs> <base64(email)> → the secret token was never decoded →
+    egressed verbatim). Proven live pre-fix (base64/hex past 12 decoys, url past 32). FIX: bound the
+    decode scan by a GLOBAL decoded-BYTE budget (_MAX_DECODE_TOTAL_BYTES=262144, shared across base64+hex)
+    instead of a token count — the input is already _CANON_MAX_LEN(20000)-capped so decoding every token
+    in it is inherently bounded; _MAX_DECODE_TOKENS 12→4096 (backstop above the ~1666 max tokens a 20K
+    input holds → never truncates a valid input); _MAX_URL_DECODE_TOKENS 32→4096 + url pass scans
+    original[:_CANON_MAX_LEN]. No FP: benign short input byte-for-byte no-op (golden cases unchanged);
+    only genuine decoded PII/secret/infra masked (60-benign-decoy battery not false-masked); perf worst
+    case ~35-45ms. patterns.py + 7 tests. Gate: 7 decoy-bypass + 1214 gateway passed, 0 failed. Integrates
+    with CHG-0057 byte-verify. RESIDUAL (pre-existing, NOT changed): content beyond _CANON_MAX_LEN=20000
+    is not obfuscation-decode-scanned (plain PII beyond still raw-masked; only ENCODED past 20K escapes).
+    Evidence mcp-parallel/findings/backstop-p2-decode-decoy-bypass/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

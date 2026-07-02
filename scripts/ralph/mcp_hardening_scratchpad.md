@@ -130,9 +130,14 @@
       recoverable). FIX: percent-decode pass in _redact_obfuscated — unquote each %XX-token (bounded
       _MAX_URL_DECODE_TOKENS=32) and mask the whole token [ENCODED_SECRET_REDACTED] when the decoded form
       matches PII/secret; benign percent text (50%20off / C%3A%5Cpath / 95% / ?p=2%2C3) untouched. patterns.py
-      + test_url_encoding_redaction.py (+11). Gate: 11 url-enc + 1158 gateway passed. RESIDUAL (perf/security
-      tradeoff, documented NOT changed): _MAX_DECODE_TOKENS=12 base64 cap lets a crafted result hide an
-      encoded secret past 12 decoy tokens. Evidence: mcp-parallel/findings/backstop-p2-url-encoding-obfuscation/finding.md.
+      + test_url_encoding_redaction.py (+11). Gate: 11 url-enc + 1158 gateway passed. RESIDUAL (CLOSED by
+      CHG-0060 2026-07-02): _MAX_DECODE_TOKENS=12 base64 cap let a crafted result hide an encoded secret
+      past 12 decoy tokens. CHG-0060 replaced the token-COUNT cap with a decoded-BYTE budget
+      (_MAX_DECODE_TOTAL_BYTES=262144) over the _CANON_MAX_LEN-capped input (base64/hex + url), so every
+      encoded token in the scan window is now decode-scanned (base64/hex past 12 decoys + url past 32 all
+      masked); +7 tests; gate 7 decoy-bypass + 1214 gateway passed. New residual: content beyond
+      _CANON_MAX_LEN=20000 not obfuscation-scanned (plain PII beyond still raw-masked). Evidence:
+      mcp-parallel/findings/backstop-p2-url-encoding-obfuscation/finding.md + backstop-p2-decode-decoy-bypass/finding.md.
       CHG-0057 (2026-07-02, fail-closed byte-truth + E2E verification): VERIFIED the MCP tool-result redaction
       path (scan_mcp_payload -> _scan_text_tier1 PII/secret branch) uses detect_pii/detect_secrets/redact_all
       from patterns.py — so CHG-0054/0055/0056 protect real tool results E2E (tier1 patterns-based; Presidio =

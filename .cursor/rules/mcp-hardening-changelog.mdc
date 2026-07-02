@@ -559,8 +559,8 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   PII/secret, mask the whole token `[ENCODED_SECRET_REDACTED]`. Only masks when decoded PII/secret is found,
   so benign percent text (`50%20off`→"50 off", `C%3A%5Cpath`, `95%`, `?p=2%2C3`) is untouched. base64/hex +
   plain-PII behaviour unchanged. Files: patterns.py, test_url_encoding_redaction.py (+11). Gate: 11 url-enc +
-  1158 gateway passed. DOCUMENTED RESIDUAL (perf/security tradeoff, NOT changed): the base64/hex decode cap
-  `_MAX_DECODE_TOKENS=12` (a DoS bound) lets a crafted result pad 12+ decoy base64 tokens to hide the real
+  1158 gateway passed. DOCUMENTED RESIDUAL (CLOSED by CHG-0060 2026-07-02): the base64/hex decode cap
+  `_MAX_DECODE_TOKENS=12` (a DoS bound) let a crafted result pad 12+ decoy base64 tokens to hide the real
   encoded secret past the cap. Evidence: `mcp-parallel/findings/backstop-p2-url-encoding-obfuscation/`.
 - **CHG-0057** (2026-07-02) — G2 item 2 / 1.4 (fail-closed byte-truth + E2E verification): VERIFIED that the
   MCP tool-result redaction path (`scan_mcp_payload` → `_scan_text_tier1` PII/secret branch) detects with
@@ -625,6 +625,28 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   source (consistency enforced at the write boundary by design); ideal future = shared `CATALOG_TAG_CODES`
   as single source-of-truth imported by control's `policy/compliance_tags.py`. Evidence:
   `mcp-parallel/findings/backstop-p5-compliance-vocab-normalize/`.
+
+- **CHG-0060** (2026-07-02) — G2 / 1.4 (decode-scan decoy-padding bypass, HIGH; CLOSES the CHG-0056
+  residual): the base64/hex/url decode passes in `_redact_obfuscated` stopped after a fixed token COUNT
+  (base64/hex `_MAX_DECODE_TOKENS=12`, url `_MAX_URL_DECODE_TOKENS=32`), so a tool result could hide an
+  encoded secret PAST the cap — `<12 benign base64 blobs> <base64("john.doe@example.com")>` — and the
+  secret token was never decoded, so it egressed verbatim (trivially recoverable). Proven live pre-fix
+  (base64/hex past 12 decoys, url past 32); not purely adversarial (any legit result with >12 encoded
+  fields where a later one carries encoded PII leaks). FIX — bound the decode scan by a GLOBAL decoded-BYTE
+  budget (`_MAX_DECODE_TOTAL_BYTES=262144`, shared across the base64+hex passes) instead of a per-pass
+  token COUNT: the input is already capped at `_CANON_MAX_LEN=20000`, so decoding EVERY token in it is
+  inherently bounded work; the byte budget is the real DoS bound (caps total decoded bytes incl. nested
+  layers). `_MAX_DECODE_TOKENS` raised 12→4096 (high backstop above the ~1666 max base64 tokens a 20K input
+  holds → never truncates a valid input); `_MAX_URL_DECODE_TOKENS` 32→4096 + the URL pass now scans
+  `original[:_CANON_MAX_LEN]`. `_iter_transport_decodes` decrements the budget per decoded blob (top+nested)
+  and stops when exhausted; `_iter_short_b64_infra` (CHG-0058) inherits the raised cap. NO FP: benign short
+  input is a byte-for-byte no-op (golden cases unchanged); scanning more tokens only masks GENUINE decoded
+  PII/secret/infra (60-benign-decoy battery not false-masked); perf worst case (full 20K base64 window)
+  ~35-45ms. Files: patterns.py, test_decode_budget_no_decoy_bypass.py (+7). Gate: 7 decoy-bypass + 1214
+  gateway passed, 0 failed. Integrates with CHG-0057 byte-verify (a surviving detected value still fails
+  closed → block). RESIDUAL (pre-existing, NOT changed): content beyond `_CANON_MAX_LEN=20000` is not
+  obfuscation-decode-scanned (plain PII beyond is still raw-masked; only ENCODED content past 20K escapes).
+  Evidence: `mcp-parallel/findings/backstop-p2-decode-decoy-bypass/`.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 

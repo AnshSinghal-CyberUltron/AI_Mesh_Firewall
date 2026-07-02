@@ -121,20 +121,33 @@ def canonicalize_for_detection(text: str) -> str:
 # --- bounded transport decode (G2): surface PII/secrets hidden in base64/hex ---
 _B64ISH_RE = re.compile(r"[A-Za-z0-9+/]{12,}={0,2}")
 _HEXISH_RE = re.compile(r"(?:[0-9A-Fa-f]{2}){8,}")
-_MAX_DECODE_TOKENS = 12
+# CHG-0060: the decode scan is bounded by a decoded-BYTE budget, not a token COUNT.
+# The old count cap (12) let a result hide an encoded secret past 12 decoy tokens
+# (``<12 benign base64 blobs> <base64(secret)>`` -> the secret token was never decoded
+# -> leaked). The input is already capped at _CANON_MAX_LEN, so decoding EVERY token in
+# it is inherently bounded work; the byte budget below is the real DoS bound (it caps
+# total decoded bytes incl. nested layers). _MAX_DECODE_TOKENS is now a high backstop on
+# the number of detect() calls — set above the max tokens a _CANON_MAX_LEN input can hold
+# (20000/12 ~= 1666 base64 tokens), so it never truncates a valid-length input.
+_MAX_DECODE_TOKENS = 4096
 _MAX_DECODE_BYTES = 4096
+# Global decoded-byte budget per scan (sum of all decoded blob sizes, incl. nested
+# layers). Sized well above the ~15KB a 20K base64 input can yield (with nesting), so it
+# never limits legitimate input; it bounds a pathological nested/large decode-bomb.
+_MAX_DECODE_TOTAL_BYTES = 262144
 # G22: max nested encoding layers to follow (double-base64 / base64-of-hex "prompt
 # laundering"). Depth is bounded and each layer is size + printable capped, so the
 # recursion is decode-bomb safe.
 _MAX_DECODE_DEPTH = 3
 # CHG-0056: percent/URL-encoding obfuscation. A token carrying at least one %XX escape
 # (PII/secret hidden in a URL query param, e.g. ``john.doe%40example.com``, or a
-# %-encoded SSN) breaks the raw patterns but is trivially recoverable. Token count is
-# bounded to stay decode-bomb safe.
+# %-encoded SSN) breaks the raw patterns but is trivially recoverable. CHG-0060: bounded
+# by the same high backstop over the _CANON_MAX_LEN-capped input (was 32, which let a
+# %-encoded secret hide past the 32nd percent-token).
 _PERCENT_TOKEN_RE = re.compile(
     r"[A-Za-z0-9._~%@+/:=?&|-]*%[0-9A-Fa-f]{2}[A-Za-z0-9._~%@+/:=?&|-]*"
 )
-_MAX_URL_DECODE_TOKENS = 32
+_MAX_URL_DECODE_TOKENS = 4096
 
 
 def _printable_ratio(s: str) -> float:
@@ -200,24 +213,33 @@ def _iter_transport_decodes(text: str):
     if not text:
         return
     scan = text[:_CANON_MAX_LEN]
+    # CHG-0060: iterate ALL tokens in the capped input, bounded by a global decoded-byte
+    # budget (shared across the base64 + hex passes) rather than a per-pass token count,
+    # so a decoy-padded result can no longer hide an encoded secret past a fixed token
+    # position. budget + input cap + per-token size cap + depth cap => decode-bomb safe.
+    budget = _MAX_DECODE_TOTAL_BYTES
     for regex, is_hex in ((_B64ISH_RE, False), (_HEXISH_RE, True)):
         seen = 0
         for m in regex.finditer(scan):
-            if seen >= _MAX_DECODE_TOKENS:
+            if seen >= _MAX_DECODE_TOKENS or budget <= 0:
                 break
             seen += 1
             top_tok = m.group(0)
             dec = _decode_one(top_tok, is_hex)
             if dec is None:
                 continue
+            budget -= len(dec)
             yield top_tok, dec
             # G22: follow nested layers, always reporting the OUTER token so masking
             # lands on the original bytes.
             layer = dec
             for _ in range(_MAX_DECODE_DEPTH - 1):
+                if budget <= 0:
+                    break
                 nxt = _decode_nested(layer)
                 if nxt is None or nxt == layer:
                     break
+                budget -= len(nxt)
                 yield top_tok, nxt
                 layer = nxt
 
@@ -1036,7 +1058,7 @@ def _redact_obfuscated(original: str, result: str) -> str:
     # Decode tokens carrying a %XX and, if the decoded form matches PII/secret, mask the
     # whole encoded token. Only masks when decoded PII/secret is found, so benign
     # percent text ("50%20off", "C%3A%5Cpath") is untouched. Token count bounded.
-    for tok in _PERCENT_TOKEN_RE.findall(original)[:_MAX_URL_DECODE_TOKENS]:
+    for tok in _PERCENT_TOKEN_RE.findall(original[:_CANON_MAX_LEN])[:_MAX_URL_DECODE_TOKENS]:
         try:
             dec = urllib.parse.unquote(tok)
         except Exception:
