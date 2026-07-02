@@ -1101,6 +1101,31 @@
         THIRTEEN confirmed-live leaks fixed (G40-G46, G49-G54) + G48 defense-in-depth + 2 documented tradeoffs.
         Obfuscation-canonicalization now SYMMETRIC across ALL four detector families (pii/secret/credential/ip)
         on BOTH input and output.
+    - 🔴 G55 OUTPUT-side base64/hex TRANSPORT-encoded CREDENTIAL / internal IP (2026-07-02):
+        detect_pii/detect_secrets transport-decode base64/hex internally (G2/G26) but
+        detect_credential_exposure/detect_ip_leakage did NOT, and the credential-only patterns (connection
+        string, basic-auth, stripe/github/azure key) are ABSENT from SECRET_PATTERNS. So a base64/hex-encoded
+        credential or internal IP emitted on OUTPUT decoded to none of the consulted detectors -> OutputGuard
+        .inspect returned ALLOW -> the encoded blob egressed RAW -> the client decodes it back. PROBED: 5
+        encoded credentials + 2 encoded internal IPs, all verdict=allow, blob decodable from egress. (Encoded
+        IP also confirmed: redact_all WOULD mask via _dec_has_infra, but that is MOOT — detection missed so
+        the verdict stayed allow and sanitize never ran.) FIX (owned patterns.py): both detectors now run the
+        SAME bounded transport-decode pass detect_pii/detect_secrets use (raw + canonical of each decode;
+        skipped when no decodable token), and _redact_obfuscated masks the encoded blob when the decode is a
+        credential (added _detect_credential_exposure_core(dec) to the base64/hex + percent conditions; IP was
+        already masked via _dec_has_infra). RESULT: encoded credentials -> redact/credential +
+        [ENCODED_SECRET_REDACTED]; encoded IP -> block/redact + masked. FP floor clean (benign base64
+        english/json/lorem, git SHA, UUID hex -> not flagged). Perf bounded despite 4x decode (100KB many-b64:
+        detect_cred 27ms / detect_ip 30ms / redact_all 109ms). FROZEN: 12 G55 golden cases. GATE: golden
+        377×3 in-process (was 366; +11); gateway suite 1363 pass. ⚠ SHARED-INDEX SWEEP: my path-scoped
+        `git add` of patterns.py + test file was swept into a concurrent fe-harden `git add -A` commit
+        (87770c40 "mark MCPConnectorPanel overflow RESOLVED") in the window between add and commit — content
+        is INTACT in HEAD (git diff HEAD empty for both files), only the commit MESSAGE is misattributed. This
+        record is the authoritative coordination note for G55. LESSON: the secret-scan-between-add-and-commit
+        window is enough for a sweep; commit IMMEDIATELY after add (or `git commit <paths>` atomically).
+        FOURTEEN confirmed-live leaks fixed (G40-G46, G49-G55) + G48 defense-in-depth + 2 documented tradeoffs.
+        Obfuscation-canonicalization now symmetric across all four detector families on BOTH the unicode AND
+        the base64/hex transport axes, on input and output.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
