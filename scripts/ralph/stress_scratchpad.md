@@ -388,6 +388,14 @@
         identically to direct injection. OWASP LLM Top-10 attack surface now comprehensively rigor-verified
         (direct+indirect injection, obfuscation, PII/secret exfil, DoS, multi-turn/crescendo, output-side
         exfil, tier-2 semantic).
+      COORDINATION 2026-07-02 (commit a41d1921): the shared git index had MCP-session files pre-staged
+        (.cursor/rules/mcp-hardening-changelog.mdc, AGENTS.md, docs/mcp/HARDENING_CHANGELOG.md, mcp-parallel/
+        findings/backstop-p13-broker-.../finding.md, scripts/ralph/mcp_hardening_scratchpad.md, services/mcp-
+        broker/.../test_stdio_manager_packages.py) which my `git commit` swept up under MY message. I did NOT
+        edit those files (they were pre-staged by the MCP session). Retroactively secret-scanned the FULL
+        commit = CLEAN. Their work is preserved on main. FIX GOING FORWARD: use `git commit -- <path>` (path-
+        scoped) so a stray shared-index entry can't ride along, since `git add <file>` stages only my file
+        but `git commit` (no pathspec) commits the WHOLE index.
       ★ FINAL COMPLETION 2026-07-02 (post-G30, +G31): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
