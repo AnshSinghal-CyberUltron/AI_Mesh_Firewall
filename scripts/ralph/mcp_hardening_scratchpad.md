@@ -343,6 +343,17 @@
       best-effort/non-blocking). REMAINING before [x]: actual restart DRILL (kill Redis/PG mid-load, verify
       recovery + no leakage during recovery) = item 18 chaos (UNSAFE on shared stack; needs dedicated host).
       Evidence: mcp-parallel/findings/backstop-p11-pg-redis/pg_redis_evidence.txt.
+      CHG-0048 (2026-07-02, MEDIUM — Redis correctness bug found + fixed): the per-key tool-call cap counter
+      (_incr_tool_call_count) did count=INCR(rk); if count==1: EXPIRE(rk,60) — the window TTL was set ONLY on
+      the FIRST increment, so a crash/dropped EXPIRE there left mcp:toolcalls:<key> with NO TTL forever (later
+      calls have count>1 → skip EXPIRE), the counter never reset, and once count>mcp_max_tool_calls the key
+      was 429'd on EVERY tool call PERMANENTLY until the Redis key was manually deleted. FIX: INCR +
+      EXPIRE(nx=True) run ATOMICALLY in pipeline(transaction=True) (MULTI/EXEC) on every increment; NX
+      (Redis 7.4) sets the TTL only when absent → fixed 60s window preserved (not sliding) + lost TTL healed
+      next call. Fail-open unchanged. +5 tests via REAL fakeredis (atomic-set / fixed-window / TTL-heal /
+      fail-open / no-key). Gate: 5 cap-ttl + 37 existing-cap + 1105 gateway passed. Evidence:
+      mcp-parallel/findings/backstop-p11-toolcall-cap-ttl-race/finding.md. (This is a CODE correctness fix;
+      the live kill-Redis-mid-load DRILL for item 11 [x] still needs a dedicated host = item 18 chaos.)
 - [ ] 12. gVisor + seccomp/no-new-privileges/cap_drop/egress-lockdown enforced.
       LIVE VERIFIED — CHG-0015 (2026-07-02): PRESENT live = cap_drop=ALL, no-new-privileges, per-org network
       (mcp_sandbox_net_<org> distinct per org — host-run shared-bridge fallback NOT active). GAPS:

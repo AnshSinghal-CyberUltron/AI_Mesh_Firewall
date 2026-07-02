@@ -440,6 +440,19 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   gateway passed (ZERO spurious blocks on legitimate redaction). With CHG-0003 (fail-closed on scan error) +
   CHG-0046 (real non-string setters), the redaction path is now fail-closed on scan-error, setter-no-op, AND
   the known non-string shapes. Evidence: `mcp-parallel/findings/backstop-p2-noop-scrub-failclosed/`.
+- **CHG-0048** (2026-07-02) — G3 item 11 (Redis correctness, MEDIUM): the per-key tool-call cap counter
+  (`_incr_tool_call_count`) did `count = INCR(rk); if count == 1: EXPIRE(rk, 60)`. The window TTL was set
+  ONLY on the first increment, so a crash / dropped connection / failed EXPIRE at that moment left
+  `mcp:toolcalls:<key>` with NO TTL forever — later calls (count>1) skip the EXPIRE, the counter never
+  resets, and once `count > mcp_max_tool_calls` the key is 429'd on EVERY tool call permanently until the
+  Redis key is manually deleted. Non-atomic read-modify-write. FIX: INCR + `EXPIRE(nx=True)` run ATOMICALLY
+  in a `pipeline(transaction=True)` (MULTI/EXEC) on every increment; `NX` (Redis 7+, deployed image
+  `redis:7.4-alpine`) sets the TTL only when absent → the FIXED 60s window is preserved (never extended, so
+  not a sliding window) and a lost TTL is HEALED on the next call. Fail-open on Redis error unchanged (soft
+  cap). Mirrors the existing atomic-Redis idiom in `rate_limiter.py`. Existing cap tests mock the function
+  wholesale, so unaffected. Files: mcp_proxy.py, test_mcp_tool_call_cap_ttl.py (new, +5 — REAL fakeredis:
+  atomic-set / fixed-window / TTL-heal / fail-open). Gate: 5 cap-ttl + 37 existing-cap + 1105 gateway
+  passed. Evidence: `mcp-parallel/findings/backstop-p11-toolcall-cap-ttl-race/`.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 

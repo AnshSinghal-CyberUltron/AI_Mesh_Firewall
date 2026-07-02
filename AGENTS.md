@@ -298,6 +298,15 @@
     +2 tests. Gate: 41 scan-orchestrator/target + 1100 gateway passed (zero spurious blocks). With
     CHG-0003 + CHG-0046, redaction path is now fail-closed on scan-error, setter-no-op, AND non-string
     shapes. Evidence mcp-parallel/findings/backstop-p2-noop-scrub-failclosed/.
+  - CHG-0048 (2026-07-02) — G3 item 11 (Redis correctness, MEDIUM): the per-key tool-call cap counter did
+    `count=INCR(rk); if count==1: EXPIRE(rk,60)` — the window TTL was set ONLY on the first increment, so a
+    crash/dropped EXPIRE there left mcp:toolcalls:<key> with NO TTL forever (later calls have count>1, skip
+    EXPIRE), the counter never reset, and once count>mcp_max_tool_calls the key was 429'd on EVERY call
+    permanently. FIX: INCR + EXPIRE(nx=True) run ATOMICALLY in a pipeline(transaction=True) (MULTI/EXEC) on
+    every increment; NX (Redis 7.4) sets the TTL only when absent → fixed 60s window preserved + a lost TTL
+    healed next call. Fail-open unchanged. +5 tests (real fakeredis: atomic set / fixed-window / TTL-heal /
+    fail-open). Gate: 5 cap-ttl + 37 existing-cap + 1105 gateway passed. Evidence
+    mcp-parallel/findings/backstop-p11-toolcall-cap-ttl-race/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

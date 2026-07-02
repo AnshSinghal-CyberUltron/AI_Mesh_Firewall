@@ -991,10 +991,21 @@ async def _incr_tool_call_count(auth) -> int:
     try:
         client = _get_scan_ver_redis()
         rk = f"mcp:toolcalls:{key_id}"
-        count = await client.incr(rk)
-        if count == 1:
-            await client.expire(rk, _MCP_TOOL_CALL_WINDOW_SEC)
-        return int(count)
+        # CHG-0048: INCR + set-TTL-if-missing ATOMICALLY (MULTI/EXEC pipeline).
+        # The old `count = INCR; if count == 1: EXPIRE` set the window TTL ONLY on
+        # the first increment, so a crash / dropped EXPIRE at that moment left the
+        # key with NO TTL forever — subsequent calls (count>1) skipped the EXPIRE, so
+        # the counter never reset and the key was PERMANENTLY capped once it crossed
+        # mcp_max_tool_calls (a Redis-correctness / availability bug). Now the EXPIRE
+        # runs on EVERY increment inside the same transaction, using `NX` (Redis 7+)
+        # so it only sets the TTL when absent — preserving the FIXED 60s window
+        # (never extending an existing TTL) while HEALING a missing TTL on the next
+        # call. Fail-open on any Redis error is unchanged (the cap is a soft limit).
+        async with client.pipeline(transaction=True) as pipe:
+            pipe.incr(rk)
+            pipe.expire(rk, _MCP_TOOL_CALL_WINDOW_SEC, nx=True)
+            res = await pipe.execute()
+        return int(res[0])
     except Exception as exc:
         LOG.warning("mcp_proxy.tool_call_count_unavailable key=%s: %s",
                     str(key_id)[:12], exc)
