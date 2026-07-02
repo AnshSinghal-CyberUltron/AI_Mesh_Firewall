@@ -13,6 +13,26 @@
   DISPATCH _adapter_forward:1775 (stdio:1788 / ws:1809 / broad-except:1832 'Adapter error') OR backend-HTTP(:2324)
   →result-scan+redaction-floor→audit _record_gateway_event:425. stdio→send_jsonrpc(mcp_stdio_adapter.py:666)→
   broker(:602) vs in-process(:628) on _stdio_in_process(:678).
+- CONTROL FLOW (item#3, docs/mcp/control-plane-flow.md): register POST /api/mcp-connector/servers/ (MCPServerListCreateView.post
+  views.py:764) -> serializer.validate (serializers.py:121, ALL guards incl B1@177) -> get_or_create(:784) -> auto-provision
+  GatewayAPIKey(:821) -> 201 tools_count=0. NO tool sync, NO sandbox provision on register (B2/B3). post_save signal only
+  bump_scan_version (signals.py:154, Redis INCR; token/oauth saves EXCLUDED via _SERVER_RELEVANT_FIELDS:167). oauth_authorized=
+  models.py:178 property (auth_type=='oauth' and bool(auth_token)). OAuth: MCPServerOAuthStartView.post(views.py:2513) discover
+  (oauth.py:169)+DCR(:237)+PKCE -> callback MCPOAuthCallbackView.get(:2658, matched by oauth_state:2672) -> exchange_code(oauth.py:321)
+  -> _store_oauth_tokens(views.py:298/2697) sets auth_token -> oauth_authorized True (DOES NOT auto-sync). TOOL SYNC only via
+  MCPServerToolListView.post(:1889/1906)->_resync_server_tools(:507)->_discover_tools_via_gateway(:407, gateway /v1/mcp/internal/
+  discover-tools:465); fresh unauth oauth -> _ensure_oauth_token_fresh(:331) False -> ([],reauth err):448/452 -> 0 tools+
+  connection_status='failed'+needs_reauth. mgmt cmd resync_mcp_servers also calls _resync_server_tools. tasks.py:12 only audit (no resync task).
+- B1 BACKEND STATUS (item#13): registration guard EXISTS+CORRECT (serializers.py:177 rejects oauth unless streamable-http/sse,
+  test_oauth_transport_guard.py). BUT MCPServerOAuthStartView.post(views.py:2513) sets server.auth_type='oauth' DIRECTLY at :2582
+  bypassing that guard (only checks server.url:2524 -> else 400 'Server has no URL':2526). This control authorize path (urls.py:19
+  servers/{pk}/oauth/authorize/ + callback :20) is REDUNDANT with gateway mcp_oauth_proxy. B1 fix: FE one Authorize button (gateway
+  path) for HTTP+oauth only; REMOVE/guard MCPServerOAuthStartView so :2526 unreachable. FE dup flagged MCPConnectorPanel.jsx:722.
+- B2 BACKEND STATUS (item#15): already exposes right signals — oauth_authorized(models.py:178), needs_reauth, connection_status.
+  Fresh oauth server = auth_token empty -> oauth_authorized False -> 0 tools until authorize+manual sync. FE fix: render distinct
+  'Pending authorization' card when auth_type=='oauth' && !oauth_authorized (never normal 0-tools card); ideally auto-resync after callback.
+- B3 CONTROL STATUS: neither register nor authorize provisions sandbox; gateway provisions lazily on first discover/tools-call.
+  Fix#19: control->gateway eager ensure on register/authorize/first-sync.
 - B1 NUANCE (must respect in item#13): a 'stdio' server CAN legitimately have a URL — mcp-remote is a stdio proc
   wrapping a REMOTE HTTP MCP URL and DOES OAuth (_maybe_inject_oauth_header:1732 scans args for mcp-remote+URL).
   So 'block oauth+stdio' == block oauth+PURE-local-stdio(no URL), NOT oauth+mcp-remote. String 'Server has no URL'
@@ -65,7 +85,12 @@
       main.py:43 (bound only) vs real readiness _ensure_initialized:369; reap=reaper.py:31 + agent _reaper_loop:486).
       LIMITS: mem 2048m/cpu 1.0/pids 256/tmpfs; ABSENT (P7 #22-23): security_opt(no-new-priv), cap_drop, seccomp,
       storage_opt/vol-quota, ulimits, run-enforced user=, pkg allowlist(broker path), tini/init. All anchors verified.
-- [ ] 3. Map control mcp_connector registration + oauth_authorized + tool-sync flow
+- [x] 3. Map control mcp_connector registration + oauth_authorized + tool-sync flow
+      EVIDENCE: docs/mcp/control-plane-flow.md (register=MCPServerListCreateView.post views.py:764 no-sync/no-provision;
+      B1 guard EXISTS serializers.py:177 but MCPServerOAuthStartView.post:2582 BYPASSES it (sets auth_type=oauth, only
+      checks url:2524->'Server has no URL':2526); oauth_authorized=models.py:178 property flips on _store_oauth_tokens:298/2697;
+      tools appear ONLY via MCPServerToolListView.post:1889->_resync_server_tools:507->_discover_tools_via_gateway:407,
+      NOT on register/callback/signal). All anchors verified.
 - [ ] 4. Map frontend MCPConnectorPanel register/authorize/list/execute + the 4 bug sites
 - [ ] 5. Write docs/mcp/ARCHITECTURE_AND_THREATS.md (isolation model + threat model + the 4 bugs)
 
