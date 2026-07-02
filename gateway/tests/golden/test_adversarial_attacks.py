@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 
 os.environ.setdefault("ENABLE_TIER2", "false")  # deterministic Tier-1; no Bedrock init
 
@@ -1210,6 +1211,45 @@ def test_g50_split_credential_or_ip_masked(label, payload):
 ])
 def test_g50_benign_not_masked(label, payload):
     assert _og.neutralize_markdown_split_pii(payload) == payload, f"{label}: benign mutated (FP)"
+
+
+# ── G51: render-invisible HTML split (comment / empty tag / self-close) — extends G44/G50 ──
+# A markdown/HTML renderer DROPS comments (<!-- -->) and empty tags (<span></span>/<br/>) so
+# an attacker splits a value with them to evade byte-level matching while it visually
+# reassembles. strip_interleaved_emphasis + neutralize_markdown_split_pii now remove these
+# too. Benign HTML with VISIBLE content (<b>123</b>) or space-separated comments is untouched.
+_G51_LEAK = [
+    ("g51_comment_ssn",  "SSN 12<!-- x -->3-45-6789 here"),
+    ("g51_empty_span",   "id 1<span></span>23-45-6789 today"),
+    ("g51_empty_b",      "value 1<b></b>23-45-6789 end"),
+    ("g51_selfclose",    "num 12<br/>3-45-6789 here"),
+    ("g51_comment_cred", "token sk_live_<!-- -->abc123def456ghi789jkl000"),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G51_LEAK)
+def test_g51_render_invisible_html_split_masked(label, payload):
+    out = _og.neutralize_markdown_split_pii(payload)
+    assert "[PII_REDACTED]" in out, f"{label}: render-invisible-HTML-split value not masked"
+    rendered = re.sub(r"<!--.*?-->", "", out, flags=re.DOTALL)
+    rendered = re.sub(r"<[^>]+>", "", rendered)
+    assert "123-45-6789" not in rendered and "sk_live_abc123def456" not in rendered, (
+        f"{label}: value survives in rendered egress"
+    )
+
+
+_G51_BENIGN = [
+    ("g51_visible_bold",   "the number <b>123</b> is shown in bold"),
+    ("g51_link",           "see <a href='https://docs.example.com'>the docs</a> here"),
+    ("g51_spaced_comment", "some text <!-- editor note --> and more text follows"),
+    ("g51_joined_words",   "word<span></span>word are joined visually"),
+    ("g51_br",             "line one<br/>line two on separate lines"),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G51_BENIGN)
+def test_g51_benign_html_not_masked(label, payload):
+    assert _og.neutralize_markdown_split_pii(payload) == payload, f"{label}: benign HTML mutated (FP)"
 
 
 # ── G49: exfil beacon hidden PAST the URL-scan budget (padding-flood evasion) ─────────

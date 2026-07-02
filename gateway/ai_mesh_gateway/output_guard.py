@@ -1391,9 +1391,19 @@ def neutralize_encoded_pii(text: str) -> str:
 # G44: a token whose chars are interleaved with inline markdown emphasis/code markers,
 # where stripping them reveals a PII/secret (``1**2**3-45-6789`` -> SSN, ``john`@`x.com``
 # -> email). Disjoint char classes (word/PII vs emphasis) -> linear (ReDoS-safe).
-# G50: only ``*`` / `` ` `` are intra-word emphasis (per CommonMark); ``_`` is a literal
-# token char (sk_live_ / snake_case) and must NOT be treated as a split marker.
-_MD_SPLIT_TOKEN_RE = re.compile(r"[\w@.\-]+(?:[*`]+[\w@.\-]+)+")
+# G50/G51: intra-word render-invisible separators a renderer drops — markdown emphasis
+# (``*`` / `` ` ``; ``_`` stays literal per CommonMark) PLUS HTML comments / empty tags.
+# A value run interspersed with these visually reassembles, so match the whole run, strip
+# the separators, and re-detect. Each subpattern is bounded (``.*?`` closed by ``-->``,
+# ``[^>]*`` negated) and the two char classes are disjoint -> LINEAR (no ReDoS).
+_RENDER_INVIS_SEP = (
+    r"(?:[*`]"
+    r"|<!--.*?-->"
+    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]*>\s*</[a-zA-Z]+\s*>"
+    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]*/\s*>)"
+)
+_MD_SPLIT_TOKEN_RE = re.compile(rf"[\w@.\-]+(?:{_RENDER_INVIS_SEP}+[\w@.\-]+)+", re.DOTALL)
+_RENDER_INVIS_STRIP_RE = re.compile(_RENDER_INVIS_SEP, re.DOTALL)
 
 
 def neutralize_markdown_split_pii(text: str) -> str:
@@ -1401,12 +1411,16 @@ def neutralize_markdown_split_pii(text: str) -> str:
     the raw bytes evade the redactor but a markdown client renders the value. Only a run
     whose emphasis-stripped form is a PII/secret is masked, so benign markdown (``a_b_c``,
     ``**bold**``, `` `code` ``, ``2*3``) is left untouched (strict no-op)."""
-    if not text or not ("*" in text or "_" in text or "`" in text):
+    # Fast-path skip only when NONE of the render-invisible separators can be present:
+    # markdown emphasis (* `) or an HTML tag/comment '<' (G51). ('_' alone never masks.)
+    if not text or not ("*" in text or "`" in text or "<" in text):
         return text
 
     def _sub(m: "re.Match[str]") -> str:
         run = m.group(0)
-        stripped = run.replace("*", "").replace("`", "")  # G50: keep '_' (literal, not emphasis)
+        # G50/G51: strip render-invisible separators (emphasis + HTML comments/empty tags);
+        # '_' stays literal (CommonMark).
+        stripped = _RENDER_INVIS_STRIP_RE.sub("", run)
         # G50: also cover CREDENTIAL (bearer/api keys) + internal IP detectors — the
         # same interleaved-emphasis trick hides an obfuscated ``sk_live_**…**`` token or
         # ``10.**0**.0.5`` internal IP from the raw-text credential/IP checks.
