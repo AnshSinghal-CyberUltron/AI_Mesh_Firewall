@@ -245,6 +245,23 @@
       ⇒ REMAINING blocker to COMPLETE is now JUST the case-09 live flake (harness max_tokens:64, in the
         owned golden suite) — the NEXT item. Fix: thread a per-case max_tokens>=128 (or deterministic PII-
         echo prompt) into live_driver/test_chat_pipeline_golden so the free model reaches a redactable email.
+      CASE-09 FLAKE FIXED 2026-07-02 (commit 3ace62ea): threaded an ADDITIVE per-case max_tokens override
+        into characterize_live_chat (default 64 -> every other case unchanged) + set case-09 to 256.
+        Empirical: current prompt @128 AND @256 => 5/5 redact; @64 => flag (truncated before a complete
+        email); a deterministic "repeat exactly <email>" prompt => 5/5 BLOCK (input scanner correctly flags
+        it as exfil) so more-tokens is the right lever, not a prompt change. LIVE golden now 10/10 x3
+        consecutive; offline golden 183 x3 (case-09 still skips offline); adversarial 180. Shared harness
+        files (live_driver.py + test_chat_pipeline_golden.py, MCP-authored) touched additively under my
+        "golden suite" ownership — backward-compatible, no other case affected. ⇒ The 9 frozen cases are now
+        GREEN BOTH OFFLINE AND LIVE.
+      COMPLETE STATUS after redeploy+case09 (2026-07-02): 1 frozen-9 green offline(183x3)+live(10/10 x3) ✓;
+        2 new-attack regressions green in-proc+live(7/7 block) ✓; 3 golden 3x in-process ✓; 5 R6 frontend
+        polish (both owned components) ✓; 6 Playwright ✓; 7 no secret leak ✓. REMAINING = criterion 4 R5
+        FULL re-validation on the FRESH gateway: routing reroute + kill-switch were verified on the OLD
+        image (pre-redeploy) so must be RE-CONFIRMED live; and the prompt asks for ~10 free models connected
+        + the COMPLETE 180-case corpus end-to-end (only a representative subset run live so far). NEXT item:
+        comprehensive R5 live re-validation on the fresh gateway (routing, kill-switch, broader corpus,
+        ~10 models via the UI). Do NOT emit COMPLETE until that is freshly green.
       CONTROL-PLANE 500 STORM observed 2026-07-02 (NOT mine, NOT this item, OUTSIDE ownership): during R6
         Playwright the control plane (container Up ~6min) returned intermittent 500s across MANY endpoints —
         /api/firewall/models|config, /api/gateways/keys|stats, /api/security/soc-kpis|threat-feed|attack-
