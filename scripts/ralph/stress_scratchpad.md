@@ -91,6 +91,15 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      R6 INCREMENT 2026-07-02: control plane RECOVERED (healthy) -> R6 unblocked. Logged into frontend
+        (admin@zeroshield.io / dev-default Adm1n!Pass#2024) via Playwright, audited the UI. App is already
+        professionally polished (other sessions). Did a focused a11y polish of the OWNED pipeline-trace card
+        (OutputPipelineTimeline.jsx): role=region/list/listitem + per-stage aria-label/title surfacing the
+        honest action as TEXT (was colour-only dot) + aria-hidden decorative icons. Build ✓, unit tests 5/5.
+        NOTE: live Playwright render of the trace card needs an output-guard EVENT (pipeline at 0 traffic ->
+        card doesn't mount); full R6 visual verification needs R5 live traffic. Login dev-default works when
+        control is healthy. ModelConnectionPanel.jsx is 1140 lines w/ 61 interactive els / 22 aria attrs —
+        broader a11y sweep is a candidate future R6 increment (large shared-design file, edit carefully).
       G25 DONE 2026-07-02: additional PII-type coverage. detect_pii missed MAC addresses (device IDs) and
         government/national IDs (passport/Aadhaar/UK NINO/driver's licence). Fixed in patterns.py PII_PATTERNS:
         mac_address (distinctive 6-hex-pair format, low FP) + cue-gated government_id (cue word + bounded
