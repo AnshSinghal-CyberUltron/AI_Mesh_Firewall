@@ -434,3 +434,10 @@
       flips aria-checked + persists to localStorage. Rendered in-context both themes across session. Tabs
       primitive's ONLY consumer = MCPConnectorPanel (never_edit); Firewall12 tabs are custom activeSection.
       MCP claim: active.
+      [iter+] Playwright visual+behavior snapshot gate CONFIRMED in place + functional (tests/visual/,
+      npm run test:visual → run.sh mints JWT → audit.mjs). Checks every surface × 2 themes × 4 widths for
+      real-overflow + leak scan + chart-migration(0 recharts) + console errors; screenshots + report.json;
+      exit 1 on any gate fail; module-1-4 allowOverflow (never_edit MCPConnectorPanel = warn not fail). Ran
+      live on login surface (unauth, F3-independent): light+dark × 1440+375 all "ok" → "GATE PASSED — no
+      visual/behavior regressions" exit 0. Full authed-suite green run is F3-throttled (env), gate itself
+      sound. Completion criterion "snapshot gate in place" = SATISFIED. MCP claim: active.
