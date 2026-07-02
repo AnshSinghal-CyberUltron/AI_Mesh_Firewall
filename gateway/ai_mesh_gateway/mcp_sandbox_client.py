@@ -93,11 +93,17 @@ async def _request_with_503_retry(
     url: str,
     *,
     json: dict[str, Any] | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> httpx.Response:
     last_response: httpx.Response | None = None
+    # CHG-0051: broker auth headers + optional out-of-band tracing headers (e.g. the
+    # X-Request-ID correlation id), built once and reused across 503 retries.
+    _hdrs = _auth_headers()
+    if extra_headers:
+        _hdrs.update({k: str(v) for k, v in extra_headers.items() if v})
     for attempt in range(1, _RETRY_MAX + 1):
         try:
-            response = await client.request(method, url, json=json, headers=_auth_headers())
+            response = await client.request(method, url, json=json, headers=_hdrs)
         except httpx.HTTPError as exc:
             LOG.warning("Broker unreachable (attempt %d/%d): %s", attempt, _RETRY_MAX, exc)
             if attempt >= _RETRY_MAX:
@@ -205,6 +211,7 @@ async def broker_send_rpc(
     *,
     msg_id: int | str | None = None,
     oauth_token: str | None = None,
+    correlation_id: str = "",
 ) -> dict[str, Any]:
     """Forward one JSON-RPC exchange to an MCP server inside the org sandbox — for
     ANY transport (stdio, streamable-http, sse, websocket).
@@ -249,8 +256,14 @@ async def broker_send_rpc(
         }
 
     url = f"{_BROKER_URL}/v1/sandbox/{org_slug}/rpc"
+    # CHG-0051: propagate the per-request correlation id to the broker (and thus the
+    # sandbox) as X-Request-ID, so their logs correlate with the gateway MCPEvent
+    # audit for the same tool call (end-to-end tracing without OTEL).
+    _trace_hdrs = {"X-Request-ID": correlation_id} if correlation_id else None
     async with httpx.AsyncClient(timeout=_http_timeout(timeout)) as client:
-        response = await _request_with_503_retry(client, "POST", url, json=payload)
+        response = await _request_with_503_retry(
+            client, "POST", url, json=payload, extra_headers=_trace_hdrs
+        )
 
     _raise_for_broker_error(response)
     return response.json()

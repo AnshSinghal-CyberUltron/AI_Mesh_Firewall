@@ -413,6 +413,16 @@
       1115 gateway passed. Evidence: mcp-parallel/findings/backstop-p13-request-correlation-id/finding.md.
       STILL OPEN (item 13 [ ]): thread _req_id into jsonrpc early authz sites + internal_tools_call; propagate
       into broker_send_rpc for cross-service tracing; OTEL/Jaeger + PG/Redis backup remain INFRA.
+      CHG-0051 (2026-07-02, completes the CHG-0050 broker-propagation follow-up): broker_send_rpc sent NO
+      correlation id to the broker, so the trace ended at the gateway boundary. FIX (out-of-band X-Request-ID
+      header, no JSON-RPC schema change): _request_with_503_retry gains extra_headers (merged w/ broker auth
+      headers, built once + reused across 503 retries); broker_send_rpc gains correlation_id → sends
+      X-Request-ID when set (no header when unset); _adapter_forward gains correlation_id (default "") →
+      passes it through; org_mcp_jsonrpc tool-call site passes correlation_id=_req_id. Remote-transport tool
+      calls now carry the id to broker+sandbox. +2 tests (header sent when set / absent when unset). Gate: 13
+      sandbox-client + 1117 gateway passed. Evidence: mcp-parallel/findings/backstop-p13-broker-correlation-propagation/finding.md.
+      STILL OPEN (item 13 [ ]): stdio branch (send_jsonrpc); tools/list + internal_tools_call + early authz
+      sites; broker/sandbox should LOG the received X-Request-ID; OTEL/Jaeger + PG/Redis backup remain INFRA.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

@@ -481,6 +481,20 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `internal_tools_call`; propagate into `broker_send_rpc` for cross-service tracing; OTEL/Jaeger + PG/Redis
   backup remain infra (item 13 stays `[ ]`). Evidence:
   `mcp-parallel/findings/backstop-p13-request-correlation-id/`.
+- **CHG-0051** (2026-07-02) — G4 item 13 (end-to-end tracing; completes the CHG-0050 follow-up): CHG-0050
+  gave MCP audit events a per-request correlation id (from `X-Request-ID`), but `broker_send_rpc` sent NO
+  correlation id to the broker — so the broker + sandbox logs for a tool call couldn't be tied back to the
+  gateway MCPEvent audit (the trace ended at the gateway boundary). FIX (out-of-band `X-Request-ID` header,
+  no JSON-RPC payload-schema change): `_request_with_503_retry` gains `extra_headers` (merged with the broker
+  auth headers, built once + reused across 503 retries); `broker_send_rpc` gains `correlation_id` and sends
+  `X-Request-ID: <id>` when set (no header when unset); `_adapter_forward` gains `correlation_id` (default
+  "") and passes it through; the `org_mcp_jsonrpc` tool-call site passes `correlation_id=_req_id`. A
+  remote-transport tool call now carries the gateway correlation id to the broker + sandbox. Additive params
+  with defaults — other callers unchanged. Files: mcp_sandbox_client.py, mcp_proxy.py,
+  test_mcp_sandbox_client.py (+2). Gate: 13 sandbox-client + 1117 gateway passed. Follow-ups: stdio branch
+  (`send_jsonrpc`); tools/list + `internal_tools_call` + early authz sites; broker should LOG the received
+  `X-Request-ID`; OTEL/Jaeger + backup remain infra (item 13 stays `[ ]`). Evidence:
+  `mcp-parallel/findings/backstop-p13-broker-correlation-propagation/`.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 

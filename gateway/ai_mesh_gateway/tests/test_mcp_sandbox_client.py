@@ -275,3 +275,35 @@ async def test_broker_send_rpc_remote_requires_url():
         await client.broker_send_rpc(
             ORG, {"server_slug": "x", "transport": "sse"}, "tools/list", None
         )
+
+
+# ── CHG-0051: propagate the request correlation id to the broker as X-Request-ID ──
+
+
+@pytest.mark.asyncio
+async def test_broker_send_rpc_propagates_correlation_id_as_x_request_id():
+    mock_http = AsyncMock()
+    mock_http.request.return_value = _response(200, json_body={"result": {"ok": True}})
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+    with patch.object(client.httpx, "AsyncClient", return_value=mock_http):
+        await client.broker_send_rpc(
+            ORG, SERVER_CONFIG, "tools/call", {"name": "x"},
+            msg_id=7, correlation_id="trace-xyz-123",
+        )
+    hdrs = mock_http.request.call_args.kwargs["headers"]
+    assert hdrs["X-Request-ID"] == "trace-xyz-123"          # correlation id reaches the broker
+    assert hdrs[client.BROKER_KEY_HEADER] == BROKER_KEY     # broker auth header still present
+
+
+@pytest.mark.asyncio
+async def test_broker_send_rpc_no_correlation_id_sends_no_x_request_id():
+    mock_http = AsyncMock()
+    mock_http.request.return_value = _response(200, json_body={"result": {"ok": True}})
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+    with patch.object(client.httpx, "AsyncClient", return_value=mock_http):
+        await client.broker_send_rpc(ORG, SERVER_CONFIG, "tools/call", {"name": "x"}, msg_id=7)
+    hdrs = mock_http.request.call_args.kwargs["headers"]
+    assert "X-Request-ID" not in hdrs                       # no empty/None header when unset
+    assert hdrs[client.BROKER_KEY_HEADER] == BROKER_KEY

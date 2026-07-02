@@ -326,6 +326,15 @@
     prefer/fallback/empty/bound/no-headers). Gate: 33 bare-proxy + 1115 gateway passed. Follow-ups: early
     jsonrpc authz sites + internal_tools_call + broker_send_rpc propagation; OTEL/backup infra. Evidence
     mcp-parallel/findings/backstop-p13-request-correlation-id/.
+  - CHG-0051 (2026-07-02) — G4 item 13 (end-to-end tracing; completes CHG-0050 follow-up): CHG-0050 gave
+    MCP audit events a correlation id but broker_send_rpc sent NONE to the broker — the trace ended at the
+    gateway boundary. FIX (out-of-band X-Request-ID header, no JSON-RPC schema change): _request_with_503_retry
+    gains extra_headers (merged w/ broker auth); broker_send_rpc gains correlation_id → sends X-Request-ID when
+    set; _adapter_forward gains correlation_id (default "") → passes it through; the org_mcp_jsonrpc tool-call
+    site passes correlation_id=_req_id. Remote-transport tool calls now carry the id to broker+sandbox. +2
+    tests (header sent when set / absent when unset). Gate: 13 sandbox-client + 1117 gateway passed. Follow-ups:
+    stdio path (send_jsonrpc); tools/list+internal+early-authz sites; broker should LOG the id; OTEL/backup
+    infra. Evidence mcp-parallel/findings/backstop-p13-broker-correlation-propagation/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

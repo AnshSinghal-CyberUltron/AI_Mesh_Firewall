@@ -2254,6 +2254,8 @@ async def _adapter_forward(
     body: dict,
     jsonrpc: str,
     msg_id,
+    *,
+    correlation_id: str = "",
 ) -> JSONResponse:
     """Forward a JSON-RPC message to the per-org sandbox for a non-backend transport.
 
@@ -2290,7 +2292,7 @@ async def _adapter_forward(
             }
             result = await broker_send_rpc(
                 org_slug, up_config, method, params if params else None,
-                msg_id=msg_id, oauth_token=oauth_token,
+                msg_id=msg_id, oauth_token=oauth_token, correlation_id=correlation_id,
             )
             return JSONResponse(content=result, status_code=200)
         if transport == "stdio":
@@ -2719,6 +2721,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
             )
             adapter_resp = await _adapter_forward(
                 transport, server_config, org_slug, server_slug, body, jsonrpc, msg_id,
+                correlation_id=_req_id,
             )
             # Best-effort audit: record allow (or error) for stdio/websocket calls
             # since these never hit the backend's MCPToolCallView audit path.
