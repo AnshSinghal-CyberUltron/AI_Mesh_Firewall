@@ -405,3 +405,11 @@
       Documented for backend. Overview structural verify @1440 both themes: 9 chart canvases, mainScroll 0,
       0 overflow. KPI==API values NOT confirmed this run (soc-kpis 17-30s under F3 → 9 spinners; 375 fell to
       login = env). Overview KPI==API + 375 re-verify PENDING rested backend. MCP claim: active.
+      [iter+] Verified account/auth cluster CLEAN (backend-light, no F3 dependency), no fix: Profile (both
+      themes 1440/768/375) — real user admin@zeroshield.io + 4 roles, org shows NAME "ZeroShield" not id:2
+      (no leak), "Not set" honest empty, 3 pw fields all type=password, 0 secrets/JWT/hex, email-change
+      validation, 0 overflow, 0 console err, good dark contrast. Settings — theme+notif toggles, 0 overflow,
+      0 err. Login (unauth) — email+masked pw (show/hide toggle), 0 overflow, 0 err, clean both themes.
+      Minor note (not fixed): login footer trust badges (99.99%/SOC2/10M+) are static marketing chrome
+      (pre-auth, can't bind live) — product call, not a dashboard data-integrity bug. Backend soc-kpis STILL
+      24-30s (sustained multi-session load) → overview KPI==API still pending. MCP claim: active.
