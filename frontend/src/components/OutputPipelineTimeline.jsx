@@ -41,6 +41,7 @@ const ACTION_COLORS = {
 
 function StageNode({ stage, isLast, actionColor }) {
   const Icon = STAGE_ICONS[stage.id] || Shield;
+  // impeccable-disable-next-line gray-on-color: dot(bg-teal-500) and text(slate) apply to SEPARATE elements — the teal dot holds a white icon, the slate label sits on the card bg (bg-white/slate-900). No gray text is rendered on teal; the static heuristic just pairs them from one object literal.
   const colors = stage.highlight ? (ACTION_COLORS[stage.highlightAction] || ACTION_COLORS.allow) : { border: "border-slate-200 dark:border-slate-700", bg: "bg-white dark:bg-slate-900/40", dot: "bg-teal-500", text: "text-slate-700 dark:text-slate-300" };
 
   // a11y: the stage's action state is otherwise conveyed by colour ALONE (dot/border).
