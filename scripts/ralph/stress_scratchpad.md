@@ -20,7 +20,7 @@
       resolves to nothing — R2/R3 must CREATE it (incl. materializing the "9 frozen" baseline cases).
 
 ## R1 — Research current attacks (browser/web)
-- [ ] 1. Research the CURRENT (2026) LLM firewall attack landscape: OWASP LLM Top-10, direct + indirect
+- [x] 1. Research the CURRENT (2026) LLM firewall attack landscape: OWASP LLM Top-10, direct + indirect
       prompt injection, jailbreaks (roleplay/DAN, many-shot, crescendo/multi-turn), obfuscation
       (unicode/homoglyph/leetspeak/base64/rot13/zero-width), token smuggling, language switching, split
       payloads, PII/secret exfil, guardrail bypass, RAG/tool poisoning, ReDoS/DoS. → docs/stress/ATTACK_LANDSCAPE.md.
@@ -66,4 +66,46 @@
 ## R7 — Freeze the hardened pipeline
 - [ ] 10. Full golden suite (9 original + new attack cases) green 3× in-process AND live-with-real-models;
       impeccable clean; pre-commit key-leak scan clean; no MCPConnectorPanel edits. Output <promise>COMPLETE</promise>.
-      
+
+---
+
+## DURABLE SESSION NOTES (read every iteration — avoid re-deriving)
+
+### Environment (CRITICAL — the repo was authored on macOS; .venv312 is a BROKEN mac venv here)
+- Working Python env = `uv`. One-time: `cd gateway && uv sync --extra dev` (materialises the project's OWN
+  locked deps incl. pytest — NOT external OSS; legitimate for running gates). Creates `gateway/.venv`.
+- Run backend tests with the venv python + PYTHONPATH (NOT `uv run pytest`, which grabs system py3.14):
+  `cd gateway && GATEWAY_LIVE=0 PYTHONPATH=. .venv/bin/python -m pytest tests/golden -q`
+- GOLDEN GATE (the 9): `GATEWAY_LIVE=0 PYTHONPATH=. .venv/bin/python -m pytest tests/golden -q`
+  → offline = 3 passed / 7 skipped / 0 failed (7 need live mode → R5 with OpenRouter key, GATEWAY_LIVE=1).
+
+### Coordination HAZARD (proven this session)
+- ALL sessions (this Claude, Cursor MCP, freeze) share ONE working tree + ONE git index on `main`.
+  A concurrent `git add -A` by another session SWEEPS UP your staged files into THEIR commit
+  (happened: golden foundation landed under commit 5d0dd346 "P8 item 26", not my R1a commit f3980687).
+  → RULE: stage NARROWLY (explicit paths, never `git add -A`) and COMMIT IMMEDIATELY after staging.
+  → NEVER `git add -A` (would also sweep .claude/ralph-loop.local.md which holds the LIVE KEY).
+
+### What is DONE
+- R0 (042c11c2): claim + pre-commit secret-scan guard (.git/hooks/pre-commit, fingerprint 93a9a831…) + .env* ignore.
+- R1a integration (files landed in 5d0dd346): the "9 frozen golden cases" + enforcement.py + pipeline
+  contracts existed ONLY on branch `cursor/chat-pipeline-stress`, not main. Integrated the released
+  commits f1a091cc..dd55f8fb onto main (main.py/policy_engine/pyproject were untouched on main since
+  merge-base 53b169f9 → zero-regression). Golden gate green on main.
+- R1 (this commit): docs/stress/ATTACK_LANDSCAPE.md — system-tailored, with gap register G1–G14.
+
+### R2/R4 ROADMAP (from ATTACK_LANDSCAPE.md Part C — priority order)
+- G1 (P0, VERIFIED leak): unicode/zero-width/homoglyph PII+secret bypass Tier-1 (detect_pii/detect_secrets/
+  redact_all run on RAW text only; scanner.py:789/800, patterns.py:621). fullwidth @, U+2011 SSN, ZWSP key → allow.
+- G2 (P0, VERIFIED): base64/hex-encoded PII+secret not decoded for PII (scanner.py:338 decode feeds only attack rescan).
+- G4 (P0): output-side has NO deobfuscation. G10 (P1): Tier-2 semantic redact = byte no-op (honest flag, egress raw).
+- G5 (P1): computed-but-not-enforced policy (redact w/o config forwards raw; policy_engine.py:362 + main.py:1079).
+- G6 (P1): scanner STATELESS → crescendo/echo/split-across-turns uncaught. G3 (P1): chunk-split "ig no re" → allow.
+- HEADLINE R4 FIX: add `canonicalize_for_detection()` in owned scanner/patterns; run raw+canonical through
+  detect_pii/detect_secrets/redact_all (shared catalogue → fixes detection AND masking). ReDoS-safe, keep 9 green.
+
+### R6 note (frontend)
+- Task-named `OutputPipelineTimeline.jsx` does NOT consume stages[] — colours 6 fake stages from one global
+  event.action. The HONEST per-stage consumer is `frontend/src/components/simulator/StageTimeline.jsx`.
+  TRACE_UI_CONTRACT.md now exists at docs/pipeline/TRACE_UI_CONTRACT.md (integrated). R6 must reconcile both.
+- `impeccable` skill/plugin is NOT installed → do R6 polish manually.
