@@ -1315,6 +1315,27 @@ def _content_to_text(content) -> str:
     return ""
 
 
+def _tool_arg_to_text(value) -> str:
+    """Coerce a tool-call ``name``/``arguments`` value to scannable text.
+
+    G58: per the OpenAI spec ``arguments`` is a JSON *string*, but some providers /
+    proxies (and LiteLLM in certain paths) return a PARSED DICT (or other non-str).
+    The output scan + enforcement previously only handled ``str`` here, so PII/
+    secrets in a dict-shaped argument egressed UNscanned AND survived neutralization
+    (the guard saw benign content -> verdict allow -> raw egress; or a redact verdict
+    blanked only str channels while the dict argument shipped verbatim). Mirrors the
+    INPUT-side coercion already done in _extract_prompt_from_messages.
+    """
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    try:
+        return json.dumps(value)
+    except (TypeError, ValueError):
+        return ""
+
+
 def _extract_response_from_completion(completion):
     """Extract assistant response text from chat completion (non-streaming)."""
     choices = completion.get("choices") or []
@@ -1365,15 +1386,17 @@ def _extract_scannable_output_text(completion) -> str:
                 continue
             fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
             for _k in ("name", "arguments"):
-                _v = fn.get(_k)
-                if isinstance(_v, str) and _v:
+                # G58: coerce a non-str (dict) ``arguments`` to JSON text so a
+                # dict-shaped tool-call payload is scanned, not skipped.
+                _v = _tool_arg_to_text(fn.get(_k))
+                if _v:
                     parts.append(_v)
         # I5: legacy `function_call` channel (pre-tool_calls API shape) — fold it too.
         _fc = msg.get("function_call")
         if isinstance(_fc, dict):
             for _k in ("name", "arguments"):
-                _v = _fc.get(_k)
-                if isinstance(_v, str) and _v:
+                _v = _tool_arg_to_text(_fc.get(_k))
+                if _v:
                     parts.append(_v)
     return "\n".join(parts)
 
@@ -1392,13 +1415,16 @@ def _neutralize_secondary_output_channels(msg: dict) -> None:
         for tc in (msg.get("tool_calls") or []):
             if isinstance(tc, dict) and isinstance(tc.get("function"), dict):
                 for _k in ("name", "arguments"):
-                    if isinstance(tc["function"].get(_k), str) and tc["function"].get(_k):
+                    # G58: blank a TRUTHY value of ANY type (a dict-shaped
+                    # ``arguments`` was left verbatim by the str-only check, shipping
+                    # its PII after a redact verdict). Neutralize to "" regardless.
+                    if tc["function"].get(_k):
                         tc["function"][_k] = ""
         # I5: blank the legacy function_call channel on enforcement too.
         _fc = msg.get("function_call")
         if isinstance(_fc, dict):
             for _k in ("name", "arguments"):
-                if isinstance(_fc.get(_k), str) and _fc.get(_k):
+                if _fc.get(_k):
                     _fc[_k] = ""
         # R12 (#15): blank the `refusal` text channel on enforcement.
         if isinstance(msg.get("refusal"), str) and msg.get("refusal"):

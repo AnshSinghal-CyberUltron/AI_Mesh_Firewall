@@ -101,13 +101,24 @@ def _completion(model: str, *, secret_channel: str, n_choices: int = 1) -> dict:
                     {"type": "text", "text": "Here is the answer. "},
                     {"type": "text", "text": f"The key is {SECRET} for {PII}."},
                 ]
+            elif secret_channel == "dict_tool_args":
+                # G58: tool-call ``arguments`` as a PARSED DICT (some providers do
+                # this) rather than the spec's JSON string. The str-only scan +
+                # enforce paths skipped it, so a dict-shaped argument egressed
+                # unscanned AND un-neutralized.
+                msg["tool_calls"] = [{
+                    "id": "call_2", "type": "function",
+                    "function": {"name": "exfiltrate",
+                                 "arguments": {"key": SECRET, "to": PII}},
+                }]
         choices.append({"index": i, "message": msg, "finish_reason": "stop"})
     return {"id": "chatcmpl-x", "object": "chat.completion", "model": model,
             "choices": choices}
 
 
 SECONDARY_CHANNELS = ["content", "reasoning_content", "refusal",
-                      "tool_calls", "function_call", "audio", "list_content"]
+                      "tool_calls", "function_call", "audio", "list_content",
+                      "dict_tool_args"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -199,6 +210,40 @@ def test_g57_list_content_stream_nonstream_parity():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# G58: tool-call ``arguments`` as a PARSED DICT (not the spec JSON string). The
+# str-only scan + enforce paths skipped it, so a dict-shaped argument egressed
+# unscanned AND survived neutralization. The input side already coerced it
+# (_extract_prompt_from_messages json.dumps); this pins output-side parity.
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("model", MODEL_IDS)
+def test_g58_dict_tool_args_scanned(model):
+    completion = _completion(model, secret_channel="dict_tool_args")
+    scan_text = gm._extract_scannable_output_text(completion)
+    assert SECRET in scan_text and PII in scan_text, (
+        f"G58: dict-shaped tool-call arguments not in scan input (model={model!r}); "
+        f"scan_text={scan_text!r}"
+    )
+
+
+def test_g58_dict_tool_args_neutralized_on_enforcement():
+    """After enforcement, a dict-shaped tool-call argument must NOT still carry the
+    secret — the str-only neutralizer left the dict verbatim (post-redact leak)."""
+    completion = _completion("gpt-4o-mini", secret_channel="dict_tool_args")
+    gm._set_completion_response_text(completion, "[REDACTED]")
+    blob = json.dumps(completion)
+    assert SECRET not in blob and PII not in blob, (
+        f"G58: dict-shaped tool-call argument survived enforcement. blob={blob[:400]}"
+    )
+
+
+def test_g58_tool_arg_coercion_helper():
+    """_tool_arg_to_text coerces dict/None to scannable text; str is identity."""
+    assert gm._tool_arg_to_text('{"a":1}') == '{"a":1}'
+    assert SECRET in gm._tool_arg_to_text({"key": SECRET})
+    assert gm._tool_arg_to_text(None) == ""
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # 2. ENFORCEMENT mutation sanitizes every choice + every secondary channel.
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("model", MODEL_IDS)
@@ -253,6 +298,9 @@ def _delta_chunk(channel: str, n_choices: int = 1) -> dict:
                 delta = {"audio": {"transcript": f"key {SECRET}"}}
             elif channel == "list_content":
                 delta = {"content": [{"type": "text", "text": f"key {SECRET}"}]}
+            elif channel == "dict_tool_args":
+                delta = {"tool_calls": [{"index": 0, "function":
+                         {"name": "x", "arguments": {"key": SECRET}}}]}
         choices.append({"index": i, "delta": delta})
     return {"choices": choices}
 

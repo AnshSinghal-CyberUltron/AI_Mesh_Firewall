@@ -880,9 +880,17 @@ class SecureStreamingResponse:
                     name = fn.get("name")
                     if isinstance(name, str):
                         parts.append(name)
+                    # G58: coerce a non-str (dict) arguments to JSON text (a
+                    # non-conforming provider may stream parsed args) — stream parity
+                    # with the non-stream _tool_arg_to_text coercion.
                     arguments = fn.get("arguments")
                     if isinstance(arguments, str):
                         parts.append(arguments)
+                    elif arguments is not None:
+                        try:
+                            parts.append(json.dumps(arguments))
+                        except (TypeError, ValueError):
+                            pass
 
             # R12 (#13): legacy `function_call` delta channel (pre-tool_calls API
             # shape) streams raw too — scan name + arguments (non-stream I5 parity).
@@ -892,6 +900,11 @@ class SecureStreamingResponse:
                     _v = fc.get(_k)
                     if isinstance(_v, str):
                         parts.append(_v)
+                    elif _v is not None:
+                        try:
+                            parts.append(json.dumps(_v))
+                        except (TypeError, ValueError):
+                            pass
 
             # R12 (#15): refusal channel streams raw — scan it.
             refusal = delta.get("refusal")
@@ -922,14 +935,17 @@ class SecureStreamingResponse:
         for call in (delta.get("tool_calls") or []):
             if isinstance(call, dict) and isinstance(call.get("function"), dict):
                 fn = call["function"]
-                if isinstance(fn.get("arguments"), str):
+                # G58: blank a TRUTHY value of ANY type — a dict-shaped ``arguments``
+                # (parsed JSON from a non-conforming provider) was left verbatim by
+                # the str-only check, streaming its secret after a redact rebuild.
+                if fn.get("arguments"):
                     fn["arguments"] = ""
-                if isinstance(fn.get("name"), str):
+                if fn.get("name"):
                     fn["name"] = ""
         fc = delta.get("function_call")
         if isinstance(fc, dict):
             for _k in ("name", "arguments"):
-                if isinstance(fc.get(_k), str):
+                if fc.get(_k):
                     fc[_k] = ""
         if isinstance(delta.get("refusal"), str):
             delta["refusal"] = ""
