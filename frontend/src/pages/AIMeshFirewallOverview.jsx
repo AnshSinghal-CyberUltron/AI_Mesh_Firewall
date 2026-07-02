@@ -597,37 +597,38 @@ export function AIMeshFirewallOverview({ onTabChange }) {
     if (showLoader) setLoading(true);
     setFetchError(null);
     try {
-      const results = await Promise.allSettled([
-        fetchWithAuth(`/api/security/soc-kpis/?period=${period}`),
-        fetchWithAuth(`/api/security/attack-vector-trends/?period=${period}`),
-        fetchWithAuth(`/api/security/module-kpis/?period=${period}`),
-        fetchWithAuth(`/api/security/module-trends/?period=${period}`),
-      ]);
-
       const errors = [];
+      // Apply each endpoint's result to state AS SOON AS IT RESOLVES — do NOT batch
+      // behind Promise.allSettled. Otherwise the slowest/hanging endpoint blocks every
+      // KPI from rendering: module-trends is explicitly non-critical yet, when it stalls
+      // (slow query / backend pressure), it would keep the whole dashboard on "--".
+      const apply = async (promise, errorName, onData) => {
+        try {
+          const res = await promise;
+          if (res && res.ok) onData(await res.json());
+          else if (errorName) errors.push(errorName);
+        } catch {
+          if (errorName) errors.push(errorName);
+        }
+      };
+      // Critical endpoints — the dashboard's readiness gates on these three only.
+      const critical = [
+        apply(fetchWithAuth(`/api/security/soc-kpis/?period=${period}`), "SOC KPIs", setSocKpis),
+        apply(fetchWithAuth(`/api/security/attack-vector-trends/?period=${period}`), "Attack Trends", (d) => setAttackTrends(Array.isArray(d) ? d : [])),
+        apply(fetchWithAuth(`/api/security/module-kpis/?period=${period}`), "Module KPIs", setModuleKpis),
+      ];
+      // Non-critical: applies whenever it arrives; never blocks the dashboard.
+      (async () => {
+        try {
+          const res = await fetchWithAuth(`/api/security/module-trends/?period=${period}`);
+          if (res && res.ok) setModuleTrends(await res.json());
+          else console.warn("Module trends endpoint unavailable, using global chart data");
+        } catch {
+          console.warn("Module trends endpoint unavailable, using global chart data");
+        }
+      })();
 
-      if (results[0].status === "fulfilled" && results[0].value.ok) {
-        setSocKpis(await results[0].value.json());
-      } else {
-        errors.push("SOC KPIs");
-      }
-      if (results[1].status === "fulfilled" && results[1].value.ok) {
-        const data = await results[1].value.json();
-        setAttackTrends(Array.isArray(data) ? data : []);
-      } else {
-        errors.push("Attack Trends");
-      }
-      if (results[2].status === "fulfilled" && results[2].value.ok) {
-        setModuleKpis(await results[2].value.json());
-      } else {
-        errors.push("Module KPIs");
-      }
-      if (results[3].status === "fulfilled" && results[3].value.ok) {
-        setModuleTrends(await results[3].value.json());
-      } else {
-        // Non-critical: fallback to global chart data if module-trends unavailable
-        console.warn("Module trends endpoint unavailable, using global chart data");
-      }
+      await Promise.allSettled(critical);
 
       if (errors.length > 0) {
         setFetchError(`Failed to load: ${errors.join(", ")}`);
