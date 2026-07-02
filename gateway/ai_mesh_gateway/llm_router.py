@@ -304,6 +304,37 @@ def _redact_tool_descriptions(obj, redactor):
     return obj
 
 
+def _redact_responses_input_list(items, redactor):
+    """G48: redact free-text in a STRUCTURED Responses ``input`` list (the modern
+    ``[{"role":..,"content":[{"type":"input_text","text":..}]}]`` shape). ``aresponses``
+    only replaced a plain-STRING ``input``, so a list-form input rode to the model RAW
+    despite a redact verdict (the exact silent-leak class ``_apply_redaction`` closed for
+    chat ``messages``). Each item's ``content`` may be a str or a list of parts with a
+    ``text`` field; both are masked. Role==system items are left untouched for parity
+    with the chat path's trusted-instructions decision. Structural fields are preserved."""
+    if not isinstance(items, list):
+        return items
+    out = []
+    for it in items:
+        if not isinstance(it, dict) or it.get("role") == "system":
+            out.append(it)
+            continue
+        c = it.get("content")
+        if isinstance(c, str) and c:
+            out.append({**it, "content": redactor(c)})
+        elif isinstance(c, list):
+            parts = [
+                ({**p, "text": redactor(p["text"])}
+                 if isinstance(p, dict) and isinstance(p.get("text"), str) and p["text"]
+                 else p)
+                for p in c
+            ]
+            out.append({**it, "content": parts})
+        else:
+            out.append(it)
+    return out
+
+
 class LLMRouter:
     """Async LLM router backed by LiteLLM."""
 
@@ -580,8 +611,16 @@ class LLMRouter:
         decrypted BYOK api_key/api_base (the byok_embedder pattern) — preserving
         per-tenant key isolation. ``redacted_content`` (when input is a plain
         string) replaces the input so the upstream model never sees raw PII."""
-        if redacted_content is not None and isinstance(body.get("input"), str):
-            body = {**body, "input": redacted_content}
+        if redacted_content is not None:
+            _inp = body.get("input")
+            if isinstance(_inp, str):
+                body = {**body, "input": redacted_content}
+            elif isinstance(_inp, list):
+                # G48: a structured list-form input previously rode to the model RAW —
+                # redact each turn's text with the same deterministic redactor.
+                body = {**body, "input": _redact_responses_input_list(
+                    _inp, lambda s: _redact_text_with_backstop(s, redacted_content)
+                )}
         route_model, params = self._resolve_responses_deployment(body)
         if params is None:
             return 404, {"error": {

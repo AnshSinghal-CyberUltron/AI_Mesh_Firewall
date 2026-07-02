@@ -148,3 +148,36 @@ def test_apply_redaction_masks_multimodal_text_part():
 def test_apply_redaction_none_signal_is_noop():
     body = _apply(None, _body([{"role": "user", "content": "call 8929554991"}]), None)
     assert body["messages"][0]["content"] == "call 8929554991"
+
+
+# G48: the OpenAI Responses API carries the prompt in ``input`` (string OR a structured
+# list of turns). ``aresponses`` previously redacted only a plain-STRING input, so a
+# LIST-form input (the modern shape, incl. multimodal ``input_text`` parts) rode to the
+# model RAW despite a redact verdict — the same silent-leak class ``_apply_redaction``
+# closed for chat ``messages``. ``_redact_responses_input_list`` now masks every turn's
+# text; system turns stay untouched for parity with the chat path.
+def test_g48_responses_list_input_redacted():
+    from llm_router import _redact_responses_input_list, _redact_text_with_backstop
+    rc = redact_all("ssn 123-45-6789 email bob@example.com")
+    red = lambda s: _redact_text_with_backstop(s, rc)  # noqa: E731
+    inp = [
+        {"role": "user", "content": [{"type": "input_text", "text": "my ssn 123-45-6789"}]},
+        {"role": "assistant", "content": [{"type": "output_text", "text": "noted"}]},
+        {"role": "user", "content": "and email bob@example.com too"},
+    ]
+    blob = str(_redact_responses_input_list(inp, red))
+    assert "123-45-6789" not in blob, "list-form Responses input SSN leaked to the model"
+    assert "bob@example.com" not in blob, "list-form Responses input email leaked to the model"
+
+
+def test_g48_responses_input_leaves_system_untouched():
+    from llm_router import _redact_responses_input_list, _redact_text_with_backstop
+    rc = redact_all("[user]: ssn 123-45-6789")
+    red = lambda s: _redact_text_with_backstop(s, rc)  # noqa: E731
+    inp = [
+        {"role": "system", "content": "agent id 8929554991 internal"},
+        {"role": "user", "content": "ssn 123-45-6789"},
+    ]
+    out = _redact_responses_input_list(inp, red)
+    assert out[0]["content"] == "agent id 8929554991 internal"  # system turn untouched (parity)
+    assert "123-45-6789" not in str(out[1])  # user turn redacted
