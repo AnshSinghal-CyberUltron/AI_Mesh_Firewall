@@ -1150,7 +1150,7 @@ def test_g43_benign_protocol_relative_not_touched(label, payload):
 _G44_LEAK = [
     ("g44_bold_ssn",   "The SSN is 1**2**3-45-6789 exactly", "123-45-6789"),
     ("g44_code_email", "reach john`@`example.com today",      "john@example.com"),
-    ("g44_ital_ssn",   "ssn 12_3_-45-6789 here",              None),
+    ("g44_star_ssn",   "ssn 12*3*-45-6789 here",              None),  # single-* renders intra-word
     ("g44_cc_split",   "card 4111**1111**1111**1111",         None),
     ("g44_backtick",   "value 1`2`3-45-6789 end",             "123-45-6789"),
 ]
@@ -1171,12 +1171,45 @@ _G44_BENIGN = [
     ("g44_math",       "compute 2*3*4 and 5_0 equals fifty"),
     ("g44_emph_value", "the value **123** and the total _456_ shown"),
     ("g44_url_ident",  "visit https://example.com/a_b/c-d and file_name.txt"),
+    # G50: intra-word '_' is NOT markdown emphasis (CommonMark) — it renders LITERALLY,
+    # so an SSN-shaped id split with '_' does NOT reveal the value and must NOT be masked.
+    ("g44_underscore_literal", "the record id is 12_3_-45-6789 in the export"),
 ]
 
 
 @pytest.mark.parametrize("label,payload", _G44_BENIGN)
 def test_g44_benign_markdown_not_touched(label, payload):
     assert _og.neutralize_markdown_split_pii(payload) == payload, f"{label}: benign markdown mutated (FP)"
+
+
+# ── G50: obfuscated CREDENTIAL / internal IP via interleaved emphasis (extends G44) ──
+# The same *//` interleaving that hid PII also hid a bearer/api-key credential and an
+# internal IP from the raw-text credential/IP detectors (which G44 did not consult).
+# neutralize_markdown_split_pii now also checks detect_credential_exposure / detect_ip_leakage
+# on the (*/`)-stripped run; '_' stays literal so a ``sk_live_`` prefix survives to match.
+_G50_LEAK = [
+    ("g50_split_bearer", "token sk_live_**abc123**def456ghi789jkl000 here"),
+    ("g50_split_ip",     "the host is 10.**0**.0.5 internally"),
+    ("g50_code_ip",      "server 10.`0`.0.5 in the vpc"),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G50_LEAK)
+def test_g50_split_credential_or_ip_masked(label, payload):
+    out = _og.neutralize_markdown_split_pii(payload)
+    assert "[PII_REDACTED]" in out, f"{label}: obfuscated credential/IP not masked"
+    stripped = out.replace("*", "").replace("`", "")
+    assert "sk_live_abc123def456" not in stripped and "10.0.0.5" not in stripped, (
+        f"{label}: sensitive value survives in rendered egress"
+    )
+
+
+@pytest.mark.parametrize("label,payload", [
+    ("g50_benign_ip_ver", "we run version 10.0.5 on the box"),      # plain, no interleaving
+    ("g50_benign_snake",  "the config key db_conn_pool is set"),    # underscores literal
+])
+def test_g50_benign_not_masked(label, payload):
+    assert _og.neutralize_markdown_split_pii(payload) == payload, f"{label}: benign mutated (FP)"
 
 
 # ── G49: exfil beacon hidden PAST the URL-scan budget (padding-flood evasion) ─────────

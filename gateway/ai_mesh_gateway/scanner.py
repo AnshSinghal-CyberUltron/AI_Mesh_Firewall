@@ -34,6 +34,8 @@ try:
         compile_pattern,
         detect_pii,
         detect_secrets,
+        detect_credential_exposure,
+        detect_ip_leakage,
         redact_all,
         strip_interleaved_emphasis,
         PII_PATTERNS,
@@ -51,6 +53,8 @@ except ImportError:
         compile_pattern,
         detect_pii,
         detect_secrets,
+        detect_credential_exposure,
+        detect_ip_leakage,
         redact_all,
         strip_interleaved_emphasis,
         PII_PATTERNS,
@@ -1271,13 +1275,19 @@ class InputScanner:
         if _md_stripped != text:
             _m_pii = detect_pii(_md_stripped)
             _m_secret = detect_secrets(_md_stripped)
-            if _m_pii or _m_secret:
-                _mk = list(_m_pii.keys()) + list(_m_secret.keys())
+            # G50: also the credential + internal-IP detectors (obfuscated bearer/api
+            # key or ``10.**0**.0.5`` internal IP). Flagged as pii/secret so the guard
+            # elevates to redact and neutralize_markdown_split_pii masks the run.
+            _m_cred = detect_credential_exposure(_md_stripped)
+            _m_ip = detect_ip_leakage(_md_stripped)
+            if _m_pii or _m_secret or _m_cred or _m_ip:
+                _mk = (list(_m_pii.keys()) + list(_m_secret.keys())
+                       + list(_m_cred.keys()) + list(_m_ip.keys()))
                 return ScanVerdict(
                     action="flag",
                     threat_type="pii" if _m_pii else "secret",
                     confidence=0.85,
-                    detail=f"Markdown-split PII/secret in output: {', '.join(_mk)}",
+                    detail=f"Markdown-split PII/secret/credential/IP in output: {', '.join(_mk)}",
                     matched_patterns=_mk,
                 )
 

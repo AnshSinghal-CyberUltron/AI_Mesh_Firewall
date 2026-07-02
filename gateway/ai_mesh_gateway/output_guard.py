@@ -1391,7 +1391,9 @@ def neutralize_encoded_pii(text: str) -> str:
 # G44: a token whose chars are interleaved with inline markdown emphasis/code markers,
 # where stripping them reveals a PII/secret (``1**2**3-45-6789`` -> SSN, ``john`@`x.com``
 # -> email). Disjoint char classes (word/PII vs emphasis) -> linear (ReDoS-safe).
-_MD_SPLIT_TOKEN_RE = re.compile(r"[\w@.\-]+(?:[*_`]+[\w@.\-]+)+")
+# G50: only ``*`` / `` ` `` are intra-word emphasis (per CommonMark); ``_`` is a literal
+# token char (sk_live_ / snake_case) and must NOT be treated as a split marker.
+_MD_SPLIT_TOKEN_RE = re.compile(r"[\w@.\-]+(?:[*`]+[\w@.\-]+)+")
 
 
 def neutralize_markdown_split_pii(text: str) -> str:
@@ -1404,8 +1406,14 @@ def neutralize_markdown_split_pii(text: str) -> str:
 
     def _sub(m: "re.Match[str]") -> str:
         run = m.group(0)
-        stripped = run.replace("*", "").replace("_", "").replace("`", "")
-        if stripped != run and (detect_pii(stripped) or detect_secrets(stripped)):
+        stripped = run.replace("*", "").replace("`", "")  # G50: keep '_' (literal, not emphasis)
+        # G50: also cover CREDENTIAL (bearer/api keys) + internal IP detectors — the
+        # same interleaved-emphasis trick hides an obfuscated ``sk_live_**…**`` token or
+        # ``10.**0**.0.5`` internal IP from the raw-text credential/IP checks.
+        if stripped != run and (
+            detect_pii(stripped) or detect_secrets(stripped)
+            or detect_credential_exposure(stripped) or detect_ip_leakage(stripped)
+        ):
             return "[PII_REDACTED]"
         return run
 

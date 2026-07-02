@@ -118,13 +118,15 @@ def canonicalize_for_detection(text: str) -> str:
     return _canonicalize_with_map(text)[0]
 
 
-# G44: inline markdown emphasis/code markers (* _ `) sitting BETWEEN two word/PII chars
-# are a typographic obfuscation — ``1**2**3-45-6789`` and ``john`@`example.com`` keep the
-# raw bytes off the PII regexes yet a markdown renderer shows the value. Only markers
-# INTERLEAVED among alnum/PII chars are stripped; emphasis that WRAPS a whole token
-# (space-adjacent, e.g. ``**bold**`` / ``_italic_``) is left intact. Disjoint char
-# classes on both sides -> linear (no ReDoS).
-_MD_EMPH_INTERLEAVE = re.compile(r"(?<=[\w@.\-])[*_`]+(?=[\w@.\-])")
+# G44/G50: inline markdown emphasis/code markers sitting BETWEEN two word/PII chars are a
+# typographic obfuscation — ``1**2**3-45-6789`` / ``john`@`example.com`` keep the raw bytes
+# off the regexes yet a markdown renderer shows the value. Only ``*`` and `` ` `` are
+# stripped: per CommonMark, INTRA-WORD ``_`` is NOT emphasis (``sk_live_key`` / ``snake_case``
+# / ``12_3_`` render LITERALLY), so stripping ``_`` would both create false hits and DESTROY
+# a legitimate ``sk_live_``/token prefix (masking the credential detector). Emphasis that
+# WRAPS a whole token (space-adjacent ``**bold**`` / ``_italic_``) is left intact. Disjoint
+# char classes on both sides -> linear (no ReDoS).
+_MD_EMPH_INTERLEAVE = re.compile(r"(?<=[\w@.\-])[*`]+(?=[\w@.\-])")
 
 
 def strip_interleaved_emphasis(text: str) -> str:
