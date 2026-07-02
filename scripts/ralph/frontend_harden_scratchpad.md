@@ -372,3 +372,12 @@
       probe shows soc-kpis?period=7d = 6-8s vs threat-feed 0.45s; useFirewallData's `await Promise.allSettled`
       couples them so KPIs wait ~7s — SAME bug class as the overview fix (56ff19ca). Decouple useFirewallData
       next iter (set each state as its fetch resolves), verify all module pages. MCP claim STILL active.
+      [iter+] DONE the root-cause decouple (commit 6b8b0cf2): useFirewallData now commits each state slice
+      as its own fetch resolves (apply() helper) instead of awaiting Promise.allSettled — module KPIs no
+      longer wait on slow soc-kpis (6-8s). Made FirewallModulePage's placeholder gate module-aware (1.1→
+      socKpis!=null, others→threatFeedCount!==null) so 1.1 doesn't flash the raw-feed total and empty
+      modules show honest 0 fast. LIVE: 1.6 —→14 in 163ms (was ~7s); 1.1 —→92,598 no flash; regression
+      clean (1.2 1005/468/143/263/39.2% + charts, 1.5 552, 1.3 6), both themes; lint 75/75, build, detector
+      []. All 5 useFirewallData consumers safe (soc-kpis timing unchanged; only feed-based values faster).
+      MCP claim (claude-ralph-stress-iter1-R0) re-checked: STILL active — MCPConnectorPanel remains THE
+      COMPLETE blocker. Everything else in remit continues to verify clean.
