@@ -1,19 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { ResponsiveContainer } from "recharts";
+import { EChart } from "./charts/EChart";
 
 /**
- * ResizeObserver-gated wrapper around recharts' <ResponsiveContainer>.
+ * ResizeObserver-gated chart wrapper.
+ *
+ * Two modes, one API (backward compatible):
+ *  - **ECharts (preferred):** pass an `option` prop → renders the theme-aware
+ *    <EChart> once the wrapper has a real measured size. This is the recharts→
+ *    ECharts migration target (FRONTEND_AUDIT.md R1); extra props forward to EChart.
+ *  - **recharts (legacy):** pass recharts JSX as `children` → renders the original
+ *    <ResponsiveContainer> path unchanged, so un-migrated panels keep working.
  *
  * recharts measures its parent synchronously on mount; when a chart is mounted
  * inside a just-expanded collapsible section (or any container that is 0×0 for
  * a frame), it logs "The width(-1) and height(-1) of chart should be greater
- * than 0". This wrapper only renders the ResponsiveContainer once the wrapping
- * div has a real measured size, eliminating that warning.
+ * than 0". The gate below only renders once the wrapping div has a real measured
+ * size, eliminating that warning for both paths.
  *
  * The wrapper div must carry an explicit height (via `className`, e.g. h-[200px]),
- * since ResponsiveContainer uses height="100%".
+ * since the inner chart fills 100% height.
  */
-export function SafeResponsiveChart({ className, children, minSize = 24 }) {
+export function SafeResponsiveChart({ className, children, minSize = 24, option, ...echartProps }) {
   const containerRef = useRef(null);
   // Track the MEASURED pixel size of the wrapper, not just a ready flag. We hand
   // those explicit px dimensions to <ResponsiveContainer> below (instead of
@@ -52,6 +60,24 @@ export function SafeResponsiveChart({ className, children, minSize = 24 }) {
 
   const isReady = size.width > minSize && size.height > minSize;
 
+  const placeholder = (
+    <div className="h-full flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">
+      Preparing chart…
+    </div>
+  );
+
+  // ECharts path (migration target): render the theme-aware <EChart>. EChart
+  // manages its own resize, but we still gate on a measured size so it never
+  // initialises at 0×0.
+  if (option) {
+    return (
+      <div ref={containerRef} className={className}>
+        {isReady ? <EChart option={option} {...echartProps} /> : placeholder}
+      </div>
+    );
+  }
+
+  // Legacy recharts path — unchanged.
   return (
     <div ref={containerRef} className={className}>
       {isReady ? (
@@ -59,9 +85,7 @@ export function SafeResponsiveChart({ className, children, minSize = 24 }) {
           {children}
         </ResponsiveContainer>
       ) : (
-        <div className="h-full flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">
-          Preparing chart…
-        </div>
+        placeholder
       )}
     </div>
   );

@@ -10,6 +10,11 @@
 
 ## Chart migration (contained slice — do early)
 - [ ] 1. Migrate SafeResponsiveChart internals recharts→ECharts (keep API identical); theme-aware colors.
+      iter2: FOUNDATION landed (not [x] — needs live verify). chartTheme.js (zs-light/zs-dark, tested),
+      echartsCore.js (slim), EChart.jsx (theme-reactive+resize+reduced-motion), SafeResponsiveChart gains
+      `option` path (superset API, legacy recharts path intact). lint 31/31, build green, detector clean.
+      Verify-only files have NO charts → R1 resolved cleanly. Finding F1: old charts hardcode dark styling.
+      NEXT iter3: migrate a reference panel to `option` + Playwright-verify both themes/4 widths data-identical.
 - [ ] 2. uPlot for dense time-series charts (telemetry/logs/trends). Verify data-identical + interactive + faster.
 
 ## Per-surface sweep (ONE panel per iteration → verify (both themes, 4 widths) → fix → re-verify → commit)

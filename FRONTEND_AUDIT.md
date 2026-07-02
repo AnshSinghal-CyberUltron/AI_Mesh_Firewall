@@ -79,7 +79,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ### Charts (items 1–2)
 | # | Surface | Owner | Dark | Light | 1440 | 1024 | 768 | 375 | Impec | State |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | SafeResponsiveChart → ECharts | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 1 | SafeResponsiveChart → ECharts | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | 🔎 foundation landed |
 | 2 | uPlot dense time-series | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ### Panels (items 3–16)
@@ -149,3 +149,14 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 
 _Setup (2026-07-02): PRODUCT.md + DESIGN.md written; audit scaffold created;
 claims pre-flight + VERIFY-ONLY set recorded; baseline green; risks R1–R4 logged._
+
+**Item 1 — chart foundation (iter2, 2026-07-02):** landed the ECharts foundation
+behind a **superset-compatible** SafeResponsiveChart (R1 resolved without touching
+verify-only files, which have no charts):
+- `utils/chartTheme.js` — registered light/dark ECharts themes from DESIGN.md tokens; `utils/chartTheme.test.js` (5 tests, incl. light/dark inversion + contrast-direction invariants).
+- `components/charts/echartsCore.js` — slim `echarts/core` (Line/Bar/Pie/Radar/Custom + Grid/Tooltip/Legend/Title/DataZoom/Radar/VisualMap/MarkLine/Graphic + Canvas), registers `zs-light`/`zs-dark`.
+- `components/charts/EChart.jsx` — theme-reactive (follows `resolvedTheme`), ResizeObserver container-resize, `prefers-reduced-motion` → animation off.
+- `SafeResponsiveChart` gains an `option` path (renders `<EChart>`); legacy recharts `children` path untouched → API identical for current callers. lint 31/31, build green, detector clean.
+- **Finding F1 (theme bug in current charts):** existing recharts charts hardcode dark styling (`tooltip #0f172a`, `grid #3f3f46`, `ticks #94a3b8`) → dark grid on white in light mode. The new themes fix this on migration. Fold into per-panel chart migrations + item 21.
+- **R3 update:** bundle temporarily 1.79→2.53 MB (gzip 478→726 KB) while echarts + recharts coexist. Net drop lands when recharts is removed after all panels migrate (item 24). recharts still used by 12 files: AIMeshFirewallOverview, OWASPStatsPanel, module-specific-{charts,log-charts}, LogDetailPage, SubmoduleResultsPage/DetailPage, RAGPipelineTelemetry, Firewall12EnterprisePage, OutputGuardrailCharts, PolicyAnalyticsPanel.
+- **Next (iter3):** migrate a reference chart panel to `option`, bring up dev+backend, Playwright-verify data-identical + interactive in BOTH themes at 4 widths, then progress item 1 → item 2 (uPlot dense time-series)._
