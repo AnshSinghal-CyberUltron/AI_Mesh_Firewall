@@ -537,5 +537,38 @@ def test_g45_streaming_markdown_split_pii_masked(use_guard):
     )
 
 
+# --------------------------------------------------------------------------- #
+# G46: a tier-2 (Bedrock) verdict can flag FREE-TEXT PII (person names / non-standard
+# layouts) the DETERMINISTIC regex redactor has no pattern for, returning the spans in
+# verdict.redaction_spans. The non-stream _sanitize_output_core masks them via
+# _mask_spans_typed; the streaming redact path called redact_pii ALONE, so those spans
+# egressed VERBATIM on the streamed channel. G46 mirrors the span-masking on the stream.
+# --------------------------------------------------------------------------- #
+class _SemanticSpanGuard:
+    """Stub tier-2 guard flagging a free-text span the deterministic regex can't match."""
+
+    def __init__(self, span: str):
+        self._span = span
+
+    async def inspect(self, text, *, context_chunks=None, org_config=None, org_slug=""):
+        return types.SimpleNamespace(
+            action="redact", threat_type="pii", matched_patterns=["person_name"],
+            redaction_spans=[self._span], matched_values={}, detail="",
+            compliance_tags=[], scan_degraded=False,
+        )
+
+
+def test_g46_streaming_masks_tier2_semantic_span():
+    name = "Johnathan Q. Publicova"
+    scanner = InputScanner(config={})
+    stream = SecureStreamingResponse(
+        _inner_from_pieces([f"The patient's full name is {name}, age 44."]),
+        scanner, redaction_enabled=True, output_guard=_SemanticSpanGuard(name),
+    )
+    delivered = asyncio.run(_drain(stream))
+    assert name not in delivered, f"tier-2 semantic PII span leaked on stream: {delivered!r}"
+    assert "REDACTED" in delivered.upper(), f"semantic span not masked on stream: {delivered!r}"
+
+
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(pytest.main([__file__, "-v"]))

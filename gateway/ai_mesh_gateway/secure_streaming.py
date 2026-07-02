@@ -415,10 +415,23 @@ class SecureStreamingResponse:
                     neutralize_encoded_pii,
                     neutralize_exfil_channels,
                     neutralize_markdown_split_pii,
+                    _mask_spans_typed,
+                    _REDACTABLE_OUTPUT_CATEGORIES,
                 )
                 _pre = neutralize_encoded_pii(neutralize_exfil_channels(full_text))
                 _pre = neutralize_markdown_split_pii(_pre)  # G45: streaming parity with G44
                 redacted_text = self._scanner.redact_pii(_pre)
+                # G46: mirror _sanitize_output_core's G10 semantic-span masking. A tier-2
+                # (Bedrock) verdict targets free-text PII (person names / non-standard
+                # layouts) the DETERMINISTIC regex redactor has no pattern for; without
+                # this those redaction_spans + matched_values egress RAW on the streamed
+                # channel while the non-stream path masks them. Redactable categories only.
+                if verdict.threat_type in _REDACTABLE_OUTPUT_CATEGORIES:
+                    _spans = list(getattr(verdict, "redaction_spans", None) or []) + [
+                        str(v) for v in (getattr(verdict, "matched_values", None) or {}).values()
+                    ]
+                    if _spans:
+                        redacted_text = _mask_spans_typed(redacted_text, _spans, verdict.threat_type)
                 # Telemetry honesty (mirror of non-stream main.py:1566 / 7289):
                 # only claim action="redact" when the bytes actually changed. A
                 # tier-2 (semantic) verdict can target content the deterministic
