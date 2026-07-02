@@ -164,3 +164,26 @@ async def test_c4_moderations_verdict_matches_independent_signal(recording_app):
     assert (attack.results[0].categories.model_extra or {}).get("prompt_injection") is True
     # IDs are joinable to the response request id (SEAM-C).
     assert benign.id.startswith("modr-") and benign._request_id == benign.id
+
+
+@pytest.mark.asyncio
+async def test_c4_moderations_batch_cap_is_dos_bounded(recording_app):
+    """G63: an oversized moderations `input` (item COUNT or total CHARS) is rejected 413 up
+    front — every item is tier-1 scanned, so an unbounded array is a CPU resource-exhaustion
+    DoS. A normal small batch still works (contrast, so a stuck-413 bug is caught)."""
+    from ai_mesh_gateway import main as gm
+    client = _raw(recording_app)
+    try:
+        over = await client.post(
+            "/v1/moderations", json={"input": ["ping"] * (gm.MAX_MODERATION_BATCH + 1)})
+        assert over.status_code == 413 and "moderation_input_too_large" in over.text, over.text
+        # total-char ceiling: two large items exceed the char cap and are 413'd BEFORE any
+        # scan runs (each on its own is below the count cap).
+        huge = "a" * (gm.MAX_MODERATION_INPUT_CHARS // 2 + 100)
+        over_chars = await client.post("/v1/moderations", json={"input": [huge, huge]})
+        assert over_chars.status_code == 413, over_chars.text
+        # a normal batch is accepted and scanned (one result per item).
+        ok = await client.post("/v1/moderations", json={"input": ["hi", "there", "ok"]})
+        assert ok.status_code == 200 and len(ok.json()["results"]) == 3, ok.text
+    finally:
+        await client.aclose()

@@ -1908,6 +1908,13 @@ def _safe_model_echo(model: str | None) -> str:
 MAX_EMBED_INPUT_CHARS = 200_000  # total chars across all batch items
 MAX_EMBED_BATCH = 256            # max items in a batch `input` array
 
+# G63: /v1/moderations scans EVERY list item with the tier-1 scanner (~ms each), so an
+# unbounded `input` array is a CPU resource-exhaustion DoS (a single authenticated request
+# could burn minutes of scan CPU) — even though each item is individually bounded by
+# MAX_PROMPT_LENGTH. Cap the batch count + total chars, mirroring the embeddings ceilings.
+MAX_MODERATION_BATCH = 256
+MAX_MODERATION_INPUT_CHARS = 200_000
+
 # input-val#6: hard ceiling on the number of chat messages per request. The
 # per-message text length is already capped, but an unbounded ``messages`` array
 # is itself a resource-exhaustion / scanner-amplification vector.
@@ -12453,6 +12460,21 @@ async def create_moderations(request: Request):
             "error": "invalid_request", "message": "Missing required parameter: 'input'.",
             "code": "missing_required_parameter"})
     texts = [_inp] if isinstance(_inp, str) else (_inp if isinstance(_inp, list) else [str(_inp)])
+    # G63: bound the batch — every item is tier-1 scanned (~ms each), so an unbounded
+    # array is a CPU resource-exhaustion DoS. Cap the item count + total chars up front
+    # (413), mirroring the /v1/embeddings ceilings. Per-item length is already bounded
+    # by the scanner's MAX_PROMPT_LENGTH.
+    if len(texts) > MAX_MODERATION_BATCH:
+        return JSONResponse(status_code=413, content={
+            "error": "payload_too_large",
+            "message": f"'input' array exceeds the maximum of {MAX_MODERATION_BATCH} items.",
+            "param": "input", "code": "moderation_input_too_large"})
+    _mod_total_chars = sum(len(_t) if isinstance(_t, str) else len(str(_t)) for _t in texts)
+    if _mod_total_chars > MAX_MODERATION_INPUT_CHARS:
+        return JSONResponse(status_code=413, content={
+            "error": "payload_too_large",
+            "message": "'input' total size exceeds the maximum.",
+            "param": "input", "code": "moderation_input_too_large"})
     results = []
     for _t in texts:
         s = _t if isinstance(_t, str) else str(_t)
