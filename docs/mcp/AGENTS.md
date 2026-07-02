@@ -23,6 +23,16 @@ subsystem map you need. Every anchor was read from the tree and spot-verified wh
   servers`): npx launch, initialize handshake, stdout=JSON-RPC-only/no-ready-banner (→B3 readiness =
   initialize probe; cold-start = npx fetch), Everything echo/`get-sum`(≠`add`, version-dependent) +
   Filesystem canary for P8/P9.
+- `oss-research-mcp-remote.md` — `geelen/mcp-remote` stdio↔remote-HTTP bridge + OAuth: why a `stdio` row
+  legitimately carries an HTTP URL (Linear case) and does gateway-side OAuth with `auth_type="none"`;
+  the `--header` Bearer pre-injection that keeps mcp-remote headless (`mcp_proxy.py:1732/1759`); per-org
+  `MCP_REMOTE_CONFIG_DIR` token isolation. **B1 nuance: "block oauth+stdio" = block `auth_type="oauth"`
+  on a URL-less local stdio row, NOT block stdio-via-mcp-remote.**
+- `oss-research-docker-hardening.md` — sourced Docker multi-tenant hardening checklist (OWASP/gVisor/
+  Docker AI-sandbox/iron-proxy) mapped to `docker_manager.py:_run_kwargs`: H1–H15 controls each with the
+  exact `docker-py` kwarg, present/absent-in-repo, and the P7 item (#22–25) that implements it. Priority
+  order + the egress default-deny-proxy pattern for #30 leakage proof. Companion to
+  `broker-sandbox-lifecycle.md` §2 gap table.
 
 Nearby subsystem AGENTS.md: `services/mcp-broker/AGENTS.md`,
 `control/ai_mesh_control/mcp_connector/AGENTS.md`, `frontend/AGENTS.md` (MCP panels section).
