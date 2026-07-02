@@ -304,6 +304,45 @@ def _redact_tool_descriptions(obj, redactor):
     return obj
 
 
+def _redact_fn_call_arguments(fn, redactor):
+    """G59: redact the ``arguments`` of a tool_call.function / legacy function_call dict
+    before it reaches the model. A conversation-history assistant turn's
+    ``tool_calls[].function.arguments`` is FOLDED into the scanned prompt (G7), so PII/
+    secrets there trigger the redact verdict — but ``_apply_redaction`` only masked message
+    ``content`` + tool DEFINITIONS, forwarding the tool-CALL arguments RAW (the detect-but-
+    don't-enforce class this method's siblings close for content/tools). ``arguments`` is a
+    JSON string per spec (a non-conforming parsed DICT is coerced to JSON first); structural
+    fields (name, id, type) are left intact so the function-calling contract still resolves."""
+    if not isinstance(fn, dict):
+        return fn
+    args = fn.get("arguments")
+    if isinstance(args, str) and args:
+        return {**fn, "arguments": redactor(args)}
+    if args is not None and not isinstance(args, str):
+        try:
+            return {**fn, "arguments": redactor(json.dumps(args))}
+        except (TypeError, ValueError):
+            return fn
+    return fn
+
+
+def _redact_message_tool_calls(m, redactor):
+    """Return ``m`` with every ``tool_calls[].function.arguments`` and a legacy
+    ``function_call.arguments`` redacted (G59). No-op when the message carries neither."""
+    out = m
+    tcs = m.get("tool_calls")
+    if isinstance(tcs, list) and tcs:
+        out = {**out, "tool_calls": [
+            ({**tc, "function": _redact_fn_call_arguments(tc["function"], redactor)}
+             if isinstance(tc, dict) and isinstance(tc.get("function"), dict) else tc)
+            for tc in tcs
+        ]}
+    fc = m.get("function_call")
+    if isinstance(fc, dict):
+        out = {**out, "function_call": _redact_fn_call_arguments(fc, redactor)}
+    return out
+
+
 def _redact_responses_input_list(items, redactor):
     """G48: redact free-text in a STRUCTURED Responses ``input`` list (the modern
     ``[{"role":..,"content":[{"type":"input_text","text":..}]}]`` shape). ``aresponses``
@@ -692,7 +731,7 @@ class LLMRouter:
                 continue
             c = m.get("content")
             if isinstance(c, str) and c:
-                new_messages.append({**m, "content": _redact_msg_text(c)})
+                nm = {**m, "content": _redact_msg_text(c)}
             elif isinstance(c, list):
                 parts = [
                     ({**p, "text": _redact_msg_text(p["text"])}
@@ -700,9 +739,14 @@ class LLMRouter:
                      else p)
                     for p in c
                 ]
-                new_messages.append({**m, "content": parts})
+                nm = {**m, "content": parts}
             else:
-                new_messages.append(m)
+                nm = m
+            # G59: also redact tool_calls[].function.arguments (+ legacy function_call) —
+            # a conversation-history turn's tool-call arguments are folded into the scanned
+            # prompt (G7) so PII there triggers the verdict, but were forwarded RAW.
+            nm = _redact_message_tool_calls(nm, _redact_msg_text)
+            new_messages.append(nm)
         result = {**body, "messages": new_messages}
 
         # Tool-definition free text reaches the upstream LLM too. ``_extract_tool_definitions_text``
