@@ -11,6 +11,8 @@ import pytest
 
 GOLDEN_DIR = Path(__file__).resolve().parent
 SNAPSHOT_DIR = GOLDEN_DIR / "snapshots"
+_LIVE_SESSION_CACHE = GOLDEN_DIR / ".live_session.json"
+_LIVE_SESSION_TTL_S = 3600
 
 # Stages that matter for enforcement contract (drop auth/rate_limit/model_* noise).
 _ENFORCEMENT_STAGES = frozenset({
@@ -80,6 +82,34 @@ def save_snapshot(name: str, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _load_cached_live_session() -> dict[str, str] | None:
+    preset_key = os.environ.get("GATEWAY_API_KEY", "").strip()
+    preset_model = os.environ.get("SIM_MODEL", "").strip()
+    if preset_key:
+        return {"api_key": preset_key, "model": preset_model or "gemma-free"}
+    if not _LIVE_SESSION_CACHE.is_file():
+        return None
+    try:
+        import time
+
+        cached = json.loads(_LIVE_SESSION_CACHE.read_text(encoding="utf-8"))
+        if time.time() - float(cached.get("ts", 0)) > _LIVE_SESSION_TTL_S:
+            return None
+        key = str(cached.get("api_key") or "").strip()
+        if not key:
+            return None
+        return {"api_key": key, "model": str(cached.get("model") or "gemma-free")}
+    except Exception:
+        return None
+
+
+def _save_cached_live_session(session: dict[str, str]) -> None:
+    import time
+
+    payload = {"api_key": session["api_key"], "model": session.get("model", ""), "ts": time.time()}
+    _LIVE_SESSION_CACHE.write_text(json.dumps(payload), encoding="utf-8")
+
+
 @pytest.fixture(scope="session")
 def golden_snapshot_dir() -> Path:
     return SNAPSHOT_DIR
@@ -90,6 +120,9 @@ def live_gateway_session() -> dict[str, str] | None:
     """Provision one simulator key + model for the live golden suite."""
     if os.environ.get("GATEWAY_LIVE", "1").strip().lower() in ("0", "false", "no"):
         return None
+    cached = _load_cached_live_session()
+    if cached:
+        return cached
     try:
         from live_driver import _detect_model, _login, _simulator_key, live_gateway_reachable
 
@@ -99,10 +132,12 @@ def live_gateway_session() -> dict[str, str] | None:
 
         with httpx.Client() as client:
             jwt = _login(client)
-            return {
+            session = {
                 "api_key": _simulator_key(client, jwt),
                 "model": _detect_model(client, jwt),
             }
+            _save_cached_live_session(session)
+            return session
     except Exception:
         return None
 

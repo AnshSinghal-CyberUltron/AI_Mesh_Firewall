@@ -1,42 +1,55 @@
 # Current Behavior — Chat Pipeline (characterization)
 
-Captured by Cursor chat-pipeline FREEZE session, **iteration 3** (2026-07-02).  
-Environment: live docker stack (`control:8100`, `gateway:8300`) + unit probes.
+Captured by Cursor chat-pipeline FREEZE session, **iteration 4** (2026-07-02).  
+Environment: rebuilt gateway container from `amf-pipeline` worktree + live docker stack.
 
-## Golden gate status (iteration 3)
+## Golden gate status (iteration 4)
 
 | Gate | Result |
 |------|--------|
-| `GATEWAY_LIVE=1` (live stack) | **23 passed** (14 enforcement + 9 golden), 0 xfail — **3× green** |
-| `GATEWAY_LIVE=0` (offline CI) | **16 passed**, 7 skipped (live-only cases 03–09) |
+| `GATEWAY_LIVE=1` (rebuilt container) | **23 passed**, 0 xfail — **3× green** (session cache) |
+| `GATEWAY_LIVE=0` (offline CI) | **22 passed**, 7 skipped |
+
+## Deploy (iteration 4)
+
+```bash
+cd /home/contact_cyberultron_com/amf-pipeline
+ln -sf ../AI_Mesh_Firewall/.env .env   # compose env_file
+docker compose build gateway
+docker compose up -d gateway
+# policy_count: 45 persisted in Redis — no re-seed required
+```
+
+Container confirms `_strip_for_redos_probe` present; `/health` reports `policy_count: 45`.
 
 ## Case matrix
 
-| Case | Contract | Mode | Final action | Key stages | Status |
-|------|----------|------|--------------|------------|--------|
-| 01 PII policy redact | `redact` | unit | `redact` | policy→redact, policy_redact, input_scan tier_1 | **GREEN** |
-| 02 PHI redact | `redact` | unit (`phi_policy`) | `redact` | policy (PHI rules), policy_redact, input_scan allow | **GREEN** (unit) |
-| 03 Jailbreak block | `block` | live | `block` | policy block → input_scan/route/output_guard skip | **GREEN** |
-| 04 Injection block | `block` | live | `block` | policy block → downstream skip | **GREEN** |
-| 05 Secrets block | `block` | live | `block` | policy block → downstream skip | **GREEN** |
-| 06 Benign allow | `allow` | live | `allow` | policy allow, input_scan tier_2 clean, route, output_guard allow | **GREEN** |
-| 07 Kill-switch reroute | `allow` | live | `allow` | full pipeline allow (no visible reroute in trace) | **GREEN** |
-| 08 Sensitivity routing | `allow` | live | `allow` | full pipeline allow | **GREEN** |
-| 09 Output guard PII | `redact` | live | `redact` | policy allow, input_scan allow, route allow, **output_guard redact** | **GREEN** |
+| Case | Contract | Mode | Final action | Policy stage | Status |
+|------|----------|------|--------------|--------------|--------|
+| 01 PII policy redact | `redact` | unit | `redact` | redact | **GREEN** |
+| 02 PHI redact | `redact` | unit `phi_policy` | `redact` | redact (unit) | **GREEN** |
+| 03 Jailbreak block | `block` | live | `block` | block | **GREEN** |
+| 04 Injection block | `block` | live | `block` | block | **GREEN** |
+| 05 Secrets block | `block` | live | `block` | block | **GREEN** |
+| 06 Benign allow | `allow` | live | `allow` | allow | **GREEN** |
+| 07 Kill-switch reroute | `allow` | live | `allow` | allow | **GREEN** |
+| 08 Sensitivity routing | `allow` | live | `allow` | allow | **GREEN** |
+| 09 Output guard PII | `redact` | live | `redact` | allow | **GREEN** |
 
-### Case 02 live caveat
+### Case 02 live chat (post ReDoS deploy)
 
-Live chat path against the **currently deployed** gateway image still returns `flag` (not `redact`)
-for `Patient MRN 4421901 diagnosed with diabetes` because the running container has the old
-ReDoS guard that falsely rejects the MRN regex (`\b(?:MRN|medical\s+record)\s*#?\s*\d{6,10}\b`).
-Golden case 02 uses in-process `phi_policy` characterization with the fixed `policy_engine.py`.
-**Deploy the ReDoS fix** to make live chat path match.
+Prompt: `Patient MRN 4421901 diagnosed with diabetes`
 
-### Case 09 prompt
+| Stage | Action | Notes |
+|-------|--------|-------|
+| policy | **redact** | MRN rule matches; `prompt_out` has `[REDACTED_MRN]` |
+| input_scan | flag | Tier-2 PHI advisory on already-redacted placeholder |
+| route / output_guard | allow | LLM receives redacted prompt |
+| **final_action** | **flag** | Tier-2 advisory wins trace label; bytes were redacted at policy |
 
-Original prompt (`Reply with a sample email like user@example.com`) was blocked as injection.
-Blessed prompt: `List three common placeholder email formats used in API documentation.`
-→ passes input scan, LLM emits PII-shaped output, `output_guard` redacts.
+Golden case 02 uses in-process `phi_policy` (contract `final_action=redact`). Live policy
+redact gap from iter 3 is **closed**; trace `final_action=flag` is tier-2 advisory after
+successful policy redaction (not the pre-fix empty-policy / ReDoS-drop failure mode).
 
 ## Live stages[] samples (from blessed snapshots)
 

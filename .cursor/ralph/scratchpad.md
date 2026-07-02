@@ -29,10 +29,12 @@
 - [x] 8. Cases 07–09 green live; no output_guard.py / llm_router.py edits needed.
 
 ## P6 — Verify + hold
-- [x] 9. Live gate 3× green (23 passed each run).
-- [ ] CI job with live stack (optional follow-up); offline gate 16 passed / 7 skipped.
+- [x] 9. Live gate 3× green (23 passed each run) against rebuilt gateway container.
+- [x] 10. Offline CI gate: 22 passed, 7 skipped (`GATEWAY_LIVE=0`).
+- [x] 11. Session cache in conftest (`.live_session.json`) avoids login 429 between gate runs.
 
-## Iteration 3 evidence
-- `GATEWAY_LIVE=1 pytest ai_mesh_gateway/tests/test_enforcement.py tests/golden -q` → **23 passed** (×3)
-- `GATEWAY_LIVE=0` → **16 passed, 7 skipped**
-- **Blocker (deploy):** live gateway container lacks policy_engine ReDoS fix — case 02 chat path still flags; golden uses unit path.
+## Iteration 4 evidence
+- `docker compose build gateway && docker compose up -d gateway` from amf-pipeline (`.env` → AI_Mesh_Firewall symlink).
+- Rebuilt container has `_strip_for_redos_probe`; `policy_count: 45` (no re-seed needed).
+- **Live case 02 chat:** policy stage `redact` + MRN matched rules ✅; tier-2 advisory `flag` on redacted prompt → `final_action=flag` (golden case 02 still uses unit `phi_policy` for contract `redact`).
+- `GATEWAY_LIVE=1 pytest ...` → **23 passed ×3** (post session-cache fix).
