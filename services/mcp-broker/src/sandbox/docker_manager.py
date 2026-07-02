@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import socket
@@ -12,9 +13,25 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from sandbox.registry import SandboxRegistry
 
+logger = logging.getLogger(__name__)
+
 LABEL_ROLE = "ai_mesh.role"
 LABEL_ORG_SLUG = "ai_mesh.org_slug"
 ROLE_VALUE = "mcp-sandbox"
+_DEFAULT_SANDBOX_USER = "sandbox"
+_DEFAULT_EGRESS_PROXY = "http://host.docker.internal:3128"
+_DEFAULT_NO_PROXY = "127.0.0.1,localhost,172.16.0.0/12,10.0.0.0/8"
+
+
+class SandboxRuntimeUnavailableError(RuntimeError):
+    """Raised when prod requires gVisor/runsc but Docker cannot provide it."""
+
+
+def _env_truthy(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass(frozen=True)
@@ -26,10 +43,18 @@ class SandboxDockerConfig:
     cpus: float = 1.0
     pids_limit: int = 256
     runtime: str | None = None
+    runtime_required: bool = False
+    sandbox_user: str = _DEFAULT_SANDBOX_USER
+    egress_lockdown: bool = False
+    http_proxy: str | None = None
+    https_proxy: str | None = None
+    no_proxy: str = _DEFAULT_NO_PROXY
 
     @classmethod
     def from_env(cls) -> SandboxDockerConfig:
         runtime = os.environ.get("MCP_SANDBOX_RUNTIME") or None
+        http_proxy = os.environ.get("MCP_SANDBOX_HTTP_PROXY") or None
+        https_proxy = os.environ.get("MCP_SANDBOX_HTTPS_PROXY") or None
         return cls(
             image=os.environ.get("MCP_SANDBOX_IMAGE", "ai-mesh/mcp-sandbox:latest"),
             network=os.environ.get("MCP_SANDBOX_NETWORK", "mcp_sandbox_bridge"),
@@ -38,6 +63,12 @@ class SandboxDockerConfig:
             cpus=float(os.environ.get("MCP_SANDBOX_CPUS", "1.0")),
             pids_limit=int(os.environ.get("MCP_SANDBOX_PIDS_LIMIT", "256")),
             runtime=runtime,
+            runtime_required=_env_truthy("MCP_SANDBOX_RUNTIME_REQUIRED"),
+            sandbox_user=os.environ.get("MCP_SANDBOX_USER", _DEFAULT_SANDBOX_USER),
+            egress_lockdown=_env_truthy("MCP_SANDBOX_EGRESS_LOCKDOWN"),
+            http_proxy=http_proxy,
+            https_proxy=https_proxy,
+            no_proxy=os.environ.get("MCP_SANDBOX_NO_PROXY", _DEFAULT_NO_PROXY),
         )
 
 
@@ -222,6 +253,51 @@ class DockerManager:
                 check_duplicate=True,
             )
 
+    def runtime_available(self, runtime: str) -> bool:
+        """Return True when Docker reports the requested OCI runtime."""
+        try:
+            info = self.client.info()
+            runtimes = info.get("Runtimes") or {}
+            return runtime in runtimes
+        except Exception:
+            return False
+
+    def _resolve_runtime(self) -> str | None:
+        runtime = self.config.runtime
+        if not self.config.runtime_required:
+            return runtime
+        if not runtime:
+            logger.error(
+                "MCP_SANDBOX_RUNTIME_REQUIRED=true but MCP_SANDBOX_RUNTIME is unset"
+            )
+            raise SandboxRuntimeUnavailableError(
+                "sandbox_runtime_unavailable: MCP_SANDBOX_RUNTIME is required but unset"
+            )
+        if not self.runtime_available(runtime):
+            logger.error("Configured sandbox runtime %r is not available in Docker", runtime)
+            raise SandboxRuntimeUnavailableError(
+                f"sandbox_runtime_unavailable: runtime {runtime!r} is not available"
+            )
+        return runtime
+
+    def _egress_proxy_env(self) -> dict[str, str]:
+        if not self.config.egress_lockdown and not self.config.http_proxy:
+            return {}
+        http_proxy = self.config.http_proxy or _DEFAULT_EGRESS_PROXY
+        https_proxy = self.config.https_proxy or http_proxy
+        return {
+            "HTTP_PROXY": http_proxy,
+            "HTTPS_PROXY": https_proxy,
+            "NO_PROXY": self.config.no_proxy,
+        }
+
+    @staticmethod
+    def _assert_no_docker_socket_mount(volumes: dict[str, Any]) -> None:
+        forbidden = {"/var/run/docker.sock", "/run/docker.sock"}
+        for mount in volumes:
+            if mount in forbidden or mount.endswith("docker.sock"):
+                raise ValueError(f"refusing sandbox create: forbidden mount {mount!r}")
+
     def ensure_org_network(self, org_slug: str) -> str:
         """Create per-org network and attach the broker so it can reach the sandbox agent."""
         self.ensure_network()
@@ -245,31 +321,50 @@ class DockerManager:
         return name
 
     def _run_kwargs(self, org_slug: str) -> dict[str, Any]:
+        runtime = self._resolve_runtime()
         org_net = self.ensure_org_network(org_slug)
         volume = self.volume_name(org_slug)
+        mem_limit = f"{self.config.memory_mb}m"
+        volumes = {volume: {"bind": "/data/mcp-auth", "mode": "rw"}}
+        self._assert_no_docker_socket_mount(volumes)
+        environment = {
+            "ORG_SLUG": org_slug,
+            "MCP_REMOTE_CONFIG_DIR": "/data/mcp-auth",
+            "MCP_STDIO_MAX_PROCESSES_PER_ORG": os.environ.get(
+                "MCP_STDIO_MAX_PROCESSES_PER_ORG", "16"
+            ),
+            # Sandbox USER is non-root; npm/uv caches need writable tmpfs (read_only rootfs).
+            # npm cache MUST NOT live on noexec /tmp — npx bin symlinks are executed directly.
+            "NPM_CONFIG_CACHE": "/var/npm-cache",
+            "UV_CACHE_DIR": "/var/cache/uv",
+            "XDG_CACHE_HOME": "/var/cache",
+        }
+        environment.update(self._egress_proxy_env())
         kwargs: dict[str, Any] = {
             "image": self.config.image,
             "name": self.container_name(org_slug),
             "detach": True,
+            "init": True,
             "labels": self.labels(org_slug),
-            "environment": {
-                "ORG_SLUG": org_slug,
-                "MCP_REMOTE_CONFIG_DIR": "/data/mcp-auth",
-                "MCP_STDIO_MAX_PROCESSES_PER_ORG": os.environ.get(
-                    "MCP_STDIO_MAX_PROCESSES_PER_ORG", "16"
-                ),
-                # Sandbox USER is non-root; npm/uv caches need writable tmpfs (read_only rootfs).
-                # npm cache MUST NOT live on noexec /tmp — npx bin symlinks are executed directly.
-                "NPM_CONFIG_CACHE": "/var/npm-cache",
-                "UV_CACHE_DIR": "/var/cache/uv",
-                "XDG_CACHE_HOME": "/var/cache",
-            },
-            "volumes": {volume: {"bind": "/data/mcp-auth", "mode": "rw"}},
+            "environment": environment,
+            "volumes": volumes,
             "network": org_net,
-            "mem_limit": f"{self.config.memory_mb}m",
+            "mem_limit": mem_limit,
+            "memswap_limit": mem_limit,
             "nano_cpus": int(self.config.cpus * 1_000_000_000),
             "pids_limit": self.config.pids_limit,
             "read_only": True,
+            "user": self.config.sandbox_user,
+            "security_opt": ["no-new-privileges:true"],
+            "cap_drop": ["ALL"],
+            "ulimits": [
+                {"name": "nofile", "soft": 1024, "hard": 2048},
+                {
+                    "name": "nproc",
+                    "soft": self.config.pids_limit,
+                    "hard": self.config.pids_limit,
+                },
+            ],
             "tmpfs": {
                 "/tmp": "rw,noexec,nosuid,size=512m",
                 "/var/npm-cache": "rw,exec,nosuid,size=1g,mode=1777",
@@ -280,8 +375,8 @@ class DockerManager:
         if self._broker_container_ref() is None:
             kwargs["ports"] = {f"{self.config.agent_port}/tcp": None}
             kwargs["network"] = self.config.network
-        if self.config.runtime:
-            kwargs["runtime"] = self.config.runtime
+        if runtime:
+            kwargs["runtime"] = runtime
         return kwargs
 
     @staticmethod

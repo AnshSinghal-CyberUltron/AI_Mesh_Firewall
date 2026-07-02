@@ -12,6 +12,7 @@ from sandbox.docker_manager import (
     ROLE_VALUE,
     DockerManager,
     SandboxDockerConfig,
+    SandboxRuntimeUnavailableError,
 )
 
 
@@ -44,6 +45,7 @@ def _mock_container(
 def _mock_client() -> MagicMock:
     client = MagicMock()
     client.ping.return_value = True
+    client.info.return_value = {"Runtimes": {"runc": {}, "runsc": {}}}
     client.containers.list.return_value = []
     client.containers.get.side_effect = Exception("not found")
     client.networks.get.side_effect = Exception("not found")
@@ -87,6 +89,13 @@ def test_ensure_creates_container_when_missing(manager: DockerManager):
     assert run_kwargs["pids_limit"] == 128
     assert run_kwargs["ports"] == {"9320/tcp": None}
     assert run_kwargs["network"] == "mcp_sandbox_bridge"
+    assert run_kwargs["read_only"] is True
+    assert run_kwargs["init"] is True
+    assert run_kwargs["user"] == "sandbox"
+    assert run_kwargs["security_opt"] == ["no-new-privileges:true"]
+    assert run_kwargs["cap_drop"] == ["ALL"]
+    assert run_kwargs["memswap_limit"] == "1024m"
+    assert len(run_kwargs["ulimits"]) == 2
     assert run_kwargs["environment"]["ORG_SLUG"] == "acme"
     assert run_kwargs["environment"]["NPM_CONFIG_CACHE"] == "/var/npm-cache"
     assert "/var/npm-cache" in run_kwargs["tmpfs"]
@@ -133,6 +142,7 @@ def test_ensure_recovers_from_name_conflict(manager: DockerManager):
     """When create hits 409, fall back to get-by-name instead of 500."""
     existing = _mock_container(org_slug="acme")
     manager.client.containers.list.return_value = []
+    manager.client.containers.get.side_effect = None
     manager.client.containers.get.return_value = existing
     conflict = Exception("name already in use")
     conflict.status_code = 409  # type: ignore[attr-defined]
@@ -217,6 +227,9 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("MCP_SANDBOX_MEMORY_MB", "4096")
     monkeypatch.setenv("MCP_SANDBOX_CPUS", "2.5")
     monkeypatch.setenv("MCP_SANDBOX_RUNTIME", "runsc")
+    monkeypatch.setenv("MCP_SANDBOX_RUNTIME_REQUIRED", "true")
+    monkeypatch.setenv("MCP_SANDBOX_EGRESS_LOCKDOWN", "true")
+    monkeypatch.setenv("MCP_SANDBOX_HTTP_PROXY", "http://proxy.test:3128")
 
     config = SandboxDockerConfig.from_env()
 
@@ -224,3 +237,73 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch):
     assert config.memory_mb == 4096
     assert config.cpus == 2.5
     assert config.runtime == "runsc"
+    assert config.runtime_required is True
+    assert config.egress_lockdown is True
+    assert config.http_proxy == "http://proxy.test:3128"
+
+
+def test_run_kwargs_include_runtime_when_configured():
+    config = SandboxDockerConfig(
+        image="ai-mesh/mcp-sandbox:test",
+        network="mcp_sandbox_bridge",
+        runtime="runsc",
+    )
+    manager = DockerManager(client=_mock_client(), config=config)
+    manager.client.containers.run.return_value = _mock_container(org_slug="acme")
+
+    manager.ensure("acme")
+
+    run_kwargs = manager.client.containers.run.call_args.kwargs
+    assert run_kwargs["runtime"] == "runsc"
+
+
+def test_runtime_required_fails_when_unset():
+    config = SandboxDockerConfig(runtime_required=True)
+    manager = DockerManager(client=_mock_client(), config=config)
+
+    with pytest.raises(SandboxRuntimeUnavailableError, match="unset"):
+        manager._run_kwargs("acme")
+
+
+def test_runtime_required_fails_when_unavailable():
+    client = _mock_client()
+    client.info.return_value = {"Runtimes": {"runc": {}}}
+    config = SandboxDockerConfig(runtime="runsc", runtime_required=True)
+    manager = DockerManager(client=client, config=config)
+
+    with pytest.raises(SandboxRuntimeUnavailableError, match="not available"):
+        manager._run_kwargs("acme")
+
+
+def test_runtime_required_succeeds_when_runsc_available():
+    config = SandboxDockerConfig(runtime="runsc", runtime_required=True)
+    manager = DockerManager(client=_mock_client(), config=config)
+    manager.client.containers.run.return_value = _mock_container(org_slug="acme")
+
+    manager.ensure("acme")
+
+    run_kwargs = manager.client.containers.run.call_args.kwargs
+    assert run_kwargs["runtime"] == "runsc"
+
+
+def test_egress_lockdown_injects_proxy_env():
+    config = SandboxDockerConfig(
+        egress_lockdown=True,
+        http_proxy="http://allowlist-proxy:3128",
+    )
+    manager = DockerManager(client=_mock_client(), config=config)
+    manager.client.containers.run.return_value = _mock_container(org_slug="acme")
+
+    manager.ensure("acme")
+
+    env = manager.client.containers.run.call_args.kwargs["environment"]
+    assert env["HTTP_PROXY"] == "http://allowlist-proxy:3128"
+    assert env["HTTPS_PROXY"] == "http://allowlist-proxy:3128"
+    assert "NO_PROXY" in env
+
+
+def test_refuses_docker_socket_mount():
+    manager = DockerManager(client=_mock_client(), config=SandboxDockerConfig())
+
+    with pytest.raises(ValueError, match="docker.sock"):
+        manager._assert_no_docker_socket_mount({"/var/run/docker.sock": {"bind": "/sock", "mode": "rw"}})

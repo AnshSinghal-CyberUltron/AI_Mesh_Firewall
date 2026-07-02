@@ -1,0 +1,9 @@
+agent: cursor-ralph-iter12
+story: P4.12 gVisor enforcement + docker hardening
+files:
+  - services/mcp-broker/src/sandbox/docker_manager.py
+  - services/mcp-broker/tests/test_sandbox_lifecycle.py
+  - docs/mcp/PARALLEL_CLAIMS.md
+  - .cursor/ralph/scratchpad.md
+since: 2026-07-02T14:00:00Z
+status: released
