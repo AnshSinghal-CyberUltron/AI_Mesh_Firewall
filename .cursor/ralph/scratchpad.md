@@ -1,44 +1,64 @@
 ---
-iteration: 6
-min_iterations: 20
+iteration: 1
 max_iterations: 50
-completion_promise: "COMPLETE and tested from frontend and backend"
+completion_promise: COMPLETE
 status: ACTIVE
-active_story: E1-openai-sdk-frontend-playwright
-prd: scripts/ralph/prd.json
-campaign: openai-sdk-frontend
-note: E1 min-floor iter6 — all 5 gates green, re-confirmation (iter 6 < 20)
 ---
 
-# OpenAI SDK Frontend — Cursor Ralph Loop
+# Cursor Ralph — MCP transports→sandbox + frontend (PARALLEL with a Claude Code session)
 
-Campaign `openai-sdk-frontend`. Story **E1-openai-sdk-frontend-playwright** passes:true, min-floor verified iter 6.
+## Coordination (do every iteration)
+- [x] C0. Join hive; read docs/mcp/PARALLEL_CLAIMS.md + mcp-parallel/claims. Only touch files in the
+      Cursor-owned set (frontend/**, sandbox-image/agent/**, docker_manager.py, docs/). Claim before edit.
 
-## Gates reference
+## P1 — Playwright-first exploration: WHY is MCP not working (repro the 4 UI-visible bugs)
+- [x] 1. Playwright MCP: log in, open MCPConnectorPanel → register Linear via STDIO; capture the TWO
+      auth buttons + "OAuth authorize failed: Server has no URL; OAuth is only for HTTP transports".
+      **Verified 2026-07-02:** B1 NOT reproducing — 1 Authorize button, no no-URL error; see
+      `mcp-parallel/findings/p1-1/`. OAuth start 401 to prod gateway URL is a separate env issue.
+- [ ] 2. Playwright: register an HTTP oauth server → confirm it LISTS immediately with 0 tools (wrong).
+- [ ] 3. Playwright: type into the Add-Server dialog fields → capture focus loss after 1 keystroke.
+- [ ] 4. Playwright + logs: trigger a tool call that surfaces "MCP sandbox is temporarily unavailable";
+      capture the network trace + broker logs. Record all repros to mcp-parallel/findings with screenshots.
 
-**E1:** backend test_openai_sdk_compat.py + full pytest; frontend build; playwright_demo_simulators.mjs; live_gateway_sdk.py
+## P2 — OSS + internet research (better approaches for ALL-transport sandboxing)
+- [ ] 5. GitHub MCP: study modelcontextprotocol/servers + how remote (http/sse/ws) MCPs are proxied;
+      study mcp-remote (stdio-wraps-remote + OAuth) — clarifies Linear.
+- [ ] 6. GitHub MCP: study gVisor (google/gvisor runsc) + Docker sandbox hardening for untrusted code
+      (seccomp, no-new-privileges, cap_drop, read-only rootfs, egress allow-listing) + per-tenant patterns.
+- [ ] 7. Web research: MCP OAuth 2.1 (PKCE, RFC 9728/8414) + why oauth needs an HTTP URL; correct UX for
+      stdio-wrapped-remote; running http/ws clients inside a sandboxed agent. Record to mcp-parallel/findings.
 
-**Stack:** Vite :8180, control :8100, gateway :8300 — login admin@zeroshield.io / Adm1n!Pass#2024
+## P3 — Contract-first seam (with the Claude session)
+- [ ] 8. Draft docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md: the sandbox-agent endpoints for http/ws/sse proxy
+      (request/response shape, streaming, timeouts, per-server config, egress policy). Ratify via
+      hive-mind_consensus BEFORE implementing across the seam.
 
-## Iteration log
+## P4 — Architecture: move ALL transports into the per-org gVisor sandbox
+- [ ] 9. Extend sandbox-image/agent to proxy HTTP/SSE MCP servers (in-sandbox httpx client, egress
+      allow-listed to the registered upstream only) — per the contract.
+- [ ] 10. Extend sandbox-image/agent to proxy WEBSOCKET MCP servers (in-sandbox ws client) — per the contract.
+- [ ] 11. Keep stdio as-is but unify: the agent exposes one transport-agnostic /rpc so the gateway calls
+       the sandbox for EVERY transport; the gateway never dials upstream directly.
+- [ ] 12. Enforce gVisor: docker_manager requires runtime=runsc in prod (fail-closed if unavailable);
+       add security_opt (seccomp, no-new-privileges), cap_drop=ALL, tmpfs-only writes, egress lockdown.
+- [ ] 13. Verify (Playwright + harness): with the gateway pointed only at the sandbox, an http, an sse, a
+       ws, and a stdio MCP all work end-to-end THROUGH the sandbox; confirm the gateway opens NO direct
+       upstream connection (network assertion) — nothing runs in the main backend.
 
-### Iteration 6 — 2026-07-01 (min-floor re-confirmation)
-- MIN-FLOOR: iter 6 < 20; distrusted passes:true; re-ran ALL E1 gates from clean shell.
-- Gates ALL GREEN: test_openai_sdk_compat 46p/2xp; full pytest 1005p; frontend build OK; stack :8180/:8100/api/health/:8300 200; playwright_demo 23/23 asserts 6/6 steps (~108s); live_gateway_sdk 6/6 PASS.
-- No product fixes needed; no gap found.
+## P5 — Frontend fixes (Playwright-verified; the dialog especially)
+- [ ] 14. B1: OAuth selectable ONLY for HTTP transports; block oauth+stdio in the form; render exactly
+       ONE Authorize button (HTTP+oauth only); remove the dup/broken control authorize path.
+- [ ] 15. B2: freshly-registered HTTP oauth server shows a distinct "Pending authorization" state (not a
+       0-tools card); tools appear only after oauth_authorized + sync.
+- [ ] 16. B4: stabilize the Add-Server dialog so controlled inputs KEEP focus per keystroke (fix the
+       remount: no field-component defined in render / stable keys / portal children not recreated).
+- [ ] 17. Playwright verify B1/B2/B4 end-to-end with screenshots (Linear-stdio → no OAuth; HTTP-oauth →
+       one Authorize + pending state → tools populate; type long strings in every dialog field, focus kept).
 
-### Iteration 5 — 2026-07-01 (round-close re-confirmation)
-- ROUND-CLOSE: distrusted passes:true; re-ran ALL E1 gates from clean shell.
-- Gates ALL GREEN: test_openai_sdk_compat 46p/2xp; full pytest 1005p; frontend build OK; stack :8180/:8100/api/health/:8300 200; playwright_demo 23/23 asserts 6/6 steps; live_gateway_sdk 6/6 PASS.
-- No product fixes needed; no gap found.
-
-### Iteration 4 — 2026-07-01 (rigor re-proof)
-- RIGOR MODE: distrusted passes:true from iter 3; re-ran ALL E1 gates adversarially.
-- Gates ALL GREEN: test_openai_sdk_compat 46p/2xp; full pytest 1005p; frontend build OK; stack :8180/:8100/:8300 200; playwright_demo 23/23 asserts 6/6 steps; live_gateway_sdk 6/6 PASS (e.request_id + typed errors on 400/404).
-- Appended rigor-verified: E1-openai-sdk-frontend-playwright under ## Rigor round 2026-06-30 in progress.txt.
-- No product fixes needed; no gap found.
-
-### Iteration 3 — 2026-07-01
-- Infra: aimesh_gate stack healthy; chromadb profile (aimesh_gate-chromadb-1 :8001); competing ralph.sh PIDs 33458/33544 noted (not started).
-- RAG 422 root cause: duplicate org-3 `docs` vector policies — seed pinecone/deny overwrote custom/chroma in compile (same `{org_id}::{collection}` key); disabled 535ed962 pinecone policy, recompiled → `3::docs custom allow`.
-- Gates ALL GREEN: test_openai_sdk_compat 46p/2xp; full pytest 1005p; frontend lint+build OK; stack :8180/:8100/:8300; playwright_demo 23/23; live_sdk 6/6 PASS.
+## P6 — Integrate + verify with the parallel session
+- [ ] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:
+       all 4 transports through the sandbox under the Claude session's 15-MCP harness (concurrency/load/
+       leakage). Fix any seam mismatch on the Cursor-owned side only.
+- [ ] 19. Re-run P1 repros → all four UI bugs gone; re-run P4 verification 3× (in-process + live).
+       When P1–P6 all [x] AND integration green, output <promise>COMPLETE</promise>.
