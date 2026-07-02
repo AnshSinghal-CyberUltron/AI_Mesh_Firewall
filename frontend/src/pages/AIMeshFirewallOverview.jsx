@@ -17,23 +17,6 @@ import {
   ShieldCheck,
   RefreshCw,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { useRealtimeNotifications } from "../hooks/useRealtimeNotifications";
 import { OWASPStatsPanel } from "../components/OWASPStatsPanel";
@@ -260,26 +243,6 @@ const VECTOR_COLORS = {
 const VECTOR_KEYS = ["Prompt Injection", "Data Leakage", "Jailbreak", "Goal Hijacking", "Tool Overreach"];
 
 // ─── Shared tooltip ──────────────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label, unit = "" }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-2xl border border-slate-700/80 bg-slate-900/95 px-4 py-3 shadow-2xl backdrop-blur-sm">
-      {label != null ? (
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      ) : null}
-      {payload.map((p) => (
-        <div key={p.dataKey ?? p.name} className="flex items-center gap-2.5 py-0.5 text-sm">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color ?? p.fill }} />
-          <span className="text-slate-300">{p.name}</span>
-          <span className="ml-auto pl-4 font-semibold tabular-nums text-white">
-            {typeof p.value === "number" ? p.value.toLocaleString() : p.value}{unit}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── Shared chart card wrapper ────────────────────────────────────────────────
 function OverviewChartCard({ eyebrow, title, action, children }) {
   return (
@@ -342,44 +305,25 @@ function AttackVectorDistributionChart({ data }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const hasData = total > 0;
 
-  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-    if (percent < 0.05) return null;
-    const RADIAN = Math.PI / 180;
-    const r = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const x = cx + r * Math.cos(-midAngle * RADIAN);
-    const y = cy + r * Math.sin(-midAngle * RADIAN);
-    return (
-      <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>
-        {`${(percent * 100).toFixed(0)}%`}
-      </text>
-    );
-  };
+  // ECharts donut (theme-aware via the registered zs-light/zs-dark theme); the
+  // in-slice % label mirrors the prior recharts custom label (hidden under 5%).
+  const donutOption = useMemo(() => ({
+    tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+    series: [{
+      type: "pie", radius: ["55%", "86%"], center: ["50%", "50%"], padAngle: 3,
+      avoidLabelOverlap: true,
+      label: { show: true, position: "inside", formatter: (p) => (p.percent >= 5 ? `${Math.round(p.percent)}%` : ""), color: "#fff", fontSize: 11, fontWeight: 600 },
+      labelLine: { show: false },
+      data: data.map((d) => ({ name: d.name, value: d.value, itemStyle: { color: d.fill } })),
+    }],
+  }), [data]);
 
   return (
     <OverviewChartCard eyebrow="Threat mix" title="Attack vector distribution">
       <div className="flex flex-col gap-5 md:flex-row md:items-center">
         <div className="mx-auto shrink-0">
           {hasData ? (
-            <ResponsiveContainer width={220} height={220}>
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={95}
-                  dataKey="value"
-                  paddingAngle={3}
-                  labelLine={false}
-                  label={renderCustomLabel}
-                >
-                  {data.map((entry, i) => (
-                    <Cell key={i} fill={entry.fill} stroke="transparent" />
-                  ))}
-                </Pie>
-                <Tooltip content={<ChartTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+            <SafeResponsiveChart className="h-[220px] w-[220px]" option={donutOption} />
           ) : (
             <div className="flex h-[220px] w-[220px] items-center justify-center text-sm text-slate-400">No data yet</div>
           )}
@@ -416,6 +360,17 @@ function AttackVectorDistributionChart({ data }) {
 
 // ─── Module comparison grouped bar chart ──────────────────────────────────────
 function ModuleComparisonChart({ data, compact = false }) {
+  // Grouped bar (ECharts; theme-aware). Total events (teal) vs Interventions (rose).
+  const barOption = useMemo(() => ({
+    grid: { top: 10, right: 8, bottom: compact ? 6 : 30, left: 4, containLabel: true },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    xAxis: { type: "category", data: data.map((d) => d.module), axisLabel: { fontSize: 10, interval: 0, rotate: compact ? 0 : 15 } },
+    yAxis: { type: "value", name: compact ? "" : "Events", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 11 } },
+    series: [
+      { name: "Total events", type: "bar", barMaxWidth: 40, itemStyle: { color: "#14b8a6", borderRadius: [6, 6, 0, 0] }, data: data.map((d) => d.requests) },
+      { name: "Interventions", type: "bar", barMaxWidth: 40, itemStyle: { color: "#f43f5e", borderRadius: [6, 6, 0, 0] }, data: data.map((d) => d.interventions) },
+    ],
+  }), [data, compact]);
   return (
     <OverviewChartCard
       eyebrow="Cross-module"
@@ -427,42 +382,7 @@ function ModuleComparisonChart({ data, compact = false }) {
         </div>
       }
     >
-      <SafeResponsiveChart className={`${compact ? "h-[260px]" : "h-[300px]"} w-full`}>
-        <BarChart data={data} margin={{ top: 4, right: 4, bottom: compact ? 12 : 24, left: compact ? -14 : -8 }} barGap={3} barCategoryGap={compact ? "18%" : "28%"}>
-          <defs>
-            <linearGradient id="bargrad-teal" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#14b8a6" stopOpacity={1} />
-              <stop offset="100%" stopColor="#0d9488" stopOpacity={0.8} />
-            </linearGradient>
-            <linearGradient id="bargrad-rose" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f43f5e" stopOpacity={1} />
-              <stop offset="100%" stopColor="#e11d48" stopOpacity={0.8} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.15} vertical={false} />
-          <XAxis
-            dataKey="module"
-            stroke="#94a3b8"
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
-            tickLine={false}
-            axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }}
-            angle={compact ? 0 : -15}
-            textAnchor={compact ? "middle" : "end"}
-            height={compact ? 28 : 54}
-          />
-          <YAxis
-            stroke="#94a3b8"
-            tick={{ fontSize: 11, fill: "#94a3b8" }}
-            tickLine={false}
-            axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }}
-            width={compact ? 28 : 40}
-            label={compact ? undefined : { value: "Events", angle: -90, position: "insideLeft", offset: 12, fontSize: 10, fill: "#64748b" }}
-          />
-          <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(148, 163, 184, 0.08)" }} />
-          <Bar dataKey="requests" fill="url(#bargrad-teal)" radius={[6, 6, 0, 0]} name="Total events" maxBarSize={40} />
-          <Bar dataKey="interventions" fill="url(#bargrad-rose)" radius={[6, 6, 0, 0]} name="Interventions" maxBarSize={40} />
-        </BarChart>
-      </SafeResponsiveChart>
+      <SafeResponsiveChart className={`${compact ? "h-[260px]" : "h-[300px]"} w-full`} option={barOption} />
     </OverviewChartCard>
   );
 }
@@ -533,6 +453,18 @@ function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 
     { key: "redacted", name: "Redacted", color: "#f59e0b" },
   ];
 
+  // Enforcement-posture donut (ECharts; theme-aware). In-slice % label hidden under 6%.
+  const actionDonutOption = useMemo(() => ({
+    tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+    series: [{
+      type: "pie", radius: ["52%", "82%"], center: ["50%", "50%"], padAngle: 4,
+      avoidLabelOverlap: true,
+      label: { show: true, position: "inside", formatter: (p) => (p.percent >= 6 ? `${Math.round(p.percent)}%` : ""), color: "#fff", fontSize: 11, fontWeight: 700 },
+      labelLine: { show: false },
+      data: actionData.map((d) => ({ name: d.name, value: d.value, itemStyle: { color: d.color } })),
+    }],
+  }), [actionData]);
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1.45fr,0.8fr]">
       <div className="ai-mesh-card rounded-[28px] p-6">
@@ -586,35 +518,7 @@ function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">Breakdown of how the firewall responds to every request — allow, block, or sanitise.</p>
 
           <div className="mt-5 flex items-center justify-center rounded-[24px] border border-slate-200/80 bg-white/75 p-4 dark:border-slate-700 dark:bg-slate-950/40">
-            <SafeResponsiveChart className="h-[200px] w-full">
-              <PieChart>
-                <Pie
-                  data={actionData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  dataKey="value"
-                  paddingAngle={4}
-                  labelLine={false}
-                  label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                    if (percent < 0.06) return null;
-                    const R = Math.PI / 180;
-                    const r = innerRadius + (outerRadius - innerRadius) * 0.5;
-                    const x = cx + r * Math.cos(-midAngle * R);
-                    const y = cy + r * Math.sin(-midAngle * R);
-                    return (
-                      <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={700}>
-                        {`${(percent * 100).toFixed(0)}%`}
-                      </text>
-                    );
-                  }}
-                >
-                  {actionData.map((entry, index) => <Cell key={`action-${index}`} fill={entry.color} stroke="transparent" />)}
-                </Pie>
-                <Tooltip content={<ChartTooltip />} />
-              </PieChart>
-            </SafeResponsiveChart>
+            <SafeResponsiveChart className="h-[200px] w-full" option={actionDonutOption} />
           </div>
 
           <div className="mt-4 space-y-2.5">
