@@ -52,8 +52,11 @@ Already in scale manifest: `everything-1` … `everything-5` (npx `@modelcontext
 | Field | Value |
 |-------|-------|
 | Transport | `sse` |
-| URL | `https://…/sse` (provider-specific) |
+| URL | `https://…/sse` (provider-specific) or in-cluster `http://sse-everything.stub:3002/sse` |
 | Slug | `sse-everything-stub` |
+
+Use **dotted** stub hostnames (`*.stub`) so Django `URLField` accepts them; add to
+`MCP_ALLOW_INTERNAL_HOSTS` on control (see `scripts/mcp_enable_http_via_sandbox.sh`).
 
 ### websocket
 

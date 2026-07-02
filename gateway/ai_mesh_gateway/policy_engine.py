@@ -369,11 +369,18 @@ def evaluate(
             # apply_redaction masked just that one pattern; the remaining PII (SSN/
             # email/phone) leaked through to Tier-2 and the LLM. Deterministic
             # policy redaction must cover all matched patterns.
-            if action == "redact" and rule.get("redaction_config"):
+            # G5 ENFORCEMENT-CONSISTENCY: append a redaction hint for EVERY matched
+            # redact rule — even one authored WITHOUT a redaction_config. Previously the
+            # append was gated on redaction_config, so a redact rule with none yielded
+            # action=='redact' but ZERO hints; apply_redaction was then a no-op and the
+            # caller forwarded the sensitive content RAW (a redact-that-leaks). apply_
+            # redaction falls back to the rule's own condition regex/keywords + the
+            # default placeholder, so a redact verdict now always masks its matched span.
+            if action == "redact":
                 result.redaction_hints.append({
                     "rule_id": rule.get("id"),
                     "rule_name": rule.get("name"),
-                    "config": rule.get("redaction_config"),
+                    "config": rule.get("redaction_config") or {},
                     "condition": rule.get("condition") or {},
                 })
 

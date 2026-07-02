@@ -1,0 +1,75 @@
+{
+  "initialized": true,
+  "topology": "hierarchical-mesh",
+  "workers": [
+    "cursor-ralph-iter1",
+    "cursor-ralph-iter2",
+    "cursor-ralph-iter3",
+    "cursor-ralph-iter4",
+    "cursor-ralph-iter5",
+    "cursor-ralph-iter17",
+    "cursor-ralph-iter18",
+    "cursor-ralph-iter28",
+    "cursor-ralph-iter29",
+    "cursor-ralph-iter30"
+  ],
+  "consensus": {
+    "pending": [
+      {
+        "proposalId": "proposal-1782979656279-rgcvqe",
+        "type": "contract",
+        "value": "SANDBOX_TRANSPORT_CONTRACT v1.0",
+        "proposedBy": "system",
+        "proposedAt": "2026-07-02T08:07:36.280Z",
+        "votes": {
+          "cursor-ralph-iter8": true
+        },
+        "status": "pending",
+        "strategy": "raft",
+        "term": 1,
+        "timeoutAt": "2026-07-02T08:08:06.280Z"
+      }
+    ],
+    "history": []
+  },
+  "sharedMemory": {
+    "broadcasts": [
+      {
+        "messageId": "msg-1782977918551-pmdveh",
+        "message": "Cursor Ralph iter2 (cursor-ralph-iter2) owns frontend/** and sandbox-image/agent/** — Claude session please defer on those paths.",
+        "priority": "normal",
+        "fromId": "system",
+        "timestamp": "2026-07-02T07:38:38.551Z"
+      },
+      {
+        "messageId": "msg-1782983411552-s9reed",
+        "message": "Cursor iter17 active. OWNS: frontend/**, services/mcp-broker/sandbox-image/agent/**, docker_manager.py, docs/**. Claude defers those. P4.13/P6.18 still blocked on gateway wiring.",
+        "priority": "normal",
+        "fromId": "cursor-ralph-iter17",
+        "timestamp": "2026-07-02T09:10:11.552Z"
+      },
+      {
+        "messageId": "msg-1782993746475-ubxrsp",
+        "message": "cursor-ralph-iter29: §3 WIRING LANDED (bb4983da — mcp_proxy broker_send_rpc x2, wiring gate YES). Still INCOMPLETE for P4.13/P6.18 [x]: MCP_HTTP_VIA_SANDBOX default OFF, websocket still ws_adapter not broker, http/sse/ws servers unregistered, 14 httpx legacy sites. Stdio e2e GREEN, multi-org GREEN, Playwright B1/B2/B4 PASS. Claude: enable flag + ws broker path + register 3 remote transports. See mcp-parallel/findings/p4-13/RECHECK_ITER29.md",
+        "priority": "normal",
+        "fromId": "cursor-ralph-iter29",
+        "timestamp": "2026-07-02T12:02:26.475Z"
+      },
+      {
+        "messageId": "msg-iter30-cursor-ralph",
+        "message": "cursor-ralph-iter30: MCP_HTTP_VIA_SANDBOX=true LIVE (scripts/mcp_enable_http_via_sandbox.sh). http+sse stubs registered; broker direct streamable-http PASS. BLOCKER: running gateway image lacks §3 (broker_send_rpc refs git=2 container=0) — http/sse via gateway return empty tools. ws still mcp_ws_adapter. Claude: deploy §3 gateway + ws broker path. See RECHECK_ITER30.md + docs/mcp/MCP_HTTP_VIA_SANDBOX_ENABLE.md",
+        "priority": "normal",
+        "fromId": "cursor-ralph-iter30",
+        "timestamp": "2026-07-02T12:12:00.000Z"
+      }
+    ]
+  },
+  "createdAt": "2026-07-02T07:10:05.971Z",
+  "updatedAt": "2026-07-02T12:02:26.475Z",
+  "consensusStrategy": "byzantine",
+  "queen": {
+    "agentId": "queen-1782976205971",
+    "electedAt": "2026-07-02T07:10:05.971Z",
+    "term": 1
+  }
+}

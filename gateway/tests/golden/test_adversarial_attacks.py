@@ -168,6 +168,31 @@ def test_g9_context_guard_credential_outranks_toxicity(label, doc, expected):
 
 
 # ================================================================== fixed gap (now FROZEN)
+# G5 — policy enforce-or-fail-closed: a redact rule authored WITHOUT a redaction_config
+# yielded action='redact' but ZERO hints, so apply_redaction was a no-op and the caller
+# forwarded the sensitive content RAW (a redact-that-leaks). FIXED: a hint is now appended
+# for every redact rule (apply_redaction falls back to the condition regex + placeholder).
+from policy_engine import evaluate as _pe_evaluate, apply_redaction as _pe_apply  # noqa: E402
+
+_G5_POLICY_NO_CONFIG = [{
+    "policy": {"id": 1, "code": "P", "name": "PII", "category": "pii", "severity": "HIGH", "policy_domain": "pipeline"},
+    "rules": [{"id": 9, "name": "Redact email (no redaction_config)", "rule_type": "regex", "action": "redact",
+               "condition": {"field": "both", "regex": r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"}}],
+}]
+
+
+def test_g5_redact_rule_without_config_must_not_forward_raw():
+    """A policy redact verdict must actually mask its span even when the rule carries no
+    redaction_config — never compute 'redact' and forward the sensitive value raw."""
+    prompt = "please email me at john.doe@example.com"
+    result = _pe_evaluate(prompt, "", compiled_policies=_G5_POLICY_NO_CONFIG)
+    assert result.action == "redact"
+    assert result.redaction_hints, "redact verdict produced no hints -> would forward raw"
+    redacted = _pe_apply(prompt, result.redaction_hints)
+    assert "john.doe@example.com" not in redacted, "email survived a redact verdict (LEAK)"
+
+
+# ================================================================== fixed gap (now FROZEN)
 # G4 — output-side obfuscated PII/secret. FIXED via the shared obfuscation-resistant
 # patterns.detect_pii/detect_secrets/redact_all (the output guard scrubs with the same
 # catalogue), so a secret smuggled in MODEL OUTPUT is now detected and masked. FROZEN.
