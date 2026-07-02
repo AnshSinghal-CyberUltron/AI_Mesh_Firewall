@@ -9,12 +9,14 @@
       ModelConnectionPanel, OutputPipelineTimeline) + gate + baseline (lint/build green) + risks R1–R4.
 
 ## Chart migration (contained slice — do early)
-- [ ] 1. Migrate SafeResponsiveChart internals recharts→ECharts (keep API identical); theme-aware colors.
-      iter2: FOUNDATION landed (not [x] — needs live verify). chartTheme.js (zs-light/zs-dark, tested),
-      echartsCore.js (slim), EChart.jsx (theme-reactive+resize+reduced-motion), SafeResponsiveChart gains
-      `option` path (superset API, legacy recharts path intact). lint 31/31, build green, detector clean.
-      Verify-only files have NO charts → R1 resolved cleanly. Finding F1: old charts hardcode dark styling.
-      NEXT iter3: migrate a reference panel to `option` + Playwright-verify both themes/4 widths data-identical.
+- [x] 1. Migrate SafeResponsiveChart internals recharts→ECharts (keep API identical); theme-aware colors.
+      iter2: FOUNDATION (chartTheme zs-light/zs-dark tested, echartsCore slim, EChart theme-reactive+resize+
+      reduced-motion, SafeResponsiveChart `option` superset API). iter3: DONE + PROVEN LIVE — migrated
+      OutputGuardrailCharts (4 charts) recharts→ECharts, verified vs real backend data (module 1.7) both
+      themes @1440/768/375: data-identical, interactive tooltip (theme-aware), no overflow, console clean.
+      Fixed F1 (light tooltip/axis now readable) + F2 (donut label clip) + radar theme deprecation.
+      Harness recipe + findings F3 (backend PG 500 bursts), F4 (KPI=0 vs chart-has-data) logged in AUDIT.
+      Remaining 11 recharts panels migrate under items 3–16; recharts removal = item 24 exit check.
 - [ ] 2. uPlot for dense time-series charts (telemetry/logs/trends). Verify data-identical + interactive + faster.
 
 ## Per-surface sweep (ONE panel per iteration → verify (both themes, 4 widths) → fix → re-verify → commit)

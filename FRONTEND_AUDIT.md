@@ -79,7 +79,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ### Charts (items 1–2)
 | # | Surface | Owner | Dark | Light | 1440 | 1024 | 768 | 375 | Impec | State |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | SafeResponsiveChart → ECharts | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | 🔎 foundation landed |
+| 1 | SafeResponsiveChart → ECharts | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ proven live |
 | 2 | uPlot dense time-series | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ### Panels (items 3–16)
@@ -92,7 +92,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | 7 | MCPManagerPanel / MCPScannerPanel / MCPScanControlMatrix | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 8 | DatabaseConnectionPanel / VectorPolicyPanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 9 | RAGFeatureTestPanel / RAGAttackTrustSimulator / RAGPipelineTelemetry | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| 10 | OutputGovernancePanel / OutputGuardrailControls / OutputGuardrailCharts / OutputGuardrailEngineCard | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 10 | OutputGovernancePanel / OutputGuardrailControls / OutputGuardrailCharts / OutputGuardrailEngineCard | me | ◐ | ◐ | ◐ | ⬜ | ◐ | ◐ | ✅chart | 🔎 charts done, panels pending |
 | 11 | AttackSimulatorPanel (+ simulator/*) | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 12 | PolicyManagementPanel / PolicyAnalyticsPanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 13 | LogViewerPanel / LogDetailPage | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -160,3 +160,22 @@ verify-only files, which have no charts):
 - **Finding F1 (theme bug in current charts):** existing recharts charts hardcode dark styling (`tooltip #0f172a`, `grid #3f3f46`, `ticks #94a3b8`) → dark grid on white in light mode. The new themes fix this on migration. Fold into per-panel chart migrations + item 21.
 - **R3 update:** bundle temporarily 1.79→2.53 MB (gzip 478→726 KB) while echarts + recharts coexist. Net drop lands when recharts is removed after all panels migrate (item 24). recharts still used by 12 files: AIMeshFirewallOverview, OWASPStatsPanel, module-specific-{charts,log-charts}, LogDetailPage, SubmoduleResultsPage/DetailPage, RAGPipelineTelemetry, Firewall12EnterprisePage, OutputGuardrailCharts, PolicyAnalyticsPanel.
 - **Next (iter3):** migrate a reference chart panel to `option`, bring up dev+backend, Playwright-verify data-identical + interactive in BOTH themes at 4 widths, then progress item 1 → item 2 (uPlot dense time-series)._
+
+**Item 1 DONE + reference migration (iter3, 2026-07-02):** migrated `OutputGuardrailCharts.jsx` (4 charts: stacked-area timeline, donut, 2 bars) recharts→ECharts `option`, and **live-verified** against real backend data (module 1.7, event_timeline 43 rows etc.):
+- Data-identical BEFORE(recharts)/AFTER(ECharts): timeline 07/02 spike + 4-series legend; donut "Redacted 100%"; categories Pii/Policy-Violation; risk 40-60 & 80-100. Screenshots in `mcp-parallel/findings/frontend-harden/output-guardrails/`.
+- recharts SVG→0, ECharts canvas→4. Theme reactivity works (toggle light↔dark re-themes charts). Interactivity works (axis tooltip on hover, theme-aware).
+- **F1 FIXED (verified):** light theme now shows a white tooltip + readable slate-600 axis labels (was hardcoded-dark). Also fixed the recharts garbled Y-axis tick ordering.
+- **F2 FIXED:** recharts donut label was clipped ("…d100%"); ECharts shows full "Redacted 100%" with labelLine.
+- lint 31/31, build green, detector clean. Fixed a theme deprecation (radar `name.textStyle`→`axisName`) to keep console clean.
+- Item 1 marked done: the SafeResponsiveChart→ECharts capability is migrated, API-compatible, theme-aware, and proven. Remaining recharts panels migrate under their per-surface items (3–16); recharts removal is the item-24 exit check. **11 recharts files remain:** AIMeshFirewallOverview, OWASPStatsPanel, module-specific-{charts,log-charts}, LogDetailPage, SubmoduleResultsPage/DetailPage, RAGPipelineTelemetry, Firewall12EnterprisePage, PolicyAnalyticsPanel (OutputGuardrailCharts now done).
+
+### Live-verification harness (reuse every iteration)
+- Target the **dockerized dev server at `http://127.0.0.1:8180`** (`ai_mesh_firewall-frontend-1`, container 5173→8180) — it serves the mounted source and HMRs edits. Do NOT run a second `:5173` (root-owned `node_modules/.vite` cache blocks it; also redundant).
+- **Auth without the (rate-limited) login form:** mint a JWT in the control container and inject into localStorage:
+  `docker exec ai_mesh_firewall-control-1 python manage.py shell -c "from django.contrib.auth import get_user_model; from rest_framework_simplejwt.tokens import RefreshToken; u=get_user_model().objects.filter(email='admin@zeroshield.io').first(); print(RefreshToken.for_user(u).access_token)"` → `localStorage.setItem('auth_access', <token>)`. Keys: `auth_access`/`auth_refresh`. Access ~1h, refresh ~7d.
+- **Navigation:** single route `/`; panels via `?tab=` (e.g. `?tab=firewall-1-7` → module 1.7; `firewall-1-1..1-7`, `firewall`, `firewall-config`).
+- Playwright MCP needs system Chrome: `npx playwright install chrome` (done).
+
+### New findings
+- **F3 (backend infra, NOT frontend — documented, worked around):** Postgres intermittently returns `FATAL: sorry, too many clients already` → app-wide **500s** under concurrent dashboard load (many polling panels × parallel Ralph sessions; `max_connections=100`, idle ~10). Transient; retry when calm. Out of frontend scope + shared-env risk to fix. **Frontend robustness sub-finding:** a transient 500 on `/api/auth/me/` currently forces a logout→`/login` bounce (a blip logs you out) — candidate hardening (item 19).
+- **F4 (data-integrity — investigate, item 19):** module 1.7 **KPI stat cards read 0** (OUTPUTS SCANNED/BLOCKED/…) while the **charts endpoint has real rows** (event_timeline 43). Possible mismatch between the module-KPIs source and the module-charts source, or a lens-window difference. Verify which is correct before signing off data-integrity.

@@ -64,7 +64,8 @@ function buildTheme(c) {
       },
     },
     radar: {
-      name: { textStyle: { color: c.subtext, fontFamily: CHART_FONT, fontSize: 11 } },
+      // ECharts 6: axis label config is `axisName` (was `name.textStyle` pre-4.0)
+      axisName: { color: c.subtext, fontFamily: CHART_FONT, fontSize: 11 },
       axisLine: { lineStyle: { color: c.splitLine } },
       splitLine: { lineStyle: { color: c.splitLine } },
       splitArea: { areaStyle: { color: ["transparent"] } },
