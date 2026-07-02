@@ -65,10 +65,17 @@ status: ACTIVE
 - [ ] 13. Verify (Playwright + harness): with the gateway pointed only at the sandbox, an http, an sse, a
        ws, and a stdio MCP all work end-to-end THROUGH the sandbox; confirm the gateway opens NO direct
        upstream connection (network assertion) — nothing runs in the main backend.
+       **BLOCKED 2026-07-02 (iter13):** gateway wiring not landed — no `broker_send_rpc`, no broker
+       `/{org}/rpc`, `mcp_proxy` still direct httpx for streamable-http/sse. See
+       `mcp-parallel/findings/p4-13/BLOCKER.md`. Pivoted to P5.14.
 
 ## P5 — Frontend fixes (Playwright-verified; the dialog especially)
-- [ ] 14. B1: OAuth selectable ONLY for HTTP transports; block oauth+stdio in the form; render exactly
+- [x] 14. B1: OAuth selectable ONLY for HTTP transports; block oauth+stdio in the form; render exactly
        ONE Authorize button (HTTP+oauth only); remove the dup/broken control authorize path.
+       **Verified 2026-07-02 (iter13):** Playwright 8/8 PASS (`playwright_mcp_b1_verify.mjs`);
+       form guards + one-button UX already in place. Control `startControlOAuth` retained for HTTP
+       oauth (token→control DB required for sync); structural removal needs Claude token bridge.
+       See `mcp-parallel/findings/p4-13/P5-14-B1-VERIFY.md`.
 - [ ] 15. B2: freshly-registered HTTP oauth server shows a distinct "Pending authorization" state (not a
        0-tools card); tools appear only after oauth_authorized + sync.
 - [ ] 16. B4: stabilize the Add-Server dialog so controlled inputs KEEP focus per keystroke (fix the

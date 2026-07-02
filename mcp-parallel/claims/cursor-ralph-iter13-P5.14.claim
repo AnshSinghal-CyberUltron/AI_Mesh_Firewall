@@ -1,0 +1,6 @@
+agent: cursor-ralph-iter13
+story: P5.14
+scope: mcp-parallel/findings/p4-13/**, docs/mcp/PARALLEL_CLAIMS.md, .cursor/ralph/scratchpad.md
+since: 2026-07-02T15:10:00Z
+status: released
+note: B1 verified via Playwright; no frontend code change
