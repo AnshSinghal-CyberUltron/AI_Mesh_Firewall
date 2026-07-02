@@ -49,6 +49,11 @@
     3-tuple (→15-sandbox ceiling); now `build_orgs(NUM_ORGS)` (default 3), so `NUM_ORGS=50 SERVERS_PER_ORG=10`
     → 500 targets. New `scripts/test_mcp_scale_provision.py` (4 pass). Remaining: pre-create N orgs; broker
     per-org distinct UID (fork budget); prove 300-500 healthy live.
+  - CHG-0011 (2026-07-02) — VERIFICATION (docs only): G3 item 7 is broker-complete but gateway-wiring
+    INCOMPLETE — corrects the "all 32 complete / all transports via sandbox" claim. stdio→broker ✓;
+    http/sse→control backend (calls upstream directly, no broker); ws→in-gateway. So http/sse/ws don't
+    egress via the per-org sandbox. NOT a data leak (result scan applies per CHG-0005) — isolation gap.
+    Owning session: route http/sse + ws through `broker_send_rpc` (unified `/{org}/rpc` route ready).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

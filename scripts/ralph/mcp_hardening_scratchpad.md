@@ -89,6 +89,18 @@
 
 ## G3 — Architecture hardening (log every edit)
 - [ ] 7. All transports (http/ws/sse/stdio) in the per-org gVisor sandbox; nothing in the backend (complete/fix if needed).
+      VERIFIED STILL OPEN — CHG-0011 (2026-07-02, read-only; active-migration zone, did NOT edit). Broker
+      side DONE (unified POST /{org}/rpc handles all transports, routes.py:296; agent dials HTTP+egress-
+      allowlist). Gateway wiring INCOMPLETE: stdio→broker ✓ (adapter path, MCP_STDIO_IN_PROCESS=false);
+      streamable-http/sse→control backend (mcp_proxy.py:2470 → /api/mcp-connector/tools/call/; backend calls
+      upstream DIRECTLY, zero broker/BROKER_URL refs, docstrings 'directly to the upstream' views.py:412/601/727);
+      websocket→in-gateway websockets.client.connect (mcp_ws_adapter.py:135). So http/sse/ws do NOT egress
+      via the per-org sandbox → "nothing in the backend" UNMET; the "all 32 complete/all transports via
+      sandbox" claim is inaccurate for the gateway wiring. NOT a data leak (1.4 result scan applies to
+      http/sse per CHG-0005) — an ISOLATION gap (per-tenant egress). REMAINING before [x] (owning session):
+      route gateway http/sse (org_mcp_jsonrpc else-branch / internal_tools_call direct-httpx) + websocket
+      (mcp_ws_adapter.py) through broker_send_rpc (unified route already exists); prove NO transport's
+      outbound call runs in the gateway/control backend.
 - [ ] 8. No unknown npm on host — proven.
 - [ ] 9. Gateway auth/authz/validation/rate-limit/policy/audit — verified + hardened.
 - [ ] 10. Resource limits CPU/mem/disk/timeout enforced + containment proven.

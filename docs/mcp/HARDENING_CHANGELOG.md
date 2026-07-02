@@ -331,3 +331,44 @@ the prod compose/manifests is tracked under G3 item 12.
   assign a DISTINCT sandbox UID per org for a true per-tenant fork budget (NPROC_ROOT_CAUSE.md — shared
   host-UID fork budget saturated ~244/256 at just 15 servers); (3) actually provision + prove 300-500
   sandboxes HEALTHY concurrently on the live stack. This entry removes the code ceiling only.
+
+### CHG-0011 — VERIFICATION: G3 item 7 is broker-complete but gateway-wiring INCOMPLETE (corrects a "complete" overclaim)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 7 (all transports in the per-org sandbox; nothing in the backend) — verified
+  STILL OPEN. Read-only verification; no code changed (active migration zone).
+- **Files:** docs only (this changelog · `.cursor/rules/mcp-hardening-changelog.mdc` · `AGENTS.md` ·
+  `scripts/ralph/mcp_hardening_scratchpad.md` · Ruflo `mcp-hardening/changes`).
+- **WHAT:** Verified the actual state of the P4.13/P6.18 transport migration against the recent
+  "all 32 items complete / all transports via sandbox" claim. The BROKER side is done — the unified
+  `POST /{org_slug}/rpc` route (`services/mcp-broker/src/sandbox/routes.py:296`) handles all four
+  transports, and the sandbox agent now dials HTTP with an egress allowlist. But the GATEWAY WIRING is
+  INCOMPLETE:
+    - **stdio** → per-org broker sandbox ✓ (adapter path, `MCP_STDIO_IN_PROCESS=false`, via the deprecated
+      `broker_send_jsonrpc`/`/stdio/rpc`).
+    - **streamable-http / sse** → the gateway POSTs to the control backend
+      (`gateway/ai_mesh_gateway/mcp_proxy.py:2470` → `{_BACKEND_URL}/api/mcp-connector/tools/call/`); the
+      control tool-call path has ZERO broker/sandbox/`BROKER_URL` references and its docstrings say it goes
+      "directly to the upstream MCP server" (`control/.../mcp_connector/views.py:412,601,727`). So these do
+      NOT egress through the per-org sandbox.
+    - **websocket** → still an in-gateway socket (`gateway/ai_mesh_gateway/mcp_ws_adapter.py:135`
+      `websockets.client.connect`), not the broker.
+- **WHY (overclaim/omission):** the architecture requirement is "one gVisor sandbox per tenant holding ALL
+  transports (http/ws/sse/stdio) with NOTHING in the main backend." http/sse remote-server calls execute
+  from the control backend and ws from the gateway — so per-tenant egress containment does NOT hold for
+  those transports, and the "all transports via sandbox" claim is inaccurate for the gateway wiring.
+- **NOW DOES:** records the precise verified state + the exact remaining wiring so the owning session (and
+  a future "architecture hardened" check) is not misled. NOTE: the 1.4 data-leak guardrail (result scan +
+  redaction) IS applied to http/sse results at the gateway (CHG-0005, fail-safe), so this is an ISOLATION-
+  architecture gap (per-tenant egress), not a data leak.
+- **Touched whose work:** verifies the P4.13/P6.18 broker/transport migration (active, several recent
+  commits). No files those sessions edit were touched.
+- **VERIFY:** `grep -n "websockets.client.connect" gateway/ai_mesh_gateway/mcp_ws_adapter.py` (→ :135);
+  `grep -n "api/mcp-connector/tools/call" gateway/ai_mesh_gateway/mcp_proxy.py` (→ http/sse to backend);
+  `grep -rn "broker\|BROKER_URL\|sandbox/rpc" control/ai_mesh_control/mcp_connector/views.py` (→ none in the
+  tool-call path); `grep -n '@router.post("/{org_slug}/rpc")' services/mcp-broker/src/sandbox/routes.py`
+  (→ :296, the unified route exists and is ready).
+- **REMAINING for G3 item 7 (owning session):** switch the gateway's http/sse tool-call path
+  (`org_mcp_jsonrpc` else-branch / `internal_tools_call` direct-httpx) and the websocket adapter
+  (`mcp_ws_adapter.py`) to delegate to `broker_send_rpc` (the unified `/{org}/rpc` route already exists),
+  then prove NO transport's outbound call executes in the gateway/control backend. Until then, do not mark
+  "all transports in the sandbox" done.
