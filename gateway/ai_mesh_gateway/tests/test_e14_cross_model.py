@@ -92,13 +92,22 @@ def _completion(model: str, *, secret_channel: str, n_choices: int = 1) -> dict:
                                         "arguments": json.dumps({"key": SECRET})}
             elif secret_channel == "audio":
                 msg["audio"] = {"id": "aud_1", "transcript": f"the key is {SECRET}"}
+            elif secret_channel == "list_content":
+                # G57: multimodal / content-block shape — content is a LIST of
+                # content-part dicts, not a str. The non-stream scanner previously
+                # only read str content, so an all-list answer yielded EMPTY scan
+                # text and the output guard was skipped entirely (raw egress).
+                msg["content"] = [
+                    {"type": "text", "text": "Here is the answer. "},
+                    {"type": "text", "text": f"The key is {SECRET} for {PII}."},
+                ]
         choices.append({"index": i, "message": msg, "finish_reason": "stop"})
     return {"id": "chatcmpl-x", "object": "chat.completion", "model": model,
             "choices": choices}
 
 
 SECONDARY_CHANNELS = ["content", "reasoning_content", "refusal",
-                      "tool_calls", "function_call", "audio"]
+                      "tool_calls", "function_call", "audio", "list_content"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -142,6 +151,51 @@ def test_nonstream_scan_is_model_invariant():
             f"MODEL-DIFFERENTIAL: scan input differs for model={model!r} "
             f"vs {MODEL_IDS[0]!r}. A provider branch in the scan path is a bypass."
         )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# G57: LIST-shaped (multimodal content-block) content must be scanned + redacted.
+# The non-stream extractor read only str content, so an all-list answer yielded
+# empty scan text -> the output guard was SKIPPED (_og_scan_text falsy) and PII/
+# secrets egressed raw. The streaming path already coerced it (FIX-C); this pins
+# the non-stream parity so a refactor cannot silently reopen the asymmetry.
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("model", MODEL_IDS)
+def test_g57_list_content_scanned_not_skipped(model):
+    completion = _completion(model, secret_channel="list_content")
+    scan_text = gm._extract_scannable_output_text(completion)
+    assert scan_text, (
+        f"G57: list-shaped content produced EMPTY scan text (model={model!r}) — "
+        f"the output guard would be SKIPPED and the answer egress unscanned."
+    )
+    assert SECRET in scan_text and PII in scan_text, (
+        f"G57: secret/PII in list-shaped content is not in the scan input "
+        f"(model={model!r}); scan_text={scan_text!r}"
+    )
+
+
+def test_g57_response_extractor_coerces_list_to_str():
+    """_extract_response_from_completion (the redaction input) must return a str for
+    list-shaped content — else _sanitize_output_for_verdict gets a list and the
+    redact path breaks (or forwards raw)."""
+    completion = _completion("gpt-4o-mini", secret_channel="list_content")
+    rt = gm._extract_response_from_completion(completion)
+    assert isinstance(rt, str), f"response text is {type(rt).__name__}, not str"
+    assert SECRET in rt and PII in rt, "coerced response text lost the content"
+
+
+def test_g57_list_content_stream_nonstream_parity():
+    """The stream and non-stream extractors must AGREE that list content carries the
+    secret — the asymmetry was the leak (stream saw it, non-stream did not)."""
+    from ai_mesh_gateway.secure_streaming import SecureStreamingResponse as _S
+    completion = _completion("gpt-4o-mini", secret_channel="list_content")
+    nonstream = gm._extract_scannable_output_text(completion)
+    delta = {"choices": [{"delta": {"content": [
+        {"type": "text", "text": f"The key is {SECRET} for {PII}."}]}}]}
+    stream = _S._extract_content_delta(_S.__new__(_S), delta)
+    assert SECRET in nonstream and SECRET in stream, (
+        f"stream/non-stream disagree on list content: nonstream={nonstream!r} stream={stream!r}"
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -197,6 +251,8 @@ def _delta_chunk(channel: str, n_choices: int = 1) -> dict:
                 delta = {"function_call": {"name": "x", "arguments": SECRET}}
             elif channel == "audio":
                 delta = {"audio": {"transcript": f"key {SECRET}"}}
+            elif channel == "list_content":
+                delta = {"content": [{"type": "text", "text": f"key {SECRET}"}]}
         choices.append({"index": i, "delta": delta})
     return {"choices": choices}
 

@@ -1293,6 +1293,28 @@ def _extract_agent_data(body: dict, x_agent_data: str | None):
     return None
 
 
+def _content_to_text(content) -> str:
+    """Coerce an OpenAI message ``content`` field to a plain ``str``.
+
+    G57: content may be a ``str`` OR a LIST of content-part dicts (multimodal /
+    content blocks — some providers/models return the assistant answer this way).
+    A list is joined from its ``text`` parts. Mirrors the streaming coercion
+    (secure_streaming ``_extract_content_delta`` FIX-C) so the NON-stream output
+    guard sees list-shaped content instead of scanning an empty string — an
+    all-list-content answer previously yielded empty scan text, which SKIPPED the
+    output guard entirely (``_og_scan_text`` falsy) and egressed PII/secrets raw.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            p.get("text") or ""
+            for p in content
+            if isinstance(p, dict) and isinstance(p.get("text"), str)
+        )
+    return ""
+
+
 def _extract_response_from_completion(completion):
     """Extract assistant response text from chat completion (non-streaming)."""
     choices = completion.get("choices") or []
@@ -1300,7 +1322,7 @@ def _extract_response_from_completion(completion):
         return ""
     c = choices[0]
     msg = c.get("message") or c.get("delta") or {}
-    return msg.get("content") or ""
+    return _content_to_text(msg.get("content"))
 
 
 def _extract_scannable_output_text(completion) -> str:
@@ -1325,7 +1347,11 @@ def _extract_scannable_output_text(completion) -> str:
         if not isinstance(msg, dict):
             continue
         # R12 (#15): include `refusal` (model-authored text channel).
-        for _v in (msg.get("content"), msg.get("reasoning_content"), msg.get("refusal")):
+        # G57: `content` may be a LIST of content-part dicts (multimodal); coerce it
+        # to text (stream parity — secure_streaming FIX-C) so list-shaped content is
+        # scanned instead of skipped (an all-list answer otherwise yields empty scan
+        # text and the output guard is bypassed entirely).
+        for _v in (_content_to_text(msg.get("content")), msg.get("reasoning_content"), msg.get("refusal")):
             if isinstance(_v, str) and _v:
                 parts.append(_v)
         # R12 (#16): audio-output transcript channel.
