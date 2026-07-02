@@ -128,6 +128,16 @@
       (catalog reporting broken for gateway events). Fix = unify vocab onto ComplianceTag.code (cross-plane:
       gateway patterns.py + control catalog/migration; breaks 8 gateway tests) — owning-session semantic
       decision, NOT a unilateral backstop edit. Evidence: mcp-parallel/findings/backstop-p5-compliance-tags/.
+      CHG-0030 (2026-07-02): the "extended to PII/IP/regulated" COVERAGE gap (distinct from the vocab mismatch
+      above) CLOSED for IP/infra. detect_ip_leakage + IP_LEAKAGE_PATTERNS (internal IPv4/hostname/URL + private
+      file paths -> INFRA tag) already ran on the CHAT output_guard but the MCP scan (_scan_text_tier1) ran ONLY
+      detect_pii/detect_secrets — so internal host/IP/path in a tool RESULT was never detected/tagged/redacted.
+      Now folded into the pii/secret fallback: ip_leakage finding -> INFRA-tagged (get_compliance_tags) +
+      posture-enforced (block/redact/monitor). Fail-closed byte-check (redact_all covers internal IP/host/URL
+      but NOT file paths -> if a detected internal value survives the scrub under redact, BLOCK — no
+      redact-that-leaks). Public IPs not flagged. +5 tests; test_mcp_scan_orchestrator.py 32 passed, broad sweep
+      1069 passed. STILL OPEN (item 5): the gateway INFRA/SECRET/PII vocab vs control ComplianceTag catalog
+      codes (GDPR-PII/...) mismatch for catalog-join reporting — the cross-plane vocab decision.
 - [x] 6. End-to-end per-tool-call chain: authz → minimize → scan+redact(in&result) → tag → audit.
       LIVE VERIFIED in order — CHG-0021 (2026-07-02): fired a PII tools/call, inspected the MCPEvent
       scan_trace/metadata. Chain executes in order on each call: authz (reached tool; org-key validated,

@@ -742,3 +742,88 @@ async def test_policy_redaction_fields_surfaced_on_input_scan_not_applied():
     assert result.policy_redaction_fields == ["ssn"]     # surfaced for cross-stage
     assert result.redacted_fields == []                  # not applied on input
     assert out["ssn"] == "SECRET-VALUE"
+
+
+# ── 1.4 "PII/IP/regulated": IP / infrastructure-leakage detection on the MCP path
+# detect_ip_leakage + IP_LEAKAGE_PATTERNS already ran on the chat output_guard, but
+# the MCP tool-call scan only ran detect_pii/detect_secrets — so an internal
+# host/IP/path in a tool RESULT was never detected/tagged/redacted (CHG-0030).
+
+
+def _no_policy_ctx():
+    return (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=EvaluationResult(action="allow")),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    )
+
+
+@pytest.mark.asyncio
+async def test_ip_leakage_internal_ip_redacted_and_tagged_infra():
+    a, b, c = _no_policy_ctx()
+    with a, b, c:
+        payload = {"note": "connect to 10.1.2.3 now"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_two_tier("output", t1_action="redact"),
+        )
+    assert result.blocked is False
+    assert "10.1.2.3" not in str(out)                       # internal IP masked
+    assert any(f.threat_type == "ip_leakage" for f in result.findings)
+    assert "INFRA" in result.compliance_tags
+
+
+@pytest.mark.asyncio
+async def test_ip_leakage_private_file_path_fails_closed_under_redact():
+    """redact_all does NOT mask private file paths, so a redact posture must BLOCK
+    rather than forward a 'redacted' result that still carries the path."""
+    a, b, c = _no_policy_ctx()
+    with a, b, c:
+        payload = {"note": "see /home/deploy/secrets.env for creds"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_two_tier("output", t1_action="redact"),
+        )
+    assert result.blocked is True                           # fail-closed, not forwarded
+    assert any(f.threat_type == "ip_leakage" for f in result.findings)
+
+
+@pytest.mark.asyncio
+async def test_ip_leakage_blocked_under_block_posture():
+    a, b, c = _no_policy_ctx()
+    with a, b, c:
+        payload = {"note": "internal host db01.corp is up"}
+        _, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_two_tier("output", t1_action="block"),
+        )
+    assert result.blocked is True
+
+
+@pytest.mark.asyncio
+async def test_ip_leakage_monitor_tags_without_mutation():
+    a, b, c = _no_policy_ctx()
+    with a, b, c:
+        payload = {"note": "connect to 10.1.2.3 now"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_two_tier("output", t1_action="monitor"),
+        )
+    assert result.blocked is False
+    assert result.monitored is True
+    assert "10.1.2.3" in str(out)                           # observe-only, unmutated
+    assert "INFRA" in result.compliance_tags
+
+
+@pytest.mark.asyncio
+async def test_public_ip_not_flagged_as_ip_leakage():
+    """A public IP (8.8.8.8) is NOT internal-infra leakage — no false positive."""
+    a, b, c = _no_policy_ctx()
+    with a, b, c:
+        payload = {"note": "ping 8.8.8.8 to test"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_two_tier("output", t1_action="redact"),
+        )
+    assert not any(f.threat_type == "ip_leakage" for f in result.findings)
+    assert "8.8.8.8" in str(out)                            # untouched

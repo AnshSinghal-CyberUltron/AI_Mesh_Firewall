@@ -981,3 +981,36 @@ the prod compose/manifests is tracked under G3 item 12.
   mcp_pipeline_matrix_live` succeeds with no GATEWAY_KEY/argv.
 - **REMAINING:** the LIVE pipeline run at scale (epochs × cases × REPEAT) is still gated on the dedicated-host
   stress environment (items 14–18); this change makes its verdicts trustworthy when it does run.
+
+### CHG-0030 — Extend MCP compliance tagging to IP / infrastructure leakage (1.4 "PII/IP/regulated")
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 1.4 compliance tagging — "extended to PII/IP/regulated". PII/PHI/PCI/secret were
+  detected+tagged on the MCP path; the IP/infrastructure category was NOT. (Distinct from item 5's tag-vocab
+  mismatch — this is missing DETECTION coverage, not a catalog-join bug.)
+- **Files:** `gateway/ai_mesh_gateway/mcp_scan_orchestrator.py` (`_scan_text_tier1` now also runs
+  `detect_ip_leakage`; `_tags_for_finding` routes `ip_leakage` findings through `get_compliance_tags`);
+  `gateway/ai_mesh_gateway/tests/test_mcp_scan_orchestrator.py` (+5 tests).
+- **WHAT:** `IP_LEAKAGE_PATTERNS` + `detect_ip_leakage` (internal IPv4, internal hostnames `*.corp/.internal/
+  .local/…`, internal URLs, private unix/windows file paths → `INFRA` tag) already existed and ran on the CHAT
+  `output_guard` path, but the MCP tool-call scan (`_scan_text_tier1`) ran ONLY `detect_pii` + `detect_secrets`
+  — so an internal host / IP / private file path in a tool RESULT (or args) was never detected, tagged, or
+  redacted on the MCP path. Folded `detect_ip_leakage` into the same PII/secret fallback: an IP-leakage match
+  now yields an `ip_leakage` finding (tagged `INFRA` via `get_compliance_tags`) and is enforced by posture
+  (block posture → block; redact posture → `redact_all`; monitor → detect+tag+allow), matching PII/secret.
+- **WHY:** the 1.4 mandate requires compliance tagging "extended to PII/IP/regulated"; MCP was silently
+  missing the IP/infra dimension the chat path already had — internal infrastructure detail could egress
+  through an MCP tool result untagged and (under a redact posture) with only partial masking.
+- **NOW DOES:** internal IP/hostname/URL in an MCP payload is detected → `INFRA`-tagged → masked under a redact
+  posture; a **fail-closed byte-check** covers the asymmetry that `redact_all` masks internal IP/host/URL but
+  NOT private file paths — if ANY detected internal value SURVIVES the scrub under a redact posture, the call
+  is BLOCKED rather than forwarded as a "redacted" result that still leaks (no A4-class redact-that-leaks).
+  Public IPs (e.g. 8.8.8.8) and canonical example addresses are NOT flagged (no false positive).
+- **Touched whose work:** reuses the existing tested `patterns.detect_ip_leakage` (chat output-guard author);
+  extends the MCP scan orchestrator (prior backstop CHG-0003/0005/0007). Behaviour is additive — no existing
+  test payload carries an internal IP/path, so all prior paths are unchanged.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_scan_orchestrator.py
+  -q` → 32 passed (+5: internal-IP redacted+`INFRA`-tagged; private file path fails closed → block; block
+  posture blocks; monitor tags without mutating; public IP not flagged). Broad sweep `ai_mesh_gateway/tests`
+  → 1069 passed, 0 failed.
+- **REMAINING (unchanged):** the gateway `INFRA`/`SECRET`/`PII` vocabulary vs the control ComplianceTag catalog
+  codes (GDPR-PII/…) still mismatch for catalog reporting — item 5's separate cross-plane vocab decision.

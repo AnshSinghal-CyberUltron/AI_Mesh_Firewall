@@ -153,6 +153,15 @@
     fallback); redacted = allow + no raw value anywhere + a marker (byte-truth); module import-safe. +8 unit
     tests (scripts/test_mcp_pipeline_oracle.py); all 4 scripts oracle suites → 25 passed. Same class of fix as
     CHG-0009 (dead oracle) + CHG-0012 (no byte-check).
+  - CHG-0030 (2026-07-02) — 1.4 "PII/IP/regulated": extended MCP compliance tagging to IP/infrastructure
+    leakage. detect_ip_leakage + IP_LEAKAGE_PATTERNS (internal IPv4/hostname/URL + private file paths → INFRA)
+    already ran on the chat output_guard but the MCP scan (_scan_text_tier1) ran ONLY detect_pii/detect_secrets
+    — so an internal host/IP/path in a tool RESULT was never detected/tagged/redacted. Now folded in: an
+    ip_leakage finding is INFRA-tagged (via get_compliance_tags) + enforced by posture (block→block,
+    redact→redact_all, monitor→tag). Fail-closed byte-check: redact_all masks internal IP/host/URL but NOT file
+    paths, so if a detected internal value survives the scrub under redact it BLOCKS (no redact-that-leaks).
+    Public IPs not flagged. Files mcp_scan_orchestrator.py + test_mcp_scan_orchestrator.py (+5). Gate: 32 +
+    1069 broad sweep passed. (Distinct from item 5's tag-vocab mismatch, still open.)
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

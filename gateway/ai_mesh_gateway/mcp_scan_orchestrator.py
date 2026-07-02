@@ -18,7 +18,7 @@ from typing import Any
 from ai_mesh_shared.mcp_compliance_tags import tags_for_preset_or_entity
 
 from mcp_scan_targets import extract_and_bind
-from patterns import detect_pii, detect_secrets, get_compliance_tags, redact_all
+from patterns import detect_ip_leakage, detect_pii, detect_secrets, get_compliance_tags, redact_all
 from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies
 
 LOG = logging.getLogger("gateway.mcp_scan")
@@ -106,7 +106,7 @@ def _direction_label(scan_direction: str) -> str:
 
 
 def _tags_for_finding(finding: McpFinding) -> list[str]:
-    if finding.threat_type in ("pii", "secret"):
+    if finding.threat_type in ("pii", "secret", "ip_leakage"):
         return get_compliance_tags(
             finding.detail.replace("Matched: ", "").split(", ")
             if "Matched:" in finding.detail
@@ -311,8 +311,15 @@ async def _scan_text_tier1(
 
     pii = detect_pii(text)
     secrets = detect_secrets(text)
-    if pii or secrets:
-        kinds = list(pii.keys()) + list(secrets.keys())
+    # 1.4 "PII/IP/regulated": extend MCP tagging to IP/infrastructure leakage
+    # (internal IPs, internal hostnames, internal URLs, private file paths). These
+    # patterns + detect_ip_leakage already existed and ran on the chat output_guard
+    # path, but the MCP tool-call scan only ran detect_pii/detect_secrets — so an
+    # internal host/path in a tool RESULT was never detected/tagged/redacted.
+    ip_leak = detect_ip_leakage(text)
+    if pii or secrets or ip_leak:
+        kinds = list(pii.keys()) + list(secrets.keys()) + list(ip_leak.keys())
+        threat = "pii" if pii else ("secret" if secrets else "ip_leakage")
         findings.append(
             McpFinding(
                 entity_type=kinds[0] if kinds else "PII",
@@ -321,14 +328,23 @@ async def _scan_text_tier1(
                 end=len(text),
                 direction=mcp_dir,
                 tier="tier1",
-                threat_type="pii" if pii else "secret",
+                threat_type=threat,
                 detail=f"Matched: {', '.join(kinds)}",
             )
         )
         if _enforce_blocks(enforcement):
             blocked = True
         elif enforcement == "redact":
-            mutated = redact_all(text)
+            candidate = redact_all(text)
+            # Egress-byte truth / fail-closed: redact_all masks internal
+            # IP/hostname/URL but NOT private file paths. If ANY detected internal
+            # value survives the scrub, do NOT forward a "redacted" result that
+            # still carries it — block instead (a redact-that-leaks is the A4-class
+            # defect). PII/secret values are always covered by redact_all.
+            if any(v and str(v) in candidate for v in ip_leak.values()):
+                blocked = True
+            else:
+                mutated = candidate
     return mutated, findings, blocked, []
 
 

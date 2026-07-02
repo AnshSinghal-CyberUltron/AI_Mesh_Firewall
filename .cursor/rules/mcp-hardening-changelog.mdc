@@ -245,3 +245,14 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   present; the module is import-safe. Files: scripts/mcp_pipeline_matrix_live.py (rewritten),
   scripts/test_mcp_pipeline_oracle.py (+8). Gate: 8 pipeline-oracle tests; all 4 scripts oracle suites → 25
   passed. Same class of defect as CHG-0009 (dead cross-tenant oracle) + CHG-0012 (no response-byte check).
+- **CHG-0030** (2026-07-02) — 1.4 "PII/IP/regulated": extended MCP compliance tagging to IP / infrastructure
+  leakage. `detect_ip_leakage` + `IP_LEAKAGE_PATTERNS` (internal IPv4, internal hostnames `*.corp/.internal/
+  .local`, internal URLs, private unix/windows file paths → `INFRA`) already ran on the CHAT `output_guard`
+  path, but the MCP tool-call scan (`_scan_text_tier1`) ran ONLY `detect_pii`+`detect_secrets` — so an internal
+  host / IP / private file path in a tool RESULT was never detected, tagged, or redacted. Now folded into the
+  same PII/secret fallback: an `ip_leakage` finding is `INFRA`-tagged (via `get_compliance_tags`) and enforced
+  by posture (block→block, redact→`redact_all`, monitor→tag). FAIL-CLOSED byte-check: `redact_all` masks
+  internal IP/host/URL but NOT private file paths, so if ANY detected internal value survives the scrub under a
+  redact posture the call BLOCKS (no redact-that-leaks). Public IPs / example addrs not flagged. Files:
+  mcp_scan_orchestrator.py (`_scan_text_tier1` + `_tags_for_finding`), test_mcp_scan_orchestrator.py (+5).
+  Gate: 32 orchestrator + 1069 broad sweep passed. Distinct from item 5's tag-vocab mismatch (still open).
