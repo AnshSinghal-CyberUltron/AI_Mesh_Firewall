@@ -21,7 +21,7 @@
           "ok": true,
           "http_status": 200,
           "detail": "tools=13",
-          "latency_ms": 137.2330649974174
+          "latency_ms": 1276.8306970028789
         },
         {
           "transport": "stdio",
@@ -30,7 +30,7 @@
           "ok": true,
           "http_status": 200,
           "detail": "echo_ok=True",
-          "latency_ms": 170.0916989975667
+          "latency_ms": 83.30220199786709
         },
         {
           "transport": "streamable-http",
@@ -39,7 +39,7 @@
           "ok": false,
           "http_status": 200,
           "detail": "tools=0",
-          "latency_ms": 117.21673600186477
+          "latency_ms": 151.32272299888427
         },
         {
           "transport": "streamable-http",
@@ -48,25 +48,25 @@
           "ok": false,
           "http_status": 200,
           "detail": "echo_ok=False",
-          "latency_ms": 127.59394900058396
+          "latency_ms": 76.91660300042713
         },
         {
           "transport": "sse",
           "server": "sse-everything-stub",
           "method": "tools/list",
           "ok": false,
-          "http_status": 200,
+          "http_status": 0,
           "detail": "tools=0",
-          "latency_ms": 94.06887499790173
+          "latency_ms": 90030.26447500088
         },
         {
           "transport": "sse",
           "server": "sse-everything-stub",
           "method": "tools/call",
           "ok": false,
-          "http_status": 200,
+          "http_status": 0,
           "detail": "echo_ok=False",
-          "latency_ms": 65.10562800031039
+          "latency_ms": 90089.79968499989
         },
         {
           "transport": "websocket",
@@ -99,7 +99,7 @@
           "ok": true,
           "http_status": 200,
           "detail": "tools=13",
-          "latency_ms": 60.86348800090491
+          "latency_ms": 3751.418673000444
         },
         {
           "transport": "stdio",
@@ -108,7 +108,7 @@
           "ok": true,
           "http_status": 200,
           "detail": "echo_ok=True",
-          "latency_ms": 73.20065599924419
+          "latency_ms": 114.31067800003802
         },
         {
           "transport": "streamable-http",
@@ -117,7 +117,7 @@
           "ok": false,
           "http_status": 200,
           "detail": "tools=0",
-          "latency_ms": 121.02883700208622
+          "latency_ms": 132.98024799951236
         },
         {
           "transport": "streamable-http",
@@ -126,25 +126,25 @@
           "ok": false,
           "http_status": 200,
           "detail": "echo_ok=False",
-          "latency_ms": 69.72971900177072
+          "latency_ms": 485.19233700062614
         },
         {
           "transport": "sse",
           "server": "sse-everything-stub",
           "method": "tools/list",
           "ok": false,
-          "http_status": 200,
+          "http_status": 0,
           "detail": "tools=0",
-          "latency_ms": 99.66848800104344
+          "latency_ms": 90019.4914470012
         },
         {
           "transport": "sse",
           "server": "sse-everything-stub",
           "method": "tools/call",
           "ok": false,
-          "http_status": 200,
+          "http_status": 0,
           "detail": "echo_ok=False",
-          "latency_ms": 61.894838996522594
+          "latency_ms": 90089.86890199958
         },
         {
           "transport": "websocket",
@@ -177,7 +177,7 @@
           "ok": true,
           "http_status": 200,
           "detail": "tools=13",
-          "latency_ms": 47.43245500139892
+          "latency_ms": 84.4515409989981
         },
         {
           "transport": "stdio",
@@ -186,7 +186,7 @@
           "ok": true,
           "http_status": 200,
           "detail": "echo_ok=True",
-          "latency_ms": 143.57423299952643
+          "latency_ms": 72.44229599746177
         },
         {
           "transport": "streamable-http",
@@ -195,7 +195,7 @@
           "ok": false,
           "http_status": 200,
           "detail": "tools=0",
-          "latency_ms": 34.117814000637736
+          "latency_ms": 117.92619700281648
         },
         {
           "transport": "streamable-http",
@@ -204,25 +204,25 @@
           "ok": false,
           "http_status": 200,
           "detail": "echo_ok=False",
-          "latency_ms": 65.42507199992542
+          "latency_ms": 169.03411300154403
         },
         {
           "transport": "sse",
           "server": "sse-everything-stub",
           "method": "tools/list",
           "ok": false,
-          "http_status": 200,
+          "http_status": 0,
           "detail": "tools=0",
-          "latency_ms": 118.4099790007167
+          "latency_ms": 90003.56022800042
         },
         {
           "transport": "sse",
           "server": "sse-everything-stub",
           "method": "tools/call",
           "ok": false,
-          "http_status": 200,
+          "http_status": 0,
           "detail": "echo_ok=False",
-          "latency_ms": 68.92128699837485
+          "latency_ms": 90090.36940900114
         },
         {
           "transport": "websocket",

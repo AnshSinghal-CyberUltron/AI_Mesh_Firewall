@@ -1,9 +1,18 @@
 ---
-iteration: 30
+iteration: 31
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter31 (2026-07-02) — §3 DEPLOYED to live gateway
+- **P4.13/P6.18 RECHECK:** Runtime gateway **NOW has §3** (2 `broker_send_rpc` refs after
+  `docker compose build gateway` + `--force-recreate`). Wiring gate **YES**. **Cannot `[x]`** —
+  stdio e2e PASS; streamable-http FAIL (session ID / upstream 400); sse FAIL (90s hang);
+  ws BLOCKED (`mcp_ws_adapter`, no ws stub). `MCP_HTTP_VIA_SANDBOX=true`; stubs up.
+  Network: gateway **no :443** during verify. Playwright B1/B2/B4 **12/12 PASS**.
+  Evidence: `RECHECK_ITER31.md`.
+- Hive: `cursor-ralph-iter31` on `hive-1782991737290-ylo911`.
 
 ## iter30 (2026-07-02) — flag ON + stubs; deployed §3 MISSING
 - **P4.13/P6.18 RECHECK:** Source §3 **YES** (2 `broker_send_rpc` refs); runtime gateway **NO**
@@ -202,10 +211,9 @@ status: ACTIVE
 - [ ] 13. Verify (Playwright + harness): with the gateway pointed only at the sandbox, an http, an sse, a
        ws, and a stdio MCP all work end-to-end THROUGH the sandbox; confirm the gateway opens NO direct
        upstream connection (network assertion) — nothing runs in the main backend.
-       **e2e INCOMPLETE 2026-07-02 (iter30):** Source §3 YES; **runtime gateway image lacks §3**
-       (0 `broker_send_rpc` refs). Flag ON; http+sse stubs registered; broker direct http PASS;
-       gateway http/sse empty (legacy path). ws still `mcp_ws_adapter`. Stdio PASS, Playwright PASS.
-       See `RECHECK_ITER30.md`.
+       **e2e INCOMPLETE 2026-07-02 (iter31):** §3 **deployed** (runtime 2 refs); flag ON;
+       stdio PASS; gateway http/sse still FAIL (session/sse); ws `mcp_ws_adapter` + no stub.
+       Playwright PASS; ss shows no gateway :443. See `RECHECK_ITER31.md`.
 
 ## P5 — Frontend fixes (Playwright-verified; the dialog especially)
 - [x] 14. B1: OAuth selectable ONLY for HTTP transports; block oauth+stdio in the form; render exactly
@@ -240,8 +248,8 @@ status: ACTIVE
 - [ ] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:
        all 4 transports through the sandbox under the Claude session's 15-MCP harness (concurrency/load/
        leakage). Fix any seam mismatch on the Cursor-owned side only.
-       **e2e INCOMPLETE 2026-07-02 (iter30):** §3 in git, not deployed; flag ON; http+sse registered;
-       broker direct http OK; gateway http/sse fail; ws missing. See `RECHECK_ITER30.md`.
+       **e2e INCOMPLETE 2026-07-02 (iter31):** §3 deployed; stdio only green in 4-transport verify;
+       http/sse/ws incomplete. See `RECHECK_ITER31.md`.
 - [ ] 19. Re-run P1 repros → all four UI bugs gone; re-run P4 verification 3× (in-process + live).
        When P1–P6 all [x] AND integration green, output <promise>COMPLETE</promise>.
        **PARTIAL 2026-07-02 (iter24):** P10.32 recursive gate re-ran P1 UI (Playwright 12/12) + P8/P9 live
