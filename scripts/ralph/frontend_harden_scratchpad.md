@@ -452,3 +452,12 @@
       MCPConnectorPanel overflow RE-CONFIRMED STILL PRESENT (fresh: 148@768 / 529@375 both themes, server card;
       MCP-page CP44/CP45 did NOT fix it). Whole gate = GATE PASSED (overflow is allowed/warn on never_edit
       1-4). So blocker persists — real current overflow, never_edit, claim active. Everything else DONE.
+      [iter+] ROOT-CAUSED the cross-source per-module discrepancy in the BACKEND: canonical classifier =
+      policy/firewall_module_classifier.py event_matches_module (OR across stamped_module/sources/event_types/
+      threat_types/owasp_prefixes). module-kpis runs it over all events (canonical); frontend module-page
+      total = threatFeedCount = raw SOURCE-only fetch count → undercounts events matching via non-source
+      criteria. 1.5 agrees (source is its only criterion, 552==552); 1.2/1.6 diverge. Mechanical align NOT
+      safe: would flip 1.4 "Context events" 4000(mcp_scan, frontend intent)→~92929(all-context, backend
+      class) = intent mismatch. Needs product decision on canonical per-lane semantics + coordinated FE+BE
+      change. Documented fully-actionable; OPEN pending product call. Both open items now = (1) MCPConnector
+      never_edit overflow, (2) this cross-layer semantics item — neither a safe frontend-only fix. MCP: active.
