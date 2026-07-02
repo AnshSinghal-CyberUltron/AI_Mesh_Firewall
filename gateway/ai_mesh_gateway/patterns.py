@@ -428,7 +428,7 @@ PII_PATTERNS: Dict[str, str] = {
     # classic 32-char form. Prefix-anchored + a 16+ char tail keeps false
     # positives on benign "sk-…" prose negligible.
     "api_key_openai": r"\bsk-(?:proj|svcacct|admin|or-v1|or|live|test)-[a-zA-Z0-9_-]{16,}\b|\bsk-[a-zA-Z0-9]{32,}\b",
-    "aws_access_key": r"\bAKIA[0-9A-Z]{16}\b",
+    "aws_access_key": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
     # AWS SECRET access key — the high-value credential. It has no fixed prefix
     # (40 chars of [A-Za-z0-9/+]), so match it in context of its variable name to
     # avoid false positives on arbitrary base64/hash blobs. Without this the
@@ -520,6 +520,18 @@ SECRET_PATTERNS: Dict[str, str] = {
     "sendgrid_key": r"\bSG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{32,}\b",
     "gitlab_pat": r"\bglpat-[A-Za-z0-9_-]{20,}\b",
     "slack_webhook": r"https://hooks\.slack\.com/services/[A-Za-z0-9/_+-]+",
+    # CHG-0072: more distinctive-prefix provider tokens the sweep found egressing UNMASKED
+    # and undetected. All have a fixed provider prefix + length => near-zero false positive.
+    "digitalocean_pat": r"\bdop_v1_[a-f0-9]{64}\b",
+    "shopify_token": r"\bshp(?:at|ss|ca|pa)_[a-fA-F0-9]{32}\b",
+    "square_token": r"\bsq0(?:atp|csp|idp)-[A-Za-z0-9_-]{22,}\b",
+    "databricks_token": r"\bdapi[a-f0-9]{32}\b",
+    "hashicorp_vault_token": r"\bhv[sb]\.[A-Za-z0-9_-]{20,}\b",
+    "figma_token": r"\bfigd_[A-Za-z0-9_-]{20,}\b",
+    "telegram_bot_token": r"\b(?:bot)?\d{8,10}:AA[A-Za-z0-9_-]{32,}\b",
+    "pypi_token": r"\bpypi-[A-Za-z0-9_-]{16,}\b",
+    "linear_api_key": r"\blin_api_[A-Za-z0-9]{32,}\b",
+    "mailgun_key": r"\bkey-[0-9a-f]{32}\b",
 }
 
 PHI_PATTERNS: Dict[str, str] = {
@@ -665,6 +677,16 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "sendgrid_key": ["SECRET"],
     "gitlab_pat": ["SECRET"],
     "slack_webhook": ["SECRET"],
+    "digitalocean_pat": ["SECRET"],
+    "shopify_token": ["SECRET"],
+    "square_token": ["SECRET"],
+    "databricks_token": ["SECRET"],
+    "hashicorp_vault_token": ["SECRET"],
+    "figma_token": ["SECRET"],
+    "telegram_bot_token": ["SECRET"],
+    "pypi_token": ["SECRET"],
+    "linear_api_key": ["SECRET"],
+    "mailgun_key": ["SECRET"],
     "medical_license": ["PHI", "HIPAA"],
     "medical_record": ["PHI", "HIPAA"],
     "insurance_id": ["PHI", "HIPAA"],

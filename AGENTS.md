@@ -566,6 +566,14 @@
     (iterated by both detect_secrets + redact_all) + COMPLIANCE_TAG_MAP (SECRET). Near-zero FP (specific
     prefixes). +10 tests. Gate: 10 + 1266 gateway passed, 0 failed. Evidence
     mcp-parallel/findings/backstop-p2-provider-secret-formats/.
+  - CHG-0072 (2026-07-02) — G2 item 2 / 1.4 (2nd adversarial secret-format sweep), HIGH: 11 more real
+    credential formats egressed UNMASKED — AWS STS temp key ASIA… (aws_access_key was AKIA-only),
+    DigitalOcean dop_v1_, Shopify shp{at,ss,ca,pa}_, Square sq0{atp,csp,idp}-, Databricks dapi, Vault
+    hv{s,b}., Figma figd_, Telegram <id>:AA…, PyPI pypi-, Linear lin_api_, Mailgun key-<32hex>. FIX
+    (patterns.py): widened aws_access_key (PII_PATTERNS/detect_pii) to (?:AKIA|ASIA); added 10 tokens to
+    SECRET_PATTERNS (detect_secrets+redact_all) + COMPLIANCE_TAG_MAP (SECRET). Telegram pattern allows the
+    optional `bot` URL prefix so a token in api.telegram.org/bot<token>/ masks too. Near-zero FP. +18 tests.
+    Gate: 18 + 1284 gateway passed, 0 failed. Evidence mcp-parallel/findings/backstop-p2-more-provider-secrets/.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

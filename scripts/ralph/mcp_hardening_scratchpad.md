@@ -174,6 +174,14 @@
       (iterated by both detect_secrets + redact_all) + COMPLIANCE_TAG_MAP (SECRET). Near-zero FP. +10 tests.
       Gate: 10 + 1266 gateway passed, 0 failed. Evidence:
       mcp-parallel/findings/backstop-p2-provider-secret-formats/finding.md.
+      CHG-0072 (2026-07-02, HIGH — 2nd adversarial secret-format sweep): 11 more real credential formats
+      egressed UNMASKED — AWS STS temp key ASIA… (aws_access_key was AKIA-only), DigitalOcean dop_v1_,
+      Shopify shp{at,ss,ca,pa}_, Square sq0{atp,csp,idp}-, Databricks dapi, Vault hv{s,b}., Figma figd_,
+      Telegram <id>:AA…, PyPI pypi-, Linear lin_api_, Mailgun key-<32hex>. FIX (patterns.py): widened
+      aws_access_key (PII_PATTERNS/detect_pii) to (?:AKIA|ASIA); added 10 tokens to SECRET_PATTERNS
+      (detect_secrets+redact_all) + COMPLIANCE_TAG_MAP (SECRET); Telegram pattern allows the optional `bot`
+      URL prefix. Near-zero FP. +18 tests. Gate: 18 + 1284 gateway passed, 0 failed. Evidence:
+      mcp-parallel/findings/backstop-p2-more-provider-secrets/finding.md.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;
