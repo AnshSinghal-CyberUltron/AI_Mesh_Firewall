@@ -956,14 +956,13 @@ export function ModelConnectionPanel({
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Model ID{selectedProvider && selectedProvider.models.length === 0 ? " *" : ""}
+                  Model ID
                 </label>
                 <input
                   type="text"
                   value={formData.model_id}
-                  required={!!selectedProvider && selectedProvider.models.length === 0}
                   onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
-                  placeholder="e.g. openai/gpt-4o"
+                  placeholder="e.g. openai/gpt-4o (defaults to the model name)"
                   className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">Auto-populated from the model selection, or defaults to the model name for custom providers. Override if the provider expects a different id.</p>
