@@ -282,6 +282,20 @@ def test_config_from_env_node_max_old_space(monkeypatch: pytest.MonkeyPatch):
     assert SandboxDockerConfig.from_env().node_max_old_space_mb == 3072
 
 
+def test_run_kwargs_npm_cache_tmpfs_default_and_configurable():
+    """CP21: the RAM-backed npm-cache tmpfs size is configurable so heavy servers
+    (Ruflo) with large dependency trees don't fail with ENOSPC at the 1GB default."""
+    m = DockerManager(client=_mock_client(), config=SandboxDockerConfig(image="x"))
+    assert "size=1024m" in m._run_kwargs("acme")["tmpfs"]["/var/npm-cache"]
+    big = DockerManager(client=_mock_client(), config=SandboxDockerConfig(image="x", npm_cache_size_mb=3072))
+    assert "size=3072m" in big._run_kwargs("acme")["tmpfs"]["/var/npm-cache"]
+
+
+def test_config_from_env_npm_cache_size(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("MCP_SANDBOX_NPM_CACHE_SIZE_MB", "4096")
+    assert SandboxDockerConfig.from_env().npm_cache_size_mb == 4096
+
+
 def test_run_kwargs_include_runtime_when_configured():
     config = SandboxDockerConfig(
         image="ai-mesh/mcp-sandbox:test",

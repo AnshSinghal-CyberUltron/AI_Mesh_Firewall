@@ -69,3 +69,19 @@ here. Map + evidence: `docs/mcp/broker-sandbox-lifecycle.md`.
   `MCP_OUT_OF_MEMORY` (a bare 134/SIGABRT would otherwise read as a generic crash). The
   gateway `mcp_stdio_adapter` mirrors this. Tests: `tests/test_stdio_exit_reason.py`,
   `tests/test_sandbox_lifecycle.py::test_run_kwargs_set_node_heap_cap_*`.
+
+## Heavy servers, npm-cache storage + Ruflo (CP21)
+- `/var/npm-cache` is a RAM-backed tmpfs (counts against the mem cgroup), size =
+  `SandboxDockerConfig.npm_cache_size_mb` (env `MCP_SANDBOX_NPM_CACHE_SIZE_MB`, default
+  1024). A heavy server with a large dependency tree (Ruflo) overflows the default and
+  fails with ENOSPC → `_classify_exit_reason` (and the control classifier) map "no space
+  left"/"enospc" to a clean `MCP_INSUFFICIENT_STORAGE` message telling the operator to
+  raise the knob. Because tmpfs eats the cgroup, at default 2GB mem the npm-cache + node
+  RSS hit the memory limit → **OOM (-9) is usually the binding constraint before the disk
+  fills** (→ `MCP_OUT_OF_MEMORY`).
+- **Ruflo is a genuinely heavy server** (koa/native addons/ONNX embedder; needs
+  huggingface.co egress). It CONNECTS and lists real tools (agent_spawn / swarm_init /
+  memory_store / hooks_*) at ~`MCP_SANDBOX_MEMORY_MB=4096` + `MCP_SANDBOX_NPM_CACHE_SIZE_MB=3072`
+  (proven via `docker run` probe of the sandbox image). Default multi-tenant limits stay
+  modest → Ruflo clean-errors (MCP_OUT_OF_MEMORY) with actionable dev guidance rather than
+  a raw crash. Verify: `scripts/ralph/mcp_page_cp21_ruflo.py` (clean-error branch, product path).

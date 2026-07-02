@@ -264,6 +264,10 @@ services:
       # servers; leave NODE_MAX_OLD_SPACE_MB=0 to keep the auto-derived cap.
       MCP_SANDBOX_MEMORY_MB: ${MCP_SANDBOX_MEMORY_MB:-2048}
       MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB: ${MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB:-0}
+      # RAM-backed npm-cache tmpfs size (CP21). Heavy servers (e.g. Ruflo, dep
+      # tree > 1GB) overflow the default → raise this AND MCP_SANDBOX_MEMORY_MB
+      # (tmpfs counts against the mem cgroup). Ruflo connects at ~4096 mem / 3072 cache.
+      MCP_SANDBOX_NPM_CACHE_SIZE_MB: ${MCP_SANDBOX_NPM_CACHE_SIZE_MB:-1024}
       MCP_BROKER_CONTAINER_NAME: ai_mesh_mcp_broker
     container_name: ai_mesh_mcp_broker
     networks:

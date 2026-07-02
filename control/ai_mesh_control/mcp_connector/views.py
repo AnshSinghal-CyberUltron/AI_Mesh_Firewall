@@ -419,6 +419,7 @@ def _clear_needs_reauth(server) -> None:
 MCP_ERR_AUTH = "MCP_AUTH_FAILED"
 MCP_ERR_EGRESS = "MCP_EGRESS_DENIED"
 MCP_ERR_OOM = "MCP_OUT_OF_MEMORY"
+MCP_ERR_STORAGE = "MCP_INSUFFICIENT_STORAGE"
 MCP_ERR_CRASH = "MCP_SERVER_CRASHED"
 MCP_ERR_IMAGE = "MCP_IMAGE_UNAVAILABLE"
 MCP_ERR_TIMEOUT = "MCP_TIMEOUT"
@@ -462,6 +463,12 @@ def _classify_sync_error(low: str) -> tuple[str, str]:
     if "egress denied" in low or "allowlist" in low or "not permitted" in low:
         return MCP_ERR_EGRESS, ("The MCP server host is not permitted by your "
                                 "organization's egress policy.")
+    # Disk/storage: the server's install overflowed the sandbox tmpfs (ENOSPC).
+    if any(k in low for k in ("no space left", "enospc", "exceeded the sandbox storage",
+                              "storage limit")):
+        return MCP_ERR_STORAGE, ("The MCP server is too large to install within the "
+                                 "current sandbox storage limit. Increase the limit for "
+                                 "heavy servers or use a lighter server, then retry.")
     # OOM: SIGKILL (exit -9 / signal 9) or container OOM-kill (exit 137 = 128+9).
     if any(k in low for k in ("code -9", "signal 9", "sigkill", "out of memory",
                               "oom", "code 137", "exit 137", "exitcode 137")):

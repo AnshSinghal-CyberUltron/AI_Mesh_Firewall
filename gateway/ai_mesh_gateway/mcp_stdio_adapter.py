@@ -294,10 +294,12 @@ async def _start_reader(proc: StdioProcess):
         # SIGABRT (134) but prints "JavaScript heap out of memory"; a kernel
         # OOM-kill is -9/137. Detect the stderr signature FIRST so it is
         # categorized as OOM (→ MCP_OUT_OF_MEMORY) not a generic crash.
+        _low_err = stderr_tail.lower()
         _oom_in_stderr = any(
-            s in stderr_tail.lower()
+            s in _low_err
             for s in ("heap out of memory", "out of memory", "fatal error: reached heap limit")
         )
+        _disk_full = any(s in _low_err for s in ("enospc", "no space left on device"))
         if proc.oversized_line:
             reason = (
                 "the MCP server sent a response larger than the gateway's "
@@ -305,6 +307,10 @@ async def _start_reader(proc: StdioProcess):
                 "MCP_STDIO_MAX_LINE_BYTES for servers with very large tool "
                 "catalogs)"
             )
+        elif _disk_full:
+            reason = ("the MCP server's install exceeded the sandbox storage limit "
+                      "(no space left on device). Raise MCP_SANDBOX_NPM_CACHE_SIZE_MB "
+                      "(and usually MCP_SANDBOX_MEMORY_MB) for heavy servers")
         elif _oom_in_stderr or rc in (-9, 137):
             reason = (f"the MCP server ran out of memory (exit code {rc}; exceeded the "
                       "per-org sandbox memory limit). Raise MCP_SANDBOX_MEMORY_MB for "

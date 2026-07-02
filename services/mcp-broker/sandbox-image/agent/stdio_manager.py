@@ -207,14 +207,24 @@ def _classify_exit_reason(rc, stderr_tail: str, *, oversized_line: bool) -> str:
     code (-9 / 137). The word "out of memory" / "exit code -9" is kept in the text
     so the control-plane classifier maps it to MCP_OUT_OF_MEMORY. (CP20)
     """
+    low_err = (stderr_tail or "").lower()
     oom_in_stderr = any(
-        s in (stderr_tail or "").lower()
+        s in low_err
         for s in ("heap out of memory", "out of memory", "fatal error: reached heap limit")
     )
+    # A heavy server whose install overflows the RAM-backed npm-cache tmpfs fails
+    # with ENOSPC — a STORAGE limit, not a bad command. (CP21)
+    disk_full = any(s in low_err for s in ("enospc", "no space left on device"))
     if oversized_line:
         return (
             f"the MCP server sent a response larger than the {_MAX_LINE_BYTES}-byte "
             "line buffer (raise MCP_STDIO_MAX_LINE_BYTES for very large tool catalogs)"
+        )
+    if disk_full:
+        return (
+            "the MCP server's install exceeded the sandbox storage limit (no space "
+            "left on device). Raise MCP_SANDBOX_NPM_CACHE_SIZE_MB (and usually "
+            "MCP_SANDBOX_MEMORY_MB) for heavy servers with large dependency trees"
         )
     if oom_in_stderr or rc in (-9, 137):
         return (

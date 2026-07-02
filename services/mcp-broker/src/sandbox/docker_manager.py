@@ -82,6 +82,9 @@ class SandboxDockerConfig:
     # ~75% of memory_mb. Also stops one runaway process starving the shared
     # per-org sandbox. (CP20)
     node_max_old_space_mb: int = 0
+    # RAM-backed npm-cache tmpfs size (MB). Heavy servers with large dependency
+    # trees (Ruflo) overflow the default 1024 and fail with ENOSPC. (CP21)
+    npm_cache_size_mb: int = 1024
     cpus: float = 1.0
     pids_limit: int = 256
     runtime: str | None = None
@@ -103,6 +106,7 @@ class SandboxDockerConfig:
             agent_port=int(os.environ.get("MCP_SANDBOX_AGENT_PORT", "9320")),
             memory_mb=int(os.environ.get("MCP_SANDBOX_MEMORY_MB", "2048")),
             node_max_old_space_mb=int(os.environ.get("MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB", "0")),
+            npm_cache_size_mb=int(os.environ.get("MCP_SANDBOX_NPM_CACHE_SIZE_MB", "1024")),
             cpus=float(os.environ.get("MCP_SANDBOX_CPUS", "1.0")),
             pids_limit=int(os.environ.get("MCP_SANDBOX_PIDS_LIMIT", "256")),
             runtime=runtime,
@@ -477,7 +481,11 @@ class DockerManager:
             "ulimits": _sandbox_ulimits(),
             "tmpfs": {
                 "/tmp": "rw,noexec,nosuid,size=512m",
-                "/var/npm-cache": "rw,exec,nosuid,size=1g,mode=1777",
+                # npm-cache is RAM-backed (counts against the mem cgroup). Heavy
+                # servers (e.g. Ruflo, whose dep tree > 1GB) overflow the default
+                # and fail with ENOSPC → raise MCP_SANDBOX_NPM_CACHE_SIZE_MB (and
+                # usually MCP_SANDBOX_MEMORY_MB too, since tmpfs eats the cgroup). (CP21)
+                "/var/npm-cache": f"rw,exec,nosuid,size={self.config.npm_cache_size_mb}m,mode=1777",
                 "/var/cache": "rw,exec,nosuid,size=512m,mode=1777",
             },
         }

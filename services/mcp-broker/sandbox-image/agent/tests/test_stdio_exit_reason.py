@@ -44,6 +44,18 @@ def test_v8_heap_abort_detected_from_stderr_not_miscategorized_as_crash():
     assert "crashed on startup" not in r
 
 
+def test_enospc_disk_full_is_storage_not_start_failure():
+    """CP21: a heavy server whose npm install overflows the RAM-backed npm-cache
+    tmpfs fails with ENOSPC (exit 1) — must read as a STORAGE limit, not a bad
+    command, so the control classifier maps it to MCP_INSUFFICIENT_STORAGE."""
+    m = _load()
+    stderr = "npm error code ENOSPC\nnpm error errno -28\nnpm error nospc ENOSPC: no space left on device, write"
+    r = m._classify_exit_reason(1, stderr, oversized_line=False)
+    assert "storage limit" in r
+    assert "MCP_SANDBOX_NPM_CACHE_SIZE_MB" in r
+    assert "check the command" not in r
+
+
 def test_plain_sigabrt_without_oom_stderr_is_crash():
     m = _load()
     r = m._classify_exit_reason(134, "Segmentation fault", oversized_line=False)
