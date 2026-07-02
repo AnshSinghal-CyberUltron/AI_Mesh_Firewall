@@ -576,6 +576,27 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (excluding another session's untracked, incomplete `test_mcp_enforcement_block_recording.py`, undefined
   `_rest_request` helper — unrelated). Evidence: `mcp-parallel/findings/backstop-p2-tier1-byte-verify-all/`.
 
+- **CHG-0058** (2026-07-02) — G2 / 1.4 (encoded internal-network-address leak, HIGH; found continuing the
+  CHG-0054/0055/0056/0057 adversarial obfuscation sweep): `redact_all` de-obfuscates base64/hex (G2) and
+  URL/percent (CHG-0056) blobs, but the decode branches in `_redact_obfuscated` checked only
+  `_detect_pii_core`/`_detect_secrets_core` — NOT `detect_ip_leakage`. So an INTERNAL network address inside an
+  encoded blob (`base64("db.internal:5432")`, `base64("http://192.168.50.123:8080/admin")`, `%`-encoded internal
+  URL) survived scrubbing and egressed verbatim (trivially recoverable). SECONDARY gap found while fixing: the
+  shared base64 gate `_B64ISH_RE` needs `{12,}` chars (~>=9 bytes), so a BARE short internal IPv4 (`10.1.2.3` →
+  `MTAuMS4yLjM=`, 11 base64 chars) fell just under and still leaked (hex short-IPs already covered: 8 bytes = 16
+  hex >= the `{8,}` floor). FIX: (1) `_dec_has_infra()` (scoped to NETWORK keys `internal_ipv4`/`internal_hostname`/
+  `internal_url`; file-path leak types excluded — flag-tier + FP-prone) added to the base64/hex decode branch and
+  the URL-decode branch → mask the whole token `[ENCODED_SECRET_REDACTED]`. (2) `_SHORT_B64_RE` +
+  `_iter_short_b64_infra()` — a dedicated SHORT-token pass (maximal run of 8..11 base64 chars, the band the main
+  gate misses) that decodes and masks ONLY internal network addresses; network-key-only so it changes NOTHING
+  about `detect_pii`/`detect_secrets`, only tightening the fail-closed redaction path; look-behind/look-ahead pin
+  maximal runs (12+ char tokens stay with the main pass); token count bounded (decode-bomb safe). NO false
+  positives: the `_IP_LEAKAGE_EXAMPLE_ADDRS` textbook carve-out (192.168.0.1, 10.0.0.1, …) is preserved on the
+  decode path; encoded file paths untouched; FP battery over benign short-base64 text → ZERO changed. Integrates
+  with CHG-0057's byte-verify guard (it already unions `ip_leak.values()` → a surviving internal address fails
+  closed → block). Files: patterns.py, test_encoded_infra_redaction.py (+13). Gate: 13 encoded-infra + 1176
+  gateway passed, 0 failed. Evidence: `mcp-parallel/findings/backstop-p2-encoded-infra-leak/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
@@ -625,3 +646,5 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
 - MCP-PAGE-CP25 (diagnose) | Observability tab 500 | ROOT CAUSE: django.db OperationalError "too many clients already" — Postgres connection-pool EXHAUSTION at peak parallel-loop load, thrown in DRF perform_authentication BEFORE the view runs (every endpoint 500s; observability is just what the tab loads: /events/ + /events/summary/). NOT a view bug (200 for all orgs+edge params w/ pool headroom). Factors: max_connections=400 (~60 used now=spike not leak), CONN_MAX_AGE=60 + daphne async accumulation. FIX CP26: reduce conn pressure (lower CONN_MAX_AGE/pgbouncer/raise ceiling) + graceful 503 retry on the endpoints | EVIDENCE: control logs 500 traceback + pg_stat_activity
 
 - MCP-PAGE-CP26 (fix) | control exception_handlers.py + frontend MCPConnectorPanel.jsx | WHAT: fix Observability 500 (CP25 root cause = PG pool exhaustion in perform_authentication) | NOW DOES: safe_exception_handler maps django.db OperationalError/InterfaceError → 503 {code:db_unavailable}+Retry-After:2 (retryable, not raw 500) — applies to EVERY endpoint since it is the project EXCEPTION_HANDLER; 400/500 branches preserved. Frontend fetchWithRetry retries observability loads once on 503. Graceful degradation > raising max_connections | VERIFY: handler asserts (Op/Interface→503, Value→400, Runtime→500) PASS; deployed; observability loads real data (summary total 64118 decisions allow 63287/error 568/redact 225/block 38); build green. SECTION G complete
+
+- MCP-PAGE-CP27 (diagnose) | enabling org Tier-2 → 400 | ROOT CAUSE: frontend saveMcpTier2 does a FULL-object PUT {...firewallConfig, mcp_tier2_enabled} to /api/firewall/config/; a stale allowed_models entry (orphaned model r6a-live-verify:free) fails re-validation → 400. PROOF: partial PUT {mcp_tier2_enabled:true}→200, full-config PUT→400 allowed_models. Endpoint supports partial update (documented). "0 Tier-2 rows active" = frontend informational count of per-scope MCPScanControl tier2 rows (NOT a backend msg); global toggle FirewallConfig.mcp_tier2_enabled governs org-wide. FIX CP28: PUT only {mcp_tier2_enabled:value}
