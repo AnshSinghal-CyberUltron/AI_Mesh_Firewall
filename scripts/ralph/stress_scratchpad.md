@@ -91,6 +91,14 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      G22 DONE 2026-07-02: nested-encoding prompt laundering. Transport decode was single-depth, so double/
+        triple-base64 and base64-of-hex payloads decoded once to another encoded blob and the injection/PII was
+        never surfaced (double-b64 injection -> allow; double-b64 SSN -> detect_pii False). Fixed in scanner.py
+        (_nested_decode_variants) + patterns.py (_iter_transport_decodes follows layers, keeps OUTER token for
+        masking); _MAX_DEPTH=3, size+printable gated (decode-bomb safe); pure-hex layer preferred as hex (hex
+        is also valid base64). 5 golden frozen. Full gateway 1064 passed; golden 103 passed/7 skipped 3x.
+        Note (pre-existing, not G22): a benign 40-char base64 blob in a prompt gets a 'redact' verdict (blob
+        looks token/secret-like); unchanged by this fix, low severity — possible future FP-reduction item.
       G21 DONE 2026-07-02: RAG-ingest obfuscation parity. context_guard matched INDIRECT_INJECTION/toxicity
         patterns on RAW doc text only, so obfuscated indirect injections (tags/small-caps/homoglyph/zero-width/
         fullwidth) in a retrieved RAG doc bypassed ingest and reached the LLM. Fixed: context_guard also matches
