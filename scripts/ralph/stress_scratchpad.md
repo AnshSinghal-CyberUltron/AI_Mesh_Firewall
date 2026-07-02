@@ -70,12 +70,15 @@
         R4b (f176fc76) scanner.py: _reassemble_split_words glues short-fragment runs + re-segments vs
           injection vocab → fixed G3 (2 chunk-split/spaced injection). Vocab-curated → zero FP.
       REMAINING R4 hardening (NOT yet encoded as findings; lower priority than R5/R6 completion gates):
-        G5 policy enforce-or-fail-closed (policy_engine.py), G6 multi-turn session state (scanner.py),
-        G10 semantic-redact typed-placeholder, G12 ReDoS caps in context_guard/leakage_detector,
-        G13 output markdown/link+tool-arg exfil (output_guard.py).
+        G6 multi-turn session state (scanner.py), G10 semantic-redact typed-placeholder,
+        G12 ReDoS caps in context_guard/leakage_detector, G13 output markdown/link+tool-arg exfil (output_guard.py).
       G9 DONE 2026-07-02 (b5861eff): context_guard precedence inversion fixed — a RAG doc with toxicity +
         a live credential was only FLAGGED (credential stored at rest = leak); reordered so credential
         BLOCK checks precede toxicity/PII FLAG checks (block outranks flag). 5 cases frozen in golden suite.
+      G5 DONE 2026-07-02 (1b4c30d5): policy_engine redact-without-config leak fixed — a redact rule with no
+        redaction_config yielded action=redact + 0 hints -> apply_redaction no-op -> raw forwarded. Now a hint
+        is appended for EVERY redact rule (apply_redaction falls back to condition regex + placeholder). Frozen.
+      Golden suite now 33 passed / 7 skipped, green 3x (9 frozen + G1-G4 + G9 + G5 attack cases).
       FLAGGED (not mine): B1 fail-closed regression on main (culprit 75b51d8e, E1 program) —
         mcp-parallel/findings/stress-r2/REGRESSION_B1_FAILCLOSED.md.
 
