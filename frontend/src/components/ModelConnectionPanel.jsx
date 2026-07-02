@@ -972,7 +972,7 @@ export function ModelConnectionPanel({
                   placeholder="e.g. openai/gpt-4o (defaults to the model name)"
                   className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">Auto-populated from the model selection, or defaults to the model name for custom providers. Override if the provider expects a different id.</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Auto-populated from the model selection, or defaults to the model name for custom providers. Override if the provider expects a different id.</p>
               </div>
 
               {showBaseUrl && (
@@ -1028,7 +1028,7 @@ export function ModelConnectionPanel({
                 >
                   {routingExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                   Routing Configuration
-                  <span className="text-[10px] font-normal text-slate-400">(optional)</span>
+                  <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">(optional)</span>
                 </button>
                 {routingExpanded && (
                   <div className="space-y-3">
