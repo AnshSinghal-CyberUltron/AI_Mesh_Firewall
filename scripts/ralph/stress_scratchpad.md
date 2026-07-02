@@ -77,11 +77,12 @@
         decode them. Fixed in scanner.py: _decode_unicode_tags (mirror U+E0020..E007E -> ASCII, drop tag
         controls) as first step of _normalize_unicode (regex-guarded no-op on clean text). 5 golden frozen.
         Full gateway 1063 passed; golden 83 passed/7 skipped 3x.
-      G18 (NEW, reproduced 2026-07-02): tag-smuggled PII/secret. detect_pii("my ssn is "+tags("123-45-6789"))
-        = False and redact_all leaves the tag-encoded SSN intact -> egresses to the model which decodes it =
-        PII leak. Fix: add _decode_unicode_tags to patterns.py _canonicalize_with_map WITH position-preserving
-        span-back mapping (each tag char is 1 codepoint -> 1 ASCII, so 1->1 index map) so tag-encoded PII is
-        detected AND masked in the original egress bytes. Mirrors the G1 canonicalize-with-map approach. NEXT.
+      G18 DONE 2026-07-02: tag-smuggled PII/secret. Tag chars are Cf so _canonicalize_with_map DROPPED them
+        (tag SSN/email/card/AWS-key vanished from canonical -> detect_pii=False) while the raw tag bytes
+        egressed (LLM decodes) = leak. Fixed in patterns.py: decode printable tag mirror (U+E0020..E007E ->
+        ASCII) BEFORE the Cf-drop, 1->1 position-preserving so the index map masks the match back onto the
+        original tag bytes. detect/redact now handle tag-smuggled values on input AND output paths. No-op on
+        plain/legit-unicode. 5 golden cases frozen. Full gateway 1063 passed; golden 88 passed/7 skipped 3x.
       G19 (NEW, reproduced 2026-07-02): small-caps injection. IPA small-caps letters (ɪɢɴᴏʀᴇ...) are not
         NFKC-folded to ASCII, so small-caps "ignore all previous instructions" bypasses. Fix: add a small-caps
         (and other letter-like variant) fold table to scanner._normalize_unicode (like _HOMOGLYPH_TABLE).
