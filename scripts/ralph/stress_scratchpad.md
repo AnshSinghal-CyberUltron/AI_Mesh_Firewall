@@ -71,8 +71,11 @@
           injection vocab → fixed G3 (2 chunk-split/spaced injection). Vocab-curated → zero FP.
       REMAINING R4 hardening (NOT yet encoded as findings; lower priority than R5/R6 completion gates):
         G5 policy enforce-or-fail-closed (policy_engine.py), G6 multi-turn session state (scanner.py),
-        G9 context_guard precedence inversion, G10 semantic-redact typed-placeholder, G12 ReDoS caps
-        in context_guard/leakage_detector, G13 output markdown/link+tool-arg exfil (output_guard.py).
+        G10 semantic-redact typed-placeholder, G12 ReDoS caps in context_guard/leakage_detector,
+        G13 output markdown/link+tool-arg exfil (output_guard.py).
+      G9 DONE 2026-07-02 (b5861eff): context_guard precedence inversion fixed — a RAG doc with toxicity +
+        a live credential was only FLAGGED (credential stored at rest = leak); reordered so credential
+        BLOCK checks precede toxicity/PII FLAG checks (block outranks flag). 5 cases frozen in golden suite.
       FLAGGED (not mine): B1 fail-closed regression on main (culprit 75b51d8e, E1 program) —
         mcp-parallel/findings/stress-r2/REGRESSION_B1_FAILCLOSED.md.
 
