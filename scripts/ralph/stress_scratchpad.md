@@ -917,6 +917,27 @@
         obfuscation (G44-G46), streaming-parity (G45/G46, complete), multi-turn+system (G47 tradeoff),
         Responses input+streaming (safe), embeddings+RAG persist (safe). 7 confirmed-live leaks fixed +
         G48 defense-in-depth + 2 documented tradeoffs.
+      R6 RE-VERIFY + TRACE-CARD-BLOCKER CONCRETE EVIDENCE 2026-07-02:
+        Re-ran the R6 gates on BOTH owned frontend components after all the backend churn + concurrent
+        fe-harden edits (my components ModelConnectionPanel.jsx / OutputPipelineTimeline.jsx were last
+        touched only by MY R6 commits — unchanged since): impeccable detector CLEAN (exit 0, repo-root
+        path; note the skill lives at repo-root .claude/skills/impeccable, NOT frontend/), frontend unit
+        75/75 pass (grew 62->75 as other sessions added tests; owned-component tests included + green),
+        npm run build ✓ (5.33s; the >500kB chunk warning is pre-existing/benign). ModelConnectionPanel
+        was live-Playwright-verified earlier (11 models + a11y).
+        TRACE-CARD (OutputPipelineTimeline) LIVE-RENDER — STRONGER EVIDENCE of the external block: the
+        card renders inside an EXPANDABLE output-guard EVENT card, so it needs a live output-guard PII
+        event. Attempted to FORCE one three ways against the live gateway (simulator key, gemma-4-31b):
+          (a) echo PII in the request  -> BLOCKED at input_scan (data_leakage) — input protection caught it;
+          (b) ask the model to GENERATE a fake SSN -> BLOCKED at input_scan (pii);
+          (c) ask to make up a sample email+SSN -> BLOCKED at input_scan (sensitive_information_disclosure).
+        => the firewall's OWN correctness (input scan blocks both echo-PII and generate-PII) makes an
+        output-guard PII event UN-FORCEABLE on demand; the only other output event (tier-2 reasoning-model
+        output block) is NON-DETERMINISTIC (this run "Say OK"->nemotron ALLOWED). So the live event-list
+        render is externally blocked for a PRINCIPLED reason, not a card defect. The card itself stays
+        fully verified: detector-clean + unit-tested + iter36 isolation-mount render (honest per-stage
+        a11y) + build. Both owned R6 components are complete; the un-forceable bit is a live event, gated
+        on the firewall NOT doing its job (which it correctly does).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
