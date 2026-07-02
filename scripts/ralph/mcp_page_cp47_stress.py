@@ -69,7 +69,12 @@ TARGETS = [(o["slug"], s, o["gateway_key"]) for o in ORGS for s in o["servers"]
 
 
 def _is_transient(status, err) -> bool:
-    return status in (502, 503) or (isinstance(err, dict) and err.get("code") in (-32000, -32603))
+    # 502/503 + JSON-RPC control backpressure, AND status == -1: a connection-level
+    # exception (reset/timeout) the gateway sheds when driven past its throughput
+    # ceiling. A real MCP client retries these transient network blips — echo/get-sum
+    # are idempotent, so a bounded retry is safe and models real-client behaviour.
+    # Retries are COUNTED (transient_recovered) so recovery is transparent, never hidden.
+    return status in (-1, 502, 503) or (isinstance(err, dict) and err.get("code") in (-32000, -32603))
 
 
 async def _one_call(client, org, server, key, tool, args):
