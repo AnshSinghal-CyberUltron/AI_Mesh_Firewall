@@ -699,6 +699,28 @@
           fulfill a benign request is not an attack), leaving the INPUT tier-2 path untouched.
           => R5 "blocks are justified" holds for the 8 clean models + all input-side blocks; the 2
           reasoning-model output FPs are a characterized tier-2 limitation, tracked here.
+      ★★ G41 — SECOND REAL ZERO-CLICK EXFIL LEAK FOUND + FIXED 2026-07-02 (HTML/SVG/CSS beacons) ★★
+        THREAT: G13/G39/G40 defended only MARKDOWN images/links + bare URLs. A model steered by indirect
+        injection can emit RAW HTML/CSS that a chat client renderer auto-fetches — <img src>, SVG
+        <image href>, CSS url(...), <iframe/video/audio/source/embed src> — a zero-click beacon. The
+        markdown-only defense MISSED it: an <img> src was only a "bare URL" to the scanner, which trips
+        SOLELY on a PII payload, so an ARBITRARY-data HTML beacon (whole system prompt / conversation
+        base64'd) rode out UN-NEUTRALIZED and still auto-rendered -> zero-click exfil. PII HTML beacons
+        had their payload stripped but the <img> auto-render tag survived (zero-click ping to attacker).
+        Repro (probe_html_exfil.py): html_img_arbitrary/svg_image/css_bg -> scan_hits=0, payload SURVIVES.
+        FIX (output_guard.py, owned): added the zero-click media class to _scan_exfil_channels +
+        neutralize_exfil_channels — _HTML_SRC_RE (src/srcset/poster/data), _HTML_SVG_HREF_RE (SVG
+        image|use href), _CSS_URL_RE (url()). "html" is treated like "image": trips on EITHER signal
+        (encoded OR sensitive). Defang replaces the WHOLE url with [exfil-redacted] (scheme+host+payload
+        gone) so the tag cannot auto-fetch the attacker at all — runs BEFORE the bare-URL pass. ReDoS-safe
+        (bounded negated-class regexes; 50KB pathological input 107ms, linear). <a href> one-click links
+        are NOT matched (only zero-click media attrs) so benign links are untouched.
+        VERIFY: all HTML/SVG/CSS/iframe beacons defanged (arbitrary + PII), auto-render neutralized; 6 FP
+        controls unchanged (CDN img, CSS bg, SVG image, <a> link, srcset, presigned S3). FROZEN: G41
+        (test_g41_html_css_exfil_beacon_neutralized 5 + test_g41_benign_html_not_defanged 5). Gate:
+        frozen+adversarial 282 passed × 3 consecutive (21.0/27.3/22.3s; 272+10); streaming/output-guard
+        suites green. commit 18b79c5c. REDEPLOYED gateway with G41 (rollback-pre-g41 tagged; build; up -d
+        --no-deps; marker _HTML_BEACON_RES present; health 200) so the fix is LIVE, not just committed.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
