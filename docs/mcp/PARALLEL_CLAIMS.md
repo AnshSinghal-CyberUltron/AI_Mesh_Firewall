@@ -30,6 +30,7 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 | cursor-ralph-iter13 | `mcp-parallel/findings/p4-13/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P4.13 blocked + P5.14 B1 verify | 2026-07-02T15:00:00Z | released |
 | cursor-ralph-iter14 | `frontend/**`, `mcp-parallel/findings/p5-15/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P5.15 B2 pending-auth verify | 2026-07-02T16:00:00Z | released |
 | cursor-ralph-iter15 | `scripts/playwright_mcp_b4_verify.mjs`, `scripts/playwright_mcp_b1_b2_b4_e2e.mjs`, `mcp-parallel/findings/p5-16/**`, `mcp-parallel/findings/p5-17/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P5.16 B4 + P5.17 E2E verify | 2026-07-02T17:00:00Z | released |
+| cursor-ralph-iter17 | `services/mcp-broker/src/sandbox/docker_manager.py`, `services/mcp-broker/tests/test_sandbox_lifecycle.py`, `mcp-parallel/findings/p6-19/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P6.19 prep + P7.23 N1 npm hardening | 2026-07-02T18:30:00Z | released |
 
 ## Claim protocol
 
@@ -40,4 +41,4 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 ## Hive
 
 - Hive ID: `hive-1782976205971-u1gav1`
-- Cursor agents: `cursor-ralph-iter1` (iter 1), `cursor-ralph-iter2` (iter 2, joined 2026-07-02)
+- Cursor agents: `cursor-ralph-iter1` (iter 1), `cursor-ralph-iter2` (iter 2), `cursor-ralph-iter17` (iter 17)

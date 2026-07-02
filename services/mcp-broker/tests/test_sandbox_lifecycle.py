@@ -98,6 +98,7 @@ def test_ensure_creates_container_when_missing(manager: DockerManager):
     assert len(run_kwargs["ulimits"]) == 2
     assert run_kwargs["environment"]["ORG_SLUG"] == "acme"
     assert run_kwargs["environment"]["NPM_CONFIG_CACHE"] == "/var/npm-cache"
+    assert run_kwargs["environment"]["npm_config_ignore_scripts"] == "true"
     assert "/var/npm-cache" in run_kwargs["tmpfs"]
     assert "noexec" in run_kwargs["tmpfs"]["/tmp"]
     assert "exec" in run_kwargs["tmpfs"]["/var/npm-cache"]

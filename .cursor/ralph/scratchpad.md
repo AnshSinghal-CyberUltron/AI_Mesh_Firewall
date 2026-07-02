@@ -101,3 +101,6 @@ status: ACTIVE
        `mcp-parallel/findings/p6-18/BLOCKER.md`. Browser at MCP panel for manual OAuth.
 - [ ] 19. Re-run P1 repros → all four UI bugs gone; re-run P4 verification 3× (in-process + live).
        When P1–P6 all [x] AND integration green, output <promise>COMPLETE</promise>.
+       **PARTIAL 2026-07-02 (iter17):** P1 B1/B2/B4 re-run 12/12 PASS (`playwright_mcp_b1_b2_b4_e2e.mjs` →
+       `mcp-parallel/findings/p6-19/`). P4.13/P6.18 still blocked (broker `/{org}/rpc` 404). P7.23 N1
+       (`npm_config_ignore_scripts`) landed in `docker_manager.py`.

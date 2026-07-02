@@ -56,7 +56,7 @@
 
 ## P7 — Sandbox isolation hardening (the dev-plan)
 - [ ] 22. Enforce resource limits per sandbox (CPU, memory, disk, timeout) + verify a runaway MCP is contained
-- [ ] 23. Confirm NO unknown npm package executes on the host — only inside the per-org sandbox
+- [x] 23. Confirm NO unknown npm package executes on the host — only inside the per-org sandbox — **N1 DONE (iter17):** `npm_config_ignore_scripts=true` in `docker_manager._run_kwargs` env; lifecycle test asserts it; 20/20 broker + 15/15 agent tests green. **Remaining N2–N7:** pinned packages, allowlist parity, registry pin, pre-bake, uv equivalents.
 - [ ] 24. Reaper/idle cleanup correctness (no orphan sandboxes; restart-safe registry) 
 - [ ] 25. Per-org credential/env isolation (Org A env/secrets never visible in Org B sandbox)
 

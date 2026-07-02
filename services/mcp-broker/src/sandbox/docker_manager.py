@@ -365,6 +365,8 @@ class DockerManager:
             # Sandbox USER is non-root; npm/uv caches need writable tmpfs (read_only rootfs).
             # npm cache MUST NOT live on noexec /tmp — npx bin symlinks are executed directly.
             "NPM_CONFIG_CACHE": "/var/npm-cache",
+            # Kill postinstall lifecycle scripts during npx fetch (supply-chain RCE vector).
+            "npm_config_ignore_scripts": "true",
             "UV_CACHE_DIR": "/var/cache/uv",
             "XDG_CACHE_HOME": "/var/cache",
         }
