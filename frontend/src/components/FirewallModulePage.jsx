@@ -56,6 +56,13 @@ export function FirewallModulePage({
   );
 
   const isLoading = firewallData.loading;
+  // Only the FIRST load has no data to show — background polls (15s) and lens
+  // changes keep the prior threatFeed, so isLoading alone would blank good data.
+  // During that first load the KPI cards would otherwise render a full board of
+  // computed "0"s (empty events → summarizeEvents total 0), indistinguishable
+  // from a real "0 events" state. Show a muted placeholder instead, matching the
+  // EvidenceTable's "Loading recent evidence…" and the overview's "--".
+  const awaitingFirstData = isLoading && firewallData.threatFeed.length === 0;
 
   const resolvedFooterPanels = useMemo(() => {
     if (!footerPanels?.length) return [];
@@ -112,7 +119,7 @@ export function FirewallModulePage({
 
             <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {pageData.summaryCards.map((card) => (
-                <SummaryCard key={card.label} {...card} />
+                <SummaryCard key={card.label} {...card} loading={awaitingFirstData} />
               ))}
             </div>
           </div>
@@ -146,7 +153,7 @@ export function FirewallModulePage({
 
               <div className="mt-6 space-y-3">
                 {pageData.spotlightCards.map((card) => (
-                  <QuickStatus key={card.label} {...card} />
+                  <QuickStatus key={card.label} {...card} loading={awaitingFirstData} />
                 ))}
               </div>
             </div>
@@ -267,21 +274,25 @@ function SectionHeading({ eyebrow, title, description, action }) {
   );
 }
 
-function SummaryCard({ label, value, detail }) {
+function SummaryCard({ label, value, detail, loading }) {
   return (
     <div className="ai-mesh-kpi p-5">
       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{label}</div>
-      <div className="mt-4 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{value}</div>
+      <div className="mt-4 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+        {loading ? <span className="text-slate-400 dark:text-slate-500" aria-hidden="true">—</span> : value}
+      </div>
       <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{detail}</div>
     </div>
   );
 }
 
-function QuickStatus({ label, value, detail }) {
+function QuickStatus({ label, value, detail, loading }) {
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/45">
       <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{label}</div>
-      <div className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">{value}</div>
+      <div className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">
+        {loading ? <span className="text-slate-400 dark:text-slate-500" aria-hidden="true">—</span> : value}
+      </div>
       <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{detail}</div>
     </div>
   );
