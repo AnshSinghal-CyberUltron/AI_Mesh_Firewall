@@ -645,6 +645,26 @@
         streaming suite now 25 passed. Then RE-ESTABLISHED completion gate #3 post-G40: golden+adversarial
         272 passed × 3 consecutive in-process (29.0s/20.5s/17.4s; 267+5 G40 golden; deterministic).
         commit ae80aee6 (test). G40 fix now fully branch-covered.
+      G40 DEPLOY-LAG CLOSED + LIVE PIPELINE RE-VERIFY 2026-07-02:
+        Found a real deploy gap: the RUNNING gateway (container started 18:31:49) PREDATED the G40 fix
+        (committed 19:13:06) — verified by grepping the container: _tail_has_oversized_encoded_blob=0,
+        MAX_OPEN_MEDIA_HOLDBACK=0. So the zero-click exfil fix was NOT live. Redeployed defensively
+        (same discipline as the earlier deploy-lag incident): tagged rollback-pre-g40 -> docker compose
+        build gateway (from committed main) -> up -d --no-deps gateway (avoids the control-hang dep gate)
+        -> healthy in 8s. Post-deploy the RUNNING gateway now has G40 (markers 2/4/3), /health=200,
+        48 policies loaded v36, firewall_enabled, enforcement=block. LIVE pipeline re-verified via a
+        seeded simulator gateway key (scripts/seed_simulator_gateway_key.sh; org GatewayAPIKey in Redis,
+        NOT the OpenRouter key, not committed):
+          - prompt-injection -> BLOCKED live: auth:allow -> rate_limit:allow -> policy:block, OpenAI
+            error envelope (code content_filter/policy_violation) + request_id + full pipeline_trace.
+          - benign "what is 2+2" -> passed all INPUT stages and reached model_routing (failed only at
+            "model not configured for this org" — expected; no model connected in this runtime session).
+        => the redeployed G40 image serves + enforces the normal request path correctly; G40's output/
+        streaming changes are offline-proven inert on normal flows (339 green incl. clean-stream-intact)
+        and only activate on a beacon/oversized-URL OUTPUT, which cannot be forced from a live model on
+        demand (external limitation, same class as the pipeline-trace-card live render).
+        REMAINING for full R5 completion: re-connect ~10 free OpenRouter models via the frontend UI
+        (key typed into UI only) and re-run the corpus through routing on the G40 image (next item).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
