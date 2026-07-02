@@ -1,0 +1,13 @@
+agent: claude-mcp-loop
+story: P4.13/P6.18 (Claude-owned gateway+broker unified RPC wiring — 4 transports via sandbox)
+files:
+  - services/mcp-broker/src/sandbox/routes.py
+  - services/mcp-broker/tests/test_sandbox_routes.py
+  - gateway/ai_mesh_gateway/mcp_sandbox_client.py
+  - gateway/ai_mesh_gateway/mcp_proxy.py
+  - mcp-parallel/findings/p4-13/**
+since: 2026-07-02T11:30:00Z
+status: active
+note: >
+  §1 broker unified POST /{org}/rpc route DONE (deployed live, /rpc 404→401).
+  §2 gateway broker_send_rpc + §3 proxy routing = next.

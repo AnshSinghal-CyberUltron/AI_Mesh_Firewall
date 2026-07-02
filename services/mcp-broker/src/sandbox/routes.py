@@ -33,15 +33,46 @@ class EnsureRequest(BaseModel):
     warm: bool = True
 
 
-class StdioRpcRequest(BaseModel):
-    server_slug: str
-    command: str
+class StdioConfig(BaseModel):
+    command: str = ""
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
+
+
+class UpstreamConfig(BaseModel):
+    url: str
+    allowed_hosts: list[str] = Field(default_factory=list)
+    headers: dict[str, str] = Field(default_factory=dict)
+    oauth_client_role: str = "forbidden_in_sandbox"
+
+
+class SandboxRpcRequest(BaseModel):
+    """Transport-agnostic RPC envelope forwarded verbatim to the sandbox agent
+    (matches ``sandbox-image/agent/main.py`` ``SandboxRpcRequest``).
+
+    P4.13/P6.18: all four transports (stdio, streamable-http, sse, websocket) route
+    through the per-org sandbox so the gateway never dials upstream MCP URLs
+    directly. ``command``/``args``/``env`` remain as LEGACY flat stdio fields so the
+    pre-contract gateway payload (and the deprecated ``/stdio/rpc`` route) keep
+    working unchanged; the agent's own legacy-merge builds ``stdio`` from them.
+    """
+
+    server_slug: str
+    transport: str = "stdio"
     method: str
     params: dict[str, list | dict | None] | list | dict | None = None
     jsonrpc_id: int | str = 1
     timeouts: dict[str, float] = Field(default_factory=dict)
+    stdio: StdioConfig | None = None
+    upstream: UpstreamConfig | None = None
+    # Legacy flat stdio fields (backward compatible with pre-contract gateway payloads).
+    command: str | None = None
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+
+# Backward-compatible alias — the deprecated /stdio/rpc route still names this type.
+StdioRpcRequest = SandboxRpcRequest
 
 
 def _iso_timestamp(value: float | datetime | None = None) -> str:
@@ -209,8 +240,14 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
         response["provisioning"] = bool(body.warm and not agent_ready)
         return response
 
-    @router.post("/{org_slug}/stdio/rpc")
-    async def stdio_rpc(org_slug: str, body: StdioRpcRequest) -> dict[str, Any]:
+    async def _forward_sandbox_rpc(org_slug: str, body: SandboxRpcRequest) -> dict[str, Any]:
+        """Resolve the running per-org sandbox and forward one RPC to its agent.
+
+        Transport-agnostic (P4.13/P6.18): the same path serves stdio, streamable-http,
+        sse and websocket — the agent picks the transport from ``body.transport`` and
+        dials the upstream from inside the org sandbox (egress-allowlisted), so the
+        gateway never connects to an external MCP URL directly.
+        """
         if not cached_docker_ok():
             raise HTTPException(status_code=503, detail="Docker unavailable")
         info = await _resolve_running_sandbox(docker_manager, org_slug)
@@ -255,6 +292,19 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
                 detail=response.text or f"Sandbox agent error: HTTP {response.status_code}",
             )
         return response.json()
+
+    @router.post("/{org_slug}/rpc")
+    async def sandbox_rpc(org_slug: str, body: SandboxRpcRequest) -> dict[str, Any]:
+        """Unified transport-agnostic RPC (P4.13/P6.18) — stdio + remote transports."""
+        return await _forward_sandbox_rpc(org_slug, body)
+
+    @router.post("/{org_slug}/stdio/rpc")
+    async def stdio_rpc(org_slug: str, body: SandboxRpcRequest) -> dict[str, Any]:
+        """DEPRECATED alias of ``/{org_slug}/rpc`` — retained for the pre-contract
+        gateway payload. Forces ``transport=stdio`` for old callers that omit it."""
+        if not body.transport:
+            body.transport = "stdio"
+        return await _forward_sandbox_rpc(org_slug, body)
 
     @router.get("/{org_slug}/status")
     async def sandbox_status(org_slug: str) -> dict[str, Any]:

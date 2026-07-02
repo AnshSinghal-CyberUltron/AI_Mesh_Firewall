@@ -204,6 +204,87 @@ def test_stdio_rpc_forwards_to_agent_and_touches_activity(
     assert entry.last_activity == 1_719_660_000.0
 
 
+def test_unified_rpc_route_forwards_remote_transport(
+    broker_client: TestClient,
+    docker_manager: DockerManager,
+    registry: SandboxRegistry,
+):
+    # P4.13/P6.18: the unified POST /{org}/rpc route must EXIST (non-404) and
+    # forward a remote transport (streamable-http) + upstream block verbatim to the
+    # agent, so the gateway never dials the upstream MCP URL directly.
+    running = _mock_container()
+    docker_manager.client.containers.list.return_value = [running]
+    registry.register(ORG, running.id, "http://172.28.0.42:9320", last_activity=100.0)
+
+    agent_response = httpx.Response(
+        200,
+        json={"jsonrpc": "2.0", "id": 7, "result": {"tools": [{"name": "echo"}]}},
+        request=httpx.Request("POST", "http://172.28.0.42:9320/rpc"),
+    )
+    mock_http = AsyncMock()
+    mock_http.post.return_value = agent_response
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    rpc_body = {
+        "server_slug": "remote-http",
+        "transport": "streamable-http",
+        "upstream": {
+            "url": "https://mcp.example.com/mcp",
+            "allowed_hosts": ["mcp.example.com"],
+            "headers": {"Authorization": "Bearer injected-token"},
+        },
+        "method": "tools/list",
+        "jsonrpc_id": 7,
+    }
+
+    with patch("sandbox.routes.httpx.AsyncClient", return_value=mock_http):
+        resp = broker_client.post(
+            f"/v1/sandbox/{ORG}/rpc",
+            json=rpc_body,
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 200  # route exists (NOT 404) and forwarded
+    assert resp.json()["result"]["tools"] == [{"name": "echo"}]
+    fwd = mock_http.post.call_args[1]["json"]
+    assert fwd["transport"] == "streamable-http"
+    assert fwd["upstream"]["url"] == "https://mcp.example.com/mcp"
+    assert fwd["upstream"]["allowed_hosts"] == ["mcp.example.com"]
+
+
+def test_stdio_rpc_alias_still_forwards(
+    broker_client: TestClient,
+    docker_manager: DockerManager,
+    registry: SandboxRegistry,
+):
+    # The deprecated /stdio/rpc alias must keep working (back-compat for the
+    # pre-contract gateway payload) and default transport to stdio.
+    running = _mock_container()
+    docker_manager.client.containers.list.return_value = [running]
+    registry.register(ORG, running.id, "http://172.28.0.42:9320", last_activity=100.0)
+
+    agent_response = httpx.Response(
+        200, json={"jsonrpc": "2.0", "id": 5, "result": {"ok": True}},
+        request=httpx.Request("POST", "http://172.28.0.42:9320/rpc"),
+    )
+    mock_http = AsyncMock()
+    mock_http.post.return_value = agent_response
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with patch("sandbox.routes.httpx.AsyncClient", return_value=mock_http):
+        resp = broker_client.post(
+            f"/v1/sandbox/{ORG}/stdio/rpc",
+            json={"server_slug": "s", "command": "npx", "args": ["-y", "pkg"], "method": "tools/list"},
+            headers=_auth_headers(),
+        )
+    assert resp.status_code == 200
+    fwd = mock_http.post.call_args[1]["json"]
+    assert fwd["transport"] == "stdio"  # alias forces stdio for legacy callers
+    assert fwd["command"] == "npx"
+
+
 def test_stdio_rpc_503_provisioning_on_agent_unreachable(
     broker_client: TestClient,
     docker_manager: DockerManager,
