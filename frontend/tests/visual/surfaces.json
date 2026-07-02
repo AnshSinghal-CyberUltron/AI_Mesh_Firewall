@@ -7,7 +7,7 @@
     { "id": "module-1-1",      "path": "/?tab=firewall-1-1",       "auth": true,  "expectText": "Gateway" },
     { "id": "module-1-2",      "path": "/?tab=firewall-1-2",       "auth": true,  "expectText": "Policy" },
     { "id": "module-1-3",      "path": "/?tab=firewall-1-3",       "auth": true,  "expectText": "RAG", "migratedChart": true },
-    { "id": "module-1-4",      "path": "/?tab=firewall-1-4",       "auth": true,  "expectText": "Context", "allowOverflow": true, "_note": "MCPConnectorPanel is stress-session never_edit; its 884px MCP server cards overflow <main> at 768/375 (FRONTEND_AUDIT item 22). Reported, not gated — stress session owns the fix." },
+    { "id": "module-1-4",      "path": "/?tab=firewall-1-4",       "auth": true,  "expectText": "Context", "_note": "MCPConnectorPanel server-card overflow FIXED (flex-wrap top row + action bar, grid-cols-1 container) — now gated like every other surface; realOver=0 at all 4 widths both themes with 22 servers rendered." },
     { "id": "module-1-5",      "path": "/?tab=firewall-1-5",       "auth": true,  "expectText": "Model" },
     { "id": "module-1-6",      "path": "/?tab=firewall-1-6",       "auth": true,  "expectText": "Isolation" },
     { "id": "module-1-7",      "path": "/?tab=firewall-1-7",       "auth": true,  "expectText": "Output", "migratedChart": true },

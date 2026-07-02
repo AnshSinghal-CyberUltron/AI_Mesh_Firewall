@@ -1252,7 +1252,7 @@ function MCPConnectorPanelInner() {
     return (
       <Card key={srv.id}>
         <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <h4 className="font-medium text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
                 <Server className="w-4 h-4 text-teal-500 shrink-0" />
@@ -1332,7 +1332,7 @@ function MCPConnectorPanelInner() {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
               <Badge variant="secondary">{srv.transport}</Badge>
               {/* Every transport runs in the per-org sandbox (bug #3 / CP15) — the
                   gateway never dials the upstream directly, so show it for ALL. */}
@@ -1525,7 +1525,7 @@ function MCPConnectorPanelInner() {
           action={<Button onClick={() => { setAddServerId(null); setAddConnectError(null); setAddConnectErrorCode(null); setAddOpen(true); }}><Plus className="w-4 h-4" /> Register Server</Button>}
         />
       ) : (
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {servers.map((srv) => renderServerCard(srv))}
         </div>
       )}
