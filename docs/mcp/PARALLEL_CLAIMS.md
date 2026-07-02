@@ -19,6 +19,8 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 |-------|---------------|-------|-------------|--------|
 | cursor-ralph-iter1 | `docs/mcp/PARALLEL_CLAIMS.md`, `mcp-parallel/**`, `docs/mcp/**` | C0 coordination setup | 2026-07-02T07:15:00Z | released |
 | cursor-ralph-iter1 | `mcp-parallel/findings/**`, `scripts/playwright_mcp_p1_stdio_oauth_repro.mjs` | P1.1 stdio OAuth repro | 2026-07-02T07:15:00Z | released |
+| cursor-ralph-iter2 | `docs/mcp/PARALLEL_CLAIMS.md`, `mcp-parallel/**`, `.cursor/ralph/scratchpad.md` | C0 hive join iter2 | 2026-07-02T07:35:00Z | released |
+| cursor-ralph-iter2 | `mcp-parallel/findings/p1-2/**`, `scripts/playwright_mcp_p1_http_oauth_repro.mjs` | P1.2 HTTP oauth 0-tools repro | 2026-07-02T08:00:00Z | released |
 
 ## Claim protocol
 
@@ -29,4 +31,4 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 ## Hive
 
 - Hive ID: `hive-1782976205971-u1gav1`
-- Cursor agent: `cursor-ralph-iter1` (specialist, joined iter 1)
+- Cursor agents: `cursor-ralph-iter1` (iter 1), `cursor-ralph-iter2` (iter 2, joined 2026-07-02)
