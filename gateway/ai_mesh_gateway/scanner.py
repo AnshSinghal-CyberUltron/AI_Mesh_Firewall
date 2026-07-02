@@ -326,6 +326,52 @@ _SMALLCAP_TABLE: dict[int, int] = {k: ord(v) for k, v in _SMALLCAP_MAP.items()}
 _TRANSPORT_DECODE_MAX_LEN: int = 200
 _BASE64_TOKEN_RE: re.Pattern[str] = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
 _HEX_TOKEN_RE: re.Pattern[str] = re.compile(r"(?:[0-9a-fA-F]{2}){8,}")
+# G22: follow up to this many NESTED encoding layers (double-base64 / base64-of-hex
+# "prompt laundering") so an injection wrapped in >1 encoding layer is still rescanned.
+# Bounded depth + per-token length cap => decode-bomb safe.
+_MAX_TRANSPORT_DEPTH: int = 3
+_ALL_HEX_RE: re.Pattern[str] = re.compile(r"[0-9a-fA-F]+")
+
+
+def _nested_decode_variants(token: str, is_hex: bool, seen: set[str]) -> list[str]:
+    """Decode ``token`` through up to ``_MAX_TRANSPORT_DEPTH`` nested base64/hex layers,
+    returning each readable-ASCII layer so an injection buried under multiple encodings
+    (e.g. double-base64) is surfaced for rescanning."""
+    out: list[str] = []
+    layer = token
+    cur_hex = is_hex
+    for _ in range(_MAX_TRANSPORT_DEPTH):
+        if len(layer) > _TRANSPORT_DECODE_MAX_LEN:
+            break
+        try:
+            if cur_hex:
+                raw = bytes.fromhex(layer)
+            else:
+                raw = base64.b64decode(layer + "=" * (-len(layer) % 4), validate=False)
+            decoded = raw.decode("utf-8", errors="strict")
+        except (binascii.Error, ValueError, UnicodeDecodeError):
+            break
+        if not decoded.isprintable():
+            break
+        if decoded not in seen:
+            seen.add(decoded)
+            out.append(decoded)
+        # Is the decoded text ITSELF another encoding layer? A pure-hex string is also
+        # valid base64, so prefer a HEX interpretation when the whole decoded layer is
+        # hex (else base64 would mis-decode base64-of-hex laundering).
+        s = decoded.strip()
+        if 16 <= len(s) <= _TRANSPORT_DECODE_MAX_LEN and len(s) % 2 == 0 and _ALL_HEX_RE.fullmatch(s):
+            layer, cur_hex = s, True
+            continue
+        b = _BASE64_TOKEN_RE.search(decoded)
+        h = _HEX_TOKEN_RE.search(decoded)
+        if b and len(b.group(0)) <= _TRANSPORT_DECODE_MAX_LEN:
+            layer, cur_hex = b.group(0), False
+        elif h and len(h.group(0)) <= _TRANSPORT_DECODE_MAX_LEN:
+            layer, cur_hex = h.group(0), True
+        else:
+            break
+    return out
 
 
 # G17: Unicode Tag block (U+E0000..U+E007F) "ASCII smuggling". U+E0020 (TAG SPACE)
@@ -404,28 +450,15 @@ def _decode_transport_variants(text: str) -> list[str]:
             variants.append(_rot)
     except Exception:  # noqa: BLE001 - decode helpers must never break the scan
         pass
+    # G22: each token is decoded through nested layers (double-base64 / base64-of-hex).
     for token in _BASE64_TOKEN_RE.findall(text)[:8]:
         if len(token) > _TRANSPORT_DECODE_MAX_LEN:
             continue
-        pad = "=" * (-len(token) % 4)
-        try:
-            raw = base64.b64decode(token + pad, validate=False)
-            decoded = raw.decode("utf-8", errors="strict")
-        except (binascii.Error, ValueError, UnicodeDecodeError):
-            continue
-        if decoded.isprintable() and decoded not in seen:
-            seen.add(decoded)
-            variants.append(decoded)
+        variants.extend(_nested_decode_variants(token, False, seen))
     for token in _HEX_TOKEN_RE.findall(text)[:8]:
         if len(token) > _TRANSPORT_DECODE_MAX_LEN:
             continue
-        try:
-            decoded = bytes.fromhex(token).decode("utf-8", errors="strict")
-        except (ValueError, UnicodeDecodeError):
-            continue
-        if decoded.isprintable() and decoded not in seen:
-            seen.add(decoded)
-            variants.append(decoded)
+        variants.extend(_nested_decode_variants(token, True, seen))
     return variants
 
 

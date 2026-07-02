@@ -122,6 +122,10 @@ _B64ISH_RE = re.compile(r"[A-Za-z0-9+/]{12,}={0,2}")
 _HEXISH_RE = re.compile(r"(?:[0-9A-Fa-f]{2}){8,}")
 _MAX_DECODE_TOKENS = 12
 _MAX_DECODE_BYTES = 4096
+# G22: max nested encoding layers to follow (double-base64 / base64-of-hex "prompt
+# laundering"). Depth is bounded and each layer is size + printable capped, so the
+# recursion is decode-bomb safe.
+_MAX_DECODE_DEPTH = 3
 
 
 def _printable_ratio(s: str) -> float:
@@ -130,11 +134,50 @@ def _printable_ratio(s: str) -> float:
     return sum(1 for c in s if c.isprintable() or c.isspace()) / len(s)
 
 
-def _iter_transport_decodes(text: str):
-    """Yield ``(encoded_token, decoded_text)`` for base64/hex blobs decoding to clean UTF-8.
+def _decode_one(tok: str, is_hex: bool):
+    """Decode a single base64/hex token to mostly-printable UTF-8, else ``None``."""
+    try:
+        if is_hex:
+            raw = bytes.fromhex(tok)
+        else:
+            raw = base64.b64decode(tok + "=" * (-len(tok) % 4), validate=False)
+        if not (0 < len(raw) <= _MAX_DECODE_BYTES):
+            return None
+        dec = raw.decode("utf-8")
+    except Exception:
+        return None
+    return dec if _printable_ratio(dec) >= 0.8 else None
 
-    Single-depth, token-count + size capped => decode-bomb safe. Only mostly-printable
-    decodes are surfaced so random alphanumerics don't create false positives.
+
+_ALL_HEX_RE = re.compile(r"[0-9a-fA-F]+")
+
+
+def _decode_nested(layer: str):
+    """A decoded blob may itself be another encoding layer. Find the first base64/hex
+    token in ``layer`` and decode it; returns the next-layer text or ``None``. A pure-
+    hex string is also valid base64, so prefer HEX when the whole layer is hex (else
+    base64-of-hex laundering mis-decodes)."""
+    layer = layer.strip()
+    if len(layer) >= 16 and len(layer) % 2 == 0 and _ALL_HEX_RE.fullmatch(layer):
+        dec = _decode_one(layer, True)
+        if dec is not None:
+            return dec
+    for regex, is_hex in ((_B64ISH_RE, False), (_HEXISH_RE, True)):
+        m = regex.search(layer)
+        if m:
+            dec = _decode_one(m.group(0), is_hex)
+            if dec is not None:
+                return dec
+    return None
+
+
+def _iter_transport_decodes(text: str):
+    """Yield ``(outer_token, decoded_text)`` for base64/hex blobs decoding to clean UTF-8,
+    following up to ``_MAX_DECODE_DEPTH`` NESTED encoding layers (double-base64 prompt
+    laundering). ``outer_token`` is always the OUTERMOST token as it appears in ``text``,
+    so a caller masking ``outer_token`` removes the whole encoded blob from the original
+    bytes even when the sensitive value is buried several layers deep. Token-count + size
+    + depth capped, mostly-printable-only => decode-bomb / FP safe.
     """
     if not text:
         return
@@ -145,19 +188,20 @@ def _iter_transport_decodes(text: str):
             if seen >= _MAX_DECODE_TOKENS:
                 break
             seen += 1
-            tok = m.group(0)
-            try:
-                if is_hex:
-                    raw = bytes.fromhex(tok)
-                else:
-                    raw = base64.b64decode(tok + "=" * (-len(tok) % 4), validate=False)
-                if not (0 < len(raw) <= _MAX_DECODE_BYTES):
-                    continue
-                dec = raw.decode("utf-8")
-            except Exception:
+            top_tok = m.group(0)
+            dec = _decode_one(top_tok, is_hex)
+            if dec is None:
                 continue
-            if _printable_ratio(dec) >= 0.8:
-                yield tok, dec
+            yield top_tok, dec
+            # G22: follow nested layers, always reporting the OUTER token so masking
+            # lands on the original bytes.
+            layer = dec
+            for _ in range(_MAX_DECODE_DEPTH - 1):
+                nxt = _decode_nested(layer)
+                if nxt is None or nxt == layer:
+                    break
+                yield top_tok, nxt
+                layer = nxt
 
 
 # B2-redactor-coverage: a trailing 10-digit US phone that may carry a SINGLE
