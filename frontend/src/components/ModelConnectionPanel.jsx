@@ -734,11 +734,12 @@ export function ModelConnectionPanel({
                                 : "hover:bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600"
                             }`}
                             title={m.is_active ? "Disable" : "Enable"}
+                            aria-label={m.is_active ? "Disable model" : "Enable model"}
                           >
                             {m.is_active ? (
-                              <PowerOff className="w-3.5 h-3.5" />
+                              <PowerOff className="w-3.5 h-3.5" aria-hidden="true" />
                             ) : (
-                              <Power className="w-3.5 h-3.5" />
+                              <Power className="w-3.5 h-3.5" aria-hidden="true" />
                             )}
                           </button>
                           <button
@@ -764,13 +765,15 @@ export function ModelConnectionPanel({
       {showConnectionsTable && showGatewayCatalog && (
       <div className="mt-6 border-t border-slate-200 dark:border-slate-700 pt-6">
         <button
+          type="button"
           onClick={() => setGatewayModelsExpanded(!gatewayModelsExpanded)}
+          aria-expanded={gatewayModelsExpanded}
           className="flex items-center gap-2 w-full text-left mb-3 min-h-[44px]"
         >
           {gatewayModelsExpanded ? (
-            <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <ChevronRight className="w-4 h-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
           )}
           <Globe className="w-4 h-4 text-teal-600" />
           <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
@@ -798,18 +801,20 @@ export function ModelConnectionPanel({
               <>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="relative flex-1">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" aria-hidden="true" />
                     <input
                       type="text"
                       value={gatewaySearch}
                       onChange={(e) => setGatewaySearch(e.target.value)}
                       placeholder="Search models..."
+                      aria-label="Search gateway models"
                       className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full pl-8 pr-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                     />
                   </div>
                   <select
                     value={gatewayProviderFilter}
                     onChange={(e) => setGatewayProviderFilter(e.target.value)}
+                    aria-label="Filter gateway models by provider"
                     className="bg-white dark:bg-slate-800 px-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   >
                     <option value="all">All Providers</option>
@@ -865,12 +870,17 @@ export function ModelConnectionPanel({
 
       {showConnectionsTable && modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/40" onClick={() => { setModalOpen(false); setEditingModel(null); }} />
-          <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+          <div className="fixed inset-0 bg-black/40" onClick={() => { setModalOpen(false); setEditingModel(null); }} aria-hidden="true" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="model-config-dialog-title"
+            className="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6"
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{editingModel ? "Edit Model Configuration" : "Add Model Configuration"}</h3>
-              <button onClick={() => { setModalOpen(false); setEditingModel(null); }} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors">
-                <X className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              <h3 id="model-config-dialog-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">{editingModel ? "Edit Model Configuration" : "Add Model Configuration"}</h3>
+              <button type="button" onClick={() => { setModalOpen(false); setEditingModel(null); }} aria-label="Close dialog" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors">
+                <X className="w-4 h-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
               </button>
             </div>
 
@@ -1024,9 +1034,10 @@ export function ModelConnectionPanel({
                 <button
                   type="button"
                   onClick={() => setRoutingExpanded(!routingExpanded)}
+                  aria-expanded={routingExpanded}
                   className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 w-full text-left"
                 >
-                  {routingExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                  {routingExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />}
                   Routing Configuration
                   <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">(optional)</span>
                 </button>
