@@ -627,6 +627,18 @@
     secret still masked (no regression); benign HTML entities/plain/URL no-FP. +9 tests. Gate: 9 + 1327
     gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
     mcp-parallel/findings/backstop-p2-mcp-encoded-exfil/.
+  - CHG-0077 (2026-07-02) — G2 item 2 / 1.4 (devil's-advocate on tool poisoning), MEDIUM: tool descriptions
+    from tools/list come LIVE from the untrusted upstream MCP server + are shown to the model (tool-poisoning
+    /line-jumping surface). The EXT proxy scans tools/list (in _EXT_FINITE_RESULT_METHODS) but the ORG
+    tools/list handler (org_mcp_jsonrpc) — BOTH the adapter AND backend sub-paths — returned the list after
+    only visibility filters, NO content scan → a secret/PII/internal-IP (or CHG-0076 encoded-exfil) in a tool
+    description egressed to the model on the org path. FIX (mcp_proxy.py): new _scanned_tools_list_response
+    runs the tools/list result through _scan_tool_result_floor (inherits CHG-0074/0075/0076); both org
+    sub-paths return through it — maskable leak MASKED + forwarded; unmaskable/encoded-exfil metadata BLOCKED
+    fail-closed; benign discovery + flag-tier file paths preserved. +4 tests. Gate: 4 + 1336 gateway passed,
+    0 failed; broker -k "not websocket" 108 passed. Evidence mcp-parallel/findings/backstop-p2-tools-list-desc-scan/.
+    FOLLOW-UP (documented, NOT fixed): MCP _injection_match is a 6-keyword substring match that misses
+    tool-poisoning payloads the chat scanner blocks — needs a dedicated iteration.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

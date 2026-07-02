@@ -2717,6 +2717,59 @@ async def _adapter_forward(
         )
 
 
+async def _scanned_tools_list_response(
+    payload,
+    *,
+    jsonrpc,
+    msg_id,
+    enabled_info,
+    org_slug: str,
+    server_slug: str,
+    actor,
+):
+    """CHG-0077: scan tools/list tool DESCRIPTIONS / metadata from an untrusted upstream
+    before returning them to the client / LLM.
+
+    GAP: the org (sandbox-routed + backend) tools/list path forwarded upstream tool
+    descriptions RAW, while the EXTERNAL proxy path already scans tools/list (it is in
+    ``_EXT_FINITE_RESULT_METHODS``). Tool descriptions come LIVE from the untrusted
+    upstream MCP server and are shown to the model — a classic tool-poisoning /
+    metadata-leak surface. So a secret / PII / internal-IP (or a CHG-0076 encoded-exfil
+    payload) embedded in a tool description leaked to the model on the org path.
+
+    Reuses the result-redaction floor: masks a maskable leak in the metadata, and blocks
+    (fail-closed) a poisoned metadata block that cannot be safely masked (e.g. an encoded
+    exfil payload) — parity with tool RESULT scanning. NOTE: this masks
+    secret/PII/internal-IP; prompt-injection text in a description is a SEPARATE detection
+    concern (``_INJECTION_KEYWORDS`` is narrow — documented follow-up)."""
+    result = payload.get("result") if isinstance(payload, dict) else None
+    if not isinstance(result, dict):
+        return JSONResponse(content=payload, status_code=200)
+    scanned, blocked, tags, _find, _meta = await _scan_tool_result_floor(
+        result,
+        tool_name="tools/list",
+        enabled_info=enabled_info,
+        org_slug=org_slug,
+        server_slug=server_slug,
+        actor=actor,
+    )
+    if blocked:
+        return JSONResponse(
+            content={
+                "jsonrpc": jsonrpc,
+                "id": msg_id,
+                "error": {
+                    "code": -32000,
+                    "message": "tools/list withheld: server tool metadata matched sensitive content",
+                },
+            },
+            status_code=200,
+        )
+    if scanned is not result:
+        payload["result"] = scanned
+    return JSONResponse(content=payload, status_code=200)
+
+
 @org_gateway_router.post(
     "/{org_slug}/mcp/{server_slug}",
     summary="MCP Streamable HTTP endpoint (JSON-RPC)",
@@ -2832,7 +2885,11 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                     result["tools"] = _filter_tools_by_key_allowlist(
                         _filter_tools_by_enabled(result["tools"], enabled_info), _mcp_auth
                     )
-                    return JSONResponse(content=payload, status_code=200)
+                    # CHG-0077: scan the upstream tool DESCRIPTIONS/metadata (leak surface)
+                    return await _scanned_tools_list_response(
+                        payload, jsonrpc=jsonrpc, msg_id=msg_id, enabled_info=enabled_info,
+                        org_slug=org_slug, server_slug=server_slug, actor=mcp_actor,
+                    )
             return adapter_resp
 
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -2869,13 +2926,11 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                     _filter_tools_by_enabled(mcp_tools, enabled_info), _mcp_auth
                 )
 
-                return JSONResponse(
-                    content={
-                        "jsonrpc": jsonrpc,
-                        "id": msg_id,
-                        "result": {"tools": mcp_tools},
-                    },
-                    status_code=200,
+                # CHG-0077: scan tool DESCRIPTIONS/metadata before returning (leak surface).
+                return await _scanned_tools_list_response(
+                    {"jsonrpc": jsonrpc, "id": msg_id, "result": {"tools": mcp_tools}},
+                    jsonrpc=jsonrpc, msg_id=msg_id, enabled_info=enabled_info,
+                    org_slug=org_slug, server_slug=server_slug, actor=mcp_actor,
                 )
             except httpx.TimeoutException:
                 return JSONResponse(
