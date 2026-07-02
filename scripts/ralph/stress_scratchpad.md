@@ -91,6 +91,15 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      G23 DONE 2026-07-02: R2 false-positive sweep + regression freeze (test-only). Input-side injection
+        detection is now SATURATED — all 14 structural variants (whitespace/tab/comma/punct/multi-space/
+        markdown/code-block/html-comment/mixed-case/nbsp/emoji-separated) still block. Froze 8 FP-floor cases
+        (benign dev content must ALLOW: security vocab in benign context, UUID/git-SHA, accents/CJK prose) +
+        5 structural-robustness block cases. Golden 116 passed/7 skipped 3x. INFRA NOTE: control plane (8100)
+        unhealthy this session -> R6 frontend Playwright polish blocked (frontend 8180 up, but auth/API need
+        control). KNOWN-CONSERVATIVE FPs (NOT bugs, fail-safe; Tier-2 disambiguates in prod, do NOT weaken):
+        (1) benign question literally containing "ignore all previous instructions" blocks; (2) card/phone-
+        SHAPED order-id/SKU numbers (4111-1111-1111-1111, 800-555-0100) redact.
       G22 DONE 2026-07-02: nested-encoding prompt laundering. Transport decode was single-depth, so double/
         triple-base64 and base64-of-hex payloads decoded once to another encoded blob and the injection/PII was
         never surfaced (double-b64 injection -> allow; double-b64 SSN -> detect_pii False). Fixed in scanner.py
