@@ -338,6 +338,7 @@ function MCPConnectorPanelInner() {
   // connection + tool-discovery attempt; only close after tools are discovered.
   const [addConnecting, setAddConnecting] = useState(false);
   const [addConnectError, setAddConnectError] = useState(null);
+  const [addConnectErrorCode, setAddConnectErrorCode] = useState(null); // stable client-facing code (CP17)
   const [addServerId, setAddServerId] = useState(null); // created row id (retry re-syncs it)
 
   /* ── OAuth upstream authorization ── */
@@ -503,6 +504,7 @@ function MCPConnectorPanelInner() {
   const addServer = async () => {
     setError(null);
     setAddConnectError(null);
+    setAddConnectErrorCode(null);
     try {
       // Step 1 — create the registration (skip if a prior attempt already created
       // it and only the connection failed; a retry then just re-connects).
@@ -570,6 +572,9 @@ function MCPConnectorPanelInner() {
             ? `Connection failed: ${syncErr}`
             : "Connected, but the server exposed no tools. Check the command / URL / auth and retry."
         );
+        // CP17: surface the STABLE client-facing error code (the message already
+        // carries the branded summary + correlation "(Ref: …)").
+        setAddConnectErrorCode(syncData.error_code || null);
         const httpOAuthPending =
           addForm.auth_type === "oauth" &&
           (addForm.transport === "streamable-http" || addForm.transport === "sse");
@@ -587,6 +592,7 @@ function MCPConnectorPanelInner() {
       }
     } catch (e) {
       setAddConnectError(`Add server failed: ${e.message}`);
+      setAddConnectErrorCode(null);
       toast(`Add server failed: ${e.message}`, { tone: "error" });
     } finally {
       setAddSaving(false);
@@ -602,6 +608,7 @@ function MCPConnectorPanelInner() {
     }
     setAddServerId(null);
     setAddConnectError(null);
+    setAddConnectErrorCode(null);
     setAddForm(makeEmptyAddForm());
     setAddOpen(false);
   };
@@ -1490,7 +1497,7 @@ function MCPConnectorPanelInner() {
           icon={Server}
           title="No MCP servers registered yet"
           description='Click "Register Server" to connect an MCP server for centralized discovery and governance.'
-          action={<Button onClick={() => { setAddServerId(null); setAddConnectError(null); setAddOpen(true); }}><Plus className="w-4 h-4" /> Register Server</Button>}
+          action={<Button onClick={() => { setAddServerId(null); setAddConnectError(null); setAddConnectErrorCode(null); setAddOpen(true); }}><Plus className="w-4 h-4" /> Register Server</Button>}
         />
       ) : (
         <div className="grid gap-3">
@@ -1790,7 +1797,14 @@ function MCPConnectorPanelInner() {
         <DialogFooter>
           <div className="flex-1 min-w-0">
             {addConnectError && (
-              <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">{addConnectError}</p>
+              <div role="alert">
+                <p className="text-sm text-rose-600 dark:text-rose-400">{addConnectError}</p>
+                {addConnectErrorCode && (
+                  <p className="mt-0.5 text-xs font-mono text-rose-500/80 dark:text-rose-400/70">
+                    Error code: {addConnectErrorCode}
+                  </p>
+                )}
+              </div>
             )}
           </div>
           <Button variant="secondary" onClick={cancelAdd} disabled={addSaving || addConnecting}>Cancel</Button>

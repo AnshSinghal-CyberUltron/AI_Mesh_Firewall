@@ -76,3 +76,18 @@ imports `ai_mesh_shared` (repo `shared/` on path). DB falls back to sqlite only 
 - `mcp_proxy.py:1838` is a PII-block **event recorder** (`decision="block"`), not a client error leak.
 - VERIFY: `python3 scripts/ralph/mcp_page_cp16_clean_error.py` (direct control API; http_405 + stdio
   bad-command → clean branded + ref, `leaks=[]`). Client error CODE + dev debug view = CP17/CP18.
+
+## Stable client-facing MCP error codes (CP17)
+- `_classify_sync_error(low)` (views.py) maps a raw error → `(code, branded summary)`. The **codes are
+  a public contract** (MCP_AUTH_FAILED / MCP_EGRESS_DENIED / MCP_OUT_OF_MEMORY / MCP_SERVER_CRASHED /
+  MCP_IMAGE_UNAVAILABLE / MCP_TIMEOUT / MCP_START_FAILED / MCP_UNAVAILABLE) — the message wording may
+  change, the code must not. **Order matters:** OOM (exit -9 / 137), crash (exit -6 / 134 / sigabrt),
+  and image-missing are matched BEFORE the generic "exited with code" branch (those raw strings also
+  contain "exited with code").
+- `SyncError(str)` (views.py) is a `str` subclass carrying `.code` + `.ref`. It is returned by
+  `_sanitize_sync_error`, so `last_sync_error = sync_error` stores the message, `.lower()` heuristics
+  scan the message, `json`/DRF serialize it as the message — while `_resync_server_tools` and the sync
+  view read `.code`/`.ref` to emit `error_code` + `correlation_id`. Do NOT downcast it to `str()` before
+  the response reads its attributes.
+- The OAuth refresh-fail path (`_ensure_oauth_token_fresh`) must route its `{exc}` through
+  `_sanitize_sync_error` — never interpolate the raw exception into `last_sync_error`.

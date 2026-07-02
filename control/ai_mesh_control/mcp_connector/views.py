@@ -374,9 +374,16 @@ def _ensure_oauth_token_fresh(server) -> bool:
         return True
     except Exception as exc:  # noqa: BLE001
         logger.error("OAuth token refresh failed for %s: %s", server.server_slug, exc)
+        # Do NOT interpolate the raw exception into the client-facing message
+        # (it can leak token-endpoint URLs / provider error bodies). Route it
+        # through the sanitizer for a clean auth message + correlation ref. (CP17)
         _mark_needs_reauth(
             server,
-            f"OAuth token refresh failed ({exc}) — re-authenticate this server.",
+            _sanitize_sync_error(
+                f"oauth token refresh failed: {exc}",
+                org_slug=getattr(getattr(server, "organization", None), "slug", ""),
+                server_slug=getattr(server, "server_slug", ""),
+            ),
         )
         return False
 
@@ -404,36 +411,104 @@ def _clear_needs_reauth(server) -> None:
         logger.error("Failed to clear needs_reauth for %s: %s", server.server_slug, exc)
 
 
-def _sanitize_sync_error(raw, *, org_slug: str = "", server_slug: str = "") -> str:
-    """Map a raw internal MCP error to a clean, branded, NON-revealing client message.
+# Stable, client-facing MCP sync error codes. These are part of the public
+# contract (documented, referenced by support): the wording of a message may
+# change, the CODE does not. Keep in sync with docs/mcp/HARDENING_CHANGELOG.md
+# and the frontend inline-error renderer.
+MCP_ERR_AUTH = "MCP_AUTH_FAILED"
+MCP_ERR_EGRESS = "MCP_EGRESS_DENIED"
+MCP_ERR_OOM = "MCP_OUT_OF_MEMORY"
+MCP_ERR_CRASH = "MCP_SERVER_CRASHED"
+MCP_ERR_IMAGE = "MCP_IMAGE_UNAVAILABLE"
+MCP_ERR_TIMEOUT = "MCP_TIMEOUT"
+MCP_ERR_START = "MCP_START_FAILED"
+MCP_ERR_UNAVAILABLE = "MCP_UNAVAILABLE"
+
+
+class SyncError(str):
+    """A sanitized, client-facing sync-error string that also carries a stable
+    error ``code`` and a correlation ``ref``.
+
+    It subclasses ``str`` so every existing consumer keeps working unchanged —
+    the ``last_sync_error`` CharField stores the human message, the
+    ``needs_reauth`` ``.lower()`` heuristics scan the message, ``sync_error or ""``
+    is truthy, and DRF/``json`` serialize it as the plain message. New consumers
+    (the sync API response, the dev debug view) read ``.code`` / ``.ref``.
+    """
+
+    code: str
+    ref: str
+
+    def __new__(cls, message: str, code: str, ref: str):
+        obj = super().__new__(cls, message)
+        obj.code = code
+        obj.ref = ref
+        return obj
+
+
+def _classify_sync_error(low: str) -> tuple[str, str]:
+    """Map a lower-cased raw error to a (stable code, branded summary).
+
+    Order matters: the specific internal-failure fingerprints (OOM, crash,
+    image-missing) are checked BEFORE the generic "exited with code" branch,
+    because those raw messages also contain "exited with code".
+    """
+    if any(k in low for k in ("re-authenticate", "re-authentication",
+                              "unauthorized", "invalid token", "invalid_token",
+                              "forbidden", " 401", " 403", "auth")):
+        return MCP_ERR_AUTH, ("The MCP server rejected authentication. Check the "
+                              "credentials or re-authorize the connection, then retry.")
+    if "egress denied" in low or "allowlist" in low or "not permitted" in low:
+        return MCP_ERR_EGRESS, ("The MCP server host is not permitted by your "
+                                "organization's egress policy.")
+    # OOM: SIGKILL (exit -9 / signal 9) or container OOM-kill (exit 137 = 128+9).
+    if any(k in low for k in ("code -9", "signal 9", "sigkill", "out of memory",
+                              "oom", "code 137", "exit 137", "exitcode 137")):
+        return MCP_ERR_OOM, ("The MCP server ran out of memory while starting. It "
+                             "may be too resource-intensive for the current limits; "
+                             "try a lighter configuration or contact support.")
+    # Hard crash: SIGABRT (exit -6 / signal 6) or container abort (exit 134 = 128+6).
+    if any(k in low for k in ("code -6", "signal 6", "sigabrt", "aborted",
+                              "code 134", "exit 134", "core dumped")):
+        return MCP_ERR_CRASH, ("The MCP server crashed while starting. Verify the "
+                               "command and package are compatible, then retry.")
+    # Container image not available (pull failure / missing image / manifest).
+    if any(k in low for k in ("no such image", "image not found", "not found: image",
+                              "manifest unknown", "pull access denied",
+                              "imagepullbackoff", "no such file or directory: image",
+                              "unable to find image")):
+        return MCP_ERR_IMAGE, ("The MCP server's runtime image is not available. "
+                               "Please retry shortly or contact support.")
+    if any(k in low for k in ("timeout", "timed out", "did not respond",
+                              "not ready", "provisioning", "starting up")):
+        return MCP_ERR_TIMEOUT, ("The MCP server did not respond in time. Please "
+                                 "retry in a moment.")
+    if any(k in low for k in ("exited with code", "failed to start", "process exited",
+                              "missing host dependency", "wrong package",
+                              "stdout stream closed", "did not start")):
+        return MCP_ERR_START, ("The MCP server could not be started. Verify the "
+                               "command and package name, then retry.")
+    return MCP_ERR_UNAVAILABLE, ("The MCP server could not be reached or returned an "
+                                 "error. Verify the configuration and retry.")
+
+
+def _sanitize_sync_error(raw, *, org_slug: str = "", server_slug: str = "") -> "SyncError":
+    """Map a raw internal MCP error to a clean, branded, NON-revealing client error.
 
     The raw detail (exit codes, upstream response bodies, sandbox-agent internals,
-    host-dependency hints, server keys) is kept in the SERVER logs under a short
-    correlation ref; the client sees only an actionable, brand-safe summary + the
-    ref. (CP16 sanitize; stable client error code + dev debug view = CP17/CP18.)
+    host-dependency hints, server keys) is kept ONLY in the SERVER logs under a
+    short correlation ``ref``; the client sees an actionable, brand-safe summary,
+    a stable error ``code``, and the ``ref``. Returns a :class:`SyncError` (a
+    ``str`` carrying ``.code`` + ``.ref``). (CP16 sanitize + CP17 code/mapping;
+    dev debug view keyed by ref = CP18.)
     """
     ref = uuid_mod.uuid4().hex[:12]
+    code, summary = _classify_sync_error(str(raw).lower())
     logger.warning(
-        "MCP sync error [ref=%s] org=%s server=%s: %s",
-        ref, org_slug, server_slug, str(raw)[:1000],
+        "MCP sync error [ref=%s code=%s] org=%s server=%s: %s",
+        ref, code, org_slug, server_slug, str(raw)[:1000],
     )
-    low = str(raw).lower()
-    if any(k in low for k in ("re-authenticate", "unauthorized", "invalid token",
-                              "forbidden", " 401", " 403", "auth")):
-        summary = ("The MCP server rejected authentication. Check the credentials "
-                   "or re-authorize the connection, then retry.")
-    elif any(k in low for k in ("exited with code", "failed to start",
-                                "process exited", "did not respond", "not ready")):
-        summary = ("The MCP server could not be started. Verify the command and "
-                   "package name, then retry.")
-    elif "egress denied" in low or "allowlist" in low:
-        summary = "The MCP server host is not permitted by the egress policy."
-    elif any(k in low for k in ("timeout", "timed out", "provisioning", "starting")):
-        summary = "The MCP server did not respond in time. Please retry in a moment."
-    else:
-        summary = ("The MCP server could not be reached or returned an error. "
-                   "Verify the configuration and retry.")
-    return f"{summary} (Ref: {ref})"
+    return SyncError(f"{summary} (Ref: {ref})", code, ref)
 
 
 def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
@@ -609,6 +684,10 @@ def _resync_server_tools(server, org) -> dict:
         "synced": len(server_tool_names),
         "pruned": pruned,
         "error": sync_error,
+        # Stable, client-facing error code + correlation id (present only on a
+        # sanitized failure; a raw string or None carries neither). (CP17)
+        "error_code": getattr(sync_error, "code", None),
+        "correlation_id": getattr(sync_error, "ref", None),
         "connection_status": server.connection_status,
     }
 
@@ -1943,7 +2022,12 @@ class MCPServerToolListView(APIView):
         return Response({
             "synced": result["synced"],
             "pruned": pruned,
-            "error": sync_error,
+            "error": str(sync_error) if sync_error else sync_error,
+            # Stable client-facing error code + correlation id for support/dev
+            # cross-reference (CP17). None on success. The message wording may
+            # change; the code is the stable contract.
+            "error_code": result.get("error_code"),
+            "correlation_id": result.get("correlation_id"),
             "connection_status": server.connection_status,
             "tools": MCPToolRegistrationSerializer(tools, many=True).data,
         })
