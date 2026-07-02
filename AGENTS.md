@@ -227,7 +227,8 @@
     the SSE branch now buffers+scans those finite methods, while notifications/subscriptions still stream
     through (no bounded result; buffering could hang). Non-streaming JSON branch already scanned any result.
     Files mcp_proxy.py + test_mcp_bare_proxy_scan.py (+2). Gate: 24 bare-proxy + 1085 broad sweep passed.
-  - CHG-0040 (2026-07-02) — G2 item 2 (last unscanned egress vector): the ext-proxy scan only inspected the
+  - CHG-0043 (2026-07-02) [renumbered from CHG-0040 — id collided with the P4.13 Blocker 2 entry below;
+    content unchanged] — G2 item 2 (last unscanned egress vector): the ext-proxy scan only inspected the
     `result`; a JSON-RPC ERROR response (no result) egressed UNSCANNED, so an untrusted server could leak a
     secret in an error message (e.g. a connection string). Both ext-proxy paths (non-streaming +
     _scan_reframe_sse_tool_result) now scan `error` when there's no result — mask any detected secret/PII
@@ -245,6 +246,16 @@
     so ws:// registers (serializer SSRF guard unchanged); ws-everything.stub in MCP_ALLOW_INTERNAL_HOSTS;
     ws stub echo prefix fixed. 4/4 transports PASS ROUNDS=3; gateway ss :443 empty. Cross-seam (control,
     iter39). Evidence mcp-parallel/findings/p4-13/RECHECK_ITER39.md.
+  - CHG-0042 (2026-07-02) — G3/1.4 (OAuth secret at rest): OAuth flow state (PKCE code_verifier, CSRF
+    state) + access/refresh tokens were persisted to Redis as PLAINTEXT JSON. Added optional Fernet
+    at-rest encryption in mcp_oauth_proxy.py (_oauth_cipher/_enc_dumps/_enc_loads, gated on env
+    MCP_OAUTH_ENCRYPTION_KEY): default OFF = byte-unchanged plaintext (no behaviour change); key set =
+    new writes encrypted (gAAAAA Fernet prefix) while legacy plaintext still reads (prefix-detected, no
+    token orphaned); invalid key → logged warning + safe plaintext fallback (never breaks the flow).
+    Wired all 4 sites: _flow_save/_flow_pop/_token_save/_token_load. OAuth callback re-audited CLEAN:
+    CSRF state + PKCE verifier restored via _flow_pop, token endpoint via _assert_safe_url (SSRF),
+    follow_redirects=False. Files mcp_oauth_proxy.py + test_mcp_oauth_encryption.py (new, +4). Gate: 4
+    oauth-enc + 1092 broad sweep passed.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
@@ -272,3 +283,5 @@
 <!-- mcp-page-ralph --> MCP-PAGE-CP03 | mcp_page_cp03_allfields_repro.mjs (new) + mcp_page_typesim.mjs (bounded click timeout) | WHAT: per-field type-sim record | WHY: CP03 record buggy fields | NOW DOES: args=SEP-DROP(0/3), env=SEP-DROP(0/1); name/url/description/command/bearer=clean; focus KEPT (not remount). Modal field map: Args ph "-y, @playwright/mcp@latest", Env ph "GITHUB_TOKEN=ghp_xxx", Command ph "npx". Two fields drop commas → common onChange (CP04 target) | touched: none (MCPConnectorPanel Args+Env onChange = CP05 fix) | VERIFY: node scripts/ralph/mcp_page_cp03_allfields_repro.mjs → buggyFields [args,env]
 
 <!-- mcp-page-ralph --> MCP-PAGE-CP04 | frontend/src/components/MCPConnectorPanel.jsx (analysis) | WHAT: ROOT CAUSE = controlled-input-bound-to-parsed-collection, NOT a remount | Args (:1499-1500): value=args.join(", ") + onChange split(",").map(trim).filter(Boolean) → typing "," makes ["a",""]→filter→["a"]→re-render "a" (comma erased); trim kills spaces. Env (:1509-1520): same with object round-trip | FIX (CP05): store raw text in state, parse to array/object only on submit (payload @168-169) not per keystroke | VERIFY(after fix): cp03 args/env → clean
+
+<!-- mcp-page-ralph --> MCP-PAGE-CP05 | frontend/src/components/MCPConnectorPanel.jsx | WHAT: FIX modal separator-drop — Args/Env inputs hold RAW TEXT (args_text/env_text), parsed to args[]/env_vars{} only at submit (buildServerPayload), never per keystroke; fallback to array/object for presets | WHY: CP04 array/object round-trip erased typed commas/spaces | NOW DOES: VERIFIED — CP03 buggyFields [], CP02 "a,b,c --flag,x" commas 3/3, vite build green (6.69s) | touched: MCPConnectorPanel.jsx (B1 logic intact) | VERIFY: cp03 [] + cp02 3/3 + npm run build

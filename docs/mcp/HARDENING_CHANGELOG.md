@@ -1295,7 +1295,11 @@ the prod compose/manifests is tracked under G3 item 12.
   `notifications/*` SSE still streams through unbuffered — `aread` not awaited). Broad sweep
   `ai_mesh_gateway/tests` → 1085 passed, 0 failed.
 
-### CHG-0040 — Scan JSON-RPC ERROR content on the external proxy (G2 item 2 — last unscanned egress vector)
+### CHG-0043 — Scan JSON-RPC ERROR content on the external proxy (G2 item 2 — last unscanned egress vector)
+> **Note (2026-07-02):** renumbered from **CHG-0040** to resolve a change-id collision — another session
+> independently used CHG-0040 for "Accept ws:// / wss:// on MCPServerRegistration.url (P4.13 Blocker 2)"
+> (see the earlier `### CHG-0040` entry above). Code comments in `mcp_proxy.py` /
+> `test_mcp_bare_proxy_scan.py` were updated to match. Content below is unchanged.
 - **Date:** 2026-07-02
 - **Scratchpad item:** G2 item 2 (byte-verified result redaction) — extends the ext-proxy egress scan from
   the `result` to the `error` field.
@@ -1389,3 +1393,5 @@ the prod compose/manifests is tracked under G3 item 12.
   sweep `ai_mesh_gateway/tests` → 1092 passed, 0 failed.
 
 ### 2026-07-02 — MCP-PAGE-CP04 | frontend/src/components/MCPConnectorPanel.jsx (analysis) | WHAT: ROOT CAUSE = controlled-input-bound-to-parsed-collection, NOT a remount | Args (:1499-1500): value=args.join(", ") + onChange split(",").map(trim).filter(Boolean) → typing "," makes ["a",""]→filter→["a"]→re-render "a" (comma erased); trim kills spaces. Env (:1509-1520): same with object round-trip | FIX (CP05): store raw text in state, parse to array/object only on submit (payload @168-169) not per keystroke | VERIFY(after fix): cp03 args/env → clean
+
+### 2026-07-02 — MCP-PAGE-CP05 | frontend/src/components/MCPConnectorPanel.jsx | WHAT: FIX modal separator-drop — Args/Env inputs hold RAW TEXT (args_text/env_text), parsed to args[]/env_vars{} only at submit (buildServerPayload), never per keystroke; fallback to array/object for presets | WHY: CP04 array/object round-trip erased typed commas/spaces | NOW DOES: VERIFIED — CP03 buggyFields [], CP02 "a,b,c --flag,x" commas 3/3, vite build green (6.69s) | touched: MCPConnectorPanel.jsx (B1 logic intact) | VERIFY: cp03 [] + cp02 3/3 + npm run build

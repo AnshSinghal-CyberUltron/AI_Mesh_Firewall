@@ -162,11 +162,31 @@ const buildServerPayload = (form) => {
     auth_query_param_value: form.auth_query_param_value,
   };
 
-  // Include stdio-specific fields
+  // Include stdio-specific fields.
+  // Args/env are parsed from the RAW TEXT buffers (args_text/env_text) at submit —
+  // never per keystroke — so commas/spaces/newlines survive typing (bug #1 fix).
+  // Fall back to the array/object when a preset set them without a text buffer.
   if (form.transport === "stdio") {
     payload.command = form.command || "";
-    payload.args = Array.isArray(form.args) ? form.args : [];
-    payload.env_vars = form.env_vars && typeof form.env_vars === "object" ? form.env_vars : {};
+    payload.args =
+      typeof form.args_text === "string"
+        ? form.args_text.split(",").map((s) => s.trim()).filter(Boolean)
+        : Array.isArray(form.args)
+        ? form.args
+        : [];
+    payload.env_vars =
+      typeof form.env_text === "string"
+        ? (() => {
+            const vars = {};
+            form.env_text.split("\n").forEach((line) => {
+              const idx = line.indexOf("=");
+              if (idx > 0) vars[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+            });
+            return vars;
+          })()
+        : form.env_vars && typeof form.env_vars === "object"
+        ? form.env_vars
+        : {};
   }
 
   if (form.auth_type === "authheaders") {
@@ -1496,8 +1516,18 @@ function MCPConnectorPanelInner() {
                 <label className="block text-sm font-medium mb-1">Arguments (comma-separated)</label>
                 <input
                   className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
-                  value={Array.isArray(addForm.args) ? addForm.args.join(", ") : ""}
-                  onChange={(e) => setAddForm({ ...addForm, args: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
+                  // RAW-TEXT source of truth (bug #1 fix): the input holds the exact
+                  // typed string so commas/spaces are never dropped by an array
+                  // round-trip; parsed to args[] only at submit (buildServerPayload).
+                  // Fall back to the array join when a preset populated args[].
+                  value={
+                    addForm.args_text !== undefined
+                      ? addForm.args_text
+                      : Array.isArray(addForm.args)
+                      ? addForm.args.join(", ")
+                      : ""
+                  }
+                  onChange={(e) => setAddForm({ ...addForm, args_text: e.target.value })}
                   placeholder="-y, @playwright/mcp@latest"
                 />
               </div>
@@ -1506,19 +1536,16 @@ function MCPConnectorPanelInner() {
                 <textarea
                   className="w-full border rounded-lg px-3 py-2 text-sm font-mono dark:bg-slate-800 dark:border-slate-600"
                   rows={2}
+                  // RAW-TEXT source of truth (bug #1 fix): hold the exact typed text so
+                  // separators/newlines survive; parsed to env_vars{} only at submit.
                   value={
-                    addForm.env_vars && typeof addForm.env_vars === "object"
+                    addForm.env_text !== undefined
+                      ? addForm.env_text
+                      : addForm.env_vars && typeof addForm.env_vars === "object"
                       ? Object.entries(addForm.env_vars).map(([k, v]) => `${k}=${v}`).join("\n")
                       : ""
                   }
-                  onChange={(e) => {
-                    const vars = {};
-                    e.target.value.split("\n").forEach((line) => {
-                      const idx = line.indexOf("=");
-                      if (idx > 0) vars[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-                    });
-                    setAddForm({ ...addForm, env_vars: vars });
-                  }}
+                  onChange={(e) => setAddForm({ ...addForm, env_text: e.target.value })}
                   placeholder="GITHUB_TOKEN=ghp_xxx"
                 />
               </div>
