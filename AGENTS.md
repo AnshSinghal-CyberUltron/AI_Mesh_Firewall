@@ -353,6 +353,16 @@
     standalone URLs/pkg-specs untouched. +5 tests. Gate: 31 stdio-pkg + 106 broker passed (no test depends on
     the log format). Follow-up: URL-embedded creds in a standalone arg (separate vector). Evidence
     mcp-parallel/findings/backstop-p13-broker-agent-log-hygiene/.
+  - CHG-0054 (2026-07-02) — G2 item 2 / 1.4 (HIGH secret leak, found via adversarial verification): redact_all
+    masked ONLY the -----BEGIN PRIVATE KEY----- header line (-> [PRIVATE_KEY]), leaving the base64 key BODY +
+    -----END----- intact — the body IS the secret, and the old pattern only matched RSA (EC/DSA/OPENSSH keys
+    egressed raw entirely). Root cause: PII_PATTERNS private_key_header runs first + masks the header, so the
+    later header-only private_key_block never matched the multi-line body. FIX: private_key_header now matches
+    the ENTIRE PEM block (generic RSA/EC/DSA/OPENSSH prefix; BEGIN..END, or BEGIN..base64-run if truncated) ->
+    whole key -> [PRIVATE_KEY]; prose "loads a private key" not redacted (no FP). NOTE: aidefence has no
+    PEM-key recognizer (piiFound:false on raw AND redacted) — confirmation via gateway detect_pii + bytes.
+    patterns.py, +5 tests. Gate: 5 pk-redaction + 74 redaction-adjacent + 1122 gateway passed. Evidence
+    mcp-parallel/findings/backstop-p2-private-key-body-leak/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

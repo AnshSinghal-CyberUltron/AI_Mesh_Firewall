@@ -102,6 +102,18 @@
       blocked. +2 tests. Gate: 41 scan-orchestrator/target + 1100 gateway passed (ZERO spurious blocks).
       With CHG-0003 + CHG-0046 the redaction path is now fail-closed on scan-error, setter-no-op, AND
       non-string shapes. Evidence: mcp-parallel/findings/backstop-p2-noop-scrub-failclosed/finding.md.
+      CHG-0054 (2026-07-02, HIGH secret leak — found via adversarial 1.4 verification w/ aidefence oracle):
+      redact_all masked ONLY the -----BEGIN PRIVATE KEY----- header line (-> [PRIVATE_KEY]), leaving the base64
+      key BODY + -----END----- intact — the body IS the secret, and [PRIVATE_KEY] is trivially replaced with
+      the fixed BEGIN line to reconstruct the key. Old pattern only matched RSA (EC/DSA/OPENSSH egressed raw
+      entirely). Root cause: PII_PATTERNS private_key_header runs first + masks the header, so the later
+      header-only private_key_block never matched the multi-line body. FIX: private_key_header now matches the
+      ENTIRE PEM block (generic RSA/EC/DSA/OPENSSH prefix; BEGIN..END or BEGIN..base64-run if truncated) ->
+      [PRIVATE_KEY]; prose "loads a private key" not redacted (no FP). ORACLE NOTE: aidefence has NO PEM-key
+      recognizer (piiFound:false on raw AND redacted) — NOT a substitute oracle; confirmed via gateway
+      detect_pii + byte inspection. patterns.py + test_private_key_redaction.py (+5). Gate: 5 pk-redaction +
+      74 redaction-adjacent + 1122 gateway passed. Evidence: mcp-parallel/findings/backstop-p2-private-key-body-leak/finding.md.
+      FOLLOW-UP: detect_secrets inventory omits private keys (detect_pii covers them) — cross-plane unification.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER

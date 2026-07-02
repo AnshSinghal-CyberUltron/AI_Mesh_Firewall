@@ -384,7 +384,16 @@ PII_PATTERNS: Dict[str, str] = {
     # output guard masked only the AKIA id and egressed the secret in cleartext.
     "aws_secret_access_key": r"(?i)\baws[_-]?secret[_-]?access[_-]?key\b\s*[:=]\s*[\"']?[A-Za-z0-9/+=]{16,}",
     "github_token": r"\bghp_[a-zA-Z0-9]{36}\b",
-    "private_key_header": r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----",
+    # CHG-0054: match the ENTIRE PEM block (BEGIN header + base64 BODY + END footer),
+    # not just the BEGIN line — else redact_all masked only the header and the key
+    # MATERIAL (the actual secret) egressed intact. Generic key-type prefix covers
+    # RSA / EC / DSA / OPENSSH / ENCRYPTED / plain (the old pattern only matched RSA).
+    # Falls back to consuming the base64 body when the END marker is absent (truncated
+    # key) so the material can never survive redaction.
+    "private_key_header": (
+        r"-----BEGIN\s+(?:[A-Z0-9]+\s+)?PRIVATE\s+KEY-----"
+        r"(?:[\s\S]*?-----END\s+(?:[A-Z0-9]+\s+)?PRIVATE\s+KEY-----|[A-Za-z0-9+/=\s]*)"
+    ),
 }
 
 # Instructional / interrogative prose words that frequently follow a bare
