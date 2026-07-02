@@ -381,3 +381,11 @@
       []. All 5 useFirewallData consumers safe (soc-kpis timing unchanged; only feed-based values faster).
       MCP claim (claude-ralph-stress-iter1-R0) re-checked: STILL active — MCPConnectorPanel remains THE
       COMPLETE blocker. Everything else in remit continues to verify clean.
+      [iter+] Exhaustive verify-only sweeps (no code change): (1) overflow @375 both themes — 1-1 + 1-3 (never
+      checked at 375 before) CLEAN (0 real offenders, 12px benign gutter); ONLY overflow anywhere = 1-4
+      MCPConnectorPanel server card (904px, mainScroll 529, "cp09-ens8do…", near "MCP Guardrails"),
+      never_edit. So EVERY editable module surface is overflow-clean — blocker is precisely the one owned
+      panel. (2) console/network @1440 all 7 tabs — 0 pageerrors, 0 console errors, 0 failed requests.
+      MCP claim (claude-ralph-stress-iter1-R0) re-checked = active. Re-confirmed the server-card overflow
+      root cause: bare `grid gap-3` at MCPConnectorPanel L1528 (no grid-cols-1/min-w-0) → cards size to
+      max-content; break-all on URL insufficient (header row forces width).
