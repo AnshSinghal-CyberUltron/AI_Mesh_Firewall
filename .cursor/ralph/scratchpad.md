@@ -30,7 +30,7 @@
 
 ## P6 — Verify + hold
 - [x] 9. Live gate 3× green (23 passed each run) against rebuilt gateway container.
-- [x] 10. Offline CI gate: 22 passed, 7 skipped (`GATEWAY_LIVE=0`).
+- [x] 10. Offline CI gate: 16 passed, 7 skipped (`GATEWAY_LIVE=0`; 13 enforcement + 3 unit golden).
 - [x] 11. Session cache in conftest (`.live_session.json`) avoids login 429 between gate runs.
 
 ## Iteration 4 evidence
@@ -38,3 +38,10 @@
 - Rebuilt container has `_strip_for_redos_probe`; `policy_count: 45` (no re-seed needed).
 - **Live case 02 chat:** policy stage `redact` + MRN matched rules ✅; tier-2 advisory `flag` on redacted prompt → `final_action=flag` (golden case 02 still uses unit `phi_policy` for contract `redact`).
 - `GATEWAY_LIVE=1 pytest ...` → **23 passed ×3** (post session-cache fix).
+
+## Iteration 5 verification (re-check)
+- All scratchpad items [x]; owned artifacts present.
+- `GATEWAY_LIVE=0` → **16 passed, 7 skipped**; `GATEWAY_LIVE=1` → **23 passed ×3**.
+- P3b claim **released**; C0 coordination claim active (expected).
+- Case 02 live tier-2 `flag` after policy redact documented in CURRENT_BEHAVIOR.md; golden uses unit `phi_policy` by design.
+- Branch `cursor/chat-pipeline-freeze`: **4 commits** ahead of main (unmerged).
