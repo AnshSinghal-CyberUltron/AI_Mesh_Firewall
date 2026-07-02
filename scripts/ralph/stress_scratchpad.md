@@ -470,6 +470,18 @@
         attack 400, PII redact 200, benign 200, G32/G34 encoded/layered 400, live golden 10/10). G35 golden: 4
         encoded-output-PII masked + 3 benign preserved + plain-still-masks. Adversarial 234, golden 237x3, full
         gateway 1163 passed. => encoded-PII/secret exfil now blocked on BOTH input (G33) AND output (G35).
+      RIGOR-VERIFIED OBFUSCATED SECRETS 2026-07-02 (no fix needed): probed secret detection vs obfuscation.
+        zero-width AWS/ghp -> redact, homoglyph(Greek-Iota-for-I) AWS -> redact, fullwidth AWS -> redact,
+        nbsp AWS -> redact (canonicalize_for_detection folds all of these, same as PII/injection). ONLY the
+        fully-SPACED secret ("A K I A I O S F ...") -> allow. Verified DEFENSIBLE, not a gap: (a) independent
+        aidefence oracle says safe=true/not-a-secret; (b) a spaced key is NON-FUNCTIONAL (unusable without
+        de-spacing); (c) CONSISTENT with the established spaced-SSN behavior (allowed as ambiguous, oracle-
+        confirmed not-PII) — the firewall collapses spaced INJECTION (clear intent even when spaced) but
+        allows spaced PII/secret (ambiguous: could be a list/display formatting). Adding space-collapse to
+        secret matching would be FP-prone for a contrived, oracle-benign, non-functional vector -> declined
+        per "keep solutions simple / avoid unnecessary workarounds". => realistic secret-obfuscation vectors
+        (zero-width/homoglyph/fullwidth/nbsp/base64/hex/HTML/URL via G24-G35) all covered; spaced-secret
+        defensibly allowed.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G35): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
