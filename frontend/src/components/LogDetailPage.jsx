@@ -3,15 +3,10 @@ import {
   ArrowLeft, Eye, Clock, Activity, Download, Share2, Copy,
   Shield, Server, CheckCircle, TrendingUp, ChevronDown,
 } from "lucide-react";
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { StageTimeline } from "./simulator/StageTimeline";
 import { copyToClipboard } from "../lib/clipboard";
 import { getModuleLogCharts } from "./module-specific-log-charts";
-import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 
 function normalizeLogDetail(logData) {
@@ -76,7 +71,7 @@ function normalizeLogDetail(logData) {
     responseText,
     pipelineTrace,
     pipelineStages,
-    timestamp: logData?.timestamp || raw?.timestamp || new Date().toISOString(),
+    timestamp: logData?.timestamp || raw?.timestamp || "",
     duration: meta?.latency_ms ? `${meta.latency_ms}ms` : (logData?.duration || formatDuration(meta?.latency_ms)),
     status: logData?.status || logData?.action || raw?.action || "allowed",
     action: logData?.action || raw?.action || "ALLOWED",
@@ -92,6 +87,14 @@ function normalizeLogDetail(logData) {
 const _STAGE_SEVERITY = { block: 3, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
 const _STAGE_SCORE = { block: 90, error: 90, redact: 75, rewrite: 75, flag: 60, reroute: 40 };
 const ACTION_TONE = { allow: "emerald", monitor: "emerald", pass: "emerald", redact: "blue", rewrite: "blue", flag: "amber", reroute: "amber", block: "red", error: "red" };
+
+// Honest timestamp: a log missing its timestamp must show "—", never the
+// current wall-clock time (which reads as if the event just happened now).
+function fmtTimestamp(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
+}
 
 function deriveStageVerdict(stages) {
   let action = null, score = 0, severity = -1;
@@ -147,8 +150,6 @@ export function LogDetailPage({ logData, onBack }) {
     pipeline: true, content: true, request: true, response: false, security: false, metadata: false,
   });
   const [copiedField, setCopiedField] = useState(null);
-  const { resolvedTheme } = (typeof useTheme === "function" ? useTheme() : {}) || {};
-  const isDark = resolvedTheme === "dark";
 
   const moduleLogCharts = getModuleLogCharts(detail || logData || {});
   const meta = normalized.meta;
@@ -175,7 +176,15 @@ export function LogDetailPage({ logData, onBack }) {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const timelineData = [{ time: "Event", latency: parseNumeric(duration) }];
+  // Real per-stage latency from the pipeline trace — a single hardcoded
+  // [{ time: "Event", latency }] point was a fake "timeline" that implied a
+  // trend from one value. When there is no stage trace the chart is hidden.
+  const timelineData = pipelineStages
+    .map((s) => ({
+      time: String(s?.name || s?.stage || "").replace(/_/g, " "),
+      latency: Math.round(parseNumeric(s?.latency_ms ?? s?.duration_ms ?? s?.latency)),
+    }))
+    .filter((s) => s.time);
   // Promote the displayed verdict / score / threat to the most-severe pipeline stage
   // when the event's own top-level fields under-report it (see deriveStageVerdict).
   const stageVerdict = deriveStageVerdict(pipelineStages);
@@ -191,23 +200,6 @@ export function LogDetailPage({ logData, onBack }) {
   // Incident ID is a backend alias of Request ID (no separate incident-grouping exists);
   // showing two guaranteed-identical IDs is noise. Only surface it when it truly differs.
   const showIncidentId = Boolean(incidentId) && incidentId !== requestId && incidentId !== String(scanId);
-  const logChartTheme = isDark
-    ? {
-        grid: "#334155",
-        axis: "#94a3b8",
-        tooltipBg: "rgba(15, 23, 42, 0.96)",
-        tooltipBorder: "#475569",
-        tooltipText: "#e5e7eb",
-        hover: "rgba(51, 65, 85, 0.35)",
-      }
-    : {
-        grid: "#cbd5e1",
-        axis: "#64748b",
-        tooltipBg: "#f8fafc",
-        tooltipBorder: "#cbd5e1",
-        tooltipText: "#0f172a",
-        hover: "rgba(226, 232, 240, 0.45)",
-      };
 
   const handleExport = () => {
     const payload = JSON.stringify(detail || logData || {}, null, 2);
@@ -244,13 +236,13 @@ export function LogDetailPage({ logData, onBack }) {
       <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm p-6">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-teal-600 hover:text-teal-700 mb-4 transition-colors"
+          className="flex items-center gap-2 text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 mb-4 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span className="text-sm font-medium">Back to Activity Preview</span>
         </button>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Scan Detail Report</h1>
               <StatusBadge status={effectiveStatus} action={effectiveAction} />
@@ -258,12 +250,12 @@ export function LogDetailPage({ logData, onBack }) {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
               <div className="flex items-center gap-2"><Eye className="w-4 h-4" /><span>Scan ID: {scanId}</span></div>
               <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
-              <div className="flex items-center gap-2"><Clock className="w-4 h-4" /><span>{new Date(timestamp).toLocaleString()}</span></div>
+              <div className="flex items-center gap-2"><Clock className="w-4 h-4" /><span>{fmtTimestamp(timestamp)}</span></div>
               <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
               <div className="flex items-center gap-2"><Activity className="w-4 h-4" /><span>Duration: {duration}</span></div>
               <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
-              <button onClick={() => handleCopy(requestId, "Request ID")} className="flex items-center gap-2 font-mono hover:text-teal-600 transition-colors" title="Copy request ID">
-                <Server className="w-4 h-4" /><span>Request ID: {requestId}</span>{copiedField === "Request ID" && <span className="text-teal-600">✓</span>}
+              <button onClick={() => handleCopy(requestId, "Request ID")} className="flex min-w-0 max-w-full items-center gap-2 font-mono hover:text-teal-600 dark:hover:text-teal-400 transition-colors" title="Copy request ID">
+                <Server className="w-4 h-4 shrink-0" /><span className="truncate">Request ID: {requestId}</span>{copiedField === "Request ID" && <span className="text-teal-600 dark:text-teal-400 shrink-0">✓</span>}
               </button>
               {showIncidentId && (
                 <>
@@ -274,7 +266,7 @@ export function LogDetailPage({ logData, onBack }) {
                 </>
               )}
               {loadingDetail && (
-                <span className="text-xs text-slate-400">Loading full trace…</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Loading full trace…</span>
               )}
             </div>
           </div>
@@ -305,40 +297,21 @@ export function LogDetailPage({ logData, onBack }) {
         <MetricCard icon={Activity} label="Threat Level" value={threatLevel} color="teal" />
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm p-6">
-        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">Request Latency</h3>
-        <SafeResponsiveChart className="h-[220px] w-full">
-          <AreaChart data={timelineData}>
-            <defs>
-              <linearGradient id="colorLatency" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={logChartTheme.grid} strokeOpacity={0.25} />
-            <XAxis dataKey="time" stroke={logChartTheme.axis} tick={{ fontSize: 11, fill: logChartTheme.axis }} />
-            <YAxis stroke={logChartTheme.axis} tick={{ fontSize: 11, fill: logChartTheme.axis }} />
-            <Tooltip
-              cursor={{ fill: logChartTheme.hover }}
-              contentStyle={{
-                backgroundColor: logChartTheme.tooltipBg,
-                border: `1px solid ${logChartTheme.tooltipBorder}`,
-                borderRadius: "8px",
-                color: logChartTheme.tooltipText,
-              }}
-            />
-            <Area
-              type="monotone"
-              dataKey="latency"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              fillOpacity={1}
-              fill="url(#colorLatency)"
-              activeDot={{ r: 4, fill: "#3b82f6", stroke: isDark ? "#0f172a" : "#ffffff", strokeWidth: 2 }}
-            />
-          </AreaChart>
-        </SafeResponsiveChart>
-      </div>
+      {timelineData.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm p-6">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">Pipeline Stage Latency</h3>
+          <SafeResponsiveChart
+            className="h-[220px] w-full"
+            option={{
+              grid: { top: 14, right: 14, bottom: timelineData.length > 4 ? 60 : 30, left: 46 },
+              tooltip: { trigger: "axis", valueFormatter: (v) => `${v} ms` },
+              xAxis: { type: "category", data: timelineData.map((d) => d.time), axisLabel: { fontSize: 11, rotate: timelineData.length > 4 ? 30 : 0, interval: 0 } },
+              yAxis: { type: "value", axisLabel: { fontSize: 11, formatter: "{value} ms" } },
+              series: [{ name: "Latency", type: "bar", barWidth: "55%", itemStyle: { color: "#3b82f6", borderRadius: [3, 3, 0, 0] }, data: timelineData.map((d) => d.latency) }],
+            }}
+          />
+        </div>
+      )}
 
       {/* Module-Specific Log Detail Charts */}
       {moduleLogCharts && moduleLogCharts.charts && moduleLogCharts.charts.length > 0 && (
@@ -422,9 +395,9 @@ export function LogDetailPage({ logData, onBack }) {
               <DataRow label="Request ID" value={requestId} />
               {showIncidentId && <DataRow label="Incident ID" value={incidentId} />}
               <DataRow label="Scan (row) ID" value={String(scanId)} />
-              <DataRow label="Timestamp" value={new Date(timestamp).toLocaleString()} />
-              <DataRow label="Method" value={logData?.method || meta?.method || "POST"} />
-              <DataRow label="Endpoint" value={logData?.endpoint || meta?.endpoint || "/v1/chat/completions"} />
+              <DataRow label="Timestamp" value={fmtTimestamp(timestamp)} />
+              <DataRow label="Method" value={logData?.method || meta?.method || "—"} />
+              <DataRow label="Endpoint" value={logData?.endpoint || meta?.endpoint || "—"} />
               <DataRow label="Source IP" value={meta?.source_ip || logData?.ip || logData?.source_ip || "--"} />
               <DataRow label="User Agent" value={meta?.user_agent || logData?.userAgent || logData?.user_agent || "--"} />
               <DataRow label="Model" value={logData?.model || meta?.model || "--"} />
@@ -546,10 +519,10 @@ function mapThreatLevel(value) {
 }
 
 function StatusBadge({ status, action }) {
-  const allow = { bg: "bg-emerald-100 dark:bg-emerald-800/30", text: "text-emerald-700", dot: "bg-emerald-500" };
-  const block = { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700", dot: "bg-red-500" };
-  const flag = { bg: "bg-amber-100 dark:bg-amber-800/30", text: "text-amber-700", dot: "bg-amber-500" };
-  const redact = { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700", dot: "bg-blue-500" };
+  const allow = { bg: "bg-emerald-100 dark:bg-emerald-800/30", text: "text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" };
+  const block = { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700 dark:text-red-300", dot: "bg-red-500" };
+  const flag = { bg: "bg-amber-100 dark:bg-amber-800/30", text: "text-amber-700 dark:text-amber-300", dot: "bg-amber-500" };
+  const redact = { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700 dark:text-blue-300", dot: "bg-blue-500" };
   // Accept both present- and past-tense verdicts (event action is present-tense:
   // allow/redact/block/flag/reroute; legacy rows used allowed/redacted/…).
   const statusConfig = {
@@ -624,7 +597,7 @@ function ContentBlock({ label, text, onCopy, copied }) {
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">{label}</span>
         {text ? (
-          <button onClick={onCopy} className="text-xs text-teal-600 hover:text-teal-700">{copied ? "Copied!" : "Copy"}</button>
+          <button onClick={onCopy} className="text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300">{copied ? "Copied!" : "Copy"}</button>
         ) : null}
       </div>
       <pre className="whitespace-pre-wrap break-words rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-3 text-xs font-mono text-slate-800 dark:text-slate-200 max-h-72 overflow-auto">
