@@ -429,3 +429,33 @@ the prod compose/manifests is tracked under G3 item 12.
   (item 18), with captured on-the-wire egress bytes cross-checked by an independent `aidefence` oracle.
   This entry proves isolation LIVE at 15-MCP scale with a trustworthy gate; the at-scale-under-chaos proof
   is the remaining work.
+
+### CHG-0014 — LIVE 1.4 redaction-under-load VERIFIED 3× (G5 item 20, real evidence) + harness fixes
+- **Date:** 2026-07-02
+- **Scratchpad item:** G5 item 20 (1.4 guardrails under peak load) — redaction VERIFIED LIVE under
+  concurrency; the true 5k-10k-in-flight run (item 15) + per-actor/tag cases remain.
+- **Files:** `scripts/mcp_live_matrix_harness.py` (PII-in-`message` agents + resilient server-id lookup) ·
+  `mcp-parallel/findings/backstop-p20-redaction-load/redaction_under_load_evidence.json` (evidence).
+- **WHAT:** Ran the CHG-0012 live-matrix harness against the running stack. Two harness fixes made the test
+  meaningful: (1) the PII agents now embed their PII in the `message` field so it ROUND-TRIPS through the
+  `echo` test tool (previously the PII sat in fields `echo` doesn't reflect, so the redaction test was
+  vacuous); (2) the optional server-id/scan-control lookup is wrapped so a wrong/unreachable `CONTROL_URL`
+  (or a gateway-key bearer that isn't a control JWT) degrades to gateway defaults instead of crashing the
+  run. Then ran it LIVE **3× consecutive** (CONCURRENCY=25, 150 calls each / 450 total): `total_leaked=0`,
+  `total_redacted=60`/run (every B_pii + D_keypath result masked), `errors=0`.
+- **WHY (evidence):** to prove the CHG-0003/0004/0005 result-redaction floor holds under CONCURRENT load
+  with byte-level leak detection (CHG-0012's `find_leaked_values`), not just in unit tests — and that a
+  redact-but-forward can no longer masquerade as `allowed`.
+- **NOW DOES:** every PII-bearing tool result is masked before egress under 25-way concurrency, with the
+  raw email/SSN provably ABSENT from the response bytes across 450 live calls, 3× consecutive. The
+  gateway's outbound result floor redacts PII even under the default (`tag`) posture (no scan-control
+  seeding was needed — the floor fires regardless).
+- **Touched whose work:** the live-matrix harness (backstop's own CHG-0012).
+- **VERIFY:** `KEY=<zeroshield gateway_key from scripts/ralph/.mcp_scale_manifest.json>`;
+  `CONTROL_URL=http://127.0.0.1:8180 GATEWAY_URL=http://127.0.0.1:8300 ORG_SLUG=zeroshield
+  SERVER_SLUG=everything-1 TOOL_NAME=echo HARNESS_TOKEN=$KEY CALLS_PER_AGENT=30 CONCURRENCY=25
+  gateway/.venv/bin/python scripts/mcp_live_matrix_harness.py` → `total_leaked=0, total_redacted=60`.
+  Evidence: `mcp-parallel/findings/backstop-p20-redaction-load/redaction_under_load_evidence.json`.
+- **REMAINING for G5 item 20:** run at TRUE peak (5k-10k in-flight, tied to item 15) and prove zero leaks
+  3×; add per-actor authz-denial and tag-enforcement cases under load. This proves redaction-under-load at
+  25-concurrency / 450 calls; higher magnitude remains.

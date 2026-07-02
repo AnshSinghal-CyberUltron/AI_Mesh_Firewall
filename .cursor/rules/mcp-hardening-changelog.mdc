@@ -113,3 +113,9 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (+transient_retries) because a ~0.7% transient echo hiccup under load intermittently failed the strict
   gate (not a demux/isolation bug — cross_org_leak/errors stayed 0 over 1080+ calls). Evidence:
   mcp-parallel/findings/backstop-p19-isolation/. REMAINING: 500-sandbox-under-chaos + egress-byte aidefence check.
+- **CHG-0014** (2026-07-02) — G5 item 20 LIVE redaction-under-load VERIFIED: ran the live-matrix harness 3×
+  consecutive (CONCURRENCY=25, 450 calls): total_leaked=0, total_redacted=60/run, errors=0 — 1.4 redaction
+  holds under concurrency (validates CHG-0003/0004/0005 + CHG-0012 byte-check end-to-end). Harness fixes:
+  PII embedded in `message` so it round-trips through `echo` (redaction test was vacuous before); resilient
+  server-id lookup (graceful CONTROL_URL degradation). Evidence: mcp-parallel/findings/backstop-p20-redaction-load/.
+  REMAINING: 5k-10k in-flight (item 15) + per-actor/tag cases under load.

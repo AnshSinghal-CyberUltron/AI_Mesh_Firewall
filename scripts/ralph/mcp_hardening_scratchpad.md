@@ -149,6 +149,14 @@
       egress = LEAK → run FAILS). New scripts/test_mcp_live_matrix_oracle.py: 5 pass. REMAINING before [x]:
       run LIVE at peak load (high CONCURRENCY / 5k-10k in-flight, tied to item 15) against the stack, prove
       ZERO leaks 3× consecutively; extend with per-actor authz-denial + tag-enforcement cases under load.
+      LIVE VERIFIED @25-concurrency — CHG-0014 (2026-07-02): ran the upgraded live-matrix harness 3×
+      consecutive (CONCURRENCY=25, 150 calls each/450 total): total_leaked=0, total_redacted=60/run,
+      errors=0 → 1.4 redaction HOLDS under concurrent load (validates CHG-0003/0004/0005 result floor +
+      CHG-0012 byte-check end-to-end; the outbound floor redacts PII even under the default tag posture).
+      Harness fixes: PII embedded in `message` (round-trips through the echo test tool — the redaction test
+      was vacuous before); resilient server-id lookup (graceful CONTROL_URL degradation). Evidence:
+      mcp-parallel/findings/backstop-p20-redaction-load/redaction_under_load_evidence.json. REMAINING before
+      [x]: run at TRUE peak (5k-10k in-flight, item 15); add per-actor authz-denial + tag-enforcement cases.
 
 ## G6 — Frontend (strictly; log edits to owned panels)
 - [ ] 21. MCP panels reflect 1.4 (tags, per-actor tool controls, redaction indicators), real data, no leak, both themes.
