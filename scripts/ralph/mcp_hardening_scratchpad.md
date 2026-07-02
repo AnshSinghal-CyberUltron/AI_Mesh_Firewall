@@ -475,6 +475,21 @@
       read-whole-then-slice; _validate_upstream lacks a resolved-IP SSRF check (sandbox analogue of
       CHG-0065, relevant while sandbox net internal=false). Evidence:
       mcp-parallel/findings/backstop-p10-sandbox-response-cap/finding.md.
+      CHG-0069 (2026-07-02, MEDIUM — error-path counterpart of CHG-0066): the sandbox agent's
+      streamable-http handler read an upstream error (status>=400) as `body = (await response.aread())[:500]`
+      — aread() buffers the WHOLE untrusted error body before the slice, so a huge 4xx/5xx body OOMs/restarts
+      that tenant's sandbox. FIX (upstream_manager.py): new async _aread_snippet(response, limit=1024) streams
+      aiter_bytes() + stops at limit (never whole-body buffers); the error read uses it. +2 tests (500 →
+      -32000 bounded snippet; _aread_snippet over 1000 chunks/limit=250 → ≤250B, ≤3 chunks consumed). Gate:
+      15 passed (-k "not websocket"; ws tests hang pre-existingly). Contained by sandbox 2GiB limit.
+      FOLLOW-UP: _read_json_response (~257-304) is dead code with the same whole-body error reads (remove in
+      cleanup). Evidence: mcp-parallel/findings/backstop-p10-sandbox-error-body-cap/finding.md.
+      NOTE (this iter, verification-only, no change): per-user/agent/role tool authz is SOLID — control
+      policy engine _policy_applies_to_actor (engine.py:100-145) scopes policies by allowed_user_ids/
+      agent_ids/roles with FAIL-CLOSED semantics (roleless/unknown-identity actor gets the policy applied);
+      roles are server-derived from the API key (not caller-spoofable), forwarded via X-Gateway-Roles.
+      Combined with per-key mcp_allowed_tools (CHG-0006/7/8) + field-level RBAC (CHG-0024/25), the mandate's
+      "per-user/agent/role tool authorization" is implemented. (Backs item 9 authz.)
 - [ ] 11. PostgreSQL + Redis schemas/usage/restart-safety verified.
       LIVE VERIFIED (usage/schema) — CHG-0023 (2026-07-02): REDIS usage correct — mcp:scan_ver:* 72 keys
       (M-15 scan-config version cache-invalidation, string counters e.g. "99"); ratelimit:* 2 keys (S12

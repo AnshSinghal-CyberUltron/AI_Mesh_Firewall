@@ -116,6 +116,23 @@ async def _assert_upstream_not_ssrf(host: str) -> None:
             raise UpstreamError(-32002, f"egress denied: host {host!r} -> {reason}")
 
 
+async def _aread_snippet(response: httpx.Response, limit: int = 1024) -> bytes:
+    """Read up to ``limit`` bytes of an (untrusted) error body for a log/error snippet
+    WITHOUT buffering the whole body. CHG-0069: the error path did
+    ``(await response.aread())[:500]`` — ``aread()`` buffers the ENTIRE streaming body
+    into memory before the slice, so a malicious upstream returning a huge 4xx/5xx body
+    OOMs the sandbox agent. This streams and stops once ``limit`` bytes are collected
+    (error-path counterpart of the CHG-0066 success-path cap)."""
+    parts: list[bytes] = []
+    total = 0
+    async for chunk in response.aiter_bytes():
+        parts.append(chunk)
+        total += len(chunk)
+        if total >= limit:
+            break
+    return b"".join(parts)[:limit]
+
+
 @dataclass
 class UpstreamSession:
     server_slug: str
@@ -391,7 +408,8 @@ async def _post_streamable_http(
             if response.status_code == 401:
                 raise UpstreamError(-32001, "upstream returned 401; re-authenticate", needs_reauth=True)
             if response.status_code >= 400:
-                body = (await response.aread())[:500].decode("utf-8", "replace")
+                # CHG-0069: bounded read of the untrusted error body (no whole-body buffer).
+                body = (await _aread_snippet(response))[:500].decode("utf-8", "replace")
                 raise UpstreamError(-32000, f"upstream HTTP {response.status_code}: {body}")
             sid = response.headers.get("mcp-session-id")
             if sid:

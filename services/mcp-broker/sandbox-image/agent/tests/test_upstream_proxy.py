@@ -476,3 +476,36 @@ def test_streamable_http_ssrf_allows_public_resolved_host(agent_client, monkeypa
         resp = agent_client.post("/rpc", json=_http_payload())
     assert resp.status_code == 200
     assert resp.json()["result"]["tools"][0]["name"] == "echo"
+
+
+# ── CHG-0069: the error path did `(await response.aread())[:500]` — aread() buffers the
+# WHOLE untrusted error body before the slice, so a malicious upstream returning a huge
+# 4xx/5xx body OOMs the sandbox agent. _aread_snippet reads a bounded amount + stops.
+def test_streamable_http_500_error_body_is_bounded(agent_client):
+    with patch("httpx.AsyncClient.stream", new=_fake_stream(err_status=500)), \
+         patch("httpx.AsyncClient.post", new=AsyncMock(return_value=httpx.Response(202))):
+        resp = agent_client.post("/rpc", json=_http_payload())
+    body = resp.json()
+    assert body["error"]["code"] == -32000
+    assert "upstream HTTP 500" in body["error"]["message"]
+    assert "unauthorized" in body["error"]["message"]  # the (bounded) body snippet
+
+
+@pytest.mark.asyncio
+async def test_aread_snippet_bounds_and_stops_early(monkeypatch):
+    _load_agent_app(monkeypatch)  # ensure agent.upstream_manager is importable
+    from agent.upstream_manager import _aread_snippet
+
+    class _BigResp:
+        def __init__(self):
+            self.consumed = 0
+
+        async def aiter_bytes(self):
+            for _ in range(1000):        # a "huge" error body
+                self.consumed += 1
+                yield b"x" * 100
+
+    r = _BigResp()
+    out = await _aread_snippet(r, limit=250)
+    assert len(out) <= 250
+    assert r.consumed <= 3               # stopped after crossing 250B, NOT all 1000 chunks

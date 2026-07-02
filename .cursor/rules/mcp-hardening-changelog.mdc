@@ -812,6 +812,22 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   infra-error withholds (non-200/non-JSON [CHG-0061], response-too-large [CHG-0064]) are not yet audited.
   Evidence: `mcp-parallel/findings/backstop-p9-ext-proxy-audit/`.
 
+- **CHG-0069** (2026-07-02) — G3 item 10 (resource-limits / mem containment), MEDIUM; error-path
+  counterpart of CHG-0066: in the sandbox agent's streamable-http handler, an upstream error (status>=400)
+  was read as `body = (await response.aread())[:500]`. `response` is a `client.stream(...)` response, so
+  `aread()` buffers the ENTIRE untrusted error body into memory BEFORE the `[:500]` slice — a malicious
+  upstream returning a huge 4xx/5xx body OOMs the sandbox agent (up to the 2GiB sandbox limit → kill +
+  restart of that tenant's sandbox) even though only 500 bytes are used. FIX (`upstream_manager.py`): new
+  `async _aread_snippet(response, limit=1024)` streams `response.aiter_bytes()` and STOPS once `limit`
+  bytes are collected (returns at most `limit`), never buffering the whole body; the error read uses it
+  (`(await _aread_snippet(response))[:500]`). Behaviour unchanged for a normal small error body. Files:
+  upstream_manager.py, test_upstream_proxy.py (+2). Gate: `pytest ... -k "not websocket"` → 15 passed (a
+  500 upstream → `-32000 upstream HTTP 500: <bounded body>`; unit: `_aread_snippet` over a 1000-chunk body
+  with limit=250 → <=250 bytes, <=3 chunks consumed [stopped early]). The 3 `websocket` tests HANG in this
+  env PRE-EXISTINGLY (unrelated). Contained by the sandbox 2GiB mem limit. FOLLOW-UP: `_read_json_response`
+  (~257-304) is dead code with the same whole-body error reads — remove in a future cleanup. Evidence:
+  `mcp-parallel/findings/backstop-p10-sandbox-error-body-cap/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
@@ -905,3 +921,5 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
 - MCP-PAGE-CP47 (load driver) | scripts/ralph/mcp_page_cp47_stress.py | multiprocess×async closed-loop MCP tool-call load driver (extends P9 mcp_concurrency/load_live). WORKERS procs × CONN async conns, no per-round barrier → true sustained RPS. echo/get-sum oracles + HARD cross-tenant CANARY per org. metrics: rps, p50/p90/p99 lat, status hist, drop vs backpressure. Env TARGET_CALLS/DURATION_S/WORKERS/CONN. | VERIFY: smokes 300c/8if→33.5rps & 2000c/32if→45.5rps, 0 drop, isolation clean, canary_leak=0. BASELINE: 4× in-flight→1.36× rps/3.3× lat = throughput ceiling (Little ≈46) → CP48 bottleneck
 
 - MCP-PAGE-CP48 (saturation sweep) | scripts/ralph/mcp_page_cp48_saturation.py; cp47_stress.py +ORG_FILTER/SERVER_FILTER | fleet RPS pins ~47 (8→128 in-flight: 37.5→46.5), latency linear (p50 203→2604ms) = saturated closed-loop, 0 drops/503/OOM. Peak: all containers IDLE (gateway CPU 0.45%) → NOT resource-bound. Single-server scales 13→45 RPS (1→16 in-flight) ≈ whole fleet → SHARED AGGREGATE chokepoint (~21ms serial), NOT per-server. canary_leak=0 incl mixed 3-org. | CP49 hypothesis: per-call enforcement-event write / policy round-trip to single-thread daphne, or tiny DB/Redis pool | VERIFY: cp48/verdict.json
+
+- MCP-PAGE-CP49 (audit hot-path decouple) | gateway/ai_mesh_gateway/mcp_proxy.py (_spawn_audit_event/_post_audit_event/_get_control_audit_client; _record_gateway_event) | CP48 root cause: ~47 RPS ceiling = per-call SYNC audit POST awaited INLINE to single-thread daphne (fresh client/call). FIX: pooled client + bounded fire-and-forget (cap 64, drop-under-bp), SAME endpoint/payload → _record_event + EnforcementEvent bridge preserved (CP24/31/32 intact). Rejected GATEWAY_ASYNC_MCP_AUDIT flag (async task omits EnforcementEvent bridge → would regress 1.4). | VERIFY: gateway suite 1245 passed; post-fix single conn=1 13→21 RPS (+56%) p50 74→45ms; fleet-8 37→47; 0 drops/0 bp/canary=0 across full back-to-back sweep. Remaining ~48/sandbox = architectural stdio (idle CPU), horizontal-scale only
