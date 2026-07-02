@@ -26,7 +26,13 @@
       Remaining 8 uPlot candidates migrate under per-surface items (12/13/15). recharts removal = item 24.
 
 ## Per-surface sweep (ONE panel per iteration → verify (both themes, 4 widths) → fix → re-verify → commit)
-- [x] 3. GatewayKeyPanel     - [x] 4. ModelGovernancePanel   - [ ] 5. RoutingGovernance/Audit
+- [x] 3. GatewayKeyPanel     - [x] 4. ModelGovernancePanel   - [x] 5. RoutingGovernance/Audit
+      item5 iter5: DONE. Routing{Governance,Audit}Panel + PolicyDomainSwitcher — analyzed via workflow,
+      verified live. Fixed F-RT2 (helper contrast), F-RT3 (sensitivity grid responsive), F-RT-saveerr,
+      F-RT1 (audit error path, standalone). No-leak proven (curated fields). +2 CROSS-CUTTING: global
+      focus-visible ring (index.css, app-wide a11y) + F-RESP-1 CRITICAL (FirewallModulePage min-w-0 —
+      panels were 1073px@375, now 351px; unblocks responsive for ALL firewall panels; re-verify 3/4 resp).
+      lint 42/42, detector clean.
       item4 iter4: DONE. Live both themes @4 widths (11 real models), console clean, no overflow, no-leak
       PROVEN (key STATUS only, guard model stripped). Controls verified: clean→save-disabled, toggle→
       enabled, reset→disabled. Fixed F-MG1 (helper text dark:slate-500→slate-400). lint 37/37.

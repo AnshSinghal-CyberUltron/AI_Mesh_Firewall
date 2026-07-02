@@ -31,6 +31,7 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
   const [localLoading, setLocalLoading] = useState(!eventsProp);
   const [expandedId, setExpandedId] = useState(null);
   const [hours, setHours] = useState(48);
+  const [loadError, setLoadError] = useState("");
 
   const usesParentFeed = eventsProp !== undefined;
 
@@ -47,11 +48,13 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
       if (res.ok) {
         const data = await res.json();
         setLocalEvents(filterRoutingEvents(data.results || []));
+        setLoadError("");
       } else {
-        setLocalEvents([]);
+        // A failed fetch must not masquerade as "no routing events yet".
+        setLoadError(`Failed to load routing audit (HTTP ${res.status}).`);
       }
     } catch {
-      setLocalEvents([]);
+      setLoadError("Failed to load the routing audit trail.");
     } finally {
       setLocalLoading(false);
     }
@@ -120,11 +123,25 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
           <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading routing events...</span>
         </div>
+      ) : loadError && events.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            <GitBranch className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>{loadError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={fetchRoutingEvents}
+            className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Retry
+          </button>
+        </div>
       ) : events.length === 0 ? (
         <div className="text-center py-8">
           <GitBranch className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
           <p className="text-sm text-slate-500 dark:text-slate-400">No routing events recorded yet.</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-md mx-auto">
+          <p className="text-xs text-slate-400 dark:text-slate-400 mt-1 max-w-md mx-auto">
             Run a chat completion through the mesh gateway with routing enabled, or use the Routing exercises simulator above to generate the first audit entry.
           </p>
         </div>
@@ -164,7 +181,7 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
                     <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                   )}
 
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1 min-w-[110px]">
+                  <span className="text-[10px] text-slate-400 dark:text-slate-400 flex items-center gap-1 min-w-[110px]">
                     <Clock className="w-3 h-3" />
                     {ev.timestamp ? new Date(ev.timestamp).toLocaleString(undefined, {
                       month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",

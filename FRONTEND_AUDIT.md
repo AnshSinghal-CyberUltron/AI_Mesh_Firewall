@@ -87,7 +87,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 |---|---|---|---|---|---|---|---|---|---|---|
 | 3 | GatewayKeyPanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
 | 4 | ModelGovernancePanel (+Fields) | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
-| 5 | RoutingGovernancePanel / RoutingAuditPanel / PolicyDomainSwitcher | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 5 | RoutingGovernancePanel / RoutingAuditPanel / PolicyDomainSwitcher | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
 | 6 | KillSwitchPanel / KillSwitchModelCombobox / ModelStatePanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 7 | MCPManagerPanel / MCPScannerPanel / MCPScanControlMatrix | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 8 | DatabaseConnectionPanel / VectorPolicyPanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -146,6 +146,19 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ---
 
 ## Per-surface finding log (append-only)
+
+**Item 5 — Routing panels + TWO cross-cutting infra fixes (iter5 resumed loop, 2026-07-02):** analyzed all 3 via a parallel workflow, verified live (firewall-1-5), console clean.
+- **No-leak PROVEN (code-level):** RoutingGovernance shows model names/weights/formula (public), no secrets/topology. RoutingAudit uses curated field accessors (`getRoutingExtra`/`getEventMetadata`) — renders models/scores/reason/sensitivity/`endpoint_name` (friendly), NOT raw `metadata`/`prompt_lineage`/`data_accessed`/`endpoint_identifier`. PolicyDomainSwitcher renders static labels only. (No live routing events in dev DB → row-render verified by code, not screenshot.)
+- **F-RT2 FIXED (contrast):** 5 helper/caption `dark:text-slate-500` (RoutingGovernance) + 2 (RoutingAudit) → `dark:text-slate-400` (verified oklch L0.554→0.704).
+- **F-RT3 FIXED (responsive):** sensitivity `grid-cols-4` → `grid-cols-2 sm:grid-cols-4` (verified 2 cols @375, no clip).
+- **F-RT-saveerr FIXED (no-leak):** RoutingGovernance save error dumped raw `JSON.stringify(body)` → now parses field messages / generic fallback (like ModelGovernance).
+- **F-RT1 FIXED (data-integrity, standalone path):** RoutingAudit local fetch error → `setLocalEvents([])` collapsed to empty; added `loadError` + error UI + Retry. **Note:** on firewall-1-5 the panel is rendered with a **parent feed** (`FirewallModulePage` clones it with `events=firewallData.threatFeed`), so the local path isn't exercised there — the page-level empty-vs-error then depends on the shared `firewallData`/`useFirewall` hook → **logged as cross-cutting data-integrity (item 19/20).**
+- Detector: cleaned a **pre-existing** `gray-on-color` false-positive (toggle ternary co-occurring slate+emerald classes) by extracting `ROUTING_TOGGLE_STYLES` (matches the file's existing style-const convention). Now 0 findings.
+- lint 42/42, build green. Evidence: `mcp-parallel/findings/frontend-harden/routing/`.
+
+### Cross-cutting infra fixes (discovered during item 5)
+- **A11Y — global keyboard focus ring (index.css):** NO custom control defined a `focus-visible` ring and index.css had none → keyboard focus was invisible app-wide. Added `.zs-app-shell :is(a,button,input,select,textarea,[role=button],[role=tab],…):focus-visible { outline: 2px solid var(--ring); outline-offset:2px }`. Pure style, theme-aware, keyboard-only (no pointer regression). **Verified:** keyboard-focused button shows a 2px indigo outline in dark. This satisfies the **focus** dimension for ALL surfaces going forward.
+- **F-RESP-1 (CRITICAL responsive) — FIXED:** firewall-module panels rendered at **~1073px at a 375 viewport** (docScrollWidth stayed 375 because the `flex-1 overflow-y-auto` content area scrolls horizontally — so a naive `documentElement` overflow check FALSELY passed). Root cause = the CSS-Grid `min-width:auto` trap on `FirewallModulePage`'s grid items. Fix: added `min-w-0` to the two grid children (L190, L203). **Verified:** panel width 1073→**351px** at 375; presets now wrap (3 rows, all reachable). **This unblocks responsive for EVERY firewall-1-N panel** and retroactively makes items 3–4 responsive genuine (they were previously verified only via documentElement overflow, i.e. under-verified). Re-verify affected panels' responsive at the panel-width level, not just document overflow.
 
 **Item 4 — ModelGovernancePanel (+Fields) DONE (iter4 resumed loop, 2026-07-02):** live-verified both themes @1440/1024/768/375 with real data (11 connected models); console 0 errors; no overflow.
 - **No-leak PROVEN:** allowlist shows model names + provider + model_id (non-secret) and only key *status* (`api_key_set`→"", else "Env-var key"/"API key missing") — never a key value. Panel already strips the ZeroShield guard model via `filterUserManagedModels` so its raw upstream id never surfaces.

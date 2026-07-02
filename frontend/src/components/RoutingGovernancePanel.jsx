@@ -55,6 +55,13 @@ const SENSITIVITY_ACTIVE_STYLES = {
   rose: "bg-rose-500/20 text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/50",
 };
 
+// Dynamic-routing toggle styles (emerald-on-emerald when on, slate-on-slate when
+// off — kept as separate strings so text/bg colours never co-occur cross-state).
+const ROUTING_TOGGLE_STYLES = {
+  on: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/50",
+  off: "bg-slate-300 dark:bg-slate-700/70 text-slate-700 dark:text-slate-300 ring-1 ring-slate-400 dark:ring-slate-600",
+};
+
 function routingFromConfig(data) {
   const w = {
     routing_risk_weight: data.routing_risk_weight ?? 0.30,
@@ -166,7 +173,12 @@ export function RoutingGovernancePanel() {
         setTimeout(() => setSaveOk(false), 4000);
       } else {
         const body = await res.json().catch(() => null);
-        setError(body ? JSON.stringify(body) : "Failed to save routing configuration.");
+        const detail = body && typeof body === "object"
+          ? Object.entries(body)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+              .join("; ")
+          : `Failed to save routing configuration (HTTP ${res.status}).`;
+        setError(detail);
       }
     } catch {
       setError("Network error saving routing configuration.");
@@ -239,7 +251,7 @@ export function RoutingGovernancePanel() {
         <div className="bg-slate-200/50 dark:bg-slate-900/40 border border-slate-300 dark:border-slate-700/50 rounded-lg p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Power className={`w-4 h-4 ${routingEnabled ? "text-emerald-700 dark:text-emerald-300" : "text-slate-500 dark:text-slate-500"}`} />
+              <Power className={`w-4 h-4 ${routingEnabled ? "text-emerald-700 dark:text-emerald-300" : "text-slate-500 dark:text-slate-400"}`} />
               <div>
                 <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Dynamic Routing</p>
                 <p className="text-[11px] text-slate-600 dark:text-slate-400">
@@ -250,12 +262,12 @@ export function RoutingGovernancePanel() {
             <button
               type="button"
               onClick={() => setRoutingEnabled((v) => !v)}
-              className={`min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${routingEnabled ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/50" : "bg-slate-300 dark:bg-slate-700/70 text-slate-700 dark:text-slate-300 ring-1 ring-slate-400 dark:ring-slate-600"}`}
+              className={`min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${routingEnabled ? ROUTING_TOGGLE_STYLES.on : ROUTING_TOGGLE_STYLES.off}`}
             >
               {routingEnabled ? "Enabled" : "Disabled"}
             </button>
           </div>
-          <p className="mt-2 text-[10px] text-slate-600 dark:text-slate-500">
+          <p className="mt-2 text-[10px] text-slate-600 dark:text-slate-400">
             API callers can still override per request using <span className="font-mono">routing_preferences.enable_routing</span>.
           </p>
         </div>
@@ -322,7 +334,7 @@ export function RoutingGovernancePanel() {
                     className="w-16 bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded px-2 py-0.5 text-xs text-slate-900 dark:text-white text-center font-mono"
                   />
                 </div>
-                <p className="text-[10px] text-slate-600 dark:text-slate-500">{description}</p>
+                <p className="text-[10px] text-slate-600 dark:text-slate-400">{description}</p>
               </div>
             ))}
           </div>
@@ -333,7 +345,7 @@ export function RoutingGovernancePanel() {
           <label className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2 block">
             Default Data Sensitivity
           </label>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {SENSITIVITY_OPTIONS.map(opt => (
               <button
                 type="button"
@@ -349,7 +361,7 @@ export function RoutingGovernancePanel() {
               </button>
             ))}
           </div>
-          <p className="mt-1.5 text-[10px] text-slate-600 dark:text-slate-500">
+          <p className="mt-1.5 text-[10px] text-slate-600 dark:text-slate-400">
             Applied when requests don't specify a sensitivity level. Models below this level are excluded from routing.
           </p>
         </div>
@@ -362,7 +374,7 @@ export function RoutingGovernancePanel() {
           <p className="text-sm font-mono text-slate-900 dark:text-white">
             {defaultModelDisplay || "— Not set —"}
           </p>
-          <p className="mt-1.5 text-[10px] text-slate-600 dark:text-slate-500">
+          <p className="mt-1.5 text-[10px] text-slate-600 dark:text-slate-400">
             Configure in the <strong>Model allowlist &amp; default</strong> panel above. Used when routing is off or no model is specified.
           </p>
         </div>
