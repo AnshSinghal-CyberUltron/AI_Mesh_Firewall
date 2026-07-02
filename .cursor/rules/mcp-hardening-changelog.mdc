@@ -1187,6 +1187,22 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   **RESIDUAL:** an MCP scan/call latency histogram + OpenTelemetry tracing for the per-call chain are
   separate item-13 enhancements (the audit already carries `latency_ms`).
 
+- **CHG-0088** (2026-07-02) — ARCH item 13/20 (**monitoring**; completes the CHG-0087 residual), LOW–MEDIUM:
+  CHG-0087 added MCP scan-decision + compliance-tag COUNTERS but no latency metric. `_record_gateway_event`
+  already carries `latency_ms` (16+ sites pass `int((time.time()-call_t0)*1000)`), yet MCP tool-call latency
+  was never exposed to Prometheus — so dashboards/alerting couldn't see MCP p50/p95/p99, exactly what "1.4
+  guardrails holding under peak load" (item 20) needs. FIX (`metrics.py` + `mcp_proxy.py`): new
+  `amf_gateway_mcp_call_seconds{org, decision}` Histogram (buckets 5ms…10s); `record_mcp_scan_decision(...)`
+  gains a `latency_ms` param and observes `latency_ms/1000` **only when truthy** (so paths that don't time
+  the call — e.g. the tools/list metadata-scan audit — don't skew the low bucket with 0s samples).
+  `_record_gateway_event` passes `latency_ms` (still best-effort try/except so metrics never break the
+  request path). +2 tests (2 block decisions @125ms+340ms → count +2 / sum 0.465s; latency 0/None/omitted →
+  no observation; audit sink records one; no-op without prometheus_client). Gate: 6 + 1461 gateway passed,
+  0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p13-mcp-latency-histogram/`. **RESIDUAL:** OpenTelemetry tracing for the
+  per-call chain remains a separate item-13 piece; a few audit calls (tools/list metadata scan, ext-proxy
+  `_ext_audit`) don't pass `latency_ms` yet (minor follow-up).
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

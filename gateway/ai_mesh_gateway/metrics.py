@@ -121,6 +121,16 @@ if _PROM_AVAILABLE:
         ["org", "tag"],
         registry=REGISTRY,
     )
+    # CHG-0088: MCP tool-call end-to-end latency (the audit already carries latency_ms
+    # but it was never exposed as a metric) — lets dashboards see MCP p50/p95/p99 under
+    # load (item 20 "1.4 under peak load" monitoring).
+    mcp_call_seconds = Histogram(
+        "amf_gateway_mcp_call_seconds",
+        "MCP tool-call end-to-end latency in seconds, labeled by org and decision.",
+        ["org", "decision"],
+        buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+        registry=REGISTRY,
+    )
     bedrock_embed_total = Counter(
         "amf_gateway_bedrock_embed_total",
         "Bedrock Titan embedding calls, labeled by result.",
@@ -255,8 +265,10 @@ def record_bedrock_embed(result: str) -> None:
     bedrock_embed_total.labels(result=_safe_label(result, "unknown")).inc()
 
 
-def record_mcp_scan_decision(org_slug: str, decision: str, compliance_tags=None) -> None:
-    """CHG-0087: meter an MCP tool-call scan/enforcement decision + its compliance tags.
+def record_mcp_scan_decision(org_slug: str, decision: str, compliance_tags=None,
+                             latency_ms=None) -> None:
+    """CHG-0087/0088: meter an MCP tool-call scan/enforcement decision, its compliance
+    tags, and (CHG-0088) its end-to-end latency.
 
     Best-effort / fail-safe (no-op when prometheus_client is absent). Called from the
     MCP audit sink (``mcp_proxy._record_gateway_event``) so every block/redact/allow/
@@ -266,14 +278,22 @@ def record_mcp_scan_decision(org_slug: str, decision: str, compliance_tags=None)
     if not _PROM_AVAILABLE:
         return
     org = _safe_label(org_slug, "anonymous")
+    dec = _safe_label(decision, "unknown")
     try:
-        mcp_scan_decisions_total.labels(org=org, decision=_safe_label(decision, "unknown")).inc()
+        mcp_scan_decisions_total.labels(org=org, decision=dec).inc()
     except Exception:  # pragma: no cover - metrics must never break the request path
         return
     for _tag in (compliance_tags or []):
         try:
             mcp_compliance_tags_total.labels(org=org, tag=_safe_label(str(_tag), "unknown")).inc()
         except Exception:  # pragma: no cover
+            pass
+    # CHG-0088: observe only a REAL measured latency (skip 0/None so paths that don't
+    # time the call — e.g. the tools/list metadata-scan audit — don't skew the low bucket).
+    if latency_ms:
+        try:
+            mcp_call_seconds.labels(org=org, decision=dec).observe(float(latency_ms) / 1000.0)
+        except (TypeError, ValueError):  # pragma: no cover
             pass
 
 

@@ -753,6 +753,15 @@
     passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
     mcp-parallel/findings/backstop-p13-mcp-scan-metrics/. RESIDUAL: MCP latency histogram + OTel tracing are
     future item-13 pieces.
+  - CHG-0088 (2026-07-02) — ARCH item 13/20 (monitoring; completes CHG-0087 residual), LOW–MEDIUM: CHG-0087
+    added MCP scan-decision + tag COUNTERS but no latency metric, though _record_gateway_event already carries
+    latency_ms — so MCP p50/p95/p99 (what "1.4 under peak load" needs) weren't exposed to Prometheus. FIX
+    (metrics.py + mcp_proxy.py): new amf_gateway_mcp_call_seconds{org,decision} Histogram (5ms…10s);
+    record_mcp_scan_decision gains latency_ms and observes latency_ms/1000 ONLY when truthy (0/None skipped so
+    untimed paths don't skew the low bucket); wired via _record_gateway_event (still fail-safe try/except).
+    +2 tests. Gate: 6 + 1461 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
+    mcp-parallel/findings/backstop-p13-mcp-latency-histogram/. RESIDUAL: OTel tracing for the per-call chain
+    remains a separate item-13 piece.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

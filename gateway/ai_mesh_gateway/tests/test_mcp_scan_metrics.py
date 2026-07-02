@@ -71,6 +71,35 @@ def test_record_is_failsafe_monkeypatched(monkeypatch):
     # if prometheus is unavailable the helper is a no-op (never raises)
     monkeypatch.setattr(M, "_PROM_AVAILABLE", False)
     M.record_mcp_scan_decision("x", "block", ["SECRET"])  # must not raise
+    M.record_mcp_scan_decision("x", "block", ["SECRET"], latency_ms=120)  # must not raise
+
+
+# ── CHG-0088: MCP call-latency histogram ──
+@pytest.mark.skipif(not M._PROM_AVAILABLE, reason="prometheus_client not installed")
+def test_latency_histogram_observes_real_latency():
+    def cnt(**l):
+        return M.REGISTRY.get_sample_value("amf_gateway_mcp_call_seconds_count", l) or 0.0
+
+    before = cnt(org="lat", decision="block")
+    M.record_mcp_scan_decision("lat", "block", ["SECRET"], latency_ms=125)
+    M.record_mcp_scan_decision("lat", "block", ["SECRET"], latency_ms=340)
+    assert cnt(org="lat", decision="block") == before + 2
+    # sum reflects seconds (125+340 ms = 0.465 s)
+    total = M.REGISTRY.get_sample_value("amf_gateway_mcp_call_seconds_sum", {"org": "lat", "decision": "block"})
+    assert total is not None and total >= 0.465 - 1e-6
+
+
+@pytest.mark.skipif(not M._PROM_AVAILABLE, reason="prometheus_client not installed")
+def test_latency_zero_or_none_is_not_observed():
+    def cnt(**l):
+        return M.REGISTRY.get_sample_value("amf_gateway_mcp_call_seconds_count", l) or 0.0
+
+    before = cnt(org="latz", decision="redact")
+    M.record_mcp_scan_decision("latz", "redact", ["PII"], latency_ms=0)
+    M.record_mcp_scan_decision("latz", "redact", ["PII"], latency_ms=None)
+    M.record_mcp_scan_decision("latz", "redact", ["PII"])  # latency omitted
+    # decision counter still moved, but NO latency observations for a 0/None latency
+    assert cnt(org="latz", decision="redact") == before
 
 
 if __name__ == "__main__":
