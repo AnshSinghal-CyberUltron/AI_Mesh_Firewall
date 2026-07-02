@@ -48,8 +48,9 @@ status: ACTIVE
       `proposal-1782979656279-rgcvqe` — Cursor YES, Claude PENDING (provisional ratification).
 
 ## P4 — Architecture: move ALL transports into the per-org gVisor sandbox
-- [ ] 9. Extend sandbox-image/agent to proxy HTTP/SSE MCP servers (in-sandbox httpx client, egress
+- [x] 9. Extend sandbox-image/agent to proxy HTTP/SSE MCP servers (in-sandbox httpx client, egress
       allow-listed to the registered upstream only) — per the contract.
+      **Done 2026-07-02:** `upstream_manager.py` + transport-aware `/rpc` in `main.py`; 7 agent tests green.
 - [ ] 10. Extend sandbox-image/agent to proxy WEBSOCKET MCP servers (in-sandbox ws client) — per the contract.
 - [ ] 11. Keep stdio as-is but unify: the agent exposes one transport-agnostic /rpc so the gateway calls
        the sandbox for EVERY transport; the gateway never dials upstream directly.
