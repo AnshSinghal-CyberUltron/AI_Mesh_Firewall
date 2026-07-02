@@ -92,9 +92,159 @@ kwarg because this repo drives Docker via the Python SDK, not the CLI.
 5. **H10 gVisor (`runtime=runsc`)** — flip the default when the host supports it and MCP servers init
    cleanly under it; the single biggest isolation upgrade for untrusted code. (#22)
 
+## gVisor (`runsc`) — host requirements + repo integration (P2.6)
+
+gVisor is a user-space kernel (Sentry) that intercepts syscalls for OCI containers. It is the
+recommended **kernel-isolation** upgrade for untrusted MCP code (H10) when seccomp policy authoring
+for arbitrary npm/PyPI workloads is impractical.
+
+### Host install + Docker registration
+
+| Step | Action | Notes |
+|------|--------|-------|
+| 1 | Install `runsc` | `apt install runsc` (gvisor apt repo) or `curl -fsSL https://gvisor.dev/archive.key \| gpg --dearmor` + apt source. Binary must be world-readable/executable (`/usr/local/bin/runsc`). |
+| 2 | Register runtime | `sudo runsc install` → adds `"runsc"` entry to `/etc/docker/daemon.json`; or manual `{ "runtimes": { "runsc": { "path": "/usr/bin/runsc" } } }`. |
+| 3 | Restart Docker | `systemctl restart docker` (required after daemon.json change). |
+| 4 | Smoke test | `docker run --rm --runtime=runsc hello-world` |
+| 5 | Platform tuning | Bare metal: prefer **KVM** platform. VM nested: **systrap**. I/O-heavy (npx cache) and network-heavy workloads see overhead — acceptable for security-first MCP sandboxes. |
+
+**Requirements:** Linux 4.14.77+, x86_64 or ARM64, Docker 17.09+. **Not available** on macOS Docker
+Desktop (no KVM/runsc) — dev hosts stay on runc; prod Linux must enforce runsc.
+
+### Repo hook today (`docker_manager.py`)
+
+```text
+SandboxDockerConfig.runtime  ← MCP_SANDBOX_RUNTIME env (:32)
+_run_kwargs                  ← kwargs["runtime"] = config.runtime if set (:283-284)
+```
+
+- **Default:** `runtime` unset → Docker uses **runc** (shared host kernel).
+- **Opt-in:** `MCP_SANDBOX_RUNTIME=runsc` passes `runtime='runsc'` to `containers.run`.
+- **Test coverage:** `test_config_from_env` asserts runtime passthrough (`test_sandbox_lifecycle.py:219`).
+
+### Fail-closed production pattern (P4 item #12 — design, not yet implemented)
+
+Prod must **refuse to create sandboxes** if runsc is unavailable when hardening is required:
+
+```text
+MCP_SANDBOX_RUNTIME=runsc                    # desired runtime
+MCP_SANDBOX_RUNTIME_REQUIRED=true            # NEW (proposed): fail closed in prod
+```
+
+**Proposed broker startup / create_container guard:**
+
+1. If `MCP_SANDBOX_RUNTIME_REQUIRED=true` and `MCP_SANDBOX_RUNTIME` is unset → log fatal, refuse create.
+2. Probe Docker: `docker info --format '{{json .Runtimes}}'` contains `runsc` (or `docker run --rm --runtime=runsc true`).
+3. On probe failure → return 503 `sandbox_runtime_unavailable` (not silent runc fallback).
+4. Dev override: `MCP_SANDBOX_RUNTIME_REQUIRED=false` (default) preserves macOS/local runc.
+
+This mirrors OpenSandbox's pattern: *"Configured Docker runtime 'runsc' is not available → error"*.
+
+**Compat validation before flip:** run `npx @modelcontextprotocol/server-everything stdio` initialize
+handshake under runsc inside the sandbox image; watch for `/proc`, `epoll`, and network-stack gaps.
+
+## Egress default-deny proxy architecture (H13 — P2.6 design)
+
+Today `network=mcp_sandbox_net_{org}` is a bridge with **full NAT egress** (`docker_manager.py:268`).
+That is required for `npx`/`uvx` registry fetch but allows arbitrary exfil (T3/T9, P9 #30).
+
+### Target pattern (two layers — kernel + proxy)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Host                                                         │
+│  ┌──────────────────┐     ┌─────────────────────────────┐ │
+│  │ allowlist proxy  │◄────│ nftables/iptables FORWARD     │ │
+│  │ (Squid/Caddy/    │     │ DROP direct container→WAN     │ │
+│  │  iron-proxy)     │     │ ALLOW only → proxy:3128       │ │
+│  │ default-deny ACL │     └─────────────────────────────┘ │
+│  └────────▲─────────┘                                        │
+│           │ HTTP(S)_PROXY=http://host.docker.internal:3128   │
+│  ┌────────┴─────────┐                                        │
+│  │ mcp_sandbox_net_ │  per-org bridge (broker attached)     │
+│  │ {org}            │                                        │
+│  │  ┌─────────────┐ │                                        │
+│  │  │ sandbox ctr │ │  env: HTTP_PROXY, HTTPS_PROXY,         │
+│  │  │ (runsc)     │ │       NO_PROXY=broker,agent,metadata  │
+│  │  └─────────────┘ │                                        │
+│  └──────────────────┘                                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Allowlist contents (per org, dynamic)
+
+| Destination class | Examples | Why |
+|-------------------|----------|-----|
+| npm registry | `registry.npmjs.org` | `npx` fetch |
+| PyPI | `pypi.org`, `files.pythonhosted.org` | `uvx` fetch |
+| Declared remote MCP hosts | `mcp.linear.app`, per-server URL host from control DB | mcp-remote / future in-sandbox HTTP proxy |
+| **Deny all else** | `*.evil.com`, IP literals, metadata `169.254.169.254` | exfil / SSRF |
+
+**Hardening rules (from iron-proxy / Doable / Claude sandbox research):**
+
+- **Exact-host match** after canonicalization — reject `registry.npmjs.org.attacker.com`.
+- **IP-level deny** for non-proxy egress (nftables) so CONNECT bypass cannot skip the proxy.
+- **Malformed Host header** rejection at proxy.
+- **#30 canary test:** plant secret in Org B; prove Org A egress capture never contains it.
+
+### `_run_kwargs` changes for H13 (P7 #22)
+
+Add to container `environment` when proxy is deployed:
+
+```python
+"HTTP_PROXY": os.environ.get("MCP_SANDBOX_HTTP_PROXY", "http://host.docker.internal:3128"),
+"HTTPS_PROXY": os.environ.get("MCP_SANDBOX_HTTPS_PROXY", "http://host.docker.internal:3128"),
+"NO_PROXY": "127.0.0.1,localhost,172.16.0.0/12",  # broker agent on org net
+```
+
+Pair with host-side proxy compose service + iptables rules (outside `docker_manager.py` scope).
+
+## `_run_kwargs` field-by-field map (verified 2026-07-02)
+
+Anchor: `docker_manager.py:_run_kwargs` lines 247–285.
+
+| `docker-py` kwarg | Present? | Value / condition | P7 |
+|-------------------|----------|-------------------|-----|
+| `image` | ✅ | `config.image` | — |
+| `name` | ✅ | `container_name(org)` | — |
+| `detach` | ✅ | `True` | — |
+| `labels` | ✅ | role + org_slug | — |
+| `environment` | ✅ | ORG_SLUG, MCP_REMOTE_CONFIG_DIR, npm/uv cache paths | H13 adds PROXY vars |
+| `volumes` | ✅ | per-org auth volume → `/data/mcp-auth` rw | H9 size cap |
+| `network` | ✅ | per-org net; shared bridge if host-run broker | H12 ✅ |
+| `mem_limit` | ✅ | `2048m` default | H7 ✅; add memswap_limit |
+| `nano_cpus` | ✅ | 1.0 CPU default | H7 ✅ |
+| `pids_limit` | ✅ | 256 | H6 ✅ |
+| `read_only` | ✅ | `True` | H4 ✅ |
+| `tmpfs` | ✅ | `/tmp` noexec; `/var/npm-cache` exec; `/var/cache` | H4 ✅ |
+| `ports` | conditional | host-run broker only (`:280-282`) | dev-only branch |
+| `runtime` | conditional | only if `MCP_SANDBOX_RUNTIME` set | H10 — require in prod |
+| `security_opt` | ❌ | — | H1 ADD |
+| `cap_drop` | ❌ | — | H2 ADD |
+| `cap_add` | ❌ | — | H2 (keep empty) |
+| `user` | ❌ | image USER sandbox only | H5 ADD `4000:4000` |
+| `ulimits` | ❌ | — | H8 ADD |
+| `init` | ❌ | — | H14 ADD |
+| `memswap_limit` | ❌ | — | H7 ADD (= mem_limit) |
+| `storage_opt` | ❌ | — | H9 ADD (FS-gated) |
+
+## Per-tenant patterns (summary)
+
+| Pattern | Repo state | Source |
+|---------|------------|--------|
+| One container per org | ✅ `ensure(org_slug)` | OWASP custom networks |
+| One network per org | ✅ `mcp_sandbox_net_{org}` | blocks sibling agent RPC |
+| One auth volume per org | ✅ `mcp_sandbox_{org}_auth` | OAuth token isolation |
+| Assume-RCE stack | partial (read_only + limits only) | OWASP layered controls |
+| Egress default-deny | ❌ full NAT | Docker AI Sandbox / iron-proxy |
+| gVisor kernel isolation | opt-in env only | gVisor production guide |
+
 ## Sources
 - [OWASP Docker Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html) — core control list (no-new-privileges, cap-drop, read-only, non-root, seccomp/AppArmor, resource limits, no docker.sock, custom networks, rootless).
 - [gVisor docs](https://gvisor.dev/docs/) — runsc runtime, `--runtime=runsc` + daemon.json, VM-grade isolation vs. seccomp policy-authoring difficulty, perf/compat tradeoffs.
+- [gVisor Docker quick start](https://gvisor.dev/docs/user_guide/quick_start/docker/) — `runsc install`, daemon restart, smoke test.
+- [gVisor production guide](https://gvisor.dev/docs/user_guide/production/) — when to sandbox, KVM vs systrap, I/O/network overhead.
+- [google/gvisor](https://github.com/google/gvisor) — runsc OCI runtime source.
 - [Docker resource constraints](https://docs.docker.com/engine/containers/resource_constraints/) — `--memory`/`--memory-swap`/`--cpus`/`--cpuset` syntax.
 - [Docker AI Sandbox network policies](https://docs.docker.com/ai/sandboxes/network-policies/) — default-deny host proxy (`host.docker.internal:3128`), Open/Balanced/Locked-Down presets, MITM TLS.
 - [Claude Code sandbox environments](https://code.claude.com/docs/en/sandbox-environments) — default-deny iptables firewall dev-container reference.

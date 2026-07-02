@@ -1,0 +1,71 @@
+{
+  "story": "P2.6",
+  "agent": "cursor-ralph-iter6",
+  "date": "2026-07-02",
+  "sources": [
+    {
+      "title": "google/gvisor",
+      "url": "https://github.com/google/gvisor",
+      "topic": "runsc OCI runtime, syscall interception"
+    },
+    {
+      "title": "gVisor Docker quick start",
+      "url": "https://gvisor.dev/docs/user_guide/quick_start/docker/",
+      "topic": "runsc install, daemon.json, smoke test"
+    },
+    {
+      "title": "gVisor production guide",
+      "url": "https://gvisor.dev/docs/user_guide/production/",
+      "topic": "security/performance tradeoff, KVM vs systrap"
+    },
+    {
+      "title": "gVisor installation",
+      "url": "https://gvisor.dev/docs/user_guide/install/",
+      "topic": "Linux 4.14.77+, apt install runsc"
+    },
+    {
+      "title": "Docker alternative runtimes",
+      "url": "https://docs.docker.com/engine/daemon/alternative-runtimes/",
+      "topic": "daemon.json runtimes registration"
+    },
+    {
+      "title": "OWASP Docker Security Cheat Sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html",
+      "topic": "cap-drop, no-new-privileges, read-only, networks"
+    },
+    {
+      "title": "Docker AI Sandbox network policies",
+      "url": "https://docs.docker.com/ai/sandboxes/network-policies/",
+      "topic": "default-deny host proxy presets"
+    },
+    {
+      "title": "iron-proxy",
+      "url": "https://github.com/ironsh/iron-proxy",
+      "topic": "MITM egress firewall, default-deny allowlist"
+    },
+    {
+      "title": "Doable egress firewall",
+      "url": "https://docs.doable.me/security/egress-firewall/",
+      "topic": "nftables + Squid allowlist pattern"
+    },
+    {
+      "title": "OpenSandbox secure container",
+      "url": "https://open-sandbox.ai/guides/secure-container",
+      "topic": "fail-closed when runsc unavailable"
+    }
+  ],
+  "internal": [
+    "services/mcp-broker/src/sandbox/docker_manager.py:247-285",
+    "docs/mcp/oss-research-docker-hardening.md",
+    "docs/mcp/broker-sandbox-lifecycle.md",
+    "services/mcp-broker/tests/test_sandbox_lifecycle.py:219"
+  ],
+  "run_kwargs_present": [
+    "image", "name", "detach", "labels", "environment", "volumes", "network",
+    "mem_limit", "nano_cpus", "pids_limit", "read_only", "tmpfs", "ports (host-run)", "runtime (env)"
+  ],
+  "run_kwargs_absent_p7": [
+    "security_opt", "cap_drop", "user", "ulimits", "init", "memswap_limit",
+    "storage_opt", "HTTP_PROXY/HTTPS_PROXY"
+  ]
+}
