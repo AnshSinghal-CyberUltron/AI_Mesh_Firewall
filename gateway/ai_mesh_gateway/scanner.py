@@ -309,6 +309,19 @@ _HOMOGLYPH_MAP: dict[str, str] = {
 }
 _HOMOGLYPH_TABLE: dict[int, int] = {ord(k): ord(v) for k, v in _HOMOGLYPH_MAP.items()}
 
+# G19: Unicode SMALL-CAPITAL letters (ɪɢɴᴏʀᴇ …). These are legitimate IPA/phonetic
+# letters, so NFKC does NOT fold them to ASCII, yet an LLM reads small-caps as normal
+# text — so "ɪɢɴᴏʀᴇ ᴀʟʟ ᴘʀᴇᴠɪᴏᴜꜱ ɪɴꜱᴛʀᴜᴄᴛɪᴏɴꜱ" bypassed the ASCII pattern set. Fold each
+# small-cap to its ASCII lowercase look-alike (same approach as _HOMOGLYPH_TABLE).
+# q and x have no widely-used small-cap form and are omitted.
+_SMALLCAP_MAP: dict[int, str] = {
+    0x1D00: "a", 0x0299: "b", 0x1D04: "c", 0x1D05: "d", 0x1D07: "e", 0xA730: "f",
+    0x0262: "g", 0x029C: "h", 0x026A: "i", 0x1D0A: "j", 0x1D0B: "k", 0x029F: "l",
+    0x1D0D: "m", 0x0274: "n", 0x1D0F: "o", 0x1D18: "p", 0x0280: "r", 0xA731: "s",
+    0x1D1B: "t", 0x1D1C: "u", 0x1D20: "v", 0x1D21: "w", 0x028F: "y", 0x1D22: "z",
+}
+_SMALLCAP_TABLE: dict[int, int] = {k: ord(v) for k, v in _SMALLCAP_MAP.items()}
+
 # Bounds for the transport decode-and-rescan stage (single decode, no recursion).
 _TRANSPORT_DECODE_MAX_LEN: int = 200
 _BASE64_TOKEN_RE: re.Pattern[str] = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
@@ -360,7 +373,7 @@ def _normalize_unicode(text: str) -> str:
         ch for ch in decomposed if unicodedata.category(ch) != "Mn"
     )
     recomposed = unicodedata.normalize("NFKC", no_marks)
-    return recomposed.translate(_HOMOGLYPH_TABLE)
+    return recomposed.translate(_HOMOGLYPH_TABLE).translate(_SMALLCAP_TABLE)
 
 
 # ROT13 is its own inverse; a whole-text Caesar-13 shift is a common evasion
