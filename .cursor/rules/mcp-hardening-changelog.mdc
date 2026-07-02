@@ -201,3 +201,14 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (output-content + input-call) now covered on the adapter path. Item 3b → [x]. RESIDUAL (non-blocking):
   bare-REST/ext-proxy cross-stage (separate surface; legacy backend path covered by control) + optional
   live-stack drive over the byte-level in-process e2e proof.
+- **CHG-0026** (2026-07-02) — G3 item 7 [x]: migrated the websocket transport onto the sandbox broker path.
+  `_adapter_forward` now forwards ws via `broker_send_rpc` (transport='websocket') alongside
+  streamable-http/sse; the in-gateway `mcp_ws_adapter.send_jsonrpc` dial is removed. ws was the LAST transport
+  still opening an upstream socket from inside the gateway process — despite `_is_sandbox_routed` already
+  declaring it sandbox-routed and the broker + sandbox agent (routes.py unified /{org}/rpc; upstream_manager
+  session.ws) already supporting ws upstreams. Now ALL four transports (stdio + streamable-http + sse +
+  websocket) egress via the per-org sandbox by default; the gateway never dials any upstream. Files:
+  mcp_proxy.py + test_mcp_http_via_sandbox.py (+1: broker routing asserted, in-gateway ws send NOT awaited).
+  Gate: 1064 gateway + 52 broker (ws/upstream/route/rpc/lifecycle) passed. Caveat: streamable-http/sse still
+  honor MCP_HTTP_VIA_SANDBOX (default ON → sandbox); stdio + ws unconditional. mcp_ws_adapter is now legacy
+  (its main.py reaper/shutdown hooks remain as benign no-ops over an empty ws session table).

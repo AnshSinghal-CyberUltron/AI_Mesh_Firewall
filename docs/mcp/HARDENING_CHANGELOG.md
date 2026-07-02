@@ -838,3 +838,39 @@ the prod compose/manifests is tracked under G3 item 12.
   (they are a separate surface from the org_mcp_jsonrpc adapter path 3b targets; the legacy direct-backend
   path is covered by control's own MCPToolCallView field redaction). (2) An optional live-stack drive on a
   real registered adapter server is belt-and-suspenders over the byte-level in-process e2e proof.
+
+### CHG-0026 — Migrate websocket transport onto the sandbox broker path (G3 item 7 — last isolation residual)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 7 (all transports via the per-org sandbox; nothing dialed from the gateway).
+  websocket was the last transport still connecting in-gateway. **Item 7 → [x]** for the default config.
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (`_adapter_forward`: websocket now routes via
+  `broker_send_rpc` alongside streamable-http/sse; the in-gateway `mcp_ws_adapter.send_jsonrpc` branch
+  removed); `gateway/ai_mesh_gateway/tests/test_mcp_http_via_sandbox.py` (+1 test).
+- **WHAT:** `_is_sandbox_routed("websocket")` already returned True ("ws always routes via the sandbox"), and
+  the broker + sandbox agent already fully support websocket upstreams (`services/mcp-broker/src/sandbox/
+  routes.py` unified `/{org}/rpc` for all four transports; `sandbox-image/agent/upstream_manager.py` opens
+  and reuses `session.ws` websocket sessions; `mcp_sandbox_client.broker_send_rpc` builds the upstream block
+  for ANY non-stdio transport). But the gateway's `_adapter_forward` STILL dialed websocket in-process via
+  `mcp_ws_adapter.send_jsonrpc` (`websockets.client.connect`) — a self-contradiction with its own
+  `_is_sandbox_routed` contract and the "nothing in the backend" isolation goal. Now the websocket branch is
+  folded into the remote-transport branch: the gateway builds the upstream block (url + egress allowlist +
+  injected OAuth bearer) and the per-org sandbox agent dials the ws upstream — the gateway never opens the
+  websocket itself.
+- **WHY:** BACKSTOP finding (CHG-0011/0018): "websocket STILL connects in-gateway … so '4-transport isolation
+  active' OVERSTATES (3/4)". With this, all four transports (stdio + streamable-http + sse + websocket) egress
+  through the per-org sandbox by default — the claim is now TRUE, not aspirational.
+- **NOW DOES:** a websocket MCP tool call is forwarded gateway → broker → per-org sandbox → upstream ws host
+  (egress-allowlisted to the upstream host only); the gateway process opens no upstream socket for any
+  transport. Per-org network isolation + egress allowlist now cover ws too.
+- **Touched whose work:** consumes the broker/sandbox-agent ws support (P4.13/P6.18 broker sessions) that was
+  already built but unused by the gateway; aligns `_adapter_forward` with `_is_sandbox_routed`. `mcp_ws_adapter`
+  is now legacy (no forwarding caller); its `main.py` reaper/shutdown lifecycle hooks remain but are benign
+  no-ops (they manage an now-empty in-gateway ws session table) — a later cleanup can drop them.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_http_via_sandbox.py
+  -q` → 4 passed incl. `test_adapter_forward_websocket_uses_broker_send_rpc` (asserts `broker_send_rpc` called
+  with `up_config.transport=="websocket"` + the in-gateway `mcp_ws_adapter.send_jsonrpc` is NOT awaited).
+  Broad gateway sweep → 1064 passed, 0 failed; broker ws/upstream/route/rpc/lifecycle subset → 52 passed.
+- **REMAINING / caveat (non-blocking):** streamable-http/sse still honor the `MCP_HTTP_VIA_SANDBOX` escape
+  hatch (default ON → sandbox; OFF → legacy direct-httpx) — so "nothing in the backend for ALL transports"
+  holds for the DEFAULT config; stdio + websocket are unconditional. Optional: an independent LIVE drive
+  (register a ws MCP server, assert 0 direct gateway upstream sockets) over the unit proof.

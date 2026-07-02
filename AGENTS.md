@@ -120,6 +120,16 @@
     (+2 end-to-end). Gate: 37 relevant + 1063 broad sweep passed. Both trigger directions (output-content +
     input-call) now covered on the adapter path. RESIDUAL (non-blocking): bare-REST cross-stage + optional
     live drive.
+  - CHG-0026 (2026-07-02) — G3 item 7 [x]: migrated the websocket transport onto the sandbox broker path.
+    `_adapter_forward` now routes ws via `broker_send_rpc` (transport='websocket') alongside streamable-http/
+    sse; the in-gateway `mcp_ws_adapter.send_jsonrpc` dial is removed. ws was the last transport still opening
+    an upstream socket from inside the gateway process, despite `_is_sandbox_routed` already declaring it
+    sandbox-routed and the broker/agent already supporting ws upstreams. Now ALL four transports (stdio +
+    streamable-http + sse + websocket) egress via the per-org sandbox by default — gateway never dials
+    upstream. Files mcp_proxy.py + test_mcp_http_via_sandbox.py (+1: asserts broker routing + in-gateway ws
+    NOT dialed). Gate: 1064 gateway + 52 broker (ws/upstream/route/rpc/lifecycle) passed. Caveat: http/sse
+    still honor MCP_HTTP_VIA_SANDBOX (default ON); stdio+ws unconditional. mcp_ws_adapter now legacy (benign
+    main.py reaper/shutdown no-ops remain).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

@@ -139,7 +139,7 @@
       RBAC redaction on adapter) + 5 (tag vocabulary catalog-join).
 
 ## G3 — Architecture hardening (log every edit)
-- [ ] 7. All transports (http/ws/sse/stdio) in the per-org gVisor sandbox; nothing in the backend (complete/fix if needed).
+- [x] 7. All transports (http/ws/sse/stdio) in the per-org gVisor sandbox; nothing in the backend (complete/fix if needed).
       VERIFIED STILL OPEN — CHG-0011 (2026-07-02, read-only; active-migration zone, did NOT edit). Broker
       side DONE (unified POST /{org}/rpc handles all transports, routes.py:296; agent dials HTTP+egress-
       allowlist). Gateway wiring INCOMPLETE: stdio→broker ✓ (adapter path, MCP_STDIO_IN_PROCESS=false);
@@ -161,6 +161,19 @@
       "4-transport isolation active" OVERSTATES (3/4; ws unused live). REMAINING before [x]: migrate ws to
       broker_send_rpc (unified /{org}/rpc handles ws) OR document ws as legacy; independent live
       http-via-sandbox drive (register a streamable-http server, assert 0 direct upstream dials).
+      CHG-0026 (2026-07-02): DONE → item 7 [x]. Migrated websocket onto the broker path. _adapter_forward now
+      routes ws via broker_send_rpc (transport='websocket') alongside streamable-http/sse; the in-gateway
+      mcp_ws_adapter.send_jsonrpc dial is REMOVED. Verified the broker + sandbox agent already support ws
+      upstreams (routes.py unified /{org}/rpc for all 4 transports; upstream_manager session.ws;
+      broker_send_rpc builds the upstream block for any non-stdio transport) — so this is a safe gateway-only
+      migration that aligns _adapter_forward with _is_sandbox_routed's already-declared ws-sandbox-routed
+      contract. Now ALL 4 transports (stdio+streamable-http+sse+websocket) egress via the per-org sandbox by
+      default; gateway never dials upstream. +1 test (test_adapter_forward_websocket_uses_broker_send_rpc:
+      asserts broker routing + in-gateway ws NOT dialed). Gate: 1064 gateway + 52 broker (ws/upstream/route/
+      rpc/lifecycle) passed. CAVEAT: streamable-http/sse still honor MCP_HTTP_VIA_SANDBOX (default ON→sandbox,
+      OFF→legacy direct-httpx); stdio+ws unconditional — so "nothing in the backend for ALL transports" holds
+      for the DEFAULT config. mcp_ws_adapter now legacy (main.py reaper/shutdown hooks remain as benign
+      no-ops). OPTIONAL follow-up: live ws-via-sandbox drive over the unit proof.
 - [ ] 8. No unknown npm on host — proven.
       PROGRESS — CHG-0022 (2026-07-02): confirmed live gap (sandbox had npm_config_ignore_scripts but NOT
       the pin/allowlist envs; docker_manager._run_kwargs only set ignore_scripts, so the agent's pin/allowlist
