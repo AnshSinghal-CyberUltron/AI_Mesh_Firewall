@@ -468,3 +468,10 @@
       theme/contrast/AI-slop issues in either theme — closes "colour/both-themes contrast" exhaustively. Also:
       lint 75/75 + build clean on shared tree. Killed full 96-combo gate (F3-polluted w/ AUTH_FAILED mid-run;
       per-surface verifications more reliable). MCP claim: active.
+      [iter+] STEADY STATE re-confirm: stress claim still active (MCPConnectorPanel never_edit); overflow root
+      (bare `grid gap-3` L1528, no grid-cols-1) UNCHANGED — mcp-page CP44-46 revamp verified "detector+themes"
+      but NOT responsive overflow, so it persists. Build green (5.0s) after CP44-46 — no regression. Frontend
+      SOURCE stable. All frontend hardening in remit is DONE+verified; the 2 open items (MCPConnector never_edit
+      overflow + cross-source product-decision) are genuinely external. Loop correctly NOT emitting COMPLETE.
+      NB for future: the owning (mcp-page) session checks detector/themes but not RESPONSIVE overflow — the
+      148/529 overflow will persist until they run a width sweep or the stress never_edit claim releases.
