@@ -1,9 +1,18 @@
 ---
-iteration: 33
+iteration: 34
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter34 (2026-07-02) — ws blockers recheck + 3-transport verify
+- **P4.13/P6.18 RECHECK:** **No change** since iter33 — gateway ws still `mcp_ws_adapter`
+  (`mcp_proxy.py:2005-2015`), NOT `broker_send_rpc`; control `URLField` (`models.py:41`) still
+  rejects `ws://` registration. **3/4** gateway transports PASS after warmup (stdio+http+sse;
+  cold-run http/sse tools=0 flakiness same as iter33 R1, no regression). ws BLOCKED (no manifest
+  slug). ss: no gateway :443. Playwright **12/12**. **Cannot `[x]`** until Claude lands both seams.
+  Evidence: `RECHECK_ITER34.md`.
+- Hive: `cursor-ralph-iter34` on `hive-1782991737290-ylo911`.
 
 ## iter33 (2026-07-02) — ws stub prep + gateway gap recheck
 - **P4.13/P6.18 RECHECK:** Gateway ws routing **unchanged** — still `mcp_ws_adapter` (`mcp_proxy.py:2000`),
