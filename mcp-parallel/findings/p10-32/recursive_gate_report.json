@@ -1,0 +1,58 @@
+{
+  "rounds_required": 3,
+  "all_green": false,
+  "elapsed_s": 168.6,
+  "rounds": [
+    {
+      "round": 1,
+      "ok": false,
+      "gates": [
+        {
+          "gate": "broker-pytest",
+          "ok": true,
+          "summary": "95 passed, 3 warnings in 2.68s"
+        },
+        {
+          "gate": "agent-pytest",
+          "ok": true,
+          "summary": "41 passed, 1 warning in 0.46s"
+        },
+        {
+          "gate": "multi-org",
+          "ok": true,
+          "summary": "HARNESS: GREEN"
+        },
+        {
+          "gate": "concurrency",
+          "ok": false,
+          "summary": "  round 2: recv=720 drops=0 id_mm=0 content_mm=0 arith_mm=0 xtenant=0"
+        },
+        {
+          "gate": "load",
+          "ok": true,
+          "summary": "LOAD: PASS"
+        },
+        {
+          "gate": "leakage",
+          "ok": true,
+          "summary": "LEAKAGE: PASS (26/26 checks)"
+        },
+        {
+          "gate": "oauth",
+          "ok": true,
+          "summary": "OAUTH_TRANSPORT: PASS (67/67 checks)"
+        },
+        {
+          "gate": "playwright",
+          "ok": true,
+          "summary": "B1/B2/B4 E2E: ALL PASS"
+        }
+      ]
+    }
+  ],
+  "blocked_items": [
+    "P4.13",
+    "P6.18",
+    "P6.19-P4"
+  ]
+}

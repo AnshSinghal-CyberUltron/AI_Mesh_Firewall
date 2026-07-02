@@ -1,8 +1,0 @@
-agent: claude-mcp-loop
-story: P10.32 (item 32 — consolidated P9 gate, 3× all-green)
-files:
-  - scripts/mcp_p9_gate.py
-  - scripts/ralph/mcp_progress.md
-  - mcp-parallel/findings/p10-32/**
-since: 2026-07-02T11:00:00Z
-status: active
