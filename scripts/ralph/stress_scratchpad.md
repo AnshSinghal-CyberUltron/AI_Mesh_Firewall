@@ -516,7 +516,19 @@
         version "v10.0.3" NOT confused with an IP, public https URL NOT flagged. => output-side infrastructure/
         credential leakage detection is robust; the output guard covers PII + secrets + exfil-channels +
         encoded-PII + infra/credential leakage + IP leakage, on both non-stream and (G36) stream egress.
-      ★ FINAL COMPLETION 2026-07-02 (+G30..G36): ALL 7 criteria met. The prior sole blocker — the tier-2
+      G37 DONE 2026-07-02 (commit b6cebaa1) — Gemma chat-template turn-token role-spoofing. Probe of model-
+        specific control-token spoofing: ChatML(<|im_*|>), Llama(<<SYS>>), special-role-tokens(<|system|>)
+        already block; but Gemma <start_of_turn>/<end_of_turn> forged-turn smuggling slipped. A user MESSAGE
+        never legitimately contains these (the gateway builds the chat template), so a literal token match is
+        near-zero FP. Added r"<\s*(?:start|end)_of_turn\s*>" to ATTACK_PATTERNS.prompt_injection. The Claude
+        "\n\nHuman:/Assistant:" delimiter was DELIBERATELY LEFT TO TIER-2: it legitimately appears when a user
+        shares a conversation transcript, so a tier-1 hard block = FP (verified: transcript allows both in-proc
+        AND live). G37 golden: 3 Gemma-spoof block + 4 FP-floor allow (code [INST,DATA], turn-of-events, start-
+        of-turn-3, Claude transcript). Adversarial 242, golden 245x3, full gateway 1176. REDEPLOYED (rollback-
+        preG37, --no-deps) + LIVE: gemma spoof 400, Claude transcript 200, benign 200, plain attack 400. Bounded
+        => ReDoS-safe. => chat-template/role-delimiter spoofing now covers ChatML + Llama + Gemma + special-role
+        tokens at tier-1; Claude Human/Assistant + semantic role-play at tier-2.
+      ★ FINAL COMPLETION 2026-07-02 (+G30..G37): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
         enforcement (no block->allow), all 41 block payloads block, translate now allow->allow; only safe-
