@@ -22,6 +22,7 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 | cursor-ralph-iter2 | `docs/mcp/PARALLEL_CLAIMS.md`, `mcp-parallel/**`, `.cursor/ralph/scratchpad.md` | C0 hive join iter2 | 2026-07-02T07:35:00Z | released |
 | cursor-ralph-iter2 | `mcp-parallel/findings/p1-2/**`, `scripts/playwright_mcp_p1_http_oauth_repro.mjs` | P1.2 HTTP oauth 0-tools repro | 2026-07-02T08:00:00Z | released |
 | cursor-ralph-iter3 | `mcp-parallel/findings/p1-3/**`, `scripts/playwright_mcp_p1_dialog_focus_repro.mjs` | P1.3 Add-Server dialog focus loss (B4) | 2026-07-02T08:15:00Z | released |
+| cursor-ralph-iter4 | `mcp-parallel/findings/p1-4/**`, `scripts/playwright_mcp_p1_sandbox_unavailable_repro.mjs` | P1.4 sandbox unavailable repro | 2026-07-02T09:00:00Z | released |
 
 ## Claim protocol
 

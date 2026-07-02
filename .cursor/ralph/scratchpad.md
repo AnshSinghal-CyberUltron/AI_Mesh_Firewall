@@ -23,8 +23,10 @@ status: ACTIVE
 - [x] 3. Playwright: type into the Add-Server dialog fields → capture focus loss after 1 keystroke.
       **Verified 2026-07-02:** B4 NOT reproducing — focus kept for 24 keystrokes × 5 fields; prior
       `Dialog.jsx` onCloseRef fix effective; see `mcp-parallel/findings/p1-3/`.
-- [ ] 4. Playwright + logs: trigger a tool call that surfaces "MCP sandbox is temporarily unavailable";
+- [x] 4. Playwright + logs: trigger a tool call that surfaces "MCP sandbox is temporarily unavailable";
       capture the network trace + broker logs. Record all repros to mcp-parallel/findings with screenshots.
+      **Verified 2026-07-02:** B3 confirmed — broker stopped → tools/call shows error in UI + gateway
+      logs (5× broker unreachable); see `mcp-parallel/findings/p1-4/`.
 
 ## P2 — OSS + internet research (better approaches for ALL-transport sandboxing)
 - [ ] 5. GitHub MCP: study modelcontextprotocol/servers + how remote (http/sse/ws) MCPs are proxied;
