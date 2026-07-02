@@ -105,11 +105,34 @@
           google/gemma-4-31b-it:free, nvidia/nemotron-3-super-120b-a12b:free, liquid/lfm-2.5-1.2b-instruct:free,
           openrouter/free. (Re-query live: curl https://openrouter.ai/api/v1/models | filter pricing.prompt==0.)
         * Evidence screenshot (pre-key, gitignored): .playwright-mcp/r5-model-connection-page-authed.png
-      R5.2 NEXT: change provider->Custom, enter base URL + OpenRouter key, connect ~10 free models, verify connected.
+      R5.2 DONE 2026-07-02 — 10 FREE OpenRouter models connected to org ZeroShield (id 2), all HTTP 201:
+        cohere/north-mini-code:free, google/gemma-4-{26b-a4b,31b}-it:free, liquid/lfm-2.5-1.2b-instruct:free,
+        nvidia/nemotron-3.5-content-safety:free, nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,
+        nvidia/nemotron-3-super-120b-a12b:free, openrouter/free, poolside/laguna-{m.1,xs.2}:free.
+        The OpenRouter KEY was TYPED INTO THE UI (modal "Custom / Other API Key" field, masked, verified 73
+        chars sk-or-v1…6c11). Models POSTed to /api/firewall/models/ (the UI form's OWN endpoint, Bearer
+        localStorage 'auth_access'), key read FROM the UI field. Payload per model: {provider:'custom',
+        model_name:<id>, model_id:<id>, is_active:true, data_sensitivity_level:'public', api_key:<from UI>,
+        api_base:'https://openrouter.ai/api/v1'}.
+      >>> R6 FINDING (SUSPECTED, verify in R6): the ModelConnectionPanel "Add model" modal for provider=custom
+        submits with model_id BLANK -> backend 400 {"model_id":["This field may not be blank."]}. The custom
+        path needs to populate model_id (from custom_model_name) or expose/require a model_id input. Confirm by
+        reading the modal JSX (line ~861-1000) + a real user click-through; fix in R6 (owned ModelConnectionPanel.jsx).
+      NOTE: session logged out after batch; models persist in control DB (not session). No gateway key in
+        localStorage under 'zeroshield_gateway_api_key' (auto-provision didn't fire before navigation).
 - [ ] 7. Run the adversarial corpus END-TO-END via the stock OpenAI SDK (org gateway key) through the
       full pipeline against the real models: assert enforcement is correct (no PII leak to any model;
       redact stays redact; blocks are justified), routing/kill-switch behave, and the trace is honest.
       Any real-world failure → fix (R4) → re-run. Redact the key from all logs/snapshots.
+      R5.4 RECIPE (next): mint a gateway key for org ZeroShield via control Django shell (like
+        scripts/seed_simulator_gateway_key.sh): docker compose exec -T control python manage.py shell -c
+        "from core.models import GatewayAPIKey; from django.contrib.auth import get_user_model;
+         u=get_user_model().objects.get(email='admin@zeroshield.io');
+         inst,raw=GatewayAPIKey.generate_key(name='stress-r5', owner=u, project_id='simulator-default'); print(raw)"
+        (do NOT commit/log raw). Then stock openai SDK: base_url=http://localhost:8300/v1, api_key=<raw org key>,
+        model='google/gemma-4-31b-it:free' (or openrouter/free). Drive the R2 corpus (obfuscated PII, injection,
+        base64) through it; capture EGRESS via gateway telemetry/pipeline_trace; assert no PII reached the model,
+        redactions held, blocks justified, kill-switch works. Use aidefence_scan as independent oracle on egress.
 
 ## R6 — Impeccable frontend revamp (client-facing, Playwright-verified)
 - [ ] 8. /impeccable audit + /critique + /polish on ModelConnectionPanel (the client's first touch:
