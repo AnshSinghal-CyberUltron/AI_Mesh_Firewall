@@ -83,6 +83,19 @@
       REMAINING before [x]: finding #1 (the big one) — per-actor user/agent/role tool authz + field-RBAC
       masking on the stdio/ws ADAPTER path (enabled-tools payload needs an actor dimension, or route the
       adapter path through actor-scoped policy eval).
+      CHG-0024 (2026-07-02): field-RBAC HALF of finding #1 DONE. The compiler already emits
+      Policy.redaction_fields into the bundle (compiler.py:521, M-04) and the control HTTP path masks those
+      named tool-RESULT fields, but the gateway never consumed them — adapter path did content-scan yet NO
+      field-level masking. Now: gateway EvaluationResult.redaction_fields (collected from matched actor-scoped
+      policies in both evaluate() + evaluate_mcp_policies()), a Django-free port of apply_field_redaction
+      (NFKC/case-insensitive keys, bounded, non-mutating), applied on the OUTPUT structured payload via
+      scan_mcp_payload._finalize_output — scoped by actor, output-only, suppressed under monitor, audited via
+      McpScanResult.redacted_fields + meta. +7 tests; test_mcp_scan_orchestrator.py 22 passed, broad sweep
+      1056 passed. Backward-compat: redaction_fields=[] → no-op. STILL OPEN (advanced, not [x]): (a) cross-
+      stage parity — control uses the INPUT-stage policy match to project fields out of the RESPONSE; the
+      gateway currently triggers on an OUTPUT-scan match (thread input-stage redaction_fields into the output
+      scan for full parity); (b) live drive proving field masking on a real adapter tool-call. (The per-actor
+      ACCESS-authz half of finding #1 is already enforced via CHG-0006/0007/0008.)
 - [x] 4. Context minimization / least-privilege assembly.
       RESOLVED N-A for MCP — CHG-0021 (2026-07-02): the MCP tool-call path has NO separate context-assembly
       step (unlike chat, where minimize_context prunes message history by token budget). Least-privilege for

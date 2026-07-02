@@ -742,3 +742,51 @@ the prod compose/manifests is tracked under G3 item 12.
   `mcp-parallel/findings/backstop-p11-pg-redis/pg_redis_evidence.txt`.
 - **REMAINING for G3 item 11:** the actual restart DRILL — kill Redis/PG mid-load and verify recovery + no
   cross-tenant leakage during recovery — is UNSAFE on the shared stack (item 18 chaos; needs a dedicated host).
+
+### CHG-0024 — Per-policy FIELD-level RBAC redaction on the stdio/websocket ADAPTER path (G2 item 3b / finding #1)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 3b (per-policy field-level redaction on the adapter path). This closes the
+  core of the item: "gateway EvaluationResult + apply on the adapter response" (the "add redaction_fields to
+  compiled policies" half was already done by M-04, compiler.py:521).
+- **Files:** `gateway/ai_mesh_gateway/policy_engine.py` (EvaluationResult.redaction_fields; collection in
+  both `evaluate()` and `evaluate_mcp_policies()`; new `apply_field_redaction()` + `_normalize_field_key()`);
+  `gateway/ai_mesh_gateway/mcp_scan_orchestrator.py` (McpScanResult.redacted_fields; `_scan_text_tier1`
+  now returns the matched policy's `redaction_fields`; `scan_mcp_payload` accumulates the union and applies
+  `_finalize_output` at every non-blocked return); `gateway/ai_mesh_gateway/mcp_proxy.py` (surface
+  `redacted_fields` in the scan audit meta); `gateway/ai_mesh_gateway/tests/test_mcp_scan_orchestrator.py`
+  (+6 orchestrator tests + 1 helper unit test).
+- **WHAT:** the compiler emits each policy's `redaction_fields` into the bundle (compiler.py:521, M-04) and
+  the control HTTP path masks those named tool-RESULT fields via `apply_field_redaction` — but the GATEWAY
+  never consumed them, so the stdio/websocket ADAPTER path (`scan_mcp_payload`) did content-scan yet **NO
+  field-level RBAC masking**. Now: (1) the gateway policy engine surfaces the matched, actor-scoped policy's
+  `redaction_fields` on `EvaluationResult` (D6 trigger = "policy matched AND has non-empty redaction_fields",
+  NOT gated on the verdict); (2) a faithful Django-free port of control's `apply_field_redaction` (NFKC
+  homoglyph folding, case-insensitive keys, depth/node bounds, non-mutating deep copy) masks those named
+  fields in the structured OUTPUT payload; (3) it is scoped by actor (`_policy_applies_to_actor`), applied
+  ONLY on the output direction, and suppressed under a `monitor` posture (observe-only) — matching the HTTP
+  path's `_output_monitor` guard; (4) a `block` posture already withholds the payload upstream, so field
+  masking never runs on a blocked call; (5) `redacted_fields` is recorded in the scan trace + audit meta,
+  mirroring the HTTP path's `metadata.redacted_field_names`.
+- **WHY:** BACKSTOP finding #1 (the "big one" tracked under 3b) — actor/policy field-level RBAC masking of
+  tool results was enforced on the control HTTP path but ENTIRELY ABSENT on the gateway stdio/websocket
+  adapter path, a 1.4 field-level-redaction gap directly in the HARDEN-1.4 mandate ("field-level redaction of
+  tool RESULTS"). The plumbing (bundle field, control masker) existed; only the gateway consumption was
+  missing.
+- **NOW DOES:** on the adapter path, a matched actor-scoped policy declaring `redaction_fields=["ssn",...]`
+  masks those named fields in the tool RESPONSE (value → `[REDACTED]`) while siblings survive, scoped to the
+  policy's actor, output-only, suppressed under monitor, audited via `redacted_fields`. Backward-compatible:
+  every legacy policy carries `redaction_fields=[]` → exact no-op (proven by a test).
+- **Touched whose work:** consumes the M-04 compiler bundle field (control policy compiler session) on the
+  gateway side; complements the CHG-0006/0007/0008 per-actor ACCESS authz on the adapter path with per-actor
+  field-level REDACTION. No control-plane change needed.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_scan_orchestrator.py
+  -q` → 22 passed (6 new field-RBAC + 1 helper unit test). Broad sweep `ai_mesh_gateway/tests` → 1056 passed,
+  0 failed. Key tests: `test_field_redaction_masks_named_output_fields`,
+  `test_field_redaction_suppressed_under_monitor_posture`, `test_field_redaction_not_applied_on_input_args`,
+  `test_field_redaction_scoped_to_actor_role`, `test_field_redaction_empty_list_is_noop`,
+  `test_apply_field_redaction_nested_homoglyph_and_nonmutating`.
+- **REMAINING for G2 item 3b:** this masks fields when the OUTPUT scan matches a policy declaring
+  redaction_fields (output-stage-triggered parity). The control HTTP path additionally uses the INPUT-stage
+  policy match to project fields out of the response (cross-stage). Threading input-stage `redaction_fields`
+  into the output `scan_mcp_payload` for full cross-stage parity is a follow-up refinement; item stays open
+  (advanced, not [x]) until that + a live drive.

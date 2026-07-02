@@ -970,6 +970,11 @@ async def _mcp_security_scan(
         "scan_action": action,
         "scan_pipeline": "two_tier",
         "monitored": result.monitored,
+        # 3b: named response fields masked via per-policy RBAC field redaction
+        # (empty unless a matched policy declared redaction_fields on an output
+        # scan under a mutating posture). Mirrors the control HTTP path's
+        # metadata.redacted_field_names so both transports audit identically.
+        "redacted_fields": list(result.redacted_fields),
     }
     return (
         scanned,

@@ -19,7 +19,7 @@ from ai_mesh_shared.mcp_compliance_tags import tags_for_preset_or_entity
 
 from mcp_scan_targets import extract_and_bind
 from patterns import detect_pii, detect_secrets, get_compliance_tags, redact_all
-from policy_engine import apply_redaction, evaluate_mcp_policies
+from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies
 
 LOG = logging.getLogger("gateway.mcp_scan")
 
@@ -68,6 +68,10 @@ class McpScanResult:
     # when nothing blocked or redacted.
     monitored: bool = False
     scan_trace: list[dict[str, Any]] = field(default_factory=list)
+    # 3b: named response fields masked on the OUTPUT via per-policy RBAC field
+    # redaction (redaction_fields). Empty unless a matched policy declared fields
+    # AND the posture allowed mutation (not 'monitor'). Surfaced to the audit meta.
+    redacted_fields: list[str] = field(default_factory=list)
 
     @property
     def has_findings(self) -> bool:
@@ -229,10 +233,16 @@ async def _scan_text_tier1(
     server_slug: str,
     tool_name: str,
     actor: dict[str, Any] | None = None,
-) -> tuple[str, list[McpFinding], bool]:
-    """Run Tier-1 policy + preset evaluation on a single text fragment."""
+) -> tuple[str, list[McpFinding], bool, list[str]]:
+    """Run Tier-1 policy + preset evaluation on a single text fragment.
+
+    Returns ``(mutated_text, findings, blocked, redaction_fields)`` where
+    ``redaction_fields`` (3b) are the named response fields the matched policy
+    declared for RBAC masking — surfaced so ``scan_mcp_payload`` can mask them on
+    the structured OUTPUT payload (the injection/PII fallbacks declare none).
+    """
     if not text:
-        return text, [], False
+        return text, [], False, []
 
     findings: list[McpFinding] = []
     blocked = False
@@ -273,7 +283,7 @@ async def _scan_text_tier1(
                 blocked = True
             elif enforcement == "redact" and (policy_redacts or eval_result.redaction_hints):
                 mutated = apply_redaction(text, eval_result.redaction_hints)
-            return mutated, findings, blocked
+            return mutated, findings, blocked, list(eval_result.redaction_fields)
 
     if _injection_match(text):
         findings.append(
@@ -292,7 +302,7 @@ async def _scan_text_tier1(
             blocked = True
         elif enforcement == "redact":
             mutated = redact_all(text)
-        return mutated, findings, blocked
+        return mutated, findings, blocked, []
 
     pii = detect_pii(text)
     secrets = detect_secrets(text)
@@ -314,7 +324,7 @@ async def _scan_text_tier1(
             blocked = True
         elif enforcement == "redact":
             mutated = redact_all(text)
-    return mutated, findings, blocked
+    return mutated, findings, blocked, []
 
 
 async def _scan_text_tier2(
@@ -394,6 +404,38 @@ async def scan_mcp_payload(
     # defers to the server/tool action passed as ``enforcement``.
     tier1_action = _resolve_tier_action(tier1_ctrl, enforcement)
     result_redacted = False
+    # 3b: accumulate the named response fields that matched actor-scoped policies
+    # declared for RBAC masking (deduped, order-preserving). Applied to the
+    # structured OUTPUT payload at each non-blocked return via _finalize_output —
+    # this closes the "adapter path does content-scan but no field-level RBAC
+    # masking" gap (BACKSTOP finding #1); the HTTP path already masks these fields.
+    field_redaction_union: list[str] = []
+
+    def _finalize_output(out_payload: Any) -> Any:
+        """Mask per-policy ``redaction_fields`` on the OUTPUT payload.
+
+        Parity with the control HTTP path (apply_field_redaction): applies ONLY
+        on the output direction, only when a matched policy declared fields, and
+        NOT under a 'monitor' posture (observe-only). A 'block' posture already
+        withheld the payload upstream, so field masking never runs on a blocked
+        call. Records the declared field set + a scan-trace stage for audit.
+        """
+        if scan_direction != "output" or not field_redaction_union:
+            return out_payload
+        if tier1_action == "monitor":
+            return out_payload
+        masked = apply_field_redaction(out_payload, field_redaction_union)
+        result.redacted_fields = list(field_redaction_union)
+        result.scan_trace.append(
+            {
+                "scan_stage": "field_redaction",
+                "tier": "tier1",
+                "direction": scan_direction,
+                "fields": list(field_redaction_union),
+                "policy_engine": True,
+            }
+        )
+        return masked
 
     if not tier1_ctrl.get("enabled", True):
         result.scan_trace.append(
@@ -420,7 +462,7 @@ async def scan_mcp_payload(
     for text, setter, path_label in targets:
         if not text:
             continue
-        new_text, findings, blocked = await _scan_text_tier1(
+        new_text, findings, blocked, rfields = await _scan_text_tier1(
             text,
             scan_direction=scan_direction,
             enforcement=tier1_action,
@@ -430,6 +472,9 @@ async def scan_mcp_payload(
             tool_name=tool_name,
             actor=actor,
         )
+        for _rf in rfields:
+            if _rf not in field_redaction_union:
+                field_redaction_union.append(_rf)
         result.findings.extend(findings)
         if findings:
             for f in findings:
@@ -465,14 +510,14 @@ async def scan_mcp_payload(
     mutable = state_ref[0]
 
     if not tier2_ctrl.get("enabled", False):
-        return (mutable if result_redacted else payload), result
+        return _finalize_output(mutable if result_redacted else payload), result
 
     org_override = _org_tier2_allowed(enabled_info)
     if org_override is False:
         result.scan_trace.append(
             {"scan_stage": "tier2_skipped", "tier": "tier2", "reason": "org_mcp_tier2_disabled"}
         )
-        return (mutable if result_redacted else payload), result
+        return _finalize_output(mutable if result_redacted else payload), result
 
     strict_mode = tier2_ctrl.get("strict_mode") or "strict"
     tier2_action = _resolve_tier_action(tier2_ctrl, enforcement)
@@ -523,5 +568,5 @@ async def scan_mcp_payload(
             setter(new_text)
             result_redacted = True
 
-    out = state_ref[0] if result_redacted else payload
+    out = _finalize_output(state_ref[0] if result_redacted else payload)
     return out, result

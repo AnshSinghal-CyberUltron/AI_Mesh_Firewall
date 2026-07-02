@@ -172,3 +172,16 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   events / 3 orgs; compliance_tags populated block=10/redact=265). Restart-safety graceful by design
   (Redis-unreachable → TTL-only; PG recording best-effort). GAP: actual restart-drill = item-18 chaos
   (unsafe on shared stack). Evidence: mcp-parallel/findings/backstop-p11-pg-redis/.
+- **CHG-0024** (2026-07-02) — G2 item 3b: per-policy FIELD-level RBAC redaction on the stdio/websocket
+  ADAPTER path. The compiler already emits `Policy.redaction_fields` into the bundle (compiler.py:521, M-04)
+  and the control HTTP path masks those named tool-RESULT fields, but the gateway never consumed them — the
+  adapter path did content-scan yet NO field-level masking. Now the gateway policy engine surfaces the
+  matched actor-scoped policy's `redaction_fields` on `EvaluationResult`, and a Django-free port of control's
+  `apply_field_redaction` (NFKC homoglyph fold, case-insensitive keys, depth/node bounds, non-mutating deep
+  copy) masks those named fields in the structured OUTPUT payload — scoped by actor, output-only, suppressed
+  under `monitor`, recorded via `redacted_fields` in the scan trace + audit meta. Closes finding #1
+  (field-RBAC absent on adapter path). Files: policy_engine.py (EvaluationResult + evaluate/evaluate_mcp_
+  policies collection + apply_field_redaction), mcp_scan_orchestrator.py (McpScanResult.redacted_fields +
+  _scan_text_tier1 4-tuple + _finalize_output), mcp_proxy.py (meta), test_mcp_scan_orchestrator.py (+7 tests).
+  Gate: 22 passed / 1056 broad sweep. Backward-compat: redaction_fields=[] → no-op (proven). REMAINING:
+  cross-stage input-triggered parity + live drive → item 3b stays open (advanced, not [x]).

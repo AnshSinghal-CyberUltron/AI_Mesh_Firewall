@@ -474,3 +474,170 @@ async def test_action_appears_in_scan_trace():
         )
     t1 = [t for t in result.scan_trace if t.get("scan_stage") == "tier1"]
     assert t1 and t1[0].get("action") == "monitor"
+
+
+# ── 3b: per-policy FIELD-level RBAC redaction on the stdio/websocket ADAPTER path
+# The compiler emits Policy.redaction_fields into the bundle (compiler.py:521) but
+# the gateway never consumed them, so the adapter path did content-scan yet NO
+# field-level masking of named tool-RESULT fields (the HTTP path masks them via
+# control apply_field_redaction). These pin the new parity: a matched policy's
+# redaction_fields mask the named OUTPUT fields, scoped by actor, suppressed under
+# a 'monitor' posture, and never applied to input args. Uses REAL compiled bundles
+# (no mocked evaluate) so the whole redaction_fields → EvaluationResult →
+# apply_field_redaction chain is exercised end-to-end.
+
+
+def _field_policy(fields, *, action="monitor", roles=None, keyword="flagme"):
+    policy = {
+        "id": 5, "code": "FR", "name": "field-rbac", "priority": 10,
+        "severity": "medium", "redaction_fields": list(fields),
+    }
+    if roles is not None:
+        policy["allowed_roles"] = list(roles)
+    return [{
+        "policy": policy,
+        "rules": [{
+            "id": 55, "name": "kw", "rule_type": "keywords",
+            "condition": {"keywords": [keyword]}, "action": action,
+        }],
+    }]
+
+
+def _field_sync(compiled):
+    sync = MagicMock()
+    sync.get_policies_for_server.return_value = compiled
+    return sync
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_masks_named_output_fields():
+    """A matched policy's redaction_fields mask the named OUTPUT fields (values
+    replaced with the placeholder) while sibling fields survive — under a
+    non-monitor posture, output direction. Original payload is not mutated."""
+    payload = {"account": "ACME-123", "ssn": "123-45-6789",
+               "note": "please flagme this record"}
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy(["ssn", "account"]))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="tag",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+        )
+    assert result.blocked is False
+    assert out["ssn"] == "[REDACTED]"
+    assert out["account"] == "[REDACTED]"
+    assert out["note"] == "please flagme this record"      # sibling untouched
+    assert result.redacted_fields == ["ssn", "account"]
+    assert any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
+    assert payload["ssn"] == "123-45-6789"                 # non-mutating (audit-safe)
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_suppressed_under_monitor_posture():
+    """A 'monitor' posture is observe-only: named fields are NOT masked and
+    redacted_fields stays empty (mirrors the HTTP path's _output_monitor guard)."""
+    payload = {"ssn": "123-45-6789", "note": "flagme"}
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy(["ssn"]))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+        )
+    assert out["ssn"] == "123-45-6789"                     # observe-only, unmasked
+    assert result.redacted_fields == []
+    assert not any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_not_applied_on_input_args():
+    """Field-level RBAC masking is an OUTPUT (tool-result) concern — input args
+    are never field-masked, so an input scan leaves them intact."""
+    payload = {"ssn": "123-45-6789", "note": "flagme"}
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy(["ssn"]))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="input", enforcement="tag",
+            effective_controls=_ctrl("input"),
+            org_slug="demo", server_slug="stub", tool_name="echo",
+        )
+    assert out["ssn"] == "123-45-6789"
+    assert result.redacted_fields == []
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_empty_list_is_noop():
+    """Backward-compat: a policy with redaction_fields=[] (every legacy policy)
+    changes nothing — no masking, no field_redaction trace."""
+    payload = {"ssn": "keep-me", "note": "flagme"}
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy([]))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="tag",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+        )
+    assert out["ssn"] == "keep-me"
+    assert result.redacted_fields == []
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_scoped_to_actor_role():
+    """RBAC dimension: redaction_fields only surface (and mask) for the actor the
+    policy is scoped to — a non-scoped actor's response is left intact."""
+    compiled = _field_policy(["ssn"], roles=["support"])
+
+    async def _run(actor_roles):
+        with (
+            patch("mcp_scan_orchestrator._get_policy_sync", return_value=_field_sync(compiled)),
+            patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+        ):
+            out, result = await scan_mcp_payload(
+                {"ssn": "123-45-6789", "note": "flagme"},
+                scan_direction="output", enforcement="tag",
+                effective_controls=_ctrl("output"),
+                org_slug="demo", server_slug="stub", tool_name="get_user_record",
+                actor={"roles": actor_roles},
+            )
+        return out, result
+
+    scoped_out, scoped_res = await _run(["support"])
+    assert scoped_out["ssn"] == "[REDACTED]"
+    assert scoped_res.redacted_fields == ["ssn"]
+
+    other_out, other_res = await _run(["admin"])
+    assert other_out["ssn"] == "123-45-6789"     # policy skipped -> no masking
+    assert other_res.redacted_fields == []
+
+
+def test_apply_field_redaction_nested_homoglyph_and_nonmutating():
+    """apply_field_redaction: recurse into nested dict/list, match keys
+    case-insensitively + NFKC (fullwidth folds to ASCII), and never mutate input."""
+    from policy_engine import apply_field_redaction
+
+    obj = {"outer": {"ssn": "111", "keep": "ok"}, "rows": [{"ssn": "222"}]}
+    out = apply_field_redaction(obj, ["ssn"])
+    assert out["outer"]["ssn"] == "[REDACTED]"
+    assert out["outer"]["keep"] == "ok"
+    assert out["rows"][0]["ssn"] == "[REDACTED]"
+    assert obj["outer"]["ssn"] == "111"          # non-mutating deep copy
+
+    # case-insensitive + NFKC: uppercase and fullwidth 'ｓｓｎ' both match "ssn".
+    assert apply_field_redaction({"SSN": "x"}, ["ssn"])["SSN"] == "[REDACTED]"
+    assert apply_field_redaction({"ｓｓｎ": "x"}, ["ssn"])["ｓｓｎ"] == "[REDACTED]"
+
+    # no fields / non-container -> returned unchanged (identity).
+    assert apply_field_redaction({"ssn": "x"}, []) == {"ssn": "x"}
+    assert apply_field_redaction("scalar", ["ssn"]) == "scalar"

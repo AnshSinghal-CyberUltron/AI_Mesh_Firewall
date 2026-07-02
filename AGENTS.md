@@ -101,6 +101,15 @@
     M-15 cache-invalidation; ratelimit 2 keys S12; toolcalls mechanism present); PG persistence correct at
     scale (109,362 MCPEvents/3 orgs; compliance_tags populated). Restart-safety graceful by design; actual
     restart-drill = item-18 chaos (unsafe on shared stack). Evidence mcp-parallel/findings/backstop-p11-pg-redis/.
+  - CHG-0024 (2026-07-02) — G2 item 3b: per-policy FIELD-level RBAC redaction on the stdio/websocket ADAPTER
+    path. Gateway now consumes each matched actor-scoped policy's `redaction_fields` (emitted into the bundle
+    by M-04, compiler.py:521) — `EvaluationResult.redaction_fields` + a Django-free port of control's
+    `apply_field_redaction` (NFKC/case-insensitive keys, bounded, non-mutating) mask the named tool-RESULT
+    fields on the OUTPUT payload, scoped by actor, output-only, suppressed under `monitor`, audited via
+    `redacted_fields`. Closes finding #1 (field-RBAC absent on adapter path; HTTP path already masked). Files
+    policy_engine.py + mcp_scan_orchestrator.py + mcp_proxy.py + test_mcp_scan_orchestrator.py (+7 tests, 22
+    passed, 1056 broad sweep). Backward-compat: redaction_fields=[] → no-op. REMAINING: cross-stage
+    (input-triggered) parity + live drive → item 3b stays open (advanced).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

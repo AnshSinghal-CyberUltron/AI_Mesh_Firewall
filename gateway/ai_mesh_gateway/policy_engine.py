@@ -9,6 +9,7 @@ for sub-millisecond enforcement.
 Action precedence: block (3) > redact (2) > monitor (1) > allow (0)
 """
 
+import copy
 import functools
 import json
 import logging
@@ -159,6 +160,16 @@ class EvaluationResult:
     matched_policy_categories: list[str] = field(default_factory=list)
     matched_rule_descriptions: list[str] = field(default_factory=list)
     redaction_hints: list[dict[str, Any]] = field(default_factory=list)
+    # 3b (BACKSTOP finding #1): named response fields to mask for the MATCHED
+    # actor-scoped policies. Mirrors control Policy.redaction_fields; the compiler
+    # already emits these into the compiled bundle (compiler.py:521 under M-04) but
+    # the gateway never consumed them — so the stdio/websocket ADAPTER path did
+    # content-scan yet NO field-level RBAC masking (the HTTP path masks them via
+    # control apply_field_redaction). Populated by evaluate() from every matched
+    # policy that declares redaction_fields (D6 trigger = "policy matched AND has
+    # non-empty redaction_fields", NOT gated on the verdict); applied to the OUTPUT
+    # structured payload downstream (mcp_scan_orchestrator.scan_mcp_payload).
+    redaction_fields: list[str] = field(default_factory=list)
     # FIX-1.2a: the winning model_downgrade rule's target model. Empty when the
     # final action is not model_downgrade (or the rule carries no downgrade_to).
     model_downgrade_target: str = ""
@@ -336,6 +347,12 @@ def evaluate(
             result.matched_policy_severities.append(policy.get("severity", ""))
             result.matched_policy_categories.append(policy.get("category", ""))
             result.matched_rule_descriptions.append(rule.get("description", ""))
+            # 3b: surface the MATCHED policy's response-field redaction list so the
+            # adapter path can mask those named fields on the tool RESULT. Deduped +
+            # order-preserving; idempotent across a policy's multiple matching rules.
+            for _rf in (policy.get("redaction_fields") or []):
+                if isinstance(_rf, str) and _rf and _rf not in result.redaction_fields:
+                    result.redaction_fields.append(_rf)
 
             action = rule.get("action", "monitor")
             rank = ACTION_ORDER.get(action, 0)
@@ -623,6 +640,12 @@ def evaluate_mcp_policies(
             result.matched_policy_severities.append(policy.get("severity", ""))
             result.matched_policy_categories.append(policy.get("category", ""))
             result.matched_rule_descriptions.append(rule.get("description", ""))
+            # 3b: surface the MATCHED policy's response-field redaction list so the
+            # adapter path can mask those named fields on the tool RESULT. Deduped +
+            # order-preserving; idempotent across a policy's multiple matching rules.
+            for _rf in (policy.get("redaction_fields") or []):
+                if isinstance(_rf, str) and _rf and _rf not in result.redaction_fields:
+                    result.redaction_fields.append(_rf)
 
             action = rule.get("action", "monitor")
             rank = ACTION_ORDER.get(action, 0)
@@ -911,4 +934,80 @@ def apply_redaction(
             pattern = rf"\b{re.escape(kw)}\b"
             result = _compile_regex(pattern).sub(repl, result)
 
+    return result
+
+
+FIELD_REDACT_PLACEHOLDER = "[REDACTED]"
+
+
+def _normalize_field_key(key: Any) -> str:
+    """Normalize a dict key for case-insensitive, Unicode-safe matching.
+
+    NFKC folds Cyrillic/Greek homoglyphs (e.g. Cyrillic 'е' U+0435 and Latin
+    'e' U+0065) onto the same compatibility codepoint, defeating the
+    lookalike-key bypass. Mirrors control/policy/redaction._normalize_key so the
+    stdio/websocket adapter path masks the same field names the HTTP path does.
+    """
+    if not isinstance(key, str):
+        return ""
+    return unicodedata.normalize("NFKC", key).lower()
+
+
+def apply_field_redaction(
+    obj: Any,
+    fields: Any,
+    *,
+    placeholder: str = FIELD_REDACT_PLACEHOLDER,
+    max_depth: int = 10,
+    max_nodes: int = 100_000,
+) -> Any:
+    """Return a deep-copied ``obj`` with values under matching keys replaced.
+
+    3b (BACKSTOP finding #1): the gateway had NO field-name redactor, so the
+    stdio/websocket adapter path could not honor a policy's ``redaction_fields``
+    (named-field RBAC masking of tool RESULTS) even though the compiler emits
+    them into the bundle. This is a Django-free port of
+    control/ai_mesh_control/policy/redaction.apply_field_redaction so both
+    transports mask identically.
+
+    Walks dicts/lists recursively; whenever a dict key matches (after NFKC +
+    casefold) any name in ``fields`` its value is replaced with ``placeholder``.
+    Bounded by ``max_depth``/``max_nodes`` (safety over strictness on adversarial
+    payloads). ``obj`` is never mutated — a deep copy is returned.
+    """
+    if not fields or not isinstance(obj, (dict, list)):
+        return obj
+
+    targets = {_normalize_field_key(f) for f in fields if isinstance(f, str)}
+    targets.discard("")
+    if not targets:
+        return obj
+
+    result = copy.deepcopy(obj)
+    node_count = 0
+
+    def _walk(node: Any, depth: int) -> None:
+        nonlocal node_count
+        if depth > max_depth or node_count > max_nodes:
+            return
+        if isinstance(node, dict):
+            for k in list(node.keys()):
+                node_count += 1
+                if node_count > max_nodes:
+                    return
+                if _normalize_field_key(k) in targets:
+                    node[k] = placeholder
+                else:
+                    v = node[k]
+                    if isinstance(v, (dict, list)):
+                        _walk(v, depth + 1)
+        elif isinstance(node, list):
+            for item in node:
+                node_count += 1
+                if node_count > max_nodes:
+                    return
+                if isinstance(item, (dict, list)):
+                    _walk(item, depth + 1)
+
+    _walk(result, 0)
     return result
