@@ -67,3 +67,10 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   a tool outside its key allowlist / over cap / disabled via the REST route. +4 tests; 18 bare-proxy passed,
   broad sweep 424 passed. REMAINING item 3: per-actor authz + field RBAC on stdio/ws adapter path (finding
   #1); posture-vs-rule block downgrade (#3); allowlist-scope inversion (#4).
+- **CHG-0007** (2026-07-02) — G2 item 3 (#3 fixed, #4 dismissed): Tier-1 policy scan
+  (`mcp_scan_orchestrator._scan_text_tier1`) now honors a matched rule's own `action='block'` under any
+  non-`monitor` posture (was downgraded to tag under default posture; the adapter path bypasses the backend
+  that re-enforces it — parity with control-plane engine). **#4 is a FALSE POSITIVE**:
+  `_policy_applies_to_actor` is a policy-SCOPING primitive (documented, mirrors control plane) — do NOT
+  invert it; the real gap is the absent deny-by-default per-actor tool-authz primitive (#1). +2 tests; 15
+  orchestrator + 427 broad pass. REMAINING item 3: finding #1 (per-actor authz + field RBAC on stdio/ws).

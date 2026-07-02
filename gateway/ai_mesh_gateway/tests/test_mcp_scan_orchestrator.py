@@ -229,6 +229,54 @@ async def test_redact_rule_still_redacts_under_redact_enforcement():
 
 
 @pytest.mark.asyncio
+async def test_block_rule_honored_under_tag_posture():
+    """CHG-0007 (G2 item 3, finding #3): a policy rule authored action='block'
+    BLOCKS even under the default 'tag' posture — parity with the control-plane
+    engine and the backend HTTP path. Without this the stdio/websocket adapter
+    path (which bypasses the backend) would downgrade an actor-scoped block rule
+    to detect-and-tag."""
+    block_eval = EvaluationResult(action="block", matched_rule_ids=[1],
+                                  matched_rule_names=["deny-intern"], message="blocked")
+    mock_sync = MagicMock()
+    mock_sync.get_policies_for_server.return_value = [{"policy": {"id": 1}, "rules": []}]
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=mock_sync),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=block_eval),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        _, result = await scan_mcp_payload(
+            {"q": "hi"},
+            scan_direction="input",
+            enforcement="tag",   # coarse posture, NOT block
+            effective_controls=_ctrl("input"),
+            org_slug="demo", server_slug="stub", tool_name="secret_tool",
+        )
+    assert result.blocked is True
+
+
+@pytest.mark.asyncio
+async def test_block_rule_not_honored_under_monitor_posture():
+    """Guard: a 'monitor' posture is explicit observe-only and still wins over a
+    block rule (no block, no mutation)."""
+    block_eval = EvaluationResult(action="block", matched_rule_ids=[1], message="blocked")
+    mock_sync = MagicMock()
+    mock_sync.get_policies_for_server.return_value = [{"policy": {"id": 1}, "rules": []}]
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=mock_sync),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=block_eval),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        _, result = await scan_mcp_payload(
+            {"q": "hi"},
+            scan_direction="input",
+            enforcement="monitor",
+            effective_controls=_ctrl("input"),
+            org_slug="demo", server_slug="stub", tool_name="secret_tool",
+        )
+    assert result.blocked is False
+
+
+@pytest.mark.asyncio
 async def test_a4_tier2_block_floor_on_redact_verdict():
     """A4 Tier-2 parity: a Bedrock 'redact' verdict under a 'block' posture BLOCKS."""
     verdict = MagicMock()

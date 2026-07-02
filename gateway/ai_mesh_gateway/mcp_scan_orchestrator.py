@@ -257,9 +257,19 @@ async def _scan_text_tier1(
                 _findings_from_policy_eval(eval_result, scan_direction=scan_direction, text=text)
             )
             policy_redacts = eval_result.action == "redact"
-            if _enforce_blocks(enforcement):
-                # A4 FIX: block posture blocks on ANY matched policy rule, even
-                # one authored as redact/tag. Floor, not ceiling.
+            # A matched rule authored action='block' is an EXPLICIT block intent —
+            # honor it even under a coarser posture (tag/redact), matching the
+            # control-plane engine (engine.py blocks on ``result.action == "block"``)
+            # and the backend HTTP path. Without this, the stdio/websocket adapter
+            # path — which bypasses the backend that would re-enforce the rule —
+            # silently downgrades an actor-scoped block rule to detect-and-tag
+            # under the default 'tag' posture (BACKSTOP_FINDINGS G2 item 3, #3).
+            # A 'monitor' posture is an explicit observe-only override and wins.
+            policy_blocks = eval_result.action == "block"
+            if _enforce_blocks(enforcement) or (policy_blocks and enforcement != "monitor"):
+                # A4 FIX: block posture is a FLOOR (blocks ANY matched rule, even
+                # one authored redact/tag); additionally a rule's own 'block'
+                # action is honored under any non-monitor posture (CHG-0007).
                 blocked = True
             elif enforcement == "redact" and (policy_redacts or eval_result.redaction_hints):
                 mutated = apply_redaction(text, eval_result.redaction_hints)

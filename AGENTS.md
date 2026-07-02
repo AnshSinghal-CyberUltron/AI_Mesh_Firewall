@@ -30,6 +30,11 @@
     per-key gates (allowlist 403 / call-cap 429 / disabled 403) before forwarding, at parity with
     `org_mcp_jsonrpc`. +4 tests; 18 + 424 pass. Remaining item 3: per-actor authz + field RBAC on stdio/ws
     adapter path (finding #1); posture-vs-rule block downgrade (#3); allowlist-scope inversion (#4).
+  - CHG-0007 (2026-07-02) — G2 item 3 (#3 fixed, #4 dismissed): Tier-1 policy scan honors a rule's own
+    `action='block'` under any non-monitor posture (was downgraded to tag; adapter path bypasses the backend
+    — parity with control-plane engine). **#4 FALSE POSITIVE** — `_policy_applies_to_actor` is correct
+    policy-SCOPING (mirrors control plane); do NOT invert it. +2 tests; 15 + 427 pass. Remaining item 3:
+    finding #1 (per-actor authz + field RBAC on stdio/ws adapter path).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

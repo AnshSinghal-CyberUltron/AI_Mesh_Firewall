@@ -215,3 +215,39 @@ the prod compose/manifests is tracked under G3 item 12.
   scan attribution but never used for an access decision; the enabled-tools payload carries no actor
   dimension); finding #3 — Tier-1/2 policy BLOCK gated on posture not the rule's action (actor-scoped
   `block` downgraded to `tag`); finding #4 — `_policy_applies_to_actor` allowlist-scope inverts intent.
+
+### CHG-0007 — Honor rule's `block` action under non-block posture + finding #4 is a FALSE POSITIVE (G2 item 3, #3/#4)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 3 (per-user/agent/role tool authorization) — PARTIAL (closes #3; #4 dismissed).
+- **Files:** `gateway/ai_mesh_gateway/mcp_scan_orchestrator.py` (`_scan_text_tier1`) ·
+  `gateway/ai_mesh_gateway/tests/test_mcp_scan_orchestrator.py` (+2 tests).
+- **WHAT (finding #3, FIXED):** Tier-1 policy evaluation now sets `blocked=True` when a matched rule's own
+  `eval_result.action == "block"` under ANY non-`monitor` posture — not only when the coarse posture is
+  `block`. The block-posture FLOOR (blocks any matched rule) is preserved.
+- **WHY (#3):** A rule authored `action='block'` was downgraded to detect-and-tag under the default `tag`
+  posture on the gateway path. The stdio/websocket ADAPTER path bypasses the backend that re-enforces the
+  rule, so an actor-scoped block rule silently didn't block there — inconsistent with the control-plane
+  engine (`control/.../policy/engine.py` blocks on `result.action == "block"`) and the HTTP path.
+- **NOW DOES (#3):** An actor-scoped block rule blocks on the adapter path under any non-monitor posture,
+  at parity with HTTP; `monitor` (explicit observe-only) still wins.
+- **FINDING #4 — FALSE POSITIVE (no code change; Devil's-Advocate correction):** the audit claimed
+  `_policy_applies_to_actor` "inverts intent" (a block policy scoped `allowed_roles=['admin']` blocks
+  admins, allows others). Verified this is **correct-as-designed**: it is a policy-SCOPING primitive
+  (`allowed_*` = "the actors this policy APPLIES to", documented at `policy_engine.py:171-193`) that
+  deliberately MIRRORS the control-plane engine (line 173) with a fail-closed rationale. "This block
+  targets admins" is coherent scoping, not an inversion. Inverting the logic would break the documented
+  contract, control-plane parity, and existing policies. The auditor conflated policy-scoping with the
+  ABSENT deny-by-default per-actor tool-authz primitive (which IS the real gap — finding #1). **Do not
+  "fix" `_policy_applies_to_actor`.**
+- **Touched whose work:** extends the two-tier scan orchestrator (many prior sessions); backstop-only
+  correction of the CHG-0002 audit re #4.
+- **VERIFY:** `cd gateway && PYTHONPATH="$PWD/../shared:$PWD/ai_mesh_gateway" ./.venv/bin/python -m pytest
+  ai_mesh_gateway/tests/test_mcp_scan_orchestrator.py -q` → 15 passed
+  (`test_block_rule_honored_under_tag_posture` [tag→blocked],
+  `test_block_rule_not_honored_under_monitor_posture` [monitor→not blocked];
+  `test_redact_rule_still_redacts_under_redact_enforcement` still green). Broad sweep
+  (`-k "mcp or scan or redact or policy or orchestrator or proxy or tier or block"`) → 427 passed / 18 skipped.
+- **REMAINING for G2 item 3:** finding #1 — per-actor (user/agent/role) tool authorization + field-level
+  RBAC masking on the stdio/websocket adapter path (the enabled-tools payload needs an actor dimension, or
+  the adapter path must route through actor-scoped policy eval). Tier-2 posture-gating of a `verdict.action
+  == "block"` is a separate LLM-judge semantic (deferred, not an authored-rule authz concern).

@@ -57,6 +57,18 @@
       payload has no actor dimension); (#3) Tier-1/2 policy BLOCK gated on posture not the rule's action
       (actor-scoped block downgraded to tag under default posture, mcp_scan_orchestrator.py); (#4)
       _policy_applies_to_actor allowlist-scope inverts intent (policy_engine.py).
+      CHG-0007 (2026-07-02): #3 FIXED — Tier-1 policy scan (_scan_text_tier1) now honors a matched rule's
+      own action='block' under any non-monitor posture (was downgraded to tag under default posture; the
+      stdio/ws adapter path bypasses the backend that re-enforces the rule — now at parity with the
+      control-plane engine). +2 tests; orchestrator 15 passed, broad sweep 427 passed.
+      #4 DISMISSED as FALSE POSITIVE — _policy_applies_to_actor is a policy-SCOPING primitive (allowed_* =
+      actors the policy APPLIES to; documented + mirrors control-plane engine); "block scoped to admins"
+      is coherent scoping, NOT an inversion. Inverting would break the contract + control-plane parity +
+      existing policies. Do NOT touch it. The auditor conflated scoping with the ABSENT deny-by-default
+      per-actor tool-authz primitive (= finding #1).
+      REMAINING before [x]: finding #1 (the big one) — per-actor user/agent/role tool authz + field-RBAC
+      masking on the stdio/ws ADAPTER path (enabled-tools payload needs an actor dimension, or route the
+      adapter path through actor-scoped policy eval).
 - [ ] 4. Context minimization / least-privilege assembly.
 - [ ] 5. Compliance tagging: extend mcp_compliance_tags.py to PII/IP/regulated; tag inputs + results; enforce by tag; audit.
 - [ ] 6. End-to-end per-tool-call chain: authz → minimize → scan+redact(in&result) → tag → audit.
