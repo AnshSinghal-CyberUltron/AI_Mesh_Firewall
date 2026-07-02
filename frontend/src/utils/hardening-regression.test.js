@@ -19,10 +19,9 @@ const SRC = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => readFileSync(join(SRC, rel), "utf8");
 const has = (rel, s) => read(rel).includes(s);
 
-// --- Chart migration: these surfaces were migrated recharts -> ECharts/uPlot (items
-// 1, 9-15, 24). A regression would re-introduce a recharts import. (The orphaned,
-// unrendered SubmoduleDetailPage / module-specific-charts are the last recharts holdouts;
-// SafeResponsiveChart keeps recharts only as the fallback for un-migrated children.)
+// --- Chart migration: recharts has been fully removed (items 1, 9-15, 24) — every
+// chart renders via ECharts or uPlot behind SafeResponsiveChart, and the recharts
+// dependency is gone. A regression would re-introduce a recharts import.
 const MIGRATED_NO_RECHARTS = [
   "components/PolicyAnalyticsPanel.jsx",
   "components/LogDetailPage.jsx",
@@ -32,6 +31,7 @@ const MIGRATED_NO_RECHARTS = [
   "components/RAGPipelineTelemetry.jsx",
   "components/SubmoduleResultsPage.jsx",
   "pages/AIMeshFirewallOverview.jsx",
+  "components/SafeResponsiveChart.jsx",
 ];
 for (const f of MIGRATED_NO_RECHARTS) {
   test(`chart-migration: ${f} has no recharts import`, () => {
@@ -43,6 +43,12 @@ for (const f of MIGRATED_NO_RECHARTS) {
 test("chart-migration: SafeResponsiveChart supports the ECharts/uPlot option API", () => {
   const src = read("components/SafeResponsiveChart.jsx");
   assert.ok(src.includes("option") && src.includes("uplot"), "SafeResponsiveChart must accept `option` (ECharts) and `uplot` props");
+});
+
+test("chart-migration: recharts is not a declared dependency", () => {
+  const pkg = JSON.parse(read("../package.json"));
+  const all = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+  assert.ok(!("recharts" in all), "recharts must not be in package.json — every chart is ECharts/uPlot now");
 });
 
 // --- Responsive fixes (item 22): panel headers/toolbars/grids that overflowed <main>
