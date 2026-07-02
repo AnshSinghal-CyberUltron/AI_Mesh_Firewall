@@ -441,3 +441,9 @@
       live on login surface (unauth, F3-independent): light+dark × 1440+375 all "ok" → "GATE PASSED — no
       visual/behavior regressions" exit 0. Full authed-suite green run is F3-throttled (env), gate itself
       sound. Completion criterion "snapshot gate in place" = SATISFIED. MCP claim: active.
+      [iter+] Backend DEGRADED (control-1 + gateway-1 unhealthy, auth/me hangs >2min) — F3 at worst; live
+      verification blocked (module-1-4 gate = AUTH_FAILED, gate correctly detects backend-down). Did static
+      no-leak review of firewall-config surface instead: API keys handled via ModelConnectionPanel (stress-
+      owned, verify-only) — input type=password + autoComplete=off, stored keys shown "Encrypted key set
+      (••••last4)" not raw, env-var keys by NAME. SECURE, no leak. firewall-config live render + MCPConnector
+      overflow re-verify PENDING backend recovery. MCP claim: active.
