@@ -227,6 +227,13 @@
     the SSE branch now buffers+scans those finite methods, while notifications/subscriptions still stream
     through (no bounded result; buffering could hang). Non-streaming JSON branch already scanned any result.
     Files mcp_proxy.py + test_mcp_bare_proxy_scan.py (+2). Gate: 24 bare-proxy + 1085 broad sweep passed.
+  - CHG-0040 (2026-07-02) — G2 item 2 (last unscanned egress vector): the ext-proxy scan only inspected the
+    `result`; a JSON-RPC ERROR response (no result) egressed UNSCANNED, so an untrusted server could leak a
+    secret in an error message (e.g. a connection string). Both ext-proxy paths (non-streaming +
+    _scan_reframe_sse_tool_result) now scan `error` when there's no result — mask any detected secret/PII
+    (redact-only), fail CLOSED (withhold) on scan error; notifications pass through. Files mcp_proxy.py +
+    test_mcp_bare_proxy_scan.py (+2). Gate: 26 bare-proxy + 1087 broad sweep passed. ext-proxy egress fully
+    scanned (result all shapes/methods + error, streaming + non-streaming).
   - CHG-0040 (2026-07-02) — P4.13 Blocker 2: MCPServerRegistration.url URLField→CharField + migration 0015
     so ws:// registers (serializer SSRF guard unchanged); ws-everything.stub in MCP_ALLOW_INTERNAL_HOSTS;
     ws stub echo prefix fixed. 4/4 transports PASS ROUNDS=3; gateway ss :443 empty. Cross-seam (control,

@@ -57,6 +57,15 @@
       The non-streaming JSON branch already scanned any result; the org path rejects these methods (-32601), so
       this closes the only reachable unscanned resource-content path. +2 tests; test_mcp_bare_proxy_scan.py 24
       passed, broad sweep 1085 passed.
+      CHG-0040 (2026-07-02): closed the LAST unscanned egress vector on ext_mcp_proxy. The scan only inspected
+      the `result`; a JSON-RPC ERROR response (no result) egressed UNSCANNED — an untrusted external server
+      could leak a secret in an error message (e.g. a postgres:// connection string). Both ext-proxy paths
+      (non-streaming branch + _scan_reframe_sse_tool_result) now scan `error` when there's no result:
+      _scan_tool_result_floor walks message/data + masks any detected secret/PII (redact-only), fail CLOSED
+      (withhold) on scan error; notifications pass through. +2 tests (connection-string secret masked in a
+      non-streaming error AND an SSE error frame); test_mcp_bare_proxy_scan.py 26 passed, broad sweep 1087
+      passed. ext-proxy egress now FULLY scanned: result (all shapes + tools/resources/prompts) + error,
+      streaming + non-streaming.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER

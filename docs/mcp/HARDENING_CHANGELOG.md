@@ -1294,3 +1294,29 @@ the prod compose/manifests is tracked under G3 item 12.
   → 24 passed (+2: a `resources/read` SSE PII result is buffered + masked, not forwarded raw; a
   `notifications/*` SSE still streams through unbuffered — `aread` not awaited). Broad sweep
   `ai_mesh_gateway/tests` → 1085 passed, 0 failed.
+
+### CHG-0040 — Scan JSON-RPC ERROR content on the external proxy (G2 item 2 — last unscanned egress vector)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 2 (byte-verified result redaction) — extends the ext-proxy egress scan from
+  the `result` to the `error` field.
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (ext_mcp_proxy non-streaming branch + the
+  `_scan_reframe_sse_tool_result` SSE helper now scan `error` when there is no `result`);
+  `gateway/ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py` (+2).
+- **WHAT:** the ext-proxy result scan only inspected `data.get("result")` (non-streaming) / result frames
+  (SSE); a JSON-RPC ERROR response (`{"error": {...}}`, no `result`) egressed UNSCANNED. An untrusted external
+  MCP server can leak a secret in an error message — e.g. `"connect failed: postgres://admin:s3cr3t@db.
+  internal/prod"` (a connection string), an internal hostname, or a token. Now both paths, when there is no
+  result but an `error` is present, run `_scan_tool_result_floor` over the error (which recursively walks its
+  message/data) and mask any detected secret/PII (redact-only — it is already an error). Fail CLOSED: on a
+  scan error the whole error content is withheld (a generic "could not be safely inspected" error) rather than
+  forwarded raw. Non-error frames (notifications / keep-alives) still pass through verbatim.
+- **WHY:** "prevent MCP data leakage" — a secret in an error string is still a leak; the error field was the
+  one remaining unscanned egress path on the ext-proxy after CHG-0004/0005/0039 covered every result shape.
+- **NOW DOES:** a JSON-RPC error carrying a secret/PII from an external server is masked before it reaches the
+  client (both `application/json` and `text/event-stream`); the org path already rejects non-tool methods and
+  its tool errors flow through the same result-scan machinery.
+- **Touched whose work:** completes the ext-proxy egress hardening (CHG-0004/0005/0039). Result-scan behaviour
+  unchanged; the error scan is an additive `elif`/branch.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q`
+  → 26 passed (+2: a connection-string secret in a non-streaming error message AND in an SSE error frame is
+  masked — `s3cr3tPass` absent). Broad sweep `ai_mesh_gateway/tests` → 1087 passed, 0 failed.

@@ -899,7 +899,28 @@ async def _scan_reframe_sse_tool_result(
             continue
         result_obj = obj.get("result") if isinstance(obj, dict) else None
         if result_obj is None:
-            out_lines.append(raw_line)  # no tool result in this frame (e.g. a notification)
+            # CHG-0040: an ERROR frame (no result) can still carry a secret in its
+            # message/data from an untrusted server — scan + mask it (fail CLOSED:
+            # withhold on scan error). Notifications / keep-alives pass through.
+            err_obj = obj.get("error") if isinstance(obj, dict) else None
+            if err_obj is None:
+                out_lines.append(raw_line)
+                continue
+            e_scanned, e_blocked, e_tags, _ef, _em = await _scan_tool_result_floor(
+                err_obj, tool_name=tool_name, enabled_info=enabled_info,
+                org_slug=org_slug, server_slug=server_slug, actor=actor,
+            )
+            if e_blocked:
+                return "", {
+                    "tags": list(e_tags),
+                    "id": obj.get("id"),
+                    "jsonrpc": obj.get("jsonrpc", "2.0"),
+                }
+            if e_scanned is not err_obj:
+                obj["error"] = e_scanned
+                out_lines.append(f"data: {json.dumps(obj)}")
+            else:
+                out_lines.append(raw_line)
             continue
         # Scan the ENTIRE result (dict content/structuredContent, list, or str) —
         # not just ``result.content`` — so every output shape is covered.
@@ -1420,6 +1441,48 @@ async def ext_mcp_proxy(path: str, request: Request):
                 )
             if _scanned_content is not _ext_result:
                 data["result"] = _scanned_content
+
+        # CHG-0040: a JSON-RPC error response (no result) can STILL leak a secret in
+        # its message/data from an untrusted external server (e.g. a connection
+        # string in "connect failed: postgres://user:pass@host"). Scan + mask it
+        # (redact-only — it is already an error); fail CLOSED (withhold) on a scan
+        # error so un-inspected error content never egresses raw.
+        elif (
+            resp.status_code == 200
+            and isinstance(data, dict)
+            and data.get("error") is not None
+        ):
+            _ext_err = data["error"]
+            (
+                _scanned_err, _err_blocked, _err_tags, _err_findings, _err_meta
+            ) = await _scan_tool_result_floor(
+                _ext_err,
+                tool_name=_ext_tool_name,
+                enabled_info=None,
+                org_slug="",
+                server_slug="",
+                actor=None,
+            )
+            if _err_blocked:
+                LOG.warning(
+                    "ext_mcp_proxy.error_content_withheld host=%s — error content "
+                    "could not be safely inspected",
+                    hostname,
+                )
+                return JSONResponse(
+                    content={
+                        "jsonrpc": data.get("jsonrpc", "2.0"),
+                        "id": data.get("id"),
+                        "error": {
+                            "code": -32000,
+                            "message": "Response withheld: error content could not be safely inspected.",
+                        },
+                    },
+                    status_code=200,
+                    headers=resp_headers,
+                )
+            if _scanned_err is not _ext_err:
+                data["error"] = _scanned_err
 
         return JSONResponse(content=data, status_code=resp.status_code, headers=resp_headers)
     except httpx.RequestError as exc:

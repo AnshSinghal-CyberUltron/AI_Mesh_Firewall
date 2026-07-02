@@ -639,3 +639,36 @@ async def test_ext_sse_notification_still_streams_through_unbuffered():
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert isinstance(resp, StreamingResponse)     # pass-through, not buffered
     sse.aread.assert_not_awaited()                 # NOT buffered (no hang risk)
+
+
+# ── CHG-0040: a JSON-RPC ERROR response (no result) can leak a secret in its
+# message from an untrusted external server — ext_mcp_proxy now scans error
+# content too (non-streaming + SSE), not just the result.
+_ERR_SECRET = "connect failed: postgres://admin:s3cr3tPass@db.internal/prod"
+
+
+@pytest.mark.asyncio
+async def test_ext_error_content_masked_non_streaming():
+    req = _ext_request({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                        "params": {"name": "db", "arguments": _BENIGN_ARG}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 3,
+                               "error": {"code": -32000, "message": _ERR_SECRET}})
+    client = _ext_client(upstream)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    blob = json.dumps(_decode(resp))
+    assert "s3cr3tPass" not in blob                 # secret in the error message masked
+    assert "error" in _decode(resp)                 # still an error response
+
+
+@pytest.mark.asyncio
+async def test_ext_sse_error_frame_masked():
+    req = _ext_request({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+                        "params": {"name": "db", "arguments": _BENIGN_ARG}})
+    sse = _sse_resp({"jsonrpc": "2.0", "id": 4, "error": {"code": -32000, "message": _ERR_SECRET}})
+    client = _ext_client(sse)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    body = bytes(resp.body).decode()
+    assert "s3cr3tPass" not in body                 # secret in the SSE error frame masked
+    assert resp.media_type == "text/event-stream"
