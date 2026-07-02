@@ -808,6 +808,28 @@
         composition from the non-stream sanitize_output_for_verdict — every new output neutralizer (G35,
         G44, ...) must be added to BOTH or the streaming path silently leaks. Both now include the full
         set: exfil-channels + encoded-PII + markdown-split-PII.
+      G46 — STREAMING MISSED TIER-2 SEMANTIC-SPAN MASKING 2026-07-02 (following the G45 streaming-
+      divergence lesson: audited streaming vs non-stream sanitize; found ANOTHER gap):
+        THREAT: the non-stream _sanitize_output_core masks a tier-2 (Bedrock) verdict's
+        redaction_spans + matched_values via _mask_spans_typed (G10) — free-text PERSON NAMES /
+        non-standard PII layouts the DETERMINISTIC regex redactor has NO pattern for. The streaming
+        redact path called self._scanner.redact_pii(_pre) ALONE (no span masking), and even the code
+        comment admitted "a tier-2 verdict … leaves the streamed output verbatim … that is a flag".
+        So a tier-2-flagged free-text name egressed RAW on the STREAMED channel while the non-stream
+        path masked it. Confirmed: non-stream "…name is [REDACTED_PII] and…" vs streaming "…name is
+        Johnathan Q. Publicova and…". A real streaming PII leak (needs live Bedrock spans, present in
+        the deployed gateway). FIX: added _mask_spans_typed(redacted_text, redaction_spans +
+        matched_values, threat_type) to the streaming guard redact handler for _REDACTABLE_OUTPUT_
+        CATEGORIES (pii/pci/phi/secret/credential) — mirrors G10. Bonus: the earlier "downgrade to
+        flag because the name wasn't masked" honesty note is now moot (the name IS masked -> honest
+        redact). VERIFY: real streaming path with a semantic-span guard stub -> "[REDACTED_PII]", name
+        no longer leaks. FROZEN: G46 (test_g46_streaming_masks_tier2_semantic_span). Gate: streaming 28
+        green; golden+streaming 341 passed × 3 in-process. commit 9228ea9b. REDEPLOYED (rollback-pre-g46;
+        marker present; health 200) — LIVE.
+        STREAMING-PARITY AUDIT STATUS: the streaming redact path now mirrors non-stream sanitize for
+        exfil-channels (G36), encoded-PII (G36/G35), markdown-split-PII (G45), AND tier-2 semantic spans
+        (G46). Remaining non-stream-only branch: hallucination->rewrite (streaming coerces rewrite->block
+        earlier, and hallucination is a rewrite/quality concern not a PII LEAK, so no leak gap there).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
