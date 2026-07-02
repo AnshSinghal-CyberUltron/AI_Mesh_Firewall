@@ -876,6 +876,27 @@
         REDEPLOYED (rollback-pre-g48; marker _redact_responses_input_list present; health 200) — LIVE.
         EIGHT real leaks fixed (G40; G41-G43 exfil-URL; G44-G46 md-split/semantic-span; G48 Responses
         input) + two documented design tradeoffs (tier-2 FP; G47 system-message).
+      G48 SEVERITY CORRECTION + RESPONSES-STREAMING AUDIT 2026-07-02 (evidence over assumption):
+        Audited the Responses request flow end to end. CORRECTION to the prior G48 note: the LIVE
+        production Responses endpoint (main.proxy_responses) does NOT call LLMRouter.aresponses — it
+        converts the body via responses_adapters.responses_to_chat -> _dispatch_chat_internally (the CHAT
+        pipeline) for BOTH streaming and non-streaming. Verified: responses_to_chat FLATTENS a list-form
+        input [{role,content:[{input_text,text}]}] into a string message, and the chat _apply_redaction
+        then redacts it (my ssn is ***-**-6789 and b***@e***.com). grep confirms LLMRouter.aresponses is
+        invoked ONLY from test_egress_wire_capture.py, not from any production request path.
+        => G48 fixed a REAL bug in the aresponses METHOD (list input un-redacted; test-covered; would
+        matter if a native-Responses routing mode ever calls aresponses) but it was DEFENSE-IN-DEPTH for
+        that method, NOT a confirmed LIVE production leak as the prior note implied. The live Responses
+        input path was already safe via the chat conversion. G48 code fix + freeze STAND (valid hardening
+        of aresponses); only the severity claim is corrected here.
+        RESPONSES-STREAMING (the flagged lead) — VERIFIED SAFE, no gap: proxy_responses -> responses_to_
+        chat -> _dispatch_chat_internally -> SecureStreamingResponse (input redacted via chat conversion;
+        OUTPUT neutralized by the full G36/G45/G46 streaming stack) -> _translate_chat_stream_to_responses.
+        Both input and output of streamed Responses are protected. No new leak this iteration; the audit
+        closed the Responses class (input + streaming output) and corrected an over-stated severity.
+        REVISED TALLY: 7 confirmed-live leaks fixed (G40 streaming buffer-limit; G41-G43 exfil-URL family;
+        G44-G46 md-split/semantic-span — all confirmed on live paths) + G48 defense-in-depth (aresponses
+        method) + two documented design tradeoffs (tier-2 FP; G47 system-message).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
