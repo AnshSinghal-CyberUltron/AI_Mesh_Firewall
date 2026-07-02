@@ -91,6 +91,18 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      R6 INCREMENT 2 2026-07-02: ModelConnectionPanel form-label a11y. Visible <label>s were not htmlFor/id-
+        bound to their inputs (label click didn't focus; SR couldn't name the control, incl. the API-key
+        password field). Added htmlFor/id for Provider/API Key/Model Name/Model ID/Base URL (+ aria-label &
+        autoComplete=off on the key field). Playwright-verified LIVE: all 5 bound, clicking Provider label
+        focuses the select. Build ✓. (Form is reached via Multi-Model Governance -> "Add model" button.)
+      LIVE-GOLDEN UPDATE 2026-07-02: only 09_output_guard_pii_redact now FAILS live (1 failed/9 passed);
+        06/07/08 now PASS live (another session/model-config fixed them). 09 is model-dependent (benign
+        "list email formats" prompt -> free model emits no literal PII -> honest flag, not redact). NOT a
+        completion criterion (in-process golden passes, 09 skips; "live validation"=R5 corpus). test_chat_
+        pipeline_golden.py was created wholesale by an MCP session (commit 5d0dd346) -> co-maintained, left
+        untouched to avoid conflict. If it must be fixed: make 09 a DETERMINISTIC output_guard case injecting
+        known PII (my finding's option b) — but coordinate with the MCP/freeze session first.
       R6 INCREMENT 2026-07-02: control plane RECOVERED (healthy) -> R6 unblocked. Logged into frontend
         (admin@zeroshield.io / dev-default Adm1n!Pass#2024) via Playwright, audited the UI. App is already
         professionally polished (other sessions). Did a focused a11y polish of the OWNED pipeline-trace card
