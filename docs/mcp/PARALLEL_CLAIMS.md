@@ -25,6 +25,7 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 | cursor-ralph-iter5 | `docs/mcp/oss-research-remote-transport-proxies.md`, `mcp-parallel/findings/p2-5/**`, `docs/mcp/PARALLEL_CLAIMS.md` | P2.5 OSS remote transport research | 2026-07-02T10:00:00Z | released |
 | cursor-ralph-iter6 | `docs/mcp/oss-research-docker-hardening.md`, `mcp-parallel/findings/p2-6/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P2.6 gVisor + Docker hardening research | 2026-07-02T11:00:00Z | released |
 | cursor-ralph-iter7 | `docs/mcp/oss-research-oauth-sandbox-client.md`, `mcp-parallel/findings/p2-7/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P2.7 MCP OAuth sandbox research | 2026-07-02T12:00:00Z | released |
+| cursor-ralph-iter8 | `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md`, `mcp-parallel/findings/p3-8/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P3.8 sandbox transport contract | 2026-07-02T13:00:00Z | released |
 
 ## Claim protocol
 

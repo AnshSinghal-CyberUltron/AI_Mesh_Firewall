@@ -1,0 +1,14 @@
+{
+  "story": "P3.8",
+  "agent": "cursor-ralph-iter8",
+  "date": "2026-07-02",
+  "hive_id": "hive-1782976205971-u1gav1",
+  "proposal_id": "proposal-1782979656279-rgcvqe",
+  "votes": [
+    { "voter": "cursor-ralph-iter8", "vote": "yes", "timestamp": "2026-07-02T13:00:00Z" }
+  ],
+  "outcome": "provisional_ratification",
+  "pending_voters": ["claude-code-session"],
+  "contract_path": "docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md",
+  "contract_version": "1.0.0-draft"
+}

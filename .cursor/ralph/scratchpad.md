@@ -41,9 +41,11 @@ status: ACTIVE
       **Done 2026-07-02:** `docs/mcp/oss-research-oauth-sandbox-client.md` + `mcp-parallel/findings/p2-7/`.
 
 ## P3 — Contract-first seam (with the Claude session)
-- [ ] 8. Draft docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md: the sandbox-agent endpoints for http/ws/sse proxy
+- [x] 8. Draft docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md: the sandbox-agent endpoints for http/ws/sse proxy
       (request/response shape, streaming, timeouts, per-server config, egress policy). Ratify via
       hive-mind_consensus BEFORE implementing across the seam.
+      **Done 2026-07-02:** `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` v1.0.0-draft; proposal
+      `proposal-1782979656279-rgcvqe` — Cursor YES, Claude PENDING (provisional ratification).
 
 ## P4 — Architecture: move ALL transports into the per-org gVisor sandbox
 - [ ] 9. Extend sandbox-image/agent to proxy HTTP/SSE MCP servers (in-sandbox httpx client, egress
