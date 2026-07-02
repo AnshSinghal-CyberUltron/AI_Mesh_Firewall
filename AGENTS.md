@@ -500,6 +500,19 @@
     public domains allowed). +3 tests (wiring block; REAL localhost→127.0.0.1→400 e2e; safe host allowed)
     + autouse fixture keeps existing redaction tests hermetic (no real DNS). Gate: 45 ext + 1245 gateway
     passed, 0 failed. Evidence mcp-parallel/findings/backstop-p12-ext-proxy-ssrf/.
+  - CHG-0066 (2026-07-02) — G3 item 10 (resource-limits/mem containment), MEDIUM; sandbox-agent
+    counterpart of CHG-0064: the per-tenant sandbox agent (services/mcp-broker/sandbox-image/agent/
+    upstream_manager.py) dials the UNTRUSTED upstream via client.stream(), and for a JSON (non-SSE)
+    response did `raw = await response.aread()` then check size — buffering the WHOLE streaming body
+    into memory before the check (multi-GB upstream → OOM/restart of that tenant's sandbox instead of a
+    clean 8MiB rejection). The SSE branch was already incremental; only the JSON branch had the anti-
+    pattern. FIX: JSON branch now reads via response.aiter_bytes() + running total, raising -32000
+    "upstream response too large" the instant it crosses _MAX_RESPONSE_BYTES (parity with SSE). +2 tests
+    (over-cap → -32000; under-cap still returns result). Gate: 11 passed (-k "not websocket"; the 3 ws
+    tests HANG pre-existingly in this env — unrelated, this change is streamable-http JSON only).
+    Contained by the sandbox 2GiB mem limit (CHG-0015). FOLLOW-UPS: _read_json_response dead code (same
+    pattern); error-body reads read-whole-then-slice; _validate_upstream has no resolved-IP SSRF check
+    (sandbox analogue of CHG-0065). Evidence mcp-parallel/findings/backstop-p10-sandbox-response-cap/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

@@ -356,9 +356,20 @@ async def _post_streamable_http(
                 )
 
             if "text/event-stream" not in response.headers.get("content-type", ""):
-                raw = await response.aread()
-                if len(raw) > _MAX_RESPONSE_BYTES:
-                    raise UpstreamError(-32000, "upstream response too large")
+                # CHG-0066: read incrementally + abort at the ceiling so an untrusted
+                # upstream cannot buffer an UNBOUNDED body into the sandbox agent's
+                # memory (mem-bomb containment) — parity with the SSE branch below. The
+                # old ``await response.aread()`` then length-check buffered the WHOLE
+                # body first (up to the sandbox's mem limit -> OOM + restart) before
+                # rejecting a too-large response.
+                _parts: list[bytes] = []
+                _total = 0
+                async for _chunk in response.aiter_bytes():
+                    _total += len(_chunk)
+                    if _total > _MAX_RESPONSE_BYTES:
+                        raise UpstreamError(-32000, "upstream response too large")
+                    _parts.append(_chunk)
+                raw = b"".join(_parts)
                 if not raw:
                     return _wrap({"jsonrpc": "2.0", "id": msg_id, "result": {}})
                 try:

@@ -452,6 +452,19 @@
       (response doubles expose aiter_bytes). Gate: 51 + 1242 gateway passed, 0 failed. Evidence:
       mcp-parallel/findings/backstop-p10-response-mem-dos/finding.md. (Gateway-side mem containment;
       sandbox-side containment [x]-tracked above still needs the isolated-host bomb drill.)
+      CHG-0066 (2026-07-02, MEDIUM — sandbox-agent counterpart of CHG-0064): the per-tenant sandbox agent
+      (services/mcp-broker/sandbox-image/agent/upstream_manager.py) dials the UNTRUSTED upstream via
+      client.stream(); for a JSON (non-SSE) response it did `raw = await response.aread()` then check size
+      — buffering the WHOLE streaming body before the check (multi-GB upstream → OOM/restart of that
+      tenant's sandbox instead of clean 8MiB rejection). The SSE branch was already incremental; only the
+      JSON branch had the anti-pattern. FIX: JSON branch reads via response.aiter_bytes() + running total,
+      raising -32000 "upstream response too large" the instant it crosses _MAX_RESPONSE_BYTES (parity with
+      SSE). +2 tests. Gate: 11 passed (-k "not websocket"; the 3 ws tests HANG pre-existingly in this env —
+      unrelated, streamable-http-JSON-only change). Contained by sandbox 2GiB mem limit (CHG-0015).
+      FOLLOW-UPS (documented): _read_json_response dead code (same pattern); error-body reads
+      read-whole-then-slice; _validate_upstream lacks a resolved-IP SSRF check (sandbox analogue of
+      CHG-0065, relevant while sandbox net internal=false). Evidence:
+      mcp-parallel/findings/backstop-p10-sandbox-response-cap/finding.md.
 - [ ] 11. PostgreSQL + Redis schemas/usage/restart-safety verified.
       LIVE VERIFIED (usage/schema) — CHG-0023 (2026-07-02): REDIS usage correct — mcp:scan_ver:* 72 keys
       (M-15 scan-config version cache-invalidation, string counters e.g. "99"); ratelimit:* 2 keys (S12

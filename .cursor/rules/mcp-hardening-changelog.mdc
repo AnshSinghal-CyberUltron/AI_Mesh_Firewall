@@ -750,6 +750,27 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   direct probe blocks localhost/169.254.169.254, allows mcp.linear.app). Evidence:
   `mcp-parallel/findings/backstop-p12-ext-proxy-ssrf/`.
 
+- **CHG-0066** (2026-07-02) — G3 item 10 (resource-limits / mem containment), MEDIUM; sandbox-agent
+  counterpart of CHG-0064: the per-tenant sandbox agent (`services/mcp-broker/sandbox-image/agent/
+  upstream_manager.py`) dials the UNTRUSTED upstream MCP server via `client.stream(...)`, and for a JSON
+  (non-SSE) response did `raw = await response.aread()` then `if len(raw) > _MAX_RESPONSE_BYTES: raise` —
+  buffering the ENTIRE streaming body into memory BEFORE the size check. A malicious upstream returning a
+  multi-GB body OOMs the sandbox agent (up to the sandbox's 2GiB mem limit → kill + restart of that
+  tenant's sandbox) instead of a clean rejection at the 8MiB ceiling. The SSE branch right below was
+  ALREADY incremental (`aiter_lines` + running `total`); only the JSON branch had the buffer-then-check
+  anti-pattern (the same one CHG-0064 fixed on the gateway). FIX: the JSON branch reads incrementally via
+  `response.aiter_bytes()` + a running `_total`, raising `UpstreamError(-32000, "upstream response too
+  large")` the instant it crosses `_MAX_RESPONSE_BYTES` (env `MCP_AGENT_MAX_RESPONSE_BYTES`, default 8MiB)
+  — parity with the SSE branch; behaviour unchanged for legitimate responses. Files: upstream_manager.py,
+  test_upstream_proxy.py (+2, fake gains `aiter_bytes`). Gate: `pytest sandbox-image/agent/tests/
+  test_upstream_proxy.py -k "not websocket"` → 11 passed (JSON over-cap → -32000 "too large"; under-cap
+  still returns the result). The 3 `websocket` tests HANG in this env PRE-EXISTINGLY (real ws / async-loop
+  issue; streamable-http + SSE all pass, and this change is streamable-http-JSON only). Contained by the
+  sandbox 2GiB mem limit (CHG-0015). FOLLOW-UPS (documented): `_read_json_response` is dead code with the
+  same pattern; error-body reads read-whole-then-slice; `_validate_upstream` does allowlist matching but no
+  resolved-IP SSRF check (sandbox analogue of CHG-0065, relevant while the sandbox net is internal=false).
+  Evidence: `mcp-parallel/findings/backstop-p10-sandbox-response-cap/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

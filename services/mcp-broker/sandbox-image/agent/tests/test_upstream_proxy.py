@@ -108,6 +108,13 @@ class _FakeStreamCtx:
     async def aread(self):
         return self.text.encode()
 
+    async def aiter_bytes(self):
+        # CHG-0066: the JSON branch now reads incrementally via aiter_bytes(); yield the
+        # body in a few chunks so the size cap can fire mid-stream.
+        data = self.text.encode()
+        for i in range(0, max(len(data), 1), 64):
+            yield data[i:i + 64]
+
     async def aiter_lines(self):
         for payload in self._sse:
             yield "event: message"
@@ -393,3 +400,43 @@ def test_health_includes_connection_count(agent_client):
     body = resp.json()
     assert "connection_count" in body
     assert "streamable-http" in body["connection_count"]
+
+
+# ── CHG-0066: the JSON (non-SSE) upstream-response branch buffered the WHOLE body
+# via response.aread() then checked the size — so an untrusted upstream could OOM the
+# sandbox agent (up to its mem limit) before the check. It now reads incrementally via
+# aiter_bytes() and aborts at _MAX_RESPONSE_BYTES (parity with the SSE branch).
+def _fake_stream_json(*, result=None, session_id="sess-abc", pad_bytes=0):
+    def _stream(self, _method, _url, *, json=None, headers=None, timeout=None):  # noqa: A002
+        req_id = (json or {}).get("id")
+        body = {"jsonrpc": "2.0", "id": req_id,
+                "result": result if result is not None else {}}
+        text = __import__("json").dumps(body)
+        if pad_bytes:
+            text = __import__("json").dumps(
+                {"jsonrpc": "2.0", "id": req_id, "result": {"pad": "x" * pad_bytes}})
+        return _FakeStreamCtx(
+            headers={"content-type": "application/json", "mcp-session-id": session_id},
+            text=text,
+        )
+    return _stream
+
+
+def test_streamable_http_json_response_over_cap_rejected(agent_client):
+    with patch("agent.upstream_manager._MAX_RESPONSE_BYTES", 100), \
+         patch("httpx.AsyncClient.stream", new=_fake_stream_json(pad_bytes=5000)), \
+         patch("httpx.AsyncClient.post", new=AsyncMock(return_value=httpx.Response(202))):
+        resp = agent_client.post("/rpc", json=_http_payload())
+    body = resp.json()
+    assert body["error"]["code"] == -32000
+    assert "too large" in body["error"]["message"].lower()
+
+
+def test_streamable_http_json_response_under_cap_ok(agent_client):
+    # the JSON branch still works normally with the incremental reader
+    with patch("httpx.AsyncClient.stream",
+               new=_fake_stream_json(result={"tools": [{"name": "echo"}]})), \
+         patch("httpx.AsyncClient.post", new=AsyncMock(return_value=httpx.Response(202))):
+        resp = agent_client.post("/rpc", json=_http_payload())
+    assert resp.status_code == 200
+    assert resp.json()["result"]["tools"][0]["name"] == "echo"
