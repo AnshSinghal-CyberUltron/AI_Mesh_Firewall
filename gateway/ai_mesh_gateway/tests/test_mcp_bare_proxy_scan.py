@@ -641,7 +641,8 @@ async def test_ext_sse_notification_still_streams_through_unbuffered():
     sse.aread.assert_not_awaited()                 # NOT buffered (no hang risk)
 
 
-# ── CHG-0040: a JSON-RPC ERROR response (no result) can leak a secret in its
+# ── CHG-0043 (was CHG-0040; renumbered — id collided w/ P4.13): a JSON-RPC ERROR
+# response (no result) can leak a secret in its
 # message from an untrusted external server — ext_mcp_proxy now scans error
 # content too (non-streaming + SSE), not just the result.
 _ERR_SECRET = "connect failed: postgres://admin:s3cr3tPass@db.internal/prod"

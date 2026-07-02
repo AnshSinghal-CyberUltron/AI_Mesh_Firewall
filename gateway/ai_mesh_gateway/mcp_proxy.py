@@ -899,7 +899,8 @@ async def _scan_reframe_sse_tool_result(
             continue
         result_obj = obj.get("result") if isinstance(obj, dict) else None
         if result_obj is None:
-            # CHG-0040: an ERROR frame (no result) can still carry a secret in its
+            # CHG-0043 (was CHG-0040; renumbered — id collided w/ P4.13 ws:// change):
+            # an ERROR frame (no result) can still carry a secret in its
             # message/data from an untrusted server — scan + mask it (fail CLOSED:
             # withhold on scan error). Notifications / keep-alives pass through.
             err_obj = obj.get("error") if isinstance(obj, dict) else None
@@ -1449,7 +1450,8 @@ async def ext_mcp_proxy(path: str, request: Request):
             if _scanned_content is not _ext_result:
                 data["result"] = _scanned_content
 
-        # CHG-0040: a JSON-RPC error response (no result) can STILL leak a secret in
+        # CHG-0043 (was CHG-0040; renumbered — id collided w/ P4.13 ws:// change):
+        # a JSON-RPC error response (no result) can STILL leak a secret in
         # its message/data from an untrusted external server (e.g. a connection
         # string in "connect failed: postgres://user:pass@host"). Scan + mask it
         # (redact-only — it is already an error); fail CLOSED (withhold) on a scan

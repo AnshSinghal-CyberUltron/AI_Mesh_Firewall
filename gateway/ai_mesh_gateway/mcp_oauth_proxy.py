@@ -108,13 +108,62 @@ def _token_redis_key(org_slug: str, server_url: str) -> str:
     return f"mcp:oauth:token:{org_slug}|{server_url}"
 
 
+# ── CHG-0042: at-rest encryption for OAuth flow state + tokens in Redis ──────
+# OAuth access/refresh tokens (and client secrets in the flow record) were stored
+# as plaintext JSON in Redis. Redis is internal, but a compromise would expose
+# every org's upstream MCP credentials. Enable encryption by setting
+# MCP_OAUTH_ENCRYPTION_KEY (a urlsafe-base64 32-byte Fernet key). Default OFF =
+# plaintext (UNCHANGED behaviour). ``_enc_loads`` transparently reads encrypted
+# values, cipher-absent plaintext, AND legacy plaintext written before the key was
+# set (Fernet tokens are prefix-detectable), so enabling the key never orphans
+# existing tokens.
+_FERNET_PREFIX = "gAAAAA"  # urlsafe-b64 of the Fernet version byte (0x80)
+
+
+def _oauth_cipher():
+    key = os.environ.get("MCP_OAUTH_ENCRYPTION_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(key.encode())
+    except Exception as exc:  # noqa: BLE001 — bad key must never break token storage
+        LOG.warning(
+            "mcp_oauth_proxy: MCP_OAUTH_ENCRYPTION_KEY invalid (%s); storing plaintext", exc
+        )
+        return None
+
+
+def _enc_dumps(obj) -> str:
+    """JSON-serialize + encrypt at rest when a cipher is configured (else plaintext)."""
+    raw = json.dumps(obj)
+    cipher = _oauth_cipher()
+    if cipher is None:
+        return raw
+    return cipher.encrypt(raw.encode()).decode()
+
+
+def _enc_loads(raw):
+    """Inverse of ``_enc_dumps``: decrypt encrypted values; pass plaintext (incl.
+    legacy, pre-key) through. Never raises on a decrypt miss — falls back to JSON."""
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", "replace")
+    cipher = _oauth_cipher()
+    if cipher is not None and raw.startswith(_FERNET_PREFIX):
+        try:
+            return json.loads(cipher.decrypt(raw.encode()).decode())
+        except Exception:  # noqa: BLE001 — key rotated / not actually encrypted
+            pass
+    return json.loads(raw)
+
+
 async def _flow_save(state: str, flow: dict) -> None:
     _oauth_flows[state] = flow
     rc = await _get_redis()
     if rc is None:
         return
     try:
-        await rc.setex(_flow_key(state), _FLOW_TTL, json.dumps(flow))
+        await rc.setex(_flow_key(state), _FLOW_TTL, _enc_dumps(flow))
     except Exception as exc:  # pragma: no cover
         LOG.warning("mcp_oauth_proxy: flow save failed: %s", exc)
 
@@ -128,7 +177,7 @@ async def _flow_pop(state: str) -> dict | None:
         raw = await rc.get(_flow_key(state))
         await rc.delete(_flow_key(state))
         if raw:
-            return json.loads(raw)
+            return _enc_loads(raw)
     except Exception as exc:  # pragma: no cover
         LOG.warning("mcp_oauth_proxy: flow pop failed: %s", exc)
     return flow
@@ -152,7 +201,7 @@ async def _token_save(org_slug: str, server_url: str, data: dict) -> None:
         await rc.setex(
             _token_redis_key(org_slug, server_url),
             ttl,
-            json.dumps(data),
+            _enc_dumps(data),
         )
     except Exception as exc:  # pragma: no cover
         LOG.warning("mcp_oauth_proxy: token save failed: %s", exc)
@@ -164,7 +213,7 @@ async def _token_load(org_slug: str, server_url: str) -> dict | None:
         try:
             raw = await rc.get(_token_redis_key(org_slug, server_url))
             if raw:
-                data = json.loads(raw)
+                data = _enc_loads(raw)
                 _oauth_tokens[_token_key(org_slug, server_url)] = data
                 return data
         except Exception as exc:  # pragma: no cover

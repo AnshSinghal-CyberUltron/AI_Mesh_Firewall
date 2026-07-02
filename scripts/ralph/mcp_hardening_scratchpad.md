@@ -57,7 +57,7 @@
       The non-streaming JSON branch already scanned any result; the org path rejects these methods (-32601), so
       this closes the only reachable unscanned resource-content path. +2 tests; test_mcp_bare_proxy_scan.py 24
       passed, broad sweep 1085 passed.
-      CHG-0040 (2026-07-02): closed the LAST unscanned egress vector on ext_mcp_proxy. The scan only inspected
+      CHG-0043 (2026-07-02) [renumbered from CHG-0040 — collided w/ P4.13 Blocker 2]: closed the LAST unscanned egress vector on ext_mcp_proxy. The scan only inspected
       the `result`; a JSON-RPC ERROR response (no result) egressed UNSCANNED — an untrusted external server
       could leak a secret in an error message (e.g. a postgres:// connection string). Both ext-proxy paths
       (non-streaming branch + _scan_reframe_sse_tool_result) now scan `error` when there's no result:
@@ -73,6 +73,13 @@
       accidental credential in prompt args no longer egresses raw to the external server. resources/read
       EXCLUDED (its param is a URI; blocking a legit https://user:token@host would break authed reads). Removed
       the dead _ext_is_tools_call flag. +1 test; test_mcp_bare_proxy_scan.py 27 passed, broad sweep 1088 passed.
+      CHG-0042 (2026-07-02): OAuth secret at rest. OAuth flow state (PKCE code_verifier, CSRF state) +
+      access/refresh tokens persisted to Redis as PLAINTEXT JSON. Added optional Fernet at-rest encryption
+      in mcp_oauth_proxy.py (_oauth_cipher/_enc_dumps/_enc_loads, gated on MCP_OAUTH_ENCRYPTION_KEY):
+      default OFF = byte-unchanged plaintext; key set = new writes encrypted (gAAAAA) while legacy plaintext
+      still reads (no orphan); invalid key -> plaintext fallback (never breaks flow). Wired _flow_save/
+      _flow_pop/_token_save/_token_load. OAuth callback re-audited CLEAN (CSRF+PKCE via _flow_pop, SSRF
+      _assert_safe_url, no redirect follow). +4 tests (test_mcp_oauth_encryption.py); broad sweep 1092 passed.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER
