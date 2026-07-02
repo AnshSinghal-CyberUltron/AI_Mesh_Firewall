@@ -249,6 +249,72 @@ def _mask_value_for_detail(value: str, max_len: int = 24) -> str:
     return f"{masked[:max_len]}{'…' if len(masked) > max_len else ''}"
 
 
+# ── G10: typed-placeholder masking of semantically-identified spans ─────────────
+# The tier-2 guard model can flag PII/secret content that has NO deterministic regex
+# (free-text names, non-standard card/ID layouts, passphrases). ``redact_all`` is a
+# no-op on those, so a "redact" verdict egressed the value raw (honestly relabeled to
+# "flag" by main.py, but still leaked). We mask the guard model's identified spans
+# with a typed placeholder so the redact actually removes the bytes.
+_TYPED_PLACEHOLDER = {
+    "pii": "[REDACTED_PII]",
+    "pci": "[REDACTED_CARD]",
+    "phi": "[REDACTED_PHI]",
+    "secret": "[REDACTED_SECRET]",
+    "credential": "[REDACTED_SECRET]",
+}
+# Bounds keep span-masking SURGICAL: skip a span too short to be a real value (noise)
+# or so long it is a whole sentence (masking it would destroy legit content — the
+# guard model is expected to return value-level evidence).
+_SPAN_MASK_MIN_LEN = 3
+_SPAN_MASK_MAX_LEN = 120
+
+
+def _typed_placeholder(threat_type: str) -> str:
+    return _TYPED_PLACEHOLDER.get(str(threat_type or "").lower(), "[REDACTED]")
+
+
+def _redaction_spans_from(spans, threat_type: str) -> list[str]:
+    """Filter guard-model evidence spans to value-like fragments worth masking, and
+    only for redactable categories (so a jailbreak/injection evidence fragment is
+    never used to blank out response text)."""
+    if str(threat_type or "").lower() not in _REDACTABLE_OUTPUT_CATEGORIES:
+        return []
+    out: list[str] = []
+    for s in spans or []:
+        s = str(s).strip()
+        if _SPAN_MASK_MIN_LEN <= len(s) <= _SPAN_MASK_MAX_LEN and "REDACTED" not in s.upper():
+            out.append(s)
+    return out
+
+
+def _mask_spans_typed(text: str, spans, threat_type: str) -> str:
+    """Replace each literal ``span`` occurrence in ``text`` with a typed placeholder.
+
+    Literal (no regex) + bounded surgical removal of a semantically-identified value
+    the deterministic redactor could not match. Skips a span that alone would mask
+    more than ~40% of the response (guards against an over-broad sentence-level
+    evidence span). Fails toward redaction: a slightly incidental over-mask is
+    preferable to egressing the raw sensitive value."""
+    if not text or not spans:
+        return text
+    placeholder = _typed_placeholder(threat_type)
+    out = text
+    seen: set[str] = set()
+    for s in spans:
+        s = str(s).strip()
+        # The [_SPAN_MASK_MIN_LEN, _SPAN_MASK_MAX_LEN] bound is the only over-mask
+        # guard: too-short spans are noise; a span > _SPAN_MASK_MAX_LEN is an over-
+        # broad (sentence-level) evidence fragment and is refused. Any value-length
+        # span within bounds is masked even if it is a large fraction of a short
+        # answer — fail-toward-redaction (a placeholder never "nukes" legit content).
+        if s in seen or not (_SPAN_MASK_MIN_LEN <= len(s) <= _SPAN_MASK_MAX_LEN):
+            continue
+        seen.add(s)
+        if s in out:
+            out = out.replace(s, placeholder)
+    return out
+
+
 @dataclass
 class OutputVerdict:
     """Result of output inspection."""
@@ -260,6 +326,13 @@ class OutputVerdict:
     matched_patterns: list[str] = field(default_factory=list)
     matched_values: dict[str, str] = field(default_factory=dict)
     compliance_tags: list[str] = field(default_factory=list)
+    # G10: RAW sensitive spans the tier-2 guard model identified SEMANTICALLY (free-
+    # text names, non-standard card/ID layouts, passphrases) that ``redact_all`` has
+    # no deterministic regex for. The sanitizer masks these with a typed placeholder
+    # so a semantic redact verdict actually removes the bytes instead of being a
+    # no-op that egresses raw. Kept OFF the client-facing telemetry surface (never
+    # serialized by output_guard_telemetry_meta) so the raw span stays internal.
+    redaction_spans: list[str] = field(default_factory=list)
     # M11: True when the tier-2 OUTPUT guard model could not scan (outage /
     # breaker-open / parse failure) and the response was passed UNSCANNED
     # (fail-open). Surfaced to telemetry + the client zeroshield metadata so a
@@ -474,6 +547,17 @@ class OutputGuard:
                     # value out of them here as a belt-and-suspenders to the scanner.py
                     # source fix. redact_all is a no-op on plain pattern-key strings.
                     t2_compliance_tags = get_compliance_tags(t2_patterns)
+                    # G10: keep the RAW guard-model evidence spans so the sanitizer can
+                    # mask semantically-detected PII/secret that redact_all has no regex
+                    # for (free-text names, non-standard layouts, passphrases). Only for
+                    # redactable categories, and only value-like spans (see
+                    # _redaction_spans_from). These stay INTERNAL (never serialized to
+                    # the client/telemetry); the display copy below is still masked.
+                    t2_redaction_spans = (
+                        _redaction_spans_from(t2_patterns, t2.threat_type or "")
+                        if t2.action in ("block", "redact")
+                        else []
+                    )
                     t2_patterns = [redact_all(str(p)) for p in t2_patterns]
                     t2_detail = redact_all(
                         t2.detail or "ZeroShield guard model (tier-2) flagged output"
@@ -485,6 +569,7 @@ class OutputGuard:
                         detail=t2_detail,
                         matched_patterns=t2_patterns,
                         compliance_tags=t2_compliance_tags,
+                        redaction_spans=t2_redaction_spans,
                     ))
             except Exception:  # noqa: BLE001 - output tier-2 must never break delivery
                 # M11: fail-open (never block an already-generated response on a
@@ -1093,9 +1178,16 @@ def _sanitize_output_core(
     # redacted (deterministic token-level masking via redact_pii_fn), never
     # routed through the non-deterministic "rewrite" path — regardless of action.
     if threat in _REDACTABLE_OUTPUT_CATEGORIES:
-        if redact_pii_fn is not None:
-            return redact_pii_fn(response_text)
-        return "[REDACTED]"
+        base = redact_pii_fn(response_text) if redact_pii_fn is not None else "[REDACTED]"
+        # G10: the deterministic redactor above has no regex for semantically-detected
+        # PII/secret (free-text names, non-standard layouts, passphrases). Mask the
+        # tier-2 guard model's identified spans (+ any raw matched_values that survived)
+        # with a typed placeholder so the redact actually removes the bytes instead of
+        # being a no-op that egresses raw.
+        spans = list(verdict.redaction_spans or []) + [
+            str(v) for v in (verdict.matched_values or {}).values()
+        ]
+        return _mask_spans_typed(base, spans, threat)
     # E15: internal infrastructure leakage (internal IP / hostname / URL) is
     # surgically masked via the deterministic redactor — never whole-response
     # rewritten — so a REAL internal address that survived FP suppression cannot

@@ -455,3 +455,60 @@ def test_g13_benign_output_not_flagged_or_mutated(label, payload):
     not be flagged as exfil nor have their bytes mutated."""
     assert not list(_scan_exfil_channels(payload)), f"{label}: benign output flagged as exfil"
     assert neutralize_exfil_channels(payload) == payload, f"{label}: benign output was mutated"
+
+
+# ================================================================== fixed gap (now FROZEN)
+# G10 — Tier-2 semantic redact was a byte no-op. The guard model flags PII/secret with
+# no deterministic regex (free-text names, non-standard card/ID layouts, passphrases);
+# a redactable-category "redact" verdict ran redact_all, which is a no-op on those
+# spans, so redacted==original and the value egressed verbatim (honestly relabeled to
+# "flag" by main.py, but still leaked). FIXED in output_guard.py: inspect() captures the
+# guard model's raw evidence spans into OutputVerdict.redaction_spans and the sanitizer
+# masks them with a typed placeholder ([REDACTED_PII/CARD/PHI/SECRET]). FROZEN.
+from output_guard import (  # noqa: E402
+    _redaction_spans_from, _mask_spans_typed, _typed_placeholder,
+)
+
+
+@pytest.mark.parametrize("cat,text,span,placeholder", [
+    ("pii",    "The account holder is John Q. Smith who lives in Seattle.", "John Q. Smith", "[REDACTED_PII]"),
+    ("secret", "The deploy passphrase is correct-horse-battery-staple ok.", "correct-horse-battery-staple", "[REDACTED_SECRET]"),
+    ("pci",    "The 14-digit card 30569309025904 was used.",               "30569309025904", "[REDACTED_CARD]"),
+    ("phi",    "Patient has early-onset Huntington disease per Dr. Alvarez.", "early-onset Huntington disease", "[REDACTED_PHI]"),
+])
+def test_g10_semantic_redact_masks_span(cat, text, span, placeholder):
+    """A tier-2 semantic-redact verdict must actually remove the identified span from
+    the egress bytes (not a no-op), replacing it with the typed placeholder."""
+    verdict = OutputVerdict(
+        action="redact", threat_type=cat,
+        redaction_spans=_redaction_spans_from([span], cat),
+    )
+    out = sanitize_output_for_verdict(text, verdict, redact_pii_fn=patterns.redact_all)
+    assert span not in out, f"{cat}: semantic span survived redaction (LEAK)"
+    assert out != text, f"{cat}: redact was a byte no-op"
+    assert placeholder in out, f"{cat}: typed placeholder not applied"
+
+
+def test_g10_nonredactable_category_spans_are_ignored():
+    """A jailbreak/injection evidence fragment must NEVER be used to blank response
+    text — only redactable categories drive span masking."""
+    assert _redaction_spans_from(["some evidence fragment"], "jailbreak") == []
+    verdict = OutputVerdict(action="redact", threat_type="jailbreak", redaction_spans=["some evidence fragment"])
+    text = "A normal answer that mentions some evidence fragment inline."
+    out = sanitize_output_for_verdict(text, verdict, redact_pii_fn=patterns.redact_all)
+    assert "some evidence fragment" in out, "non-redactable span wrongly masked response text"
+
+
+def test_g10_overbroad_span_refused():
+    """An over-broad (sentence-level, > max-len) evidence span is refused so masking
+    stays surgical and cannot blank a whole legit answer."""
+    overbroad = "x" * 150  # exceeds _SPAN_MASK_MAX_LEN (120)
+    text = f"A long grounded answer containing {overbroad} and more useful detail."
+    assert _mask_spans_typed(text, [overbroad], "pii") == text, "over-broad span should be refused"
+
+
+def test_g10_redaction_spans_filter_bounds():
+    """Span filter drops noise (too short), oversized spans, and already-masked spans."""
+    spans = ["ab", "x" * 200, "[REDACTED_PII]", "Jane Q. Doe"]
+    assert _redaction_spans_from(spans, "pii") == ["Jane Q. Doe"]
+    assert _typed_placeholder("credential") == "[REDACTED_SECRET]"
