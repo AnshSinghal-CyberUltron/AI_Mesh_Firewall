@@ -1037,6 +1037,27 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   8 + 1350 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
   `mcp-parallel/findings/backstop-p2-mcp-unicode-deobfuscation/`.
 
+- **CHG-0080** (2026-07-02) — G2 item 2 / 1.4 (**devil's-advocate on model-facing surfaces**), MEDIUM: the
+  MCP `initialize` result carries an `instructions` field the spec treats as model-facing guidance
+  ("thought of like a hint … may be added to the system prompt") + serverInfo — a tool-poisoning /
+  indirect-prompt-injection + metadata surface like tool descriptions (CHG-0077). The ORG path is **safe**
+  (`org_mcp_jsonrpc` SYNTHESIZES the initialize response — gateway serverInfo, no upstream instructions
+  forwarded). But the EXT transparent proxy (`ext_mcp_proxy`) scans a result only when the method is in
+  `_EXT_FINITE_RESULT_METHODS`, and `initialize` was **NOT** in it → the upstream's initialize response
+  (incl. model-facing `instructions` + serverInfo) was forwarded **RAW, unscanned**; a malicious external
+  server could put an injection/exfil instruction or a hidden secret/internal-IP in `instructions` and it
+  reached the model past the firewall. FIX (`mcp_proxy.py`): added `"initialize"` to
+  `_EXT_FINITE_RESULT_METHODS`. The finite handshake result now routes through the same result-redaction
+  floor as tool results, inheriting CHG-0074 (IP-network floor) + CHG-0075 (credential-exposure) + CHG-0076
+  (text-encoding exfil block) + CHG-0079 (invisible/confusable-unicode deobfuscation) + injection
+  detection/tagging (CHG-0078). initialize ARGS (client capabilities/clientInfo) NOT scanned (client-
+  provided). +5 tests (secret + internal-IP in initialize instructions masked + tagged INFRA,SECRET;
+  zero-width-hidden secret blocked fail-closed; injection detected; benign initialize unchanged). Gate: 5 +
+  1358 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p2-ext-initialize-instructions/`. **RESIDUAL:** injection in
+  `instructions` is detected+tagged but not removed under the default `tag` posture (same output-injection
+  enforcement question as the CHG-0078 residual).
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

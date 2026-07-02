@@ -1389,6 +1389,14 @@ _EXT_CREDENTIAL_HEADERS = frozenset({
 _EXT_FINITE_RESULT_METHODS = frozenset({
     "tools/call", "tools/list", "resources/list", "resources/read",
     "prompts/list", "prompts/get",
+    # CHG-0080: the MCP `initialize` result carries an `instructions` field that the
+    # spec treats as model-facing guidance ("analogous to a system prompt" / a hint
+    # added to the LLM context) plus serverInfo — a tool-poisoning / indirect-prompt-
+    # injection + metadata-leak surface exactly like tool descriptions (CHG-0077). On
+    # the transparent EXTERNAL proxy it was forwarded RAW (initialize wasn't in this
+    # set), so a malicious upstream's initialize instructions/serverInfo reached the
+    # model unscanned. The handshake result is finite → safe to buffer + scan.
+    "initialize",
 })
 
 # CHG-0041: methods whose params carry an ``arguments`` object that must be

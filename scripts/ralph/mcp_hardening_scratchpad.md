@@ -299,6 +299,19 @@
       mcp-parallel/findings/backstop-p2-mcp-unicode-deobfuscation/finding.md. RESIDUAL: heuristic-drop of
       poisoned tool descriptions REJECTED on FP grounds; injection under default tag posture remains
       tagged-but-forwarded (CHG-0078 residual).
+      CHG-0080 (2026-07-02, MEDIUM — devil's-advocate on model-facing surfaces): the MCP `initialize` result
+      carries an `instructions` field the spec treats as model-facing guidance ("analogous to a system
+      prompt") + serverInfo — a tool-poisoning/injection + metadata surface like tool descriptions (CHG-0077).
+      ORG path SAFE (org_mcp_jsonrpc SYNTHESIZES initialize; no upstream instructions forwarded), but the EXT
+      transparent proxy (ext_mcp_proxy) scans a result only when the method is in _EXT_FINITE_RESULT_METHODS —
+      and `initialize` was NOT in it → the upstream's initialize instructions/serverInfo egressed RAW to the
+      model. FIX (mcp_proxy.py): added "initialize" to _EXT_FINITE_RESULT_METHODS → the finite handshake
+      result now routes through the result floor (inherits CHG-0074/0075/0076/0079 + injection detect/tag).
+      initialize ARGS not scanned (client-provided). +5 tests (secret+IP in instructions masked+tagged;
+      zero-width-hidden secret blocked fail-closed; injection detected; benign intact). Gate: 5 + 1358 gateway
+      passed, 0 failed; broker -k "not websocket" 108 passed. Evidence:
+      mcp-parallel/findings/backstop-p2-ext-initialize-instructions/finding.md. RESIDUAL: injection in
+      instructions detected+tagged but not removed under default tag posture (CHG-0078 residual).
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;
