@@ -66,6 +66,11 @@
     (CONCURRENCY=25, 450 calls): total_leaked=0, redacted=60/run, errors=0 — 1.4 redaction holds under
     concurrency (validates CHG-0003/0004/0005 + CHG-0012 end-to-end). Fixes: PII in `message` (round-trips
     through echo), resilient CONTROL_URL lookup. Evidence mcp-parallel/findings/backstop-p20-redaction-load/.
+  - CHG-0015 (2026-07-02) — LIVE architecture posture (docker inspect): item 10 resource limits VERIFIED
+    STRONG (cap_drop=ALL, no-new-priv, pids=256, mem=2GiB, cpu=1, readonly-rootfs, noexec-tmpfs); per-org
+    network isolation VERIFIED (distinct mcp_sandbox_net_<org>). item 12 gVisor UNMET INFRA PREREQ
+    (runsc NOT installed — can't require here); egress GAP confirmed (networks internal=false). Evidence
+    mcp-parallel/findings/backstop-p12-isolation-posture/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

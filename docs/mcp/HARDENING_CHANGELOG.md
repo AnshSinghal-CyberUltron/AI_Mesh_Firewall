@@ -459,3 +459,42 @@ the prod compose/manifests is tracked under G3 item 12.
 - **REMAINING for G5 item 20:** run at TRUE peak (5k-10k in-flight, tied to item 15) and prove zero leaks
   3×; add per-actor authz-denial and tag-enforcement cases under load. This proves redaction-under-load at
   25-concurrency / 450 calls; higher magnitude remains.
+
+### CHG-0015 — LIVE architecture-posture verification: items 10/11 STRONG, item 12 refined (docs)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 10 (resource limits) + item 12 (gVisor/seccomp/caps/egress) verified against
+  the RUNNING sandboxes; also verified the per-org network-isolation invariant (relevant to item 7). Read-only
+  `docker inspect`; no code/deploy changed. (NB: scratchpad item 11 is PostgreSQL+Redis — NOT covered here.)
+- **Files:** `mcp-parallel/findings/backstop-p12-isolation-posture/isolation_posture_evidence.txt` (evidence).
+- **WHAT:** `docker inspect` on all 3 live org sandboxes (org-a/org-b/zeroshield) + their networks + host
+  runtimes. Findings (all 3 identical):
+    - **Item 10 (resource limits) — VERIFIED STRONG:** `CapDrop:[ALL]`, `SecurityOpt:[no-new-privileges]`,
+      `Privileged:false`, `PidsLimit:256`, `Memory:2GiB`, `NanoCpus:1`, `ReadonlyRootfs:true`, tmpfs
+      `/tmp` mounted `noexec,nosuid`, and `npm_config_ignore_scripts` set. Genuine containment (except the
+      kernel boundary).
+    - **Per-org network isolation (isolation invariant; relevant to item 7) — VERIFIED PRESENT:** each org's sandbox is on its OWN L2
+      network `mcp_sandbox_net_<org>` (distinct per org), so a compromised sandbox cannot reach a sibling
+      org's sandbox at L2. The audit's "host-run fallback collapses tenants onto one shared bridge" is NOT
+      active in this deployment.
+    - **Item 12 gVisor — UNMET INFRASTRUCTURE PREREQUISITE (not a config gap):** `docker info` offers only
+      `runc`/`io.containerd.runc.v2`; `which runsc` → NOT installed. So sandboxes run on `runc` (shared
+      kernel). The code fail-closes when `MCP_SANDBOX_RUNTIME_REQUIRED=true` (CHG-0001), so forcing it here
+      would kill every sandbox — gVisor must be INSTALLED on the deploy host before it can be required.
+    - **Item 12 egress — GAP CONFIRMED:** the per-org networks are `internal=false` (open outbound NAT); no
+      network-level egress default-deny. (Per-org L2 isolation IS present; the missing control is an
+      egress allowlist / `internal=true` + broker-proxied egress.)
+- **WHY:** the CHG-0002 audit assessed these from CODE defaults (fail-open); this is the first LIVE
+  evidence. It corrects the impression of "fail-open everything": the deployed containment is actually
+  strong, with two SPECIFIC remaining gaps — gVisor (host infra) and network-level egress default-deny.
+- **NOW DOES:** records the exact deployed posture so item 12 is not marked done (runc + open egress) and
+  items 10/11 have real evidence. No live change (forcing runsc/`internal=true` would break the running
+  stack other sessions use).
+- **Touched whose work:** verifies the broker/`docker_manager` sandbox provisioning (active P4.13/P6.18/P7
+  sessions). No files edited.
+- **VERIFY:** `docker inspect org-a-mcp-sandbox --format '{{.HostConfig.Runtime}} {{.HostConfig.CapDrop}}
+  {{.HostConfig.PidsLimit}} {{.HostConfig.ReadonlyRootfs}}'`; `which runsc`; `docker network inspect
+  mcp_sandbox_net_org-a --format '{{.Internal}}'`. Snapshot:
+  `mcp-parallel/findings/backstop-p12-isolation-posture/isolation_posture_evidence.txt`.
+- **REMAINING for G3 item 12:** (1) install gVisor on the deploy host, then set `MCP_SANDBOX_RUNTIME=runsc`
+  + `MCP_SANDBOX_RUNTIME_REQUIRED=true` and verify `Runtime=runsc` live; (2) network-level egress
+  default-deny (per-org `internal=true` + broker-proxied allowlist, or per-container iptables/eBPF).

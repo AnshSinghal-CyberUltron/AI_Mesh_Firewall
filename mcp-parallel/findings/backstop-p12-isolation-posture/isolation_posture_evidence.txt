@@ -1,0 +1,12 @@
+# Live sandbox isolation posture (backstop CHG-0015, 2026-07-02)
+## docker runtimes available
+io.containerd.runc.v2 runc 
+runsc installed: NO
+## per-sandbox HostConfig (org-a / org-b / zeroshield)
+/org-a-mcp-sandbox runtime=runc net=mcp_sandbox_net_org-a capdrop=[ALL] secopt=[no-new-privileges:true] priv=false pids=256 mem=2147483648 cpu=1000000000 rofs=true
+/org-b-mcp-sandbox runtime=runc net=mcp_sandbox_net_org-b capdrop=[ALL] secopt=[no-new-privileges:true] priv=false pids=256 mem=2147483648 cpu=1000000000 rofs=true
+/zeroshield-mcp-sandbox runtime=runc net=mcp_sandbox_net_zeroshield capdrop=[ALL] secopt=[no-new-privileges:true] priv=false pids=256 mem=2147483648 cpu=1000000000 rofs=true
+## per-org network internal flag (egress)
+mcp_sandbox_net_org-a internal=false
+mcp_sandbox_net_org-b internal=false
+mcp_sandbox_net_zeroshield internal=false

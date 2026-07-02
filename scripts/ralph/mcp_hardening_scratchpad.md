@@ -104,8 +104,23 @@
 - [ ] 8. No unknown npm on host — proven.
 - [ ] 9. Gateway auth/authz/validation/rate-limit/policy/audit — verified + hardened.
 - [ ] 10. Resource limits CPU/mem/disk/timeout enforced + containment proven.
+      LIVE VERIFIED (config) — CHG-0015 (2026-07-02): docker inspect of all 3 live org sandboxes shows
+      CapDrop=[ALL], SecurityOpt=[no-new-privileges], Privileged=false, PidsLimit=256, Memory=2GiB,
+      NanoCpus=1, ReadonlyRootfs=true, tmpfs /tmp noexec,nosuid, npm_config_ignore_scripts set. Strong
+      containment deployed. REMAINING before [x]: prove CONTAINMENT under load (fork/mem/disk/timeout bombs
+      + neighbor-safe) — but destructive bombs are UNSAFE on the shared live stack (item 17 needs an
+      isolated host). Evidence: mcp-parallel/findings/backstop-p12-isolation-posture/.
 - [ ] 11. PostgreSQL + Redis schemas/usage/restart-safety verified.
 - [ ] 12. gVisor + seccomp/no-new-privileges/cap_drop/egress-lockdown enforced.
+      LIVE VERIFIED — CHG-0015 (2026-07-02): PRESENT live = cap_drop=ALL, no-new-privileges, per-org network
+      (mcp_sandbox_net_<org> distinct per org — host-run shared-bridge fallback NOT active). GAPS:
+      (a) gVisor UNMET INFRA PREREQ — `which runsc`=NOT installed, docker only offers runc; sandboxes run
+      on runc (shared kernel). Code fail-closes if RUNTIME_REQUIRED=true (CHG-0001) so forcing it would KILL
+      the sandboxes — gVisor must be INSTALLED on the deploy host first (infra task, not code). (b) egress:
+      per-org networks internal=false (open outbound NAT) — no network-level egress default-deny. REMAINING
+      before [x]: install gVisor + require runsc (verify Runtime=runsc live); network egress default-deny
+      (per-org internal=true + broker-proxied allowlist, or iptables/eBPF). NOTE: risky to change live (would
+      break the running stack). Evidence: mcp-parallel/findings/backstop-p12-isolation-posture/.
 
 ## G4 — Production hardening (Phase 3)
 - [ ] 13. Monitoring + metrics + tracing wired; backup; auto-recovery (sandbox/broker/Redis/PG self-heal).

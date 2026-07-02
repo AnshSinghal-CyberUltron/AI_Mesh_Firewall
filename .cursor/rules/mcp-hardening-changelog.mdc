@@ -119,3 +119,10 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   PII embedded in `message` so it round-trips through `echo` (redaction test was vacuous before); resilient
   server-id lookup (graceful CONTROL_URL degradation). Evidence: mcp-parallel/findings/backstop-p20-redaction-load/.
   REMAINING: 5k-10k in-flight (item 15) + per-actor/tag cases under load.
+- **CHG-0015** (2026-07-02) — LIVE architecture posture (docker inspect, docs): item 10 resource limits
+  VERIFIED STRONG (cap_drop=ALL, no-new-privileges, pids=256, mem=2GiB, cpu=1, readonly-rootfs, noexec-tmpfs);
+  per-org network isolation VERIFIED (distinct mcp_sandbox_net_<org> per org — host-run shared-bridge
+  fallback NOT active; isolation invariant, relevant to item 7). item 12 gVisor is an UNMET INFRA PREREQ (runsc NOT installed on host — forcing
+  RUNTIME_REQUIRED would fail-close/kill sandboxes); item 12 egress GAP confirmed (networks internal=false =
+  open NAT). Evidence: mcp-parallel/findings/backstop-p12-isolation-posture/. REMAINING item 12: install
+  gVisor + require runsc; network-level egress default-deny.
