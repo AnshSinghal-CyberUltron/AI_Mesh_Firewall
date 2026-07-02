@@ -728,6 +728,28 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (oversized JSON upstream → 502; oversized SSE upstream → 502; normal response unaffected; existing 39
   ext tests still pass). Evidence: `mcp-parallel/findings/backstop-p10-response-mem-dos/`.
 
+- **CHG-0065** (2026-07-02) — G3 item 12 (egress-lockdown / SSRF) + item 9 (validation), HIGH: the
+  tenant-facing `ext_mcp_proxy` validated the target ONLY by matching the hostname STRING against
+  `_ALLOWED_MCP_DOMAINS` (mcp.context7.com / api.githubcopilot.com / mcp.linear.app), then forwarded to
+  `https://{hostname}/...` — it NEVER resolved the host or checked the resolved IP. An allowlisted domain
+  that RESOLVES to an internal address (DNS rebinding, DNS hijack of a third-party domain, or a
+  misconfigured/future allowlist entry) is forwarded to → a caller reaches the cloud-metadata endpoint
+  `169.254.169.254` (IAM credential theft), loopback/link-local, or RFC-1918 internal services. The sibling
+  internal paths (`internal_discover_tools`/`internal_tools_call`) ALREADY guard this via
+  `is_safe_outbound_url` ("finding mcp#1"); ext_mcp_proxy was the omission. FIX (`mcp_proxy.py`):
+  ext_mcp_proxy calls `is_safe_outbound_url(target_url)` after building the target and before any
+  OAuth/body/forward work → 400 `Upstream URL rejected by SSRF guard: <reason>` on rejection.
+  `is_safe_outbound_url` (`_url_guard.py`) validates the scheme, resolves via getaddrinfo, and blocks any
+  private/loopback/link-local/cloud-metadata resolved IP, FAIL-CLOSED on parse/DNS error (`MCP_ALLOW_
+  INTERNAL_HOSTS` overrides for dev). httpx default `follow_redirects=False` → a 302-to-internal is
+  returned+response-scanned (CHG-0061/0064), not auto-followed, so the initial-target guard is the needed
+  control. No FP (real public allowlisted domains resolve to public IPs → allowed). Files: mcp_proxy.py,
+  test_mcp_bare_proxy_scan.py (+3 SSRF tests + 1 autouse hermeticity fixture). Gate: 45 ext + 1245 gateway
+  passed, 0 failed (guard-rejects → 400 wiring; REAL guard + allowlist={"localhost"} →
+  `ext_mcp_proxy("localhost/mcp")` resolves 127.0.0.1 → 400 e2e no-network; safe public host NOT blocked;
+  direct probe blocks localhost/169.254.169.254, allows mcp.linear.app). Evidence:
+  `mcp-parallel/findings/backstop-p12-ext-proxy-ssrf/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

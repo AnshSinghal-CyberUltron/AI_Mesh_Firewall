@@ -1382,6 +1382,24 @@ async def ext_mcp_proxy(path: str, request: Request):
 
     target_url = f"https://{hostname}/{remaining}"
 
+    # CHG-0065: SSRF guard — parity with internal_tools_call / internal_discover_tools
+    # ("finding mcp#1"). The allowlist above matches the hostname STRING only; it does
+    # NOT catch an allowlisted domain that RESOLVES to an internal / loopback /
+    # link-local / cloud-metadata address (DNS rebinding, DNS hijack, or a
+    # misconfigured/future allowlist entry) — which would let a caller reach internal
+    # services or the cloud-metadata endpoint (169.254.169.254 → credential theft).
+    # Resolve + block before forwarding (fail-closed; MCP_ALLOW_INTERNAL_HOSTS overrides
+    # for dev, same as the internal paths).
+    _ssrf_ok, _ssrf_reason = is_safe_outbound_url(target_url)
+    if not _ssrf_ok:
+        LOG.warning(
+            "ext_mcp_proxy.ssrf_blocked host=%s: %s", hostname, _ssrf_reason,
+        )
+        return JSONResponse(
+            content={"error": f"Upstream URL rejected by SSRF guard: {_ssrf_reason}"},
+            status_code=400,
+        )
+
     # CHG-0033: strip the caller's gateway credentials before forwarding to the
     # third-party external server (least-privilege / no credential leak). Inject
     # the upstream's OWN stored OAuth token if the gateway holds one for this

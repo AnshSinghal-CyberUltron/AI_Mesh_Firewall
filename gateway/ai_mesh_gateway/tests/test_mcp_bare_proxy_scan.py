@@ -49,6 +49,15 @@ def _force_direct_http_path(monkeypatch):
     monkeypatch.setenv("MCP_HTTP_VIA_SANDBOX", "0")
 
 
+@pytest.fixture(autouse=True)
+def _ssrf_guard_allows_by_default(monkeypatch):
+    # CHG-0065 added an SSRF guard to ext_mcp_proxy that RESOLVES the target host via
+    # getaddrinfo. These redaction/egress tests use real allowlisted domains and must
+    # stay hermetic (no real DNS), so default the guard to "allow"; the dedicated SSRF
+    # tests below override this to exercise the block path.
+    monkeypatch.setattr(mcp_proxy, "is_safe_outbound_url", lambda *_a, **_k: (True, "ok"))
+
+
 # A credential the real SECRET_PATTERNS reliably flags (token_assignment) so the
 # orchestrator tags it threat_type="secret" → _findings_have_credential True.
 _CRED_TEXT = "token=ghp_abcdefghijklmnopqrstuvwxyz0123456789"
@@ -931,3 +940,50 @@ async def test_ext_response_under_cap_unaffected():
          patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 200
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# CHG-0065: SSRF guard on ext_mcp_proxy. The domain allowlist matches the hostname
+# STRING only — it does NOT catch an allowlisted domain that RESOLVES to an internal
+# / loopback / link-local / cloud-metadata address (DNS rebinding / hijack / misconfig),
+# which would let a caller reach internal services or 169.254.169.254 (metadata →
+# credential theft). is_safe_outbound_url() resolves + blocks; ext_mcp_proxy now calls it.
+# ════════════════════════════════════════════════════════════════════════════
+@pytest.mark.asyncio
+async def test_ext_proxy_ssrf_guard_blocks_when_url_unsafe():
+    # wiring: when the guard rejects the resolved target, ext_mcp_proxy returns 400
+    req = _ext_request(_BENIGN_CALL)
+    with patch.object(mcp_proxy, "is_safe_outbound_url",
+                      lambda *_a, **_k: (False, "cloud metadata endpoint (169.254.169.254)")):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 400
+    err = _decode(resp)["error"]
+    assert "SSRF guard" in err and "metadata" in err
+
+
+@pytest.mark.asyncio
+async def test_ext_proxy_ssrf_guard_real_resolution_blocks_localhost(monkeypatch):
+    # end-to-end with the REAL guard: an allowlisted host that resolves to loopback
+    # (127.0.0.1) is blocked before any forward. localhost always resolves locally, so
+    # this is deterministic without network.
+    from _url_guard import is_safe_outbound_url as _real
+    monkeypatch.delenv("MCP_ALLOW_INTERNAL_HOSTS", raising=False)
+    req = _ext_request(_BENIGN_CALL)
+    with patch.object(mcp_proxy, "_ALLOWED_MCP_DOMAINS", {"localhost"}), \
+         patch.object(mcp_proxy, "is_safe_outbound_url", _real):
+        resp = await mcp_proxy.ext_mcp_proxy("localhost/mcp", req)
+    assert resp.status_code == 400
+    assert "SSRF guard" in _decode(resp)["error"]
+
+
+@pytest.mark.asyncio
+async def test_ext_proxy_ssrf_guard_allows_safe_public_host():
+    # a safe (public) resolved target is NOT SSRF-blocked — it proceeds to the normal
+    # scan/forward path (mock upstream returns a benign result).
+    req = _ext_request(_BENIGN_CALL)
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 20,
+                               "result": {"content": [{"type": "text", "text": "ok"}]}})
+    with patch.object(mcp_proxy, "is_safe_outbound_url", lambda *_a, **_k: (True, "ok")), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 200  # not SSRF-blocked

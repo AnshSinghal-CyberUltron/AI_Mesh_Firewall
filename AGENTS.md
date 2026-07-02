@@ -488,6 +488,18 @@
     (gVisor mem/disk limits contain a huge sandbox response). +5 tests (2 unit + 3 integration 502);
     existing 39 ext tests updated (response doubles expose aiter_bytes). Gate: 51 + 1242 gateway passed,
     0 failed. Evidence mcp-parallel/findings/backstop-p10-response-mem-dos/.
+  - CHG-0065 (2026-07-02) — G3 item 12 (egress-lockdown/SSRF) + item 9 (validation), HIGH: ext_mcp_proxy
+    validated the target ONLY by hostname-STRING allowlist (_ALLOWED_MCP_DOMAINS), never resolving the
+    IP — so an allowlisted domain resolving to an internal addr (DNS rebinding/hijack/misconfig) was
+    forwarded to → caller reaches 169.254.169.254 (cloud-metadata creds), loopback, or RFC-1918. The
+    internal paths (internal_tools_call/discover) already guard this via is_safe_outbound_url ("finding
+    mcp#1"); ext-proxy was the omission. FIX (mcp_proxy.py): ext_mcp_proxy now calls
+    is_safe_outbound_url(target_url) after building the URL → 400 on reject. The guard (_url_guard.py)
+    resolves via getaddrinfo + blocks private/loopback/link-local/metadata IPs, fail-closed (MCP_ALLOW_
+    INTERNAL_HOSTS overrides for dev). httpx follow_redirects=False so no redirect-SSRF. No FP (real
+    public domains allowed). +3 tests (wiring block; REAL localhost→127.0.0.1→400 e2e; safe host allowed)
+    + autouse fixture keeps existing redaction tests hermetic (no real DNS). Gate: 45 ext + 1245 gateway
+    passed, 0 failed. Evidence mcp-parallel/findings/backstop-p12-ext-proxy-ssrf/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

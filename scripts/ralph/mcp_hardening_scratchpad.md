@@ -504,6 +504,19 @@
       before [x]: install gVisor + require runsc (verify Runtime=runsc live); network egress default-deny
       (per-org internal=true + broker-proxied allowlist, or iptables/eBPF). NOTE: risky to change live (would
       break the running stack). Evidence: mcp-parallel/findings/backstop-p12-isolation-posture/.
+      CHG-0065 (2026-07-02, HIGH — gateway-side SSRF / egress-lockdown gap CLOSED in code): ext_mcp_proxy
+      validated the forward target ONLY by hostname-STRING allowlist (_ALLOWED_MCP_DOMAINS), never
+      resolving the IP — so an allowlisted domain resolving to an internal addr (DNS rebinding/hijack/
+      misconfig) was forwarded to → caller reaches 169.254.169.254 (cloud-metadata IAM creds), loopback,
+      or RFC-1918. The internal paths (internal_tools_call/discover) already guard via is_safe_outbound_url
+      ("finding mcp#1"); ext-proxy was the omission. FIX (mcp_proxy.py): ext_mcp_proxy now calls
+      is_safe_outbound_url(target_url) after building the URL → 400 on reject (getaddrinfo-resolve + block
+      private/loopback/link-local/metadata, fail-closed; MCP_ALLOW_INTERNAL_HOSTS dev override). httpx
+      follow_redirects=False → no redirect-SSRF. +3 tests (wiring block; REAL localhost→127.0.0.1→400 e2e;
+      safe host allowed) + autouse fixture keeps existing redaction tests hermetic. Gate: 45 ext + 1245
+      gateway passed, 0 failed. This is the GATEWAY-side egress control; the sandbox network-level
+      egress-default-deny + gVisor-runsc residuals above remain INFRA (need the deploy host). Evidence:
+      mcp-parallel/findings/backstop-p12-ext-proxy-ssrf/finding.md.
       CHG-0035 (2026-07-02, verification): CODE-level sandbox security audited CLEAN (the runc/egress gaps above
       are the only residuals, and both are INFRA). docker_manager: no-new-privileges + DEFAULT seccomp (code
       explicitly does NOT pass seccomp=unconfined) + cap_drop=ALL + read_only rootfs + memswap_limit=mem_limit
