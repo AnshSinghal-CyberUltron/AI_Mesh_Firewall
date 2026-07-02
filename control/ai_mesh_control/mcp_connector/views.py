@@ -1842,7 +1842,18 @@ def _record_event(
         # scalar-field sanitisation above cannot be bypassed via the metadata /
         # compliance_tags / scan_findings channels (stored-XSS + NUL + deep-nest).
         ev_metadata = _sanitize_event_structure(ev_metadata)
-        safe_compliance_tags = _sanitize_event_structure(compliance_tags or [])
+        # CHG-0059: normalize onto the ComplianceTag catalog vocabulary so every
+        # MCPEvent write site upholds the documented ``compliance_tags = list of
+        # ComplianceTag.code`` contract. Idempotent (this path already emits catalog
+        # codes via _mcp_compliance_tags); never raises (audit must not break).
+        try:
+            from ai_mesh_shared.mcp_compliance_tags import to_catalog_codes
+
+            safe_compliance_tags = to_catalog_codes(
+                _sanitize_event_structure(compliance_tags or [])
+            )
+        except Exception:  # pragma: no cover - defensive, never break recording
+            safe_compliance_tags = _sanitize_event_structure(compliance_tags or [])
         safe_scan_findings = _sanitize_event_structure(scan_findings or [])
 
         MCPEvent.objects.create(

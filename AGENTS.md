@@ -403,6 +403,25 @@
     encoded file paths untouched; benign short-base64 battery zero-changed. patterns.py + 13 tests. Gate: 13
     encoded-infra + 1176 gateway passed, 0 failed. Integrates with CHG-0057 byte-verify (ip_leak union fails
     closed on a survivor). Evidence mcp-parallel/findings/backstop-p2-encoded-infra-leak/.
+  - CHG-0059 (2026-07-02) — G2 item 5 / 1.4 (compliance-tag vocabulary unified onto catalog codes,
+    MEDIUM audit-integrity; closes the CHG-0017/CHG-0030 vocab residual): MCPEvent.compliance_tags is
+    documented as a list of ComplianceTag.code values (GDPR-PII/HIPAA-PHI/PCI-CARD/SOC2-CONF), and the
+    control enforcement path already emits those, but the GATEWAY scan path (patterns.py
+    get_compliance_tags) emits granular vocab (GDPR/HIPAA/PII/PHI/PCI-DSS/SECRET/INFRA/SOC2) — so the
+    same audit field held two vocabularies by plane (SSN leak → control ['GDPR-PII','HIPAA-PHI'] vs
+    gateway ['GDPR','HIPAA','PII']), breaking group/filter-by-tag + violating the field contract; and
+    the shared module had NO internal-infra keys (item 5's literal "extend to IP"). FIX (NO gateway
+    change → the 8 gateway compliance tests stay green, no collision with active patterns.py editors):
+    normalize at the audit WRITE boundary. shared/ai_mesh_shared/mcp_compliance_tags.py gains
+    to_catalog_codes() (GDPR/PII→GDPR-PII, HIPAA/PHI→HIPAA-PHI, PCI-DSS→PCI-CARD, SECRET/INFRA/SOC2→
+    SOC2-CONF; idempotent; never drops a tag) + internal-infra keys (internal_ipv4/hostname/url/
+    file_path_*/ip_leakage → SOC2-CONF); control tasks.py record_mcp_event_task (gateway ingestion) +
+    views.py _record_event (defense-in-depth) apply it, exception-guarded. Gate: 31 gateway vocab +
+    1207 gateway sweep passed; control mcp_connector ingestion 6 + 21 broader passed (Django runner in a
+    throwaway container w/ working-tree bind-mount; 2 unrelated pre-existing harness errors =
+    pytest/fakeredis dev deps absent). Residuals: ITAR/FERPA have no detector; gateway still emits
+    granular at source (consistency enforced at the audit write boundary by design).
+    Evidence mcp-parallel/findings/backstop-p5-compliance-vocab-normalize/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

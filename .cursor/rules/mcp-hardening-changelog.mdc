@@ -597,6 +597,35 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   closed → block). Files: patterns.py, test_encoded_infra_redaction.py (+13). Gate: 13 encoded-infra + 1176
   gateway passed, 0 failed. Evidence: `mcp-parallel/findings/backstop-p2-encoded-infra-leak/`.
 
+- **CHG-0059** (2026-07-02) — G2 item 5 / 1.4 (compliance-tag vocabulary unified onto catalog codes,
+  MEDIUM audit-integrity; closes the CHG-0017/CHG-0030 vocab residual): `MCPEvent.compliance_tags` is
+  documented (models.py:309) as a list of `ComplianceTag.code` values
+  (`GDPR-PII/HIPAA-PHI/PCI-CARD/SOC2-CONF/...`). The control enforcement path (`_record_event` via
+  `tags_for_preset_or_entity`) already emits catalog codes, but the GATEWAY scan path (`patterns.py`
+  `get_compliance_tags`) emits a GRANULAR vocabulary (`GDPR/HIPAA/PII/PHI/PCI-DSS/SECRET/INFRA/SOC2`) —
+  so the SAME audit field held two vocabularies depending on which plane recorded the event (an SSN leak
+  → control `['GDPR-PII','HIPAA-PHI']` vs gateway `['GDPR','HIPAA','PII']`), breaking any group/filter/
+  join-by-tag and violating the field's own contract. (No live catalog-join exists yet — frontend just
+  displays the tags — so latent-but-real audit-integrity.) The shared module also had NO internal-infra
+  keys (item 5's literal "extend to IP"). FIX — normalize at the audit WRITE boundary (NOT the gateway
+  source, so ZERO gateway changes: the 8 gateway compliance tests stay green + no collision with active
+  patterns.py editors): `shared/ai_mesh_shared/mcp_compliance_tags.py` gains `to_catalog_codes()`
+  (GDPR/PII→GDPR-PII, HIPAA/PHI→HIPAA-PHI, PCI-DSS→PCI-CARD, SECRET/INFRA/SOC2→SOC2-CONF; IDEMPOTENT;
+  unknown tokens pass through — never drops a tag) + `CATALOG_TAG_CODES` + internal-infra `PRESET_TO_TAGS`
+  keys (`internal_ipv4/internal_hostname/internal_url/file_path_unix/file_path_windows/ip_leakage` →
+  `SOC2-CONF`). `control/.../mcp_connector/tasks.py` `record_mcp_event_task` (gateway ingestion) +
+  `views.py` `_record_event` (defense-in-depth) apply it, exception-guarded (audit must never break).
+  Now every MCPEvent write upholds the catalog-code contract regardless of plane. Files:
+  mcp_compliance_tags.py, tasks.py, views.py, test_compliance_tag_catalog_vocab.py (+31),
+  test_compliance_tag_ingest_normalization.py (+6). Gate: 31 gateway vocab + 1207 gateway sweep passed,
+  0 failed; control mcp_connector 6 ingestion + 21 broader passed via the Django runner in a throwaway
+  container (working-tree bind-mount on the compose network+DB), gateway envelope `['GDPR','HIPAA','PII']`
+  PERSISTS as `['GDPR-PII','HIPAA-PHI']` (2 unrelated pre-existing harness errors: pytest/fakeredis dev
+  deps absent). RESIDUALS (non-blocking): ITAR/FERPA have no detector; gateway still emits granular at
+  source (consistency enforced at the write boundary by design); ideal future = shared `CATALOG_TAG_CODES`
+  as single source-of-truth imported by control's `policy/compliance_tags.py`. Evidence:
+  `mcp-parallel/findings/backstop-p5-compliance-vocab-normalize/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

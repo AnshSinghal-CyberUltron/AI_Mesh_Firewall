@@ -246,7 +246,7 @@
       OAuth bearer for the upstream (if any) as the SOLE Authorization. +2 tests; test_mcp_bare_proxy_scan.py
       20 passed, broad sweep 1077 passed. Now the external server receives ONLY safe/protocol headers + its own
       token; the caller's gateway key never leaves the gateway.
-- [ ] 5. Compliance tagging: extend mcp_compliance_tags.py to PII/IP/regulated; tag inputs + results; enforce by tag; audit.
+- [x] 5. Compliance tagging: extend mcp_compliance_tags.py to PII/IP/regulated; tag inputs + results; enforce by tag; audit.
       LIVE VERIFIED (mostly done) — CHG-0017 (2026-07-02): sent PII through the live gateway + queried
       MCPEvents. Redaction comprehensive (ssn/card/email all masked, combined too, 0 leak). compliance_tags
       recorded AND COMPLETE (email-only→['GDPR','PII']; email+ssn→['GDPR','HIPAA','PII']). decision=redact
@@ -267,6 +267,24 @@
       redact-that-leaks). Public IPs not flagged. +5 tests; test_mcp_scan_orchestrator.py 32 passed, broad sweep
       1069 passed. STILL OPEN (item 5): the gateway INFRA/SECRET/PII vocab vs control ComplianceTag catalog
       codes (GDPR-PII/...) mismatch for catalog-join reporting — the cross-plane vocab decision.
+      CHG-0059 (2026-07-02) — RESIDUAL CLOSED → item 5 [x]. The vocab mismatch is fixed by normalizing at the
+      audit WRITE boundary instead of changing the gateway source (the reason prior iterations deferred it:
+      changing patterns.py breaks 8 gateway tests + is cross-plane + collision-prone). NEW to_catalog_codes()
+      in shared/ai_mesh_shared/mcp_compliance_tags.py maps gateway-granular (GDPR/HIPAA/PII/PHI/PCI-DSS/SECRET/
+      INFRA/SOC2) -> catalog codes (GDPR-PII/HIPAA-PHI/PCI-CARD/SOC2-CONF); idempotent; unknown tokens pass
+      through (never drops a tag). Wired at control mcp_connector/tasks.py record_mcp_event_task (gateway
+      ingestion — the site where granular vocab entered) + views.py _record_event (defense-in-depth), both
+      exception-guarded. Also extended PRESET_TO_TAGS with internal-infra keys (internal_ipv4/internal_hostname/
+      internal_url/file_path_unix/file_path_windows/ip_leakage -> SOC2-CONF) — item 5's literal "extend to IP"
+      in the shared module. NO gateway change (patterns.py untouched → 8 gateway compliance tests stay green,
+      no collision). GATE: 31 gateway vocab tests + 1207 gateway sweep + 6 control ingestion (gateway envelope
+      ['GDPR','HIPAA','PII'] PERSISTS as ['GDPR-PII','HIPAA-PHI']) + 21 broader control passed (Django runner
+      in a throwaway container w/ working-tree bind-mount on the compose net+DB; 2 unrelated pre-existing
+      harness errors = pytest/fakeredis dev deps absent). RESIDUALS (documented, non-blocking): ITAR/FERPA
+      have no detector producing them; the gateway still EMITS granular at source (consistency now enforced at
+      the audit write boundary by design); ideal future = shared CATALOG_TAG_CODES as the single source-of-
+      truth imported by control policy/compliance_tags.py. Evidence:
+      mcp-parallel/findings/backstop-p5-compliance-vocab-normalize/finding.md.
 - [x] 6. End-to-end per-tool-call chain: authz → minimize → scan+redact(in&result) → tag → audit.
       LIVE VERIFIED in order — CHG-0021 (2026-07-02): fired a PII tools/call, inspected the MCPEvent
       scan_trace/metadata. Chain executes in order on each call: authz (reached tool; org-key validated,
