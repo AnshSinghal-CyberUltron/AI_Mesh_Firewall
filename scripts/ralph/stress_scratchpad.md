@@ -162,6 +162,19 @@
         folded); detect_pii/detect_secrets/_redact_obfuscated transport loops also match the canonical decode
         so the OUTER blob is masked. Binary garbage still dropped; FP floor holds. 7 golden frozen. Full
         gateway 1077 passed; golden 144 passed/7 skipped 3x.
+      KILL-SWITCH LIVE-VERIFIED 2026-07-02: model-scoped kill-switch create->activate-> request=503
+        kill_switch_active ->deactivate+delete->request=200 recovered. Clean cleanup, no org-wide outage.
+        All 6 R5 checks now fresh-verified this session.
+      R5 COMPREHENSIVE CORPUS + DEPLOY-LAG FINDING 2026-07-02 (see R5_DEPLOY_LAG_PII_TYPES.md): ran ~30
+        attack/PII/benign cases live. 18/18 injections BLOCK, 4/4 benign allow, standard PII (SSN/email/card)
+        redacted with NO leak, secrets blocked, kill-switch works. BUT a MAC address + passport (G25 new PII
+        types) REACHED the model live. ROOT CAUSE: gateway container started 13:30:59; image is BAKED (no
+        source mount); my patterns.py G24(13:51)/G25(13:56) commits POSTDATE it -> live gateway runs stale
+        patterns.py without mac_address/government_id. Scanner.py injection fixes (G17 13:19, G19 13:26)
+        PREDATE container start -> baked in -> live (why injections block). CODE IS CORRECT in-process (G24/G25
+        golden green 3x); this is a DEPLOY LAG. Fix = docker compose build gateway && up -d gateway (shared
+        infra, NOT done mid-run w/ active sessions). => COMPLETE withheld: live "no PII reaches models" fails
+        for MAC/gov-id pending a gateway REDEPLOY of already-committed, in-process-verified code.
       R5 LIVE VALIDATION PASS 2026-07-02 (see mcp-parallel/findings/stress-r2/R5_LIVE_VALIDATION.md): auth
         rate-limit cleared; 10 free OpenRouter models (:free) already connected. Drove the corpus through the
         REAL pipeline (POST /v1/chat/completions, model=google/gemma-4-31b-it:free). ALL enforcement correct
