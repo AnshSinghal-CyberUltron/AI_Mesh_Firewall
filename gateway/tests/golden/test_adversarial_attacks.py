@@ -850,3 +850,41 @@ _G24_FP_FLOOR = [
 @pytest.mark.parametrize("payload", _G24_FP_FLOOR)
 def test_g24_secret_fp_floor(payload):
     assert not patterns.detect_secrets(payload), f"benign text wrongly flagged as secret: {payload!r}"
+
+
+# ================================================================== fixed gap (now FROZEN)
+# G25 — additional PII types were undetected: MAC addresses (device identifiers) and
+# government/national IDs (passport / Aadhaar / UK NINO / driver's licence). FIXED in
+# patterns.py: mac_address (distinctive 6-hex-pair format) + a cue-gated government_id
+# pattern (requires the id-type cue AND a digit in the value via a bounded lookahead,
+# so benign 'passport application' / timestamps don't false-positive). FROZEN.
+_G25_PII = [
+    ("g25_mac_colon",  "device 00:1A:2B:3C:4D:5E on the lan", "00:1A:2B:3C:4D:5E"),
+    ("g25_mac_hyphen", "MAC 00-1A-2B-3C-4D-5E registered",    "00-1A-2B-3C-4D-5E"),
+    ("g25_passport",   "passport 987654321 issued in 2020",   "987654321"),
+    ("g25_aadhaar",    "Aadhaar 1234 5678 9012 on file",      "1234 5678 9012"),
+    ("g25_nino",       "NINO QQ123456C is valid",             "QQ123456C"),
+    ("g25_dl",         "driver's license D1234567 from CA",   "D1234567"),
+]
+
+
+@pytest.mark.parametrize("label,payload,needle", _G25_PII)
+def test_g25_pii_detected_and_masked(label, payload, needle):
+    assert patterns.detect_pii(payload), f"{label}: PII not detected"
+    assert needle not in patterns.redact_all(payload), f"{label}: PII value survived redaction (LEAK)"
+
+
+_G25_FP_FLOOR = [
+    "passport application form is required for travel.",
+    "please renew your passport soon before it expires.",
+    "the driver's license exam has 40 multiple-choice questions.",
+    "national insurance contributions are explained in the handbook.",
+    "aadhaar enrollment center hours are 9am to 5pm.",
+    "the build finished at 12:34:56 today.",
+    "standup is at 09:00:00 sharp every day.",
+]
+
+
+@pytest.mark.parametrize("payload", _G25_FP_FLOOR)
+def test_g25_pii_fp_floor(payload):
+    assert not patterns.detect_pii(payload), f"benign text wrongly flagged as PII: {payload!r}"

@@ -344,6 +344,21 @@ PII_PATTERNS: Dict[str, str] = {
         r"|\b(?:my|the)\s+(?:phone\s+|mobile\s+|cell\s+)?(?:number|no\.?|#)\s+(?:is\s+)?"
         r")" + _BARE_PHONE_10_SPLIT + r"\b"
     ),
+    # G25: MAC address (device identifier / personal data under GDPR). The 6-hex-pairs
+    # colon/hyphen format is highly distinctive => near-zero FP (a 3-group time like
+    # 12:34:56 has too few groups; fixed 5 repetitions => linear, no ReDoS).
+    "mac_address": r"\b(?:[0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}\b",
+    # G25: government / national identity numbers (passport, Aadhaar, UK NINO, driver's
+    # licence). A BARE value is indistinguishable from any id/order number, so gate on
+    # the canonical cue word AND require the value to actually contain a digit within
+    # its first few chars (a bounded lookahead) so benign prose like "passport
+    # application form" is not flagged. All quantifiers are bounded => linear/ReDoS-safe.
+    "government_id": (
+        r"(?:passport|aadhaar|aadhar|national\s+insurance|driver'?s?\s+licen[cs]e|\bnino\b)"
+        r"\s*(?:number|no\.?|id|#)?\s*[:#]?\s*"
+        r"(?=[A-Za-z0-9\s\-]{0,6}\d)"
+        r"([A-Za-z0-9][A-Za-z0-9\s\-]{4,16}[A-Za-z0-9])"
+    ),
     # N-CRED FIX: the original r"\bsk-[a-zA-Z0-9]{32,}\b" required an UNBROKEN
     # alphanumeric run, so it MISSED every modern hyphenated key format —
     # OpenAI project/service keys (sk-proj-…, sk-svcacct-…, sk-admin-…) and
@@ -548,6 +563,8 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "phone_intl": ["PII", "GDPR"],
     "phone_dotted": ["PII", "GDPR"],
     "phone_us_bare_contextual": ["PII", "GDPR"],
+    "mac_address": ["PII", "GDPR"],
+    "government_id": ["PII", "GDPR"],
     "api_key_openai": ["SECRET"],
     "aws_access_key": ["SECRET"],
     "aws_secret_access_key": ["SECRET"],
