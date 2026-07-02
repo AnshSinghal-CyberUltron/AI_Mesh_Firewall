@@ -80,6 +80,7 @@ class UpstreamSession:
     initialized: bool = False
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     client: httpx.AsyncClient | None = None
+    ws: Any | None = None
 
     def config_key(self) -> tuple[str, str, str, tuple[tuple[str, str], ...]]:
         return (
@@ -117,14 +118,19 @@ async def _get_session(
         new_cfg = (transport, url, json.dumps(allowed_hosts, sort_keys=True), tuple(sorted(headers.items())))
         if sess is not None:
             old_cfg = sess.config_key()
-            if old_cfg == new_cfg and sess.client is not None:
-                return sess
+            if old_cfg == new_cfg:
+                if transport == "websocket" and sess.ws is not None:
+                    return sess
+                if transport != "websocket" and sess.client is not None:
+                    return sess
             await _close_session_unlocked(server_slug)
 
-        client = httpx.AsyncClient(
-            timeout=httpx.Timeout(connect_timeout, read=connect_timeout + _METHOD_TIMEOUT),
-            follow_redirects=False,
-        )
+        client = None
+        if transport != "websocket":
+            client = httpx.AsyncClient(
+                timeout=httpx.Timeout(connect_timeout, read=connect_timeout + _METHOD_TIMEOUT),
+                follow_redirects=False,
+            )
         sess = UpstreamSession(
             server_slug=server_slug,
             transport=transport,
@@ -141,8 +147,14 @@ async def _get_session(
 
 async def _close_session_unlocked(server_slug: str) -> None:
     sess = _sessions.pop(server_slug, None)
-    if sess and sess.client:
+    if sess is None:
+        return
+    if sess.client:
         await sess.client.aclose()
+    if sess.ws:
+        from agent.ws_manager import close_ws
+
+        await close_ws(sess)
 
 
 async def shutdown_all() -> None:
@@ -402,8 +414,8 @@ async def send_upstream_jsonrpc(
     *,
     timeouts: dict[str, float] | None = None,
 ) -> dict[str, Any]:
-    """Forward one JSON-RPC message to an HTTP or SSE upstream MCP server."""
-    if transport not in ("streamable-http", "sse"):
+    """Forward one JSON-RPC message to an HTTP, SSE, or WebSocket upstream MCP server."""
+    if transport not in ("streamable-http", "sse", "websocket"):
         raise UpstreamError(-32004, f"unsupported upstream transport: {transport}")
 
     connect_timeout, init_timeout, method_timeout = _timeouts(timeouts)
@@ -452,8 +464,14 @@ async def send_upstream_jsonrpc(
         try:
             if transport == "streamable-http":
                 result = await _post_streamable_http(session, message, method_timeout, msg_id)
-            else:
+            elif transport == "sse":
                 result = await _post_sse(
+                    session, message, connect_timeout, method_timeout, msg_id
+                )
+            else:
+                from agent.ws_manager import send_ws_jsonrpc
+
+                result = await send_ws_jsonrpc(
                     session, message, connect_timeout, method_timeout, msg_id
                 )
             if method == "initialize" and "error" not in result:

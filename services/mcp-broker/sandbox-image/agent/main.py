@@ -96,7 +96,7 @@ async def health() -> dict[str, Any]:
 
 @app.post("/rpc")
 async def rpc(body: SandboxRpcRequest) -> dict[str, Any]:
-    """Transport-agnostic JSON-RPC forward (stdio, streamable-http, sse)."""
+    """Transport-agnostic JSON-RPC forward (stdio, streamable-http, sse, websocket)."""
     if not body.server_slug.strip():
         return _jsonrpc_error(body.jsonrpc_id, -32602, "server_slug is required")
 
@@ -121,10 +121,10 @@ async def rpc(body: SandboxRpcRequest) -> dict[str, Any]:
                 method_timeout=method_timeout,
             )
 
-        if transport in ("streamable-http", "sse"):
+        if transport in ("streamable-http", "sse", "websocket"):
             if body.upstream is None:
                 return _jsonrpc_error(
-                    body.jsonrpc_id, -32602, "upstream block is required for HTTP transports"
+                    body.jsonrpc_id, -32602, "upstream block is required for remote transports"
                 )
             return await send_upstream_jsonrpc(
                 server_slug=body.server_slug,
@@ -135,9 +135,6 @@ async def rpc(body: SandboxRpcRequest) -> dict[str, Any]:
                 msg_id=body.jsonrpc_id,
                 timeouts=body.timeouts,
             )
-
-        if transport == "websocket":
-            return _jsonrpc_error(body.jsonrpc_id, -32004, "websocket transport not implemented")
 
         return _jsonrpc_error(body.jsonrpc_id, -32004, f"unsupported transport: {transport}")
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -25,6 +26,7 @@ def _load_agent_app(monkeypatch):
         "agent.main",
         "agent.stdio_manager",
         "agent.upstream_manager",
+        "agent.ws_manager",
         "agent",
     ):
         sys.modules.pop(mod, None)
@@ -122,21 +124,82 @@ def test_streamable_http_401_needs_reauth(agent_client):
     assert body["_meta"]["needs_reauth"] is True
 
 
-def test_websocket_transport_not_implemented(agent_client):
+def _ws_payload(**overrides):
+    base = {
+        "server_slug": "ws-server",
+        "transport": "websocket",
+        "method": "tools/list",
+        "jsonrpc_id": 2,
+        "upstream": {
+            "url": "wss://mcp.example.com/ws",
+            "allowed_hosts": ["mcp.example.com"],
+            "headers": {"Authorization": "Bearer ws-token"},
+            "oauth_client_role": "forbidden_in_sandbox",
+        },
+    }
+    base.update(overrides)
+    return base
+
+
+class _FakeWebSocket:
+    def __init__(self, recv_payload: str):
+        self._recv_payload = recv_payload
+        self.state = type("State", (), {"name": "OPEN"})()
+
+    async def send(self, _data: str) -> None:
+        return None
+
+    async def recv(self) -> str:
+        return self._recv_payload
+
+    async def close(self) -> None:
+        return None
+
+
+def test_websocket_tools_list(agent_client):
+    payload = json.dumps(
+        {"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "ws-tool"}]}}
+    )
+    fake_ws = _FakeWebSocket(payload)
+
+    with patch("websockets.connect", new=AsyncMock(return_value=fake_ws)):
+        resp = agent_client.post("/rpc", json=_ws_payload())
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["result"]["tools"][0]["name"] == "ws-tool"
+    assert body["_meta"]["transport"] == "websocket"
+
+
+def test_websocket_handshake_401_needs_reauth(agent_client):
+    from websockets.exceptions import InvalidStatus
+
+    class _Resp:
+        status_code = 401
+
+    with patch(
+        "websockets.connect",
+        new=AsyncMock(side_effect=InvalidStatus(_Resp())),
+    ):
+        resp = agent_client.post("/rpc", json=_ws_payload())
+
+    body = resp.json()
+    assert body["error"]["code"] == -32001
+    assert body["_meta"]["needs_reauth"] is True
+
+
+def test_websocket_egress_denied(agent_client):
     resp = agent_client.post(
         "/rpc",
-        json={
-            "server_slug": "ws",
-            "transport": "websocket",
-            "method": "tools/list",
-            "jsonrpc_id": 2,
-            "upstream": {
-                "url": "wss://mcp.example.com/ws",
+        json=_ws_payload(
+            upstream={
+                "url": "wss://evil.example.com/ws",
                 "allowed_hosts": ["mcp.example.com"],
-            },
-        },
+                "headers": {},
+            }
+        ),
     )
-    assert resp.json()["error"]["code"] == -32004
+    assert resp.json()["error"]["code"] == -32002
 
 
 def test_stdio_backward_compat_unchanged(agent_client):
