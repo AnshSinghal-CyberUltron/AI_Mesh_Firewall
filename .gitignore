@@ -47,3 +47,5 @@ crash.log
 .skill-workspace/scripts/ralph/mcp_sandbox/.pw-profile/
 scripts/ralph/mcp_sandbox/runs/
 scripts/ralph/.mcp_scale_manifest.json
+
+gateway/tests/golden/.live_session.json
