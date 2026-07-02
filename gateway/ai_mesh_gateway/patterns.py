@@ -118,6 +118,21 @@ def canonicalize_for_detection(text: str) -> str:
     return _canonicalize_with_map(text)[0]
 
 
+# G44: inline markdown emphasis/code markers (* _ `) sitting BETWEEN two word/PII chars
+# are a typographic obfuscation — ``1**2**3-45-6789`` and ``john`@`example.com`` keep the
+# raw bytes off the PII regexes yet a markdown renderer shows the value. Only markers
+# INTERLEAVED among alnum/PII chars are stripped; emphasis that WRAPS a whole token
+# (space-adjacent, e.g. ``**bold**`` / ``_italic_``) is left intact. Disjoint char
+# classes on both sides -> linear (no ReDoS).
+_MD_EMPH_INTERLEAVE = re.compile(r"(?<=[\w@.\-])[*_`]+(?=[\w@.\-])")
+
+
+def strip_interleaved_emphasis(text: str) -> str:
+    """Remove inline markdown emphasis/code markers interleaved among word/PII chars,
+    exposing a PII value split to evade byte-level matching. Detection-only helper."""
+    return _MD_EMPH_INTERLEAVE.sub("", text)
+
+
 # --- bounded transport decode (G2): surface PII/secrets hidden in base64/hex ---
 _B64ISH_RE = re.compile(r"[A-Za-z0-9+/]{12,}={0,2}")
 _HEXISH_RE = re.compile(r"(?:[0-9A-Fa-f]{2}){8,}")

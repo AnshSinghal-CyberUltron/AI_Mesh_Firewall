@@ -1141,6 +1141,44 @@ def test_g43_benign_protocol_relative_not_touched(label, payload):
     assert neutralize_exfil_channels(payload) == payload, f"{label}: benign // mutated (FP)"
 
 
+# ── G44: OUTPUT PII hidden by inline markdown emphasis interleaved in the value ──────
+# 1**2**3-45-6789 / john`@`example.com keep the raw bytes off the PII regexes, but a
+# markdown client renders the value (bold "2" -> "123-45-6789") => rendering-layer leak.
+# neutralize_markdown_split_pii masks any run whose emphasis-stripped form is a PII/secret;
+# benign markdown (a_b_c, **bold**, `code`, 2*3, emphasis wrapping a whole value) is a
+# strict no-op. Also detected in _scan_output_sync so the output guard elevates to redact.
+_G44_LEAK = [
+    ("g44_bold_ssn",   "The SSN is 1**2**3-45-6789 exactly", "123-45-6789"),
+    ("g44_code_email", "reach john`@`example.com today",      "john@example.com"),
+    ("g44_ital_ssn",   "ssn 12_3_-45-6789 here",              None),
+    ("g44_cc_split",   "card 4111**1111**1111**1111",         None),
+    ("g44_backtick",   "value 1`2`3-45-6789 end",             "123-45-6789"),
+]
+
+
+@pytest.mark.parametrize("label,payload,rendered", _G44_LEAK)
+def test_g44_markdown_split_pii_neutralized(label, payload, rendered):
+    out = _og.neutralize_markdown_split_pii(payload)
+    assert "[PII_REDACTED]" in out, f"{label}: markdown-split PII not masked"
+    if rendered:  # the rendered (emphasis-stripped) egress must not reveal the PII
+        stripped = out.replace("*", "").replace("`", "").replace("_", "")
+        assert rendered not in stripped, f"{label}: PII survives in rendered egress"
+
+
+_G44_BENIGN = [
+    ("g44_snake_case", "the var snake_case_name and a_b_c value"),
+    ("g44_bold_ital",  "**Important**: _italic_ and `inline code` here"),
+    ("g44_math",       "compute 2*3*4 and 5_0 equals fifty"),
+    ("g44_emph_value", "the value **123** and the total _456_ shown"),
+    ("g44_url_ident",  "visit https://example.com/a_b/c-d and file_name.txt"),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G44_BENIGN)
+def test_g44_benign_markdown_not_touched(label, payload):
+    assert _og.neutralize_markdown_split_pii(payload) == payload, f"{label}: benign markdown mutated (FP)"
+
+
 # ================================================================== fixed gap (now FROZEN)
 # G10 — Tier-2 semantic redact was a byte no-op. The guard model flags PII/secret with
 # no deterministic regex (free-text names, non-standard card/ID layouts, passphrases);

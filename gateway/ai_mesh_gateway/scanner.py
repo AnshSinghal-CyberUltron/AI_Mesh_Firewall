@@ -35,6 +35,7 @@ try:
         detect_pii,
         detect_secrets,
         redact_all,
+        strip_interleaved_emphasis,
         PII_PATTERNS,
         SECRET_PATTERNS,
     )
@@ -51,6 +52,7 @@ except ImportError:
         detect_pii,
         detect_secrets,
         redact_all,
+        strip_interleaved_emphasis,
         PII_PATTERNS,
         SECRET_PATTERNS,
     )
@@ -1257,6 +1259,26 @@ class InputScanner:
                     confidence=0.85,
                     detail=f"Encoded PII/secret in output: {', '.join(_k)}",
                     matched_patterns=_k,
+                )
+
+        # G44: PII/secret hidden by INLINE markdown emphasis interleaved among its chars
+        # (``1**2**3-45-6789`` -> SSN, ``john`@`example.com`` -> email). The raw bytes
+        # dodge the regexes but a markdown client renders the value. Flag (threat_type
+        # pii/secret + matched_patterns) so the output guard elevates to redact and the
+        # egress sanitizer's neutralize_markdown_split_pii masks it. Only fires when
+        # stripping REVEALS PII the plaintext lacked, so benign markdown is unaffected.
+        _md_stripped = strip_interleaved_emphasis(text)
+        if _md_stripped != text:
+            _m_pii = detect_pii(_md_stripped)
+            _m_secret = detect_secrets(_md_stripped)
+            if _m_pii or _m_secret:
+                _mk = list(_m_pii.keys()) + list(_m_secret.keys())
+                return ScanVerdict(
+                    action="flag",
+                    threat_type="pii" if _m_pii else "secret",
+                    confidence=0.85,
+                    detail=f"Markdown-split PII/secret in output: {', '.join(_mk)}",
+                    matched_patterns=_mk,
                 )
 
         return ScanVerdict()

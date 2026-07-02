@@ -1366,6 +1366,33 @@ def neutralize_encoded_pii(text: str) -> str:
         return text
 
 
+# G44: a token whose chars are interleaved with inline markdown emphasis/code markers,
+# where stripping them reveals a PII/secret (``1**2**3-45-6789`` -> SSN, ``john`@`x.com``
+# -> email). Disjoint char classes (word/PII vs emphasis) -> linear (ReDoS-safe).
+_MD_SPLIT_TOKEN_RE = re.compile(r"[\w@.\-]+(?:[*_`]+[\w@.\-]+)+")
+
+
+def neutralize_markdown_split_pii(text: str) -> str:
+    """Mask PII/secret hidden by INLINE markdown emphasis interleaved among its chars —
+    the raw bytes evade the redactor but a markdown client renders the value. Only a run
+    whose emphasis-stripped form is a PII/secret is masked, so benign markdown (``a_b_c``,
+    ``**bold**``, `` `code` ``, ``2*3``) is left untouched (strict no-op)."""
+    if not text or not ("*" in text or "_" in text or "`" in text):
+        return text
+
+    def _sub(m: "re.Match[str]") -> str:
+        run = m.group(0)
+        stripped = run.replace("*", "").replace("_", "").replace("`", "")
+        if stripped != run and (detect_pii(stripped) or detect_secrets(stripped)):
+            return "[PII_REDACTED]"
+        return run
+
+    try:
+        return _MD_SPLIT_TOKEN_RE.sub(_sub, text)
+    except Exception:  # noqa: BLE001 - sanitizer must never break the egress
+        return text
+
+
 def sanitize_output_for_verdict(
     response_text: str,
     verdict: OutputVerdict,
@@ -1385,6 +1412,7 @@ def sanitize_output_for_verdict(
     """
     neutralized = neutralize_exfil_channels(response_text)
     neutralized = neutralize_encoded_pii(neutralized)
+    neutralized = neutralize_markdown_split_pii(neutralized)  # G44
     return _sanitize_output_core(neutralized, verdict, redact_pii_fn=redact_pii_fn)
 
 
