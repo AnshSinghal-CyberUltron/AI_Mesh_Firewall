@@ -482,7 +482,23 @@
         per "keep solutions simple / avoid unnecessary workarounds". => realistic secret-obfuscation vectors
         (zero-width/homoglyph/fullwidth/nbsp/base64/hex/HTML/URL via G24-G35) all covered; spaced-secret
         defensibly allowed.
-      ★ FINAL COMPLETION 2026-07-02 (+G30..G35): ALL 7 criteria met. The prior sole blocker — the tier-2
+      G36 DONE 2026-07-02 (commit 0ec000ad) — STREAMING egress parity for exfil + encoded-PII neutralization.
+        Probed Phase-8 streaming: input enforcement blocks injections BEFORE the stream (400, no stream) ✓;
+        benign streams via SecureStreamingResponse (SSE) ✓. GAP FOUND (code-level): secure_streaming redact
+        path used self._scanner.redact_pii(full_text) ALONE — masks plain PII but does NOT call neutralize_
+        exfil_channels (G13) or neutralize_encoded_pii (G35), while the NON-stream sanitize_output_for_verdict
+        defangs both. So a STREAMED markdown-image exfil beacon or HTML/percent-encoded PII rode out un-
+        neutralized (OutputGuard.inspect returns redact, not block, for exfil -> redact path is where it must
+        be fixed). FIX: run neutralize_exfil_channels + neutralize_encoded_pii BEFORE redact_pii on the streamed
+        flush (lazy import to dodge circular dep; redact-verdict path only; mirrors the non-stream order so the
+        beacon/payload is seen unmasked). Verified in-process: streamed beacon -> [exfil-redacted], encoded PII
+        -> [ENCODED_PII_REDACTED], plain PII still ***, benign untouched; telemetry-honesty noop check preserved
+        (neutralization changing bytes => genuine redact, not phantom). Streaming tests 193 passed, full gateway
+        1176 passed, golden 238x3. REDEPLOYED (rollback-preG36, --no-deps) + live: streaming works (benign 200/
+        11 chunks, injection 400). Live exfil-on-stream masking not force-testable (can't make the model emit a
+        beacon) but the redact composition + no-regression are verified. => streaming egress now has FULL parity
+        with non-stream defense-in-depth (exfil + encoded-PII + plain PII + cross-flush secret masking).
+      ★ FINAL COMPLETION 2026-07-02 (+G30..G36): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
         enforcement (no block->allow), all 41 block payloads block, translate now allow->allow; only safe-
