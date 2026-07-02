@@ -315,19 +315,44 @@ _BASE64_TOKEN_RE: re.Pattern[str] = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
 _HEX_TOKEN_RE: re.Pattern[str] = re.compile(r"(?:[0-9a-fA-F]{2}){8,}")
 
 
+# G17: Unicode Tag block (U+E0000..U+E007F) "ASCII smuggling". U+E0020 (TAG SPACE)
+# .. U+E007E (TAG TILDE) mirror printable ASCII 0x20..0x7E; they render as NOTHING
+# but several LLMs decode them back to the mirrored ASCII, so an ENTIRE injection can
+# be smuggled invisibly. NFKC does NOT fold them (category Cf), and they are not in
+# the zero-width set. Decode the printable range back to ASCII and drop the tag
+# controls (U+E0000 lang tag, U+E0001 lang-tag begin, U+E007F CANCEL TAG).
+_TAG_BLOCK_RE: re.Pattern[str] = re.compile(r"[\U000E0000-\U000E007F]")
+
+
+def _decode_unicode_tags(text: str) -> str:
+    if not text or not _TAG_BLOCK_RE.search(text):
+        return text
+    out: list[str] = []
+    for ch in text:
+        cp = ord(ch)
+        if 0xE0020 <= cp <= 0xE007E:      # TAG SPACE..TAG TILDE -> ASCII 0x20..0x7E
+            out.append(chr(cp - 0xE0000))
+        elif 0xE0000 <= cp <= 0xE007F:    # tag language / cancel controls -> drop
+            continue
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
 def _normalize_unicode(text: str) -> str:
     """
     Fold Unicode-obfuscated text toward canonical ASCII so the ASCII-oriented
     pattern set can match. Closes the fullwidth / homoglyph / zero-width / RTL /
-    combining-diacritic smuggling blind spot.
+    combining-diacritic / Unicode-tag smuggling blind spot.
 
-    Steps: strip zero-width & bidi-override chars -> NFKC (folds fullwidth,
-    ligatures, circled/styled forms) -> drop combining marks (NFD + Mn filter)
-    -> fold residual Cyrillic/Greek homoglyphs to ASCII look-alikes.
+    Steps: decode Unicode Tag block -> strip zero-width & bidi-override chars ->
+    NFKC (folds fullwidth, ligatures, circled/styled forms) -> drop combining marks
+    (NFD + Mn filter) -> fold residual Cyrillic/Greek homoglyphs to ASCII look-alikes.
     """
     if not text:
         return text
-    stripped = _ZERO_WIDTH_RE.sub("", text)
+    stripped = _decode_unicode_tags(text)
+    stripped = _ZERO_WIDTH_RE.sub("", stripped)
     normalized = unicodedata.normalize("NFKC", stripped)
     # Strip combining marks (e.g. zalgo / diacritic smuggling).
     decomposed = unicodedata.normalize("NFD", normalized)
