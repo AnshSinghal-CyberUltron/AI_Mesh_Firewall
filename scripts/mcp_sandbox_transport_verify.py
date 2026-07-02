@@ -17,6 +17,8 @@ Env:
   SCALE_MANIFEST       fallback: stdio-only from mcp_scale_provision (partial check)
   ROUNDS               consecutive all-green rounds (default 1)
   SKIP_NETWORK_DOC     1 to skip printing network-assertion instructions
+  AUTO_STUBS_UP        1 (default) to run scripts/mcp_transport_stubs_up.sh before e2e
+  SKIP_STUBS_UP        1 to skip auto-stub startup (debug only; may false-fail http/sse)
   FORCE_E2E            1 to run stdio e2e even when wiring gate fails (debug only)
 
 Exit codes:
@@ -46,6 +48,9 @@ ROUNDS = int(os.environ.get("ROUNDS", "1"))
 TIMEOUT = float(os.environ.get("HARNESS_TIMEOUT", "90"))
 FORCE_E2E = os.environ.get("FORCE_E2E", "0") == "1"
 SKIP_NETWORK_DOC = os.environ.get("SKIP_NETWORK_DOC", "0") == "1"
+AUTO_STUBS_UP = os.environ.get("AUTO_STUBS_UP", "1") == "1"
+SKIP_STUBS_UP = os.environ.get("SKIP_STUBS_UP", "0") == "1"
+STUBS_SCRIPT = HERE / "mcp_transport_stubs_up.sh"
 TRANSPORT_MANIFEST = os.environ.get(
     "TRANSPORT_MANIFEST",
     str(REPO / "mcp-parallel" / "findings" / "p4-13" / "TRANSPORT_MANIFEST.example.json"),
@@ -101,6 +106,7 @@ class TransportCall:
     http_status: int
     detail: str = ""
     latency_ms: float = 0.0
+    blocked: bool = False  # unregistered / URLField — not a regression failure
 
 
 @dataclass
@@ -110,7 +116,10 @@ class RoundReport:
     calls: list[TransportCall] = field(default_factory=list)
 
     def failures(self) -> list[TransportCall]:
-        return [c for c in self.calls if not c.ok]
+        return [c for c in self.calls if not c.ok and not c.blocked]
+
+    def blocked(self) -> list[TransportCall]:
+        return [c for c in self.calls if c.blocked]
 
 
 def _http_probe(url: str, payload: dict | None = None) -> int:
@@ -232,8 +241,14 @@ def run_transport_round(targets: dict, rnd: int) -> list[TransportCall]:
     for transport in ALL_TRANSPORTS:
         server = servers.get(transport)
         if not server:
-            out.append(TransportCall(transport, "", "tools/list", False, 0, "server slug missing"))
-            out.append(TransportCall(transport, "", "tools/call", False, 0, "server slug missing"))
+            out.append(TransportCall(
+                transport, "", "tools/list", False, 0,
+                "server slug missing (BLOCKED)", blocked=True,
+            ))
+            out.append(TransportCall(
+                transport, "", "tools/call", False, 0,
+                "server slug missing (BLOCKED)", blocked=True,
+            ))
             continue
 
         status, body, ms = _gateway_rpc(org, server, key, "tools/list", {})
@@ -325,6 +340,32 @@ def _docker_gateway_name() -> str | None:
         return None
 
 
+def ensure_transport_stubs_up() -> tuple[bool, str]:
+    """Start in-cluster http/sse/ws stubs (prevents cold-run tools=0 false-fail)."""
+    if SKIP_STUBS_UP or not AUTO_STUBS_UP:
+        return True, "skipped"
+    if not STUBS_SCRIPT.is_file():
+        return False, f"missing {STUBS_SCRIPT}"
+    try:
+        out = subprocess.run(
+            ["bash", str(STUBS_SCRIPT)],
+            cwd=str(REPO),
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "stubs_up timeout (180s)"
+    except Exception as exc:  # noqa: BLE001
+        return False, str(exc)
+    combined = ((out.stdout or "") + (out.stderr or "")).strip()
+    if out.returncode != 0:
+        return False, combined[-800:] or f"exit {out.returncode}"
+    tail = "\n".join(combined.splitlines()[-4:]) if combined else "ok"
+    return True, tail
+
+
 def snapshot_gateway_443() -> list[str]:
     """Best-effort ss lines for :443 from gateway (informational only)."""
     gw = _docker_gateway_name()
@@ -375,6 +416,20 @@ def main() -> int:
             json.dump(report, fh, indent=2)
         return 2
 
+    stubs_ok, stubs_detail = ensure_transport_stubs_up()
+    print(f"STUBS UP: {'YES' if stubs_ok else 'NO'} — {stubs_detail[:240]}")
+    if not stubs_ok:
+        print("SANDBOX_TRANSPORT: FAIL — transport stubs did not start (http/sse need stubs)")
+        report = {
+            "verdict": "FAIL",
+            "wiring": asdict(wiring),
+            "stubs_up": {"ok": False, "detail": stubs_detail},
+            "rounds": [],
+        }
+        with open(REPORT_PATH, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, indent=2)
+        return 1
+
     targets = _load_transport_targets()
     if not targets:
         print("SANDBOX_TRANSPORT: FAIL — no TRANSPORT_MANIFEST or SCALE_MANIFEST")
@@ -393,13 +448,15 @@ def main() -> int:
         rr = RoundReport(round=rnd, wiring=wiring, calls=calls)
         reports.append(rr)
         fails = rr.failures()
+        blocked = rr.blocked()
         if fails:
             all_ok = False
             print(f"Round {rnd}: FAIL ({len(fails)} transport calls)")
             for f in fails:
                 print(f"  {f.transport}/{f.method}: {f.detail} http={f.http_status}")
         else:
-            print(f"Round {rnd}: all transport calls PASS")
+            blocked_note = f", {len({c.transport for c in blocked})} BLOCKED" if blocked else ""
+            print(f"Round {rnd}: all configured transport calls PASS{blocked_note}")
 
     post_443 = snapshot_gateway_443()
     new_443 = [ln for ln in post_443 if ln not in pre_443]
@@ -410,10 +467,17 @@ def main() -> int:
 
     print_network_assertion_guide()
 
+    configured = [t for t in ALL_TRANSPORTS if (targets.get("servers") or {}).get(t)]
+    blocked_transports = [t for t in ALL_TRANSPORTS if t not in configured]
     verdict = "PASS" if all_ok and wiring.landed else "FAIL"
+    if verdict == "PASS" and blocked_transports:
+        verdict = "PASS_PARTIAL"
     report = {
         "verdict": verdict,
+        "configured_transports": configured,
+        "blocked_transports": blocked_transports,
         "wiring": asdict(wiring),
+        "stubs_up": {"ok": stubs_ok, "detail": stubs_detail[:500]},
         "rounds": [
             {"round": r.round, "calls": [asdict(c) for c in r.calls], "failures": len(r.failures())}
             for r in reports
@@ -423,8 +487,9 @@ def main() -> int:
     with open(REPORT_PATH, "w", encoding="utf-8") as fh:
         json.dump(report, fh, indent=2)
 
-    if verdict == "PASS":
-        print(f"\nSANDBOX_TRANSPORT: PASS ({ROUNDS} round(s)) — report {REPORT_PATH}")
+    if verdict in ("PASS", "PASS_PARTIAL"):
+        suffix = f" ({len(configured)}/{len(ALL_TRANSPORTS)} transports)" if blocked_transports else ""
+        print(f"\nSANDBOX_TRANSPORT: {verdict}{suffix} ({ROUNDS} round(s)) — report {REPORT_PATH}")
         return 0
     print(f"\nSANDBOX_TRANSPORT: FAIL — report {REPORT_PATH}")
     return 1

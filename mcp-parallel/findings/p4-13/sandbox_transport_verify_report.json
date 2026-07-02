@@ -1,5 +1,13 @@
 {
-  "verdict": "FAIL",
+  "verdict": "PASS_PARTIAL",
+  "configured_transports": [
+    "stdio",
+    "streamable-http",
+    "sse"
+  ],
+  "blocked_transports": [
+    "websocket"
+  ],
   "wiring": {
     "broker_send_rpc_present": true,
     "broker_unified_rpc_route": true,
@@ -9,6 +17,10 @@
     "mcp_proxy_direct_httpx": false,
     "mcp_proxy_httpx_sites": 14,
     "mcp_proxy_broker_send_rpc_refs": 2
+  },
+  "stubs_up": {
+    "ok": true,
+    "detail": "started sse-everything (sse) alias=sse-everything.stub on mcp_sandbox_net_zeroshield:3002\nstarted ws-everything (websocket stub) alias=ws-everything.stub on mcp_sandbox_net_zeroshield:3003\nStarting Streamable HTTP server...\nws-everything-stub listening ws://0.0.0.0:3003/mcp"
   },
   "rounds": [
     {
@@ -21,7 +33,8 @@
           "ok": true,
           "http_status": 200,
           "detail": "tools=13",
-          "latency_ms": 115.03188899951056
+          "latency_ms": 1511.7950339990784,
+          "blocked": false
         },
         {
           "transport": "stdio",
@@ -30,7 +43,8 @@
           "ok": true,
           "http_status": 200,
           "detail": "echo_ok=True",
-          "latency_ms": 71.99700199998915
+          "latency_ms": 76.26596499903826,
+          "blocked": false
         },
         {
           "transport": "streamable-http",
@@ -39,7 +53,8 @@
           "ok": true,
           "http_status": 200,
           "detail": "tools=12",
-          "latency_ms": 142.2751319987583
+          "latency_ms": 103.1986610032618,
+          "blocked": false
         },
         {
           "transport": "streamable-http",
@@ -48,7 +63,8 @@
           "ok": true,
           "http_status": 200,
           "detail": "echo_ok=True",
-          "latency_ms": 77.11570399987977
+          "latency_ms": 130.9168250008952,
+          "blocked": false
         },
         {
           "transport": "sse",
@@ -57,7 +73,8 @@
           "ok": true,
           "http_status": 200,
           "detail": "tools=12",
-          "latency_ms": 131.24426399735967
+          "latency_ms": 166.02019199490314,
+          "blocked": false
         },
         {
           "transport": "sse",
@@ -66,7 +83,8 @@
           "ok": true,
           "http_status": 200,
           "detail": "echo_ok=True",
-          "latency_ms": 76.6388550036936
+          "latency_ms": 84.86621199699584,
+          "blocked": false
         },
         {
           "transport": "websocket",
@@ -74,8 +92,9 @@
           "method": "tools/list",
           "ok": false,
           "http_status": 0,
-          "detail": "server slug missing",
-          "latency_ms": 0.0
+          "detail": "server slug missing (BLOCKED)",
+          "latency_ms": 0.0,
+          "blocked": true
         },
         {
           "transport": "websocket",
@@ -83,11 +102,184 @@
           "method": "tools/call",
           "ok": false,
           "http_status": 0,
-          "detail": "server slug missing",
-          "latency_ms": 0.0
+          "detail": "server slug missing (BLOCKED)",
+          "latency_ms": 0.0,
+          "blocked": true
         }
       ],
-      "failures": 2
+      "failures": 0
+    },
+    {
+      "round": 2,
+      "calls": [
+        {
+          "transport": "stdio",
+          "server": "everything-1",
+          "method": "tools/list",
+          "ok": true,
+          "http_status": 200,
+          "detail": "tools=13",
+          "latency_ms": 119.93237600108841,
+          "blocked": false
+        },
+        {
+          "transport": "stdio",
+          "server": "everything-1",
+          "method": "tools/call",
+          "ok": true,
+          "http_status": 200,
+          "detail": "echo_ok=True",
+          "latency_ms": 422.9685839964077,
+          "blocked": false
+        },
+        {
+          "transport": "streamable-http",
+          "server": "http-everything-stub",
+          "method": "tools/list",
+          "ok": true,
+          "http_status": 200,
+          "detail": "tools=12",
+          "latency_ms": 1131.2630280008307,
+          "blocked": false
+        },
+        {
+          "transport": "streamable-http",
+          "server": "http-everything-stub",
+          "method": "tools/call",
+          "ok": true,
+          "http_status": 200,
+          "detail": "echo_ok=True",
+          "latency_ms": 1170.240459003253,
+          "blocked": false
+        },
+        {
+          "transport": "sse",
+          "server": "sse-everything-stub",
+          "method": "tools/list",
+          "ok": true,
+          "http_status": 200,
+          "detail": "tools=12",
+          "latency_ms": 73.51536499481881,
+          "blocked": false
+        },
+        {
+          "transport": "sse",
+          "server": "sse-everything-stub",
+          "method": "tools/call",
+          "ok": true,
+          "http_status": 200,
+          "detail": "echo_ok=True",
+          "latency_ms": 410.0557519996073,
+          "blocked": false
+        },
+        {
+          "transport": "websocket",
+          "server": "",
+          "method": "tools/list",
+          "ok": false,
+          "http_status": 0,
+          "detail": "server slug missing (BLOCKED)",
+          "latency_ms": 0.0,
+          "blocked": true
+        },
+        {
+          "transport": "websocket",
+          "server": "",
+          "method": "tools/call",
+          "ok": false,
+          "http_status": 0,
+          "detail": "server slug missing (BLOCKED)",
+          "latency_ms": 0.0,
+          "blocked": true
+        }
+      ],
+      "failures": 0
+    },
+    {
+      "round": 3,
+      "calls": [
+        {
+          "transport": "stdio",
+          "server": "everything-1",
+          "method": "tools/list",
+          "ok": true,
+          "http_status": 200,
+          "detail": "tools=13",
+          "latency_ms": 727.5223279939382,
+          "blocked": false
+        },
+        {
+          "transport": "stdio",
+          "server": "everything-1",
+          "method": "tools/call",
+          "ok": true,
+          "http_status": 200,
+          "detail": "echo_ok=True",
+          "latency_ms": 1558.165676004137,
+          "blocked": false
+        },
+        {
+          "transport": "streamable-http",
+          "server": "http-everything-stub",
+          "method": "tools/list",
+          "ok": true,
+          "http_status": 200,
+          "detail": "tools=12",
+          "latency_ms": 96.27157799695851,
+          "blocked": false
+        },
+        {
+          "transport": "streamable-http",
+          "server": "http-everything-stub",
+          "method": "tools/call",
+          "ok": true,
+          "http_status": 200,
+          "detail": "echo_ok=True",
+          "latency_ms": 208.0241110015777,
+          "blocked": false
+        },
+        {
+          "transport": "sse",
+          "server": "sse-everything-stub",
+          "method": "tools/list",
+          "ok": true,
+          "http_status": 200,
+          "detail": "tools=12",
+          "latency_ms": 43.61099000379909,
+          "blocked": false
+        },
+        {
+          "transport": "sse",
+          "server": "sse-everything-stub",
+          "method": "tools/call",
+          "ok": true,
+          "http_status": 200,
+          "detail": "echo_ok=True",
+          "latency_ms": 686.5962459996808,
+          "blocked": false
+        },
+        {
+          "transport": "websocket",
+          "server": "",
+          "method": "tools/list",
+          "ok": false,
+          "http_status": 0,
+          "detail": "server slug missing (BLOCKED)",
+          "latency_ms": 0.0,
+          "blocked": true
+        },
+        {
+          "transport": "websocket",
+          "server": "",
+          "method": "tools/call",
+          "ok": false,
+          "http_status": 0,
+          "detail": "server slug missing (BLOCKED)",
+          "latency_ms": 0.0,
+          "blocked": true
+        }
+      ],
+      "failures": 0
     }
   ],
   "gateway_443_snapshot": {

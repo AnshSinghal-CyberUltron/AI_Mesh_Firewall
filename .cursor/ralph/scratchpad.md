@@ -1,9 +1,18 @@
 ---
-iteration: 36
+iteration: 37
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter37 (2026-07-02) — ws partial land + auto-stubs + blocker spec
+- **P4.13/P6.18 RECHECK:** Gateway ws **LANDED** — CHG-0026 (`d6ab1ae7`) routes websocket via
+  `broker_send_rpc`; iter37 **rebuilt** live gateway (no `mcp_ws_adapter` hot path). Control
+  `URLField` (`models.py:41`) **still blocks** `ws://` — registration fails, no manifest ws slug.
+  **Cursor:** `mcp_sandbox_transport_verify.py` auto-stubs + BLOCKED semantics; added
+  `docs/mcp/CLAUDE_WS_BLOCKERS.md`. **3/3 configured transports PASS ROUNDS=3** (`PASS_PARTIAL 3/4`);
+  ws BLOCKED. ss: no gateway :443. **Cannot `[x]`** until URLField fixed. Evidence: `RECHECK_ITER37.md`.
+- Hive: `cursor-ralph-iter37` on `hive-1782991737290-ylo911`.
 
 ## iter36 (2026-07-02) — ws blockers recheck + 3-transport R1
 - **P4.13/P6.18 RECHECK:** ws blockers **unchanged** in git AND live — gateway ws still
