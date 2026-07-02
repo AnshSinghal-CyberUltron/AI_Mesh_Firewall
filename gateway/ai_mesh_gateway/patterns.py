@@ -146,7 +146,16 @@ def _decode_one(tok: str, is_hex: bool):
         dec = raw.decode("utf-8")
     except Exception:
         return None
-    return dec if _printable_ratio(dec) >= 0.8 else None
+    # G26: a base64/hex-wrapped unicode-obfuscated payload (base64 ∘ zero-width, or
+    # base64 ∘ Unicode-tags where EVERY char is a Cf tag) decodes to a string that is
+    # legitimately "not printable" / all-format-chars, dragging _printable_ratio below
+    # the gate — yet it IS the smuggled value. Judge printability on the CANONICAL form
+    # (tags decoded to ASCII, zero-width/format stripped, homoglyphs folded) so the
+    # compound evasion survives to detection/masking; genuine binary garbage still
+    # canonicalizes to a low-printable residue and is dropped. The RAW ``dec`` is
+    # returned (detect_*/redact_all canonicalize it again, mapping masks to originals).
+    probe = canonicalize_for_detection(dec)
+    return dec if probe and _printable_ratio(probe) >= 0.8 else None
 
 
 _ALL_HEX_RE = re.compile(r"[0-9a-fA-F]+")
@@ -642,8 +651,12 @@ def detect_pii(text: str) -> Dict[str, str]:
         for k, v in _detect_pii_core(canon).items():
             found.setdefault(k, v)
     for _tok, dec in _iter_transport_decodes(text):
-        for k, v in _detect_pii_core(dec).items():
-            found.setdefault(k, v)
+        # G26: the decoded payload may itself be unicode-obfuscated (base64 ∘ zero-width /
+        # tags), so match its CANONICAL form too, not just the raw decode.
+        dec_canon = canonicalize_for_detection(dec)
+        for src in ((dec, dec_canon) if dec_canon != dec else (dec,)):
+            for k, v in _detect_pii_core(src).items():
+                found.setdefault(k, v)
     return _filter_pii_label_false_positives(text, found)
 
 
@@ -694,8 +707,10 @@ def detect_secrets(text: str) -> Dict[str, str]:
         for k, v in _detect_secrets_core(canon).items():
             found.setdefault(k, v)
     for _tok, dec in _iter_transport_decodes(text):
-        for k, v in _detect_secrets_core(dec).items():
-            found.setdefault(k, v)
+        dec_canon = canonicalize_for_detection(dec)   # G26: canonicalize obfuscated decode
+        for src in ((dec, dec_canon) if dec_canon != dec else (dec,)):
+            for k, v in _detect_secrets_core(src).items():
+                found.setdefault(k, v)
     return found
 
 
@@ -930,7 +945,11 @@ def _redact_obfuscated(original: str, result: str) -> str:
                 if orig_sub:
                     masks.append((orig_sub, f"[{label.upper()}_REDACTED]"))
     for tok, dec in _iter_transport_decodes(original):
-        if _detect_pii_core(dec) or _detect_secrets_core(dec):
+        # G26: mask the OUTER encoded blob when its decode carries PII/secret in either
+        # raw OR canonical (unicode-obfuscated, e.g. base64 ∘ zero-width) form.
+        dcanon = canonicalize_for_detection(dec)
+        if (_detect_pii_core(dec) or _detect_secrets_core(dec)
+                or (dcanon != dec and (_detect_pii_core(dcanon) or _detect_secrets_core(dcanon)))):
             masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
     for sub, tag in sorted(masks, key=lambda x: -len(x[0])):
         if sub and sub in result:

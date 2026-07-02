@@ -351,7 +351,13 @@ def _nested_decode_variants(token: str, is_hex: bool, seen: set[str]) -> list[st
             decoded = raw.decode("utf-8", errors="strict")
         except (binascii.Error, ValueError, UnicodeDecodeError):
             break
-        if not decoded.isprintable():
+        # G26: a base64-wrapped ZERO-WIDTH / Unicode-TAG obfuscated injection decodes to
+        # a string full of Cf chars, which is legitimately "not printable" — yet it IS the
+        # payload we must catch. Strip that obfuscation for the printability gate only, so
+        # the compound (base64 ∘ zero-width) evasion is not dropped before the caller
+        # normalizes it. Genuine binary garbage still has no printable residue and breaks.
+        probe = _ZERO_WIDTH_RE.sub("", _decode_unicode_tags(decoded))
+        if not probe.isprintable():
             break
         if decoded not in seen:
             seen.add(decoded)
