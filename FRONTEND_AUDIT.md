@@ -89,7 +89,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | 4 | ModelGovernancePanel (+Fields) | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
 | 5 | RoutingGovernancePanel / RoutingAuditPanel / PolicyDomainSwitcher | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
 | 6 | KillSwitchPanel / KillSwitchModelCombobox / ModelStatePanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done (critical fixes) |
-| 7 | MCPManagerPanel / MCPScannerPanel / MCPScanControlMatrix | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 7 | MCPManagerPanel / MCPScannerPanel / MCPScanControlMatrix | — | 👁 | 👁 | 👁 | 👁 | 👁 | 👁 | n/a | 👁 verify-only / orphaned (see log) |
 | 8 | DatabaseConnectionPanel / VectorPolicyPanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 9 | RAGFeatureTestPanel / RAGAttackTrustSimulator / RAGPipelineTelemetry | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 10 | OutputGovernancePanel / OutputGuardrailControls / OutputGuardrailCharts / OutputGuardrailEngineCard | me | ◐ | ◐ | ◐ | ⬜ | ◐ | ◐ | ✅chart | 🔎 charts done, panels pending |
@@ -146,6 +146,12 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ---
 
 ## Per-surface finding log (append-only)
+
+**Item 7 — MCP panels: VERIFY-ONLY / ORPHANED (iter7 resumed loop, 2026-07-02):** evidence changed the disposition — none of the three is an editable live surface of mine.
+- **MCPManagerPanel.jsx (1945 L) + MCPScannerPanel.jsx (1026 L) = ORPHANED DEAD CODE.** Imported/rendered NOWHERE in `src` (only referenced in two code comments); no lazy/dynamic import. Vite/Rollup tree-shakes them out → they don't ship in the bundle and are unreachable in the app. `MCPConnectorPanel` is the live MCP surface (firewall-submodules.jsx:152, module 1.4). **No action:** not a live surface to harden; NOT deleting during the parallel MCP session's active work (their territory + revival risk) — flagged as a **cleanup candidate to coordinate with the MCP session** (removing ~2971 lines of dead MCP source).
+- **MCPScanControlMatrix.jsx (922 L) = VERIFY-ONLY.** Rendered INSIDE `MCPConnectorPanel` (never_edit, stress/MCP-owned) at L1793 → part of the connector surface the MCP session owns (item-17 scope). **Do not edit.** Code-verified no-leak clean: it renders scan-control policy rows (tier/direction/scope) + an "Effective preview"; no raw URLs/endpoints/keys/commands/topology. Not reachable in the default module-1.4 view (needs connected MCP servers, which the dev DB has none of).
+- **Live verify-only of the MCP surface (module 1.4), both themes:** no leaks (scanned for `sk-`/Bearer/non-local URLs/`ip:port` → none), **no overflow @1440/375**, **console 0 errors**. Screenshots `mcp-parallel/findings/frontend-harden/mcp-verify-only/`. (Also contributes to item-17 verify-only coverage of the MCP connector surface.)
+- **No product code changed this iteration** (correct for verify-only/orphaned). Item 7 marked 👁 verify-only.
 
 **Item 6 — KillSwitch/ModelState (iter6 resumed loop, 2026-07-02):** analyzed via parallel workflow (safety-critical control surface), verified live (firewall-1-6; 11 real models, KillSwitch empty state), console 0 errors, responsive (panels 351px @375 via F-RESP-1), no page overflow. **All destructive testing used route intercepts — no model was actually isolated (verified 0 isolated after).**
 - **F-MS1 FIXED (CRITICAL safety):** `handleIsolate`/`handleRecover` POSTed without checking `res.ok` → a failed isolate/recover **silently no-op'd**, leaving the operator believing a kill succeeded. Now: `window.confirm` + `res.ok` check + `setLoadError`. **Verified live:** intercepted isolate→500 shows *"Could not isolate … the model was not changed"* and the model stayed active; dismissing the confirm blocks the action. Also fixed a latent bug: `recover` now `encodeURIComponent`s the model name (names contain `/`).

@@ -39,7 +39,13 @@
       iter3: DONE. Live-verified both themes @4 widths (7 real keys), console clean, modal validates, no
       overflow, no-leak PROVEN (list has no raw key; prefix only). Fixed F-GK1 (fetch error→error state,
       not false-empty), F-GK2 (badge dark: text variants), F-GK3 (create error text hardened). lint 37/37.
-- [x] 6. KillSwitch/ModelState - [ ] 7. MCPManager/Scanner/ScanControlMatrix
+- [x] 6. KillSwitch/ModelState - [x] 7. MCPManager/Scanner/ScanControlMatrix (VERIFY-ONLY/ORPHANED)
+      item7 iter7: NO editable live surface of mine. MCPManagerPanel(1945L)+MCPScannerPanel(1026L) =
+      ORPHANED DEAD CODE (imported nowhere, tree-shaken; cleanup candidate to coordinate w/ MCP session,
+      not deleting during their active work). MCPScanControlMatrix(922L) = VERIFY-ONLY (rendered inside
+      never_edit MCPConnectorPanel → item 17 scope); code no-leak clean (policy controls, no topology).
+      Live verify-only of MCP surface (module 1.4) both themes: no leaks, no overflow @1440/375, console
+      clean. No product code changed. Full MCPScanControlMatrix live render folds into item 17 (needs MCP servers).
       item6 iter6: DONE (safety-critical). Workflow-analyzed + live-verified (11 real models; intercepts→
       0 real isolations). Fixed CRITICAL F-MS1 (isolate/recover res.ok+confirm+error, +encode bug),
       F-KS1 (kill-switch load-error state), F-KS-confirm, F-MS-leak (audit guard-model mask), theme
