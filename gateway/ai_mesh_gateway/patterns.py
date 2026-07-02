@@ -13,8 +13,10 @@ Provides:
 """
 from __future__ import annotations
 
+import base64
 import functools
 import re
+import unicodedata
 from typing import Dict, List
 
 
@@ -22,6 +24,114 @@ from typing import Dict, List
 def compile_pattern(pattern: str) -> re.Pattern[str]:
     """Compile and cache regex patterns for performance."""
     return re.compile(pattern, re.IGNORECASE)
+
+
+# ---------------------------------------------------------------------------
+# Obfuscation-resistant canonicalization (ATTACK_LANDSCAPE G1/G2).
+#
+# detect_pii/detect_secrets/redact_all historically matched RAW text only, so PII
+# and secrets hidden with zero-width, fullwidth, unicode-dash, homoglyph, combining
+# marks, or base64/hex encoding evaded BOTH detection and masking and egressed in
+# cleartext. ``_canonicalize_with_map`` folds an obfuscated string to a canonical
+# form using ONLY position-preserving 1->1 substitutions and 1->0 removals, and
+# returns an index map so a match found in the canonical form is masked back in the
+# ORIGINAL bytes (the only bytes that egress). It is a NO-OP on plain ASCII, so the
+# frozen golden cases and existing redaction behaviour are unchanged. Every step is a
+# single linear char scan under a hard length cap => ReDoS/DoS-safe.
+# ---------------------------------------------------------------------------
+
+_CANON_MAX_LEN = 20000  # hard cap (upstream MAX_PROMPT_LENGTH is 10k)
+
+# Unicode dashes NFKC does NOT fold to ASCII '-' (e.g. U+2011 non-breaking hyphen).
+_DASH_CHARS = frozenset("‐‑‒–—―−﹘﹣－")
+
+# Cross-script confusables NFKC leaves untouched (Cyrillic/Greek -> Latin skeleton).
+_CONFUSABLE_MAP = {
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c",
+    "х": "x", "у": "y", "і": "i", "ј": "j", "ѕ": "s",
+    "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H",
+    "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O",
+    "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X",
+    "ο": "o", "α": "a", "ι": "i", "ν": "v",
+}
+
+
+def _canonicalize_with_map(text: str):
+    """Return ``(canonical_text, index_map)`` using only 1->1 subs and 1->0 removals.
+
+    ``index_map[k]`` is the offset in ``text`` of canonical char ``k`` so a canonical
+    match span maps back to the exact original substring to mask.
+    """
+    if not text:
+        return "", []
+    src = text[:_CANON_MAX_LEN]
+    out_chars: List[str] = []
+    idx_map: List[int] = []
+    for i, ch in enumerate(src):
+        cat = unicodedata.category(ch)
+        if cat in ("Cf", "Mn", "Me"):                 # invisibles / combining marks -> drop
+            continue
+        if cat == "Cc" and ch not in "\t\n\r":         # control chars -> drop (keep whitespace)
+            continue
+        nc = unicodedata.normalize("NFKC", ch)
+        ch2 = nc if len(nc) == 1 else ch               # keep 1->1 compat folds (fullwidth/math/circled)
+        if ch2 in _DASH_CHARS:
+            ch2 = "-"
+        elif unicodedata.category(ch2) == "Zs":
+            ch2 = " "
+        elif ch2 in _CONFUSABLE_MAP:
+            ch2 = _CONFUSABLE_MAP[ch2]
+        out_chars.append(ch2)
+        idx_map.append(i)
+    return "".join(out_chars), idx_map
+
+
+def canonicalize_for_detection(text: str) -> str:
+    """Public canonical form for obfuscation-resistant matching (no index map)."""
+    return _canonicalize_with_map(text)[0]
+
+
+# --- bounded transport decode (G2): surface PII/secrets hidden in base64/hex ---
+_B64ISH_RE = re.compile(r"[A-Za-z0-9+/]{12,}={0,2}")
+_HEXISH_RE = re.compile(r"(?:[0-9A-Fa-f]{2}){8,}")
+_MAX_DECODE_TOKENS = 12
+_MAX_DECODE_BYTES = 4096
+
+
+def _printable_ratio(s: str) -> float:
+    if not s:
+        return 0.0
+    return sum(1 for c in s if c.isprintable() or c.isspace()) / len(s)
+
+
+def _iter_transport_decodes(text: str):
+    """Yield ``(encoded_token, decoded_text)`` for base64/hex blobs decoding to clean UTF-8.
+
+    Single-depth, token-count + size capped => decode-bomb safe. Only mostly-printable
+    decodes are surfaced so random alphanumerics don't create false positives.
+    """
+    if not text:
+        return
+    scan = text[:_CANON_MAX_LEN]
+    for regex, is_hex in ((_B64ISH_RE, False), (_HEXISH_RE, True)):
+        seen = 0
+        for m in regex.finditer(scan):
+            if seen >= _MAX_DECODE_TOKENS:
+                break
+            seen += 1
+            tok = m.group(0)
+            try:
+                if is_hex:
+                    raw = bytes.fromhex(tok)
+                else:
+                    raw = base64.b64decode(tok + "=" * (-len(tok) % 4), validate=False)
+                if not (0 < len(raw) <= _MAX_DECODE_BYTES):
+                    continue
+                dec = raw.decode("utf-8")
+            except Exception:
+                continue
+            if _printable_ratio(dec) >= 0.8:
+                yield tok, dec
 
 
 # B2-redactor-coverage: a trailing 10-digit US phone that may carry a SINGLE
@@ -410,24 +520,31 @@ def is_safety_refusal_output(text: str) -> bool:
     return hits >= 2
 
 
-def detect_pii(text: str) -> Dict[str, str]:
-    """Detect PII, PHI, and PCI patterns in text. Returns dict of type -> matched value."""
+def _detect_pii_core(text: str) -> Dict[str, str]:
+    """Raw PII/PHI/PCI detection over one text form (no canonicalization)."""
     found: Dict[str, str] = {}
-    for pii_type, pattern_str in PII_PATTERNS.items():
-        compiled = compile_pattern(pattern_str)
-        match = compiled.search(text)
-        if match:
-            found[pii_type] = match.group(0)
-    for phi_type, pattern_str in PHI_PATTERNS.items():
-        compiled = compile_pattern(pattern_str)
-        match = compiled.search(text)
-        if match:
-            found[phi_type] = match.group(0)
-    for pci_type, pattern_str in PCI_PATTERNS.items():
-        compiled = compile_pattern(pattern_str)
-        match = compiled.search(text)
-        if match:
-            found[pci_type] = match.group(0)
+    for group in (PII_PATTERNS, PHI_PATTERNS, PCI_PATTERNS):
+        for pii_type, pattern_str in group.items():
+            compiled = compile_pattern(pattern_str)
+            match = compiled.search(text)
+            if match:
+                found.setdefault(pii_type, match.group(0))
+    return found
+
+
+def detect_pii(text: str) -> Dict[str, str]:
+    """Detect PII/PHI/PCI, resistant to unicode/zero-width/homoglyph (G1) and base64/hex (G2)
+    obfuscation. Matches on the raw text AND its canonical form AND bounded transport decodes,
+    then filters label-only false positives. Canonical/decode passes are skipped when they add
+    nothing (plain ASCII), so plain-text behaviour is unchanged."""
+    found = _detect_pii_core(text)
+    canon = canonicalize_for_detection(text)
+    if canon != text:
+        for k, v in _detect_pii_core(canon).items():
+            found.setdefault(k, v)
+    for _tok, dec in _iter_transport_decodes(text):
+        for k, v in _detect_pii_core(dec).items():
+            found.setdefault(k, v)
     return _filter_pii_label_false_positives(text, found)
 
 
@@ -457,14 +574,29 @@ def _filter_pii_label_false_positives(text: str, found: Dict[str, str]) -> Dict[
     return filtered
 
 
-def detect_secrets(text: str) -> Dict[str, str]:
-    """Detect secret patterns in text. Returns dict of type -> matched value."""
+def _detect_secrets_core(text: str) -> Dict[str, str]:
+    """Raw secret detection over one text form (no canonicalization)."""
     found: Dict[str, str] = {}
     for secret_type, pattern_str in SECRET_PATTERNS.items():
         compiled = compile_pattern(pattern_str)
         match = compiled.search(text)
         if match:
-            found[secret_type] = match.group(0)
+            found.setdefault(secret_type, match.group(0))
+    return found
+
+
+def detect_secrets(text: str) -> Dict[str, str]:
+    """Detect secrets, resistant to unicode/zero-width/homoglyph (G1) and base64/hex (G2)
+    obfuscation. Matches on the raw text AND its canonical form AND bounded transport decodes.
+    Canonical/decode passes are skipped when they add nothing (plain ASCII)."""
+    found = _detect_secrets_core(text)
+    canon = canonicalize_for_detection(text)
+    if canon != text:
+        for k, v in _detect_secrets_core(canon).items():
+            found.setdefault(k, v)
+    for _tok, dec in _iter_transport_decodes(text):
+        for k, v in _detect_secrets_core(dec).items():
+            found.setdefault(k, v)
     return found
 
 
@@ -618,8 +750,8 @@ def redact_evidence_digit_spans(text: str, evidence_sources: List[str]) -> str:
     return result
 
 
-def redact_all(text: str) -> str:
-    """Redact PII with smart partial masking; PHI/PCI use placeholder tags."""
+def _redact_all_raw(text: str) -> str:
+    """Redact PII with smart partial masking; PHI/PCI use placeholder tags (raw text only)."""
     result = text
     for pii_type, pattern_str in PII_PATTERNS.items():
         compiled = compile_pattern(pattern_str)
@@ -671,6 +803,49 @@ def redact_all(text: str) -> str:
 
         result = _infra_compiled.sub(_infra_sub, result)
     return result
+
+
+def _detect_all_spans(text: str):
+    """Yield ``(label, start, end)`` for every PII/PHI/PCI/secret match in ``text``."""
+    for group in (PII_PATTERNS, PHI_PATTERNS, PCI_PATTERNS, SECRET_PATTERNS):
+        for label, pattern_str in group.items():
+            compiled = compile_pattern(pattern_str)
+            for m in compiled.finditer(text):
+                if m.group(0):
+                    yield label, m.start(), m.end()
+
+
+def _redact_obfuscated(original: str, result: str) -> str:
+    """Mask obfuscated PII/secret (G1) and encoded PII/secret blobs (G2) in ``result``.
+
+    ``result`` is the raw-redacted text. Obfuscated spans the raw pass missed survive
+    verbatim in ``result``, so they can be found and masked by exact substring. Masking
+    the WHOLE original span with a placeholder is intentional (obfuscated PII gets fully
+    removed). No-op when the input carries no obfuscation and no decodable blob."""
+    masks: List[tuple[str, str]] = []
+    canon, idx = _canonicalize_with_map(original)
+    if canon and canon != original:
+        for label, a, b in _detect_all_spans(canon):
+            if 0 <= a < len(idx) and 0 <= b - 1 < len(idx):
+                orig_sub = original[idx[a]: idx[b - 1] + 1]
+                if orig_sub:
+                    masks.append((orig_sub, f"[{label.upper()}_REDACTED]"))
+    for tok, dec in _iter_transport_decodes(original):
+        if _detect_pii_core(dec) or _detect_secrets_core(dec):
+            masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
+    for sub, tag in sorted(masks, key=lambda x: -len(x[0])):
+        if sub and sub in result:
+            result = result.replace(sub, tag)
+    return result
+
+
+def redact_all(text: str) -> str:
+    """Redact PII/secrets from ``text``, resistant to unicode/zero-width/homoglyph (G1) and
+    base64/hex (G2) obfuscation. Runs the raw partial-masking pass, then masks any obfuscated
+    or encoded PII/secret that survived. A no-op beyond the raw pass on plain ASCII, so the
+    frozen golden cases and existing redaction outputs are unchanged."""
+    result = _redact_all_raw(text)
+    return _redact_obfuscated(text, result)
 
 
 def get_compliance_tags(pattern_keys: List[str]) -> List[str]:
