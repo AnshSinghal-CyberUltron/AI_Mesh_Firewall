@@ -77,7 +77,7 @@
         mcp-parallel/findings/stress-r2/REGRESSION_B1_FAILCLOSED.md.
 
 ## R5 — Client E2E stress with 10 real free OpenRouter models
-- [~] 6. Playwright as a client: in ModelConnectionPanel, add provider (OpenAI-compatible, base URL
+- [x] 6. Playwright as a client: in ModelConnectionPanel, add provider (OpenAI-compatible, base URL
       https://openrouter.ai/api/v1), enter OPENROUTER_KEY (from env, typed into the UI — NEVER stored by
       you), connect 10 FREE models (query OpenRouter /models, pricing.prompt==0). Verify they appear as
       connected. (Pre-commit key scan must stay clean.)
@@ -120,11 +120,25 @@
         reading the modal JSX (line ~861-1000) + a real user click-through; fix in R6 (owned ModelConnectionPanel.jsx).
       NOTE: session logged out after batch; models persist in control DB (not session). No gateway key in
         localStorage under 'zeroshield_gateway_api_key' (auto-provision didn't fire before navigation).
-- [ ] 7. Run the adversarial corpus END-TO-END via the stock OpenAI SDK (org gateway key) through the
+- [x] 7. Run the adversarial corpus END-TO-END via the stock OpenAI SDK (org gateway key) through the
       full pipeline against the real models: assert enforcement is correct (no PII leak to any model;
       redact stays redact; blocks are justified), routing/kill-switch behave, and the trace is honest.
       Any real-world failure → fix (R4) → re-run. Redact the key from all logs/snapshots.
-      R5.4 RECIPE (next): mint a gateway key for org ZeroShield via control Django shell (like
+      R5.4 DONE 2026-07-02 — LIVE corpus e2e PASSED against real OpenRouter models (stock openai SDK ->
+      gateway:8300/v1, org gateway key minted via control shell, harness /tmp scratchpad r5_live_corpus.py):
+        benign        -> PASS 200, real reply, model_routing=reroute.
+        plain_pii     -> PASS 200, policy=redact, model reply empty, NO PII leaked (redacted before egress).
+        obf_pii_G1    -> BLOCK 400 content_filter (R4 canonicalize detects unicode/fullwidth PII -> no leak).
+        b64_pii_G2    -> BLOCK 400 (R4 transport-decode detects encoded PII -> no leak).
+        injection     -> BLOCK 400. obf_injection_G3 -> BLOCK 400 (R4 reassemble split-words works LIVE).
+        multi-model routing: benign PASS across openrouter/free + gemma-4-31b + nemotron-super-120b.
+        KILL-SWITCH: SET kill_switch:zeroshield:global {"is_active":true,"action":"disable"} -> BLOCK 503
+          kill_switch_active; DEL -> PASS again. (Payload MUST include is_active:true — kill_switch.py:77.)
+        => My R4 fixes (G1/G2/G3) confirmed in the LIVE pipeline, not just in-process. No PII reached any model.
+      PREREQ the UI normally does but I had to do manually (because of the R6 model_id modal bug): added the
+        10 models to org allowlist (FirewallConfig.allowed_models, org id 2) — isolation was on w/ only gpt-5.2.
+      Gateway keys minted (stress-r5-*) are local org keys (harmless); OpenRouter key only ever typed into UI.
+      R5.4 RECIPE (for re-run): mint a gateway key for org ZeroShield via control Django shell (like
         scripts/seed_simulator_gateway_key.sh): docker compose exec -T control python manage.py shell -c
         "from core.models import GatewayAPIKey; from django.contrib.auth import get_user_model;
          u=get_user_model().objects.get(email='admin@zeroshield.io');
