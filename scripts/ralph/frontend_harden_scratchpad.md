@@ -125,7 +125,27 @@
       both themes + 375 stacks clean. 500/401 cascades = F3 env (auth/me 500→downstream 401). Deferred-LOW:
       EngineCard "0F" flagged counter is structurally always-0 (flag folds into redacted bucket) — honest 0,
       logged not changed.
-- [ ] 13. LogViewer/LogDetailPage - [ ] 14. OWASPStatsPanel - [ ] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
+- [x] 13. LogViewer/LogDetailPage - [ ] 14. OWASPStatsPanel - [ ] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
+      item13 DONE (3-agent workflow inventoried 21 charts). LogViewerPanel = ORPHANED dead code (mounted
+      nowhere, confirmed; item-7 precedent → logged, not edited). LogDetailPage (part1, commit 0a805a91):
+      DATA-INTEGRITY — timestamp defaulted to now() → honest fmtTimestamp "—"; Method/Endpoint placeholders
+      ("POST"/"/v1/chat/completions") → "—"; timelineData was a single hardcoded [{time:"Event",latency}]
+      point feeding a fake "timeline" AreaChart → REAL per-stage latency from pipeline_trace, card hidden when
+      no trace. CHART: AreaChart recharts→ECharts bar (theme-aware); removed recharts import + hardcoded
+      logChartTheme/isDark/useTheme. THEME StatusBadge/back/Copy/loading dark variants. RESPONSIVE header
+      flex-wrap + request-id truncate. (deriveStageVerdict/_STAGE_SCORE left — documented anti-under-report.)
+      module-specific-log-charts (part2): the factory FABRICATED ~15 of 21 charts (latency×0.3/0.5 "breakdowns",
+      prompt.length field-size splits, per-doc similarity DECAY CURVES from one value, 2-point "risk trends",
+      content-analysis hardcoded by action allow?80:35, "confidence" from count/10, cost from tokens/100000,
+      1-point line). REMOVED all fabricated → get13/15/16/17/default now return {charts:[]} (card hides = honest
+      empty). KEPT+migrated to ECharts the 6 REAL charts: get11 stage-latency (real trace) + token-usage (real
+      counts, dropped 0.6/0.4 synth split); get12 ×3 real pipeline_audit (tightened guard ragEmpty→!hasAudit,
+      dropped synthetic non-audit fallback); get14 PII-detections (real matched/tags/redaction counts, guarded).
+      recharts import removed. GATE lint 42/42, build, detector 0 (both files). LIVE reached LogDetailPage via
+      evidence-row click, both themes @1440/375: overflow=0 all 4, 0 console/net, ECharts canvas renders,
+      honest empty states verified ("no per-stage trace → no chart"), real timestamp/method/endpoint shown.
+      Deferred-LOW: LogViewerPanel dead-code cleanup (coordinate); get12 synthetic-fallback compute still runs
+      but is guard-dropped (never rendered).
 - [ ] 17. VERIFY-ONLY (log, don't edit): MCPConnectorPanel, ModelConnectionPanel, pipeline-trace cards
 - [ ] 18. Shared ui/* primitives (Button/Card/Dialog/Input/Select/Table/Tabs/Badge/Toast/Tooltip/…): both themes, API-compatible restyle
 
