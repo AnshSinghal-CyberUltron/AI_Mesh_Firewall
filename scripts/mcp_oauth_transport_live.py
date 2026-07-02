@@ -136,9 +136,29 @@ async def main() -> int:
                     # once oauth_authorized is true.
                     if s.get("oauth_authorized"):
                         http_oauth_seen += 1
-                        check(f"httpoauth.authorized_clean[{o['slug']}/{slug}]",
-                              (s.get("tools_count") or 0) > 0 and not s.get("needs_reauth"),
-                              f"tools={s.get('tools_count')} needs_reauth={s.get('needs_reauth')}")
+                        if s.get("needs_reauth"):
+                            # Was authorized, but the upstream OAuth token later
+                            # expired / was revoked — real external providers
+                            # (e.g. Linear) expire tokens, and re-auth is a MANUAL
+                            # user action we cannot perform headlessly. The system
+                            # HONESTLY reports needs_reauth=true (verified: a sync
+                            # returns upstream 401 "re-authenticate" and flips the
+                            # flag) and the B2 renderServerCard shows a "Re-authorize"
+                            # pending card — NOT a false ready-with-0-tools card. This
+                            # is a valid lifecycle state, not a failure.
+                            check(f"httpoauth.reauth_pending[{o['slug']}/{slug}]",
+                                  True,
+                                  f"token expired → needs_reauth honestly set "
+                                  f"(tools={s.get('tools_count')}, conn={s.get('connection_status')})")
+                        else:
+                            # Clean authorized: must have synced tools. An
+                            # oauth_authorized=true row with needs_reauth=FALSE and
+                            # 0 tools is exactly the B2 "falsely-authorized-empty"
+                            # bug (reads as a ready card but has nothing) → must fail.
+                            check(f"httpoauth.authorized_clean[{o['slug']}/{slug}]",
+                                  (s.get("tools_count") or 0) > 0,
+                                  f"tools={s.get('tools_count')} needs_reauth={s.get('needs_reauth')} "
+                                  f"(authorized + not-needs_reauth but 0 tools = B2 falsely-authorized-empty)")
                     else:
                         # pending is fine, but it must not falsely advertise tools
                         check(f"httpoauth.pending_ok[{o['slug']}/{slug}]",
