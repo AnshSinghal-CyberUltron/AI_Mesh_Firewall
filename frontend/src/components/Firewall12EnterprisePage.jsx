@@ -247,11 +247,11 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
     <div className="space-y-5 pb-8">
       <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-3">
+          <div className="flex flex-wrap items-start gap-3">
             <div className="mt-1 rounded-xl border border-slate-200 dark:border-slate-700 p-2">
               <Shield className="h-5 w-5 text-slate-700 dark:text-slate-200" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-3xl font-semibold leading-tight text-slate-900 dark:text-slate-100">Policy Management</h1>
               <p className="text-sm text-slate-500 dark:text-slate-400">Firewall Module 1.2</p>
             </div>
