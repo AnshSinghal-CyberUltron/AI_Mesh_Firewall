@@ -1150,6 +1150,31 @@
         FIFTEEN confirmed-live leaks fixed (G40-G46, G49-G56) + G48 defense-in-depth + 2 documented tradeoffs.
         The obfuscation-canonicalization FOUNDATION (unicode fold + transport decode + confusables) is now
         complete + symmetric across pii/secret/credential/ip on input and output.
+    - 🔴 G57 NON-STREAM output guard SKIPPED on LIST-shaped (multimodal) content (2026-07-02):
+        PIVOTED off the obfuscation vein. Verified tool-call/reasoning/refusal/audio exfil is well-defended
+        (F4/R12/FIX-A/B, non-stream _neutralize_secondary_output_channels blanks them, stream drops buffer on
+        redact). But found a STREAM/NON-STREAM ASYMMETRY: an assistant message's `content` can be a LIST of
+        content-part dicts (multimodal / content blocks — some providers return the answer this way).
+        secure_streaming._extract_content_delta coerces it (FIX-C), but the NON-STREAM
+        _extract_scannable_output_text + _extract_response_from_completion read ONLY str content. PROBED (in
+        the deployed container's own code): list-content answer -> _extract_scannable_output_text returns ''
+        -> _og_scan_text falsy -> _output_guard_active False -> OUTPUT GUARD SKIPPED ENTIRELY -> PII/secret/
+        email in list content egress RAW (verdict never even computed). Streaming saw the same PII. FIX
+        (minimal CLAIMED main.py chat-module edit): added _content_to_text() coercing a content list to its
+        joined text parts (mirrors FIX-C); wired into BOTH extractors. Detection now fires; response_text is a
+        str so _sanitize_output_for_verdict redacts surgically + _set_completion_response_text overwrites
+        content with the sanitized string. str content unchanged (_content_to_text(str) identity) -> zero
+        regression. VERIFY: list-content PII/secret/email scanned + redacted end-to-end (final response leaks
+        nothing); string-content baseline unchanged. FROZEN in ai_mesh_gateway/tests/test_e14_cross_model.py
+        (the stream/non-stream output-extractor PARITY suite — natural home; golden/ can't import main w/o the
+        shared path): extended the cross-model scan/enforce matrix with a `list_content` channel (×5 models,
+        both non-stream + stream delta builders) + 3 dedicated G57 tests (scan-not-skipped, response coercion
+        to str, stream/non-stream parity). GATE: golden 406×3; gateway suite 1421 pass; test_e14_cross_model
+        140 pass. commit f3419e16 (own msg, pathspec). REDEPLOYING (rollback gateway-rollback-pre-g57; both
+        control+gateway healthy pre-deploy).
+        SIXTEEN confirmed-live leaks fixed (G40-G46, G49-G57) + G48 defense-in-depth + 2 documented tradeoffs.
+        NOTE for other sessions: main.py now has _content_to_text() (near _extract_response_from_completion,
+        ~line 1296) — the canonical content-list->str coercion; reuse it rather than re-inlining.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
