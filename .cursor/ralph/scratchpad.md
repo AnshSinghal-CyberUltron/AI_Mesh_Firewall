@@ -20,7 +20,9 @@ status: ACTIVE
 - [x] 2. Playwright: register an HTTP oauth server → confirm it LISTS immediately with 0 tools (wrong).
       **Verified 2026-07-02:** B2 partial — lists 0 tools while `oauth_authorized=false`; pending cues
       (`authorization required`, Authorize, sync disabled) present; see `mcp-parallel/findings/p1-2/`.
-- [ ] 3. Playwright: type into the Add-Server dialog fields → capture focus loss after 1 keystroke.
+- [x] 3. Playwright: type into the Add-Server dialog fields → capture focus loss after 1 keystroke.
+      **Verified 2026-07-02:** B4 NOT reproducing — focus kept for 24 keystrokes × 5 fields; prior
+      `Dialog.jsx` onCloseRef fix effective; see `mcp-parallel/findings/p1-3/`.
 - [ ] 4. Playwright + logs: trigger a tool call that surfaces "MCP sandbox is temporarily unavailable";
       capture the network trace + broker logs. Record all repros to mcp-parallel/findings with screenshots.
 
