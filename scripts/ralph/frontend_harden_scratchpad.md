@@ -338,3 +338,13 @@
       resolved" is NOT unequivocally true → must NOT output COMPLETE. Everything else in my remit is DONE +
       verified. Each further iteration: regression-check my surfaces + re-check whether MCPConnectorPanel is
       fixed / the claim released; complete the instant that ⚠ clears.
+      [iter+] DATA-INTEGRITY sweep found + FIXED module 1.5 "ROUTING DECISIONS" 500-cap undercount
+      (commit 4e6c7bfc): buildModulePageData counted the limit=500 page; filterEventsForModule("1.5")
+      matches every routing row via its OR `sources` clause, so the headline is the routing-source total →
+      override summary.total with the uncapped threatFeedCount (same as 1.4). Live: UI 500→551 == API count
+      551 (7d), verified light/1440 + dark/375 + dark/768; lint 69/69, build clean, detector []. Also
+      widened `test:unit` glob (was src/utils/*.test.js only → +src/components/*.test.js) so the new 1.5
+      regression test is actually gated (62→69). NEW OPEN finding (separate item, my domain, NOT blocked):
+      src/constants/zeroshieldBrand.test.js:19 FAILS — expects "ZeroShield Guard Model", source emits
+      "ZeroShield Model"; was ungated (constants not globbed). Needs an intent check (source vs test stale).
+      → next iteration target. MCPConnectorPanel still the never_edit COMPLETE blocker (claim active).
