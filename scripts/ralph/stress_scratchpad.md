@@ -583,6 +583,20 @@
         in original glyph vs ASCII) is oracle-clean and within the frozen last-4 convention. NO gap, NO fix
         (changing the frozen redact_all last-4 format would risk the frozen-9 for zero security gain).
         (probe: scratchpad probe_output_confusable.py, throwaway.)
+      G39 FROZEN 2026-07-02 (rigorous-verification round — NEW golden coverage, not a fix):
+        Probed the exfil-channel neutralizer for a corner G13 did NOT cover: PII ENCODED inside the
+        exfil URL (raw url trips no PII pattern; only _url_smuggles_data's decode-then-detect_pii path
+        recovers it). Battery of 6 (base64-email query, plain-SSN query, base64 link, hex bare-URL,
+        base64 PATH segment, LAYERED base64(base64(email))) -> ALL defanged to ".../[exfil-redacted]",
+        image beacons lose the leading '!' (no zero-click auto-render). Egress oracle-confirmed PII-free
+        (aidefence_has_pii/ scan = false on the neutralized bytes, incl. the layered case). 3 FP-floor
+        controls (benign logo image, opaque tracking LINK w/ printable-base64 token, git-hash bare URL)
+        stayed unchanged — links trip only on the stronger sensitive_payload signal, never a bare
+        encoded blob. Froze as G39 in test_adversarial_attacks.py: 5 exfil + 2 benign = 7 new cases,
+        test_g39_encoded_pii_exfil_channel_neutralized + test_g39_benign_opaque_token_not_defanged.
+        Gate: G39 7/7 green; full frozen+adversarial 267 passed (was 260, +7, NO regression). ruff not
+        installed in this env (gate non-blocking per prompt). (probes: scratchpad probe_exfil_encoded.py
+        / probe_exfil_egress.py / probe_g39_benign.py, throwaway.) commit 6d0bc6cf.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
