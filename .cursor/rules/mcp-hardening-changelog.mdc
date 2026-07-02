@@ -945,6 +945,31 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   no-FP. +11 tests. Gate: 11 + 1327 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed.
   Evidence: `mcp-parallel/findings/backstop-p2-cred-exposure-mcp-scan/`.
 
+- **CHG-0076** (2026-07-02) — G2 item 2 / 1.4 (**devil's-advocate on chat-vs-MCP scan parity**: does the
+  MCP scan have the chat scanner's obfuscation check?), MEDIUM–HIGH: the chat OUTPUT scanner
+  (`scanner._scan_output_sync`, G33/G35) decodes text-encoding variants via
+  `_decode_text_encoding_variants` (HTML char refs `&#..;`, percent-encoding, `\u`/`\x` escapes) so an
+  encoded PII/secret a markdown/browser client renders back is caught. The MCP orchestrator tier-1
+  (`_scan_text_tier1`) had **NO such check** — raw `detect_pii/secrets/ip_leakage/credential_exposure`
+  only. `detect_secrets` folds base64/hex transport, but a SECRET / CREDENTIAL / INTERNAL-NETWORK IP
+  hidden by a TEXT-encoding dodges the raw regexes, and `redact_all` cannot mask an encoded run — so an
+  encoded credential / internal IP in a tool RESULT egressed (verified: HTML-entity + percent-encoded
+  `sk-ant-…` and `10.0.0.5` NOT flagged by the MCP floor while the chat path caught them), and a
+  markdown/HTML MCP client decodes it back to the value = a laundering/exfil channel for an untrusted
+  external MCP server (same class in tool ARGS). FIX (`mcp_scan_orchestrator.py`): `_scan_text_tier1`
+  (after the raw detect branch) decodes `_decode_text_encoding_variants(text)`; if a decoded variant
+  reveals a SECRET (`detect_secrets`) / CREDENTIAL (`detect_credential_exposure`) / internal-NETWORK IP
+  (`detect_ip_leakage` ∩ `_INFRA_NETWORK_KEYS`) the raw text lacked → appends `threat_type="secret"` +
+  **BLOCKS** (fail-closed) under any non-`monitor` posture (redact_all can't mask the encoded run; mirrors
+  the chat INPUT path `scanner._scan_prompt_sync`). SCOPED for FP control: generic PII EXCLUDED (a scraped
+  HTML page's entity-encoded contact email is usually benign → no false-block of legit web/HTML tool
+  results); file paths excluded. Applies to input+output; plain text → `_decode_text_encoding_variants`
+  returns `[]` so the loop never runs (negligible overhead). Net: encoded secret/IP in a RESULT or ARGS
+  BLOCKS; encoded generic PII email NOT blocked; raw secret still masked-not-blocked (no regression);
+  benign HTML entities (`&amp;`/`&#8212;`/`&lt;`)/plain/URL no-FP. +9 tests. Gate: 9 + 1327 gateway
+  passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p2-mcp-encoded-exfil/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

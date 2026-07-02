@@ -19,6 +19,7 @@ from ai_mesh_shared.mcp_compliance_tags import tags_for_preset_or_entity
 
 from mcp_scan_targets import _safe_json, extract_and_bind
 from patterns import (
+    _INFRA_NETWORK_KEYS,
     detect_credential_exposure,
     detect_ip_leakage,
     detect_pii,
@@ -387,6 +388,46 @@ async def _scan_text_tier1(
                 blocked = True
             else:
                 mutated = candidate
+
+    # CHG-0076: obfuscation-bypass parity with the chat output scanner (G33/G35).
+    # detect_secrets folds base64/hex transport, but a SECRET / CREDENTIAL / INTERNAL
+    # NETWORK IP hidden by a TEXT-encoding (HTML char refs &#..;, percent-encoding,
+    # \u / \x escapes) dodges the raw regexes above — yet a markdown/HTML MCP client
+    # decodes it back to the value, so a malicious upstream can exfil a stolen
+    # credential / internal IP past the firewall (or a tenant can smuggle one in ARGS).
+    # redact_all CANNOT mask an ENCODED run, so BLOCK (fail-closed) — mirroring the chat
+    # INPUT path (scanner._scan_prompt_sync) and the byte-verify block above; a 'monitor'
+    # posture stays observe-only. SCOPED to secret/credential/internal-NETWORK-IP (no
+    # legit reason to text-encode those); generic PII is EXCLUDED so a scraped HTML page's
+    # entity-encoded contact email does not false-block a legitimate web/HTML tool result.
+    if not blocked and enforcement != "monitor":
+        from scanner import _decode_text_encoding_variants  # local: avoid import cycle
+        for _variant in _decode_text_encoding_variants(text):
+            if _variant == text:
+                continue
+            _hidden: dict[str, str] = {}
+            _hidden.update(detect_secrets(_variant))
+            _hidden.update(detect_credential_exposure(_variant))
+            _hidden.update({
+                k: v for k, v in detect_ip_leakage(_variant).items()
+                if k in _INFRA_NETWORK_KEYS
+            })
+            if _hidden:
+                findings.append(
+                    McpFinding(
+                        entity_type=next(iter(_hidden)),
+                        score=0.9,
+                        start=0,
+                        end=len(text),
+                        direction=mcp_dir,
+                        tier="tier1",
+                        threat_type="secret",
+                        detail=f"Encoded exfil (text-encoding) hides: {', '.join(_hidden)}",
+                        matched_kinds=list(_hidden),
+                    )
+                )
+                blocked = True
+                break
     return mutated, findings, blocked, []
 
 

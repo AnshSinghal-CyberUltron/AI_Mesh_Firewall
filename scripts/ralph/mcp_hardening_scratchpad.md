@@ -231,6 +231,21 @@
       += the 7 keys → ["SECRET","SOC2"]. Net: Stripe/Twilio/Azure/conn-string/GCP-SA in results MASKED+tagged
       SECRET; same in args force-blocked; benign no-FP. +11 tests. Gate: 11 + 1327 gateway passed, 0 failed;
       broker -k "not websocket" 108 passed. Evidence: mcp-parallel/findings/backstop-p2-cred-exposure-mcp-scan/finding.md.
+      CHG-0076 (2026-07-02, MEDIUM–HIGH — devil's-advocate on chat-vs-MCP scan parity): the chat OUTPUT
+      scanner (scanner._scan_output_sync, G33/G35) decodes text-encoding variants via
+      _decode_text_encoding_variants (HTML char refs &#..;, percent, \u/\x) but the MCP orchestrator tier-1
+      (_scan_text_tier1) had NO such check. detect_secrets folds base64/hex, but a SECRET/CREDENTIAL/
+      INTERNAL-NETWORK-IP hidden by a TEXT-encoding dodges the raw regexes, and redact_all can't mask an
+      encoded run → an encoded credential/internal IP in a tool RESULT egressed (verified: HTML-entity +
+      percent-encoded sk-ant + 10.0.0.5 NOT flagged by the MCP floor while the chat path caught them) and a
+      markdown/HTML MCP client decodes it back = exfil past the firewall by an untrusted upstream (same class
+      in ARGS). FIX (mcp_scan_orchestrator.py): _scan_text_tier1 decodes the variants; a decoded SECRET/
+      CREDENTIAL/internal-NETWORK-IP the raw lacked → threat_type="secret" + BLOCK (fail-closed, non-monitor;
+      redact_all can't mask an encoded run; mirrors chat INPUT path). SCOPED: generic PII EXCLUDED (scraped-
+      HTML contact emails must not false-block web tools); file paths excluded. Net: encoded secret/IP in
+      result or args BLOCKS; encoded PII email not blocked; raw secret still masked (no regression); benign
+      HTML entities/plain/URL no-FP. +9 tests. Gate: 9 + 1327 gateway passed, 0 failed; broker -k "not
+      websocket" 108 passed. Evidence: mcp-parallel/findings/backstop-p2-mcp-encoded-exfil/finding.md.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

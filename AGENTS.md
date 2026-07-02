@@ -614,6 +614,19 @@
     conn-string/GCP-SA in results MASKED+tagged SECRET; same in args force-blocked; benign no-FP. +11 tests.
     Gate: 11 + 1327 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
     mcp-parallel/findings/backstop-p2-cred-exposure-mcp-scan/.
+  - CHG-0076 (2026-07-02) — G2 item 2 / 1.4 (devil's-advocate on chat-vs-MCP scan parity), MEDIUM–HIGH: the
+    chat OUTPUT scanner decodes text-encoding variants (_decode_text_encoding_variants, G33/G35) but the MCP
+    orchestrator tier-1 (_scan_text_tier1) had NO such check. detect_secrets folds base64/hex, but a SECRET/
+    CREDENTIAL/INTERNAL-NETWORK-IP hidden by a TEXT-encoding (HTML char refs &#..;, percent, \u/\x) dodges
+    the raw regexes, and redact_all can't mask an encoded run — so an encoded credential/internal IP in a
+    tool RESULT egressed (verified) and a markdown/HTML MCP client decodes it back = exfil past the firewall
+    by an untrusted upstream (same class in ARGS). FIX (mcp_scan_orchestrator.py): _scan_text_tier1 decodes
+    the variants; a decoded SECRET/CREDENTIAL/internal-NETWORK-IP the raw text lacked → BLOCK (fail-closed,
+    non-monitor). SCOPED: generic PII EXCLUDED (scraped-HTML contact emails must not false-block web tools);
+    file paths excluded. Net: encoded secret/IP in result or args BLOCKS; encoded PII email not blocked; raw
+    secret still masked (no regression); benign HTML entities/plain/URL no-FP. +9 tests. Gate: 9 + 1327
+    gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
+    mcp-parallel/findings/backstop-p2-mcp-encoded-exfil/.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)
