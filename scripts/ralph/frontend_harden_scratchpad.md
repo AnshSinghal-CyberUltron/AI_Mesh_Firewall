@@ -301,3 +301,16 @@
       GATE lint 58/58, build green.
 - [ ] 24. Full re-verify pass; FRONTEND_AUDIT.md all resolved; impeccable clean; console/network clean.
       Only when ALL items done in BOTH themes at ALL widths → output <promise>COMPLETE</promise>.
+      PROGRESS (recharts removal — the remaining item-24 work):
+      · [x] SubModuleResultsPage.jsx — DONE (commit e3ae804a): AreaChart+BarChart → ECharts option; killed
+        hardcoded chartTheme + isDark-ternary theming; FIXED fabricated arrowTimings (lat×0.3/0.4/0.3 →
+        honest "--" + real end-to-end avg in heading). Live-verified both themes: 0 recharts SVGs, honest
+        empty states, 0 overflow, clean console. Added to static no-recharts guard (17 tests).
+      · [ ] AIMeshFirewallOverview.jsx — LIVE, 4 recharts charts still (harness reports recharts=4). NEXT.
+      · [ ] SafeResponsiveChart.jsx — recharts is the intentional FALLBACK for un-migrated children; remove
+        its recharts import LAST, only after every live consumer is migrated.
+      · [ ] Orphaned dead code w/ recharts (not rendered): SubmoduleDetailPage.jsx, module-specific-charts.jsx
+        — migrate or note-as-orphaned in final pass.
+      Remaining before COMPLETE: AIMeshFirewallOverview migration; then SafeResponsiveChart fallback removal;
+      then a full re-verify sweep (all surfaces both themes 4 widths, console/network clean) + confirm
+      FRONTEND_AUDIT.md fully resolved.
