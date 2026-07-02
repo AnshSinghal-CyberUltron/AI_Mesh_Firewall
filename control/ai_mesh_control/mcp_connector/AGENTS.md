@@ -104,3 +104,18 @@ imports `ai_mesh_shared` (repo `shared/` on path). DB falls back to sqlite only 
   as staff. VERIFY: `python3 scripts/ralph/mcp_page_cp18_diag_channel.py` (staff 200 sees raw cause;
   non-staff 403; edges 400/404). The script self-mints a non-staff JWT via `docker exec` — do NOT commit
   any token file.
+
+## Enforcement-block accounting gotcha (CP22 diagnosis → CP23 fix)
+- `MCPToolCallView` returns HTTP **403** for enforcement denials (`tool_disabled` :1199,
+  `tool_not_registered` :1222, `schema_validation_failed` :1244) and **404** for unknown
+  server/tool. It records these as `decision="block"` LOCALLY — but for **gateway-originated**
+  calls the local `_record_event` is a **no-op** (de-dup shadow, ~:1166; "recorded once by the
+  gateway data plane"). So the authoritative event comes from the gateway.
+- BUG (CP22): the gateway (`mcp_proxy.py:3047`) records a non-200 backend response as
+  `decision="error"` reason=`backend_error_http_{status}` — so a **403 enforcement block is
+  miscounted as an error**, not a block. This is why the stats show few BLOCKs and many
+  "errors" (`backend_error_http_403` dominates, = `tool_not_registered` denials of tools whose
+  server crashed/never synced). Gateway↔control internal keys MATCH — it is NOT an auth failure.
+- CP23 fix: at the gateway, map a control 403/404 carrying an enforcement `reason` in the body
+  → `decision="block"` with that reason; keep genuine errors (backend 500, sandbox-unavailable,
+  stdio crash) as `error`.
