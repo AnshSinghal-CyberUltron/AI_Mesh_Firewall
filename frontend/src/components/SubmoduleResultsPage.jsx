@@ -23,6 +23,8 @@ export function SubModuleResultsPage({
   const {
     socKpis,
     threatFeed,
+    threatFeedCount,
+    threatFeedActionCounts,
     timeSeriesData,
     actionDistributionData,
     loading,
@@ -30,7 +32,27 @@ export function SubModuleResultsPage({
     refetch,
   } = useFirewallData(moduleId, "24h");
 
-  const moduleConfig = getModuleResultsConfig(moduleId, socKpis);
+  // Module-scoped enforcement summary. soc-kpis is ORG-WIDE (no source filter), so it
+  // must not drive a scoped lane's flow nodes — that rendered e.g. module 1.5
+  // "Request: 93,553" instead of its 552 routing events. Mirror the module pages: use
+  // the source-scoped threat-feed count + per-action aggregate (which also match THIS
+  // page's table, since the table is the same scoped feed). Module 1.1 stays org-wide.
+  const scoped = useMemo(() => {
+    const ac = threatFeedActionCounts || {};
+    const num = (k) => Number(ac[k]) || 0;
+    const critical = (threatFeed || []).filter((ev) => {
+      const s = Number(ev?.metadata?.security_risk_score ?? ev?.severity);
+      return Number.isFinite(s) ? s >= 80 : String(ev?.severity || "").toLowerCase() === "critical";
+    }).length;
+    return {
+      total: typeof threatFeedCount === "number" ? threatFeedCount : (threatFeed?.length || 0),
+      blocked: num("block"),
+      redacted: num("redact"),
+      critical,
+    };
+  }, [threatFeed, threatFeedCount, threatFeedActionCounts]);
+
+  const moduleConfig = getModuleResultsConfig(moduleId, socKpis, scoped);
   const ModuleIcon = moduleConfig.icon;
   const tableData = useMemo(() => mapThreatFeedToTableData(moduleId, threatFeed), [moduleId, threatFeed]);
   const keys = moduleConfig.tableColumnKeys;
@@ -394,15 +416,22 @@ export function SubModuleResultsPage({
   );
 }
 
-function getModuleResultsConfig(moduleId, socKpis) {
-  const total = socKpis?.total_threats ?? 0;
-  const blocked = socKpis?.blocked ?? 0;
-  const redacted = socKpis?.redacted ?? 0;
+function getModuleResultsConfig(moduleId, socKpis, scoped) {
+  // soc-kpis is ORG-WIDE (no source filter). Only module 1.1 (the ingress lane) is
+  // legitimately org-wide; every other lane is source-scoped, so its flow nodes must
+  // use the module-scoped threat-feed aggregate (`scoped`) instead of the whole-mesh
+  // soc-kpis totals. `scoped` = { total, blocked, redacted, critical }.
+  const isIngress = moduleId === "1.1";
+  const orgTotal = socKpis?.total_threats ?? 0;
+  const total = isIngress ? orgTotal : (scoped?.total ?? 0);
+  const blocked = isIngress ? (socKpis?.blocked ?? 0) : (scoped?.blocked ?? 0);
+  const redacted = isIngress ? (socKpis?.redacted ?? 0) : (scoped?.redacted ?? 0);
+  const criticalCount = isIngress ? (socKpis?.critical_count ?? 0) : (scoped?.critical ?? 0);
   const allowed = Math.max(0, total - blocked - redacted);
   // Module 1.1 (ingress) reflects REQUESTS, not all enforcement events. With
   // routing active each request also emits a model_routed event, so total_threats
   // double-counts ingress. Use the request-scoped count for the 1.1 flow only.
-  const requestsInspected = socKpis?.requests_inspected ?? total;
+  const requestsInspected = socKpis?.requests_inspected ?? orgTotal;
   const allowedReq = Math.max(0, requestsInspected - blocked - redacted);
   // The backend emits only an end-to-end avg_latency_ms — no per-hop breakdown. A
   // synthetic 0.3/0.4/0.3 split would fabricate per-arrow numbers, so arrow labels stay
@@ -486,7 +515,7 @@ function getModuleResultsConfig(moduleId, socKpis) {
       icon: FilterIcon,
       flowNodes: [
         { label: "Model", value: total.toLocaleString(), color: "emerald" },
-        { label: "Risk", value: (socKpis?.critical_count ?? 0).toLocaleString(), color: "amber" },
+        { label: "Risk", value: criticalCount.toLocaleString(), color: "amber" },
         { label: "Block", value: blocked.toLocaleString(), color: "orange" },
         { label: "Status", value: allowed.toLocaleString(), color: "emerald" },
       ],
