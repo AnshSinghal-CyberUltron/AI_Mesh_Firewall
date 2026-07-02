@@ -514,5 +514,28 @@ def test_g40_cap_failclosed_oversized_unclosed_opener(use_guard):
     )
 
 
+# --------------------------------------------------------------------------- #
+# G45: streaming redaction parity with G44 (non-stream). Markdown-emphasis-split PII
+# (1**2**3-45-6789 -> renders as the SSN) must be masked on the STREAMED egress too —
+# the streaming redact composition previously ran only neutralize_exfil_channels +
+# neutralize_encoded_pii (G36), missing the G44 markdown-split neutralizer, so a
+# streamed obfuscated-PII response leaked. Proven on guard + no-guard fallback paths.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("use_guard", [True, False], ids=["guard", "fallback"])
+def test_g45_streaming_markdown_split_pii_masked(use_guard):
+    pieces = ["The SSN is 1**2**", "3-45-6789 exactly. Reach john`@`example.com now."]
+    delivered = _run_real_guard(pieces) if use_guard else _run(pieces, use_guard=False)
+    rendered = delivered.replace("*", "").replace("`", "").replace("_", "")
+    assert "123-45-6789" not in rendered, (
+        f"[g45 use_guard={use_guard}] markdown-split SSN reached the client: {delivered!r}"
+    )
+    assert "john@example.com" not in rendered, (
+        f"[g45 use_guard={use_guard}] markdown-split email reached the client: {delivered!r}"
+    )
+    assert "[PII_REDACTED]" in delivered or "***" in delivered or "REDACT" in delivered.upper(), (
+        f"[g45 use_guard={use_guard}] obfuscated PII was neither masked nor blocked: {delivered!r}"
+    )
+
+
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(pytest.main([__file__, "-v"]))

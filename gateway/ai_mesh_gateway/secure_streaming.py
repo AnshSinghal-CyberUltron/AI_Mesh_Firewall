@@ -414,8 +414,10 @@ class SecureStreamingResponse:
                 from output_guard import (  # noqa: PLC0415
                     neutralize_encoded_pii,
                     neutralize_exfil_channels,
+                    neutralize_markdown_split_pii,
                 )
                 _pre = neutralize_encoded_pii(neutralize_exfil_channels(full_text))
+                _pre = neutralize_markdown_split_pii(_pre)  # G45: streaming parity with G44
                 redacted_text = self._scanner.redact_pii(_pre)
                 # Telemetry honesty (mirror of non-stream main.py:1566 / 7289):
                 # only claim action="redact" when the bytes actually changed. A
@@ -482,8 +484,10 @@ class SecureStreamingResponse:
         from output_guard import (  # noqa: PLC0415
             neutralize_encoded_pii,
             neutralize_exfil_channels,
+            neutralize_markdown_split_pii,
         )
         neutralized = neutralize_encoded_pii(neutralize_exfil_channels(full_text))
+        neutralized = neutralize_markdown_split_pii(neutralized)  # G45: streaming parity
 
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
             redacted_text = self._scanner.redact_pii(neutralized)
