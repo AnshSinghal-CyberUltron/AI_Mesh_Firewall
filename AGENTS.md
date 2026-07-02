@@ -137,6 +137,14 @@
     (running container NOT recreated). VERIFY: `docker compose ... config` renders gateway.healthcheck +
     restart=unless-stopped; both merged configs parse. Item 13 STILL OPEN: OTEL tracing + PG/Redis backup
     remain; optional peer service_healthy upgrade.
+  - CHG-0028 (2026-07-02) — G5 item 20 (advance): extended mcp_live_matrix_harness.py with a per-actor
+    AUTHZ-under-load oracle. The harness proved REDACTION under load but had no authz dimension. Added
+    authz_denied() (403 / authz-error / [BLOCKED] result; a generic error is NOT a denial) + authz_violation()
+    (True only when a forbidden tool EXECUTED successfully under load) + a Scenario type + a DENY_TOOL_NAME-
+    gated F_authz_deny concurrent agent; the gate now FAILS on any authz violation and flags a vacuous deny
+    run. Files scripts/mcp_live_matrix_harness.py + scripts/test_mcp_live_matrix_oracle.py (+3 oracle tests →
+    8 passed). Backward-compat: unset DENY_TOOL_NAME → 5-agent redaction matrix unchanged. REMAINING: live
+    peak run (5k-10k, item 15) with a real denied tool + tag-enforcement MCPEvent audit under load.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

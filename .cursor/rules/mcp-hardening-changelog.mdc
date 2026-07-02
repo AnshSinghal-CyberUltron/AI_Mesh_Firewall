@@ -223,3 +223,14 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   docker-compose.override.yml config` shows gateway.healthcheck + restart=unless-stopped; base+prod merged
   config also valid. Files: docker-compose.yml, docker-compose.prod.yml. Item 13 STILL OPEN: OTEL/Jaeger
   tracing + PG/Redis backup remain (optional: upgrade gateway-dependent peers to service_healthy).
+- **CHG-0028** (2026-07-02) — G5 item 20 (advance): extended the live-matrix harness with a per-actor
+  AUTHZ-under-load oracle. It proved REDACTION under concurrent load (byte oracle) but had NO per-actor tool
+  authorization dimension. Added `authz_denied(status, body)` (HTTP 403 / authz-flavored JSON-RPC error /
+  `[BLOCKED]` result — a GENERIC error is NOT a denial) + `authz_violation(..., expect_denied=True)` (True
+  ONLY when a forbidden tool EXECUTED successfully under load = a real hole) + a `Scenario` type + a
+  `DENY_TOOL_NAME`-gated `F_authz_deny` concurrent agent that fires forbidden calls and asserts every one is
+  refused. The run gate now FAILS on any authz violation (plus any raw-PII leak) and flags an `authz_vacuous`
+  run (deny tool neither denied nor executed → misconfigured). Files: scripts/mcp_live_matrix_harness.py,
+  scripts/test_mcp_live_matrix_oracle.py (+3 → 8 oracle tests passed). Backward-compat: unset DENY_TOOL_NAME
+  → the 5-agent redaction matrix runs unchanged. REMAINING for item 20: run the full matrix LIVE at true peak
+  (5k-10k, item 15) with a real denied-but-existing tool + a tag-enforcement MCPEvent audit under load.

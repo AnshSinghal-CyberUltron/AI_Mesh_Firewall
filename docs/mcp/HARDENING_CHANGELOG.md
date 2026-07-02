@@ -912,3 +912,39 @@ the prod compose/manifests is tracked under G3 item 12.
   BACKUP still not verified; (3) OPTIONAL: upgrade peers that `depends_on: gateway` from `service_started` to
   `service_healthy` now that a healthcheck exists (a startup-ordering behavior change — left to the owning
   session).
+
+### CHG-0028 — Extend the live-matrix harness with a per-actor AUTHZ-under-load oracle (G5 item 20)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G5 item 20 (1.4 guardrails — redaction + per-actor authz + tagging — under peak load).
+  Adds the authz-denial dimension the harness lacked (only redaction was proven under load). Item 20 stays
+  open (the true 5k–10k peak run + a live denied-tool run remain — item 15 / dedicated host).
+- **Files:** `scripts/mcp_live_matrix_harness.py` (new `authz_denied` + `authz_violation` oracles; `Scenario`
+  dataclass; `DENY_TOOL_NAME` env + `build_scenarios()` deny-agent; per-scenario `tool_name`; authz counters
+  + gate); `scripts/test_mcp_live_matrix_oracle.py` (+3 authz oracle tests).
+- **WHAT:** the harness proved REDACTION under concurrent load (byte oracle, CHG-0012/0014) but had NO
+  per-actor tool-AUTHORIZATION dimension — the mandate's "per-actor authz holding under peak load" was
+  unexercised. Added: (1) `authz_denied(status, body)` — a precise denial oracle (HTTP 403, an authz-flavored
+  JSON-RPC error, or a `[BLOCKED]` result; a GENERIC error is NOT a denial, so an internal/upstream failure
+  isn't miscounted); (2) `authz_violation(status, body, expect_denied=True)` — True ONLY when a forbidden tool
+  EXECUTED SUCCESSFULLY under load (a real authz hole); (3) a `Scenario` type + a `DENY_TOOL_NAME`-gated
+  `F_authz_deny` agent that fires concurrent calls to a tool the actor may NOT use; (4) the run gate now FAILS
+  on any `authz_violation` (in addition to any raw-PII leak), and flags an `authz_vacuous` run (deny-scenario
+  configured but the tool neither denied nor executed → misconfigured DENY_TOOL_NAME) rather than passing
+  silently.
+- **WHY:** item-20 remaining explicitly required "per-actor authz-denial … cases under load"; a concurrency
+  race that let ONE forbidden call through under peak load would be a silent authz hole the redaction oracle
+  can't see. The oracle is byte/status-based and independent of the gateway's own verdict.
+- **NOW DOES:** with `DENY_TOOL_NAME` set to a tool the `HARNESS_TOKEN` actor is denied, the matrix fires
+  concurrent forbidden calls and asserts EVERY one is refused (403 / authz-error / `[BLOCKED]`), failing on any
+  successful execution. Backward-compatible: unset → the deny-agent is skipped and the 5-agent redaction
+  matrix runs unchanged.
+- **Touched whose work:** extends the item-20 harness (prior backstop CHG-0012/0014). No gateway/app code
+  changed — harness + oracle only.
+- **VERIFY:** `gateway/.venv/bin/python -m pytest scripts/test_mcp_live_matrix_oracle.py -q` → 8 passed (5
+  redaction + 3 authz: `test_authz_denied_shapes`, `test_authz_violation_only_on_successful_forbidden_
+  execution`, `test_authz_violation_never_flags_allowed_scenarios`). `python -c "build_scenarios()"` → 5
+  scenarios by default, 6 (incl. `F_authz_deny`) with `DENY_TOOL_NAME` set. `py_compile` clean.
+- **REMAINING for G5 item 20:** run the full matrix (redaction + authz) LIVE at TRUE peak (5k–10k in-flight,
+  item 15) with a real denied-but-existing tool as `DENY_TOOL_NAME`; add a tag-enforcement-under-load audit
+  (query MCPEvents for compliance_tags at load, per CHG-0017) — both need a dedicated host / live policy
+  setup.

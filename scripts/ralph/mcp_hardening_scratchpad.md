@@ -286,6 +286,15 @@
       was vacuous before); resilient server-id lookup (graceful CONTROL_URL degradation). Evidence:
       mcp-parallel/findings/backstop-p20-redaction-load/redaction_under_load_evidence.json. REMAINING before
       [x]: run at TRUE peak (5k-10k in-flight, item 15); add per-actor authz-denial + tag-enforcement cases.
+      CHG-0028 (2026-07-02): authz-denial dimension ADDED to the harness. New authz_denied() (403 / authz-error
+      / [BLOCKED] result; a GENERIC error is NOT a denial) + authz_violation() (True ONLY when a forbidden tool
+      EXECUTED successfully under load = a real hole) + a Scenario type + a DENY_TOOL_NAME-gated F_authz_deny
+      concurrent agent; the gate now FAILS on any authz violation and flags a vacuous deny run. +3 oracle tests
+      (scripts/test_mcp_live_matrix_oracle.py -> 8 passed); build_scenarios() = 5 default / 6 with DENY_TOOL_
+      NAME. Backward-compat: unset -> redaction matrix unchanged. STILL OPEN (item stays [ ]): (a) run the full
+      matrix LIVE at TRUE peak (5k-10k, item 15) with a real denied-but-existing tool as DENY_TOOL_NAME (needs
+      a dedicated host + a per-key allowlist/disabled-tool setup, not safe to configure unilaterally on shared
+      state); (b) tag-enforcement-under-load audit = query MCPEvents for compliance_tags at load (per CHG-0017).
 
 ## G6 — Frontend (strictly; log edits to owned panels)
 - [ ] 21. MCP panels reflect 1.4 (tags, per-actor tool controls, redaction indicators), real data, no leak, both themes.

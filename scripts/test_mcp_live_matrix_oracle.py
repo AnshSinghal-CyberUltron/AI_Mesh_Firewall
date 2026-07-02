@@ -12,7 +12,11 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from mcp_live_matrix_harness import find_leaked_values  # noqa: E402
+from mcp_live_matrix_harness import (  # noqa: E402
+    authz_denied,
+    authz_violation,
+    find_leaked_values,
+)
 
 
 def test_detects_raw_pii_leak():
@@ -40,6 +44,39 @@ def test_partial_leak_detected():
 def test_no_sensitive_values():
     assert find_leaked_values({"result": {"content": [{"text": "hello"}]}}, []) == []
     assert find_leaked_values({"anything": 1}, None) == []
+
+
+# ── item-20 authz-under-load oracle (CHG-0028) ───────────────────────────────
+
+_OK_RESULT = {"result": {"content": [{"type": "text", "text": "did the thing"}]}}
+
+
+def test_authz_denied_shapes():
+    assert authz_denied(403, {}) is True                                   # HTTP 403
+    assert authz_denied(200, {"error": {"message": "tool not allowed for key"}}) is True
+    assert authz_denied(200, {"error": {"message": "org_scope_violation"}}) is True
+    assert authz_denied(200, {"result": {"content": [{"text": "[BLOCKED] no"}], "isError": True}}) is True
+    assert authz_denied(200, _OK_RESULT) is False                          # normal success
+    assert authz_denied(200, {"error": {"message": "internal boom"}}) is False  # non-authz error
+
+
+def test_authz_violation_only_on_successful_forbidden_execution():
+    # A forbidden tool that RAN successfully under load -> violation.
+    assert authz_violation(200, _OK_RESULT, expect_denied=True) is True
+    # Correctly denied in each shape -> NOT a violation.
+    assert authz_violation(403, {}, expect_denied=True) is False
+    assert authz_violation(200, {"error": {"message": "forbidden"}}, expect_denied=True) is False
+    assert authz_violation(200, {"result": {"content": [{"text": "[BLOCKED]"}], "isError": True}},
+                           expect_denied=True) is False
+    # Non-execution error (didn't run the tool) -> NOT a violation.
+    assert authz_violation(400, {"error": {"message": "bad json"}}, expect_denied=True) is False
+    assert authz_violation(200, {"error": {"message": "upstream timeout"}}, expect_denied=True) is False
+
+
+def test_authz_violation_never_flags_allowed_scenarios():
+    # For a normal (non-deny) scenario we never expect denial, so a success is fine.
+    assert authz_violation(200, _OK_RESULT, expect_denied=False) is False
+    assert authz_violation(403, {}, expect_denied=False) is False
 
 
 if __name__ == "__main__":
