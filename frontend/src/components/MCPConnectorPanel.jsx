@@ -68,7 +68,7 @@ const TRANSPORT_OPTIONS = [
   // spawn inside the gateway container (MCP_STDIO_IN_PROCESS=true). Command must be
   // an allow-listed interpreter (npx/node/python/python3); package runtime deps must
   // exist in the sandbox image. Failures surface in last_sync_error, not silent disconnect.
-  { value: "stdio", label: "Stdio (sandbox)", supported: true },
+  { value: "stdio", label: "Stdio", supported: true },
   { value: "websocket", label: "WebSocket", supported: true },
 ];
 
@@ -570,6 +570,13 @@ function MCPConnectorPanelInner() {
             ? `Connection failed: ${syncErr}`
             : "Connected, but the server exposed no tools. Check the command / URL / auth and retry."
         );
+        const httpOAuthPending =
+          addForm.auth_type === "oauth" &&
+          (addForm.transport === "streamable-http" || addForm.transport === "sse");
+        if (httpOAuthPending) {
+          // B2: show the pending-authorization card immediately (never a hidden 0-tools row).
+          await loadServers();
+        }
       } else {
         // Success (CP09) — tools discovered → close + add to the list (never 0 tools).
         setAddOpen(false);
@@ -1295,6 +1302,11 @@ function MCPConnectorPanelInner() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Badge variant="secondary">{srv.transport}</Badge>
+              {/* Every transport runs in the per-org sandbox (bug #3 / CP15) — the
+                  gateway never dials the upstream directly, so show it for ALL. */}
+              <Badge variant="secondary" className="inline-flex items-center gap-1" title="Executes in your org's isolated per-org sandbox; the gateway never dials the upstream directly.">
+                <Shield className="w-3 h-3" /> Sandboxed
+              </Badge>
               <Select
                 value={srv.default_scan_action || "tag"}
                 onChange={(e) => setServerScanDefault(srv.id, e.target.value)}
@@ -1543,9 +1555,14 @@ function MCPConnectorPanelInner() {
                 ))}
               </Select>
               <p className="text-xs text-slate-500 mt-1">
-                Supports HTTP, SSE, WebSocket, and Stdio (per-org sandbox) transports.
-                Stdio delegates to the mcp-broker sandbox in production; dev may use in-process gateway spawn.
+                Every transport (HTTP, SSE, WebSocket, Stdio) executes inside your
+                organization&apos;s isolated per-org sandbox (mcp-broker &rarr; sandbox-agent);
+                the gateway never connects to the upstream MCP server directly.
+                (Dev may run stdio in-process when MCP_STDIO_IN_PROCESS=true.)
               </p>
+              <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800 rounded px-1.5 py-0.5">
+                <Shield className="w-3 h-3" /> Sandboxed &mdash; all transports run in your org&apos;s isolated sandbox
+              </span>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Description</label>
