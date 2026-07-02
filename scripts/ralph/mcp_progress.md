@@ -45,7 +45,7 @@
 
 ## P5 — Fix B4 (modal focus loss)
 - [x] 17. Stabilize the Add Server modal/form subtree (define fields outside render / stable keys / no portal-children recreation) so focus persists per keystroke — NO CODE CHANGE NEEDED (prior fix holds): Dialog.jsx onCloseRef(:22)+stable handleKey useCallback + effect deps [open,handleKey](:68) → focus-trap effect runs only on open-toggle not per keystroke; MCPConnectorPanel has NO component defined in render (only top-level fn decls StatusDot/StatCard/Inner/Panel), render helpers are function CALLS {renderServers()}. VERIFIED behaviorally: scripts/playwright_mcp_p1_dialog_focus_repro.mjs (system chromium) → b4BugConfirmed=false, focusLossFields=[], focus kept 24 keystrokes across name/url/description/stdio-command/bearer. (Parallel loop P1.3 = same result.)
-- [ ] 18. Playwright verify: type a long string into each field without losing focus; presets prefill correctly
+- [x] 18. Playwright verify: type a long string into each field without losing focus; presets prefill correctly — FOCUS: p1_dialog_focus_repro 24 keys×5 fields focus kept (item#17) + b4_preset_verify 37 keys on prefilled field focus kept. PRESET PREFILL: GitHub MCP preset (requiresAuth) opens modal prefilled name="GitHub MCP"/url="https://api.githubcopilot.com/mcp/"/transport="streamable-http"/auth_type="bearer". scripts/playwright_mcp_b4_preset_verify.mjs 5/5 PASS + screenshot.
 
 ## P6 — Fix B3 (sandbox temporarily unavailable)
 - [ ] 19. Eager sandbox provisioning on register/authorize/first-sync (warm the per-org sandbox) 
