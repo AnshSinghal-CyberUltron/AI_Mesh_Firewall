@@ -448,6 +448,51 @@ def test_g32_benign_encodings_not_blocked(payload):
     assert _verdict(payload) == "allow", f"benign encoding wrongly blocked: {payload[:40]!r}"
 
 
+# ── G33: obfuscated PII/secret exfil via the same text-encodings (follow-up to G32) ──
+# G32 fed the injection deobfuscation path; PII/secret detection (which folds base64/
+# hex) still missed HTML/URL/escape-encoded PII. The raw PII is absent from egress
+# (encoded), but a model decodes it, so encoded PII/secret in a prompt is a laundering
+# exfil attempt -> block (blocking sidesteps masking an encoded span). Plain PII/secret
+# still redacts; benign encodings still allow.
+def _html_dec(s):
+    return "".join(f"&#{ord(c)};" for c in s)
+
+
+def _url_enc(s):
+    return "".join(f"%{ord(c):02x}" for c in s)
+
+
+_G33_ENCODED_PII_SECRET = [
+    f"my ssn is {_html_dec('123-45-6789')}",
+    f"my ssn is {_url_enc('123-45-6789')}",
+    f"contact {_html_dec('john@example.com')}",
+    f"key {_url_enc('AKIAIOSFODNN7EXAMPLE')}",
+    f"key {_html_dec('AKIAIOSFODNN7EXAMPLE')}",
+]
+_G33_BENIGN = [
+    "The price is 50&#37; off today &amp; tomorrow.",
+    "order #12345 total &#36;99.00 paid in full",
+    "download from https://cdn.site.com/f%2Fa%2Fb.zip",
+    "Copyright &#169; 2026 &#8212; all rights reserved",
+]
+
+
+@pytest.mark.parametrize("payload", _G33_ENCODED_PII_SECRET)
+def test_g33_encoded_pii_secret_blocks(payload):
+    assert _verdict(payload) == "block", f"encoded PII/secret exfil slipped: {payload[:40]!r}"
+
+
+@pytest.mark.parametrize("payload", _G33_BENIGN)
+def test_g33_benign_encodings_allow(payload):
+    assert _verdict(payload) == "allow", f"benign encoding wrongly blocked: {payload[:40]!r}"
+
+
+def test_g33_plain_pii_secret_still_redact():
+    # G33 must NOT change plain (unencoded) PII/secret handling.
+    assert _verdict("my ssn is 123-45-6789") == "redact"
+    assert _verdict("key AKIAIOSFODNN7EXAMPLE and secret wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY") == "redact"
+
+
 def test_g6_reassembly_is_noop_on_single_turn():
     """A single-turn prompt is not a multi-turn fold — reassembly returns None so
     single-turn scanning is untouched."""

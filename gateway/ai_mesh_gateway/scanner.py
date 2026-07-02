@@ -1122,6 +1122,33 @@ class InputScanner:
                 tier="tier_1",
             )
 
+        # G33: obfuscated PII/secret exfil via text-encodings (HTML char refs,
+        # URL/percent-encoding, \\u / \\x escapes). detect_pii/detect_secrets above
+        # already fold base64/hex transport; these text-encodings are checked here
+        # on the decoded variants (same decoder G32 wired into the injection path).
+        # The RAW PII/secret is absent from the egress bytes (it is encoded), but a
+        # model trivially decodes it, so an encoded PII/secret in a prompt is a
+        # laundering/exfil attempt -> block (blocking sidesteps masking an encoded
+        # span). Reaching here means the plaintext carried no PII/secret, so this
+        # only fires on genuinely-hidden payloads; verified zero FP on benign
+        # entities/URLs/escapes (they decode to harmless text, not PII patterns).
+        for _variant in _decode_text_encoding_variants(text):
+            _v_pii = detect_pii(_variant)
+            _v_secret = detect_secrets(_variant)
+            if _v_pii or _v_secret:
+                _kinds = list(_v_pii.keys()) + list(_v_secret.keys())
+                return ScanVerdict(
+                    action="block",
+                    threat_type="obfuscated_pii" if _v_pii else "obfuscated_secret",
+                    confidence=0.9,
+                    detail=(
+                        "Encoded PII/secret exfil attempt via text-encoding: "
+                        + ", ".join(_kinds)
+                    ),
+                    matched_patterns=_kinds,
+                    tier="tier_1",
+                )
+
         toxicity_verdict = self._check_toxicity(text, toxicity_threshold)
         if toxicity_verdict is not None:
             return toxicity_verdict
