@@ -86,6 +86,9 @@
     so "4-transport" overstates (3/4; ws unused live). Remaining: migrate ws to broker or mark ws legacy.
   - CHG-0019 (2026-07-02) — item 21 (frontend): fixed a BROKEN mojibake fix at PolicyManagementPanel.jsx:399
     (literal `·` in raw JSX text rendered the string, not `·`); now `{'·'}`. npm run build ✓.
+  - CHG-0020 (2026-07-02) — G4 item 13 LIVE observability: metrics + health + auto-recovery (docker
+    healthchecks + reaper) WIRED. GAPS: distributed tracing (OTEL) not configured; gateway has no docker
+    healthcheck; backup unverified. Evidence mcp-parallel/findings/backstop-p13-observability/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

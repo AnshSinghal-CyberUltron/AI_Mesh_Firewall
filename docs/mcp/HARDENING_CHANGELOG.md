@@ -615,3 +615,37 @@ the prod compose/manifests is tracked under G3 item 12.
 - **REMAINING for item 21 (owned by fe-harden):** the larger 1.4 surfaces — explicit redact signal +
   Redact badge/field list on execute, Redact StatCard under-count, Playwright gate covering tags/actor/
   redaction (BACKSTOP_FINDINGS item 21 MEDIUM/OMISSION rows).
+
+### CHG-0020 — LIVE Phase-3 observability verification: metrics+health+auto-recovery WIRED; tracing GAP (G4 item 13)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G4 item 13 (monitoring + metrics + tracing; backup; auto-recovery) — metrics/health/
+  auto-recovery verified live; distributed tracing + backup are gaps.
+- **Files:** `mcp-parallel/findings/backstop-p13-observability/observability_evidence.txt` (evidence).
+- **WHAT:** Probed the running stack's observability surfaces:
+    - **Metrics — WIRED:** gateway `/metrics` → 401 (exists; scraper-key-gated; `METRICS_ALLOW_OPEN=false`
+      → secured, not open) + a telemetry-drain thread (`TELEMETRY_DRAIN_MODE=thread`,
+      `TELEMETRY_DRAIN_INTERVAL_SEC/BATCH_SIZE`, `METRICS_SCRAPER_KEY`).
+    - **Health — WIRED:** gateway `/health` + `/v1/mcp/health` → 200; control `/api/health/` → 200; broker
+      (:8311) `/health` → 200.
+    - **Auto-recovery — mostly present:** docker healthchecks on broker/control/postgres/redis (all
+      `healthy` → docker auto-restarts on unhealthy) + the sandbox reaper/reconcile (code-verified) for
+      sandbox self-heal.
+    - **GAPS:** (1) distributed **tracing (OpenTelemetry/Jaeger) is NOT configured** — no OTEL/JAEGER/
+      TRACING env on gateway or broker (there is metrics/telemetry, but no request-level distributed
+      tracing); (2) the **gateway container has NO docker healthcheck** (`health=none`) — docker won't
+      auto-restart it on failure (control/broker/pg/redis do); (3) **backup (PG/Redis) not verified** (no
+      backup cron/volume probed).
+- **WHY:** the CHG-0002 audit noted item 13 (Phase-3) was unchecked; this is the first LIVE evidence of the
+  observability posture.
+- **NOW DOES:** records that metrics + health + infra auto-recovery are deployed and functional, and pins
+  the three gaps so item 13 is scoped precisely (not marked done).
+- **Touched whose work:** verifies the gateway/control/broker deployment + telemetry (prior sessions). No
+  files edited.
+- **VERIFY:** `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8300/health` → 200;
+  `curl ... :8300/metrics` → 401; `docker inspect ai_mesh_firewall-gateway-1 --format '{{if .State.Health}}
+  {{.State.Health.Status}}{{else}}none{{end}}'` → `none`; `docker inspect ai_mesh_firewall-gateway-1
+  --format '{{.Config.Env}}' | grep -i otel` → (empty). Evidence:
+  `mcp-parallel/findings/backstop-p13-observability/observability_evidence.txt`.
+- **REMAINING for G4 item 13:** (1) wire distributed tracing (OTEL exporter → Jaeger/Tempo) so cross-service
+  MCP request traces exist; (2) add a docker healthcheck to the gateway container; (3) verify/define PG +
+  Redis backup (dump cron / volume snapshot) + restore drill.

@@ -151,6 +151,14 @@
 
 ## G4 — Production hardening (Phase 3)
 - [ ] 13. Monitoring + metrics + tracing wired; backup; auto-recovery (sandbox/broker/Redis/PG self-heal).
+      LIVE VERIFIED (partial) — CHG-0020 (2026-07-02): probed the running stack. METRICS WIRED (gateway
+      /metrics 401 scraper-key-gated, METRICS_ALLOW_OPEN=false=secured; telemetry-drain thread). HEALTH
+      WIRED (gateway /health + /v1/mcp/health 200; control /api/health/ 200; broker :8311 /health 200).
+      AUTO-RECOVERY: docker healthchecks on broker/control/postgres/redis (all healthy -> auto-restart on
+      unhealthy) + sandbox reaper/reconcile. GAPS before [x]: (1) distributed TRACING (OTEL/Jaeger) NOT
+      configured (metrics/telemetry present, but no request-level tracing); (2) gateway container has NO
+      docker healthcheck (health=none -> not auto-restarted); (3) backup (PG/Redis) NOT verified. Evidence:
+      mcp-parallel/findings/backstop-p13-observability/observability_evidence.txt.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.
