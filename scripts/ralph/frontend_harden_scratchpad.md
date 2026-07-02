@@ -348,3 +348,17 @@
       src/constants/zeroshieldBrand.test.js:19 FAILS — expects "ZeroShield Guard Model", source emits
       "ZeroShield Model"; was ungated (constants not globbed). Needs an intent check (source vs test stale).
       → next iteration target. MCPConnectorPanel still the never_edit COMPLETE blocker (claim active).
+      [iter+] RESOLVED the zeroshieldBrand stale test (commit 0006fa71): intent check proved the
+      "Guard Model"->"ZeroShield Model" collapse is a DELIBERATE anti-leak (RESERVED_LABEL_FRAGMENTS,
+      landed 9f8c9489); test was asserting the old leaky label → updated to assert product label +
+      doesNotMatch /guard/i, and gated constants (test:unit glob +src/constants/*.test.js, 69→75).
+      Then found + FIXED a REAL no-leak bug (commit 537e6682): AttackSimulatorPanel.jsx:847 fallback
+      `sanitizeGuardText(guard_model) || "ZeroShield Guard Model"` rendered the raw reserved branding
+      when guard_model is absent → swapped to the imported ZEROSHIELD_GUARD_MODEL_LABEL. Then swept the
+      whole tree for sibling reserved-branding leaks (guard/bedrock/claude-haiku/anthropic literals as
+      JSX fallbacks/raw strings): the only accidental one was :847 (fixed); all others are intentional —
+      provider-selection UI (ModelConnectionPanel, stress-owned), help/docs (howToUseContent, MCPScanner),
+      internal-only values (LogViewerPanel SERVICE_FILTERS value:"Bedrock" renders label not value —
+      verified L243), and non-rendered error codes. liveGateway:842 "ZeroShield guard models are for
+      scanning only" = intentional help copy (product term, not an id leak) — left as-is. lint 75/75,
+      build clean, detector [] on both edited files. MCPConnectorPanel claim re-checked: STILL active.
