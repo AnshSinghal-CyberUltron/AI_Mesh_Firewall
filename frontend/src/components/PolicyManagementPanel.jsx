@@ -263,6 +263,7 @@ function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, erro
             <input
               type="text"
               required
+              autoFocus
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="e.g. Prompt Injection Blocker"
@@ -547,6 +548,7 @@ function RuleModal({
             <input
               type="text"
               required
+              autoFocus
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="e.g. Block SSN patterns"
