@@ -76,8 +76,11 @@ status: ACTIVE
        form guards + one-button UX already in place. Control `startControlOAuth` retained for HTTP
        oauth (token→control DB required for sync); structural removal needs Claude token bridge.
        See `mcp-parallel/findings/p4-13/P5-14-B1-VERIFY.md`.
-- [ ] 15. B2: freshly-registered HTTP oauth server shows a distinct "Pending authorization" state (not a
+- [x] 15. B2: freshly-registered HTTP oauth server shows a distinct "Pending authorization" state (not a
        0-tools card); tools appear only after oauth_authorized + sync.
+       **Verified 2026-07-02 (iter14):** fix already in `04748af5` (renderServerCard awaitingAuth);
+       Playwright 6/6 PASS (`playwright_mcp_b2_verify.mjs` → `mcp-parallel/findings/p5-15/`).
+       Amber "Pending authorization" badge + "Authorize to load tools"; no Unknown/0-tools card.
 - [ ] 16. B4: stabilize the Add-Server dialog so controlled inputs KEEP focus per keystroke (fix the
        remount: no field-component defined in render / stable keys / portal children not recreated).
 - [ ] 17. Playwright verify B1/B2/B4 end-to-end with screenshots (Linear-stdio → no OAuth; HTTP-oauth →
