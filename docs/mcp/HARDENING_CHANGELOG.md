@@ -1387,3 +1387,5 @@ the prod compose/manifests is tracked under G3 item 12.
   ai_mesh_gateway/tests/test_mcp_oauth_org_scope.py -q` → 8 passed (default-off plaintext; encrypted round-trip
   hides access/refresh/client_secret; legacy plaintext still read; invalid key → plaintext fallback). Broad
   sweep `ai_mesh_gateway/tests` → 1092 passed, 0 failed.
+
+### 2026-07-02 — MCP-PAGE-CP04 | frontend/src/components/MCPConnectorPanel.jsx (analysis) | WHAT: ROOT CAUSE = controlled-input-bound-to-parsed-collection, NOT a remount | Args (:1499-1500): value=args.join(", ") + onChange split(",").map(trim).filter(Boolean) → typing "," makes ["a",""]→filter→["a"]→re-render "a" (comma erased); trim kills spaces. Env (:1509-1520): same with object round-trip | FIX (CP05): store raw text in state, parse to array/object only on submit (payload @168-169) not per keystroke | VERIFY(after fix): cp03 args/env → clean
