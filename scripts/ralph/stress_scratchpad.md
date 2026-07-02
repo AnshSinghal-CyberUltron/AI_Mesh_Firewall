@@ -1239,6 +1239,26 @@
         INPUT SCAN now folds EVERY model-visible text channel (content str/list, tool_calls, tool defs,
         function_call, participant name) and ENFORCEMENT redacts/drops each — no model-visible channel is
         scanned-but-not-enforced. (Structural identifiers tool/function NAMEs stay intact by design.)
+    - 🔴 G61 OUTPUT structured (list/dict) reasoning_content & refusal bypassed scan + enforce (2026-07-02):
+        Completed the output data-shape coverage. G57 coerced list `content`, but the sibling secondary text
+        channels reasoning_content + refusal were still read as str ONLY (non-stream _extract_scannable_output_
+        text + _neutralize_secondary_output_channels, AND streaming _extract_content_delta + _blank_streaming_
+        secondary_channels). A reasoning model can return them STRUCTURED — a list of blocks, or a dict
+        (Anthropic-style thinking uses a `thinking` key, NOT `text`), e.g. via the Responses->chat conversion.
+        PROBED: reasoning_content=[{'type':'text','text':'ssn ...'}] and dict {'thinking':'ssn ...'} + list
+        refusal -> _extract_scannable_output_text did NOT include the SSN (guard bypassed) AND neutralize left
+        it verbatim on redact. FIX (owned main.py + secure_streaming.py, 4 sites): coerce reasoning_content/
+        refusal via _tool_arg_to_text (json.dumps for ANY non-str — text-only channels so JSON coercion is
+        safe and catches any shape/key incl. `thinking`) for scanning; blank a TRUTHY value of ANY type on
+        enforcement. str behavior unchanged -> zero regression. VERIFY: list + dict(thinking) reasoning + list
+        refusal now scanned + blanked, non-stream AND stream. FROZEN: list_reasoning + list_refusal channels
+        added to the cross-model matrix (×5 models, scan+enforce, stream+non-stream) + 2 dedicated G61 tests.
+        GATE: golden 406×3; gateway suite 1461 pass; e14 203 pass. commit d09cf90e (own msg, pathspec).
+        REDEPLOYING (rollback gateway-rollback-pre-g61; both healthy).
+        TWENTY confirmed-live leaks fixed (G40-G46, G49-G61) + G48 defense-in-depth + 2 documented tradeoffs.
+        OUTPUT scan+enforce now coerces EVERY non-str shape across ALL model-authored text channels (content,
+        reasoning_content, refusal, tool_calls args, function_call) — data-shape-bypass class fully closed on
+        BOTH input (G60 name, G59 tool args) and output (G57 content, G58 tool args, G61 reasoning/refusal).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
