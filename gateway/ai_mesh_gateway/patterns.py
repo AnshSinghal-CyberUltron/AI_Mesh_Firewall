@@ -410,6 +410,16 @@ SECRET_PATTERNS: Dict[str, str] = {
     "slack_token": r'\bxox[baprs]-[0-9A-Za-z-]{10,}\b',
     "jwt": r'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b',
     "bearer_token": r'Bearer\s+[A-Za-z0-9_\-\.]{20,}',
+    # G24: modern cloud/registry credential FORMATS the inventory missed, so a bare
+    # Google API key / npm token egressed to the model or was stored at RAG ingest.
+    # Both have a distinctive fixed prefix + length => detection is near-zero-FP.
+    "google_api_key": r'\bAIza[0-9A-Za-z_\-]{32,42}\b',
+    "npm_token": r'\bnpm_[A-Za-z0-9]{32,42}\b',
+    # AWS secret access keys are 40 bare base64 chars with NO prefix, so a bare value
+    # is indistinguishable from any 40-char blob. Gate on the canonical key-name cue
+    # (env var / config label) to stay low-FP; the standard AKIA access key is already
+    # covered by aws_access_key above.
+    "aws_secret_access_key": r'aws_secret_access_key["\s]*[:=][\s"\']*([A-Za-z0-9/+]{40})\b',
 }
 
 PHI_PATTERNS: Dict[str, str] = {
@@ -541,6 +551,8 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "api_key_openai": ["SECRET"],
     "aws_access_key": ["SECRET"],
     "aws_secret_access_key": ["SECRET"],
+    "google_api_key": ["SECRET"],
+    "npm_token": ["SECRET"],
     "github_token": ["SECRET"],
     "private_key_header": ["SECRET"],
     "password_assignment": ["SECRET"],

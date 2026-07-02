@@ -807,3 +807,46 @@ _G23_STRUCTURAL_INJECTIONS = [
 @pytest.mark.parametrize("label,payload", _G23_STRUCTURAL_INJECTIONS)
 def test_g23_structural_injection_still_blocks(label, payload):
     assert _verdict(payload) == "block", f"{label}: structural-variant injection not blocked (robustness regression)"
+
+
+# ================================================================== fixed gap (now FROZEN)
+# G24 — modern cloud/registry secret formats were undetected, so a bare Google API key
+# or npm token egressed to the model / was stored at RAG ingest, and aws_secret_access_key
+# had a compliance tag but NO detection pattern. FIXED in patterns.py: added
+# google_api_key / npm_token (distinctive prefix => low FP) and a context-gated
+# aws_secret_access_key pattern. FROZEN. (Synthetic/placeholder values only.)
+_G24_SECRETS = [
+    ("g24_google_api", "AIzaSyD-1234567890abcdefghijklmnopqrstuv"),
+    ("g24_npm_token",  "npm_1234567890abcdefghijklmnopqrstuvwxyz12"),
+    ("g24_aws_secret", "aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G24_SECRETS)
+def test_g24_modern_secret_detected_and_masked(label, payload):
+    """A modern credential must be DETECTED and its value MASKED out of the egress bytes."""
+    assert patterns.detect_secrets(payload), f"{label}: secret not detected"
+    redacted = patterns.redact_all(payload)
+    # the high-entropy secret value must not survive (allow the label for aws)
+    value = payload.split("=", 1)[1] if "=" in payload else payload
+    assert value not in redacted, f"{label}: secret value survived redaction (LEAK)"
+
+
+def test_g24_modern_secret_blocked_at_rag_ingest():
+    """A modern credential in a retrieved RAG document must BLOCK at ingest (never
+    stored raw at rest) — context_guard unions detect_secrets."""
+    assert _CG._scan_single_document_sync("deploy key AIzaSyD-1234567890abcdefghijklmnopqrstuv").action == "block"
+    assert _CG._scan_single_document_sync("token npm_1234567890abcdefghijklmnopqrstuvwxyz12").action == "block"
+
+
+_G24_FP_FLOOR = [
+    "npm install express && npm run build",
+    "Please run npm_config set registry https://registry.npmjs.org",
+    "The AIza prefix identifies Google API keys in docs.",
+    "aws_secret_access_key is the env var name you set in CI, not a value.",
+]
+
+
+@pytest.mark.parametrize("payload", _G24_FP_FLOOR)
+def test_g24_secret_fp_floor(payload):
+    assert not patterns.detect_secrets(payload), f"benign text wrongly flagged as secret: {payload!r}"
