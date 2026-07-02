@@ -10,8 +10,22 @@
       (env-set verification tracked under G3 item 12).
 
 ## G1 — Backstop audit (what did the other sessions do/miss?)
-- [ ] 1. Review the cursor-mcp / stress / frontend branches + shared memory; list mistakes, omissions,
+- [x] 1. Review the cursor-mcp / stress / frontend branches + shared memory; list mistakes, omissions,
       regressions, and incomplete work → docs/mcp/BACKSTOP_FINDINGS.md.
+      CHG-0002 (2026-07-02): 6-auditor parallel workflow → docs/mcp/BACKSTOP_FINDINGS.md (24 findings:
+      13 high/8 med/1 low). Signal = OMISSIONS/fail-open parity gaps, not cross-session regressions.
+      3 load-bearing claims backstop-verified (SSE unscanned egress; dead cross-tenant oracle
+      `for fs in []`; 3-org=15-sandbox ceiling). PRIORITY ORDER for next items:
+        #1 G2 item 2 — fail-closed byte-verified RESULT redaction (SSE /ext-proxy + string/structuredContent
+           shapes + fail-OPEN result-floor all egress raw PII/secret TODAY — the most direct leak).
+        #2 G2 item 3 — per-actor authz + field-redaction on stdio/ws adapter path (+posture-vs-rule block
+           downgrade, +allowlist-scope inversion, +org_mcp_tool_call bypasses allowlist/cap).
+        #3 G2 item 5 — unify tag vocab onto ComplianceTag.code + tag→action enforcement + tag input-blocks.
+        #4 G3 item 12 — runsc REQUIRED + network-level egress default-deny (shipped default = runc+open NAT).
+        #5 G3 item 7 — broker RPC for http/sse/ws (only stdio sandboxed) + fix host-run shared-bridge fallback.
+        #6 G5 item 19 — replace dead cross-tenant oracle + capture real egress bytes + aidefence cross-check.
+        #7 G5 14/15/18/16/17/20 — build true-scale stress (300-500 sandboxes, 5k-10k calls, chaos/soak/bomb/peak).
+        #8 G6 item 21 — emit redact signal, Redact badge+field list, fix StatCard under-count, extend Playwright, fix mojibake.
 
 ## G2 — 1.4 Context Assembly & MCP Guardrails (log every edit)
 - [ ] 2. Field-level redaction of MCP tool RESULTS (byte-verified, fail-closed).

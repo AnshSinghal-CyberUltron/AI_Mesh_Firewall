@@ -35,3 +35,9 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `docker_manager._resolve_runtime()` already fail-closes runsc enforcement
   (`services/mcp-broker/src/sandbox/docker_manager.py:343-359`). Verify: `ls` the two new files +
   `grep "MCP Hardening BACKSTOP changelog" AGENTS.md`.
+- **CHG-0002** (2026-07-02) — Backstop audit → `docs/mcp/BACKSTOP_FINDINGS.md` (24 findings: 13 high/8 med/1
+  low, each file:line + verify). Read-only; backstop-only. Confirmed gaps: SSE `ext_mcp_proxy` egress
+  unscanned; per-actor authz absent on stdio/ws path; compliance tags audit-only + 2 disjoint vocabularies;
+  gVisor/egress default fail-open; only stdio sandboxed; a **dead cross-tenant oracle** (`for fs in []`) and
+  a **15-sandbox ceiling** (hardcoded 3 orgs) that overstate prior "scale/isolation validated" claims. Next
+  priority = G2 item 2 (fail-closed byte-verified result redaction). Verify: `docs/mcp/BACKSTOP_FINDINGS.md`.

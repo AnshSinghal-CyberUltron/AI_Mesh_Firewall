@@ -11,6 +11,10 @@
 - Changelog pointers (newest last):
   - CHG-0001 (2026-07-02) — established the four-memory changelog protocol; audited runsc fail-closed
     enforcement in `docker_manager._resolve_runtime()`.
+  - CHG-0002 (2026-07-02) — backstop audit → `docs/mcp/BACKSTOP_FINDINGS.md` (24 findings; next priority =
+    G2 item 2 fail-closed byte-verified result redaction). Confirmed SSE egress unscanned, per-actor authz
+    missing on stdio/ws, tags audit-only, gVisor/egress default fail-open, a dead cross-tenant oracle +
+    15-sandbox ceiling overstating prior "scale validated" claims.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

@@ -73,3 +73,25 @@ named runtime (e.g. `runsc`) is not reported by `docker info`.`Runtimes`. Produc
 gVisor refuses to launch sandboxes rather than silently downgrading to the default runc runtime. This is
 recorded here as the item-0 enforcement contract; verification of the *runtime-required* env being set in
 the prod compose/manifests is tracked under G3 item 12.
+
+### CHG-0002 — Backstop audit → ranked findings (BACKSTOP_FINDINGS.md)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G1 item 1 (backstop audit of parallel Claude+Cursor sessions)
+- **Files:** `docs/mcp/BACKSTOP_FINDINGS.md` (new) · `scripts/ralph/mcp_hardening_scratchpad.md` (item 1 [x] + priority order).
+- **WHAT:** Ran a read-only 6-auditor parallel workflow (`wf_ca0d6349-33e`, 7 agents, 904k tokens) over the
+  gateway guardrail chain, control-plane compliance/authz, broker sandbox, stress harnesses, and frontend;
+  synthesized/deduped to 24 findings (13 high · 8 medium · 1 low), each grounded in file:line + a verify command.
+- **WHY (gap/mistake/omission):** No consolidated, evidence-based map of what the parallel sessions left
+  incomplete/wrong existed; items 2–20 had no prioritized, verifiable roadmap.
+- **NOW DOES:** Gives the backstop a ranked, corroboration-annotated worklist. Key confirmed gaps: SSE
+  `ext_mcp_proxy` egress unscanned (raw PII/secret today); per-actor authz absent on stdio/ws adapter path;
+  compliance tags are audit-only (no tag-driven enforcement) with two disjoint vocabularies; gVisor/egress
+  default fail-open; only stdio reaches the sandbox; a **dead cross-tenant oracle** (`for fs in []` →
+  `foreign_org_events` structurally 0) and a **15-sandbox scale ceiling** (hardcoded 3 orgs) that overstate
+  prior "isolation/scale validated" claims.
+- **Touched whose work:** backstop-only (net-new audit doc). Findings implicate prior sessions' commits
+  (e.g. 5d0dd346 "scale matrix validated" was 6/6 403s at 15 MCPs) but no code was changed.
+- **VERIFY:** Spot-verified 3 load-bearing claims directly: `sed -n '1021,1035p' gateway/ai_mesh_gateway/mcp_proxy.py`
+  (SSE `aiter_bytes` passthrough); `python3 -c "print(any(1 for fs in []))"` → False +
+  `sed -n '129p' scripts/mcp_scale_matrix_live.py`; `grep -n 'ORGS = \[' -A5 scripts/mcp_scale_provision.py`
+  (literal 3-tuple). Full doc: `docs/mcp/BACKSTOP_FINDINGS.md`. Ruflo: `memory_search CHG-0002 namespace mcp-hardening/changes`.
