@@ -1955,6 +1955,43 @@ def _validate_org_scope(request: Request, org_slug: str):
     return None
 
 
+async def _audit_and_return_scope_error(
+    request: Request, org_slug: str, server_slug: str = ""
+):
+    """``_validate_org_scope`` + audit the cross-tenant 403 (CHG-0045, item 9 audit-
+    completeness).
+
+    ``_validate_org_scope`` only ``LOG.warning``'d a 403 ``org_scope_violation`` (an
+    authenticated tenant using its key against ANOTHER org's endpoint) — the single
+    most forensically important MCP security event left NO record in the MCPEvent
+    audit/SIEM trail (unlike the per-key authz denials, which all call
+    ``_record_gateway_event``). Record it as a ``decision=block`` event attributed to
+    the CALLER's real org (never the target's, so the block stays inside the caller's
+    tenant boundary), with the target org + key prefix in metadata. The 401
+    (unauthenticated) has no org to attribute and is left to the auth middleware /
+    access logs. Wrapper is additive and keeps ``_validate_org_scope`` sync so the
+    ~13 test patch sites + the direct-call unit tests are unaffected.
+    """
+    err = _validate_org_scope(request, org_slug)
+    if err is not None and getattr(err, "status_code", None) == 403:
+        auth = _get_auth_context(request)
+        caller_org = getattr(auth, "org_slug", "") or ""
+        await _record_gateway_event(
+            org_slug=caller_org,
+            server_slug=server_slug,
+            tool_name="",
+            decision="block",
+            reason="org_scope_violation",
+            metadata={
+                "transport": "http",
+                "enforced_at": "gateway",
+                "target_org": org_slug,
+                "key_prefix": getattr(auth, "prefix", "") or "",
+            },
+        )
+    return err
+
+
 # JSON-RPC server-error band; MCP Streamable HTTP returns HTTP 200 + error object.
 _JSONRPC_RATE_LIMIT_CODE = -32000
 
@@ -2283,7 +2320,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
     as JSON-RPC POST requests to the base MCP server URL. This handler
     dispatches each method to the appropriate backend endpoint.
     """
-    err = _validate_org_scope(request, org_slug)
+    err = await _audit_and_return_scope_error(request, org_slug, server_slug)
     if err:
         return err
 
@@ -3053,7 +3090,7 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
     - Timeouts → 504 with error_code=backend_timeout
     - Backend errors → pass-through with original status code
     """
-    err = _validate_org_scope(request, org_slug)
+    err = await _audit_and_return_scope_error(request, org_slug, server_slug)
     if err:
         return err
 
@@ -3266,7 +3303,7 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
 )
 async def org_mcp_tools_list(org_slug: str, server_slug: str, request: Request):
     """List available tools for a specific org MCP server."""
-    err = _validate_org_scope(request, org_slug)
+    err = await _audit_and_return_scope_error(request, org_slug, server_slug)
     if err:
         return err
 
@@ -3308,7 +3345,7 @@ async def org_mcp_tools_list(org_slug: str, server_slug: str, request: Request):
 )
 async def org_mcp_server_health(org_slug: str, server_slug: str, request: Request):
     """Check health of a specific org MCP server."""
-    err = _validate_org_scope(request, org_slug)
+    err = await _audit_and_return_scope_error(request, org_slug, server_slug)
     if err:
         return err
 

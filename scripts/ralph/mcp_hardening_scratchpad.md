@@ -293,6 +293,18 @@
       was the isolated leak. Non-invasive Content-Length pre-check. +4 tests; test_mcp_rate_limit.py 14 passed,
       broad sweep 1081 passed. LIMITATION (documented): doesn't catch chunked-without-Content-Length (infra
       body limit covers it; app-layer streaming cap deferred to avoid MCP test-harness churn).
+      CHG-0045 (2026-07-02, MEDIUM — audit-completeness): the cross-tenant 403 org_scope_violation
+      (authenticated key's org ≠ URL org) was only LOG.warning'd — NEVER recorded to the MCPEvent audit
+      trail, so the most forensically important MCP event was invisible to audit/SIEM (while lesser
+      per-key authz denials DID audit via CHG-0006). FIX: new async wrapper _audit_and_return_scope_error
+      (mcp_proxy.py) calls _validate_org_scope (UNCHANGED — kept sync so ~13 test patch sites + direct-call
+      unit tests stay valid) and on a 403 emits _record_gateway_event(decision=block,
+      reason=org_scope_violation) attributed to the CALLER's real org (target_org + key_prefix in metadata,
+      never leaks into the target's event stream); all 4 tenant routes (jsonrpc/tool_call/tools_list/
+      server_health) now use it. 429 audit deliberately skipped (per-rejection audit under a burst would
+      amplify load). +2 tests. Gate: 6 org-scope + 67 route-patch-site + 1094 gateway passed. Evidence:
+      mcp-parallel/findings/backstop-p9-scope-violation-audit/finding.md. STILL OPEN (item 9): live
+      rate-limit threshold probe (>150 req/s on a dedicated key/host) + adversarial policy-enforcement.
 - [ ] 10. Resource limits CPU/mem/disk/timeout enforced + containment proven.
       LIVE VERIFIED (config) — CHG-0015 (2026-07-02): docker inspect of all 3 live org sandboxes shows
       CapDrop=[ALL], SecurityOpt=[no-new-privileges], Privileged=false, PidsLimit=256, Memory=2GiB,

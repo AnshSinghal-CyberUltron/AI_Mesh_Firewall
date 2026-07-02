@@ -267,6 +267,16 @@
     host env can re-enable scripts; the package bin still runs. Touches broker sandbox agent +
     gateway legacy stdio adapter (shared helper). +3 tests. Gate: 19 stdio_common + 101 broker
     + 1092 gateway passed. Evidence mcp-parallel/findings/backstop-p8-npm-ignore-scripts/.
+  - CHG-0045 (2026-07-02) — G3 item 9 (audit-completeness, MEDIUM): the cross-tenant 403
+    org_scope_violation (authenticated key's org ≠ URL org) was only LOG.warning'd — never
+    written to the MCPEvent audit trail, so the most forensically important MCP event was
+    invisible to audit/SIEM (while lesser per-key authz denials DID audit). FIX: new async
+    wrapper _audit_and_return_scope_error (mcp_proxy.py) calls _validate_org_scope (unchanged,
+    kept sync so ~13 test patch sites stay valid) and on a 403 emits _record_gateway_event
+    (decision=block, reason=org_scope_violation) attributed to the CALLER's real org (target_org
+    + key_prefix in metadata, never leaks into the target's stream); all 4 routes use it. 429
+    audit deliberately skipped (burst amplification). +2 tests. Gate: 6 org-scope + 67 route
+    (patch-site) + 1094 gateway passed. Evidence mcp-parallel/findings/backstop-p9-scope-violation-audit/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

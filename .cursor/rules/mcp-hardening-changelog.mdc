@@ -395,6 +395,20 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (`mcp_stdio_adapter.py`) via the shared helper; complements CHG-0022 (pin/allowlist envs).
   Files: mcp_stdio_common.py, test_stdio_common.py (+3). Gate: 19 stdio_common + 101 broker +
   1092 gateway passed. Evidence: `mcp-parallel/findings/backstop-p8-npm-ignore-scripts/`.
+- **CHG-0045** (2026-07-02) — G3 item 9 (audit-completeness, MEDIUM): every tenant-facing MCP route
+  starts with `_validate_org_scope`, which returns 403 `org_scope_violation` when an authenticated
+  key's org ≠ the URL org (a cross-tenant access attempt — the core threat this firewall stops). That
+  403 was only `LOG.warning`'d, NEVER `_record_gateway_event`, so — unlike the per-key authz denials
+  (CHG-0006, which audit) — the most forensically important MCP event was invisible to the MCPEvent
+  audit/SIEM layer. FIX: new async wrapper `_audit_and_return_scope_error` (`mcp_proxy.py`) calls
+  `_validate_org_scope` (UNCHANGED — kept sync so the ~13 `patch.object(...,"_validate_org_scope",
+  return_value=None)` sites + direct-call unit tests stay valid) and on a 403 emits an MCPEvent
+  (`decision=block`, `reason=org_scope_violation`) attributed to the CALLER's real org (`auth.org_slug`,
+  never the target — record stays in the caller's tenant boundary), with `target_org` + `key_prefix` in
+  metadata; all 4 routes now call it. Rate-limit (429) auditing deliberately NOT added (per-rejection
+  audit under a burst would amplify load). Files: mcp_proxy.py, test_mcp_org_scope_data_path.py (+2).
+  Gate: 6 org-scope + 67 route-patch-site + 1094 gateway passed. Evidence:
+  `mcp-parallel/findings/backstop-p9-scope-violation-audit/`.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
