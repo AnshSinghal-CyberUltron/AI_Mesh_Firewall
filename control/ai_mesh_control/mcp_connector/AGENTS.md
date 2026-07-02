@@ -62,3 +62,17 @@ frontend renders. Map + evidence: `docs/mcp/control-plane-flow.md`.
 `PYTHONPATH=ai_mesh_control:../shared DJANGO_SETTINGS_MODULE=main_app.settings DJANGO_SECRET_KEY=x DEBUG=True DJANGO_CACHE_BACKEND=locmem pytest ai_mesh_control/mcp_connector/tests/test_oauth_transport_guard.py -k OAuthStartViewTransportGuard`.
 Settings require `DJANGO_SECRET_KEY` when DEBUG=False; `main_app/__init__.py` imports `celery`; settings
 imports `ai_mesh_shared` (repo `shared/` on path). DB falls back to sqlite only when `DATABASE_URL` unset.
+
+## Client-facing error sanitization (CP16 — bug #5/6/7)
+- **`last_sync_error` is the CLIENT boundary** (set in `_persist_sync_state`/discovery; rendered as the
+  inline modal error on the MCP page). It must NEVER carry raw upstream HTML, exit codes, `proc.key`
+  server keys, sandbox-agent internals, or "gateway logs" hints.
+- **`_sanitize_sync_error(raw, *, org_slug, server_slug)` (views.py:407)** is the single choke point:
+  logs the raw detail at WARNING under a 12-hex correlation `ref` (`uuid4().hex[:12]`), then returns a
+  category-branded summary (auth / start-failure / egress / timeout / generic) + `(Ref: <ref>)`.
+  ALL 4 return points in `_discover_tools_via_gateway` route through it — so any raw message the gateway
+  bubbles up (incl. `mcp_stdio_adapter.py` "exited with code N" and raw upstream bodies) is scrubbed
+  before it reaches the client. Add new discovery-error returns via this helper, never raw.
+- `mcp_proxy.py:1838` is a PII-block **event recorder** (`decision="block"`), not a client error leak.
+- VERIFY: `python3 scripts/ralph/mcp_page_cp16_clean_error.py` (direct control API; http_405 + stdio
+  bad-command → clean branded + ref, `leaks=[]`). Client error CODE + dev debug view = CP17/CP18.

@@ -404,6 +404,38 @@ def _clear_needs_reauth(server) -> None:
         logger.error("Failed to clear needs_reauth for %s: %s", server.server_slug, exc)
 
 
+def _sanitize_sync_error(raw, *, org_slug: str = "", server_slug: str = "") -> str:
+    """Map a raw internal MCP error to a clean, branded, NON-revealing client message.
+
+    The raw detail (exit codes, upstream response bodies, sandbox-agent internals,
+    host-dependency hints, server keys) is kept in the SERVER logs under a short
+    correlation ref; the client sees only an actionable, brand-safe summary + the
+    ref. (CP16 sanitize; stable client error code + dev debug view = CP17/CP18.)
+    """
+    ref = uuid_mod.uuid4().hex[:12]
+    logger.warning(
+        "MCP sync error [ref=%s] org=%s server=%s: %s",
+        ref, org_slug, server_slug, str(raw)[:1000],
+    )
+    low = str(raw).lower()
+    if any(k in low for k in ("re-authenticate", "unauthorized", "invalid token",
+                              "forbidden", " 401", " 403", "auth")):
+        summary = ("The MCP server rejected authentication. Check the credentials "
+                   "or re-authorize the connection, then retry.")
+    elif any(k in low for k in ("exited with code", "failed to start",
+                                "process exited", "did not respond", "not ready")):
+        summary = ("The MCP server could not be started. Verify the command and "
+                   "package name, then retry.")
+    elif "egress denied" in low or "allowlist" in low:
+        summary = "The MCP server host is not permitted by the egress policy."
+    elif any(k in low for k in ("timeout", "timed out", "provisioning", "starting")):
+        summary = "The MCP server did not respond in time. Please retry in a moment."
+    else:
+        summary = ("The MCP server could not be reached or returned an error. "
+                   "Verify the configuration and retry.")
+    return f"{summary} (Ref: {ref})"
+
+
 def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
     """Discover tools from an MCP server via the gateway's internal endpoint.
 
@@ -477,7 +509,7 @@ def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
                 resp.status_code, org.slug, server.server_slug,
                 resp.text[:500],
             )
-            return [], f"Gateway returned HTTP {resp.status_code}: {resp.text[:200]}"
+            return [], _sanitize_sync_error(f"gateway HTTP {resp.status_code}: {resp.text[:500]}", org_slug=org.slug, server_slug=server.server_slug)
 
         data = resp.json()
         # JSON-RPC response: {"jsonrpc":"2.0","id":1,"result":{"tools":[...]}}
@@ -486,7 +518,7 @@ def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
         if isinstance(data, dict) and data.get("error"):
             err = data["error"]
             msg = err.get("message") if isinstance(err, dict) else str(err)
-            return [], f"Upstream MCP error: {msg}"
+            return [], _sanitize_sync_error(msg, org_slug=org.slug, server_slug=server.server_slug)
         result = data.get("result", {})
         tools = result.get("tools", [])
         if isinstance(tools, list):
@@ -495,13 +527,13 @@ def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
                 len(tools), org.slug, server.server_slug,
             )
             return tools, None
-        return [], "Malformed tools/list response from gateway."
+        return [], _sanitize_sync_error("malformed tools/list response from gateway", org_slug=org.slug, server_slug=server.server_slug)
     except Exception as exc:
         logger.warning(
             "Gateway discover-tools failed for %s/%s: %s",
             org.slug, server.server_slug, exc,
         )
-        return [], f"Discovery request failed: {exc}"
+        return [], _sanitize_sync_error(f"discovery request failed: {exc}", org_slug=org.slug, server_slug=server.server_slug)
 
 
 def _resync_server_tools(server, org) -> dict:
