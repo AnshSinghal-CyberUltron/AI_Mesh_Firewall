@@ -105,6 +105,14 @@
 - [ ] 17. Resource bombs (mem/fork/disk/timeout) — contained; neighbors + host safe.
 - [ ] 18. Chaos (kill sandbox/broker/Redis/PG) — auto-recovery + no leakage during recovery.
 - [ ] 19. Cross-tenant leakage canaries at 500-sandbox scale under chaos — never observed anywhere.
+      ORACLE FIXED — CHG-0009 (2026-07-02): the audit-log cross-tenant oracle in mcp_scale_matrix_live.py
+      was FABRICATED (`for fs in []` → foreign_org_events structurally 0, and NOT in the PASS gate — a
+      false "isolation proven" signal). Replaced with a real unit-tested count_foreign_events, ADDED to the
+      PASS gate (total_foreign==0), made the module import-safe, renamed misleading total_egress_bytes→
+      request_payload_bytes. New scripts/test_mcp_scale_oracle.py: 5 pass (incl. proof the OLD predicate
+      missed a real leak). REMAINING before [x]: run the canary matrix LIVE at 500-sandbox scale under
+      chaos with the corrected+gated oracle + capture REAL sandbox egress bytes cross-checked with an
+      independent aidefence oracle (tied to item 14 true scale — still a hardcoded-3-org=15-sandbox ceiling).
 - [ ] 20. 1.4 under peak load — redaction + per-actor authz + tagging hold; no PII/IP/regulated escape.
 
 ## G6 — Frontend (strictly; log edits to owned panels)

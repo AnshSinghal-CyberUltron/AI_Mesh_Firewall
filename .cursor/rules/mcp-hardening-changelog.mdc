@@ -82,3 +82,10 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   blocked, other role allowed); 27 tests pass. SPLIT-OUT as item 3b: per-policy FIELD-level redaction
   (`redaction_fields`) is HTTP-only; gateway bundle has no field-redaction support — needs a bundle-format
   extension to reach the adapter path.
+- **CHG-0009** (2026-07-02) — G5 item 19 (oracle fixed): replaced the FABRICATED cross-tenant oracle in
+  `scripts/mcp_scale_matrix_live.py` (`for fs in []` → always 0, and not even in the PASS gate) with a
+  real, unit-tested `count_foreign_events`, ADDED it to the gate (`total_foreign == 0`), made the module
+  import-safe, and renamed the misleading `total_egress_bytes`→`request_payload_bytes`. New
+  `scripts/test_mcp_scale_oracle.py` (5 pass, incl. a case proving the old predicate missed a real leak).
+  REMAINING: run the canary matrix LIVE at 500-sandbox scale under chaos with real egress bytes +
+  aidefence cross-check (tied to item 14 scale).

@@ -282,3 +282,31 @@ the prod compose/manifests is tracked under G3 item 12.
   field-redaction support (only `redaction_hints`), so the stdio/ws adapter path does content-scan but not
   field-level RBAC masking. Closing it needs a bundle-format extension (add `redaction_fields` to compiled
   policies + gateway `EvaluationResult` + apply on the adapter response) — a scoped cross-cutting follow-up.
+
+### CHG-0009 — Real, gated, unit-tested cross-tenant audit-log leakage oracle (G5 item 19, oracle fixed)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G5 item 19 (cross-tenant leakage canaries) — the ORACLE is fixed; the live-at-scale
+  proof remains.
+- **Files:** `scripts/mcp_scale_matrix_live.py` · `scripts/test_mcp_scale_oracle.py` (new).
+- **WHAT:** Replaced the dead cross-tenant oracle `foreign = sum(1 for r in rows if any(... for fs in []))`
+  (an empty `for fs in []` → `any(...)` always False → structurally 0) with a real, pure, unit-tested
+  `count_foreign_events(rows, other_slugs)`; **added it to the PASS gate** (`total_foreign == 0` — it was
+  computed but NOT gated before); made the module import-safe (manifest load wrapped so the pure oracle is
+  importable/testable without a live manifest); renamed the misleading `total_egress_bytes` →
+  `request_payload_bytes` (it measures the REQUEST size we generate, not on-the-wire egress — the audit's
+  recommendation, no code consumer) and added `foreign_org_events_total` to the report.
+- **WHY (mistake):** BACKSTOP_FINDINGS G5 item 19 — the oracle was a **fabricated metric** that could never
+  trip regardless of real audit-row leakage, AND it was not part of the PASS gate, so the harness gave a
+  false "audit isolation proven" signal. `total_egress_bytes` similarly implied a leak-proof it didn't provide.
+- **NOW DOES:** SCALE MATRIX PASS additionally asserts **zero cross-tenant audit-log leakage** via a real
+  predicate (a row is foreign if its `org_slug` is another tenant's OR its content references
+  `/mcp/<other_slug>`); the oracle is unit-tested including a case proving the OLD predicate missed a real leak.
+- **Touched whose work:** the scale harness (prior sessions — the "scale matrix validated"/P8-P9 commits
+  whose isolation evidence rested on this metric).
+- **VERIFY:** `gateway/.venv/bin/python scripts/test_mcp_scale_oracle.py` → `ALL 5 ORACLE TESTS PASSED`
+  (incl. `test_old_dead_predicate_missed_the_leak`). Harness still imports:
+  `gateway/.venv/bin/python -c "import sys;sys.path.insert(0,'scripts');import mcp_scale_matrix_live"`.
+- **REMAINING for G5 item 19:** run the leakage-canary matrix LIVE at 500-sandbox scale under chaos with
+  this corrected+gated oracle, and capture REAL sandbox egress bytes cross-checked with an independent
+  `aidefence` oracle — tied to item 14 (true 300–500-sandbox scale, still a hardcoded-3-org ceiling). This
+  entry removes the fabricated metric; the live-at-scale proof is separate.

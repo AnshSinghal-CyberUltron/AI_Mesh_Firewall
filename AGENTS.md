@@ -40,6 +40,11 @@
     + `_policy_applies_to_actor` (+CHG-0007) — the audit's "no access decision on adapter path" was
     imprecise. Added end-to-end proof (27 pass). SPLIT-OUT item 3b: per-policy FIELD-level redaction
     (`redaction_fields`) is HTTP-only; needs a gateway bundle-format extension.
+  - CHG-0009 (2026-07-02) — G5 item 19 (oracle fixed): the cross-tenant leakage oracle in
+    `scripts/mcp_scale_matrix_live.py` was FABRICATED (`for fs in []` → always 0, and not gated). Replaced
+    with a real unit-tested `count_foreign_events`, added to the PASS gate, import-safe; new
+    `scripts/test_mcp_scale_oracle.py` (5 pass). Remaining: run the canary matrix LIVE at 500-sandbox scale
+    with real egress + aidefence cross-check (tied to item 14).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

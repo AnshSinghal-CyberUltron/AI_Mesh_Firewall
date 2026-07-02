@@ -1,9 +1,22 @@
 ---
-iteration: 25
+iteration: 26
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter26 (2026-07-02) — P7.23 N2+N3 verified + P4.13/P6.18 partial recheck
+- **P7.23 N2+N3 DONE:** package allowlist + pinned-package enforcement in
+  `stdio_manager.py` verified **26/26** via broker venv
+  (`services/mcp-broker/.venv/bin/python -m pytest sandbox-image/agent/tests/test_stdio_manager_packages.py`);
+  full broker+agent gate **138 passed**. N4–N7 remain Claude-owned.
+- **P4.13/P6.18 RECHECK (PARTIAL):** §1 broker `POST /{org}/rpc` LIVE (401 not 404);
+  §2 `broker_send_rpc` PRESENT in `mcp_sandbox_client.py`; §3 `mcp_proxy` still has
+  zero `broker_send_rpc` refs — direct httpx upstream dials remain. Still BLOCKED.
+  Evidence: `mcp-parallel/findings/p4-13/RECHECK_ITER26.md`.
+- Hive: joined `hive-1782991737290-ylo911` as `cursor-ralph-iter26`.
+- 15-MCP fleet: manifest has 3 orgs × 5 stdio Everything servers; headed browser UP
+  (noVNC :6080, CDP :9222) for manual HTTP OAuth.
 
 ## iter25 (2026-07-02) — P4.13/P6.18 recheck + transport verify prep
 - **P4.13/P6.18 RECHECK:** still BLOCKED — `broker_send_rpc` absent; `POST
@@ -146,9 +159,9 @@ status: ACTIVE
 - [ ] 13. Verify (Playwright + harness): with the gateway pointed only at the sandbox, an http, an sse, a
        ws, and a stdio MCP all work end-to-end THROUGH the sandbox; confirm the gateway opens NO direct
        upstream connection (network assertion) — nothing runs in the main backend.
-       **BLOCKED 2026-07-02 (iter24 recheck):** gateway wiring not landed — no `broker_send_rpc`, no broker
-       `/{org}/rpc`, `mcp_proxy` still direct httpx for streamable-http/sse. See
-       `mcp-parallel/findings/p4-13/RECHECK_ITER24.md`.
+       **BLOCKED 2026-07-02 (iter26 recheck):** §1+§2 LANDED (`broker_send_rpc` present, broker
+       `/{org}/rpc` → 401); §3 NOT landed — `mcp_proxy` has zero `broker_send_rpc` refs, direct httpx
+       upstream dials remain. See `mcp-parallel/findings/p4-13/RECHECK_ITER26.md`.
 
 ## P5 — Frontend fixes (Playwright-verified; the dialog especially)
 - [x] 14. B1: OAuth selectable ONLY for HTTP transports; block oauth+stdio in the form; render exactly
@@ -171,22 +184,21 @@ status: ACTIVE
        one Authorize + pending state → tools populate; type long strings in every dialog field, focus kept).
        **Verified 2026-07-02 (iter15):** combined E2E 12/12 PASS (`playwright_mcp_b1_b2_b4_e2e.mjs` →
        `mcp-parallel/findings/p5-17/`). Tools-populate after authorize = manual OAuth (headed noVNC).
-- [ ] **P7.23 N2+N3 (iter18):** Package-allowlist parity + pinned-package enforcement added to
+- [x] **P7.23 N2+N3 (iter18/iter26):** Package-allowlist parity + pinned-package enforcement in
        `sandbox-image/agent/stdio_manager.py`. Helpers `_extract_package_spec`, `_package_name`, `_is_pinned`
        + constants `_PACKAGE_ALLOWLIST` (env `MCP_STDIO_PACKAGE_ALLOWLIST`) and `_REQUIRE_PINNED_PACKAGES`
        (env `MCP_STDIO_REQUIRE_PINNED_PACKAGES`, default off) ported from gateway `mcp_stdio_adapter.py`.
        Enforcement in `_ensure_process` after command-allowlist check (same position as gateway path).
-       Tests: 26/26 new `test_stdio_manager_packages.py` + 41/41 agent + 95/95 broker. Frontend build ✓.
-       **Remaining N4–N7:** pre-bake, registry-pin, uv/PyPI equivalents (Claude-owned: N4+ need gateway changes).
+       **Verified iter26:** 26/26 `test_stdio_manager_packages.py` (broker venv) + 138/138 broker+agent;
+       frontend build ✓. **Remaining N4–N7:** pre-bake, registry-pin, uv/PyPI equivalents (Claude-owned).
 
 ## P6 — Integrate + verify with the parallel session
 - [ ] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:
        all 4 transports through the sandbox under the Claude session's 15-MCP harness (concurrency/load/
        leakage). Fix any seam mismatch on the Cursor-owned side only.
-       **BLOCKED 2026-07-02 (iter24 recheck):** gateway wiring still not landed — no `broker_send_rpc`, broker
-       `/{org}/rpc` returns 404, HTTP/SSE still direct httpx in `mcp_proxy.py`. Cursor seam green
-       (agent 41/41, broker 95/95, 15-MCP harness GREEN 3×). See
-       `mcp-parallel/findings/p4-13/RECHECK_ITER24.md`.
+       **BLOCKED 2026-07-02 (iter26 recheck):** §1+§2 LANDED; §3 `mcp_proxy` routing still
+       missing. Cursor seam green (agent 138/138 broker+agent, 15-MCP harness GREEN 3×). See
+       `mcp-parallel/findings/p4-13/RECHECK_ITER26.md`.
 - [ ] 19. Re-run P1 repros → all four UI bugs gone; re-run P4 verification 3× (in-process + live).
        When P1–P6 all [x] AND integration green, output <promise>COMPLETE</promise>.
        **PARTIAL 2026-07-02 (iter24):** P10.32 recursive gate re-ran P1 UI (Playwright 12/12) + P8/P9 live
