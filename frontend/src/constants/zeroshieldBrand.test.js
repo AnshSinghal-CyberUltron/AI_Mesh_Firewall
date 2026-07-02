@@ -16,7 +16,14 @@ test("formatZeroshieldScanSummary maps tier-2 clean pass to operator labels", ()
     risk_score: 0.01,
     detail: "Guard Model scan completed",
   });
-  assert.match(summary.tierLabel, /ZeroShield Guard Model/);
+  // Anti-leak: tier-2 (the Bedrock-backed guard model) MUST collapse to the
+  // client-facing product label. The internal "Guard Model" / "ZeroShield Guard"
+  // branding is a reserved leak fragment (see RESERVED_LABEL_FRAGMENTS +
+  // formatDetectionTier); it was collapsed to "ZeroShield Model" in 9f8c9489.
+  // The old assertion here matched the pre-hardening leaky label and had gone
+  // stale (the constants suite was ungated until the test:unit glob widened).
+  assert.equal(summary.tierLabel, "ZeroShield Model");
+  assert.doesNotMatch(summary.tierLabel, /guard/i);
   assert.equal(summary.threatLabel, "No threat detected");
   assert.equal(summary.scoreLabel, "Risk score");
   assert.equal(summary.scoreValue, "1%");
