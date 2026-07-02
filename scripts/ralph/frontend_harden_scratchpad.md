@@ -51,7 +51,7 @@
       F-KS1 (kill-switch load-error state), F-KS-confirm, F-MS-leak (audit guard-model mask), theme
       contrast (audit cells/badges/labels). No-leak proven (key status/prefix only). lint 42/42. Deferred:
       slider PATCH-storm, audit fetch err, KS 8-col table @375, combobox litellm id — logged in AUDIT.
-- [x] 8. DatabaseConnection/VectorPolicy - [ ] 9. RAGFeatureTest/RAGAttackTrust/PipelineTelemetry
+- [x] 8. DatabaseConnection/VectorPolicy - [x] 9. RAGFeatureTest/RAGAttackTrust/PipelineTelemetry
       item8 iter8: DONE. Workflow-analyzed. DatabaseConnectionPanel (module 1.3) live-verified both themes
       @4 widths: no-leak PROVEN (masked keys, write-only BYOK, gateway key never rendered), fixed pipeline
       badge dark-variants + helpText/latency contrast + pipeline-trace overflow-x-auto (was clipped @375).
@@ -62,6 +62,19 @@
       console clean). Fixed 22 inverted slate-400/dark:slate-500 spots + colored-number light variants.
       lint 42/42. PART2 next: RAGFeatureTestPanel (theme + data-integrity BLOCKED/ALLOWED conflation + Run
       race) + RAGAttackTrustSimulator 1021L (med-leak raw-resp/doc-content, focus:outline-none, contrast).
+      item9 PART2 DONE: RAGFeatureTestPanel — data-integrity (finalAction=`error` when no pipeline_audit,
+      never fabricate ALLOWED/BLOCKED from an infra 500; honest detail msg), Run-race (all Run buttons
+      disabled while any test runs: `disabled={running != null}`), badge pills + teal/amber/blue/red light
+      variants, stages-row overflow-x-auto @375, inverted-slate swap. RAGAttackTrustSimulator — ACTION_STYLES
+      + status/escalation badges + 20+ inline amber/red/blue/emerald/purple got `-700 dark:-400` light
+      variants, active-selection chips (teal/purple/red) light-legible, 21 inverted-slate swapped, 2×
+      focus:outline-none dropped (global ring covers a11y). LEAK dispositon: raw-JSON dump + "Allowed
+      Documents" content + NS echo render the operator's OWN RAG corpus in an admin trust-sim (tool's
+      purpose) — gateway key lives in request headers, never in result.body → NOT a leak, LOGGED not removed.
+      GATE: lint 42/42, build clean, detector clean on both. LIVE both themes @1440/1024/768/375: overflow=0
+      all 8, 0 console errors + 0 net-fails when backend calm; dark+light panel shots verified (tab switch
+      Attack↔Trust works, SAFE/ATTACK badges legible, Run controls, sliders, helpers). 500 bursts = known F3
+      env PG "too many clients", not code. recharts still removed. Item 9 fully complete.
 - [ ] 10. OutputGuardrailControls/Charts - [ ] 11. AttackSimulatorPanel - [ ] 12. PolicyManagement/Analytics
 - [ ] 13. LogViewer/LogDetailPage - [ ] 14. OWASPStatsPanel - [ ] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
 - [ ] 17. VERIFY-ONLY (log, don't edit): MCPConnectorPanel, ModelConnectionPanel, pipeline-trace cards

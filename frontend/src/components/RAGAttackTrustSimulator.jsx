@@ -128,11 +128,11 @@ const RAG_ATTACK_SCENARIOS = [
 ];
 
 const ACTION_STYLES = {
-  allow: { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-400", Icon: CheckCircle, label: "ALLOWED" },
-  block: { bg: "bg-red-500/10", border: "border-red-500/30", text: "text-red-400", Icon: XCircle, label: "BLOCKED" },
-  flag: { bg: "bg-amber-500/10", border: "border-amber-500/30", text: "text-amber-400", Icon: AlertTriangle, label: "FLAGGED" },
-  rewrite: { bg: "bg-blue-500/10", border: "border-blue-500/30", text: "text-blue-400", Icon: RefreshCw, label: "REWRITTEN" },
-  redact: { bg: "bg-purple-500/10", border: "border-purple-500/30", text: "text-purple-400", Icon: Shield, label: "REDACTED" },
+  allow: { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-700 dark:text-emerald-400", Icon: CheckCircle, label: "ALLOWED" },
+  block: { bg: "bg-red-500/10", border: "border-red-500/30", text: "text-red-700 dark:text-red-400", Icon: XCircle, label: "BLOCKED" },
+  flag: { bg: "bg-amber-500/10", border: "border-amber-500/30", text: "text-amber-700 dark:text-amber-400", Icon: AlertTriangle, label: "FLAGGED" },
+  rewrite: { bg: "bg-blue-500/10", border: "border-blue-500/30", text: "text-blue-700 dark:text-blue-400", Icon: RefreshCw, label: "REWRITTEN" },
+  redact: { bg: "bg-purple-500/10", border: "border-purple-500/30", text: "text-purple-700 dark:text-purple-400", Icon: Shield, label: "REDACTED" },
 };
 
 // ── Trust tab data (ported verbatim from VectorFirewallSimulator) ────────────
@@ -205,21 +205,21 @@ function StageTraceRow({ stage, index, isLast }) {
         </div>
         {stage.threat_type && stage.threat_type !== "none" && (
           <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            <span className="text-slate-400 dark:text-slate-500">Threat:</span> <span className="text-amber-400">{stage.threat_type}</span>
+            <span className="text-slate-500 dark:text-slate-400">Threat:</span> <span className="text-amber-600 dark:text-amber-400">{stage.threat_type}</span>
           </div>
         )}
         {stage.rewritten_text && (
           <div className="text-xs mt-1 bg-blue-500/5 rounded p-2 border border-blue-500/20">
-            <span className="text-blue-400">Rewritten query:</span>
+            <span className="text-blue-600 dark:text-blue-400">Rewritten query:</span>
             <p className="text-slate-700 dark:text-slate-300 mt-0.5 font-mono">{stage.rewritten_text}</p>
           </div>
         )}
         {(stage.docs_in != null || stage.docs_out != null) && (
           <div className="flex items-center gap-3 mt-1 text-xs">
-            {stage.docs_in != null && <span className="text-slate-400 dark:text-slate-500">Docs in: <span className="text-slate-900 dark:text-slate-100 font-mono">{stage.docs_in}</span></span>}
-            {stage.docs_out != null && <span className="text-slate-400 dark:text-slate-500">Docs out: <span className="text-slate-900 dark:text-slate-100 font-mono">{stage.docs_out}</span></span>}
+            {stage.docs_in != null && <span className="text-slate-500 dark:text-slate-400">Docs in: <span className="text-slate-900 dark:text-slate-100 font-mono">{stage.docs_in}</span></span>}
+            {stage.docs_out != null && <span className="text-slate-500 dark:text-slate-400">Docs out: <span className="text-slate-900 dark:text-slate-100 font-mono">{stage.docs_out}</span></span>}
             {stage.docs_in != null && stage.docs_out != null && stage.docs_in > stage.docs_out && (
-              <span className="text-amber-400 font-mono">({stage.docs_in - stage.docs_out} filtered)</span>
+              <span className="text-amber-600 dark:text-amber-400 font-mono">({stage.docs_in - stage.docs_out} filtered)</span>
             )}
           </div>
         )}
@@ -231,12 +231,12 @@ function StageTraceRow({ stage, index, isLast }) {
 function CustomPayloadEditor({ value, onChange }) {
   return (
     <div className="space-y-2">
-      <label className="text-xs text-slate-400 dark:text-slate-500 block">Custom Payload (JSON)</label>
+      <label className="text-xs text-slate-500 dark:text-slate-400 block">Custom Payload (JSON)</label>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={5}
-        className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono focus:border-teal-500 focus:outline-none resize-y"
+        className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono focus:border-teal-500 resize-y"
         placeholder='{"collection": "docs", "query": "your query here", "n_results": 5}'
       />
     </div>
@@ -462,7 +462,7 @@ export function RAGAttackTrustSimulator() {
           className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
             activeTab === "attack"
               ? "border-teal-500 text-teal-500 dark:text-teal-400"
-              : "border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
           }`}
         >
           <Crosshair size={14} />
@@ -473,7 +473,7 @@ export function RAGAttackTrustSimulator() {
           className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
             activeTab === "trust"
               ? "border-teal-500 text-teal-500 dark:text-teal-400"
-              : "border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
           }`}
         >
           <ShieldAlert size={14} />
@@ -487,18 +487,18 @@ export function RAGAttackTrustSimulator() {
           {/* Config row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2">
-              <label className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Gateway connection</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Gateway connection</label>
               {gatewayChip}
             </div>
             <div>
-              <label className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Collection Override</label>
+              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Collection Override</label>
               <div className="flex items-center gap-1">
                 <input
                   list="ratsim-attack-collections"
                   value={collectionOverride}
                   onChange={(e) => setCollectionOverride(e.target.value)}
                   placeholder={collectionsLoading ? "Loading..." : "Leave empty for scenario default"}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none"
+                  className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:border-teal-500"
                 />
                 <datalist id="ratsim-attack-collections">
                   {collections.map((c) => (
@@ -510,7 +510,7 @@ export function RAGAttackTrustSimulator() {
                 </button>
               </div>
               {collections.length === 0 && !collectionsLoading && (
-                <p className="text-[10px] text-amber-500 dark:text-amber-400/70 mt-1">No collections found. Ingest docs first.</p>
+                <p className="text-[10px] text-amber-600 dark:text-amber-400/70 mt-1">No collections found. Ingest docs first.</p>
               )}
             </div>
           </div>
@@ -523,8 +523,8 @@ export function RAGAttackTrustSimulator() {
                 onClick={() => setCategoryFilter(cat.id)}
                 className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
                   categoryFilter === cat.id
-                    ? "bg-teal-500/20 border-teal-500/40 text-teal-400"
-                    : "border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600"
+                    ? "bg-teal-500/20 border-teal-500/40 text-teal-700 dark:text-teal-400"
+                    : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600"
                 }`}
               >
                 {cat.label}
@@ -535,8 +535,8 @@ export function RAGAttackTrustSimulator() {
                 onClick={() => setUseCustomPayload(!useCustomPayload)}
                 className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
                   useCustomPayload
-                    ? "bg-purple-500/20 border-purple-500/40 text-purple-400"
-                    : "border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                    ? "bg-purple-500/20 border-purple-500/40 text-purple-700 dark:text-purple-400"
+                    : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 <FileText size={12} className="inline mr-1" />
@@ -565,7 +565,7 @@ export function RAGAttackTrustSimulator() {
                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{sc.framework}</span>
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{sc.description}</p>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500">Target: {sc.stage}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Target: {sc.stage}</span>
                   </button>
                 );
               })}
@@ -583,11 +583,11 @@ export function RAGAttackTrustSimulator() {
               {sending ? "Executing..." : "Execute RAG Query"}
             </button>
             {history.length > 0 && (
-              <span className="text-xs text-slate-400 dark:text-slate-500">{history.length} previous result{history.length > 1 ? "s" : ""}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{history.length} previous result{history.length > 1 ? "s" : ""}</span>
             )}
           </div>
 
-          {error && <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3">{error}</div>}
+          {error && <div className="text-red-700 dark:text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3">{error}</div>}
 
           {/* Results */}
           {result && (
@@ -595,7 +595,7 @@ export function RAGAttackTrustSimulator() {
               {/* Summary header */}
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className={`px-3 py-1.5 rounded-lg text-sm font-mono font-semibold ${result.status < 400 ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-red-500/10 text-red-400 border border-red-500/30"}`}>
+                  <span className={`px-3 py-1.5 rounded-lg text-sm font-mono font-semibold ${result.status < 400 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30" : "bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30"}`}>
                     HTTP {result.status}
                   </span>
                   <span className="text-slate-700 dark:text-slate-300 text-sm font-semibold">{result.scenarioName}</span>
@@ -604,27 +604,27 @@ export function RAGAttackTrustSimulator() {
                 {audit && (
                   <div className="flex items-center gap-2">
                     <span className={`text-xs px-2.5 py-1 rounded-lg font-mono font-semibold ${
-                      audit.final_action === "allow" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" :
-                      audit.final_action === "block" ? "bg-red-500/10 text-red-400 border border-red-500/30" :
-                      "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                      audit.final_action === "allow" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30" :
+                      audit.final_action === "block" ? "bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30" :
+                      "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30"
                     }`}>
                       {audit.final_action?.toUpperCase()}
                     </span>
                     <span className={`text-xs px-2 py-1 rounded-lg font-mono ${
-                      audit.escalation_level === 0 ? "bg-emerald-500/10 text-emerald-400" :
-                      audit.escalation_level === 1 ? "bg-amber-500/10 text-amber-400" :
-                      "bg-red-500/10 text-red-400"
+                      audit.escalation_level === 0 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" :
+                      audit.escalation_level === 1 ? "bg-amber-500/10 text-amber-700 dark:text-amber-400" :
+                      "bg-red-500/10 text-red-700 dark:text-red-400"
                     }`}>
                       Escalation L{audit.escalation_level}
                     </span>
-                    <span className="text-slate-400 dark:text-slate-500 text-xs font-mono">{audit.total_latency_ms?.toFixed(1)}ms total</span>
+                    <span className="text-slate-500 dark:text-slate-400 text-xs font-mono">{audit.total_latency_ms?.toFixed(1)}ms total</span>
                   </div>
                 )}
               </div>
 
               {/* Pipeline IDs */}
               {(result.headers.pipelineRequestId || result.headers.contextId) && (
-                <div className="flex items-center gap-4 text-xs text-slate-400 dark:text-slate-500 font-mono bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 font-mono bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2">
                   {result.headers.pipelineRequestId && (
                     <span>Pipeline: {result.headers.pipelineRequestId.slice(0, 16)}...</span>
                   )}
@@ -662,7 +662,7 @@ export function RAGAttackTrustSimulator() {
                     </div>
                   )}
                   {result.body.filtered_count > 0 && (
-                    <div className="text-amber-400 font-mono text-sm">
+                    <div className="text-amber-600 dark:text-amber-400 font-mono text-sm">
                       {result.body.filtered_count} filtered out
                     </div>
                   )}
@@ -672,7 +672,7 @@ export function RAGAttackTrustSimulator() {
               {/* Empty state guidance */}
               {result.status < 400 && (!result.body?.documents || result.body.documents.length === 0) && (result.body?.total_retrieved ?? 0) === 0 && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm font-medium">
                     <AlertTriangle size={14} /> No Documents Retrieved
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
@@ -688,7 +688,7 @@ export function RAGAttackTrustSimulator() {
 
               {/* Error message from gateway */}
               {result.body?.error && (
-                <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3 font-mono">
+                <div className="text-red-700 dark:text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3 font-mono">
                   {errorToText(result.body.error)}
                 </div>
               )}
@@ -697,14 +697,14 @@ export function RAGAttackTrustSimulator() {
               <div>
                 <button
                   onClick={() => setShowRawJson(!showRawJson)}
-                  className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                  className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
                 >
                   {showRawJson ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                   Raw Response JSON
                 </button>
                 {showRawJson && (
                   <div className="relative mt-2">
-                    <button onClick={handleCopy} className="absolute top-2 right-2 p-1.5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all text-xs">
+                    <button onClick={handleCopy} className="absolute top-2 right-2 p-1.5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all text-xs">
                       {copied ? <CheckCircle size={12} /> : <Copy size={12} />}
                     </button>
                     <pre className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg p-4 overflow-auto max-h-80 border border-slate-200 dark:border-slate-700">
@@ -719,7 +719,7 @@ export function RAGAttackTrustSimulator() {
           {/* History */}
           {history.length > 1 && (
             <div>
-              <h4 className="text-xs font-medium text-slate-400 dark:text-slate-500 mb-2">Recent Results</h4>
+              <h4 className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Recent Results</h4>
               <div className="space-y-1">
                 {history.slice(1).map((h, i) => (
                   <button
@@ -731,7 +731,7 @@ export function RAGAttackTrustSimulator() {
                       <span className={`w-2 h-2 rounded-full ${h.status < 400 ? "bg-emerald-500" : "bg-red-500"}`} />
                       <span className="text-xs text-slate-700 dark:text-slate-300">{h.scenarioName}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                       <span>HTTP {h.status}</span>
                       <span>{h.elapsed}ms</span>
                       <span>{new Date(h.timestamp).toLocaleTimeString()}</span>
@@ -749,7 +749,7 @@ export function RAGAttackTrustSimulator() {
         <div className="space-y-5">
           {/* Gateway connection */}
           <div>
-            <label className="text-xs text-slate-400 dark:text-slate-500 mb-1 block">Gateway connection</label>
+            <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Gateway connection</label>
             {gatewayChip}
           </div>
 
@@ -765,20 +765,20 @@ export function RAGAttackTrustSimulator() {
                   className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
                     isSelected
                       ? isAttack
-                        ? "bg-red-500/20 border-red-500/40 text-red-400"
-                        : "bg-teal-500/20 border-teal-500/40 text-teal-400"
-                      : "border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600"
+                        ? "bg-red-500/20 border-red-500/40 text-red-700 dark:text-red-400"
+                        : "bg-teal-500/20 border-teal-500/40 text-teal-700 dark:text-teal-400"
+                      : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600"
                   }`}
                 >
                   {sc.label}
-                  <span className={`ml-1.5 text-[10px] font-mono uppercase ${isAttack ? "text-red-400" : "text-emerald-400"}`}>{sc.badge}</span>
+                  <span className={`ml-1.5 text-[10px] font-mono uppercase ${isAttack ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>{sc.badge}</span>
                 </button>
               );
             })}
             {trustSelected && (
               <button
                 onClick={() => setTrustSelected(null)}
-                className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               >
                 Clear (custom query)
               </button>
@@ -829,7 +829,7 @@ export function RAGAttackTrustSimulator() {
                 </button>
               </div>
               {!trustSelected && providerCollections.length === 0 && !collectionsLoading && (
-                <p className="text-[10px] text-amber-400/70 mt-1">No collections found for {provider}. Ingest data first.</p>
+                <p className="text-[10px] text-amber-600 dark:text-amber-400/70 mt-1">No collections found for {provider}. Ingest data first.</p>
               )}
             </div>
             <div>
@@ -889,10 +889,10 @@ export function RAGAttackTrustSimulator() {
             </button>
           </div>
 
-          {trustError && <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3">{trustError}</div>}
+          {trustError && <div className="text-red-700 dark:text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3">{trustError}</div>}
 
           {trustResult?.error && (
-            <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3 font-mono">
+            <div className="text-red-700 dark:text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3 font-mono">
               {trustResult.error}
             </div>
           )}
@@ -922,7 +922,7 @@ export function RAGAttackTrustSimulator() {
               {/* Empty state guidance */}
               {(trustResult.total_retrieved ?? 0) === 0 && !trustResult.documents?.length && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm font-medium">
                     <AlertTriangle size={14} /> No Documents Retrieved
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
