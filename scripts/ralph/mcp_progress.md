@@ -113,7 +113,11 @@
       (serverAwaitingAuth:741 @ :1095). B4: no in-render component (render helpers are fn calls :2203-2208) + Dialog
       focus-trap stabilized (ui/Dialog.jsx onClose-ref, deps [open,handleKey]). REMAINING: B1 delete backend dup
       MCPServerOAuthStartView path; B2/B4 in-browser verify. All anchors verified.
-- [ ] 5. Write docs/mcp/ARCHITECTURE_AND_THREATS.md (isolation model + threat model + the 4 bugs)
+- [x] 5. Write docs/mcp/ARCHITECTURE_AND_THREATS.md (isolation model + threat model + the 4 bugs)
+      EVIDENCE: docs/mcp/ARCHITECTURE_AND_THREATS.md (capstone) — consolidates items 1-4 maps: architecture (2 planes,
+      request lifecycle, register/oauth/tool-sync), isolation model (invariants+present controls table + P7 GAPS),
+      STRIDE threat model (T1 leakage..T8 audit, 6 trust boundaries), and B1-B4 root-cause/current-state/remaining.
+      Also docs/mcp/AGENTS.md index. P0 ANALYSIS (items 1-5) COMPLETE.
 
 ## P1 — OSS exploration (GitHub MCP)
 - [ ] 6. Study modelcontextprotocol/servers stdio server patterns (how official stdio servers start/handshake)
