@@ -457,7 +457,20 @@
         attack/PII unregressed. => prompt-laundering coverage now handles arbitrary 2-layer cross-encodings.
         (COMMIT-MSG GOTCHA: avoid backticks in `git commit -m "..."` — bash runs them as command substitution;
         use plain quotes.)
-      ★ FINAL COMPLETION 2026-07-02 (+G30..G34): ALL 7 criteria met. The prior sole blocker — the tier-2
+      G35 DONE 2026-07-02 (commit 1b8114c1) — mask encoded PII/secret in MODEL OUTPUT (output-side laundering,
+        symmetric to input G33). Probe: the output guard did NOT decode HTML-entity/percent-encoded PII in
+        model output -> raw value absent from egress bytes but a browser/markdown renderer decodes it back
+        (exfil-via-render). Two additive changes: (1) _scan_output_sync (scanner.py) flags encoded PII/secret
+        found in the text-encoding-decoded output (same flag shape as plain output PII); (2) sanitize_output_
+        for_verdict (output_guard.py) gains neutralize_encoded_pii, which masks HTML-entity/percent RUNS that
+        decode to a PII/secret -> [ENCODED_PII_REDACTED] (masks the RUN, no position-mapping). Plain output PII
+        still masks to ***; benign encoded output (colour hex, url path, emoji, ©/™) preserved (zero FP). IN-
+        PROCESS verified end-to-end (scan flags + egress masked); LIVE is limited (cannot force a model to emit
+        encoded PII on demand) but the egress code path is exercised + post-deploy live regression clean (plain
+        attack 400, PII redact 200, benign 200, G32/G34 encoded/layered 400, live golden 10/10). G35 golden: 4
+        encoded-output-PII masked + 3 benign preserved + plain-still-masks. Adversarial 234, golden 237x3, full
+        gateway 1163 passed. => encoded-PII/secret exfil now blocked on BOTH input (G33) AND output (G35).
+      ★ FINAL COMPLETION 2026-07-02 (+G30..G35): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
         enforcement (no block->allow), all 41 block payloads block, translate now allow->allow; only safe-
