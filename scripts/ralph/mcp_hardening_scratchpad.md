@@ -92,6 +92,16 @@
       byte-assert). Gate: 39 scan-target/orchestrator + 1098 gateway passed. Evidence:
       mcp-parallel/findings/backstop-p2-nonstring-redact-setter/finding.md. FOLLOW-UP: general fail-closed
       OUTPUT byte-check in _scan_tool_result_floor (block if any detected value survives the scrub).
+      CHG-0047 (2026-07-02, defense-in-depth — IMPLEMENTS the CHG-0046 follow-up): scan_mcp_payload set
+      result_redacted=True whenever new_text!=text regardless of whether the setter actually mutated the
+      payload — so a residual no-op scrub (_mutate_dot_path best-effort on exotic nested-list paths) could
+      egress the raw value while claiming redaction. FIX: in the Tier-1 redact branch, snapshot
+      _safe_json(state_ref[0]) before/after setter(new_text); if the payload BYTES are unchanged → no-op
+      scrub → tier1_blocked=True (+ noop_scrub_failclosed trace) → fail CLOSED (block), never egress
+      un-scrubbed. General/precise (bytes, no out-of-scope FP)/cheap; a real setter changes bytes → not
+      blocked. +2 tests. Gate: 41 scan-orchestrator/target + 1100 gateway passed (ZERO spurious blocks).
+      With CHG-0003 + CHG-0046 the redaction path is now fail-closed on scan-error, setter-no-op, AND
+      non-string shapes. Evidence: mcp-parallel/findings/backstop-p2-noop-scrub-failclosed/finding.md.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER

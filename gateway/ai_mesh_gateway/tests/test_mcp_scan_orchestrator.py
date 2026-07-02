@@ -874,3 +874,93 @@ async def test_chg0046_keypath_nonstring_value_setter_applied_end_to_end():
     assert scanned["ssn"] == "MASKED"                       # non-string value REPLACED (was no-op → 123456789)
     assert "123456789" not in str(scanned)                  # raw value gone from egress bytes
     assert scanned["note"] == "ok"                          # untouched field intact
+
+
+# ── CHG-0047: fail-closed no-op-scrub guard ──────────────────────────────────────
+# Tier-1 produced a redaction (new_text != text) but the setter silently failed to
+# apply it (a no-op scrub) — the raw value would egress while result_redacted claims
+# a scrub. scan_mcp_payload must detect the unchanged payload bytes and BLOCK.
+
+
+@pytest.mark.asyncio
+async def test_chg0047_noop_setter_fails_closed():
+    state = [{"ssn": 123456789}]
+
+    def _noop_setter(_new):
+        pass  # simulates a setter that silently fails to mutate the payload
+
+    def _fake_extract(payload, *, target_mode, key_path):
+        return state, [("123456789", _noop_setter, "ssn")]
+
+    async def _fake_tier1(text, **kwargs):
+        return "MASKED", [], False, []  # tier1 "redacted" the text (new_text != text)
+
+    ctrl = {
+        "scan_controls_configured": True,
+        "tier1_output": {
+            "enabled": True, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": "t1",
+        },
+        "tier2_output": {
+            "enabled": False, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": None,
+        },
+    }
+    with (
+        patch("mcp_scan_orchestrator.extract_and_bind", _fake_extract),
+        patch("mcp_scan_orchestrator._scan_text_tier1", new=_fake_tier1),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        _, result = await scan_mcp_payload(
+            {"ssn": 123456789},
+            scan_direction="output",
+            enforcement="redact",
+            effective_controls=ctrl,
+            org_slug="demo", server_slug="stub", tool_name="echo",
+        )
+    # The scrub was a no-op (payload bytes unchanged) → fail CLOSED, not raw egress.
+    assert result.blocked is True
+    assert any(
+        t.get("scan_stage") == "noop_scrub_failclosed" for t in result.scan_trace
+    )
+
+
+@pytest.mark.asyncio
+async def test_chg0047_real_setter_not_blocked():
+    # Control: when the setter DOES apply the redaction, no fail-closed block fires.
+    state = [{"ssn": 123456789}]
+
+    def _real_setter(new, _s=state):
+        _s[0]["ssn"] = new
+
+    def _fake_extract(payload, *, target_mode, key_path):
+        return state, [("123456789", _real_setter, "ssn")]
+
+    async def _fake_tier1(text, **kwargs):
+        return "MASKED", [], False, []
+
+    ctrl = {
+        "scan_controls_configured": True,
+        "tier1_output": {
+            "enabled": True, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": "t1",
+        },
+        "tier2_output": {
+            "enabled": False, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": None,
+        },
+    }
+    with (
+        patch("mcp_scan_orchestrator.extract_and_bind", _fake_extract),
+        patch("mcp_scan_orchestrator._scan_text_tier1", new=_fake_tier1),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        scanned, result = await scan_mcp_payload(
+            {"ssn": 123456789},
+            scan_direction="output",
+            enforcement="redact",
+            effective_controls=ctrl,
+            org_slug="demo", server_slug="stub", tool_name="echo",
+        )
+    assert result.blocked is False
+    assert scanned["ssn"] == "MASKED"

@@ -17,7 +17,7 @@ from typing import Any
 
 from ai_mesh_shared.mcp_compliance_tags import tags_for_preset_or_entity
 
-from mcp_scan_targets import extract_and_bind
+from mcp_scan_targets import _safe_json, extract_and_bind
 from patterns import detect_ip_leakage, detect_pii, detect_secrets, get_compliance_tags, redact_all
 from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies
 
@@ -524,8 +524,30 @@ async def scan_mcp_payload(
         if blocked:
             tier1_blocked = True
         if new_text != text and tier1_action == "redact":
+            # CHG-0047: fail-closed no-op-scrub guard (egress bytes are the only
+            # source of truth). Tier-1 produced a redaction (new_text != text);
+            # VERIFY the setter actually applied it by comparing the payload bytes
+            # before/after. A setter that silently no-ops (e.g. a best-effort
+            # mutator on an exotic nested path) would otherwise leave the RAW value
+            # in the payload while result_redacted claims a scrub — the CHG-0046
+            # class of leak. If the payload did not change, BLOCK rather than egress
+            # an un-scrubbed result. Complements CHG-0046 (which made the known
+            # non-string setters real) by catching ANY residual no-op scrub.
+            _before = _safe_json(state_ref[0])
             setter(new_text)
             result_redacted = True
+            if _safe_json(state_ref[0]) == _before:
+                tier1_blocked = True
+                result.scan_trace.append(
+                    {
+                        "scan_stage": "noop_scrub_failclosed",
+                        "tier": "tier1",
+                        "direction": scan_direction,
+                        "target_mode": target_mode,
+                        "key_path": path_label,
+                        "reason": "redaction_setter_noop_raw_survived",
+                    }
+                )
         result.scan_trace.append(
             {
                 "scan_stage": "tier1",

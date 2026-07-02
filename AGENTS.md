@@ -288,6 +288,16 @@
     untouched. +4 tests (3 unit + 1 e2e byte-assert). Gate: 39 scan-target/orchestrator + 1098 gateway
     passed. Evidence mcp-parallel/findings/backstop-p2-nonstring-redact-setter/. Follow-up: general
     fail-closed OUTPUT byte-check in _scan_tool_result_floor.
+  - CHG-0047 (2026-07-02) — G2 item 2 (byte-truth invariant, defense-in-depth): IMPLEMENTS the CHG-0046
+    follow-up. scan_mcp_payload set result_redacted=True whenever new_text != text, regardless of whether
+    the setter actually mutated the payload — so a residual no-op scrub (e.g. _mutate_dot_path best-effort
+    on an exotic path) could egress the raw value while claiming redaction. FIX: in the Tier-1 redact
+    branch, snapshot _safe_json(state_ref[0]) before/after setter(new_text); if the payload BYTES are
+    unchanged the scrub was a no-op → tier1_blocked=True (+ noop_scrub_failclosed trace) → fail CLOSED
+    (block), never egress un-scrubbed. General/precise/cheap; a real setter changes bytes → not blocked.
+    +2 tests. Gate: 41 scan-orchestrator/target + 1100 gateway passed (zero spurious blocks). With
+    CHG-0003 + CHG-0046, redaction path is now fail-closed on scan-error, setter-no-op, AND non-string
+    shapes. Evidence mcp-parallel/findings/backstop-p2-noop-scrub-failclosed/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
