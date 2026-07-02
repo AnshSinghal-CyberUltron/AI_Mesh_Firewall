@@ -1136,6 +1136,13 @@ _EXT_FINITE_RESULT_METHODS = frozenset({
     "prompts/list", "prompts/get",
 })
 
+# CHG-0041: methods whose params carry an ``arguments`` object that must be
+# credential-scanned before egress to the external server (an accidental
+# credential in tool args OR prompt-template args should not leak upstream).
+# resources/read is deliberately EXCLUDED — its param is a URI, and blocking a
+# legitimate ``https://user:token@host`` auth-in-URL would break authed reads.
+_EXT_ARG_SCAN_METHODS = frozenset({"tools/call", "prompts/get"})
+
 
 def _ext_proxy_forward_headers(inbound, *, oauth_token: str | None = None) -> dict:
     """Least-privilege outbound header set for the external MCP proxy forward.
@@ -1222,7 +1229,6 @@ async def ext_mcp_proxy(path: str, request: Request):
     # is blocked before it egresses to the external MCP server. Best-effort —
     # if the body is not a tools/call JSON-RPC, this is a no-op. ──
     _ext_tool_name = ""
-    _ext_is_tools_call = False
     # CHG-0039: True when the response should be result-scanned (finite methods:
     # tools/call + resources/* + prompts/*), so the SSE branch buffers+scans them
     # too — not just tools/call. Notifications/subscriptions stay pass-through.
@@ -1234,8 +1240,9 @@ async def ext_mcp_proxy(path: str, request: Request):
             _ext_req = None
         if isinstance(_ext_req, dict):
             _ext_scan_result = str(_ext_req.get("method") or "") in _EXT_FINITE_RESULT_METHODS
-        if isinstance(_ext_req, dict) and _ext_req.get("method") == "tools/call":
-            _ext_is_tools_call = True
+        # CHG-0041: credential-scan the args of any method carrying params.arguments
+        # (tools/call AND prompts/get) — not only tools/call. Same params shape.
+        if isinstance(_ext_req, dict) and str(_ext_req.get("method") or "") in _EXT_ARG_SCAN_METHODS:
             _ext_params = _ext_req.get("params") or {}
             if isinstance(_ext_params, dict):
                 _ext_tool_name = str(_ext_params.get("name") or "")

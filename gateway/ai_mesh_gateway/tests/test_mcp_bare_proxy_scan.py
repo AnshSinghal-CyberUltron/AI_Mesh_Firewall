@@ -672,3 +672,25 @@ async def test_ext_sse_error_frame_masked():
     body = bytes(resp.body).decode()
     assert "s3cr3tPass" not in body                 # secret in the SSE error frame masked
     assert resp.media_type == "text/event-stream"
+
+
+# ── CHG-0041: the ext-proxy inbound credential block now covers prompts/get args
+# (same params.arguments shape as tools/call), not just tools/call — an accidental
+# credential in prompt-template args must not egress to the external server.
+
+
+@pytest.mark.asyncio
+async def test_ext_blocks_credential_in_prompts_get_args():
+    req = _ext_request({"jsonrpc": "2.0", "id": 6, "method": "prompts/get",
+                        "params": {"name": "summarize", "arguments": _CRED_ARG}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 6, "result": {"messages": []}})
+    client = _ext_client(upstream)
+    with (
+        patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client),
+    ):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 200
+    data = _decode(resp)
+    assert "error" in data and "compliance tags" in data["error"]["message"]
+    client.send.assert_not_awaited()               # blocked before forwarding upstream

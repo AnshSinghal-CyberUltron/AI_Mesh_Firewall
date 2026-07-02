@@ -66,6 +66,13 @@
       non-streaming error AND an SSE error frame); test_mcp_bare_proxy_scan.py 26 passed, broad sweep 1087
       passed. ext-proxy egress now FULLY scanned: result (all shapes + tools/resources/prompts) + error,
       streaming + non-streaming.
+      CHG-0041 (2026-07-02): (1) AUDITED gateway MCP logging = CLEAN (no PII/secret to logs: mcp_proxy logs
+      only target_url + exception messages; scan orchestrator logs only exceptions; metrics logs
+      method/model/token-counts; audit raw-store off by default). (2) Extended the ext-proxy INBOUND credential
+      block from tools/call-only to prompts/get (same params.arguments shape; _EXT_ARG_SCAN_METHODS) — an
+      accidental credential in prompt args no longer egresses raw to the external server. resources/read
+      EXCLUDED (its param is a URI; blocking a legit https://user:token@host would break authed reads). Removed
+      the dead _ext_is_tools_call flag. +1 test; test_mcp_bare_proxy_scan.py 27 passed, broad sweep 1088 passed.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER
