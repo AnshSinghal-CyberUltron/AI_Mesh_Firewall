@@ -423,6 +423,17 @@
       sandbox-client + 1117 gateway passed. Evidence: mcp-parallel/findings/backstop-p13-broker-correlation-propagation/finding.md.
       STILL OPEN (item 13 [ ]): stdio branch (send_jsonrpc); tools/list + internal_tools_call + early authz
       sites; broker/sandbox should LOG the received X-Request-ID; OTEL/Jaeger + PG/Redis backup remain INFRA.
+      CHG-0052 (2026-07-02, completes CHG-0051): the broker RPC route neither read nor logged the propagated
+      X-Request-ID (the broker RPC path had NO per-call logging at all). FIX (services/mcp-broker/src/sandbox/
+      routes.py): added logger; both RPC routes capture x_request_id=Header(alias=X-Request-ID) →
+      _forward_sandbox_rpc logs ONE line at the top (before docker resolution, so failed 503s trace too) with
+      SAFE metadata ONLY (org/server/transport/method/jsonrpc_id/request_id — NEVER params/args/env/upstream,
+      which can carry PII/secrets; mirrors CHG-0041); "-" when no header. Trace chain now: gateway audit
+      (CHG-0050) → X-Request-ID (CHG-0051) → broker log (CHG-0052). +2 tests (TestClient: header logged / "-"
+      when absent / no params in logs; force clean 503 via cached_docker_ok=False). Gate: 106 broker passed.
+      Evidence: mcp-parallel/findings/backstop-p13-broker-logs-correlation-id/finding.md. STILL OPEN (item 13
+      [ ]): forward X-Request-ID to the sandbox AGENT + agent-log (last hop); gateway stdio/tools-list/internal/
+      early-authz sites; OTEL/Jaeger + PG/Redis backup remain INFRA.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

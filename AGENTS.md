@@ -335,6 +335,15 @@
     tests (header sent when set / absent when unset). Gate: 13 sandbox-client + 1117 gateway passed. Follow-ups:
     stdio path (send_jsonrpc); tools/list+internal+early-authz sites; broker should LOG the id; OTEL/backup
     infra. Evidence mcp-parallel/findings/backstop-p13-broker-correlation-propagation/.
+  - CHG-0052 (2026-07-02) — G4 item 13 (completes CHG-0051): CHG-0051 propagated the correlation id to the
+    broker as X-Request-ID, but the broker RPC route neither read nor logged it (the broker RPC path had NO
+    per-call logging at all). FIX (services/mcp-broker/src/sandbox/routes.py): added logger; both RPC routes
+    capture x_request_id=Header(alias=X-Request-ID) → _forward_sandbox_rpc logs ONE line at the top (before
+    docker resolution, so failed 503s trace too) with SAFE metadata ONLY (org/server/transport/method/
+    jsonrpc_id/request_id — NEVER params/args/env/upstream). Trace chain: gateway audit (CHG-0050) →
+    X-Request-ID (CHG-0051) → broker log (CHG-0052). +2 tests. Gate: 106 broker passed. Follow-ups: forward to
+    the sandbox AGENT + agent-log (last hop); gateway stdio/tools-list/internal/early-authz; OTEL/backup infra.
+    Evidence mcp-parallel/findings/backstop-p13-broker-logs-correlation-id/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

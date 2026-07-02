@@ -495,6 +495,20 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (`send_jsonrpc`); tools/list + `internal_tools_call` + early authz sites; broker should LOG the received
   `X-Request-ID`; OTEL/Jaeger + backup remain infra (item 13 stays `[ ]`). Evidence:
   `mcp-parallel/findings/backstop-p13-broker-correlation-propagation/`.
+- **CHG-0052** (2026-07-02) — G4 item 13 (completes CHG-0051): CHG-0051 propagated the correlation id to the
+  broker as an `X-Request-ID` header, but the broker's RPC route (`sandbox_rpc` / `stdio_rpc` →
+  `_forward_sandbox_rpc`) neither read nor logged it — the broker RPC path had NO per-call logging at all — so
+  the propagated trace was invisible on the broker side. FIX (`services/mcp-broker/src/sandbox/routes.py`):
+  added `LOG = logging.getLogger("mcp_broker.sandbox_rpc")`; both RPC routes capture
+  `x_request_id = Header(default=None, alias="X-Request-ID")` and pass it to `_forward_sandbox_rpc(...,
+  request_id=...)`, which logs ONE line at the top (before docker/sandbox resolution, so failed 503 calls are
+  traced too): `sandbox rpc org=… server=… transport=… method=… jsonrpc_id=… request_id=…`. PII-SAFE: logs
+  ONLY metadata — never `params`/`stdio`/`upstream`/`command`/`args`/`env` (can carry PII/secrets; mirrors
+  CHG-0041); `-` placeholder when no header. Trace chain now complete to the broker: gateway audit (CHG-0050)
+  → X-Request-ID (CHG-0051) → broker log (CHG-0052). `_post_agent_rpc` untouched. Files: routes.py,
+  test_broker_auth.py (+2). Gate: 106 broker passed. Follow-ups: forward `X-Request-ID` to the sandbox AGENT +
+  agent-log (last hop); gateway stdio/tools-list/internal/early-authz sites; OTEL/Jaeger + backup infra (item
+  13 stays `[ ]`). Evidence: `mcp-parallel/findings/backstop-p13-broker-logs-correlation-id/`.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 

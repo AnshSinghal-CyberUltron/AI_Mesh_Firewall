@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -129,3 +130,48 @@ def test_auth_valid_key_allows_protected_route(
         )
     assert resp.status_code == 200
     assert resp.json() == {"destroyed": True}
+
+
+# ── CHG-0052: the broker LOGS the propagated X-Request-ID (completes CHG-0051) ──
+
+
+def test_rpc_logs_x_request_id(
+    monkeypatch: pytest.MonkeyPatch,
+    docker_manager: DockerManager,
+    caplog: pytest.LogCaptureFixture,
+):
+    # The correlation id is logged BEFORE docker/sandbox resolution. Force the clean
+    # early 503 (docker unavailable) so the log-under-test isn't masked by unrelated
+    # mock-docker resolution details / cross-test cached_docker_ok state.
+    monkeypatch.setattr("sandbox.routes.cached_docker_ok", lambda: False)
+    client = _build_client(monkeypatch, docker_manager)
+    with caplog.at_level(logging.INFO, logger="mcp_broker.sandbox_rpc"):
+        client.post(
+            f"/v1/sandbox/{ORG}/rpc",
+            headers={BROKER_KEY_HEADER: BROKER_KEY, "X-Request-ID": "trace-broker-42"},
+            json={
+                "server_slug": "srv", "transport": "stdio",
+                "method": "tools/call", "jsonrpc_id": 1,
+            },
+        )
+    msgs = [r.getMessage() for r in caplog.records if r.name == "mcp_broker.sandbox_rpc"]
+    assert any("request_id=trace-broker-42" in m for m in msgs)      # trace id logged
+    assert any("method=tools/call" in m for m in msgs)               # safe metadata logged
+    assert all("params" not in m for m in msgs)                      # no raw payload in logs
+
+
+def test_rpc_logs_dash_when_no_x_request_id(
+    monkeypatch: pytest.MonkeyPatch,
+    docker_manager: DockerManager,
+    caplog: pytest.LogCaptureFixture,
+):
+    monkeypatch.setattr("sandbox.routes.cached_docker_ok", lambda: False)
+    client = _build_client(monkeypatch, docker_manager)
+    with caplog.at_level(logging.INFO, logger="mcp_broker.sandbox_rpc"):
+        client.post(
+            f"/v1/sandbox/{ORG}/rpc",
+            headers={BROKER_KEY_HEADER: BROKER_KEY},
+            json={"server_slug": "srv", "method": "ping", "jsonrpc_id": 2},
+        )
+    msgs = [r.getMessage() for r in caplog.records if r.name == "mcp_broker.sandbox_rpc"]
+    assert any("request_id=-" in m for m in msgs)                    # no header -> "-" placeholder

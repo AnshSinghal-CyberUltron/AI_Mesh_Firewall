@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from auth import require_broker_key
 from sandbox.docker_health import cached_docker_ok
 from sandbox.docker_manager import DockerManager, SandboxContainerInfo
+
+LOG = logging.getLogger("mcp_broker.sandbox_rpc")
 
 _AGENT_TIMEOUT = float(os.environ.get("MCP_BROKER_AGENT_TIMEOUT", "130"))
 # Cold-start agent-readiness window. A freshly (re)started sandbox container
@@ -240,7 +243,9 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
         response["provisioning"] = bool(body.warm and not agent_ready)
         return response
 
-    async def _forward_sandbox_rpc(org_slug: str, body: SandboxRpcRequest) -> dict[str, Any]:
+    async def _forward_sandbox_rpc(
+        org_slug: str, body: SandboxRpcRequest, request_id: str | None = None
+    ) -> dict[str, Any]:
         """Resolve the running per-org sandbox and forward one RPC to its agent.
 
         Transport-agnostic (P4.13/P6.18): the same path serves stdio, streamable-http,
@@ -248,6 +253,15 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
         dials the upstream from inside the org sandbox (egress-allowlisted), so the
         gateway never connects to an external MCP URL directly.
         """
+        # CHG-0052: log the forward (safe metadata ONLY — never params/args/env/upstream,
+        # which can carry PII/secrets) with the propagated X-Request-ID (CHG-0051), so a
+        # tool call is traceable gateway audit -> broker. Logged before the docker/sandbox
+        # resolution so failed (503) calls are traced too.
+        LOG.info(
+            "sandbox rpc org=%s server=%s transport=%s method=%s jsonrpc_id=%s request_id=%s",
+            org_slug, body.server_slug, body.transport, body.method,
+            body.jsonrpc_id, request_id or "-",
+        )
         if not cached_docker_ok():
             raise HTTPException(status_code=503, detail="Docker unavailable")
         info = await _resolve_running_sandbox(docker_manager, org_slug)
@@ -294,17 +308,25 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
         return response.json()
 
     @router.post("/{org_slug}/rpc")
-    async def sandbox_rpc(org_slug: str, body: SandboxRpcRequest) -> dict[str, Any]:
+    async def sandbox_rpc(
+        org_slug: str,
+        body: SandboxRpcRequest,
+        x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
+    ) -> dict[str, Any]:
         """Unified transport-agnostic RPC (P4.13/P6.18) — stdio + remote transports."""
-        return await _forward_sandbox_rpc(org_slug, body)
+        return await _forward_sandbox_rpc(org_slug, body, request_id=x_request_id)
 
     @router.post("/{org_slug}/stdio/rpc")
-    async def stdio_rpc(org_slug: str, body: SandboxRpcRequest) -> dict[str, Any]:
+    async def stdio_rpc(
+        org_slug: str,
+        body: SandboxRpcRequest,
+        x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
+    ) -> dict[str, Any]:
         """DEPRECATED alias of ``/{org_slug}/rpc`` — retained for the pre-contract
         gateway payload. Forces ``transport=stdio`` for old callers that omit it."""
         if not body.transport:
             body.transport = "stdio"
-        return await _forward_sandbox_rpc(org_slug, body)
+        return await _forward_sandbox_rpc(org_slug, body, request_id=x_request_id)
 
     @router.get("/{org_slug}/status")
     async def sandbox_status(org_slug: str) -> dict[str, Any]:
