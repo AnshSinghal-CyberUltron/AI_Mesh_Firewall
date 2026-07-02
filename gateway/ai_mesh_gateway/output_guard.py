@@ -73,9 +73,18 @@ _REDACTABLE_OUTPUT_CATEGORIES = frozenset({"pii", "pci", "phi", "secret", "crede
 # Output Handling (OWASP LLM02 / LLM05). The output guard neutralizes the channel:
 # it defangs the auto-render (image -> plain link) and masks the smuggled payload,
 # delivering the rest of the answer intact (surgical redact, never whole-block).
-_MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(\s*<?(https?://[^)\s<>]+)>?\s*\)", re.IGNORECASE)
-_MD_LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(\s*<?(https?://[^)\s<>]+)>?\s*\)", re.IGNORECASE)
+# G43: scheme is OPTIONAL — a PROTOCOL-RELATIVE url (``//evil.com/…``) auto-fetches
+# with the page's own scheme, so it is just as exfil-capable and must match everywhere.
+_MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(\s*<?((?:https?:)?//[^)\s<>]+)>?\s*\)", re.IGNORECASE)
+_MD_LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(\s*<?((?:https?:)?//[^)\s<>]+)>?\s*\)", re.IGNORECASE)
 _BARE_URL_RE = re.compile(r"(?<![\]\(\[])https?://[^\s)<>\[\]]+", re.IGNORECASE)
+# G43: bare PROTOCOL-RELATIVE url in prose. Stricter than the absolute bare form to keep
+# FP low: requires a DOTTED host AND a path/query (so ``a//b`` math, ``//localhost`` and a
+# bare ``//host`` with no path do not match), and is gated by _url_smuggles_data
+# (defangs only on a sensitive payload), so benign ``//cdn.example`` text is untouched.
+_BARE_PROTOREL_RE = re.compile(
+    r"(?<![\w/:.])//[a-z0-9][a-z0-9.\-]*\.[a-z]{2,}/[^\s)<>\[\]]+", re.IGNORECASE
+)
 # G41: HTML/SVG/CSS ZERO-CLICK auto-render beacons. A model steered by indirect
 # injection can emit raw HTML/CSS that a client renderer auto-fetches (exfil) even when
 # markdown images are sanitized — and the markdown-only defense above misses them (an
@@ -89,25 +98,25 @@ _BARE_URL_RE = re.compile(r"(?<![\]\(\[])https?://[^\s)<>\[\]]+", re.IGNORECASE)
 # source/embed/track, <object data>, <video poster>, plus <form action|formaction> and
 # the deprecated background=/cite=. Each captures the URL as group(1).
 _HTML_ATTR_RE = re.compile(
-    r'\b(?:src|poster|data|action|formaction|background|cite)\s*=\s*["\']?\s*(https?://[^"\'>\s]+)',
+    r'\b(?:src|poster|data|action|formaction|background|cite)\s*=\s*["\']?\s*((?:https?:)?//[^"\'>\s]+)',
     re.IGNORECASE,
 )
 # G42: href that AUTO-fetches or hijacks resolution — <link href> (preload/prefetch/
 # dns-prefetch/stylesheet/preconnect), SVG <image|use href>, <base href>. One-click
 # <a>/<area href> are deliberately NOT matched (handled as links, not zero-click).
 _HTML_HREF_RE = re.compile(
-    r'<\s*(?:link|image|use|base)\b[^>]{0,300}?\bhref\s*=\s*["\']?\s*(https?://[^"\'>\s]+)',
+    r'<\s*(?:link|image|use|base)\b[^>]{0,300}?\bhref\s*=\s*["\']?\s*((?:https?:)?//[^"\'>\s]+)',
     re.IGNORECASE,
 )
 # G42: <meta http-equiv="refresh" content="0;url=..."> zero-click auto-navigation.
 _HTML_META_URL_RE = re.compile(
-    r'<\s*meta\b[^>]{0,300}?\burl\s*=\s*["\']?\s*(https?://[^"\'>\s]+)', re.IGNORECASE,
+    r'<\s*meta\b[^>]{0,300}?\burl\s*=\s*["\']?\s*((?:https?:)?//[^"\'>\s]+)', re.IGNORECASE,
 )
-_CSS_URL_RE = re.compile(r'url\(\s*["\']?\s*(https?://[^"\')\s]+)', re.IGNORECASE)
+_CSS_URL_RE = re.compile(r'url\(\s*["\']?\s*((?:https?:)?//[^"\')\s]+)', re.IGNORECASE)
 # G42: srcset carries MULTIPLE comma-separated "URL [descriptor]" candidates — G41's
 # single-URL capture defanged only the first, leaking the rest. Handle the whole value.
 _HTML_SRCSET_RE = re.compile(r'\bsrcset\s*=\s*["\']([^"\']*)["\']', re.IGNORECASE)
-_SRCSET_URL_RE = re.compile(r'https?://[^\s,]+')
+_SRCSET_URL_RE = re.compile(r'(?:https?:)?//[^\s,]+')
 # A real responsive srcset is short; beyond this a value is pathological -> fail closed.
 _SRCSET_MAX_LEN = 4096
 _HTML_BEACON_RES = (_HTML_ATTR_RE, _HTML_HREF_RE, _HTML_META_URL_RE, _CSS_URL_RE)
@@ -117,14 +126,19 @@ _MAX_EXFIL_URLS = 256
 
 
 def _url_tail(url: str) -> str:
-    """The exfil-bearing portion of a URL: path + query + fragment (scheme+host dropped)."""
-    m = re.match(r"https?://[^/?#]*(.*)", url, re.IGNORECASE)
+    """The exfil-bearing portion of a URL: path + query + fragment (scheme+host dropped).
+
+    G43: the scheme is OPTIONAL — a PROTOCOL-RELATIVE url (``//evil.com/log?d=…``)
+    auto-fetches using the page's own scheme, so it is just as exfil-capable as an
+    absolute one and must be recognised here too."""
+    m = re.match(r"(?:https?:)?//[^/?#]*(.*)", url, re.IGNORECASE)
     return m.group(1) if m else ""
 
 
 def _url_host_prefix(url: str) -> str:
-    """``scheme://host`` prefix of ``url`` (everything before path/query/fragment)."""
-    m = re.match(r"(https?://[^/?#]*)", url, re.IGNORECASE)
+    """``[scheme:]//host`` prefix of ``url`` (everything before path/query/fragment).
+    G43: scheme optional so protocol-relative hosts are handled."""
+    m = re.match(r"((?:https?:)?//[^/?#]*)", url, re.IGNORECASE)
     return m.group(1) if m else url
 
 
@@ -210,7 +224,8 @@ def _scan_exfil_channels(text: str):
     they legitimately carry long opaque tokens (presigned / tracking URLs), so an
     encoded-blob-alone would false-positive.
     """
-    if not text or ("http://" not in text and "https://" not in text):
+    # G43: gate on "//" so protocol-relative beacons (no http/https scheme) are scanned.
+    if not text or "//" not in text:
         return
     seen: set[tuple[str, str]] = set()
     budget = _MAX_EXFIL_URLS
@@ -219,6 +234,7 @@ def _scan_exfil_channels(text: str):
     # match for bare.
     passes = (
         ("image", _MD_IMAGE_RE), ("link", _MD_LINK_RE), ("bare", _BARE_URL_RE),
+        ("bare", _BARE_PROTOREL_RE),
         ("html", _HTML_ATTR_RE), ("html", _HTML_HREF_RE), ("html", _HTML_META_URL_RE),
         ("html", _CSS_URL_RE),
     )
@@ -260,7 +276,8 @@ def neutralize_exfil_channels(text: str) -> str:
     """Defang output-side data-exfiltration channels: mask the smuggled payload and
     stop the zero-click auto-render (image -> plain link). Strict no-op on benign
     markdown / URLs (only constructs that trip :func:`_url_smuggles_data` change)."""
-    if not text or ("http://" not in text and "https://" not in text):
+    # G43: gate on "//" so protocol-relative beacons (no http/https scheme) are handled.
+    if not text or "//" not in text:
         return text
 
     def _defang(url: str) -> str:
@@ -319,6 +336,7 @@ def neutralize_exfil_channels(text: str) -> str:
     out = _MD_IMAGE_RE.sub(_img_sub, out)
     out = _MD_LINK_RE.sub(_link_sub, out)
     out = _BARE_URL_RE.sub(_bare_sub, out)
+    out = _BARE_PROTOREL_RE.sub(_bare_sub, out)  # G43: protocol-relative bare urls
     return out
 
 _STOPWORDS = frozenset({
