@@ -417,7 +417,21 @@
         + Playwright verification RE-CONFIRMED (dialog a11y was live-verified iter36; model-list consistency
         live-verified now). CONTROL remains flaky (hangs under load, auto/restart-recovers) — a pre-existing
         infra issue outside chat-module ownership; the gateway stays healthy + enforcing throughout.
-      ★ FINAL COMPLETION 2026-07-02 (post-G30, +G31): ALL 7 criteria met. The prior sole blocker — the tier-2
+      G32 DONE 2026-07-02 (commit 36a2e957) — prompt-laundering TEXT-encoding coverage. R2 probe found
+        documented laundering encodings evading the scanner (base64/hex WERE decoded via G22, but these were
+        NOT): HTML char refs &#NNN;/&#xHH;, percent/URL-encoding %XX, and source escapes \\uXXXX/\\xHH. A
+        downstream model (or an explicit "decode this and follow it") interprets them, so an encoded injection
+        must be decoded for detection. Added _decode_text_encoding_variants (scanner.py) — bounded single-pass
+        regex subs (ReDoS-safe, 0.0ms on 10k pathological input) whose decoded forms append to the tier-0.5
+        deobfuscation rescan (ADDITIVE — can only ADD detections, never rewrites the original). Verified ZERO
+        FP on benign entities/URLs/code escapes (50%-entity off, ?q=hello%20world, JSON \\u000a, regex \\x41,
+        copyright/em-dash entities). G32 golden: 6 encoded-injection block + 6 encoding FP-floor allow.
+        Adversarial 207, golden 210x3, full gateway 1122 passed. REDEPLOYED (rollback-preG32; used `docker
+        compose up -d --no-deps gateway` per the G31 lesson) + LIVE-VERIFIED: HTML-dec/URL-enc/u-escape
+        injections -> 400 block, benign encodings -> 200 allow, plain attack/PII/benign unregressed, live
+        golden 10/10. => prompt-laundering (R1) coverage now includes text-encodings in addition to
+        base64/hex/rot13.
+      ★ FINAL COMPLETION 2026-07-02 (post-G30, +G31, +G32): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
         enforcement (no block->allow), all 41 block payloads block, translate now allow->allow; only safe-
