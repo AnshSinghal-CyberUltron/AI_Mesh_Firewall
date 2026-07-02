@@ -546,32 +546,47 @@ async def send_upstream_jsonrpc(
     if params is not None:
         message["params"] = params
 
+    async def _dispatch() -> dict[str, Any]:
+        # Auto-handshake: initialize the upstream session on first real method
+        # (streamable-http/sse only; websocket manages its own handshake).
+        if (
+            not session.initialized
+            and transport in ("streamable-http", "sse")
+            and method not in ("initialize", "notifications/initialized")
+        ):
+            await _initialize_session(session, connect_timeout, init_timeout)
+        if transport == "streamable-http":
+            r = await _post_streamable_http(session, message, method_timeout, msg_id)
+        elif transport == "sse":
+            r = await _post_sse(session, message, connect_timeout, method_timeout, msg_id)
+        else:
+            from agent.ws_manager import send_ws_jsonrpc
+
+            r = await send_ws_jsonrpc(session, message, connect_timeout, method_timeout, msg_id)
+        if method == "initialize" and "error" not in r:
+            session.initialized = True
+        return r
+
     async with session.lock:
         try:
-            # Auto-handshake: initialize the upstream session on first real method
-            # (streamable-http/sse only; websocket manages its own handshake).
-            if (
-                not session.initialized
-                and transport in ("streamable-http", "sse")
-                and method not in ("initialize", "notifications/initialized")
-            ):
-                await _initialize_session(session, connect_timeout, init_timeout)
-            if transport == "streamable-http":
-                result = await _post_streamable_http(session, message, method_timeout, msg_id)
-            elif transport == "sse":
-                result = await _post_sse(
-                    session, message, connect_timeout, method_timeout, msg_id
-                )
-            else:
-                from agent.ws_manager import send_ws_jsonrpc
-
-                result = await send_ws_jsonrpc(
-                    session, message, connect_timeout, method_timeout, msg_id
-                )
-            if method == "initialize" and "error" not in result:
-                session.initialized = True
-            return result
+            return await _dispatch()
         except UpstreamError as exc:
+            # Stale-session recovery: an upstream that restarted / expired the session
+            # rejects our cached Mcp-Session-Id ("No valid session ID provided").
+            # Invalidate the session and re-handshake ONCE (streamable-http/sse only)
+            # so a long-lived sandbox survives upstream restarts without operator action.
+            if (
+                transport in ("streamable-http", "sse")
+                and method not in ("initialize", "notifications/initialized")
+                and "session" in str(getattr(exc, "message", exc)).lower()
+            ):
+                LOG.info("upstream session rejected (%s) — re-initializing and retrying", server_slug)
+                session.initialized = False
+                session.session_id = None
+                try:
+                    return await _dispatch()
+                except UpstreamError as exc2:
+                    exc = exc2
             return _error_response(
                 msg_id,
                 exc,

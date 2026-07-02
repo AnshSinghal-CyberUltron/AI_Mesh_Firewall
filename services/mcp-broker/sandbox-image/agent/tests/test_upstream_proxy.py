@@ -152,6 +152,37 @@ def test_streamable_http_401_needs_reauth(agent_client):
     assert body["_meta"]["needs_reauth"] is True
 
 
+def test_streamable_http_stale_session_recovers(agent_client):
+    # An upstream that restarted rejects the cached session ("No valid session ID");
+    # the agent must invalidate + re-handshake + retry ONCE and succeed.
+    state = {"real_method_calls": 0}
+
+    def _stream(self, _method, _url, *, json=None, headers=None, timeout=None):  # noqa: A002
+        req = json or {}
+        rid = req.get("id")
+        if req.get("method") == "initialize":
+            return _FakeStreamCtx(
+                headers={"content-type": "text/event-stream", "mcp-session-id": "sess-new"},
+                sse_frames=[{"jsonrpc": "2.0", "id": rid, "result": {"protocolVersion": "2024-11-05"}}],
+            )
+        state["real_method_calls"] += 1
+        if state["real_method_calls"] == 1:
+            return _FakeStreamCtx(status=400, headers={"content-type": "text/plain"},
+                                  text='{"error":{"message":"No valid session ID provided"}}')
+        return _FakeStreamCtx(
+            headers={"content-type": "text/event-stream", "mcp-session-id": "sess-new"},
+            sse_frames=[{"jsonrpc": "2.0", "id": rid, "result": {"tools": [{"name": "echo"}]}}],
+        )
+
+    with patch("httpx.AsyncClient.stream", new=_stream), \
+         patch("httpx.AsyncClient.post", new=AsyncMock(return_value=httpx.Response(202))):
+        resp = agent_client.post("/rpc", json=_http_payload())
+
+    body = resp.json()
+    assert body["result"]["tools"][0]["name"] == "echo"  # recovered after re-init
+    assert state["real_method_calls"] == 2  # first rejected, second (post re-init) succeeded
+
+
 def _ws_payload(**overrides):
     base = {
         "server_slug": "ws-server",
