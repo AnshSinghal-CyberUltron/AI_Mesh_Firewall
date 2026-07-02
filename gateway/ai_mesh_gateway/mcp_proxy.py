@@ -157,8 +157,9 @@ def _mcp_body_too_large(request) -> bool:
     A cheap first-line DoS guard: an honest/naive oversized body is rejected
     BEFORE it is buffered by request.body()/json(). Defensive against test doubles
     (no headers/content-length → False). NOTE: a chunked request that omits
-    Content-Length is not caught here — the infra-layer body limit and a future
-    streaming cap cover that adversarial case.
+    Content-Length is not caught here — that adversarial case is covered by the
+    streaming byte-cap in ``_mcp_read_body_capped`` (CHG-0063), which every MCP
+    entry point uses to buffer the body.
     """
     hdrs = getattr(request, "headers", None)
     if not hdrs:
@@ -184,6 +185,56 @@ def _mcp_body_too_large_response() -> JSONResponse:
             "message": f"MCP request body exceeds the {_MCP_MAX_BODY_BYTES}-byte ceiling.",
         },
     )
+
+
+class _MCPBodyTooLarge(Exception):
+    """Raised by ``_mcp_read_body_capped`` when the streamed body exceeds the ceiling."""
+
+
+async def _mcp_read_body_capped(request) -> bytes:
+    """Buffer the request body, enforcing ``_MCP_MAX_BODY_BYTES`` on the ACTUAL bytes
+    streamed — not just the declared Content-Length.
+
+    ``_mcp_body_too_large`` only pre-checks the Content-Length HEADER; a chunked /
+    no-Content-Length body slips past it, and ``request.body()`` / ``request.json()``
+    then buffer the whole stream into memory with NO ceiling (a memory-exhaustion
+    DoS — CHG-0034's documented limitation). This reads the stream incrementally and
+    raises ``_MCPBodyTooLarge`` the instant the accumulated size crosses the ceiling,
+    so the gateway never holds more than the ceiling in memory regardless of framing.
+    The result is cached on the request (``_body``) so a later ``request.json()`` /
+    ``request.body()`` reuses it (Starlette's own cache slot).
+    """
+    cached = getattr(request, "_body", None)
+    if cached is not None:
+        if len(cached) > _MCP_MAX_BODY_BYTES:
+            raise _MCPBodyTooLarge()
+        return cached
+    stream = getattr(request, "stream", None)
+    if not callable(stream):
+        # Object without a stream() (a test double). Real Starlette Requests always
+        # expose stream(), so the incremental cap below is what runs in production;
+        # this branch only bounds test doubles. Fall back to body() if present, else
+        # no-op (a double that supplies its payload via a mocked json()/other path).
+        body_fn = getattr(request, "body", None)
+        if not callable(body_fn):
+            return b""
+        body_bytes = await body_fn()
+        if len(body_bytes) > _MCP_MAX_BODY_BYTES:
+            raise _MCPBodyTooLarge()
+        return body_bytes
+    total = 0
+    chunks: list[bytes] = []
+    async for chunk in stream():
+        total += len(chunk)
+        if total > _MCP_MAX_BODY_BYTES:
+            raise _MCPBodyTooLarge()
+        chunks.append(chunk)
+    body_bytes = b"".join(chunks)
+    try:
+        request._body = body_bytes  # populate Starlette's cache for downstream reads
+    except Exception:  # pragma: no cover - non-Request test double
+        pass
+    return body_bytes
 
 # ── Server config cache for transport-aware routing ──────────────────
 _server_config_cache: dict[str, dict] = {}
@@ -1310,7 +1361,10 @@ async def ext_mcp_proxy(path: str, request: Request):
     headers = _ext_proxy_forward_headers(
         dict(request.headers.items()), oauth_token=_ext_oauth,
     )
-    body = await request.body()
+    try:  # CHG-0063: cap the ACTUAL bytes (chunked/no-Content-Length DoS guard)
+        body = await _mcp_read_body_capped(request)
+    except _MCPBodyTooLarge:
+        return _mcp_body_too_large_response()
 
     # ── Inbound credential hard-block on the transparent external proxy.
     # This path is transport-level (no org/server/tool scoping), so the
@@ -2483,6 +2537,14 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
             "roles": list(getattr(_mcp_auth, "roles", None) or []),
         }
 
+    # CHG-0063: cap the ACTUAL streamed bytes so a chunked / no-Content-Length body
+    # cannot buffer unbounded (the Content-Length pre-check above only catches an
+    # honestly-declared oversize). This buffers + caches into request._body, so the
+    # request.json() below reuses the already-capped bytes.
+    try:
+        await _mcp_read_body_capped(request)
+    except _MCPBodyTooLarge:
+        return _mcp_body_too_large_response()
     try:
         body = await request.json()
     except Exception:
@@ -3252,7 +3314,10 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
     if _mcp_body_too_large(request):
         return _mcp_body_too_large_response()
 
-    body = await request.body()
+    try:  # CHG-0063: cap the ACTUAL bytes (chunked/no-Content-Length DoS guard)
+        body = await _mcp_read_body_capped(request)
+    except _MCPBodyTooLarge:
+        return _mcp_body_too_large_response()
 
     # ── Scan parity with org_mcp_jsonrpc (the bare REST route previously
     # forwarded verbatim with NO scan). Extract the tool args from the JSON body

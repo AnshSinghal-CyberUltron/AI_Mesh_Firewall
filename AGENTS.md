@@ -463,6 +463,19 @@
     mcp_rate_limit + 1228 gateway passed, 0 failed. SIBLING (documented, not changed — one item/iter):
     leakage_detector.py:116-120 (sadd loop then separate expire) same class, milder. Evidence
     mcp-parallel/findings/backstop-p11-ratelimit-atomic-ttl/.
+  - CHG-0063 (2026-07-02) — G3 item 9 (validation/DoS) + resource-limits (mem), HIGH; closes CHG-0034's
+    documented limitation: _mcp_body_too_large only pre-checks the Content-Length HEADER, so a chunked /
+    no-Content-Length body slipped past it and request.body()/json() buffered the whole stream into
+    memory unbounded (gigabyte chunked body → gateway OOM), on the 3 tenant-facing entry points
+    (ext_mcp_proxy, org_mcp_jsonrpc, org_mcp_tool_call). FIX (mcp_proxy.py): new _mcp_read_body_capped()
+    reads request.stream() incrementally and raises _MCPBodyTooLarge the instant the running total
+    crosses _MCP_MAX_BODY_BYTES (never holds more than the ceiling in memory); caches capped bytes on
+    request._body so downstream json()/body() reuse it. Wired at all 3 entry points → 413. Content-Length
+    pre-check retained; test-double fallback keeps .json()-mocking tests working. +7 tests (incl. e2e 413
+    on an oversized chunked stream + a "stops reading early / bounds memory" assertion). Gate: 7 body-cap
+    + 1237 gateway passed, 0 failed. Scope: tenant-facing routes; backend-internal (X-Gateway-Internal-Key)
+    paths still plain body() (lower risk, future follow-up). Evidence
+    mcp-parallel/findings/backstop-p9-chunked-body-dos/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

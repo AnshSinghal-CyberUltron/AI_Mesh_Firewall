@@ -405,8 +405,21 @@
       pattern: internal_discover_tools/internal_tools_call build CLEAN upstream headers from the server's own
       auth_token (+ is_safe_outbound_url SSRF guard) and the sandbox path (broker_send_rpc) too — so CHG-0033
       was the isolated leak. Non-invasive Content-Length pre-check. +4 tests; test_mcp_rate_limit.py 14 passed,
-      broad sweep 1081 passed. LIMITATION (documented): doesn't catch chunked-without-Content-Length (infra
-      body limit covers it; app-layer streaming cap deferred to avoid MCP test-harness churn).
+      broad sweep 1081 passed. LIMITATION (CLOSED by CHG-0063 2026-07-02): doesn't catch
+      chunked-without-Content-Length.
+      CHG-0063 (2026-07-02, HIGH — closes the CHG-0034 chunked limitation): _mcp_body_too_large only
+      pre-checks the Content-Length HEADER, so a chunked / no-Content-Length body slipped past it and
+      request.body()/json() buffered the whole stream into memory unbounded (gigabyte chunked body →
+      gateway OOM), on all 3 tenant-facing entry points (ext_mcp_proxy, org_mcp_jsonrpc, org_mcp_tool_call).
+      FIX (mcp_proxy.py): new _mcp_read_body_capped() reads request.stream() incrementally and raises
+      _MCPBodyTooLarge the instant the running total crosses _MCP_MAX_BODY_BYTES (never holds > ceiling in
+      memory); caches capped bytes on request._body so downstream json()/body() reuse it → 413. CL
+      pre-check retained; org_mcp_jsonrpc keeps request.json() (pre-capped) so .json()-mocking doubles are
+      unaffected; test-double fallback for objects without stream(). +7 tests (incl. e2e 413 on an oversized
+      chunked stream + a stops-reading-early/bounds-memory assertion). Gate: 7 body-cap + 1237 gateway
+      passed, 0 failed. Scope: tenant-facing routes (backend-internal X-Gateway-Internal-Key paths still
+      plain body() — lower risk, future follow-up). Evidence:
+      mcp-parallel/findings/backstop-p9-chunked-body-dos/finding.md. (Advances item 9 validation/DoS.)
       CHG-0045 (2026-07-02, MEDIUM — audit-completeness): the cross-tenant 403 org_scope_violation
       (authenticated key's org ≠ URL org) was only LOG.warning'd — NEVER recorded to the MCPEvent audit
       trail, so the most forensically important MCP event was invisible to audit/SIEM (while lesser
