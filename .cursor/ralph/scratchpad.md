@@ -95,5 +95,9 @@ status: ACTIVE
 - [ ] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:
        all 4 transports through the sandbox under the Claude session's 15-MCP harness (concurrency/load/
        leakage). Fix any seam mismatch on the Cursor-owned side only.
+       **BLOCKED 2026-07-02 (iter16):** gateway wiring still not landed — no `broker_send_rpc`, broker
+       `/{org}/rpc` returns 404, HTTP/SSE still direct httpx in `mcp_proxy.py`. Cursor seam green
+       (agent 15/15, lifecycle 20/20). Live stack = 1 org × 4 servers (not 15). See
+       `mcp-parallel/findings/p6-18/BLOCKER.md`. Browser at MCP panel for manual OAuth.
 - [ ] 19. Re-run P1 repros → all four UI bugs gone; re-run P4 verification 3× (in-process + live).
        When P1–P6 all [x] AND integration green, output <promise>COMPLETE</promise>.
