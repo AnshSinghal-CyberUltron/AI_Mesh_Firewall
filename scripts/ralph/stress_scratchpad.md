@@ -71,6 +71,22 @@
           injection vocab → fixed G3 (2 chunk-split/spaced injection). Vocab-curated → zero FP.
       REMAINING R4 hardening (NOT yet encoded as findings; lower priority than R5/R6 completion gates):
         (all originally-listed R4 gaps G1-G13 now DONE; new adjacent findings tracked below.)
+      G17 DONE 2026-07-02: Unicode Tag block (U+E0000..U+E007F) invisible ASCII-smuggled injection. TAG
+        SPACE..TAG TILDE mirror printable ASCII but render as nothing; NFKC doesn't fold them (Cf) and they
+        aren't zero-width, so tag-encoded "ignore all previous instructions" bypassed the scanner while LLMs
+        decode them. Fixed in scanner.py: _decode_unicode_tags (mirror U+E0020..E007E -> ASCII, drop tag
+        controls) as first step of _normalize_unicode (regex-guarded no-op on clean text). 5 golden frozen.
+        Full gateway 1063 passed; golden 83 passed/7 skipped 3x.
+      G18 (NEW, reproduced 2026-07-02): tag-smuggled PII/secret. detect_pii("my ssn is "+tags("123-45-6789"))
+        = False and redact_all leaves the tag-encoded SSN intact -> egresses to the model which decodes it =
+        PII leak. Fix: add _decode_unicode_tags to patterns.py _canonicalize_with_map WITH position-preserving
+        span-back mapping (each tag char is 1 codepoint -> 1 ASCII, so 1->1 index map) so tag-encoded PII is
+        detected AND masked in the original egress bytes. Mirrors the G1 canonicalize-with-map approach. NEXT.
+      G19 (NEW, reproduced 2026-07-02): small-caps injection. IPA small-caps letters (ɪɢɴᴏʀᴇ...) are not
+        NFKC-folded to ASCII, so small-caps "ignore all previous instructions" bypasses. Fix: add a small-caps
+        (and other letter-like variant) fold table to scanner._normalize_unicode (like _HOMOGLYPH_TABLE).
+        Lower priority than G18. Reversed-text also bypasses but deprioritized (models rarely execute reversed
+        instructions reliably; whole-text reversal scanning risks FPs).
       G10 DONE 2026-07-02: tier-2 semantic redact was a byte no-op. Guard model flags PII/secret with no
         deterministic regex (free-text names, non-standard card/ID, passphrases) -> redact_all no-op ->
         redacted==original -> value egressed verbatim (relabeled flag). Fixed in output_guard.py:
