@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../context/AuthContext";
+import { useBackendHealth } from "../../hooks/useBackendHealth";
 
 const menuItems = [
   {
@@ -50,6 +51,14 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [flyoutModule, setFlyoutModule] = useState(null);
   const { user, logout } = useAuth();
+  // Real backend reachability — the widget below was a hardcoded "All systems
+  // operational / Protected" that stayed green even when the backend was down.
+  const backendHealth = useBackendHealth();
+  const sysStatus = backendHealth === "connected"
+    ? { line: "All systems operational", dot: "bg-teal-500", pulse: "animate-pulse", label: "Protected", labelCls: "text-teal-700 dark:text-teal-400" }
+    : backendHealth === "checking"
+      ? { line: "Checking system status…", dot: "bg-amber-500", pulse: "animate-pulse", label: "Connecting…", labelCls: "text-amber-700 dark:text-amber-400" }
+      : { line: "Backend unreachable", dot: "bg-red-500", pulse: "", label: "Offline", labelCls: "text-red-700 dark:text-red-400" };
   const { hasPlatform } = useOfferingVisibility(user);
   const [expandedModules, setExpandedModules] = useState([]);
   const [hasCustomizedExpansion, setHasCustomizedExpansion] = useState(false);
@@ -338,10 +347,10 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
             <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-cyan-400/20 to-teal-400/20 rounded-full blur-2xl"></div>
             <div className="relative">
               <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-1">System Status</h3>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">All systems operational</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">{sysStatus.line}</p>
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-pulse"></div>
-                <span className="text-xs font-medium text-teal-700 dark:text-teal-400">Protected</span>
+                <div className={`w-1.5 h-1.5 rounded-full ${sysStatus.dot} ${sysStatus.pulse}`}></div>
+                <span className={`text-xs font-medium ${sysStatus.labelCls}`}>{sysStatus.label}</span>
               </div>
             </div>
           </div>

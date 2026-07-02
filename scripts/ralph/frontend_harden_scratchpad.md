@@ -212,7 +212,23 @@
       fix is code-verified + trivially correct. Deferred: none.
 
 ## Cross-cutting hardening
-- [ ] 19. Data-integrity: prove no static/mock/placeholder/wrong data anywhere; every value binds to real backend.
+- [x] 19. Data-integrity: prove no static/mock/placeholder/wrong data anywhere; every value binds to real backend.
+      item19 DONE. Codebase fabrication sweep: 0 Math.random, 0 mock/dummy/fake/placeholder data vars, 0
+      synthetic-breakdown patterns (latency×0.NN / length×ratio / decay-curve — all removed in item 13), 0
+      inline static chart arrays. All chart/KPI/table surfaces bind to REAL backend: useFirewallData, fetchWithAuth
+      /api/*, or props from parents that fetch (SubModuleDetailPage). Honest empty states everywhere
+      (numberOrDash/percentOrDash→"--", null→"--", "Awaiting X data", "No detections"). Orphaned dead code
+      (module-specific-charts real-fetch-but-unrendered, MCPManagerPanel) not shown. Benign config-defaults only
+      (RiskGauge threshold||80, form priority||100). BIG FABRICATION offenders already killed in items 11
+      (OutputGuard hallucination meters) + 13 (log-chart factory 15 fake charts). CONCRETE FIX: 3 status
+      indicators were HARDCODED (stayed green even if backend down) — Header "Connected" badge, Sidebar "System
+      Status: All systems operational/Protected", Firewall12 "Operational" badge. Created useBackendHealth hook
+      (polls /api/health/ 30s → connected|checking|disconnected) and bound all 3 → real Connected/Connecting/
+      Offline + operational/checking/unreachable + Operational/Checking/Backend-offline. Login "10M+ calls" =
+      pre-auth marketing hero stat (logged, not a dashboard-data violation). GATE lint 42/42, build, detector 0
+      (Header/Firewall12/hook; Sidebar has 1 PRE-EXISTING side-tab FP on the nav border-l-2, not mine). LIVE dark
+      @1440: all 3 indicators resolve from real health (Connected/operational/Operational, backend up); flip
+      logic symmetric for down-state.
 - [ ] 20. No-leak: prove no raw key/PII/secret/topology is ever displayed.
 - [ ] 21. Theme audit: every surface correct in dark AND light (contrast/focus/hover/disabled).
 - [ ] 22. Responsive audit: no overflow/overlap at 1440/1024/768/375 on every surface.

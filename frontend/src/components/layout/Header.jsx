@@ -6,6 +6,7 @@ import { Badge } from "../ui/Badge";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
+import { useBackendHealth } from "../../hooks/useBackendHealth";
 
 function useOfferingVisibility(user) {
   const roles = user?.roles || [];
@@ -261,6 +262,14 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
   const setSearchValue = onSearchQueryChange || setLocalQuery;
   const pageTitle = TAB_TITLES[activeTab] || "Control Console";
   const environment = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "DEV" : "PROD";
+  // Real backend reachability (was a hardcoded green "Connected" that stayed on
+  // even when the backend was down).
+  const backendHealth = useBackendHealth();
+  const connBadge = backendHealth === "connected"
+    ? { label: "Connected", dot: "bg-emerald-500", cls: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" }
+    : backendHealth === "checking"
+      ? { label: "Connecting…", dot: "bg-amber-500", cls: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300" }
+      : { label: "Offline", dot: "bg-red-500", cls: "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300" };
 
   const isDark = resolvedTheme === "dark";
   const ThemeIcon = isDark ? Sun : Moon;
@@ -284,9 +293,9 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
               <div className="min-w-0 flex flex-wrap items-center gap-2 text-xs">
                 <span className="font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{pageTitle}</span>
                 <span className="rounded-full border border-slate-200 px-2 py-0.5 font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">{environment}</span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  Connected
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium ${connBadge.cls}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${connBadge.dot}`} />
+                  {connBadge.label}
                 </span>
               </div>
             </div>

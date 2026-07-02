@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { useFirewallData } from "../hooks/useFirewallData";
+import { useBackendHealth } from "../hooks/useBackendHealth";
 import { useAuth } from "../context/AuthContext";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
 import { PolicyAnalyticsPanel } from "./PolicyAnalyticsPanel";
@@ -106,6 +107,14 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
   const [externalCreateScopeLocked, setExternalCreateScopeLocked] = useState(false);
   const { fetchWithAuth } = useAuth();
   const firewallData = useFirewallData("1.2", timeRange);
+  // Real backend reachability drives the module status pill (was a hardcoded
+  // green "Operational").
+  const backendHealth = useBackendHealth();
+  const opBadge = backendHealth === "connected"
+    ? { label: "Operational", cls: "bg-emerald-50 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300", Icon: CheckCircle2 }
+    : backendHealth === "checking"
+      ? { label: "Checking…", cls: "bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300", Icon: RefreshCw }
+      : { label: "Backend offline", cls: "bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300", Icon: AlertTriangle };
   const [policies, setPolicies] = useState([]);
   const [policyLoading, setPolicyLoading] = useState(true);
 
@@ -246,9 +255,9 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
               <h1 className="text-3xl font-semibold leading-tight text-slate-900 dark:text-slate-100">Policy Management</h1>
               <p className="text-sm text-slate-500 dark:text-slate-400">Firewall Module 1.2</p>
             </div>
-            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-900/25 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Operational
+            <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${opBadge.cls}`}>
+              <opBadge.Icon className="h-3.5 w-3.5" />
+              {opBadge.label}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
