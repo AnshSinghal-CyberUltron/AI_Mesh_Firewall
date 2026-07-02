@@ -110,6 +110,16 @@
     policy_engine.py + mcp_scan_orchestrator.py + mcp_proxy.py + test_mcp_scan_orchestrator.py (+7 tests, 22
     passed, 1056 broad sweep). Backward-compat: redaction_fields=[] → no-op. REMAINING: cross-stage
     (input-triggered) parity + live drive → item 3b stays open (advanced).
+  - CHG-0025 (2026-07-02) — G2 item 3b COMPLETE ([x]): cross-stage input-triggered field projection. The RBAC
+    "role X never sees field F" pattern authors the rule on the CALL, so the INPUT-stage policy match must
+    project fields out of the RESPONSE (control HTTP-path parity). Gateway now: input scan surfaces
+    `policy_redaction_fields` in meta; `org_mcp_jsonrpc` threads `_in_rfields` into both adapter OUTPUT scans
+    as `extra_redaction_fields`; `apply_field_redaction` returns identity on a no-op; the adapter swap gate
+    also fires on `redacted_fields` so a finding-less projection isn't discarded. Files policy_engine.py +
+    mcp_scan_orchestrator.py + mcp_proxy.py + test_mcp_scan_orchestrator.py (+5) + test_e12_result_redaction.py
+    (+2 end-to-end). Gate: 37 relevant + 1063 broad sweep passed. Both trigger directions (output-content +
+    input-call) now covered on the adapter path. RESIDUAL (non-blocking): bare-REST cross-stage + optional
+    live drive.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

@@ -789,4 +789,52 @@ the prod compose/manifests is tracked under G3 item 12.
   redaction_fields (output-stage-triggered parity). The control HTTP path additionally uses the INPUT-stage
   policy match to project fields out of the response (cross-stage). Threading input-stage `redaction_fields`
   into the output `scan_mcp_payload` for full cross-stage parity is a follow-up refinement; item stays open
-  (advanced, not [x]) until that + a live drive.
+  (advanced, not [x]) until that + a live drive. → DONE in CHG-0025.
+
+### CHG-0025 — Cross-stage input-triggered field projection completes G2 item 3b (adapter path field-RBAC)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 3b — the cross-stage half CHG-0024 left open. With this, the stdio/websocket
+  ADAPTER path reaches full control HTTP-path parity for per-policy field-level RBAC redaction. **Item 3b → [x].**
+- **Files:** `gateway/ai_mesh_gateway/policy_engine.py` (`apply_field_redaction` now returns identity on a
+  true no-op); `gateway/ai_mesh_gateway/mcp_scan_orchestrator.py` (`McpScanResult.policy_redaction_fields`;
+  `scan_mcp_payload(extra_redaction_fields=...)` merges caller-threaded fields for the OUTPUT mask + surfaces
+  the this-scan declared union; `_finalize_output` identity-gates its record so an absent field is a true
+  no-op); `gateway/ai_mesh_gateway/mcp_proxy.py` (`_mcp_security_scan(extra_redaction_fields=...)` +
+  `policy_redaction_fields` in meta; `org_mcp_jsonrpc` captures the INPUT scan's `_in_rfields` and threads it
+  into both adapter OUTPUT scans; the swap gate now also fires on `redacted_fields` so a finding-less field
+  projection is not discarded; residual-limitation comment updated); tests
+  (`test_mcp_scan_orchestrator.py` +5, `test_e12_result_redaction.py` +2 end-to-end).
+- **WHAT:** CHG-0024 masked a result field only when the OUTPUT itself matched a policy declaring the field.
+  The primary RBAC pattern — "role X never sees field F" — authors the rule to fire on the CALL, not the
+  response, so it needs the INPUT-stage match to project fields out of the RESPONSE (exactly what the control
+  HTTP path does via `eval_result.matched_policy_ids` on the pre-call eval → `apply_field_redaction(result,
+  redacted_field_names)`). Now: the input scan surfaces `policy_redaction_fields` (the declared union of its
+  matched actor-scoped policies) in its meta; `org_mcp_jsonrpc` threads that into the paired outbound scans as
+  `extra_redaction_fields`; the orchestrator masks those named fields on the response. `apply_field_redaction`
+  now preserves object identity when no named field is present, so a pure field-projection scan can be
+  detected (masked ⇔ new object) and a no-op never mislabels the result as redacted; the adapter swap gate
+  was widened to also swap in a field-projection redaction that produced no PII/secret finding (else the
+  masked bytes would be discarded and the field would leak).
+- **WHY:** completes BACKSTOP finding #1 — the mcp_proxy.py:2392-2394 comment explicitly flagged G8
+  per-user/role field-level filtering as adapter-path "tracked as follow-up". Both trigger directions
+  (output-content match AND input-call match) are now covered on the adapter path, at parity with control.
+- **NOW DOES:** on the stdio/websocket/http-via-sandbox adapter path, a tool CALL matching an actor-scoped
+  policy that declares `redaction_fields` strips those named fields from the tool RESPONSE (value →
+  `[REDACTED]`), actor-scoped, monitor-suppressed, audited via `redacted_fields`; dormant (exact no-op) when
+  no policy declares fields. Backward-compatible — all new params default to no-op.
+- **Touched whose work:** builds directly on CHG-0024; consumes the M-04 control compiler bundle field;
+  complements CHG-0006/0007/0008 per-actor ACCESS authz. No control-plane change.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_scan_orchestrator.py
+  ai_mesh_gateway/tests/test_e12_result_redaction.py -q` → 37 passed. Broad sweep `ai_mesh_gateway/tests` →
+  1063 passed, 0 failed. Key e2e:
+  `test_adapter_input_policy_projects_redaction_fields_onto_response` (input-call policy → `account_number`
+  masked in the adapter RESPONSE, non-targeted content survives) +
+  `test_adapter_no_input_policy_leaves_response_fields_intact` (dormant guard);
+  `test_extra_redaction_fields_projects_output_without_content_match`,
+  `test_policy_redaction_fields_surfaced_on_input_scan_not_applied`,
+  `test_apply_field_redaction_identity_on_noop`.
+- **RESIDUAL (non-blocking, not part of 3b's adapter-path scope):** (1) the bare-REST / ext-proxy paths
+  (`_scan_tool_result_floor`) do OUTPUT-triggered field masking (CHG-0024) but not input-triggered cross-stage
+  (they are a separate surface from the org_mcp_jsonrpc adapter path 3b targets; the legacy direct-backend
+  path is covered by control's own MCPToolCallView field redaction). (2) An optional live-stack drive on a
+  real registered adapter server is belt-and-suspenders over the byte-level in-process e2e proof.

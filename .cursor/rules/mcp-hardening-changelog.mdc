@@ -185,3 +185,19 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   _scan_text_tier1 4-tuple + _finalize_output), mcp_proxy.py (meta), test_mcp_scan_orchestrator.py (+7 tests).
   Gate: 22 passed / 1056 broad sweep. Backward-compat: redaction_fields=[] → no-op (proven). REMAINING:
   cross-stage input-triggered parity + live drive → item 3b stays open (advanced, not [x]).
+- **CHG-0025** (2026-07-02) — G2 item 3b COMPLETE ([x]): cross-stage input-triggered field projection. The
+  RBAC "role X never sees field F" pattern authors its rule on the CALL, so the INPUT-stage policy match must
+  project the declared fields out of the RESPONSE — exactly what the control HTTP path does. Now: the input
+  scan surfaces `policy_redaction_fields` (its matched policies' declared union) in the returned meta;
+  `org_mcp_jsonrpc` captures that (`_in_rfields`) and threads it into BOTH adapter OUTPUT scans as
+  `extra_redaction_fields`; the orchestrator masks those named fields on the response;
+  `apply_field_redaction` now returns object identity on a true no-op (so a pure field-projection scan is
+  detectable and never mislabels an unchanged result); the adapter swap gate also fires on
+  `_scan_meta_out.redacted_fields` so a finding-less field projection isn't discarded (would have leaked the
+  field). Files: policy_engine.py (identity-on-noop), mcp_scan_orchestrator.py
+  (McpScanResult.policy_redaction_fields + extra_redaction_fields + identity-gated _finalize_output),
+  mcp_proxy.py (_mcp_security_scan param + meta + org_mcp_jsonrpc threading + swap-gate), +5 orchestrator
+  tests, +2 end-to-end adapter tests. Gate: 37 relevant + 1063 broad sweep passed. Both trigger directions
+  (output-content + input-call) now covered on the adapter path. Item 3b → [x]. RESIDUAL (non-blocking):
+  bare-REST/ext-proxy cross-stage (separate surface; legacy backend path covered by control) + optional
+  live-stack drive over the byte-level in-process e2e proof.

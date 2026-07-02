@@ -272,3 +272,108 @@ async def test_adapter_explicit_monitor_does_not_force_redact():
     blob = str(_decode(resp))
     assert _RAW_TOKEN in blob
     assert _RAW_SSN in blob
+
+
+# ── CHG-0025: cross-stage RBAC field projection onto the adapter RESPONSE ──────
+# An INPUT-stage policy match declaring redaction_fields projects those named
+# fields OUT of the tool RESPONSE — even though the rule fired on the CALL, not the
+# response (the "role X never sees field F" RBAC pattern). Control HTTP-path parity
+# on the stdio/websocket adapter path.
+
+
+def _field_rbac_policy(fields, keyword):
+    return [{
+        "policy": {"id": 9, "code": "RBAC", "name": "field-rbac", "priority": 10,
+                   "severity": "medium", "redaction_fields": list(fields)},
+        "rules": [{"id": 91, "name": "kw", "rule_type": "keywords",
+                   "condition": {"keywords": [keyword]}, "action": "monitor"}],
+    }]
+
+
+@pytest.mark.asyncio
+async def test_adapter_input_policy_projects_redaction_fields_onto_response():
+    """The tool CALL matches an RBAC policy declaring redaction_fields=['account_
+    number']; the adapter RESPONSE (which does NOT itself match the rule) has that
+    field masked. Proves the input→output cross-stage thread end-to-end through
+    org_mcp_jsonrpc, not just the orchestrator unit."""
+    from unittest.mock import MagicMock
+
+    import mcp_scan_orchestrator
+    from fastapi.responses import JSONResponse
+
+    req = _make_request(_auth())
+    body = {"jsonrpc": "2.0", "id": 21, "method": "tools/call",
+            "params": {"name": "get_account",
+                       "arguments": {"q": "lookup flagme account"}}}
+    adapter_result = {
+        "content": [{"type": "text", "text": "account balance is 42"}],
+        "account_number": "ACCT-SECRET-999",
+    }
+    raw = JSONResponse(
+        content={"jsonrpc": "2.0", "id": 21, "result": adapter_result},
+        status_code=200,
+    )
+    sync = MagicMock()
+    sync.get_policies_for_server.return_value = _field_rbac_policy(
+        ["account_number"], "flagme"
+    )
+    req.json = AsyncMock(return_value=body)
+    with (
+        patch.object(mcp_proxy, "_validate_org_scope", return_value=None),
+        patch.object(mcp_proxy, "_get_server_config",
+                     AsyncMock(return_value={"transport": "stdio", "command": "x"})),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "_incr_tool_call_count", AsyncMock(return_value=1)),
+        patch.object(mcp_proxy, "_adapter_forward", AsyncMock(return_value=raw)),
+        patch.object(mcp_scan_orchestrator, "_get_policy_sync", return_value=sync),
+        patch.object(mcp_scan_orchestrator, "_get_input_scanner",
+                     return_value=MagicMock()),
+    ):
+        resp = await mcp_proxy.org_mcp_jsonrpc("demo", "srv", req)
+    decoded = _decode(resp)
+    blob = str(decoded)
+    assert "ACCT-SECRET-999" not in blob                  # field projected out
+    assert "[REDACTED]" in blob
+    assert "account balance is 42" in blob                # non-targeted content survives
+    assert decoded["result"]["account_number"] == "[REDACTED]"
+
+
+@pytest.mark.asyncio
+async def test_adapter_no_input_policy_leaves_response_fields_intact():
+    """Guard: with NO input-stage field policy, the adapter response is unchanged
+    (the cross-stage thread is dormant unless a policy declares fields)."""
+    from unittest.mock import MagicMock
+
+    import mcp_scan_orchestrator
+    from fastapi.responses import JSONResponse
+
+    req = _make_request(_auth())
+    body = {"jsonrpc": "2.0", "id": 22, "method": "tools/call",
+            "params": {"name": "get_account", "arguments": {"q": "lookup account"}}}
+    adapter_result = {
+        "content": [{"type": "text", "text": "account balance is 42"}],
+        "account_number": "ACCT-SECRET-999",
+    }
+    raw = JSONResponse(
+        content={"jsonrpc": "2.0", "id": 22, "result": adapter_result},
+        status_code=200,
+    )
+    sync = MagicMock()
+    sync.get_policies_for_server.return_value = []        # no policies
+    req.json = AsyncMock(return_value=body)
+    with (
+        patch.object(mcp_proxy, "_validate_org_scope", return_value=None),
+        patch.object(mcp_proxy, "_get_server_config",
+                     AsyncMock(return_value={"transport": "stdio", "command": "x"})),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "_incr_tool_call_count", AsyncMock(return_value=1)),
+        patch.object(mcp_proxy, "_adapter_forward", AsyncMock(return_value=raw)),
+        patch.object(mcp_scan_orchestrator, "_get_policy_sync", return_value=sync),
+        patch.object(mcp_scan_orchestrator, "_get_input_scanner",
+                     return_value=MagicMock()),
+    ):
+        resp = await mcp_proxy.org_mcp_jsonrpc("demo", "srv", req)
+    decoded = _decode(resp)
+    assert decoded["result"]["account_number"] == "ACCT-SECRET-999"  # intact

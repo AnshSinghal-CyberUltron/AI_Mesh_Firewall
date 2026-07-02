@@ -72,6 +72,11 @@ class McpScanResult:
     # redaction (redaction_fields). Empty unless a matched policy declared fields
     # AND the posture allowed mutation (not 'monitor'). Surfaced to the audit meta.
     redacted_fields: list[str] = field(default_factory=list)
+    # 3b cross-stage: the field names DECLARED by policies matched in THIS scan
+    # (both directions), independent of whether they were applied. The INPUT scan
+    # surfaces these so the caller can project the same fields out of the RESPONSE
+    # (control HTTP-path parity: an input-stage policy match strips output fields).
+    policy_redaction_fields: list[str] = field(default_factory=list)
 
     @property
     def has_findings(self) -> bool:
@@ -391,11 +396,19 @@ async def scan_mcp_payload(
     server_slug: str = "",
     tool_name: str = "",
     actor: dict[str, Any] | None = None,
+    extra_redaction_fields: list[str] | None = None,
 ) -> tuple[Any, McpScanResult]:
     """Run Tier-1 then conditional Tier-2 on ``payload`` for input or output.
 
     ``actor`` (M-04): optional {user_id, agent_id, roles} identity used to
     scope actor-allowlisted MCP policies during Tier-1 evaluation.
+
+    ``extra_redaction_fields`` (3b cross-stage): named fields to mask on the
+    OUTPUT in addition to any this scan's own policy matches declare. The caller
+    threads the INPUT scan's ``policy_redaction_fields`` here so an input-stage
+    policy match projects those fields out of the RESPONSE — control HTTP-path
+    parity for the RBAC "role X never sees field F" pattern (the rule fires on the
+    call, not the response). Ignored on the input direction.
     """
     result = McpScanResult()
     tier1_ctrl = _effective_control(effective_controls, "tier1", scan_direction)
@@ -415,23 +428,32 @@ async def scan_mcp_payload(
         """Mask per-policy ``redaction_fields`` on the OUTPUT payload.
 
         Parity with the control HTTP path (apply_field_redaction): applies ONLY
-        on the output direction, only when a matched policy declared fields, and
-        NOT under a 'monitor' posture (observe-only). A 'block' posture already
-        withheld the payload upstream, so field masking never runs on a blocked
-        call. Records the declared field set + a scan-trace stage for audit.
+        on the output direction, only when a matched policy declared fields (this
+        scan's own matches PLUS the caller-threaded ``extra_redaction_fields`` from
+        the input stage), and NOT under a 'monitor' posture (observe-only). A
+        'block' posture already withheld the payload upstream, so field masking
+        never runs on a blocked call. Records the masked field set + a scan-trace
+        stage for audit ONLY when a named field was actually present (identity
+        no-op otherwise — so a caller never mislabels an unchanged result).
         """
-        if scan_direction != "output" or not field_redaction_union:
+        if scan_direction != "output" or tier1_action == "monitor":
             return out_payload
-        if tier1_action == "monitor":
+        mask_fields = list(field_redaction_union)
+        for _rf in (extra_redaction_fields or []):
+            if isinstance(_rf, str) and _rf and _rf not in mask_fields:
+                mask_fields.append(_rf)
+        if not mask_fields:
             return out_payload
-        masked = apply_field_redaction(out_payload, field_redaction_union)
-        result.redacted_fields = list(field_redaction_union)
+        masked = apply_field_redaction(out_payload, mask_fields)
+        if masked is out_payload:
+            return out_payload  # none of the named fields present -> true no-op
+        result.redacted_fields = mask_fields
         result.scan_trace.append(
             {
                 "scan_stage": "field_redaction",
                 "tier": "tier1",
                 "direction": scan_direction,
-                "fields": list(field_redaction_union),
+                "fields": list(mask_fields),
                 "policy_engine": True,
             }
         )
@@ -502,6 +524,11 @@ async def scan_mcp_payload(
                 "policy_engine": True,
             }
         )
+
+    # 3b cross-stage: surface the field names THIS scan's matched policies
+    # declared (both directions) so the caller can project them out of the paired
+    # RESPONSE. Set from the this-scan union only (NOT extra_redaction_fields).
+    result.policy_redaction_fields = list(field_redaction_union)
 
     if tier1_blocked:
         result.blocked = True

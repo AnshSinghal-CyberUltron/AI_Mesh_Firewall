@@ -57,7 +57,7 @@
       IS used for an access decision, one layer down); the mcp_proxy.py:301-307 cache-key TODO is a
       documented non-issue (tool enable/disable is server-scoped by design). Finding #4 was a FALSE
       POSITIVE (CHG-0007). Gate: 27 authz/scoping tests + 427 broad sweep pass.
-- [ ] 3b. Per-policy FIELD-level redaction (redaction_fields) on the stdio/ws adapter path (split from #3).
+- [x] 3b. Per-policy FIELD-level redaction (redaction_fields) on the stdio/ws adapter path (split from #3).
       HTTP path (MCPToolCallView, control views.py:1113) masks specific NAMED result fields for matched
       actor-scoped policies via apply_field_redaction/redact_structured; the gateway policy engine/bundle
       has NO field-redaction support (only redaction_hints), so the adapter path does content-scan but not
@@ -96,6 +96,19 @@
       gateway currently triggers on an OUTPUT-scan match (thread input-stage redaction_fields into the output
       scan for full parity); (b) live drive proving field masking on a real adapter tool-call. (The per-actor
       ACCESS-authz half of finding #1 is already enforced via CHG-0006/0007/0008.)
+      CHG-0025 (2026-07-02): DONE → item 3b [x]. Cross-stage input-triggered field projection added. The RBAC
+      "role X never sees field F" pattern authors its rule on the CALL, so the INPUT-stage policy match now
+      projects the declared redaction_fields out of the RESPONSE (control HTTP-path parity): the input scan
+      surfaces policy_redaction_fields in its meta; org_mcp_jsonrpc threads it (_in_rfields) into both adapter
+      OUTPUT scans as extra_redaction_fields; the orchestrator masks those fields; apply_field_redaction
+      returns identity on a no-op; the adapter swap gate also fires on redacted_fields so a finding-less
+      projection isn't discarded. +5 orchestrator tests, +2 END-TO-END adapter tests (real org_mcp_jsonrpc,
+      real policy eval, byte-level: account_number masked in the adapter RESPONSE while non-targeted content
+      survives; dormant guard when no policy). Gate: 37 relevant + 1063 broad sweep passed. Both trigger
+      directions (output-content CHG-0024 + input-call CHG-0025) covered on the adapter path. RESIDUAL
+      (non-blocking, out of 3b's adapter scope): bare-REST/ext-proxy cross-stage (separate surface; legacy
+      direct-backend path covered by control's own MCPToolCallView field redaction) + optional live-stack
+      drive over the in-process byte-level e2e proof.
 - [x] 4. Context minimization / least-privilege assembly.
       RESOLVED N-A for MCP — CHG-0021 (2026-07-02): the MCP tool-call path has NO separate context-assembly
       step (unlike chat, where minimize_context prunes message history by token budget). Least-privilege for

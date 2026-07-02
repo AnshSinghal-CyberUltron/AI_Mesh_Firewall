@@ -641,3 +641,104 @@ def test_apply_field_redaction_nested_homoglyph_and_nonmutating():
     # no fields / non-container -> returned unchanged (identity).
     assert apply_field_redaction({"ssn": "x"}, []) == {"ssn": "x"}
     assert apply_field_redaction("scalar", ["ssn"]) == "scalar"
+
+
+def test_apply_field_redaction_identity_on_noop():
+    """CHG-0025: when none of the declared fields are present the SAME object is
+    returned (identity), so a caller can detect 'nothing changed' and not mislabel
+    an unchanged result as redacted."""
+    from policy_engine import apply_field_redaction
+
+    obj = {"other": "x", "nested": {"keep": "y"}}
+    assert apply_field_redaction(obj, ["ssn"]) is obj          # no match -> identity
+    masked = apply_field_redaction({"ssn": "x", "other": "y"}, ["ssn"])
+    assert masked == {"ssn": "[REDACTED]", "other": "y"}        # match -> new copy
+
+
+# ── 3b cross-stage: extra_redaction_fields projects INPUT-stage policy fields out
+# of the RESPONSE (control HTTP-path parity for "role X never sees field F", where
+# the rule fires on the CALL not the response). The caller threads an input scan's
+# policy_redaction_fields into the paired output scan.
+
+
+@pytest.mark.asyncio
+async def test_extra_redaction_fields_projects_output_without_content_match():
+    """extra_redaction_fields mask named OUTPUT fields even when THIS scan matched
+    no policy/PII (pure actor-scoped field projection)."""
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=EvaluationResult(action="allow")),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        payload = {"ssn": "SECRET-VALUE", "note": "hello world"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="tag",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+            extra_redaction_fields=["ssn"],
+        )
+    assert out["ssn"] == "[REDACTED]"
+    assert out["note"] == "hello world"
+    assert result.redacted_fields == ["ssn"]
+    assert result.policy_redaction_fields == []          # this scan declared none
+    assert any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
+
+
+@pytest.mark.asyncio
+async def test_extra_redaction_fields_ignored_on_input():
+    """Cross-stage projection is OUTPUT-only: input args are never field-masked."""
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=EvaluationResult(action="allow")),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            {"ssn": "SECRET-VALUE", "note": "x"}, scan_direction="input",
+            enforcement="tag", effective_controls=_ctrl("input"),
+            org_slug="demo", server_slug="stub", tool_name="echo",
+            extra_redaction_fields=["ssn"],
+        )
+    assert out["ssn"] == "SECRET-VALUE"
+    assert result.redacted_fields == []
+
+
+@pytest.mark.asyncio
+async def test_extra_redaction_fields_noop_when_field_absent():
+    """extra_redaction_fields naming an absent field is a true no-op: unchanged
+    output, empty redacted_fields, no field_redaction trace (identity)."""
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=EvaluationResult(action="allow")),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        payload = {"note": "nothing sensitive here"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="tag",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+            extra_redaction_fields=["ssn", "account"],
+        )
+    assert out == {"note": "nothing sensitive here"}
+    assert result.redacted_fields == []
+    assert not any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
+
+
+@pytest.mark.asyncio
+async def test_policy_redaction_fields_surfaced_on_input_scan_not_applied():
+    """An INPUT scan whose matched policy declares redaction_fields SURFACES them
+    on result.policy_redaction_fields (for the caller to project onto the response)
+    but does NOT mask the input args itself."""
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy(["ssn"], keyword="flagme"))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            {"ssn": "SECRET-VALUE", "note": "please flagme"},
+            scan_direction="input", enforcement="tag",
+            effective_controls=_ctrl("input"),
+            org_slug="demo", server_slug="stub", tool_name="echo",
+        )
+    assert result.policy_redaction_fields == ["ssn"]     # surfaced for cross-stage
+    assert result.redacted_fields == []                  # not applied on input
+    assert out["ssn"] == "SECRET-VALUE"

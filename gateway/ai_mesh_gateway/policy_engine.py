@@ -985,9 +985,10 @@ def apply_field_redaction(
 
     result = copy.deepcopy(obj)
     node_count = 0
+    masked = False
 
     def _walk(node: Any, depth: int) -> None:
-        nonlocal node_count
+        nonlocal node_count, masked
         if depth > max_depth or node_count > max_nodes:
             return
         if isinstance(node, dict):
@@ -997,6 +998,7 @@ def apply_field_redaction(
                     return
                 if _normalize_field_key(k) in targets:
                     node[k] = placeholder
+                    masked = True
                 else:
                     v = node[k]
                     if isinstance(v, (dict, list)):
@@ -1010,4 +1012,7 @@ def apply_field_redaction(
                     _walk(item, depth + 1)
 
     _walk(result, 0)
-    return result
+    # Identity on a true no-op: when none of the declared fields were present the
+    # caller must be able to tell nothing changed (``masked_out is payload``) so a
+    # field-projection scan does not mislabel an unchanged result as "redacted".
+    return result if masked else obj

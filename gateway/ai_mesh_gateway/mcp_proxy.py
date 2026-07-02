@@ -932,8 +932,14 @@ async def _mcp_security_scan(
     server_slug: str = "",
     actor: dict | None = None,
     enforcement_override: str | None = None,
+    extra_redaction_fields: list | None = None,
 ) -> tuple[object, bool, list[str], list[dict], dict]:
     """Scan MCP payload via two-tier orchestrator. Returns (payload, blocked, tags, findings, metadata).
+
+    ``extra_redaction_fields`` (3b cross-stage): named result fields to mask on an
+    OUTPUT scan in addition to this scan's own matches — the caller threads the
+    INPUT scan's ``policy_redaction_fields`` (from the returned meta) so an
+    input-stage policy match projects those fields out of the RESPONSE.
 
     ``enforcement_override`` (E12 result-redaction floor): when set, it replaces
     the resolved per-tool ``scan_action`` as the enforcement passed to the
@@ -963,6 +969,7 @@ async def _mcp_security_scan(
         server_slug=server_slug,
         tool_name=tool_name,
         actor=actor,
+        extra_redaction_fields=extra_redaction_fields,
     )
     meta = {
         "scan_trace": result.scan_trace,
@@ -975,6 +982,10 @@ async def _mcp_security_scan(
         # scan under a mutating posture). Mirrors the control HTTP path's
         # metadata.redacted_field_names so both transports audit identically.
         "redacted_fields": list(result.redacted_fields),
+        # 3b cross-stage: fields THIS scan's matched policies declared (both
+        # directions). The caller threads an INPUT scan's value back as
+        # ``extra_redaction_fields`` on the paired OUTPUT scan.
+        "policy_redaction_fields": list(result.policy_redaction_fields),
     }
     return (
         scanned,
@@ -2382,6 +2393,12 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                 params["arguments"] = arguments
                 _in_redacted = True
 
+        # 3b cross-stage: fields the INPUT-stage policy matches declared — threaded
+        # into the OUTBOUND scan so an input-stage RBAC policy match projects those
+        # fields out of the RESPONSE (control HTTP-path parity for "role X never
+        # sees field F", where the rule fires on the call, not the response).
+        _in_rfields = list((_scan_meta_in or {}).get("policy_redaction_fields") or [])
+
         if is_adapter_transport and server_config:
             # ── D5 (E12 FIX 2): the adapter transport path (stdio / websocket)
             # calls the MCP server directly and bypasses the backend
@@ -2389,9 +2406,12 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
             # OUTBOUND tool-result scan + redaction (the same two-tier pipeline
             # the streamable-http path uses) now runs below before returning, so
             # secrets/PII in stdio/ws tool RESULTS are redacted (or blocked) and
-            # never returned raw. Residual limitation: G8 per-user/role
-            # field-level policy filtering (MCPToolCallView's RBAC field masks)
-            # still only fires on the backend HTTP path — tracked as follow-up.
+            # never returned raw. G8 per-user/role field-level policy filtering
+            # (the MCPToolCallView RBAC field masks) now ALSO fires here: CHG-0024
+            # masks fields whose policy matches the RESULT, and CHG-0025 threads the
+            # INPUT-stage policy's redaction_fields (``_in_rfields``) into the
+            # outbound scan so an input-matched RBAC policy projects those fields
+            # out of the RESPONSE — control HTTP-path parity on the adapter path.
             LOG.info(
                 "mcp_proxy.adapter_transport_gateway_scan org=%s server=%s tool=%s transport=%s",
                 org_slug, server_slug, tool_name, transport,
@@ -2425,9 +2445,15 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         org_slug=org_slug,
                         server_slug=server_slug,
                         actor=mcp_actor,
+                        extra_redaction_fields=_in_rfields,
                     )
                 )
-                if _out_tags_new or _out_find_new:
+                # CHG-0025: a field-projection redaction can mask named result
+                # fields with NO PII/secret finding (the input-stage RBAC policy
+                # fired on the call, not the response). Enter the swap block on that
+                # signal too, else the masked ``_scanned_out`` would be discarded
+                # and the field would leak.
+                if _out_tags_new or _out_find_new or (_scan_meta_out or {}).get("redacted_fields"):
                     for t in _out_tags_new:
                         if t not in _out_tags:
                             _out_tags.append(t)
@@ -2479,6 +2505,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                             server_slug=server_slug,
                             actor=mcp_actor,
                             enforcement_override="redact",
+                            extra_redaction_fields=_in_rfields,
                         )
                         if _scanned_floor is not _scan_target:
                             decision = "redact"
