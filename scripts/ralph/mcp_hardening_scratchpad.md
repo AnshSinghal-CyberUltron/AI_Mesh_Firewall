@@ -434,6 +434,15 @@
       Evidence: mcp-parallel/findings/backstop-p13-broker-logs-correlation-id/finding.md. STILL OPEN (item 13
       [ ]): forward X-Request-ID to the sandbox AGENT + agent-log (last hop); gateway stdio/tools-list/internal/
       early-authz sites; OTEL/Jaeger + PG/Redis backup remain INFRA.
+      CHG-0053 (2026-07-02, item 13/1.4 — sandbox-agent leak-to-logs audit + fix): extended the CHG-0041
+      gateway-logging audit to the broker + sandbox AGENT. AUDIT: tool-call RESULTS/params are NEVER logged
+      (1.4-critical property holds); only the initialize result (capabilities, json-escaped+truncated) +
+      metadata logged. GAP: stdio_manager.py:360 logged command+args verbatim — env is never logged, but a
+      credential passed as a stdio ARG (--token XYZ / --api-key=XYZ) would land in operator logs plaintext.
+      FIX: new _safe_args_for_log() masks secret-flag VALUES (token/key/secret/password/passwd/auth/credential/
+      apikey); standalone URLs/pkg-specs untouched. +5 tests. Gate: 31 stdio-pkg + 106 broker passed (no test
+      depends on the log format). Evidence: mcp-parallel/findings/backstop-p13-broker-agent-log-hygiene/finding.md.
+      FOLLOW-UP: URL-embedded creds in a standalone arg (separate vector, not masked by the flag heuristic).
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

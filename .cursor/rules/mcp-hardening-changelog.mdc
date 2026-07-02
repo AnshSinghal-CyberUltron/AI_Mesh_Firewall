@@ -509,6 +509,18 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   test_broker_auth.py (+2). Gate: 106 broker passed. Follow-ups: forward `X-Request-ID` to the sandbox AGENT +
   agent-log (last hop); gateway stdio/tools-list/internal/early-authz sites; OTEL/Jaeger + backup infra (item
   13 stays `[ ]`). Evidence: `mcp-parallel/findings/backstop-p13-broker-logs-correlation-id/`.
+- **CHG-0053** (2026-07-02) — item 13 / 1.4 (sandbox-agent leak-to-logs audit + fix): extended the CHG-0041
+  gateway-logging audit to the broker + sandbox AGENT (prompted by the CHG-0052 broker logging). AUDIT
+  result: tool-call RESULTS/params are NEVER logged (the 1.4-critical property holds); the only server result
+  logged is the `initialize` result (capabilities, `json.dumps`-escaped + truncated — acceptable); broker
+  `_forward_sandbox_rpc` logs metadata only (CHG-0052). GAP: `stdio_manager.py:360` logged `command` + `args`
+  verbatim at INFO — `env` (the normal secret store) is never logged, but a credential passed as a stdio ARG
+  (`--token XYZ` / `--api-key=XYZ`) would land in operator logs in plaintext. FIX: new `_safe_args_for_log()`
+  masks the VALUE of any secret-looking flag (`token`/`key`/`secret`/`password`/`passwd`/`auth`/`credential`/
+  `apikey`) — `--token XYZ` → `["--token","***"]`; standalone URLs/package specs left intact. Files:
+  stdio_manager.py, test_stdio_manager_packages.py (+5). Gate: 31 stdio-pkg + 106 broker passed (no test
+  depends on the log format). Follow-up: URL-embedded creds in a standalone arg (separate vector). Evidence:
+  `mcp-parallel/findings/backstop-p13-broker-agent-log-hygiene/`.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 

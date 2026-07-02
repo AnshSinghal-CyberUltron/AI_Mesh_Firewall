@@ -344,6 +344,15 @@
     X-Request-ID (CHG-0051) → broker log (CHG-0052). +2 tests. Gate: 106 broker passed. Follow-ups: forward to
     the sandbox AGENT + agent-log (last hop); gateway stdio/tools-list/internal/early-authz; OTEL/backup infra.
     Evidence mcp-parallel/findings/backstop-p13-broker-logs-correlation-id/.
+  - CHG-0053 (2026-07-02) — item 13/1.4 (sandbox-agent leak-to-logs audit + fix): extended the CHG-0041
+    gateway-logging audit to the broker + sandbox AGENT. AUDIT: tool-call RESULTS/params are NEVER logged
+    (1.4-critical property holds); only the initialize result (capabilities, json-escaped+truncated) +
+    metadata are logged. GAP: stdio_manager.py:360 logged command+args verbatim — env is never logged, but a
+    credential passed as a stdio ARG (--token XYZ / --api-key=XYZ) would land in operator logs plaintext. FIX:
+    new _safe_args_for_log() masks secret-flag VALUES (token/key/secret/password/auth/credential/apikey);
+    standalone URLs/pkg-specs untouched. +5 tests. Gate: 31 stdio-pkg + 106 broker passed (no test depends on
+    the log format). Follow-up: URL-embedded creds in a standalone arg (separate vector). Evidence
+    mcp-parallel/findings/backstop-p13-broker-agent-log-hygiene/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

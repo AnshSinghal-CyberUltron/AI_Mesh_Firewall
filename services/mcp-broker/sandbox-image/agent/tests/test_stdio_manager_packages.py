@@ -223,3 +223,38 @@ class TestEnsureProcessPackageGating:
         err = str(exc_info.value)
         assert "not in the on-demand allowlist" not in err
         assert "must be version-pinned" not in err
+
+
+# ---------------------------------------------------------------------------
+# _safe_args_for_log (CHG-0053) — mask secret-looking arg VALUES before logging
+# ---------------------------------------------------------------------------
+
+class TestSafeArgsForLog:
+    def test_masks_value_after_secret_flag(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._safe_args_for_log(["--token", "s3cr3t", "-y", "@pkg"]) == [
+            "--token", "***", "-y", "@pkg",
+        ]
+
+    def test_masks_inline_secret_flag(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._safe_args_for_log(["--api-key=s3cr3t"]) == ["--api-key=***"]
+
+    def test_masks_password_and_auth(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._safe_args_for_log(["--password", "p", "--auth-secret=q"]) == [
+            "--password", "***", "--auth-secret=***",
+        ]
+
+    def test_leaves_non_secret_args_untouched(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        args = ["-y", "@playwright/mcp@latest", "https://mcp.example.com"]
+        assert m._safe_args_for_log(args) == args
+
+    def test_bare_positional_not_masked(self, monkeypatch):
+        # A standalone value not preceded by a secret flag is left intact (URLs /
+        # package specs must not be corrupted); flag-based secrets are the target.
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._safe_args_for_log(["mcp-remote", "tokenish-pkgname"]) == [
+            "mcp-remote", "tokenish-pkgname",
+        ]
