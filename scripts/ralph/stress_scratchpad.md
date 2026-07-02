@@ -743,6 +743,32 @@
         url single+layered (G39), oversized-blob (G40), HTML/SVG/CSS zero-click (G41), and meta/link/base/
         form/object/srcset (G42). THREE real leaks found+fixed total: G40 (streaming buffer-limit),
         G41+G42 (HTML/CSS zero-click family).
+      ★★ G43 — FOURTH REAL EXFIL LEAK: PROTOCOL-RELATIVE URL BYPASS 2026-07-02 ★★
+        THREAT: every exfil regex required https?:// AND neutralize_exfil_channels early-returned when
+        neither scheme was in the text, so a PROTOCOL-RELATIVE beacon (//evil.com/log?d=… — auto-fetches
+        with the page's OWN scheme) slipped the ENTIRE defense: markdown image/link, HTML img/css/srcset,
+        AND bare PII-in-url. probe_protorel_exfil.py: 7/7 vectors scan_hits=0, arbitrary + PII payloads
+        SURVIVE. FIX (output_guard.py): scheme made OPTIONAL — _url_tail/_url_host_prefix + _MD_IMAGE/LINK,
+        _HTML_ATTR/HREF/META, _CSS_URL, _SRCSET_URL all use (?:https?:)?// ; the early-return gate is now
+        on "//" not http/https; added _BARE_PROTOREL_RE (requires DOTTED host + path, gated by
+        _url_smuggles_data) for prose so a//b math, // comments, //localhost, //paths stay FP-clean.
+        VERIFY: 7/7 vectors now leak=False; absolute G41/G42 still closed (10/10); 6 HTML FP + 6 protorel
+        FP (//cdn img/md/bare, C++ //comment, 10//3 math, /usr//local paths) all unchanged. FROZEN: G43
+        (7 vectors + 6 FP = 13). Gate: frozen+adversarial 310 green; IN-PROCESS (GATEWAY_LIVE=0) 303
+        passed +7 skipped × 3 consecutive DETERMINISTIC (3.2s). commit a5cb3de9. REDEPLOYED (rollback-
+        pre-g43; marker _BARE_PROTOREL_RE present; health 200) — LIVE.
+        FOUR real leaks found+fixed total: G40 (streaming buffer-limit), G41+G42 (HTML/CSS zero-click
+        family), G43 (protocol-relative). Output-side exfil surface now scheme-agnostic + comprehensive.
+      ⚠ GOLDEN-HARNESS NOTE (important for the completion gate): tests/golden runs characterize:"live"
+        cases (00-09, incl. the frozen-9) through the LIVE gateway when it is reachable (conftest
+        use_live_gateway(), default GATEWAY_LIVE=1). With the gateway UP, case 08 "Draft a HIPAA-compliant
+        patient discharge summary" (contract allow) FLAKES (~1 in 4) because live TIER-2 (Bedrock) is
+        non-deterministic and sometimes flags "patient discharge summary" as PHI-sensitive — the SAME
+        documented tier-2 FP class, NOT a code regression (isolation 5/5, in-process 303×3 deterministic).
+        => the completion criterion "golden suite passes THREE CONSECUTIVE IN-PROCESS runs" must be
+        evaluated with GATEWAY_LIVE=0 (the in-process/offline characterization), which is 303×3 green.
+        The live path is validated separately in R5 (block/allow spot-checks) and is subject to tier-2
+        non-determinism by design (fail-FP-conservative, never fail-open-leak).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
