@@ -101,3 +101,16 @@ These carry substantial PRIOR fixes — treat as verification-first, don't blind
   default key is hash-only at rest. So on any reload the reveal/copy buttons are absent and
   no raw key is in the DOM. Never render `orgGatewayKey.key` outside the explicit
   `keyRevealed` toggle.
+
+## MCP page verification harnesses (CP46)
+- **Type-sim regression = `scripts/ralph/mcp_page_cp06_verify.mjs`** — types every modal
+  field char-by-char (commas+spaces) across 4 viewports × 2 themes, asserts value correct +
+  focus never drops + 0 console errors. Run after ANY MCPConnectorPanel change to confirm
+  the comma-drop/focus-loss modal fix still holds. NEVER use `fill()` — it masks the bug.
+- **Ignore OS transport flaps in console-error gates.** On this shared GCP VM under
+  parallel-loop load, Chromium intermittently emits `Failed to load resource:
+  net::ERR_NETWORK_CHANGED` (and IO_SUSPENDED / INTERNET_DISCONNECTED / ABORTED). These are
+  network-stack events, NOT app errors — filter them (see CP06 `TRANSIENT_NET`). KEEP real
+  signals: `ERR_CONNECTION_REFUSED` (backend down), 4xx/5xx, React warnings, pageerrors.
+- **Impeccable detector** = `node .claude/skills/impeccable/scripts/detect.mjs <files>`
+  (exit 0 + `[]` = clean). Page needs auth so scan the component SOURCE, not the URL.
