@@ -38,7 +38,9 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 2. Only edit files in your owned set.
 3. On commit, set claim `status: released` and remove or mark released in the claim file.
 
+| cursor-ralph-iter18 | `services/mcp-broker/sandbox-image/agent/stdio_manager.py`, `services/mcp-broker/sandbox-image/agent/tests/test_stdio_manager_packages.py`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P7.23 N2+N3 package allowlist + pinned-pkg parity | 2026-07-02T09:16:00Z | released |
+
 ## Hive
 
 - Hive ID: `hive-1782976205971-u1gav1`
-- Cursor agents: `cursor-ralph-iter1` (iter 1), `cursor-ralph-iter2` (iter 2), `cursor-ralph-iter17` (iter 17)
+- Cursor agents: `cursor-ralph-iter1` (iter 1), `cursor-ralph-iter2` (iter 2), `cursor-ralph-iter17` (iter 17), `cursor-ralph-iter18` (iter 18)

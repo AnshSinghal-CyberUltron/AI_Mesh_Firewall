@@ -1,0 +1,225 @@
+"""Tests for package-gating logic in sandbox-agent stdio_manager (P7.23 N2+N3).
+
+Verifies that _extract_package_spec / _package_name / _is_pinned helpers and
+the _ensure_process enforcement work correctly for both the PACKAGE_ALLOWLIST
+(N3) and REQUIRE_PINNED_PACKAGES (N2) controls, mirroring the gateway path.
+"""
+
+from __future__ import annotations
+
+import importlib
+import sys
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+SANDBOX_IMAGE = Path(__file__).resolve().parents[2]
+
+
+def _reload_stdio_manager(monkeypatch, **env_overrides):
+    """Re-import stdio_manager with the given env overrides active."""
+    for k, v in env_overrides.items():
+        monkeypatch.setenv(k, v)
+    # Also clear any previously-set values not in overrides so defaults apply.
+    for k in ("MCP_STDIO_PACKAGE_ALLOWLIST", "MCP_STDIO_REQUIRE_PINNED_PACKAGES"):
+        if k not in env_overrides:
+            monkeypatch.delenv(k, raising=False)
+
+    sandbox_image = str(SANDBOX_IMAGE)
+    if sandbox_image not in sys.path:
+        sys.path.insert(0, sandbox_image)
+    for mod in ("agent.stdio_manager", "agent"):
+        sys.modules.pop(mod, None)
+    return importlib.import_module("agent.stdio_manager")
+
+
+# ---------------------------------------------------------------------------
+# _extract_package_spec
+# ---------------------------------------------------------------------------
+
+class TestExtractPackageSpec:
+    def test_npx_bare(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._extract_package_spec("npx", ["-y", "mcp-remote", "https://x.com"]) == "mcp-remote"
+
+    def test_npx_pinned(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._extract_package_spec("npx", ["-y", "ruflo@1.2.3", "mcp"]) == "ruflo@1.2.3"
+
+    def test_uvx_bare(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._extract_package_spec("uvx", ["semgrep-mcp"]) == "semgrep-mcp"
+
+    def test_uvx_from_flag(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._extract_package_spec("uvx", ["--from", "semgrep-mcp==1.0", "semgrep-mcp"]) == "semgrep-mcp==1.0"
+
+    def test_node_returns_none(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._extract_package_spec("node", ["-e", "console.log('hi')"]) is None
+
+    def test_python_returns_none(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._extract_package_spec("python3", ["-m", "some_mcp"]) is None
+
+
+# ---------------------------------------------------------------------------
+# _package_name
+# ---------------------------------------------------------------------------
+
+class TestPackageName:
+    def test_bare(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._package_name("mcp-remote") == "mcp-remote"
+
+    def test_at_version(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._package_name("ruflo@1.2.3") == "ruflo"
+
+    def test_at_latest(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._package_name("ruflo@latest") == "ruflo"
+
+    def test_pypi_pin(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._package_name("semgrep-mcp==1.0.0") == "semgrep-mcp"
+
+    def test_scoped_npm(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._package_name("@anthropic/mcp@2.0.0") == "@anthropic/mcp"
+
+    def test_scoped_npm_bare(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._package_name("@anthropic/mcp") == "@anthropic/mcp"
+
+
+# ---------------------------------------------------------------------------
+# _is_pinned
+# ---------------------------------------------------------------------------
+
+class TestIsPinned:
+    def test_bare_is_not_pinned(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert not m._is_pinned("mcp-remote")
+
+    def test_at_latest_is_not_pinned(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert not m._is_pinned("ruflo@latest")
+
+    def test_at_version_is_pinned(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._is_pinned("ruflo@1.2.3")
+
+    def test_pypi_pin_is_pinned(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._is_pinned("semgrep-mcp==1.0.0")
+
+    def test_scoped_npm_pinned(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._is_pinned("@anthropic/mcp@2.0.0")
+
+    def test_scoped_npm_bare_not_pinned(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert not m._is_pinned("@anthropic/mcp")
+
+
+# ---------------------------------------------------------------------------
+# _ensure_process enforcement (N2 + N3) — unit-level, no subprocess needed
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+class TestEnsureProcessPackageGating:
+
+    async def test_allowlist_blocks_unlisted_package(self, monkeypatch):
+        """N3: package not in allowlist must be rejected before spawning."""
+        m = _reload_stdio_manager(
+            monkeypatch, MCP_STDIO_PACKAGE_ALLOWLIST="mcp-remote,ruflo"
+        )
+        with pytest.raises(RuntimeError, match="not in the on-demand allowlist"):
+            await m._ensure_process(
+                "test-org/evil-mcp", "npx", ["-y", "evil-pkg"], {}
+            )
+
+    async def test_allowlist_permits_listed_package(self, monkeypatch):
+        """N3: allowlisted package must not be rejected by the allowlist guard."""
+        m = _reload_stdio_manager(
+            monkeypatch, MCP_STDIO_PACKAGE_ALLOWLIST="mcp-remote,ruflo"
+        )
+        # Mock subprocess so we reach the registry/spawn code without a real shell.
+        with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError("npx not found")):
+            with pytest.raises(RuntimeError, match="not found") as exc_info:
+                await m._ensure_process(
+                    "test-org/srv", "npx", ["-y", "ruflo", "mcp"], {}
+                )
+        assert "not in the on-demand allowlist" not in str(exc_info.value)
+
+    async def test_allowlist_empty_permits_any(self, monkeypatch):
+        """N3: empty allowlist (default) must not block any package."""
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._PACKAGE_ALLOWLIST == set()
+        with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError("npx not found")):
+            with pytest.raises(RuntimeError, match="not found") as exc_info:
+                await m._ensure_process(
+                    "test-org/srv", "npx", ["-y", "any-unknown-pkg"], {}
+                )
+        assert "not in the on-demand allowlist" not in str(exc_info.value)
+
+    async def test_require_pinned_blocks_bare(self, monkeypatch):
+        """N2: unpinned spec must be rejected when REQUIRE_PINNED is true."""
+        m = _reload_stdio_manager(
+            monkeypatch, MCP_STDIO_REQUIRE_PINNED_PACKAGES="true"
+        )
+        with pytest.raises(RuntimeError, match="must be version-pinned"):
+            await m._ensure_process(
+                "test-org/srv", "npx", ["-y", "mcp-remote"], {}
+            )
+
+    async def test_require_pinned_blocks_at_latest(self, monkeypatch):
+        """N2: @latest spec must be rejected when REQUIRE_PINNED is true."""
+        m = _reload_stdio_manager(
+            monkeypatch, MCP_STDIO_REQUIRE_PINNED_PACKAGES="true"
+        )
+        with pytest.raises(RuntimeError, match="must be version-pinned"):
+            await m._ensure_process(
+                "test-org/srv", "npx", ["-y", "ruflo@latest"], {}
+            )
+
+    async def test_require_pinned_permits_versioned(self, monkeypatch):
+        """N2: pinned spec must pass the pinned guard."""
+        m = _reload_stdio_manager(
+            monkeypatch, MCP_STDIO_REQUIRE_PINNED_PACKAGES="true"
+        )
+        with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError("npx not found")):
+            with pytest.raises(RuntimeError, match="not found") as exc_info:
+                await m._ensure_process(
+                    "test-org/srv", "npx", ["-y", "ruflo@1.2.3"], {}
+                )
+        assert "must be version-pinned" not in str(exc_info.value)
+
+    async def test_require_pinned_off_by_default(self, monkeypatch):
+        """N2: default (off) must not block unpinned specs."""
+        m = _reload_stdio_manager(monkeypatch)
+        assert not m._REQUIRE_PINNED_PACKAGES
+        with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError("npx not found")):
+            with pytest.raises(RuntimeError, match="not found") as exc_info:
+                await m._ensure_process(
+                    "test-org/srv", "npx", ["-y", "mcp-remote@latest"], {}
+                )
+        assert "must be version-pinned" not in str(exc_info.value)
+
+    async def test_node_interpreter_bypasses_package_checks(self, monkeypatch):
+        """N2+N3: non-fetching interpreters (node/python) skip package checks."""
+        m = _reload_stdio_manager(
+            monkeypatch,
+            MCP_STDIO_PACKAGE_ALLOWLIST="nothing",
+            MCP_STDIO_REQUIRE_PINNED_PACKAGES="true",
+        )
+        with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError("node not found")):
+            with pytest.raises(RuntimeError, match="not found") as exc_info:
+                await m._ensure_process(
+                    "test-org/srv", "node", ["-e", "require('x')"], {}
+                )
+        err = str(exc_info.value)
+        assert "not in the on-demand allowlist" not in err
+        assert "must be version-pinned" not in err

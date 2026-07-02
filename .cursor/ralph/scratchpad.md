@@ -90,6 +90,13 @@ status: ACTIVE
        one Authorize + pending state → tools populate; type long strings in every dialog field, focus kept).
        **Verified 2026-07-02 (iter15):** combined E2E 12/12 PASS (`playwright_mcp_b1_b2_b4_e2e.mjs` →
        `mcp-parallel/findings/p5-17/`). Tools-populate after authorize = manual OAuth (headed noVNC).
+- [x] **P7.23 N2+N3 (iter18):** Package-allowlist parity + pinned-package enforcement added to
+       `sandbox-image/agent/stdio_manager.py`. Helpers `_extract_package_spec`, `_package_name`, `_is_pinned`
+       + constants `_PACKAGE_ALLOWLIST` (env `MCP_STDIO_PACKAGE_ALLOWLIST`) and `_REQUIRE_PINNED_PACKAGES`
+       (env `MCP_STDIO_REQUIRE_PINNED_PACKAGES`, default off) ported from gateway `mcp_stdio_adapter.py`.
+       Enforcement in `_ensure_process` after command-allowlist check (same position as gateway path).
+       Tests: 26/26 new `test_stdio_manager_packages.py` + 41/41 agent + 95/95 broker. Frontend build ✓.
+       **Remaining N4–N7:** pre-bake, registry-pin, uv/PyPI equivalents (Claude-owned: N4+ need gateway changes).
 
 ## P6 — Integrate + verify with the parallel session
 - [ ] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:

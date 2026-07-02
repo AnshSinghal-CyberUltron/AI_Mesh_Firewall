@@ -42,6 +42,23 @@ _ALLOWED_COMMANDS = {
     if c.strip()
 }
 
+# Optional comma-separated allowlist of npm/PyPI package names permitted for
+# on-demand fetch (e.g. "semgrep-mcp,mcp-remote"). Empty = allow any package
+# (the sandbox already constrains which servers are registered per-org).
+# Mirrors gateway mcp_stdio_adapter._PACKAGE_ALLOWLIST for parity.
+_PACKAGE_ALLOWLIST = {
+    p.strip().lower()
+    for p in os.environ.get("MCP_STDIO_PACKAGE_ALLOWLIST", "").split(",")
+    if p.strip()
+}
+
+# When true, reject unpinned (@latest / bare) package specs so every fetch is
+# reproducible and the supply-chain attack window is eliminated.
+# Mirrors gateway mcp_stdio_adapter._REQUIRE_PINNED_PACKAGES for parity.
+_REQUIRE_PINNED_PACKAGES = os.environ.get(
+    "MCP_STDIO_REQUIRE_PINNED_PACKAGES", "false"
+).lower() in ("1", "true", "yes")
+
 _init_semaphore: asyncio.Semaphore | None = None
 _processes: dict[str, StdioProcess] = {}
 _registry_lock = asyncio.Lock()
@@ -50,6 +67,52 @@ _reaper_task: asyncio.Task | None = None
 
 def _command_basename(command: str) -> str:
     return os.path.basename(command).lower()
+
+
+def _extract_package_spec(command: str, args: list[str]) -> str | None:
+    """Best-effort extraction of the package spec an npx/uvx call will fetch.
+
+    npx  ["-y", "mcp-remote", "https://.."]   -> "mcp-remote"
+    npx  ["-y", "ruflo@latest", "mcp"]         -> "ruflo@latest"
+    uvx  ["semgrep-mcp"]                        -> "semgrep-mcp"
+    uvx  ["--from", "semgrep-mcp==1.0", ".."]  -> "semgrep-mcp==1.0"
+    Returns None for runtimes that don't fetch packages (node/python).
+    """
+    if _command_basename(command) not in ("npx", "uvx", "uv"):
+        return None
+    skip = {"-y", "--yes", "-q", "--quiet", "tool", "run"}
+    it = iter(args)
+    for tok in it:
+        if tok in ("--from", "--with", "--package", "-p"):
+            return next(it, None)
+        if tok.startswith("-") or tok in skip:
+            continue
+        return tok
+    return None
+
+
+def _package_name(spec: str) -> str:
+    """Strip version/url from a package spec to get the bare name (lowercase)."""
+    if spec.startswith("@"):  # scoped npm pkg @scope/name@version
+        at = spec.rfind("@")
+        return (spec[:at] if at > 0 else spec).lower()
+    for sep in ("==", ">=", "<=", "~=", "@", ">", "<"):
+        if sep in spec:
+            return spec.split(sep, 1)[0].lower()
+    return spec.lower()
+
+
+def _is_pinned(spec: str) -> bool:
+    """True if the spec carries an explicit (non-@latest) version."""
+    if spec.startswith("@"):
+        at = spec.rfind("@")
+        ver = spec[at + 1:] if at > 0 else ""
+        return bool(ver) and ver != "latest"
+    for sep in ("==", "@"):
+        if sep in spec:
+            ver = spec.split(sep, 1)[1]
+            return bool(ver) and ver != "latest"
+    return False
 
 
 def _get_init_semaphore() -> asyncio.Semaphore:
@@ -210,6 +273,23 @@ async def _ensure_process(
             f"Command '{command}' is not permitted for stdio MCP servers. "
             f"Allowed commands: {', '.join(sorted(_ALLOWED_COMMANDS))}."
         )
+
+    # Package allowlist + pinned-version enforcement (N3 + N2).
+    # Mirrors the same checks in gateway mcp_stdio_adapter so both paths have
+    # identical supply-chain hardening regardless of MCP_STDIO_IN_PROCESS.
+    spec = _extract_package_spec(command, args)
+    if spec is not None:
+        name = _package_name(spec)
+        if _PACKAGE_ALLOWLIST and name not in _PACKAGE_ALLOWLIST:
+            raise RuntimeError(
+                f"Package '{name}' is not in the on-demand allowlist. "
+                f"Allowed: {', '.join(sorted(_PACKAGE_ALLOWLIST))}."
+            )
+        if _REQUIRE_PINNED_PACKAGES and not _is_pinned(spec):
+            raise RuntimeError(
+                f"Package '{spec}' must be version-pinned (e.g. 'pkg@1.2.3'); "
+                "unpinned/@latest specs are disabled by policy."
+            )
 
     async with _registry_lock:
         if key in _processes:
