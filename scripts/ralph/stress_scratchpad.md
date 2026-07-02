@@ -70,7 +70,23 @@
         R4b (f176fc76) scanner.py: _reassemble_split_words glues short-fragment runs + re-segments vs
           injection vocab → fixed G3 (2 chunk-split/spaced injection). Vocab-curated → zero FP.
       REMAINING R4 hardening (NOT yet encoded as findings; lower priority than R5/R6 completion gates):
-        G10 semantic-redact typed-placeholder.
+        (all originally-listed R4 gaps G1-G13 now DONE; new adjacent findings tracked below.)
+      G10 DONE 2026-07-02: tier-2 semantic redact was a byte no-op. Guard model flags PII/secret with no
+        deterministic regex (free-text names, non-standard card/ID, passphrases) -> redact_all no-op ->
+        redacted==original -> value egressed verbatim (relabeled flag). Fixed in output_guard.py:
+        OutputVerdict.redaction_spans carries the guard model's raw evidence spans (captured in inspect()
+        before display-mask, kept off client/telemetry surface); sanitizer masks them with typed placeholder
+        [REDACTED_PII/CARD/PHI/SECRET]. Bounded 3..120 chars, literal, redactable-categories-only (surgical;
+        never blanks a legit answer or acts on jailbreak evidence). No main.py change. 7 golden cases frozen.
+        Full gateway 1056 passed; golden 70 passed/7 skipped 3x.
+      G16 (NEW, reproduced 2026-07-02): the tier-2 display OutputVerdict.matched_patterns still carries a RAW
+        no-op-redactable value (redact_all can't mask a free-text name) and flows to the client enforcement
+        envelope (main.py:7457) — a metadata side-channel that can leak the just-redacted value. Distinct from
+        G10 (response-body egress, now fixed). Fix needs a key-vs-value discriminator: matched_patterns holds
+        EITHER pattern-keys ("ssn"/"email" — must stay readable) OR raw evidence spans (must be masked), and
+        length alone can't tell them apart. Candidate: mask only entries that also appear in redaction_spans.
+        NEXT-tier item (raw_output/response_snippet telemetry fields are by-design operator control-plane, not
+        a client leak).
       G15 DONE 2026-07-02: scanner injection verb-alternation coverage. "ignore all previous instructions"
         blocked but disregard/forget/override + two-word qualifier bypassed even single-turn (disregard/forget
         patterns took only ONE qualifier; no "override"). Fixed by adding one unified verb-alternation pattern
