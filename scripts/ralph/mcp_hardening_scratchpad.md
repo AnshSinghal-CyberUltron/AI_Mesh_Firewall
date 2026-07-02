@@ -323,6 +323,19 @@
       org. +3 tests (secret/IP → audited redact w/ tags + request-id; encoded-exfil → audited block; benign →
       NO audit). Gate: 3 + 1363 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence:
       mcp-parallel/findings/backstop-p9-tools-list-audit/finding.md.
+      CHG-0082 (2026-07-02, MEDIUM — bare-REST parity, applying the CHG-0081 audit + CHG-0077 scan lens to the
+      other REST routes): (A) org_mcp_tool_call (REST POST .../tools/call) audited a result BLOCK but swapped
+      a REDACTED result in SILENTLY (no _record_gateway_event) → a secret/PII/IP masked on the primary
+      bare-REST tool-call path was invisible to audit/SIEM (asymmetric with the block branch + org jsonrpc).
+      (B) org_mcp_tools_list (REST GET .../tools) FILTERED but NEVER scanned tool descriptions (JSON-RPC
+      tools/list already scans, CHG-0077) → a secret/PII/IP or tool-poisoning payload in a description
+      egressed on this REST endpoint. FIX (mcp_proxy.py): (A) audit decision=redact before swapping the masked
+      result (mirrors the block branch); (B) run the REST tools-list through _scan_tool_result_floor (mask;
+      block unmaskable/encoded-exfil → 403 tools_withheld) + audit block/redact (reason=tools_list_metadata_
+      scan); clean list not audited. Reuses the floor chain (CHG-0074/0075/0076/0079); actor=None. +3 tests
+      (tool-call secret result → masked AND audited redact; REST tools-list secret+IP in description → masked
+      + audited redact; benign → no audit). Gate: 3 + 1369 gateway passed, 0 failed; broker -k "not websocket"
+      108 passed. Evidence: mcp-parallel/findings/backstop-p9-bare-rest-parity/finding.md.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

@@ -3873,6 +3873,23 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
                             status_code=403,
                         )
                     if scanned_content is not result_content:
+                        # CHG-0082: audit the result REDACTION. The block branch above
+                        # audits, but a masked (redacted) result was swapped in SILENTLY
+                        # — so a secret/PII/IP masked on the bare-REST tool-call path was
+                        # invisible to audit/SIEM, asymmetric with the block path AND with
+                        # org_mcp_jsonrpc (which audits redact). Record it before egress.
+                        await _record_gateway_event(
+                            org_slug=org_slug,
+                            server_slug=server_slug,
+                            tool_name=tool_name,
+                            decision="redact",
+                            reason="pii_redacted_outbound",
+                            request_id=_req_id,
+                            latency_ms=int((time.time() - call_t0) * 1000),
+                            metadata={"transport": "rest", "enforced_at": "gateway", **scan_meta_out},
+                            compliance_tags=list(out_tags),
+                            scan_findings=list(out_findings),
+                        )
                         # Swap the masked content back under whichever key carried it.
                         if data.get("result") is not None:
                             data["result"] = scanned_content
@@ -3922,6 +3939,41 @@ async def org_mcp_tools_list(org_slug: str, server_slug: str, request: Request):
                 data["results"] = _filter_tools_by_key_allowlist(
                     _filter_tools_by_enabled(data["results"], enabled_info), _mcp_auth
                 )
+            # CHG-0082: scan the tool DESCRIPTIONS/metadata (tool-poisoning / secret/PII/IP
+            # leak surface) — this REST tools endpoint filtered but did NOT scan, while the
+            # JSON-RPC tools/list already scans (CHG-0077). Reuse the result-redaction floor
+            # (masks a maskable leak; blocks unmaskable/encoded-exfil metadata) + audit the
+            # block/redact decision. Parity + defense-in-depth for a compromised tool
+            # registration.
+            _tools_ref = data if isinstance(data, list) else (
+                data.get("results") if isinstance(data, dict) else None
+            )
+            if _tools_ref is not None:
+                _tl_scanned, _tl_blocked, _tl_tags, _tl_find, _tl_meta = await _scan_tool_result_floor(
+                    _tools_ref, tool_name="tools/list", enabled_info=enabled_info,
+                    org_slug=org_slug, server_slug=server_slug, actor=None,
+                )
+                if _tl_blocked or (_tl_scanned is not _tools_ref):
+                    await _record_gateway_event(
+                        org_slug=org_slug, server_slug=server_slug, tool_name="tools/list",
+                        decision="block" if _tl_blocked else "redact",
+                        reason="tools_list_metadata_scan",
+                        request_id=_mcp_request_correlation_id(request),
+                        metadata={"transport": "rest", "enforced_at": "gateway_tools_list"},
+                        compliance_tags=list(_tl_tags), scan_findings=_tl_find,
+                    )
+                if _tl_blocked:
+                    return JSONResponse(
+                        content={"error": "tools_withheld", "detail": (
+                            "tool metadata matched sensitive content"),
+                            "compliance_tags": list(_tl_tags)},
+                        status_code=403,
+                    )
+                if _tl_scanned is not _tools_ref:
+                    if isinstance(data, list):
+                        data = _tl_scanned
+                    else:
+                        data["results"] = _tl_scanned
             return JSONResponse(content=data, status_code=resp.status_code)
         except httpx.TimeoutException as exc:
             return JSONResponse(

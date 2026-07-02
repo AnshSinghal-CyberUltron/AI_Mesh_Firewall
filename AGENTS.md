@@ -688,6 +688,17 @@
     new request_id param = _mcp_request_correlation_id from both org sub-paths); a clean tools/list is NOT
     audited (no noise). +3 tests. Gate: 3 + 1363 gateway passed, 0 failed; broker -k "not websocket" 108
     passed. Evidence mcp-parallel/findings/backstop-p9-tools-list-audit/.
+  - CHG-0082 (2026-07-02) — G2 item 5/9 / 1.4 (bare-REST parity, applying the CHG-0081 audit + CHG-0077 scan
+    lens to the other REST routes), MEDIUM: (A) org_mcp_tool_call (REST POST .../tools/call) audited a result
+    BLOCK but swapped a REDACTED result in SILENTLY (no _record_gateway_event) → a secret/PII/IP masked on
+    the primary bare-REST tool-call path was invisible to audit (asymmetric with the block branch + org
+    jsonrpc). (B) org_mcp_tools_list (REST GET .../tools) FILTERED but NEVER scanned tool descriptions (JSON-
+    RPC tools/list already scans, CHG-0077) → a secret/PII/IP or tool-poisoning payload in a description
+    egressed on this REST endpoint. FIX (mcp_proxy.py): (A) audit decision=redact before swapping the masked
+    result; (B) run the REST tools-list through _scan_tool_result_floor (mask/block unmaskable→403) + audit
+    block/redact; clean list not audited. Reuses the floor chain (CHG-0074/0075/0076/0079). +3 tests. Gate: 3
+    + 1369 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
+    mcp-parallel/findings/backstop-p9-bare-rest-parity/.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

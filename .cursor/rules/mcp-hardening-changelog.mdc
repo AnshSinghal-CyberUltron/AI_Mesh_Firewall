@@ -1074,6 +1074,24 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   → audited `decision=block`; benign tools/list → NO audit event). Gate: 3 + 1363 gateway passed, 0 failed;
   broker `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p9-tools-list-audit/`.
 
+- **CHG-0082** (2026-07-02) — G2 item 5/9 / 1.4 (**bare-REST parity** — applying the CHG-0081 audit +
+  CHG-0077 scan lens to the other REST routes), MEDIUM. **(A)** `org_mcp_tool_call` (REST POST
+  `.../tools/call`, a primary tenant tool path) audited a result BLOCK but, on a REDACT, swapped the masked
+  content in **silently** (no `_record_gateway_event`) → a secret/PII/IP masked on the bare-REST tool-call
+  path was invisible to audit/SIEM, asymmetric with the block branch AND `org_mcp_jsonrpc`. **(B)**
+  `org_mcp_tools_list` (REST GET `.../tools`) FILTERED tools (enabled + per-key allowlist) but NEVER scanned
+  the tool descriptions, while the JSON-RPC `tools/list` already scans them (CHG-0077) → a
+  secret/PII/internal-IP (or encoded-exfil / tool-poisoning payload) in a tool description egressed on this
+  REST discovery endpoint. FIX (`mcp_proxy.py`): (A) record a `decision="redact"` gateway event (tags,
+  findings, request-id, latency) before swapping the masked result — mirroring the block branch. (B) run the
+  filtered tools through `_scan_tool_result_floor` (masks maskable leak; blocks unmaskable/encoded-exfil →
+  403 `tools_withheld`) + audit the block/redact (`reason="tools_list_metadata_scan"`); a clean list is NOT
+  audited. Reuses the whole floor chain (CHG-0074/0075/0076/0079); actor=None (descriptions not
+  actor-scoped). +3 tests (bare-REST tool call w/ a secret result → masked AND audited `decision=redact`;
+  REST tools-list w/ secret+IP in a description → masked + audited redact; benign REST tools-list →
+  unchanged, no audit). Gate: 3 + 1369 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed.
+  Evidence: `mcp-parallel/findings/backstop-p9-bare-rest-parity/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
