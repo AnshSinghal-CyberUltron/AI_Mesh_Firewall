@@ -427,3 +427,10 @@
       Overview data-integrity + responsive now FULLY closed. No fix (renders correctly). Only OPEN items left:
       MCPConnectorPanel overflow (never_edit, active) + cross-source per-module discrepancy (backend-semantics).
       MCP claim: active.
+      [iter+] ui/* primitives (all 20) verified CLEAN, no fix: detector 0-findings except Tabs border-b-2
+      (=active-tab underline FP; TabsTrigger has role=tab/aria-selected/roving tabindex/focus-visible ring).
+      Interactive primitives all have focus-visible:ring + disabled + hover both themes (Select = native
+      wrapper w/ focus:ring, minor focus: vs focus-visible: nit, not a bug). Behavioral: Settings toggle
+      flips aria-checked + persists to localStorage. Rendered in-context both themes across session. Tabs
+      primitive's ONLY consumer = MCPConnectorPanel (never_edit); Firewall12 tabs are custom activeSection.
+      MCP claim: active.
