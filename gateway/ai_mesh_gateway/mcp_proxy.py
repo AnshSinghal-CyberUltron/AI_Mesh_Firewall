@@ -491,6 +491,24 @@ def _filter_tools_by_key_allowlist(tools: list, auth) -> list:
     return out
 
 
+def _mcp_request_correlation_id(request, msg_id=None) -> str:
+    """Stable per-request correlation id for MCP audit events + cross-service tracing.
+
+    CHG-0050: prefer the inbound ``X-Request-ID`` header, so a caller / upstream trace
+    id flows into every MCPEvent for the request and can be correlated across
+    gateway → broker → sandbox. Falls back to the JSON-RPC ``id`` (JSON-RPC route),
+    else ``""`` (which ``_record_gateway_event`` turns into a generated ``mcp-<ms>``
+    id). Bounded so a hostile header can't bloat the audit record.
+    """
+    try:
+        hdr = request.headers.get("x-request-id")
+    except Exception:
+        hdr = None
+    if hdr:
+        return str(hdr)[:200]
+    return str(msg_id) if msg_id is not None else ""
+
+
 async def _record_gateway_event(
     org_slug: str,
     server_slug: str,
@@ -2601,7 +2619,9 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
         # ── MCP security scan (two-tier policy + optional Bedrock) ──
         _scan_action = _effective_scan_action(tool_name, enabled_info)
         # Stable per-call id for audit correlation + gateway/backend de-dup.
-        _req_id = str(msg_id) if msg_id is not None else ""
+        # CHG-0050: honor an inbound X-Request-ID (cross-service trace) over the
+        # repeatable JSON-RPC id.
+        _req_id = _mcp_request_correlation_id(request, msg_id)
         _in_redacted = False
         _inbound_tags: list[str] = []
         _inbound_findings: list[dict] = []
@@ -3123,6 +3143,10 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
             "agent_id": getattr(_mcp_auth, "prefix", None) or "",
             "roles": list(getattr(_mcp_auth, "roles", None) or []),
         }
+    # CHG-0050: per-request correlation id (honors an inbound X-Request-ID) threaded
+    # into every audit event below, so a bare-REST tool call is traceable end to end
+    # (this route previously recorded audit events with NO correlation id at all).
+    _req_id = _mcp_request_correlation_id(request)
 
     # S12 (CHG-0031): per-org TPM + burst/RPM rate limit — parity with
     # org_mcp_jsonrpc. This bare REST route enforced the per-key tool-call CAP but
@@ -3156,6 +3180,7 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
             await _record_gateway_event(
                 org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
                 decision="block", reason="tool_not_allowed_for_key",
+                request_id=_req_id,
                 latency_ms=int((time.time() - call_t0) * 1000),
                 metadata={"transport": "rest", "enforced_at": "gateway"},
             )
@@ -3171,6 +3196,7 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
                 await _record_gateway_event(
                     org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
                     decision="block", reason="tool_call_cap_exceeded",
+                    request_id=_req_id,
                     latency_ms=int((time.time() - call_t0) * 1000),
                     metadata={"transport": "rest", "enforced_at": "gateway",
                               "tool_call_count": _call_n, "tool_call_cap": _mcp_cap},
@@ -3185,6 +3211,7 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
             await _record_gateway_event(
                 org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
                 decision="block", reason="tool_disabled",
+                request_id=_req_id,
                 latency_ms=int((time.time() - call_t0) * 1000),
                 metadata={"transport": "rest", "enforced_at": "gateway"},
             )
@@ -3209,6 +3236,7 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
                 tool_name=tool_name,
                 decision="block",
                 reason="pii_blocked_inbound",
+                request_id=_req_id,
                 latency_ms=int((time.time() - call_t0) * 1000),
                 metadata={"transport": "rest", "enforced_at": "gateway", **scan_meta_in},
                 compliance_tags=list(in_tags),
@@ -3270,6 +3298,7 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
                             tool_name=tool_name,
                             decision="block",
                             reason="pii_blocked_outbound",
+                            request_id=_req_id,
                             latency_ms=int((time.time() - call_t0) * 1000),
                             metadata={"transport": "rest", "enforced_at": "gateway", **scan_meta_out},
                             compliance_tags=list(out_tags),

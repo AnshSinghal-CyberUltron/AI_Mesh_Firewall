@@ -695,3 +695,49 @@ async def test_ext_blocks_credential_in_prompts_get_args():
     data = _decode(resp)
     assert "error" in data and "compliance tags" in data["error"]["message"]
     client.send.assert_not_awaited()               # blocked before forwarding upstream
+
+
+# ── CHG-0050: request correlation id (X-Request-ID) on the bare REST audit path ──
+
+
+@pytest.mark.asyncio
+async def test_rest_audit_carries_x_request_id_correlation():
+    # A bare-REST tool call must thread the inbound X-Request-ID into its audit event
+    # (this route previously recorded audit events with NO correlation id at all), so
+    # a block is traceable across gateway -> broker -> sandbox.
+    req = _rest_request(_auth(allowed=["other_tool"]), {"name": "fetch", "arguments": _BENIGN_ARG})
+    req.headers = {"x-request-id": "trace-xyz-123"}
+    rec = AsyncMock()
+    backend = _http_resp({"result": [{"type": "text", "text": "ok"}]})
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", rec),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_fake_client([backend])),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 403                          # "fetch" not in key allowlist -> block
+    assert rec.await_count >= 1
+    assert rec.await_args.kwargs.get("request_id") == "trace-xyz-123"
+
+
+def test_correlation_id_prefers_x_request_id():
+    req = SimpleNamespace(headers={"x-request-id": "trace-abc"})
+    assert mcp_proxy._mcp_request_correlation_id(req, 5) == "trace-abc"
+
+
+def test_correlation_id_falls_back_to_msg_id():
+    assert mcp_proxy._mcp_request_correlation_id(SimpleNamespace(headers={}), 42) == "42"
+
+
+def test_correlation_id_empty_when_neither():
+    assert mcp_proxy._mcp_request_correlation_id(SimpleNamespace(headers={}), None) == ""
+
+
+def test_correlation_id_bounds_hostile_header():
+    req = SimpleNamespace(headers={"x-request-id": "x" * 500})
+    assert len(mcp_proxy._mcp_request_correlation_id(req, None)) == 200
+
+
+def test_correlation_id_survives_missing_headers_attr():
+    # A request object with no `.headers` must not raise (internal call paths).
+    assert mcp_proxy._mcp_request_correlation_id(SimpleNamespace(), 7) == "7"

@@ -402,6 +402,17 @@
       `docker compose -f docker-compose.yml -f docker-compose.override.yml config` renders gateway.healthcheck
       + restart=unless-stopped; base+prod merged config also valid. STILL OPEN (item stays [ ]): (1) OTEL/
       Jaeger distributed tracing; (3) PG/Redis backup verification; optional peer service_healthy upgrade.
+      CHG-0050 (2026-07-02, LOW-MED — code-level tracing gap): _record_gateway_event defaults request_id to
+      a throwaway mcp-<ms> timestamp. The bare REST route org_mcp_tool_call recorded ALL audit events with NO
+      request_id; org_mcp_jsonrpc used the repeatable JSON-RPC id only on main sites; NEITHER honored an
+      inbound X-Request-ID — so a tool call's decisions weren't correlatable across the audit trail or
+      gateway->broker->sandbox. FIX: new _mcp_request_correlation_id(request, msg_id) prefers X-Request-ID
+      (bounded 200 chars), then JSON-RPC id, else "". Threaded into ALL 5 REST audit events (was zero); the
+      jsonrpc _req_id now uses it. +6 tests (integration: REST audit carries the header via patched
+      _record_gateway_event; unit: prefer/fallback/empty/bound-hostile/no-.headers). Gate: 33 bare-proxy +
+      1115 gateway passed. Evidence: mcp-parallel/findings/backstop-p13-request-correlation-id/finding.md.
+      STILL OPEN (item 13 [ ]): thread _req_id into jsonrpc early authz sites + internal_tools_call; propagate
+      into broker_send_rpc for cross-service tracing; OTEL/Jaeger + PG/Redis backup remain INFRA.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

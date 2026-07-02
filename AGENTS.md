@@ -316,6 +316,16 @@
     expired record is BY DESIGN (get_stored_token re-checks expires_at; has_stored_token reports existence).
     No production code change. Gate: 4 oauth-ttl + 1109 gateway passed. Evidence
     mcp-parallel/findings/backstop-p11-redis-write-audit/.
+  - CHG-0050 (2026-07-02) — G4 item 13 (tracing, LOW-MED): _record_gateway_event defaults request_id to a
+    throwaway mcp-<ms> timestamp. The bare REST route org_mcp_tool_call recorded ALL audit events with NO
+    request_id; org_mcp_jsonrpc used the repeatable JSON-RPC id only on its main sites; NEITHER honored an
+    inbound X-Request-ID — so a tool call's block/redact/tag decisions weren't correlatable across the audit
+    trail or gateway->broker->sandbox. FIX: new _mcp_request_correlation_id(request, msg_id) prefers
+    X-Request-ID (bounded 200 chars), then JSON-RPC id, else "". Threaded into ALL 5 REST audit events (was
+    zero) + the JSON-RPC _req_id now uses it. +6 tests (integration: REST audit carries the header; unit:
+    prefer/fallback/empty/bound/no-headers). Gate: 33 bare-proxy + 1115 gateway passed. Follow-ups: early
+    jsonrpc authz sites + internal_tools_call + broker_send_rpc propagation; OTEL/backup infra. Evidence
+    mcp-parallel/findings/backstop-p13-request-correlation-id/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
