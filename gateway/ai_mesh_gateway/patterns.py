@@ -17,6 +17,7 @@ import base64
 import functools
 import re
 import unicodedata
+import urllib.parse
 from typing import Dict, List
 
 
@@ -126,6 +127,14 @@ _MAX_DECODE_BYTES = 4096
 # laundering"). Depth is bounded and each layer is size + printable capped, so the
 # recursion is decode-bomb safe.
 _MAX_DECODE_DEPTH = 3
+# CHG-0056: percent/URL-encoding obfuscation. A token carrying at least one %XX escape
+# (PII/secret hidden in a URL query param, e.g. ``john.doe%40example.com``, or a
+# %-encoded SSN) breaks the raw patterns but is trivially recoverable. Token count is
+# bounded to stay decode-bomb safe.
+_PERCENT_TOKEN_RE = re.compile(
+    r"[A-Za-z0-9._~%@+/:=?&|-]*%[0-9A-Fa-f]{2}[A-Za-z0-9._~%@+/:=?&|-]*"
+)
+_MAX_URL_DECODE_TOKENS = 32
 
 
 def _printable_ratio(s: str) -> float:
@@ -968,6 +977,18 @@ def _redact_obfuscated(original: str, result: str) -> str:
         dcanon = canonicalize_for_detection(dec)
         if (_detect_pii_core(dec) or _detect_secrets_core(dec)
                 or (dcanon != dec and (_detect_pii_core(dcanon) or _detect_secrets_core(dcanon)))):
+            masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
+    # CHG-0056: percent/URL-encoding obfuscation — a %XX-encoded PII/secret (e.g. an
+    # email in a URL query param) breaks the raw pattern but is trivially recoverable.
+    # Decode tokens carrying a %XX and, if the decoded form matches PII/secret, mask the
+    # whole encoded token. Only masks when decoded PII/secret is found, so benign
+    # percent text ("50%20off", "C%3A%5Cpath") is untouched. Token count bounded.
+    for tok in _PERCENT_TOKEN_RE.findall(original)[:_MAX_URL_DECODE_TOKENS]:
+        try:
+            dec = urllib.parse.unquote(tok)
+        except Exception:
+            continue
+        if dec != tok and (_detect_pii_core(dec) or _detect_secrets_core(dec)):
             masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
     for sub, tag in sorted(masks, key=lambda x: -len(x[0])):
         if sub and sub in result:

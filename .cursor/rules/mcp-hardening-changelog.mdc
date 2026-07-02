@@ -549,6 +549,19 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `detect_secrets` now flags `api_key_assignment`. Files: patterns.py, test_api_key_assignment_redaction.py
   (+13). Gate: 13 api-key + 1135 gateway passed. Evidence:
   `mcp-parallel/findings/backstop-p2-api-key-assignment-gap/`.
+- **CHG-0056** (2026-07-02) — G2 item 2 / 1.4 (URL-encoding obfuscation bypass, MEDIUM; found continuing the
+  CHG-0054/0055 adversarial 1.4 verification of the encoding-obfuscation surface): `redact_all` →
+  `_redact_obfuscated` de-obfuscated base64 / hex / url-safe-base64 / double-base64 (all caught) but did NOT
+  URL-decode — so `john.doe%40example.com` (email in a URL query param) or a %-encoded SSN (`123%2d45%2d6789`)
+  broke the raw patterns (`@`→`%40`, `-`→`%2d`) and the token egressed (trivially recoverable). FIX: a
+  percent-decode pass — for each token carrying a `%XX` escape (`_PERCENT_TOKEN_RE`, bounded to
+  `_MAX_URL_DECODE_TOKENS=32` decode-bomb-safe), `urllib.parse.unquote` it and, if the decoded form matches
+  PII/secret, mask the whole token `[ENCODED_SECRET_REDACTED]`. Only masks when decoded PII/secret is found,
+  so benign percent text (`50%20off`→"50 off", `C%3A%5Cpath`, `95%`, `?p=2%2C3`) is untouched. base64/hex +
+  plain-PII behaviour unchanged. Files: patterns.py, test_url_encoding_redaction.py (+11). Gate: 11 url-enc +
+  1158 gateway passed. DOCUMENTED RESIDUAL (perf/security tradeoff, NOT changed): the base64/hex decode cap
+  `_MAX_DECODE_TOKENS=12` (a DoS bound) lets a crafted result pad 12+ decoy base64 tokens to hide the real
+  encoded secret past the cap. Evidence: `mcp-parallel/findings/backstop-p2-url-encoding-obfuscation/`.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 

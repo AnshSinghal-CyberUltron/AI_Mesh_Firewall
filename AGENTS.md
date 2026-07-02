@@ -371,6 +371,15 @@
     chars w/ a digit, not prose) so api_key=none / DEBUG=true stay safe; tagged SECRET; masked via
     _mask_secret_assignment -> api_key=***; detect_secrets now flags it. patterns.py + 13 tests. Gate: 13
     api-key + 1135 gateway passed. Evidence mcp-parallel/findings/backstop-p2-api-key-assignment-gap/.
+  - CHG-0056 (2026-07-02) — G2 item 2 / 1.4 (URL-encoding obfuscation bypass, MEDIUM; found continuing the
+    CHG-0054/0055 adversarial verification): redact_all de-obfuscated base64/hex/url-safe-b64/double-b64 (all
+    caught) but did NOT URL-decode — so john.doe%40example.com (email in a URL query param) / %-encoded SSN
+    egressed (trivially recoverable). FIX: percent-decode pass in _redact_obfuscated — unquote each %XX-token
+    (bounded _MAX_URL_DECODE_TOKENS=32) and mask the whole token as [ENCODED_SECRET_REDACTED] when the decoded
+    form matches PII/secret; benign percent text (50%20off / C%3A%5Cpath / 95%) untouched. patterns.py + 11
+    tests. Gate: 11 url-enc + 1158 gateway passed. RESIDUAL (perf/security tradeoff, NOT changed):
+    _MAX_DECODE_TOKENS=12 base64 cap lets a crafted result hide an encoded secret past 12 decoy tokens.
+    Evidence mcp-parallel/findings/backstop-p2-url-encoding-obfuscation/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
