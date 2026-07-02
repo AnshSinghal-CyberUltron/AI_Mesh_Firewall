@@ -1,0 +1,16 @@
+{"ts":"2026-07-02T07:42:09.783Z","url":"http://127.0.0.1:8180/api/mcp-connector/health/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:09.787Z","url":"http://127.0.0.1:8180/api/mcp-connector/org-gateway-key/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:09.797Z","url":"http://127.0.0.1:8180/api/mcp-connector/servers/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:09.799Z","url":"http://127.0.0.1:8180/api/mcp-connector/events/summary/?hours=24","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:09.848Z","url":"http://127.0.0.1:8180/api/mcp-connector/health/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:09.852Z","url":"http://127.0.0.1:8180/api/mcp-connector/org-gateway-key/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:09.934Z","url":"http://127.0.0.1:8180/api/mcp-connector/servers/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:09.934Z","url":"http://127.0.0.1:8180/api/mcp-connector/events/summary/?hours=24","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:09.936Z","url":"http://127.0.0.1:8180/api/mcp-connector/servers/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:09.936Z","url":"http://127.0.0.1:8180/api/mcp-connector/servers/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:10.039Z","url":"http://127.0.0.1:8180/api/mcp-connector/servers/26b25e94-d2c9-4fc6-8245-71d849281e2c/tools/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:10.442Z","url":"http://127.0.0.1:8180/api/mcp-connector/servers/","status":201,"method":"POST"}
+{"ts":"2026-07-02T07:42:10.460Z","url":"http://127.0.0.1:8180/api/mcp-connector/servers/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:11.389Z","url":"http://127.0.0.1:8180/api/mcp-connector/servers/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:11.553Z","url":"http://127.0.0.1:8180/api/mcp-connector/servers/fd13c8bd-af33-4b95-a411-c65dded29eed/tools/","status":200,"method":"GET"}
+{"ts":"2026-07-02T07:42:11.574Z","url":"http://127.0.0.1:8180/api/mcp-connector/servers/fd13c8bd-af33-4b95-a411-c65dded29eed/","status":204,"method":"DELETE"}

@@ -1,5 +1,5 @@
 ---
-iteration: 1
+iteration: 0
 max_iterations: 50
 completion_promise: COMPLETE
 status: ACTIVE
@@ -10,13 +10,16 @@ status: ACTIVE
 ## Coordination (do every iteration)
 - [x] C0. Join hive; read docs/mcp/PARALLEL_CLAIMS.md + mcp-parallel/claims. Only touch files in the
       Cursor-owned set (frontend/**, sandbox-image/agent/**, docker_manager.py, docs/). Claim before edit.
+      **Done 2026-07-02:** joined hive-1782976205971-u1gav1 as cursor-ralph-iter2; ownership broadcast.
 
 ## P1 — Playwright-first exploration: WHY is MCP not working (repro the 4 UI-visible bugs)
 - [x] 1. Playwright MCP: log in, open MCPConnectorPanel → register Linear via STDIO; capture the TWO
       auth buttons + "OAuth authorize failed: Server has no URL; OAuth is only for HTTP transports".
       **Verified 2026-07-02:** B1 NOT reproducing — 1 Authorize button, no no-URL error; see
       `mcp-parallel/findings/p1-1/`. OAuth start 401 to prod gateway URL is a separate env issue.
-- [ ] 2. Playwright: register an HTTP oauth server → confirm it LISTS immediately with 0 tools (wrong).
+- [x] 2. Playwright: register an HTTP oauth server → confirm it LISTS immediately with 0 tools (wrong).
+      **Verified 2026-07-02:** B2 partial — lists 0 tools while `oauth_authorized=false`; pending cues
+      (`authorization required`, Authorize, sync disabled) present; see `mcp-parallel/findings/p1-2/`.
 - [ ] 3. Playwright: type into the Add-Server dialog fields → capture focus loss after 1 keystroke.
 - [ ] 4. Playwright + logs: trigger a tool call that surfaces "MCP sandbox is temporarily unavailable";
       capture the network trace + broker logs. Record all repros to mcp-parallel/findings with screenshots.
