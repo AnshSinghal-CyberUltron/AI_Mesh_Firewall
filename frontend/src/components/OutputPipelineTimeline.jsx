@@ -2,6 +2,7 @@ import {
   MessageSquare, Cpu, Shield, Brain, CheckCircle, XCircle, AlertTriangle,
   EyeOff, Eye, Clock, ChevronRight, Lock,
 } from "lucide-react";
+import { buildHonestTraceStages, extractRealStages, extractFinalAction } from "../utils/pipelineTrace";
 
 const STAGE_ICONS = {
   input: MessageSquare,
@@ -10,14 +11,33 @@ const STAGE_ICONS = {
   reasoning: Brain,
   action: CheckCircle,
   final_output: Lock,
+  // real pipeline_trace stage ids (TRACE_UI_CONTRACT.md)
+  policy: Shield,
+  policy_redact: EyeOff,
+  input_scan: Shield,
+  route: ChevronRight,
+  model_routing: ChevronRight,
+  llm: Cpu,
+  model_input: MessageSquare,
+  model_output: Cpu,
+  output_guard: Lock,
+  output_guardrail: Lock,
+  auth: Lock,
+  rate_limit: Clock,
+  kill_switch: XCircle,
 };
 
 const ACTION_COLORS = {
   block: { border: "border-red-400 dark:border-red-600", bg: "bg-red-50 dark:bg-red-900/20", dot: "bg-red-500", text: "text-red-700 dark:text-red-300" },
   redact: { border: "border-amber-400 dark:border-amber-600", bg: "bg-amber-50 dark:bg-amber-900/20", dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-300" },
+  rewrite: { border: "border-violet-400 dark:border-violet-600", bg: "bg-violet-50 dark:bg-violet-900/20", dot: "bg-violet-500", text: "text-violet-700 dark:text-violet-300" },
   flag: { border: "border-orange-400 dark:border-orange-600", bg: "bg-orange-50 dark:bg-orange-900/20", dot: "bg-orange-500", text: "text-orange-700 dark:text-orange-300" },
+  monitor: { border: "border-sky-400 dark:border-sky-600", bg: "bg-sky-50 dark:bg-sky-900/20", dot: "bg-sky-500", text: "text-sky-700 dark:text-sky-300" },
+  reroute: { border: "border-teal-400 dark:border-teal-600", bg: "bg-teal-50 dark:bg-teal-900/20", dot: "bg-teal-500", text: "text-teal-700 dark:text-teal-300" },
+  skip: { border: "border-slate-300 dark:border-slate-600", bg: "bg-slate-50 dark:bg-slate-800/40", dot: "bg-slate-400", text: "text-slate-500 dark:text-slate-400" },
   allow: { border: "border-emerald-400 dark:border-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-900/20", dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300" },
 };
+
 
 function StageNode({ stage, isLast, actionColor }) {
   const Icon = STAGE_ICONS[stage.id] || Shield;
@@ -43,7 +63,11 @@ function StageNode({ stage, isLast, actionColor }) {
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
               stage.badge === "blocked" ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" :
               stage.badge === "redacted" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400" :
+              stage.badge === "rewritten" ? "bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400" :
               stage.badge === "flagged" ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" :
+              stage.badge === "monitored" ? "bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400" :
+              stage.badge === "rerouted" ? "bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400" :
+              stage.badge === "skipped" ? "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400" :
               "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
             }`}>
               {stage.badge.toUpperCase()}
@@ -101,9 +125,15 @@ export function OutputPipelineTimeline({ event }) {
     matchedValues && typeof matchedValues === "object" ? matchedValues : {},
   );
 
-  // Build pipeline stages
-  const stages = [];
+  // Build pipeline stages — prefer the gateway's REAL per-stage trace (honest); the
+  // narrative view below is only a fallback for events that carry no pipeline_trace.
+  let stages = [];
+  const realStages = extractRealStages(event);
+  if (realStages.length) {
+    stages = buildHonestTraceStages(realStages, extractFinalAction(event, action), { promptSnippet, rawOutput, sanitizedOutput });
+  }
 
+  if (stages.length === 0) {
   // Stage 1: User Input
   stages.push({
     id: "input",
@@ -193,6 +223,7 @@ export function OutputPipelineTimeline({ event }) {
     highlight: action !== "allow",
     highlightAction: action === "block" ? "block" : "allow",
   });
+  } // end synthetic-narrative fallback
 
   return (
     <div className="pt-1">
