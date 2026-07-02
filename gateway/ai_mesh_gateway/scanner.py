@@ -704,6 +704,57 @@ BEDROCK_MONITOR_ACTIONS: frozenset[str] = frozenset({
     "review",
 })
 
+_ROT13_TABLE = str.maketrans(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    "NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm",
+)
+
+
+def _norm_word_set(s: str) -> set[str]:
+    """Lowercased alphanumeric word set — for order/punctuation-insensitive compare."""
+    return set(re.findall(r"[a-z0-9]+", s.lower()))
+
+
+def _tier2_evidence_is_self_referential_encoding(evidence_blob: str, input_text: str) -> bool:
+    """Detect a Tier-2 guard-model HALLUCINATION: the guard cites a 'hidden encoded
+    payload' (ROT13 / base64 / hex) as its block evidence, but that payload — when
+    decoded — is essentially the VISIBLE INPUT re-encoded (a fabricated threat).
+
+    Confirmed live 2026-07-02: "Please translate the following paragraph into French."
+    was hard-blocked (tier_2, prompt_injection, conf 0.92) citing "ROT13 encoded payload
+    appended: 'hfre cyrnfr genafyngr gur sbyybjvat cnentencu vagb serapu'…", and
+    ROT13(that) == the prompt itself. A REAL hidden payload decodes to ATTACK content
+    that differs from the visible input, so a high BIDIRECTIONAL word-set overlap
+    (Jaccard >= 0.85) between a decoded cited-token and the input is a reliable
+    hallucination signature that can NEVER match a genuine encoded attack (whose decoded
+    form carries the extra malicious content -> low overlap). Fail-safe: any parse/decode
+    failure returns False (the Tier-2 block stands)."""
+    if not evidence_blob or not input_text:
+        return False
+    input_words = _norm_word_set(input_text)
+    if len(input_words) < 3:
+        return False  # too short to match reliably; keep the block
+    candidates = re.findall(r"'([^']{6,})'", evidence_blob) + re.findall(r'"([^"]{6,})"', evidence_blob)
+    for tok in candidates:
+        tok = tok.strip()
+        decoded: list[str] = [tok.translate(_ROT13_TABLE)]
+        try:
+            _b = base64.b64decode(tok + "=" * (-len(tok) % 4), validate=False).decode("utf-8", "ignore")
+            if any(c.isalpha() for c in _b):
+                decoded.append(_b)
+        except Exception:
+            pass
+        try:
+            if re.fullmatch(r"[0-9a-fA-F]+", tok) and len(tok) % 2 == 0:
+                decoded.append(bytes.fromhex(tok).decode("utf-8", "ignore"))
+        except Exception:
+            pass
+        for dec in decoded:
+            dw = _norm_word_set(dec)
+            if dw and len(input_words | dw) and len(input_words & dw) / len(input_words | dw) >= 0.85:
+                return True
+    return False
+
 FUZZY_ANCHOR_PHRASES: dict[str, list[list[str]]] = {
     "prompt_injection": [
         ["ignore", "previous", "instructions"],
@@ -1603,6 +1654,31 @@ class InputScanner:
             return verdict
 
         if recommended == "block":
+            # Guard-model hallucination guard: when Tier-1 found nothing (allow) and the
+            # guard's block evidence is a "hidden encoded payload" that decodes to the
+            # VISIBLE INPUT itself (a fabricated self-referential encoding — see
+            # _tier2_evidence_is_self_referential_encoding), the block is unsupported.
+            # Downgrade to a monitor 'flag' rather than hard-blocking a benign prompt.
+            # Provably cannot suppress a real encoded attack (whose decoded payload differs
+            # from the visible input). Only fires on tier1=allow so a Tier-1 verdict is
+            # never weakened.
+            if tier1.action == "allow":
+                _ev_blob = " ".join(bedrock_evidence) + " " + str(meta.get("decision_reason") or "")
+                if _tier2_evidence_is_self_referential_encoding(_ev_blob, text):
+                    return _bedrock_verdict(
+                        action="flag",
+                        threat_type=bedrock_categories[0] if bedrock_categories else "policy_violation",
+                        confidence=min(max_confidence or 0.5, 0.5),
+                        detail=(
+                            "ZeroShield Tier-2 block suppressed: guard-model cited a self-"
+                            "referential encoded payload (decodes to the visible input) — "
+                            "hallucinated hidden payload; downgraded to monitor"
+                        ),
+                        matched_patterns=[],
+                        tier="tier_2",
+                        reason_code="tier2_self_referential_encoding_hallucination",
+                        owasp_codes=bedrock_owasp,
+                    )
             return _bedrock_verdict(
                 action="block",
                 threat_type=bedrock_categories[0] if bedrock_categories else "policy_violation",
