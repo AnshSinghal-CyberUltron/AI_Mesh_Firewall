@@ -215,6 +215,36 @@
         select+gateway-disclosure live in the showGatewayCatalog sub-section (off on this mount) -> source+
         build+served-verified, render on the LlmConnectionsCard mount. The 1 unnamed button on the tab is a
         chevron under "Model Routing Simulator"/"Gateway API Keys" = a SIBLING panel, NOT mine (left alone).
+      ★★★ GATEWAY REDEPLOY — DEPLOY-LAG RESOLVED 2026-07-02 15:53 (the big unblock): rebuilt + recreated
+        the gateway from committed main so it finally runs my G22-G29 chat-module hardening (the gateway
+        chat pipeline IS the owned "chat module"; R5 explicitly requires the REAL pipeline to run my code).
+        Did it DEFENSIVELY: (1) verified gateway/ tree — only uv.lock modified, a BENIGN dev-only delta
+        (adds docker/httpx/openai to [dev] extras; Dockerfile line 12 = `uv sync --frozen --no-dev` so it
+        never enters the runtime image); (2) tagged the running image as ai_mesh_firewall-gateway:rollback-
+        preG29 (id 8b935343) BEFORE building; (3) `docker compose build gateway` (non-destructive — running
+        container stays up if build fails); (4) verified the NEW image carries all fixes via a throwaway
+        `docker run --rm` grep (mac_address=2, google_api_key=2, jailbr=1, become-unrestricted=2, INSTRUCTION
+        _ROLES=4) BEFORE recreating; (5) `docker compose up -d gateway` -> healthy, /health 200 first try,
+        fresh StartedAt 15:53:52 (was frozen at 13:30:59 for ~2.5h). LIVE VALIDATION (cached sim session,
+        cohere/north-mini-code:free): MAC 00:1A:2B:3C:4D:5E -> [MAC_ADDRESS_REDACTED], passport 987654321 ->
+        [GOVERNMENT_ID_REDACTED], SSN -> ***-**-6789 — RAW ABSENT from egress bytes (previously MAC/gov-id
+        LEAKED raw). Egress preview: "[user]: Device mac [MAC_ADDRESS_REDACTED], SSN ***-**-6789, [GOVERNMENT
+        _ID_REDACTED]." INDEPENDENT ORACLE: aidefence_has_pii(redacted egress)=FALSE, aidefence_has_pii(raw)=
+        TRUE (meaningful, not a false-neg). Injections: 7/7 BLOCK live incl now-deployed G28(jailbroke/
+        extract) + G29(encode-evade/sysmsg/persona) + classic DAN + AWS-key. Benign: 3/3 allow incl the
+        tricky "encode payload in base64" transport (G29 encode-evade correctly does NOT block). Live golden
+        pipeline: 9 passed / 1 failed — the 1 is the SAME pre-diagnosed case-09 max_tokens:64 flake (NOT a
+        leak, NOT a redeploy regression). NO frozen regressions. ⇒ Criterion-4 PII sub-item ("no PII reaches
+        models") is now LIVE-TRUE for MAC/gov-id/SSN + all injection classes. Rollback still available:
+        `docker tag ai_mesh_firewall-gateway:rollback-preG29 ai_mesh_firewall-gateway:latest && docker
+        compose up -d gateway`.
+      COORDINATION (redeploy impact): the gateway :8300 was down ~10-30s during recreate — concurrent
+        sessions' in-flight gateway requests during that window would have failed transiently. It now runs
+        CURRENT committed main (all sessions' committed work integrated). No source overwritten. The
+        rollback-preG29 image is kept as a safety net; do not prune it until COMPLETE.
+      ⇒ REMAINING blocker to COMPLETE is now JUST the case-09 live flake (harness max_tokens:64, in the
+        owned golden suite) — the NEXT item. Fix: thread a per-case max_tokens>=128 (or deterministic PII-
+        echo prompt) into live_driver/test_chat_pipeline_golden so the free model reaches a redactable email.
       CONTROL-PLANE 500 STORM observed 2026-07-02 (NOT mine, NOT this item, OUTSIDE ownership): during R6
         Playwright the control plane (container Up ~6min) returned intermittent 500s across MANY endpoints —
         /api/firewall/models|config, /api/gateways/keys|stats, /api/security/soc-kpis|threat-feed|attack-

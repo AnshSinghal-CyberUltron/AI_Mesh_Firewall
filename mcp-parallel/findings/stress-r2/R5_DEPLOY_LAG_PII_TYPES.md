@@ -1,5 +1,12 @@
 # R5 finding — live gateway runs STALE patterns.py; new PII types (MAC/gov-id) not redacted live
 
+> **✅ RESOLVED 2026-07-02 15:53** — gateway rebuilt + recreated from committed main (image
+> `rollback-preG29` kept as rollback). Running container now carries G22-G29. LIVE re-test:
+> MAC `00:1A:2B:3C:4D:5E` → `[MAC_ADDRESS_REDACTED]`, passport `987654321` → `[GOVERNMENT_ID_REDACTED]`,
+> SSN → `***-**-6789`; RAW absent from egress bytes; INDEPENDENT `aidefence_has_pii(redacted egress)=false`
+> (raw=true). 7/7 injection classes block live (incl G28/G29), 3/3 benign allow. Live golden 9/10 (the 1
+> is the unrelated case-09 max_tokens:64 flake). No regressions. The MEDIUM deployment-lag leak is closed.
+
 **By:** `claude-ralph-stress` · **Date:** 2026-07-02 · Severity: MEDIUM (deployment lag, NOT a code defect)
 
 ## What the comprehensive live corpus showed (model=google/gemma-4-31b-it:free)
