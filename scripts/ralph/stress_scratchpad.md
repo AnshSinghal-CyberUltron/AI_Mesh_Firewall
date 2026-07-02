@@ -177,7 +177,31 @@
       COORDINATION: fe-harden session active on frontend but has NOT touched ModelConnectionPanel/
         OutputPipelineTimeline (git log clean); keep edits surgical.
 
-## R6 verify (item 9) + R7 freeze — REMAINING for COMPLETE
+## R7 LIVE-GOLDEN BLOCKER (found 2026-07-02) — why COMPLETE is NOT yet true
+- IN-PROCESS golden suite: GREEN 3x (27 passed / 7 skipped / 0 failed). Live corpus (R5.4): PASSES reliably.
+- BUT `GATEWAY_LIVE=1 pytest tests/golden` FAILS on the live-only cases, model-dependently:
+  - 09_output_guard_pii_redact: expected final=redact, live gives **flag**. Root: the output guard's
+    redact->flag HONESTY relabel — the live model's output PII is Tier-2-semantic-flagged but NOT
+    maskable by redact_all (regex) => relabeled flag (G10). flag DELIVERS the response => a real
+    output-side PII path when the model emits semantic-only PII. This is the documented **G10** gap
+    (Tier-2 semantic redact = byte no-op), NOT one of the G1-G4 fixes, and NOT my regression (my R4
+    patterns change is a NO-OP on plain text; direct harness shows redact for gemma/others).
+  - 07_benign_kill_switch_reroute, 08_benign_sensitivity_routing: drift with which live model
+    `_detect_model` picks (routing/reroute is model+config dependent); pass with the blessed/cached
+    model, fail with gemma. Pre-existing live-golden model-sensitivity (freeze session owns the bless).
+- WHY NOT re-bless to green: re-blessing 09 redact->flag WEAKENS the frozen case (prohibited). 07/08 are
+  routing-only (re-bless is defensible) but owned by the freeze session's bless config.
+- SO completion condition "the original 9 frozen cases remain green [live]" is NOT unequivocally true.
+  DO NOT emit <promise>. NEXT unblocked item = close G10 on the OUTPUT side inside owned modules:
+  typed-placeholder redaction (typed_placeholder_redactor.py / output_guard.py) so a Tier-2-flagged
+  output PII span is masked (redact) rather than relabeled flag+delivered; then case 09 goes redact live
+  without weakening. Encode a new xfail golden for the G10 output-leak first (R2 discipline).
+
+## R6 verify (item 9) DONE + R7 freeze — remaining for COMPLETE
+- Item 9 Playwright: DONE 2026-07-02 — connect flow verified END-TO-END via real UI modal (custom provider,
+  Model ID left BLANK -> model connected, model_id auto-defaulted, fix_verified:true, modal closed);
+  connections table renders 10 models; ZERO console errors on the connect flow; honest trace card unit-tested
+  5/5. R6a2 (54b6c092) dropped HTML `required` on Model ID (native validation was blocking submit).
 - Item 9 Playwright: drive connect flow end-to-end (custom provider, blank model_id now works via R6a),
   render an event with a real pipeline_trace and assert per-stage badges differ (honest), zero console errors.
 - R7: re-run `GATEWAY_LIVE=0 PYTHONPATH=. .venv/bin/python -m pytest tests/golden -q` 3x (all green) AND
