@@ -1961,16 +1961,23 @@ async def _adapter_forward(
     jsonrpc: str,
     msg_id,
 ) -> JSONResponse:
-    """Forward a JSON-RPC message to the per-org sandbox for a non-backend transport
-    (stdio, websocket, or — P4.13/P6.18 §3 — streamable-http/sse via the broker)."""
+    """Forward a JSON-RPC message to the per-org sandbox for a non-backend transport.
+
+    ALL remote transports (streamable-http, sse, websocket) go through the broker →
+    sandbox → upstream; stdio runs inside the sandbox too. The gateway NEVER dials an
+    upstream MCP host itself — closing the last isolation residual (CHG-0026:
+    websocket previously connected in-gateway via mcp_ws_adapter despite
+    _is_sandbox_routed already declaring ws sandbox-routed)."""
     method = body.get("method", "")
     params = body.get("params", {})
     try:
-        if transport in ("streamable-http", "sse"):
-            # P4.13/P6.18 §3: route remote transports through the sandbox agent
-            # (gateway → broker → sandbox → upstream). The gateway builds the
-            # upstream block (url + egress allowlist + injected Bearer) and the
-            # sandbox does the dial — the gateway never connects to the MCP host.
+        if transport in ("streamable-http", "sse", "websocket"):
+            # P4.13/P6.18 §3 (+CHG-0026 for websocket): route remote transports
+            # through the sandbox agent (gateway → broker → sandbox → upstream). The
+            # gateway builds the upstream block (url + egress allowlist + injected
+            # Bearer) and the sandbox does the dial — the gateway never connects to
+            # the MCP host. The sandbox agent + broker support all three remote
+            # transports (upstream_manager handles websocket sessions).
             from mcp_sandbox_client import broker_send_rpc
 
             upstream_url = server_config.get("url", "")
@@ -2012,17 +2019,6 @@ async def _adapter_forward(
                 params=params if params else None,
                 msg_id=msg_id,
                 server_config=stdio_cfg,
-            )
-        elif transport == "websocket":
-            from mcp_ws_adapter import send_jsonrpc as ws_send
-            result = await ws_send(
-                org_slug=org_slug,
-                server_slug=server_slug,
-                url=server_config["url"],
-                auth_headers=None,
-                method=method,
-                params=params if params else None,
-                msg_id=msg_id,
             )
         else:
             return JSONResponse(

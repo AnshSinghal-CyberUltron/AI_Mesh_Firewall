@@ -62,6 +62,42 @@ async def test_adapter_forward_streamable_http_uses_broker_send_rpc(monkeypatch:
 
 
 @pytest.mark.asyncio
+async def test_adapter_forward_websocket_uses_broker_send_rpc():
+    """CHG-0026: websocket now routes through the per-org sandbox via
+    broker_send_rpc (transport='websocket'), NOT the in-gateway mcp_ws_adapter —
+    closing the last isolation residual (ws was the only transport still dialing an
+    upstream from inside the gateway process, despite _is_sandbox_routed already
+    declaring it sandbox-routed)."""
+    server_config = {
+        "url": "wss://mcp.example.com/ws",
+        "allowed_hosts": ["mcp.example.com"],
+    }
+    body = {"method": "tools/call", "params": {"name": "echo", "arguments": {"message": "hi"}}}
+    broker_rpc = AsyncMock(return_value={
+        "jsonrpc": "2.0", "id": 9,
+        "result": {"content": [{"type": "text", "text": "Echo: hi"}]},
+    })
+    # Guard: the legacy in-gateway ws adapter must NOT be dialed anymore.
+    ws_send = AsyncMock(side_effect=AssertionError("ws must route via broker, not in-gateway"))
+    with patch("mcp_sandbox_client.broker_send_rpc", broker_rpc), \
+         patch("mcp_oauth_proxy.get_stored_token", AsyncMock(return_value=None)), \
+         patch("mcp_ws_adapter.send_jsonrpc", ws_send):
+        resp = await mcp_proxy._adapter_forward(
+            "websocket", server_config, "org-a", "remote-ws", body, "2.0", 9,
+        )
+    assert resp.status_code == 200
+    broker_rpc.assert_awaited_once()
+    args, kwargs = broker_rpc.call_args
+    assert args[0] == "org-a"
+    up_config = args[1]
+    assert up_config["transport"] == "websocket"
+    assert up_config["url"] == "wss://mcp.example.com/ws"
+    assert up_config["allowed_hosts"] == ["mcp.example.com"]
+    assert args[2] == "tools/call"
+    ws_send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_adapter_forward_sse_missing_url_errors_without_direct_dial(monkeypatch: pytest.MonkeyPatch):
     # A misconfigured remote server (no url) surfaces a JSON-RPC error — and still
     # never dials an upstream directly (broker_send_rpc raises on missing url).
