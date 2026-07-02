@@ -35,7 +35,7 @@ HARNESSES = [
 # Settle between harnesses so the concurrency burst's residual control-plane pressure
 # (the -32000 saturation boundary) drains before the load harness measures — the
 # harnesses each pass standalone; back-to-back they need a brief cooldown.
-_SETTLE_SECONDS = float(os.environ.get("GATE_SETTLE_SECONDS", "6"))
+_SETTLE_SECONDS = float(os.environ.get("GATE_SETTLE_SECONDS", "12"))
 if INCLUDE_OAUTH:
     HARNESSES.append(("oauth", "mcp_oauth_transport_live.py", {}, "OAUTH_TRANSPORT: PASS"))
 

@@ -1942,10 +1942,11 @@ def _is_sandbox_routed(transport: str) -> bool:
     if transport in ("stdio", "websocket"):
         return True
     if transport in ("streamable-http", "sse"):
-        # Default OFF for a safe rollout (like MCP_STDIO_IN_PROCESS): the legacy
-        # direct-httpx path stays the default until an operator opts in per env /
-        # compose. When ON, remote transports route through the sandbox agent
-        # (gateway never dials the upstream MCP host).
+        # Default ON (CHG-0026 / P4.13 rollout complete): remote transports route
+        # through the per-org sandbox agent so the gateway never dials the upstream
+        # MCP host — isolation holds for every transport by default. Set
+        # MCP_HTTP_VIA_SANDBOX=0 only to fall back to the legacy direct-httpx path
+        # (still SSRF-guarded) for debugging.
         return os.environ.get("MCP_HTTP_VIA_SANDBOX", "true").strip().lower() in (
             "1", "true", "yes", "on",
         )
