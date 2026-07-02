@@ -359,6 +359,15 @@
         image, utm/ref tracking link, presigned S3 X-Amz-Signature) = zero FP. My initial weak probes
         ("?data=secret123", "?leak=abc123") correctly NOT neutralized (short opaque != exfil signal; neutralizing
         would be an FP). => output-side PII masking + exfil-channel defense CONFIRMED ROBUST, no gap.
+      KILL-SWITCH REROUTE VERIFIED 2026-07-02 (completes the "kill-switch works" R5 check — both actions):
+        previously verified DISABLE (->503 "Model disabled", model-scoped). Now verified REROUTE live: created
+        a reroute kill-switch (liquid -> fallback gemma), activated, sent a request to liquid -> pipeline trace
+        stage model_routing action=reroute detail="Kill-switch reroute: liquid/lfm-2.5-1.2b-instruct:free ->
+        google/gemma-4-31b-it:free" (http 200; the response.model field echoes the REQUESTED model per OpenAI
+        convention, but the trace confirms the actual reroute to the fallback). Contained + self-cleaning:
+        deactivate/ + delete/ (trailing slash) -> 0 kill-switches remain, no dangling state. Control was flaky
+        mid-test (connection reset -> auto-restart -> healthy); gateway stayed healthy throughout. => kill-switch
+        DISABLE + REROUTE both live-verified, model-scoped, clean activate/deactivate/recover.
       ★ FINAL COMPLETION 2026-07-02 (post-G30, +G31): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
