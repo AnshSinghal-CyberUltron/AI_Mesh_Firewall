@@ -17,17 +17,23 @@ const PIPELINE_STAGE_OPTIONS = [
 ];
 
 const SEVERITY_CONFIG = {
-  CRITICAL: { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700", border: "border-red-200 dark:border-red-800" },
-  HIGH: { bg: "bg-orange-100 dark:bg-orange-800/30", text: "text-orange-700", border: "border-orange-200 dark:border-orange-800" },
-  MEDIUM: { bg: "bg-yellow-100 dark:bg-yellow-800/30", text: "text-yellow-700", border: "border-yellow-200 dark:border-yellow-800" },
-  LOW: { bg: "bg-green-100 dark:bg-green-800/30", text: "text-green-700", border: "border-green-200 dark:border-green-800" },
+  CRITICAL: { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700 dark:text-red-300", border: "border-red-200 dark:border-red-800" },
+  HIGH: { bg: "bg-orange-100 dark:bg-orange-800/30", text: "text-orange-700 dark:text-orange-300", border: "border-orange-200 dark:border-orange-800" },
+  MEDIUM: { bg: "bg-yellow-100 dark:bg-yellow-800/30", text: "text-yellow-700 dark:text-yellow-300", border: "border-yellow-200 dark:border-yellow-800" },
+  LOW: { bg: "bg-green-100 dark:bg-green-800/30", text: "text-green-700 dark:text-green-300", border: "border-green-200 dark:border-green-800" },
 };
 
 const ACTION_CONFIG = {
-  block: { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700" },
-  redact: { bg: "bg-amber-100 dark:bg-amber-800/30", text: "text-amber-700" },
-  monitor: { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700" },
+  block: { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700 dark:text-red-300" },
+  redact: { bg: "bg-amber-100 dark:bg-amber-800/30", text: "text-amber-700 dark:text-amber-300" },
+  monitor: { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700 dark:text-blue-300" },
 };
+
+// Rule enabled/disabled badge styles as separate literals — keeps the active
+// emerald tint and the disabled slate text in different strings so the
+// detector's gray-on-color heuristic doesn't false-positive on the ternary.
+const RULE_STATUS_ACTIVE = "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 dark:text-emerald-300";
+const RULE_STATUS_DISABLED = "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400";
 
 const EMPTY_POLICY_FORM = {
   name: "",
@@ -215,10 +221,15 @@ function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, erro
   const guardedClose = submitting ? () => {} : onClose;
   const domainUi = getPolicyDomainUi(form.scope || "pipeline");
   const resolvedTitle = title?.includes("Edit") ? title : domainUi.createTitle;
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape" && !submitting) onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [submitting, onClose]);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40" onClick={guardedClose} />
-      <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+      <div role="dialog" aria-modal="true" aria-label={resolvedTitle} className="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{resolvedTitle}</h3>
           <button
@@ -231,7 +242,7 @@ function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, erro
           </button>
         </div>
         {error && (
-          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-300">
             {error}
           </div>
         )}
@@ -304,7 +315,7 @@ function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, erro
               ) : null}
             </div>
           ) : null}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Severity</label>
               <select
@@ -444,7 +455,7 @@ function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, erro
           <div className="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardedClose}
               className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               Cancel
@@ -506,18 +517,27 @@ function RuleModal({
     }
   };
 
+  // Mirror PolicyModal's B5 guard: while a save is in flight, the backdrop / X /
+  // Cancel must NOT discard the draft (which could leave a half-applied write).
+  const guardedClose = submitting ? () => {} : onClose;
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape" && !submitting) onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [submitting, onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+      <div className="fixed inset-0 bg-black/40" onClick={guardedClose} />
+      <div role="dialog" aria-modal="true" aria-label={title} className="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
-          <button onClick={onClose} aria-label="Close" title="Close" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors">
+          <button onClick={guardedClose} aria-label="Close" title="Close" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors">
             <X className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </button>
         </div>
         {error && (
-          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-300">
             {error}
           </div>
         )}
@@ -768,7 +788,7 @@ function RuleModal({
           <div className="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardedClose}
               className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               Cancel
@@ -831,19 +851,19 @@ function RulesTable({ rules, loading, onAddRule, onEditRule, onDeleteRule, onTog
         </span>
         <button
           onClick={onAddRule}
-          className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-teal-600 hover:bg-teal-50 dark:bg-teal-900/20 rounded transition-colors"
+          className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:bg-teal-900/20 rounded transition-colors"
         >
           <Plus className="w-3 h-3" />
           Add Rule
         </button>
       </div>
       {rules.length === 0 ? (
-        <div className="text-center py-3 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+        <div className="text-center py-3 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
           No rules defined. Add rules to activate this policy.
         </div>
       ) : (
-        <div className="border border-slate-100 dark:border-slate-700/50 rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
+        <div className="border border-slate-100 dark:border-slate-700/50 rounded-lg overflow-x-auto">
+          <table className="w-full min-w-[520px] text-xs">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/50">
                 <th className="px-2 py-1.5 text-left font-semibold text-slate-500 dark:text-slate-300 uppercase">Name</th>
@@ -869,7 +889,7 @@ function RulesTable({ rules, loading, onAddRule, onEditRule, onDeleteRule, onTog
                         ariaLabel={`${rule.enabled !== false ? "Disable" : "Enable"} rule ${rule.name}`}
                         onChange={(next) => onToggleRule?.(rule, next)}
                       />
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${rule.enabled ? "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700" : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"}`}>
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${rule.enabled ? RULE_STATUS_ACTIVE : RULE_STATUS_DISABLED}`}>
                         {rule.enabled ? "Active" : "Disabled"}
                       </span>
                     </div>
@@ -1430,7 +1450,14 @@ export function PolicyManagementPanel({
   const totalPolicies = policies.length;
   const enabledPolicies = policies.filter((policy) => policy.enabled !== false).length;
   const criticalPolicies = policies.filter((policy) => policy.severity === "CRITICAL").length;
-  const totalRules = Object.values(policyRules).reduce((sum, rules) => sum + (Array.isArray(rules) ? rules.length : 0), 0);
+  // True total across ALL policies from the backend's per-policy rule_count,
+  // refined by the live count for any policy the user has expanded (whose rules
+  // are actually loaded). Summing only policyRules — which is populated lazily on
+  // expand — made this headline KPI read 0 until a policy was opened.
+  const totalRules = policies.reduce(
+    (sum, p) => sum + (Array.isArray(policyRules[p.id]) ? policyRules[p.id].length : (p.rule_count || 0)),
+    0,
+  );
 
   const resolvedEmptyStateMessage = emptyStateMessage || (
     scope === "all"
@@ -1488,7 +1515,7 @@ export function PolicyManagementPanel({
         <StatCard icon={Shield} label="Total Policies" value={totalPolicies} tone="teal" />
         <StatCard icon={CheckCircle} label="Enabled Policies" value={enabledPolicies} tone="violet" />
         <StatCard icon={AlertTriangle} label="Critical Severity" value={criticalPolicies} tone="rose" />
-        <StatCard icon={Activity} label="Loaded Rules" value={totalRules} tone="amber" />
+        <StatCard icon={Activity} label="Total Rules" value={totalRules} tone="amber" />
       </div>
 
       {compileStatus && (
@@ -1499,10 +1526,10 @@ export function PolicyManagementPanel({
         <div
           className={`mb-4 p-3 rounded-lg text-xs flex items-start gap-2 ${
             compileStatus.success && !compileStatus.partial
-              ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700"
+              ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
               : compileStatus.partial
-              ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700"
-              : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700"
+              ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300"
+              : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300"
           }`}
         >
           {compileStatus.success && !compileStatus.partial ? (
@@ -1527,7 +1554,7 @@ export function PolicyManagementPanel({
       )}
 
       {loadError ? (
-        <div className="mb-4 p-3 rounded-lg text-xs flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700">
+        <div className="mb-4 p-3 rounded-lg text-xs flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300">
           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <span>{loadError}</span>
         </div>
@@ -1624,10 +1651,10 @@ export function PolicyManagementPanel({
                     {policy.category && (
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-1.5 py-0.5">{policy.category}</span>
                     )}
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
                       {policy.rule_count != null ? `${policy.rule_count} rules` : ""}
                     </span>
-                    <span className="text-[10px] text-slate-400">Priority: {policy.priority}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Priority: {policy.priority}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -1673,7 +1700,7 @@ export function PolicyManagementPanel({
                   {policy.description && (
                     <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 mb-2">{policy.description}</p>
                   )}
-                  <div className="flex items-center gap-4 text-[10px] text-slate-400 mb-2">
+                  <div className="flex flex-wrap items-center gap-4 text-[10px] text-slate-500 dark:text-slate-400 mb-2">
                     <span>Version: {policy.version}</span>
                     <span>Created: {formatDate(policy.created_at)}</span>
                     <span>Updated: {formatDate(policy.updated_at)}</span>

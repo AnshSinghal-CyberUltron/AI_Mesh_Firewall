@@ -75,7 +75,23 @@
       all 8, 0 console errors + 0 net-fails when backend calm; dark+light panel shots verified (tab switch
       Attack↔Trust works, SAFE/ATTACK badges legible, Run controls, sliders, helpers). 500 bursts = known F3
       env PG "too many clients", not code. recharts still removed. Item 9 fully complete.
-- [x] 10. OutputGuardrailControls/Charts - [x] 11. AttackSimulatorPanel (+ simulator/*) - [ ] 12. PolicyManagement/Analytics
+- [x] 10. OutputGuardrailControls/Charts - [x] 11. AttackSimulatorPanel (+ simulator/*) - [x] 12. PolicyManagement/Analytics
+      item12 DONE (2-agent workflow): PolicyAnalyticsPanel recharts→ECharts (effectiveness area + violation
+      stacked-bar → SafeResponsiveChart `option`, theme-aware via zs-light/zs-dark, recharts import removed);
+      DATA-INTEGRITY: added missing 6th `agenticThreat` violation category (backend emits it in
+      violations_by_* but VIOLATION_COLORS only had 5 → stacked bar UNDERCOUNTED) — validated vs live API +
+      VISUALLY confirmed (legend shows all 6 incl. Agentic Threat). StatusBadge/error-banner dark variants,
+      MetricCards grid-cols-2 sm:grid-cols-4. PolicyManagementPanel (1760L, ALSO embedded in MCPConnectorPanel
+      → kept API-compatible): DATA-INTEGRITY fixed "Loaded Rules" KPI (summed only lazily-loaded policyRules →
+      near-always-0; now sums backend policy.rule_count w/ live override → "Total Rules 55" verified). Theme:
+      SeverityBadge/ActionBadge configs + Active badge + 4 modal/banner status boxes + Add-Rule + slate
+      metadata (all text-*-700 dark-on-dark → dark:*-300). Responsive: RulesTable overflow-x-auto + min-w,
+      modal grid-cols-3→sm:, metadata flex-wrap. CONTROL: RuleModal guardedClose (backdrop/X/Cancel were
+      unguarded mid-save), PolicyModal Cancel guarded, both modals Esc-to-close + role="dialog"/aria-modal.
+      Detector: cleared 2 pre-existing ternary FPs via RULE_STATUS_ACTIVE/DISABLED consts. GATE lint 42/42,
+      build, detector 0 both. LIVE: PolicyMgmt both themes @1440/1024/768/375 overflow=0 all 8 + 0 console/net;
+      migrated Violation-Breakdown chart visually verified (light). Deferred-LOW: rule-delete double-submit,
+      MCP key/regex validation, full modal focus-trap (tab containment), analytics abort-guard.
       item11 DONE (module 1.1 + simulator/* across 1.1/1.3/1.4/1.5/1.6): 10-agent Workflow surfaced ~40
       findings; fixed. HIGH DATA-INTEGRITY (fabricated verdicts): CircuitBreaker read flat result.model/state
       but store is {ok,data} → always-blank + always-green "healthy" even on error (now reads data + honest
