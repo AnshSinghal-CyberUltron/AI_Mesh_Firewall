@@ -320,6 +320,15 @@
         cascaded out recharts' whole transitive tree (@reduxjs/toolkit, immer, all d3-*, es-toolkit,
         decimal.js-light, eventemitter3, internmap — none imported directly). R3 bundle/install win.
         Static gate now asserts recharts is not a dep (62 tests). RECHARTS IS FULLY GONE from the frontend.
-      Remaining before COMPLETE: (a) full re-verify sweep — run the item-23 harness across ALL surfaces both
-      themes 4 widths + spot-check console/network clean; (b) confirm FRONTEND_AUDIT.md status matrix has no
-      pending ⬜ for owned surfaces (verify-only ⚠ MCP items are stress-owned, logged not resolvable by me).
+      RE-VERIFY (b2cc5866 matrix reconcile + live sweep): FRONTEND_AUDIT status matrix reconciled with the
+      finding log — 20 ui/* primitives ✅, items 18-23 ✅, item 17b/17c 👁✅, item 15 SubmoduleDetailPage 🗑.
+      Live sweep of the chart-migration-edited surfaces both themes @768/375: overview recharts=0 echarts=11
+      overflow=0 jsErr=0; module-1-3 recharts=0 echarts=2 overflow=0 jsErr=0. Static gate 62/62. Full-matrix
+      live pass is F3-limited (AUTH_FAILED bursts = dev-DB, not regressions).
+      ⛔ COMPLETE BLOCKER (the ONLY open item): item 17a MCPConnectorPanel — the MCP server cards (884px) overflow
+      <main> @768/375 WHEN they render (data-dependent). It's `never_edit` (stress claim claude-ralph-stress-
+      iter1-R0 still ACTIVE), so I've LOGGED it + the fix (single responsive column / min-w-0) but CANNOT fix
+      it. Until the owning session fixes it (or releases the claim), "every panel fixed" + "FRONTEND_AUDIT fully
+      resolved" is NOT unequivocally true → must NOT output COMPLETE. Everything else in my remit is DONE +
+      verified. Each further iteration: regression-check my surfaces + re-check whether MCPConnectorPanel is
+      fixed / the claim released; complete the instant that ⚠ clears.
