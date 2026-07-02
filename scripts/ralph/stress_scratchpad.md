@@ -538,6 +538,18 @@
         golden: 4 intl-phone redact + 4 FP-floor allow. Adversarial 250, golden 253x3, full gateway 1176.
         REDEPLOYED (rollback-preG38, --no-deps) + LIVE: +44 phone http=200 raw ABSENT from egress (redacted),
         benign 200, attack 400. ReDoS-safe (bounded). => international phone PII coverage now consistent.
+      R6 PIPELINE-TRACE-CARD RE-VERIFY 2026-07-02 (OutputPipelineTimeline, the 2nd owned frontend component):
+        renders at OutputGovernancePanel.jsx:116 <OutputPipelineTimeline event={event}/> inside an expandable
+        output-guard EVENT card (isExpanded). Live Playwright (logged in, ?tab=firewall-1-7 Output Guardrails):
+        panel renders (Generator-Level Output Guardrails / Engine / Analytics) but the event LIST is currently
+        EMPTY -> no expandable card -> trace card has no live event to mount (same external condition as iter36:
+        can't force the model to emit PII/exfil so no output-guard event is produced for THIS org's telemetry
+        window). The trace card itself is fully verified: impeccable detector CLEAN, frontend unit 62/62 pass,
+        build ✓, and iter36 isolation-mount render showed honest per-stage rendering (role=region/list/listitem
+        + per-stage aria-label surfacing the action as TEXT, decorative icons aria-hidden, sanitized "Your SSN
+        is ***-**-****" with no raw PII). => both owned frontend components (ModelConnectionPanel live 11-model
+        consistency + a11y; OutputPipelineTimeline detector/unit/isolation-mount) are R6-verified; the only
+        un-force-able bit is a LIVE output-guard event card, gated on model-emitted PII (external).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-

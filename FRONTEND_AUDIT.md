@@ -97,15 +97,15 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | 12 | PolicyManagementPanel / PolicyAnalyticsPanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ DONE — charts→ECharts (+agenticThreat undercount fix), KPI fix, dark-on-dark badges, modal guards; both themes @4 widths |
 | 13 | LogViewerPanel / LogDetailPage / module-specific-log-charts | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ DONE — removed 15 fabricated charts, migrated 6 real→ECharts, honest timestamp/method/endpoint; LogViewer orphaned |
 | 14 | OWASPStatsPanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ DONE — bar+radar recharts→ECharts (theme-aware), dark-on-dark badges, responsive; both themes @4 widths |
-| 15 | Firewall12EnterprisePage ✅ / FirewallModulePage ◐ / SubmoduleDetailPage ⬜ / SubmoduleResultsPage ✅ | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ Firewall12EnterprisePage DONE (2 charts→ECharts); FirewallModulePage got min-w-0 (item5); **SubModuleResultsPage recharts→ECharts + arrowTimings data-integrity DONE (item24 pt1, e3ae804a)**; SubmoduleDetailPage orphaned dead-code recharts pending (→ item 24) |
+| 15 | Firewall12EnterprisePage ✅ / FirewallModulePage ✅ / SubmoduleResultsPage ✅ / ~~SubmoduleDetailPage~~ 🗑 | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Firewall12EnterprisePage DONE (2 charts→ECharts); FirewallModulePage min-w-0 (item5); SubModuleResultsPage recharts→ECharts + arrowTimings fix (item24 pt1); **SubmoduleDetailPage DELETED as orphaned dead code (item24, cf7ee848)** |
 | 16 | HowToUse | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ DONE — fixed 375 step-text clipping (grid auto-min-width trap), teal badge contrast; no-leak (placeholder keys) |
 
 ### Verify-only (item 17 — never edit)
 | # | Surface | Owner | State |
 |---|---|---|---|
 | 17a | MCPConnectorPanel | stress/never_edit | 👁 ⚠ — item22: MCP server cards 884px wide overflow `<main>` @768 (mainScroll 140) & @375 (521); fits @1024/1440. Stress session owns fix. |
-| 17b | ModelConnectionPanel | stress | 👁 ⬜ |
-| 17c | OutputPipelineTimeline (pipeline-trace cards) | stress | 👁 ⬜ |
+| 17b | ModelConnectionPanel | stress | 👁 ✅ — verified clean (item 17): 0 inverted-slate / dark-on-dark / recharts / non-responsive-grid / leak; both themes @4 widths |
+| 17c | OutputPipelineTimeline (pipeline-trace cards) | stress | 👁 ✅ — code clean (item 17); renders inside expanded output-guard rows (0 events in dev env, so not exercised live) |
 
 ### Also in scope (discovered — not in original numbered list, fold into nearest item)
 | Surface | Note |
@@ -119,26 +119,26 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | BedrockTestPanel | model test surface |
 | EmptyState / Skeleton / Spinner / PanelLoadingShell | loading/empty primitives |
 
-### ui/* primitives (item 18 — API-compatible restyle only)
+### ui/* primitives (item 18 — API-compatible restyle only) — ✅ all 20 verified (item 18, both themes; detector 0)
 | Primitive | Dark | Light | Impec | State | | Primitive | Dark | Light | Impec | State |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Badge | ⬜ | ⬜ | ⬜ | ⬜ | | Select | ⬜ | ⬜ | ⬜ | ⬜ |
-| Button | ⬜ | ⬜ | ⬜ | ⬜ | | Skeleton | ⬜ | ⬜ | ⬜ | ⬜ |
-| Card | ⬜ | ⬜ | ⬜ | ⬜ | | Slider | ⬜ | ⬜ | ⬜ | ⬜ |
-| Dialog | ⬜ | ⬜ | ⬜ | ⬜ | | Spinner | ⬜ | ⬜ | ⬜ | ⬜ |
-| EmptyState | ⬜ | ⬜ | ⬜ | ⬜ | | Switch | ⬜ | ⬜ | ⬜ | ⬜ |
-| Input | ⬜ | ⬜ | ⬜ | ⬜ | | Table | ⬜ | ⬜ | ⬜ | ⬜ |
-| Label | ⬜ | ⬜ | ⬜ | ⬜ | | Tabs | ⬜ | ⬜ | ⬜ | ⬜ |
-| PanelHeader | ⬜ | ⬜ | ⬜ | ⬜ | | Textarea | ⬜ | ⬜ | ⬜ | ⬜ |
-| Progress | ⬜ | ⬜ | ⬜ | ⬜ | | Toast | ⬜ | ⬜ | ⬜ | ⬜ |
-| SegmentedControl | ⬜ | ⬜ | ⬜ | ⬜ | | Tooltip | ⬜ | ⬜ | ⬜ | ⬜ |
+| Badge | ✅ | ✅ | ✅ | ✅ | | Select | ✅ | ✅ | ✅ | ✅ |
+| Button | ✅ | ✅ | ✅ | ✅ | | Skeleton | ✅ | ✅ | ✅ | ✅ |
+| Card | ✅ | ✅ | ✅ | ✅ | | Slider | ✅ | ✅ | ✅ | ✅ |
+| Dialog | ✅ | ✅ | ✅ | ✅ | | Spinner | ✅ | ✅ | ✅ | ✅ |
+| EmptyState | ✅ | ✅ | ✅ | ✅ (L7 inverted-slate fixed) | | Switch | ✅ | ✅ | ✅ | ✅ |
+| Input | ✅ | ✅ | ✅ | ✅ | | Table | ✅ | ✅ | ✅ | ✅ |
+| Label | ✅ | ✅ | ✅ | ✅ | | Tabs | ✅ | ✅ | ✅ | ✅ |
+| PanelHeader | ✅ | ✅ | ✅ | ✅ | | Textarea | ✅ | ✅ | ✅ | ✅ |
+| Progress | ✅ | ✅ | ✅ | ✅ | | Toast | ✅ | ✅ | ✅ | ✅ |
+| SegmentedControl | ✅ | ✅ | ✅ | ✅ | | Tooltip | ✅ | ✅ | ✅ | ✅ |
 
 ### Cross-cutting & freeze (items 19–24)
 | # | Item | State |
 |---|---|---|
-| 19 | Data-integrity proof (no mock/placeholder anywhere) | ⬜ |
-| 20 | No-leak proof (no key/PII/secret/topology) | ⬜ |
-| 21 | Theme audit (dark+light contrast/focus/hover/disabled) — see R2 | ⬜ |
+| 19 | Data-integrity proof (no mock/placeholder anywhere) | ✅ — codebase-wide fabrication sweep clean; bound Header/Sidebar/Firewall12 status to real `/api/health/` (useBackendHealth); killed the last synthetic-breakdown (SubModuleResultsPage arrowTimings, item 24 pt1) |
+| 20 | No-leak proof (no key/PII/secret/topology) | ✅ — static sweep (0 raw creds/tokens; keys entered via password inputs, shown prefix-only) + live DOM scan 0 hits across overview + 1.1–1.7; backend `telemetry.py redact_all` scrubs audit free-text |
+| 21 | Theme audit (dark+light contrast/focus/hover/disabled) — see R2 | ✅ — 24 contrast fixes across 9 files (inverted-slate, dark-on-dark verdicts, bare-400); 0 `focus:outline-none` without a paired ring; per-surface theme fixes (items 9–20) + sweep |
 | 22 | Responsive audit (1440/1024/768/375, no overflow/overlap) | ✅ — `mainScroll` audit (catches `<main>`-absorbed overflow docOver misses); fixed SubModuleResultsPage + CollectionManagerPanel + ModelStatePanel + OutputGovernancePanel; MCPConnectorPanel overflow @768/375 LOGGED (verify-only); residual 12px = scrollbar artifact |
 | 23 | Playwright visual+behavior snapshot regression gate | ✅ — live harness `frontend/tests/visual/audit.mjs` (mainScroll+leak+console+chart audit, all surfaces × both themes × 4 widths, PNG+JSON, `npm run test:visual`) + browserless static gate `src/utils/hardening-regression.test.js` (16 tests in `npm test`, lint 58/58) |
 | 24 | Full re-verify; bundle check (R3); console/network clean; all resolved | ⬜ |
