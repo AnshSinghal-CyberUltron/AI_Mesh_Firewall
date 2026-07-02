@@ -127,7 +127,7 @@ export function SubModuleResultsPage({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 dark:from-slate-900 via-white dark:via-slate-900 to-slate-50 dark:to-slate-900">
-      <div className="p-8 space-y-6">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Breadcrumb */}
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-4">
           <div className="flex items-center gap-2 text-sm">
@@ -163,7 +163,7 @@ export function SubModuleResultsPage({
         {/* AI Traffic Flow & Processing Pipeline */}
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-6">AI Traffic Flow & Processing Pipeline</h2>
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-8 border border-slate-200 dark:border-slate-700">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 sm:p-6 lg:p-8 border border-slate-200 dark:border-slate-700 overflow-x-auto">
             <div className="flex items-center justify-between">
               {moduleConfig.flowNodes.map((node, index) => (
                 <div key={index} className="flex items-center">
@@ -288,9 +288,9 @@ export function SubModuleResultsPage({
         {/* Detailed Records */}
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
           <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Detailed Records ({filteredData.length})</h3>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={refetch}
                   disabled={loading}
@@ -397,7 +397,7 @@ export function SubModuleResultsPage({
               </tbody>
             </table>
           </div>
-          <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm text-slate-600 dark:text-slate-400">
               Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredData.length)} of {filteredData.length}
             </div>
