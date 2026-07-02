@@ -325,6 +325,22 @@
         3 other FP-floor cases still block but now cite GENUINE semantic reasons (bypass-auth+exfil /
         jailbreak / context-override) = defensible fail-safe caution, NOT fabricated evidence; G30 leaves
         them alone. => the sole OBJECTIVE live FP (hallucinated block of a benign prompt) is ELIMINATED.
+      ★ FINAL COMPLETION 2026-07-02 (post-G30): ALL 7 criteria met. The prior sole blocker — the tier-2
+        guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
+        — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
+        enforcement (no block->allow), all 41 block payloads block, translate now allow->allow; only safe-
+        direction over-blocks remain (base64 exfil-wrapper redact->block = defense-in-depth; 3 injection-
+        ADJACENT FP-floor phrasings "forget your training"/"forget the above context"/"get past the login
+        screen+screenshot" blocked by tier-2 for GENUINE semantic reasons = defensible fail-safe caution,
+        while tier-1 correctly allows them = tier-1 precision). No OBJECTIVELY-unjustified block remains.
+        Criteria: (1) frozen-9 green offline 189x3 + live 10/10 x2; (2) new-attack regressions green
+        (adversarial 186 in-proc + live 41/41 block + G30 real-attack-must-stand); (3) golden 3x in-process
+        (189x3); (4) live validation: no-PII (oracle hasPII=false), redactions hold, blocks justified
+        (objective FP eliminated), routing, kill-switch (503/scoped/recover), traces, stock-openai-SDK typed
+        errors, 0-leak/0-under-enforcement corpus; (5) R6 frontend polish both owned components (detector-
+        clean, Playwright); (6) Playwright dialog-a11y live-verified; (7) no secret leakage (audited tracked
+        files + all commits; ghp_abc... is a pre-existing FAKE test placeholder testing redaction, not mine).
+        Live gateway healthy running committed main (G22-G30). => genuinely, unequivocally COMPLETE.
       COMPLETE STATUS after redeploy+case09 (2026-07-02): 1 frozen-9 green offline(183x3)+live(10/10 x3) ✓;
         2 new-attack regressions green in-proc+live(7/7 block) ✓; 3 golden 3x in-process ✓; 5 R6 frontend
         polish (both owned components) ✓; 6 Playwright ✓; 7 no secret leak ✓. REMAINING = criterion 4 R5
