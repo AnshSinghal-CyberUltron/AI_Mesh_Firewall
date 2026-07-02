@@ -11,17 +11,6 @@ import {
   Shield,
   Gauge,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  Tooltip,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-} from "recharts";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { useFirewallData } from "../hooks/useFirewallData";
 import { useAuth } from "../context/AuthContext";
@@ -38,6 +27,31 @@ function numberOrDash(value) {
 function percentOrDash(value) {
   if (value == null || Number.isNaN(Number(value))) return "--";
   return `${Number(value).toFixed(1)}%`;
+}
+
+// ── ECharts option builders (replace recharts; zs-light/zs-dark theme drives
+// axis/grid/tooltip colors so the charts read correctly on the dark card). The
+// neutral slate series color (#6b7280) is preserved.
+function eventTrendOption(rows) {
+  return {
+    grid: { top: 14, right: 14, bottom: 24, left: 40 },
+    tooltip: { trigger: "axis" },
+    xAxis: { type: "category", boundaryGap: false, data: rows.map((r) => r.time), axisLabel: { fontSize: 11 } },
+    yAxis: { type: "value", axisLabel: { fontSize: 11 } },
+    series: [{ name: "Events", type: "line", smooth: true, showSymbol: false, data: rows.map((r) => r.primary), lineStyle: { color: "#6b7280", width: 2 }, itemStyle: { color: "#6b7280" } }],
+  };
+}
+
+function topCategoriesOption(rows) {
+  return {
+    grid: { top: 10, right: 18, bottom: 18, left: 104 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    xAxis: { type: "value", minInterval: 1, axisLabel: { fontSize: 11 } },
+    // inverse: true keeps the largest category (data is sorted desc) at the top,
+    // matching the prior recharts horizontal-bar order.
+    yAxis: { type: "category", inverse: true, data: rows.map((r) => r.name), axisLabel: { fontSize: 11, width: 96, overflow: "truncate" } },
+    series: [{ name: "Events", type: "bar", itemStyle: { color: "#6b7280", borderRadius: [0, 6, 6, 0] }, data: rows.map((r) => r.value) }],
+  };
 }
 
 function sectionSkeleton() {
@@ -277,15 +291,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
       <section className="grid gap-4 xl:grid-cols-3">
         <ChartCard title="Event Trend">
           {firewallData.loading && trendData.length === 0 ? sectionSkeleton() : (
-            <SafeResponsiveChart className="h-[210px] w-full">
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
-                <XAxis dataKey="time" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="primary" stroke="#6b7280" strokeWidth={2} dot={false} />
-              </LineChart>
-            </SafeResponsiveChart>
+            <SafeResponsiveChart className="h-[210px] w-full" option={eventTrendOption(trendData)} />
           )}
         </ChartCard>
 
@@ -318,15 +324,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
 
         <ChartCard title="Top Categories">
           {firewallData.loading && categoryData.length === 0 ? sectionSkeleton() : (
-            <SafeResponsiveChart className="h-[210px] w-full">
-              <BarChart data={categoryData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
-                <XAxis dataKey="name" hide />
-                <YAxis tick={{ fontSize: 11 }} width={100} dataKey="name" type="category" />
-                <Tooltip />
-                <Bar dataKey="value" fill="#6b7280" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </SafeResponsiveChart>
+            <SafeResponsiveChart className="h-[210px] w-full" option={topCategoriesOption(categoryData)} />
           )}
         </ChartCard>
       </section>

@@ -125,7 +125,20 @@
       both themes + 375 stacks clean. 500/401 cascades = F3 env (auth/me 500→downstream 401). Deferred-LOW:
       EngineCard "0F" flagged counter is structurally always-0 (flag folds into redacted bucket) — honest 0,
       logged not changed.
-- [x] 13. LogViewer/LogDetailPage - [x] 14. OWASPStatsPanel - [ ] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
+- [x] 13. LogViewer/LogDetailPage - [x] 14. OWASPStatsPanel - [x] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
+      item15 DONE (Firewall12EnterprisePage, module 1.2). Claim check: cursor-ralph-iter2-P1.2 is a RELEASED
+      MCP-http/oauth-repro claim (scope mcp-parallel/findings/p1-2/**, docs) — does NOT cover this file. CHART
+      migration recharts→ECharts: "Event Trend" LineChart (trendData time/primary) → eventTrendOption line;
+      "Top Categories" horizontal BarChart (categoryData, real category counts from threatFeed) →
+      topCategoriesOption (yAxis category inverse:true to keep biggest-at-top like recharts); recharts import
+      removed. Theme was ALREADY clean (0 inverted-slate, 0 dark-on-dark, grids responsive, 2 text-slate-400 =
+      decorative icons). DATA-INTEGRITY clean: KPIs from real socKpis (numberOrDash/percentOrDash honest "--",
+      successRate null→"--"), categoryData real top-5, actionDistribution real (honest 0 fallback). Embedded
+      PolicyManagementPanel/PolicyAnalyticsPanel/VectorPolicyPanel already hardened (items 12/8; VectorPolicy
+      item-8 deferred live-render folds here — Vector tab, detector-clean + page renders clean). GATE lint
+      42/42, build, detector 0. LIVE both themes @1440/1024/768/375: canvases=2 ALL 8, overflow=0 ALL 8, 0
+      console/net (except 768-light F3 transient); line + horizontal-bar visually verified data-identical +
+      theme-aware (dark AND light), Top-Categories correctly ordered biggest-at-top, KPIs stack 1-col @375.
       item14 DONE (OWASPStatsPanel, Overview): CHART migration recharts→ECharts — stacked coverage BarChart
       (Blocked/Allowed per vector) + threat RadarChart (Detected/Blocked top-active vectors) → SafeResponsiveChart
       `option` (coverageBarOption/threatRadarOption), theme-aware zs-light/zs-dark (fixes old hardcoded
