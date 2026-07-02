@@ -68,56 +68,54 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
         feedParams.set("source", source);
       }
 
-      const requests = [
-        fetchWithAuth(`/api/security/soc-kpis/?period=${period}`),
-        fetchWithAuth(`/api/security/threat-feed/?${feedParams.toString()}`),
-        fetchWithAuth(`/api/security/attack-vector-trends/?period=${period}`),
-        fetchWithAuth("/api/gateways/stats/"),
+      // Decoupled fetch (mirrors the overview dashboard's apply() pattern, 56ff19ca):
+      // fire all requests but commit each slice of state the MOMENT its own response
+      // resolves, instead of awaiting Promise.allSettled and blocking EVERY card on
+      // the SLOWEST endpoint. soc-kpis?period=7d runs ~6-8s while threat-feed is
+      // ~0.45s; the coupled version pinned the whole page (KPIs + evidence) to that
+      // ~7s tail. A per-request failure is swallowed so it leaves its own state
+      // untouched — matching the prior behavior where a non-ok result just skipped
+      // its setter (and Promise.allSettled never rejected).
+      const apply = async (request, onData) => {
+        try {
+          const resp = await request;
+          if (resp?.ok) {
+            onData(await resp.json());
+          }
+        } catch {
+          /* per-request failure is non-fatal: leave that slice of state as-is */
+        }
+      };
+
+      const jobs = [
+        apply(fetchWithAuth(`/api/security/soc-kpis/?period=${period}`), (data) => setSocKpis(data)),
+        apply(fetchWithAuth(`/api/security/threat-feed/?${feedParams.toString()}`), (data) => {
+          if (Array.isArray(data)) {
+            setThreatFeed(data);
+            setThreatFeedCount(data.length);
+            setThreatFeedActionCounts(null);
+          } else if (Array.isArray(data?.results)) {
+            setThreatFeed(data.results);
+            setThreatFeedCount(typeof data.count === "number" ? data.count : data.results.length);
+            setThreatFeedActionCounts(
+              data.action_counts && typeof data.action_counts === "object" ? data.action_counts : null,
+            );
+          } else {
+            setThreatFeed([]);
+            setThreatFeedCount(0);
+            setThreatFeedActionCounts(null);
+          }
+        }),
+        apply(fetchWithAuth(`/api/security/attack-vector-trends/?period=${period}`), (data) => setAttackTrends(Array.isArray(data) ? data : [])),
+        apply(fetchWithAuth("/api/gateways/stats/"), (data) => setGatewayStats(data)),
       ];
       if (moduleId === "1.2" || moduleId === "1.3") {
-        requests.push(fetchWithAuth(`/api/security/rag-pipeline-kpis/?period=${period}`));
+        jobs.push(apply(fetchWithAuth(`/api/security/rag-pipeline-kpis/?period=${period}`), (data) => setRagPipelineKpis(data)));
       }
 
-      const results = await Promise.allSettled(requests);
-
-      if (results[0].status === "fulfilled" && results[0].value.ok) {
-        const data = await results[0].value.json();
-        setSocKpis(data);
-      }
-
-      if (results[1].status === "fulfilled" && results[1].value.ok) {
-        const data = await results[1].value.json();
-        if (Array.isArray(data)) {
-          setThreatFeed(data);
-          setThreatFeedCount(data.length);
-          setThreatFeedActionCounts(null);
-        } else if (Array.isArray(data?.results)) {
-          setThreatFeed(data.results);
-          setThreatFeedCount(typeof data.count === "number" ? data.count : data.results.length);
-          setThreatFeedActionCounts(
-            data.action_counts && typeof data.action_counts === "object" ? data.action_counts : null,
-          );
-        } else {
-          setThreatFeed([]);
-          setThreatFeedCount(0);
-          setThreatFeedActionCounts(null);
-        }
-      }
-
-      if (results[2].status === "fulfilled" && results[2].value.ok) {
-        const data = await results[2].value.json();
-        setAttackTrends(Array.isArray(data) ? data : []);
-      }
-
-      if (results[3].status === "fulfilled" && results[3].value.ok) {
-        const data = await results[3].value.json();
-        setGatewayStats(data);
-      }
-
-      if (results[4] && results[4].status === "fulfilled" && results[4].value.ok) {
-        const data = await results[4].value.json();
-        setRagPipelineKpis(data);
-      }
+      // Await all so `loading` clears and hasLoadedOnce flips only once every request
+      // has settled — but state has already streamed in as each resolved above.
+      await Promise.all(jobs);
     } catch (err) {
       setSocKpis(null);
       setThreatFeed([]);

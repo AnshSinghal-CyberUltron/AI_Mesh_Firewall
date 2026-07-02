@@ -56,13 +56,19 @@ export function FirewallModulePage({
   );
 
   const isLoading = firewallData.loading;
-  // Only the FIRST load has no data to show — background polls (15s) and lens
-  // changes keep the prior threatFeed, so isLoading alone would blank good data.
-  // During that first load the KPI cards would otherwise render a full board of
-  // computed "0"s (empty events → summarizeEvents total 0), indistinguishable
-  // from a real "0 events" state. Show a muted placeholder instead, matching the
-  // EvidenceTable's "Loading recent evidence…" and the overview's "--".
-  const awaitingFirstData = isLoading && firewallData.threatFeed.length === 0;
+  // During the FIRST load the KPI cards would otherwise render a full board of
+  // computed "0"s (empty data → summarizeEvents total 0), indistinguishable from a
+  // real "0 events" state. Show a muted placeholder until the card's PRIMARY source
+  // has resolved. That source differs by module: 1.1's summary cards derive from the
+  // (slow) soc-kpis distinct-request partition, every other module from the
+  // threat-feed. Since useFirewallData now streams state in independently, gating on
+  // the right source stops 1.1 from flashing the raw-feed total before soc-kpis
+  // lands, and lets the feed-based modules reveal the instant the feed is in.
+  // `threatFeedCount !== null` marks "feed resolved" (0 included), and prior data is
+  // retained across lens changes / polls, so neither blanks good data.
+  const primaryKpiReady =
+    moduleId === "1.1" ? firewallData.socKpis != null : firewallData.threatFeedCount !== null;
+  const awaitingFirstData = isLoading && !primaryKpiReady;
 
   const resolvedFooterPanels = useMemo(() => {
     if (!footerPanels?.length) return [];
