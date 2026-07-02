@@ -526,6 +526,51 @@ def test_g34_benign_layered_allow(payload):
     assert _verdict(payload) == "allow", f"benign encoding wrongly blocked by depth-2: {payload[:40]!r}"
 
 
+# ── G35: encoded PII/secret in MODEL OUTPUT (output-side laundering, symmetric to G33) ──
+# A manipulated model can emit PII as HTML entities / percent-encoding so the raw value
+# is absent from egress bytes, yet a browser/markdown renderer decodes it back. The
+# output scan flags it and the egress sanitizer masks the encoded run. Benign encoded
+# output (colour hex, url path, emoji) is preserved.
+import output_guard as _og  # noqa: E402
+from patterns import redact_all as _redact_all  # noqa: E402
+
+
+def _output_egress(text):
+    v = _SCANNER._scan_output_sync(text)
+    ov = _og.OutputVerdict(action=getattr(v, "action", "allow"), threat_type=getattr(v, "threat_type", ""))
+    return getattr(v, "action", "?"), _og.sanitize_output_for_verdict(text, ov, redact_pii_fn=_redact_all)
+
+
+_G35_ENCODED_OUTPUT_PII = [
+    "The SSN is " + "".join(f"&#{ord(c)};" for c in "123-45-6789") + ".",
+    "code " + "".join(f"%{ord(c):02x}" for c in "123-45-6789"),
+    "reach " + "".join(f"&#{ord(c)};" for c in "john@example.com"),
+    "key " + "".join(f"&#{ord(c)};" for c in "AKIAIOSFODNN7EXAMPLE"),
+]
+_G35_BENIGN_OUTPUT = [
+    "color &#35;&#70;&#70;&#48;&#48;&#48;&#48; hex",
+    "see https://x.com/a%2Fb%2Fc%2Fd%2Fe%2Ff path",
+    "nice &#128512;&#128513;&#128514;&#128515;&#128516;&#128517; day",
+]
+
+
+@pytest.mark.parametrize("payload", _G35_ENCODED_OUTPUT_PII)
+def test_g35_encoded_output_pii_masked(payload):
+    action, egress = _output_egress(payload)
+    assert "[ENCODED_PII_REDACTED]" in egress, f"encoded output PII not masked: {egress[:50]!r}"
+
+
+@pytest.mark.parametrize("payload", _G35_BENIGN_OUTPUT)
+def test_g35_benign_encoded_output_preserved(payload):
+    action, egress = _output_egress(payload)
+    assert egress == payload and action == "allow", f"benign encoded output altered: {egress[:50]!r}"
+
+
+def test_g35_plain_output_pii_still_masks():
+    action, egress = _output_egress("The SSN is 123-45-6789.")
+    assert "***-**-6789" in egress and "123-45-6789" not in egress
+
+
 def test_g6_reassembly_is_noop_on_single_turn():
     """A single-turn prompt is not a multi-turn fold — reassembly returns None so
     single-turn scanning is untouched."""

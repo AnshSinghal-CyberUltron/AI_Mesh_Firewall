@@ -1179,6 +1179,45 @@ async def rewrite_output_response_text_async(
     return await loop.run_in_executor(None, func)
 
 
+# G35: runs of HTML character-references or percent-encodings long enough to carry
+# a PII/secret value. A manipulated model can emit PII as &#..; / %.. so the raw
+# value never appears in the egress bytes, yet a browser/markdown renderer auto-
+# decodes it back to the PII. Mask the whole encoded run (not the value inside it),
+# so no position-mapping is needed. Benign entity/percent runs (colour hex, emoji,
+# ©/™, url path segments) do NOT decode to a PII/secret pattern and are preserved.
+_ENCODED_PII_RUN_RE = re.compile(
+    r"(?:&#x?[0-9a-fA-F]{1,6};){6,}|(?:%[0-9a-fA-F]{2}){6,}"
+)
+
+
+def _decode_encoded_run(run: str) -> str:
+    def _cp(n: int) -> str:
+        return chr(n) if 0 <= n < 0x110000 else ""
+    s = re.sub(r"&#x([0-9a-fA-F]{1,6});", lambda m: _cp(int(m.group(1), 16)) or m.group(0), run)
+    s = re.sub(r"&#(\d{1,7});", lambda m: _cp(int(m.group(1))) or m.group(0), s)
+    s = re.sub(r"%([0-9a-fA-F]{2})", lambda m: _cp(int(m.group(1), 16)) or m.group(0), s)
+    return s
+
+
+def neutralize_encoded_pii(text: str) -> str:
+    """Mask HTML-entity / percent-encoded runs in model output that DECODE to a
+    PII/secret value (output-side laundering; symmetric to input G33). Strict no-op
+    on benign encoded runs. Bounded single-pass regex (ReDoS-safe)."""
+    if not text or ("&#" not in text and "%" not in text):
+        return text
+
+    def _sub(m: "re.Match[str]") -> str:
+        decoded = _decode_encoded_run(m.group(0))
+        if detect_pii(decoded) or detect_secrets(decoded):
+            return "[ENCODED_PII_REDACTED]"
+        return m.group(0)
+
+    try:
+        return _ENCODED_PII_RUN_RE.sub(_sub, text)
+    except Exception:  # noqa: BLE001 - sanitizer must never break the egress
+        return text
+
+
 def sanitize_output_for_verdict(
     response_text: str,
     verdict: OutputVerdict,
@@ -1193,8 +1232,11 @@ def sanitize_output_for_verdict(
     the PII verdict was selected. Neutralize runs BEFORE core redaction so it sees
     the original (unmasked) URL — otherwise masking the payload first would hide
     the exfil signal and leave the auto-render intact. No-op on benign markdown/URLs.
+    G35 adds a symmetric encoded-PII neutralization pass (HTML-entity / percent runs
+    that decode to a PII/secret) so a laundered-output exfil can't ride out either.
     """
     neutralized = neutralize_exfil_channels(response_text)
+    neutralized = neutralize_encoded_pii(neutralized)
     return _sanitize_output_core(neutralized, verdict, redact_pii_fn=redact_pii_fn)
 
 

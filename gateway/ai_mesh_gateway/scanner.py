@@ -1232,8 +1232,27 @@ class InputScanner:
                 matched_values=dict(secret_matched),
             )
 
+        # G35: encoded PII/secret in model output (HTML-entity / URL / source escapes).
+        # A manipulated model can emit PII as &#..; / %.. so the RAW value is absent
+        # from egress bytes, yet a browser/markdown renderer decodes it back to the
+        # PII. Flag it (same shape as plain output PII) so the egress sanitizer's
+        # neutralize_encoded_pii masks the encoded run. Only fires when the DECODED
+        # form has PII/secret the plaintext lacked (benign encoded output unaffected).
+        for _variant in _decode_text_encoding_variants(text):
+            _v_pii = detect_pii(_variant)
+            _v_secret = detect_secrets(_variant)
+            if _v_pii or _v_secret:
+                _k = list(_v_pii.keys()) + list(_v_secret.keys())
+                return ScanVerdict(
+                    action="flag",
+                    threat_type="pii" if _v_pii else "secret",
+                    confidence=0.85,
+                    detail=f"Encoded PII/secret in output: {', '.join(_k)}",
+                    matched_patterns=_k,
+                )
+
         return ScanVerdict()
-    
+
 
     def redact_pii(self, text: str, verdict: ScanVerdict | None = None) -> str:
         result = redact_all(text)
