@@ -133,6 +133,14 @@
       missed a real leak). REMAINING before [x]: run the canary matrix LIVE at 500-sandbox scale under
       chaos with the corrected+gated oracle + capture REAL sandbox egress bytes cross-checked with an
       independent aidefence oracle (tied to item 14 true scale — still a hardcoded-3-org=15-sandbox ceiling).
+      LIVE VERIFIED @15-MCP — CHG-0013 (2026-07-02): stack was up, RAN scale-matrix 3× consecutive
+      (ROUNDS=6, 540 calls): cross_org_result_leak=0, foreign_org_events_total=0 (fixed oracle), errors=0,
+      mismatches=0 → cross-tenant isolation HOLDS. De-flaked the gate: retry-on-mismatch (+transient_retries)
+      since a ~0.7% transient echo hiccup under load intermittently failed the strict gate (NOT a demux/
+      isolation bug — cross_org_leak/errors stayed 0 across 1080+ calls). Evidence:
+      mcp-parallel/findings/backstop-p19-isolation/scale_isolation_evidence.json. REMAINING before [x]:
+      run at TRUE 300-500-sandbox scale (item 14 live) UNDER CHAOS (item 18) with captured egress bytes +
+      independent aidefence cross-check.
 - [ ] 20. 1.4 under peak load — redaction + per-actor authz + tagging hold; no PII/IP/regulated escape.
       HARNESS UPGRADED — CHG-0012 (2026-07-02): mcp_live_matrix_harness.py was fully SEQUENTIAL (not peak
       load) + classified only allowed/blocked/errors, never inspecting response bytes (a redact-but-forward

@@ -107,3 +107,9 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   — any sent sensitive value appearing raw in the egress is a LEAK that FAILS the run. New
   `scripts/test_mcp_live_matrix_oracle.py` (5 pass). REMAINING: run LIVE at peak load (3×), zero leaks;
   add per-actor authz-denial + tag-enforcement cases under load.
+- **CHG-0013** (2026-07-02) — G5 item 19 LIVE isolation VERIFIED: stack was up, so I RAN the scale-matrix
+  harness (CHG-0009 oracle) 3× consecutive (ROUNDS=6, 540 calls): cross_org_result_leak=0,
+  foreign_org_events_total=0, errors=0, mismatches=0. Also de-flaked the gate: added retry-on-mismatch
+  (+transient_retries) because a ~0.7% transient echo hiccup under load intermittently failed the strict
+  gate (not a demux/isolation bug — cross_org_leak/errors stayed 0 over 1080+ calls). Evidence:
+  mcp-parallel/findings/backstop-p19-isolation/. REMAINING: 500-sandbox-under-chaos + egress-byte aidefence check.

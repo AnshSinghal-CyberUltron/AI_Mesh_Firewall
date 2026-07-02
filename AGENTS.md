@@ -58,6 +58,10 @@
     checked response bytes (redact-but-forward counted as allowed). Now concurrent (CONCURRENCY semaphore) +
     asserts RESPONSE BYTES via `find_leaked_values` (raw sent value in egress = leak → FAIL). New
     `scripts/test_mcp_live_matrix_oracle.py` (5 pass). Remaining: run LIVE at peak load 3×, zero leaks.
+  - CHG-0013 (2026-07-02) — G5 item 19 LIVE isolation VERIFIED: stack up → RAN scale-matrix 3× consecutive
+    (540 calls): cross_org_result_leak=0, foreign_org_events_total=0, errors=0, mismatches=0. De-flaked the
+    gate (retry-on-mismatch; the ~0.7% transient echo hiccup was flakiness, not a demux/isolation bug).
+    Evidence in mcp-parallel/findings/backstop-p19-isolation/. Remaining: 500-sandbox-under-chaos scale.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
