@@ -140,3 +140,23 @@ _G3_MISSES = [
 @pytest.mark.parametrize("label,payload", _G3_MISSES)
 def test_g3_split_injection_must_block(label, payload):
     assert _verdict(payload) == "block", f"{label}: split injection not blocked (MISS)"
+
+
+# ================================================================== fixed gap (now FROZEN)
+# G4 — output-side obfuscated PII/secret. FIXED via the shared obfuscation-resistant
+# patterns.detect_pii/detect_secrets/redact_all (the output guard scrubs with the same
+# catalogue), so a secret smuggled in MODEL OUTPUT is now detected and masked. FROZEN.
+_G4_OUTPUT = [
+    ("g4_out_ssn_fullwidth",  f"the record shows SSN {fullwidth(SSN)}"),
+    ("g4_out_key_zero_width", f"leaked token: {zero_width(OAI_KEY)}"),
+    ("g4_out_email_homoglyph", f"reply to {homoglyph('johndoe')}@example.com"),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G4_OUTPUT)
+def test_g4_output_obfuscated_pii_detected_and_masked(label, payload):
+    # The output scanner now DETECTS the obfuscated value (not 'allow') ...
+    assert _SCANNER._scan_output_sync(payload).action in ("flag", "redact", "block"), (
+        f"{label}: output scanner missed obfuscated PII/secret")
+    # ... and the shared scrubber removes it from the egress bytes.
+    assert not _residual_secret(payload), f"{label}: obfuscated PII/secret survived output redaction"

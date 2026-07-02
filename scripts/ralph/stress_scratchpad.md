@@ -56,11 +56,25 @@
       original span and is masked in EGRESS bytes. No-op when canon==original → zero risk to the 9 frozen.
 
 ## R4 — Fix on this worktree
-- [ ] 5. Implement fixes in the chat modules (enforcement.py, policy_engine.py, bedrock_scanner.py,
+- [~] 5. Implement fixes in the chat modules (enforcement.py, policy_engine.py, bedrock_scanner.py,
       scanner/input-scan, output_guard.py): input normalization/canonicalization before matching,
       ReDoS-safe patterns, obfuscation decoding, multi-turn/context handling, and correct enforcement
       per the precedence table (redact stays redact; leaks become redact/block; false positives relax).
       Keep main.py edits minimal + claimed. New golden cases go green; the 9 stay green.
+      CORE DONE 2026-07-02 (all 12 encoded attack cases GREEN, 9 frozen GREEN, 3x in-process):
+        R4a (28fa828a) patterns.py: canonicalize_for_detection (position-preserving index map: NFKC +
+          strip Cf invisibles/combining + fold unicode dashes/spaces + Cyrillic/Greek confusables) +
+          bounded base64/hex transport-decode; detect_pii/detect_secrets/redact_all scan raw+canonical+
+          decoded, span-back mask into egress bytes. NO-OP on plain ASCII (frozen cases untouched).
+          → fixed G1 (5 unicode/zw/homoglyph PII+secret), G2 (2 base64), G4 (output-side, shared scrubber).
+        R4b (f176fc76) scanner.py: _reassemble_split_words glues short-fragment runs + re-segments vs
+          injection vocab → fixed G3 (2 chunk-split/spaced injection). Vocab-curated → zero FP.
+      REMAINING R4 hardening (NOT yet encoded as findings; lower priority than R5/R6 completion gates):
+        G5 policy enforce-or-fail-closed (policy_engine.py), G6 multi-turn session state (scanner.py),
+        G9 context_guard precedence inversion, G10 semantic-redact typed-placeholder, G12 ReDoS caps
+        in context_guard/leakage_detector, G13 output markdown/link+tool-arg exfil (output_guard.py).
+      FLAGGED (not mine): B1 fail-closed regression on main (culprit 75b51d8e, E1 program) —
+        mcp-parallel/findings/stress-r2/REGRESSION_B1_FAILCLOSED.md.
 
 ## R5 — Client E2E stress with 10 real free OpenRouter models
 - [ ] 6. Playwright as a client: in ModelConnectionPanel, add provider (OpenAI-compatible, base URL
