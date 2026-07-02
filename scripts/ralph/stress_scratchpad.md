@@ -91,6 +91,13 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      G25 DONE 2026-07-02: additional PII-type coverage. detect_pii missed MAC addresses (device IDs) and
+        government/national IDs (passport/Aadhaar/UK NINO/driver's licence). Fixed in patterns.py PII_PATTERNS:
+        mac_address (distinctive 6-hex-pair format, low FP) + cue-gated government_id (cue word + bounded
+        digit-lookahead so 'passport application'/timestamps don't FP). GDPR-tagged, ReDoS-safe, canonicalize-
+        aware. FP floor verified. 13 golden frozen. Full gateway 1064 passed; golden 137 passed/7 skipped 3x.
+        Intentionally NOT added (correct/too-FP): public IPv4/IPv6 (only INTERNAL IPs are INFRA-flagged),
+        bare DOB/passport/DL/EIN without a cue (ambiguous with order/version numbers).
       G24 DONE 2026-07-02: modern secret-format coverage. detect_secrets missed Google API keys (AIza…),
         npm tokens (npm_…), and aws_secret_access_key had a compliance tag but NO detection pattern -> bare
         Google/npm creds egressed / stored raw at RAG ingest. Fixed in patterns.py SECRET_PATTERNS:
