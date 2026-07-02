@@ -187,7 +187,7 @@ export function FirewallModulePage({
           description={pageConfig.workspaceDescription}
         />
         <div className={cn("grid gap-6", hasSidebar && "xl:grid-cols-[1.4fr,0.9fr]")}>
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             {controlPanels.length > 0 ? (
               <PanelLane label={pageConfig.panelLabels.control} panels={resolvedControlPanels} />
             ) : null}
@@ -200,7 +200,7 @@ export function FirewallModulePage({
           </div>
 
           {hasSidebar ? (
-            <div className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+            <div className="space-y-6 min-w-0 xl:sticky xl:top-6 xl:self-start">
               <FlowSection flowNodes={flowNodes} summary={pageData.summary} />
               {inspectionPanels.length > 0 ? (
                 <PanelLane label={pageConfig.panelLabels.inspection} panels={inspectionPanels} />
