@@ -958,6 +958,30 @@
         from the independent oracle AND open a bypass — an attacker labels an SSN "SKU" or wraps an
         injection in "what does X mean"). Scanner precision validated: agrees with the oracle on all 28.
         Both sides of the scanner now validated — leak-recall (G40-G48) AND precision (this audit).
+      ★★ G49 — REAL BUDGET-EXHAUSTION EXFIL LEAK (found via the ReDoS/DoS sweep) ★★ 2026-07-02:
+        THREAT: _scan_exfil_channels caps inspected URLs at _MAX_EXFIL_URLS (was 256) as a DoS guard —
+        a SHARED budget across all passes. Padding a model output with 256+ benign URLs BEFORE an exfil
+        beacon exhausted the budget SILENTLY (the scan just returned), so the beacon past the cap was
+        NEVER detected -> exfil verdict = ALLOW. And since the egress neutralizer (neutralize_exfil_
+        channels, uncapped) only runs on a redact/block verdict via sanitize_output_for_verdict, the
+        beacon egressed RAW -> zero-click exfil. VERIFIED: 300 benign md-images + 1 beacon -> scan 0 hits,
+        verdict allow, beacon survives. Tension: the neutralize is uncapped (measured ~1.5s on a 500KB
+        output) so simply "always neutralize" would re-introduce the DoS the cap prevents.
+        FIX (output_guard.py): (a) raised _MAX_EXFIL_URLS 256->1024 so realistic outputs are fully
+        scanned + defanged (scan cost still bounded: 80ms @1024, ReDoS-free); (b) on budget exhaustion
+        _scan_exfil_channels now yields a sentinel (_EXFIL_BUDGET_SENTINEL) at BOTH exhaustion points
+        (srcset loop + main pass loop), and _check_exfil_channel FAILS CLOSED -> action=block,
+        threat_type=exfil_channel ("URL-flood / exfil-padding pattern"). A single legit answer never has
+        >1024 distinct URLs; blocking is safe and bounds DoS (block short-circuits the uncapped neutralize
+        on huge outputs). VERIFY: 300+beacon -> redact+defanged (leak CLOSED); 1224+beacon -> block (fail
+        closed); 1224 benign no-beacon -> block (anomalous); normal 5-URL output -> allow (no FP).
+        FROZEN: G49 (test_g49_beacon_within_budget_detected_and_defanged / _url_flood_fails_closed_block /
+        _normal_output_not_flagged). Gate: frozen+adversarial 316 green; golden+streaming 344 passed × 3
+        in-process; scan 1024 urls 80ms / 3072 urls 74ms (bounded). commit 86bb028a. REDEPLOYED
+        (rollback-pre-g49; marker _EXFIL_BUDGET_SENTINEL present; health 200) — LIVE.
+        => the ReDoS/DoS sweep (all pipeline inputs bounded/linear, NO catastrophic backtracking) ALSO
+        surfaced this real detection-gap leak. EIGHT confirmed-live leaks fixed now (G40-G46, G49) +
+        G48 defense-in-depth + 2 documented tradeoffs.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
