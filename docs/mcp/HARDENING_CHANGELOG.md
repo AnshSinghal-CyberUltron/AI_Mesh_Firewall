@@ -1215,7 +1215,7 @@ the prod compose/manifests is tracked under G3 item 12.
   changelog; the gateway suite gate is `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`
   → 1081 passed.
 
-### CHG-0039 — Accept ws:// / wss:// on MCPServerRegistration.url (P4.13 Blocker 2)
+### CHG-0040 — Accept ws:// / wss:// on MCPServerRegistration.url (P4.13 Blocker 2)
 - **Date:** 2026-07-02
 - **Scratchpad item:** P4.13 / P6.18 / P6.19 — four-transport sandbox e2e. Cross-seam exception (Cursor-owned
   iter39; user: don't wait for Claude after 2+ iters blocked on URLField).

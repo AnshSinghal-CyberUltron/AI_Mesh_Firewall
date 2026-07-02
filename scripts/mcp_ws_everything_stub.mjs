@@ -39,7 +39,7 @@ function handleMessage(ws, raw) {
     };
   } else if (method === "tools/call") {
     const message = params?.arguments?.message ?? "";
-    result = { content: [{ type: "text", text: String(message) }] };
+    result = { content: [{ type: "text", text: `Echo: ${message}` }] };
   } else {
     return;
   }

@@ -4,6 +4,7 @@
   "servers": {
     "stdio": "everything-1",
     "streamable-http": "http-everything-stub",
-    "sse": "sse-everything-stub"
+    "sse": "sse-everything-stub",
+    "websocket": "ws-everything-stub"
   }
 }

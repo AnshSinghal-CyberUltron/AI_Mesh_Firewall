@@ -40,8 +40,7 @@ class OAuthTransportGuardTests(TestCase):
 
     def test_websocket_plus_oauth_is_rejected(self):
         # websocket is a non-HTTP transport -> oauth must never be accepted.
-        # (Rejected either by the URLField/scheme check or the oauth guard;
-        # either way registration must fail closed.)
+        # (Rejected by the oauth guard; registration must fail closed.)
         ok, _errors = self._errors(
             {
                 "name": "guard-ws-oauth",
@@ -51,6 +50,18 @@ class OAuthTransportGuardTests(TestCase):
             }
         )
         self.assertFalse(ok)
+
+    def test_websocket_ws_scheme_url_is_allowed(self):
+        # P4.13: CharField + serializer SSRF guard must accept ws:// (URLField rejected it).
+        ok, errors = self._errors(
+            {
+                "name": "guard-ws-stub",
+                "transport": "websocket",
+                "url": "ws://ws-everything.stub:3003/mcp",
+                "auth_type": "none",
+            }
+        )
+        self.assertTrue(ok, msg=f"expected valid, got {errors}")
 
     def test_streamable_http_plus_oauth_is_allowed(self):
         ok, errors = self._errors(

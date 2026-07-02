@@ -227,7 +227,7 @@
     the SSE branch now buffers+scans those finite methods, while notifications/subscriptions still stream
     through (no bounded result; buffering could hang). Non-streaming JSON branch already scanned any result.
     Files mcp_proxy.py + test_mcp_bare_proxy_scan.py (+2). Gate: 24 bare-proxy + 1085 broad sweep passed.
-  - CHG-0039 (2026-07-02) — P4.13 Blocker 2: MCPServerRegistration.url URLField→CharField + migration 0015
+  - CHG-0040 (2026-07-02) — P4.13 Blocker 2: MCPServerRegistration.url URLField→CharField + migration 0015
     so ws:// registers (serializer SSRF guard unchanged); ws-everything.stub in MCP_ALLOW_INTERNAL_HOSTS;
     ws stub echo prefix fixed. 4/4 transports PASS ROUNDS=3; gateway ss :443 empty. Cross-seam (control,
     iter39). Evidence mcp-parallel/findings/p4-13/RECHECK_ITER39.md.

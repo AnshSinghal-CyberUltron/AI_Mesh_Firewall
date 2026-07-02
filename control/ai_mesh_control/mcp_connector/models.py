@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.core.validators import MaxLengthValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -38,10 +39,12 @@ class MCPServerRegistration(models.Model):
         default="",
         help_text="URL-safe identifier for gateway endpoint; auto-generated from name",
     )
-    url = models.URLField(
-        help_text="MCP server endpoint URL (required for http/sse/websocket, blank for stdio)",
+    url = models.CharField(
+        max_length=2048,
         blank=True,
         default="",
+        validators=[MaxLengthValidator(2048)],
+        help_text="MCP server endpoint URL (http/https/ws/wss for remote; blank for stdio)",
     )
     transport = models.CharField(
         max_length=32,

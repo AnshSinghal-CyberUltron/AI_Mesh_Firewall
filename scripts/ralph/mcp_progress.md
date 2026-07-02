@@ -1,6 +1,9 @@
 # MCP Gateway Ralph Progress   (mark [x] when DONE + verified; never fake green)
 
 ## Codebase Patterns (append reusable learnings at top)
+- P4.13 4/4 DONE (iter39): Cross-seam Blocker 2 — `MCPServerRegistration.url` CharField + migration `0015`;
+  `ws-everything.stub` in `MCP_ALLOW_INTERNAL_HOSTS`; ws stub echo prefix. **4/4 transports PASS ROUNDS=3**;
+  manifest has websocket slug; ss no gateway :443. CHG-0040. Evidence: `RECHECK_ITER39.md`.
 - P4.13 WS PARTIAL (iter37): Gateway ws **LANDED** CHG-0026 (`broker_send_rpc` L1974, commit d6ab1ae7); iter37 rebuilt live gateway. **Remaining:** control `URLField` blocks `ws://` registration → 3/4 only. Cursor: `mcp_sandbox_transport_verify.py` auto-stubs (`AUTO_STUBS_UP=1`) + unregistered transports = BLOCKED not FAIL (`PASS_PARTIAL`). Spec: `docs/mcp/CLAUDE_WS_BLOCKERS.md`. Evidence: `RECHECK_ITER37.md`.
 - P4.13 WS GAP UNCHANGED (iter36): Gateway ws still `mcp_ws_adapter` (git L2017, container L2001); URLField still blocks `ws://` (`models.py:41` git+live). 3/3 transports R1 PASS after stubs-up; no regression. Evidence: `RECHECK_ITER36.md`.
 - P4.13 COLD tools=0 FIX (iter35): SSE/ws did not auto-run MCP `initialize` on the first real method (only streamable-http did) → cold `tools/list` after stub/sandbox recreate could return HTTP 200 with `tools=[]` while R2+ warmed. Fix in `upstream_manager.py`: `_AUTO_INIT_TRANSPORTS` (streamable-http+sse+websocket), plus one retry when `tools/list` is empty (invalidate session + re-init). Rebuild `ai-mesh/mcp-sandbox:latest` after agent changes. Evidence: `RECHECK_ITER35.md`.
@@ -124,6 +127,7 @@
 - **iter31 (2026-07-02):** Gateway image rebuilt — §3 live (2 `broker_send_rpc` refs). 4-transport verify still FAIL (stdio only); P4.13/P6.18 remain `[ ]`. `RECHECK_ITER31.md`.
 - **iter32 (2026-07-02):** Agent SSE reader + stale-session fix (`sse_manager.py`); sandbox image rebuilt. stdio+http+sse PASS 3×; ws BLOCKED. P4.13/P6.18 remain `[ ]`. `RECHECK_ITER32.md`.
 - **iter37 (2026-07-02):** Gateway ws **LANDED** CHG-0026 (git+rebuild); URLField **still blocks** ws registration. Cursor: auto-stubs harness + `CLAUDE_WS_BLOCKERS.md`. **3-transport ROUNDS=3 PASS_PARTIAL**; ws BLOCKED. ss: no gateway :443. P10 recursive 1×: agent-pytest TIMEOUT flake (other gates green). P4.13/P6.18 remain `[ ]`. `RECHECK_ITER37.md`.
+- **iter38 (2026-07-02):** URLField fix **NOT in git** (`git log -5 mcp_connector/models.py` unchanged); live control still `URLField`. Gateway ws still LANDED (no rebuild). **3-transport ROUNDS=3 PASS_PARTIAL**; ws BLOCKED. ss: no gateway :443. P4.13/P6.18 remain `[ ]`. `RECHECK_ITER38.md`.
 - **iter36 (2026-07-02):** ws blockers **unchanged** git+live (`mcp_ws_adapter`, URLField). 3-transport **R1 PASS** after stubs-up (no regression); ws BLOCKED. ss: no gateway :443. P4.13/P6.18 remain `[ ]`. `RECHECK_ITER36.md`.
 - **iter35 (2026-07-02):** cold R1 tools=0 flake FIXED (agent sse/ws auto-init + empty tools/list retry); sandbox image rebuilt. ws blockers unchanged (`mcp_ws_adapter`, URLField). **3-transport ROUNDS=3 PASS incl. R1**; Playwright 12/12; broker 85 passed. P4.13/P6.18 remain `[ ]`. `RECHECK_ITER35.md`.
 - **iter34 (2026-07-02):** iter33 blockers **unchanged** — gateway ws `mcp_ws_adapter:2005`, URLField `models.py:41`. 3-transport verify 1× no regression (cold http/sse flake, warm PASS). Playwright 12/12. P4.13/P6.18 remain `[ ]`. `RECHECK_ITER34.md`.

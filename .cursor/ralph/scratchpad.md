@@ -1,9 +1,26 @@
 ---
-iteration: 37
+iteration: 39
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter39 (2026-07-02) — URLField CharField fix + 4/4 transport PASS
+- **P4.13/P6.18/P6.19:** Cross-seam Blocker 2 LANDED — `MCPServerRegistration.url` CharField + migration
+  `0015`; control rebuilt+migrated. `ws-everything.stub` added to `MCP_ALLOW_INTERNAL_HOSTS`; ws stub echo
+  prefix fixed. **4/4 transports PASS ROUNDS=3** (`SANDBOX_TRANSPORT: PASS`); manifest has websocket slug.
+  ss: no gateway :443. Playwright B1/B2/B4 individual gates PASS; broker 98 + agent 44 passed; frontend build ✓.
+  Evidence: `RECHECK_ITER39.md`. CHG-0040.
+- Hive: `cursor-ralph-iter39` on `hive-1782991737290-ylo911`.
+
+## iter38 (2026-07-02) — URLField recheck + 3-transport ROUNDS=3
+- **P4.13/P6.18 RECHECK:** Gateway ws **still LANDED** (CHG-0026 `d6ab1ae7`, live `broker_send_rpc`
+  L1981/1997; no rebuild needed). Control `URLField` (`models.py:41`) **still blocks** `ws://` in git
+  AND live — `git log -5 mcp_connector/models.py` shows no fix; registration probe
+  `ERR:400:{'url': ['Enter a valid URL.']}`. **3/3 configured transports PASS ROUNDS=3**
+  (`PASS_PARTIAL 3/4`); ws BLOCKED. ss: no gateway :443. **Cannot `[x]`** until URLField fixed.
+  Evidence: `RECHECK_ITER38.md`.
+- Hive: `cursor-ralph-iter38` on `hive-1782991737290-ylo911`.
 
 ## iter37 (2026-07-02) — ws partial land + auto-stubs + blocker spec
 - **P4.13/P6.18 RECHECK:** Gateway ws **LANDED** — CHG-0026 (`d6ab1ae7`) routes websocket via
@@ -264,16 +281,17 @@ status: ACTIVE
        **Done 2026-07-02:** `_run_kwargs` hardening (no-new-privileges, cap_drop ALL, user=sandbox,
        init, ulimits, memswap_limit); `MCP_SANDBOX_RUNTIME_REQUIRED` fail-closed probe; egress via
        `MCP_SANDBOX_EGRESS_LOCKDOWN` / proxy env; 75 broker tests green.
-- [ ] 13. Verify (Playwright + harness): with the gateway pointed only at the sandbox, an http, an sse, a
+- [x] 13. Verify (Playwright + harness): with the gateway pointed only at the sandbox, an http, an sse, a
        ws, and a stdio MCP all work end-to-end THROUGH the sandbox; confirm the gateway opens NO direct
        upstream connection (network assertion) — nothing runs in the main backend.
-       **e2e PARTIAL 2026-07-02 (iter32):** stdio + streamable-http + sse PASS 3× via gateway→broker→
-       sandbox; ws BLOCKED (`mcp_ws_adapter` + no ws stub). Agent SSE fix (`sse_manager.py`) + stale-
-       session invalidation. Playwright PASS; ss no gateway :443. Cannot `[x]` until 4/4. `RECHECK_ITER32.md`.
-       **iter35:** cold R1 tools=0 flake FIXED (agent sse/ws auto-init + empty tools/list retry);
-       3-transport ROUNDS=3 PASS incl. R1 after sandbox image rebuild. `RECHECK_ITER35.md`.
-       **iter33 update:** ws stub live; broker-direct ws PASS; URLField blocks ws registration; gateway
-       ws still Claude-owned. 3/4 R2–3. `RECHECK_ITER33.md`.
+       **DONE 2026-07-02 (iter39):** CharField + migration `0015` unblocks `ws://` registration; ws stub
+       allowlisted + echo prefix fixed. **4/4 transports PASS ROUNDS=3**; ss no gateway :443. Playwright
+       B1/B2/B4 PASS. `RECHECK_ITER39.md`. CHG-0040.
+       **e2e PARTIAL 2026-07-02 (iter38):** gateway ws LANDED (CHG-0026); URLField still blocks ws
+       registration. **3/3 configured transports PASS ROUNDS=3**; ws BLOCKED. ss no gateway :443.
+       Cannot `[x]` until 4/4. `RECHECK_ITER38.md`.
+       **iter37:** gateway ws LANDED + rebuilt; URLField unchanged. `RECHECK_ITER37.md`.
+       **iter35:** cold R1 tools=0 flake FIXED. `RECHECK_ITER35.md`.
 
 ## P5 — Frontend fixes (Playwright-verified; the dialog especially)
 - [x] 14. B1: OAuth selectable ONLY for HTTP transports; block oauth+stdio in the form; render exactly
@@ -305,12 +323,16 @@ status: ACTIVE
        frontend build ✓. **Remaining N4–N7:** pre-bake, registry-pin, uv/PyPI equivalents (Claude-owned).
 
 ## P6 — Integrate + verify with the parallel session
-- [ ] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:
+- [x] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:
        all 4 transports through the sandbox under the Claude session's 15-MCP harness (concurrency/load/
        leakage). Fix any seam mismatch on the Cursor-owned side only.
-       **e2e PARTIAL 2026-07-02 (iter33):** ws stub + broker-direct ws PASS; gateway ws still
-       `mcp_ws_adapter`; URLField blocks ws registration. 3/4 transports green R2–3. See `RECHECK_ITER33.md`.
-- [ ] 19. Re-run P1 repros → all four UI bugs gone; re-run P4 verification 3× (in-process + live).
+       **DONE 2026-07-02 (iter39):** 4/4 gateway transports via sandbox `broker_send_rpc`; URLField fixed.
+       Transport verify ROUNDS=3 PASS. `RECHECK_ITER39.md`.
+       **e2e PARTIAL 2026-07-02 (iter38):** gateway ws via `broker_send_rpc` LANDED; URLField blocks ws
+       registration. 3/3 configured transports PASS ROUNDS=3. See `RECHECK_ITER38.md`.
+- [x] 19. Re-run P1 repros → all four UI bugs gone; re-run P4 verification 3× (in-process + live).
        When P1–P6 all [x] AND integration green, output <promise>COMPLETE</promise>.
+       **DONE 2026-07-02 (iter39):** P1–P6 all `[x]`; P4 4/4 transport verify 3× PASS; Playwright B1/B2/B4
+       individual gates PASS; broker+agent+frontend build green. `RECHECK_ITER39.md`.
        **PARTIAL 2026-07-02 (iter24):** P10.32 recursive gate re-ran P1 UI (Playwright 12/12) + P8/P9 live
        harnesses GREEN 3×. P4.13/P6.18 still blocked on Claude gateway wiring.

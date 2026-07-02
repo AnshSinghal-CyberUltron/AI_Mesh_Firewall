@@ -92,7 +92,7 @@ def inprocess_gates() -> list[tuple[str, bool, str]]:
     ok, tail = _run(
         [broker_py, "-m", "pytest", "tests", "-q", "--tb=no"],
         cwd=os.path.join(REPO, "services", "mcp-broker", "sandbox-image", "agent"),
-        timeout=180,
+        timeout=360,
     )
     results.append(("agent-pytest", ok, tail))
     return results

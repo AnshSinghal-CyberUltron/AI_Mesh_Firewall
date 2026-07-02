@@ -342,7 +342,7 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   / long-lived streams still pass through live (no bounded result; buffering could hang). The non-streaming
   JSON branch already scanned any method's result; the org path rejects these methods (`-32601`). Files:
   mcp_proxy.py, test_mcp_bare_proxy_scan.py (+2). Gate: 24 bare-proxy + 1085 broad sweep passed.
-- **CHG-0039** (2026-07-02) — P4.13 Blocker 2: `MCPServerRegistration.url` URLField→CharField + migration
+- **CHG-0040** (2026-07-02) — P4.13 Blocker 2: `MCPServerRegistration.url` URLField→CharField + migration
   `0015` so `ws://` registers (serializer `is_safe_outbound_url` unchanged); `ws-everything.stub` added to
   `MCP_ALLOW_INTERNAL_HOSTS`; ws stub echo `Echo: {message}` parity; P10 agent-pytest timeout 180→360s.
   4/4 transports PASS ROUNDS=3; gateway ss :443 empty. Cross-seam control (iter39). Evidence:

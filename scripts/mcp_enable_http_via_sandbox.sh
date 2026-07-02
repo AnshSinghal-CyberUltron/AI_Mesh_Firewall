@@ -5,7 +5,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 ENV_FILE="${ENV_FILE:-.env}"
-INTERNAL_HOSTS="${MCP_ALLOW_INTERNAL_HOSTS:-http-everything.stub:3001,sse-everything.stub:3002,http-everything.stub,sse-everything.stub,mcp-stub:9999,mcp-stub}"
+INTERNAL_HOSTS="${MCP_ALLOW_INTERNAL_HOSTS:-http-everything.stub:3001,sse-everything.stub:3002,ws-everything.stub:3003,http-everything.stub,sse-everything.stub,ws-everything.stub,mcp-stub:9999,mcp-stub}"
 
 set_kv() {
   local key="$1" val="$2"
