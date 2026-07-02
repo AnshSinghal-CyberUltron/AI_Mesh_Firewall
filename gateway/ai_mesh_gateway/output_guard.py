@@ -273,17 +273,50 @@ def _typed_placeholder(threat_type: str) -> str:
     return _TYPED_PLACEHOLDER.get(str(threat_type or "").lower(), "[REDACTED]")
 
 
+# A detector CATEGORY LABEL ("ssn", "email", "aws_access_key") — a lowercase
+# snake_case identifier — is NOT a raw sensitive value: it is safe to show in
+# evidence and must NOT be masked/used as a redaction span. The tier-2 guard model,
+# by contrast, returns RAW evidence fragments (free-text names, card numbers) that
+# MUST be masked. Length alone can't tell them apart; the key SHAPE can.
+_PATTERN_KEY_RE = re.compile(r"[a-z][a-z0-9_]{1,39}")
+
+
+def _looks_like_pattern_key(s: str) -> bool:
+    return bool(_PATTERN_KEY_RE.fullmatch(s or ""))
+
+
+def _mask_evidence_span(span: str, threat_type: str) -> str:
+    """Client-safe form of a guard-model evidence fragment (G16).
+
+    The tier-2 verdict's ``matched_patterns`` reaches the client via the enforcement
+    envelope (main.py) — it must never carry a RAW sensitive value. ``redact_all``
+    handles standard PII/secret; a category label stays readable; any remaining
+    free-text value (a name / passphrase redact_all has no regex for) is partial-
+    masked so it cannot leak the just-redacted value back through metadata."""
+    s = str(span)
+    r = redact_all(s)
+    if r != s:  # standard PII/secret regex masked it
+        return r
+    if len(s.strip()) < _SPAN_MASK_MIN_LEN or _looks_like_pattern_key(s.strip()):
+        return s  # category label / trivial fragment -> keep readable
+    return _mask_value_for_detail(s)
+
+
 def _redaction_spans_from(spans, threat_type: str) -> list[str]:
     """Filter guard-model evidence spans to value-like fragments worth masking, and
     only for redactable categories (so a jailbreak/injection evidence fragment is
-    never used to blank out response text)."""
+    never used to blank out response text). Category labels (pattern keys) are
+    excluded — they are not raw values, so they must never blank response text."""
     if str(threat_type or "").lower() not in _REDACTABLE_OUTPUT_CATEGORIES:
         return []
     out: list[str] = []
     for s in spans or []:
         s = str(s).strip()
-        if _SPAN_MASK_MIN_LEN <= len(s) <= _SPAN_MASK_MAX_LEN and "REDACTED" not in s.upper():
-            out.append(s)
+        if not (_SPAN_MASK_MIN_LEN <= len(s) <= _SPAN_MASK_MAX_LEN):
+            continue
+        if "REDACTED" in s.upper() or _looks_like_pattern_key(s):
+            continue
+        out.append(s)
     return out
 
 
@@ -558,7 +591,12 @@ class OutputGuard:
                         if t2.action in ("block", "redact")
                         else []
                     )
-                    t2_patterns = [redact_all(str(p)) for p in t2_patterns]
+                    # G16: mask RAW evidence VALUES (free-text names/passphrases that
+                    # redact_all is a no-op on) in the client-facing display copy while
+                    # keeping category labels ("ssn"/"email") readable — matched_patterns
+                    # flows to the client enforcement envelope, so a raw value here would
+                    # leak the just-redacted content back through metadata.
+                    t2_patterns = [_mask_evidence_span(str(p), t2.threat_type or "") for p in t2_patterns]
                     t2_detail = redact_all(
                         t2.detail or "ZeroShield guard model (tier-2) flagged output"
                     )

@@ -512,3 +512,68 @@ def test_g10_redaction_spans_filter_bounds():
     spans = ["ab", "x" * 200, "[REDACTED_PII]", "Jane Q. Doe"]
     assert _redaction_spans_from(spans, "pii") == ["Jane Q. Doe"]
     assert _typed_placeholder("credential") == "[REDACTED_SECRET]"
+
+
+# ================================================================== fixed gap (now FROZEN)
+# G16 — the tier-2 verdict's client-facing matched_patterns (raw guard-model evidence
+# spans, e.g. a free-text name) reached the client enforcement envelope (main.py) with
+# the value RAW, because the display copy was masked only with redact_all (a no-op on
+# free-text). That leaked the just-redacted value back through metadata (a side-channel
+# distinct from G10's response body). FIXED in output_guard.py: _mask_evidence_span masks
+# raw evidence VALUES while a category-label discriminator (_looks_like_pattern_key)
+# keeps "ssn"/"email" readable; inspect() applies it to the tier-2 display copy. FROZEN.
+import asyncio  # noqa: E402
+from output_guard import (  # noqa: E402
+    OutputGuard, _mask_evidence_span, _looks_like_pattern_key,
+)
+
+
+@pytest.mark.parametrize("span,is_key", [
+    ("ssn", True), ("email", True), ("aws_access_key", True),
+    ("John Q. Smith", False), ("correct-horse-battery-staple", False), ("30569309025904", False),
+])
+def test_g16_key_vs_value_discriminator(span, is_key):
+    assert _looks_like_pattern_key(span) is is_key
+    masked = _mask_evidence_span(span, "pii")
+    if is_key:
+        assert masked == span, f"category label {span!r} must stay readable"
+    else:
+        assert span not in masked, f"raw evidence value {span!r} must be masked"
+
+
+class _FakeT2Scanner:
+    """Drives the tier-2 output path deterministically (no Bedrock)."""
+    def __init__(self, spans, cat="pii", action="redact"):
+        self._spans, self._cat, self._action = spans, cat, action
+
+    async def scan_output(self, text):
+        from scanner import ScanVerdict
+        return ScanVerdict()
+
+    async def scan_output_with_tier2(self, text, **kw):
+        from scanner import ScanVerdict
+        return ScanVerdict(action=self._action, threat_type=self._cat,
+                           confidence=0.9, matched_patterns=list(self._spans))
+
+
+def _inspect_tier2(spans, cat="pii", action="redact"):
+    guard = OutputGuard(_FakeT2Scanner(spans, cat, action), config={"output_tier2_enabled": True})
+    return asyncio.run(guard.inspect(
+        "The account holder is John Q. Smith with card 30569309025904.",
+        org_config={"output_tier2_enabled": True},
+    ))
+
+
+def test_g16_tier2_matched_patterns_never_carry_raw_value():
+    """A tier-2 redact verdict's client-facing matched_patterns must not carry the raw
+    evidence value (it would leak the just-redacted value via the enforcement envelope)."""
+    v = _inspect_tier2(["John Q. Smith", "30569309025904"], "pii")
+    joined = " ".join(v.matched_patterns)
+    assert "John Q. Smith" not in joined, "raw name leaked via matched_patterns metadata"
+    assert "30569309025904" not in joined, "raw card leaked via matched_patterns metadata"
+
+
+def test_g16_tier2_matched_patterns_keep_category_labels():
+    """Category labels must remain readable in evidence (not mangled by the mask)."""
+    v = _inspect_tier2(["ssn", "email"], "pii")
+    assert set(v.matched_patterns) == {"ssn", "email"}
