@@ -87,7 +87,7 @@ def _extract_trace(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
     return stages, final_action
 
 
-def characterize_live_chat(prompt: str, *, model: str | None = None, api_key: str | None = None) -> dict[str, Any]:
+def characterize_live_chat(prompt: str, *, model: str | None = None, api_key: str | None = None, max_tokens: int = 64) -> dict[str, Any]:
     """Drive one prompt through /v1/chat/completions and return normalized observation."""
     api_key = api_key or os.environ.get("GATEWAY_API_KEY", "").strip() or None
     with httpx.Client() as client:
@@ -104,7 +104,7 @@ def characterize_live_chat(prompt: str, *, model: str | None = None, api_key: st
             json={
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 64,
+                "max_tokens": max_tokens,
             },
             timeout=120.0,
         )

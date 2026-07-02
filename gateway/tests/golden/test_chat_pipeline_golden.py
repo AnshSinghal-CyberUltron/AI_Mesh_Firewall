@@ -163,6 +163,13 @@ CASES: list[dict[str, Any]] = [
         "contract_final": "redact",
         "characterize": "live",
         "live_only": True,
+        # This live case relies on the model actually EMITTING a placeholder email so the
+        # output-guard has a PII span to redact. At the default max_tokens=64 the free model
+        # is truncated mid-list BEFORE the first complete email, so the guard sees no PII span
+        # and returns 'flag' (an honest non-redact, NOT a leak) -> non-deterministic contract.
+        # Empirically, 128/256 tokens => 5/5 'redact' on cohere/north-mini-code:free. 256 gives
+        # headroom against per-run variance without materially changing latency/cost.
+        "max_tokens": 256,
     },
 ]
 
@@ -248,6 +255,7 @@ def _characterize_case(case: dict[str, Any], live_session: dict[str, str] | None
             case["prompt"],
             model=live_session.get("model"),
             api_key=live_session.get("api_key"),
+            max_tokens=case.get("max_tokens", 64),
         )
         return {
             "case_id": case["id"],
