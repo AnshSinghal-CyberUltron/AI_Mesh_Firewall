@@ -421,3 +421,9 @@
       backend-coordinated, flagged. Live: light/1440 + dark 1440/1024/768/375 — 0 leak, 0 overflow all
       widths, controls (Copy/Share/Export/Back), ECharts pipeline chart, honest Offline state, clean console,
       good dark contrast. MCP claim: active. Backend recovered to ~9.8s this iter (overview KPI==API still TODO).
+      [iter+] Overview KPI==API VERIFIED (backend recovered to 4.4s): UI 94,597/801/552/387 == soc-kpis
+      total_threats/critical_count/blocked/redacted exactly. 375 responsive VERIFIED both themes (auth-retry):
+      0 real overflow, docOver=0 (12px benign gutter), charts render, honest "--" loading + Offline badge.
+      Overview data-integrity + responsive now FULLY closed. No fix (renders correctly). Only OPEN items left:
+      MCPConnectorPanel overflow (never_edit, active) + cross-source per-module discrepancy (backend-semantics).
+      MCP claim: active.
