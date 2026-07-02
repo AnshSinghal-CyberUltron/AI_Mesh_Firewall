@@ -270,6 +270,25 @@ export function buildModulePageData(moduleId, threatFeed = [], extras = {}) {
       };
     }
   }
+  // Module 1.4 = Context Assembly & MCP Guardrails. Its flow-node stages (Context
+  // Fields assembled / PII Redaction sanitized / Size Check denied / Final Context
+  // approved) must reflect REAL, uncapped counts over ALL events — not the
+  // limit=500 results page. Use the server's total `count` + the per-action
+  // aggregate (CP31). monitor+allow = passed/approved; block = denied; redact =
+  // sanitized. Without a change this pinned at "500 assembled / 0 / 0 / 0".
+  if (moduleId === "1.4" && extras.threatFeedActionCounts && typeof extras.threatFeedCount === "number") {
+    const ac = extras.threatFeedActionCounts;
+    const num = (k) => Number(ac[k]) || 0;
+    summary = {
+      ...summary,
+      total: extras.threatFeedCount,
+      blocked: num("block"),
+      redacted: num("redact"),
+      monitor: num("monitor"),
+      flagged: num("flag"),
+      allowed: num("monitor") + num("allow") + num("monitored") + num("pass"),
+    };
+  }
   const rows = buildRows(config.columns, events);
 
   return {

@@ -25,6 +25,9 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
   const [socKpis, setSocKpis] = useState(null);
   const [threatFeed, setThreatFeed] = useState([]);
   const [threatFeedCount, setThreatFeedCount] = useState(null);
+  // Real per-action distribution over the FULL counted set (not the capped
+  // results page) — powers per-module stage KPIs like §1.4 context-assembly. (CP31)
+  const [threatFeedActionCounts, setThreatFeedActionCounts] = useState(null);
   const [attackTrends, setAttackTrends] = useState([]);
   const [gatewayStats, setGatewayStats] = useState(null);
   const [ragPipelineKpis, setRagPipelineKpis] = useState(null);
@@ -87,12 +90,17 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
         if (Array.isArray(data)) {
           setThreatFeed(data);
           setThreatFeedCount(data.length);
+          setThreatFeedActionCounts(null);
         } else if (Array.isArray(data?.results)) {
           setThreatFeed(data.results);
           setThreatFeedCount(typeof data.count === "number" ? data.count : data.results.length);
+          setThreatFeedActionCounts(
+            data.action_counts && typeof data.action_counts === "object" ? data.action_counts : null,
+          );
         } else {
           setThreatFeed([]);
           setThreatFeedCount(0);
+          setThreatFeedActionCounts(null);
         }
       }
 
@@ -114,6 +122,7 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
       setSocKpis(null);
       setThreatFeed([]);
       setThreatFeedCount(null);
+      setThreatFeedActionCounts(null);
       setAttackTrends([]);
       setGatewayStats(null);
       setRagPipelineKpis(null);
@@ -219,6 +228,8 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
     metrics,
     statusMetrics,
     threatFeed,
+    threatFeedCount,
+    threatFeedActionCounts,
     previewData,
     attackTrends,
     timeSeriesData,

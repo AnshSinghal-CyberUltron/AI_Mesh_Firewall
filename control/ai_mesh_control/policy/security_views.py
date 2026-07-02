@@ -502,17 +502,56 @@ class ThreatFeedView(APIView):
             total_count = len(deduped)
             page_qs = deduped[offset : offset + limit]
             items = self._serialize_threat_feed_page(request, page_qs)
+            # Per-action aggregate over the FULL counted (deduped, distinct-request)
+            # set, so summary KPIs (§1.4 context-assembly stages) reflect every event,
+            # not just the limit-capped results page. A request is classified by its
+            # STRONGEST outcome across all its collapsed events (block > redact >
+            # canonical), so a redaction is not hidden when a request/monitor event is
+            # the canonical feed row — otherwise "sanitized" always read 0. Each
+            # request is counted exactly once → sum(action_counts) == count. (CP31)
+            _blocked_rids: set = set()
+            _redacted_rids: set = set()
+            for ev in scanned:
+                md = ev.metadata if isinstance(ev.metadata, dict) else {}
+                rid = md.get("request_id")
+                if not isinstance(rid, str):
+                    continue
+                a = str(getattr(ev, "action", "") or "").lower()
+                if a == "block":
+                    _blocked_rids.add(rid)
+                elif a == "redact":
+                    _redacted_rids.add(rid)
+            action_counts: dict = {}
+            for ev in deduped:
+                md = ev.metadata if isinstance(ev.metadata, dict) else {}
+                rid = md.get("request_id")
+                if isinstance(rid, str) and rid in _blocked_rids:
+                    a = "block"
+                elif isinstance(rid, str) and rid in _redacted_rids:
+                    a = "redact"
+                else:
+                    a = str(getattr(ev, "action", "") or "").lower()
+                action_counts[a] = action_counts.get(a, 0) + 1
             return Response({
                 "count": total_count,
                 "results": items,
+                "action_counts": action_counts,
                 "collapsed_by_request": True,
                 "scan_truncated": len(scanned) >= _THREAT_FEED_DEDUP_SCAN_CAP,
             })
 
         total_count = ordered.count()
+        # SQL aggregate over the full filtered queryset (uncapped). (CP31)
+        # NOTE: .order_by() clears the queryset ordering first — otherwise the
+        # ``order_by("-created_at")`` leaks ``created_at`` into the GROUP BY, so the
+        # aggregate groups by (action, created_at) and undercounts wildly.
+        action_counts = {
+            (a or "").lower(): n
+            for a, n in ordered.order_by().values_list("action").annotate(n=Count("id")).values_list("action", "n")
+        }
         page_qs = list(ordered[offset : offset + limit])
         items = self._serialize_threat_feed_page(request, page_qs)
-        return Response({"count": total_count, "results": items})
+        return Response({"count": total_count, "results": items, "action_counts": action_counts})
 
     def _get_module_16_threat_feed(
         self,

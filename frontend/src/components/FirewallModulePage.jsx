@@ -49,8 +49,10 @@ export function FirewallModulePage({
         socKpis: firewallData.socKpis,
         gatewayStats: firewallData.gatewayStats,
         ragPipelineKpis: firewallData.ragPipelineKpis,
+        threatFeedCount: firewallData.threatFeedCount,
+        threatFeedActionCounts: firewallData.threatFeedActionCounts,
       }),
-    [moduleId, firewallData.threatFeed, firewallData.socKpis, firewallData.gatewayStats, firewallData.ragPipelineKpis],
+    [moduleId, firewallData.threatFeed, firewallData.socKpis, firewallData.gatewayStats, firewallData.ragPipelineKpis, firewallData.threatFeedCount, firewallData.threatFeedActionCounts],
   );
 
   const isLoading = firewallData.loading;
