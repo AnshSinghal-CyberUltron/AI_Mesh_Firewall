@@ -147,6 +147,8 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 
 ## Per-surface finding log (append-only)
 
+**Item 24 — interaction/behavior verification (iter resumed loop, 2026-07-02):** the item-23 harness covers overflow/leak/console/charts but not interactions, so a focused live behavior check of the shared chrome controls (the ones that underpin "both themes correct" + "every control reflects state"): the **theme toggle** flips both ways and persists — light →(click)→ dark (`html.dark` + `localStorage.zeroshield_theme='dark'`) →(click)→ light; the **global search** input reflects its typed value; the **time-lens 7d** button flips active state on click. **0 page errors** across all interactions. Confirms the theme toggle works live (prior theme checks seeded `localStorage` directly). No files changed.
+
 **Item 24 (part 3) — recharts FULLY REMOVED (iter resumed loop, 2026-07-02):** commit cf7ee848; lint 62/62, build clean. The chart migration is complete — recharts is gone from source AND dependencies.
 - **Deleted 2 orphaned dead-code files** — `components/SubmoduleDetailPage.jsx` (878 L) and `components/module-specific-charts.jsx` (218 L) — imported nowhere repo-wide, never rendered, superseded by the live `SubModuleResultsPage` / `module-specific-log-charts`. These were the last recharts-`children` consumers.
 - **SafeResponsiveChart** — dropped the legacy recharts `<ResponsiveContainer>` `children` fallback and its import; the wrapper is now **option (ECharts) / uplot only**. Verified beforehand that every live `<SafeResponsiveChart>` uses `option=`/`uplot=`.
