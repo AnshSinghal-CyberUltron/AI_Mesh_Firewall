@@ -177,25 +177,28 @@
       COORDINATION: fe-harden session active on frontend but has NOT touched ModelConnectionPanel/
         OutputPipelineTimeline (git log clean); keep edits surgical.
 
-## R7 LIVE-GOLDEN BLOCKER (found 2026-07-02) — why COMPLETE is NOT yet true
-- IN-PROCESS golden suite: GREEN 3x (27 passed / 7 skipped / 0 failed). Live corpus (R5.4): PASSES reliably.
-- BUT `GATEWAY_LIVE=1 pytest tests/golden` FAILS on the live-only cases, model-dependently:
-  - 09_output_guard_pii_redact: expected final=redact, live gives **flag**. Root: the output guard's
-    redact->flag HONESTY relabel — the live model's output PII is Tier-2-semantic-flagged but NOT
-    maskable by redact_all (regex) => relabeled flag (G10). flag DELIVERS the response => a real
-    output-side PII path when the model emits semantic-only PII. This is the documented **G10** gap
-    (Tier-2 semantic redact = byte no-op), NOT one of the G1-G4 fixes, and NOT my regression (my R4
-    patterns change is a NO-OP on plain text; direct harness shows redact for gemma/others).
-  - 07_benign_kill_switch_reroute, 08_benign_sensitivity_routing: drift with which live model
-    `_detect_model` picks (routing/reroute is model+config dependent); pass with the blessed/cached
-    model, fail with gemma. Pre-existing live-golden model-sensitivity (freeze session owns the bless).
-- WHY NOT re-bless to green: re-blessing 09 redact->flag WEAKENS the frozen case (prohibited). 07/08 are
-  routing-only (re-bless is defensible) but owned by the freeze session's bless config.
-- SO completion condition "the original 9 frozen cases remain green [live]" is NOT unequivocally true.
-  DO NOT emit <promise>. NEXT unblocked item = close G10 on the OUTPUT side inside owned modules:
-  typed-placeholder redaction (typed_placeholder_redactor.py / output_guard.py) so a Tier-2-flagged
-  output PII span is masked (redact) rather than relabeled flag+delivered; then case 09 goes redact live
-  without weakening. Encode a new xfail golden for the G10 output-leak first (R2 discipline).
+## R7 LIVE-GOLDEN status (found + CORRECTED 2026-07-02) — freeze-session fixture, NOT a leak, NOT my defect
+- IN-PROCESS golden suite: GREEN 3x (27 passed / 7 skipped / 0 failed). Live corpus (R5.4): PASSES reliably,
+  NO leaks. Security is SOLID.
+- `GATEWAY_LIVE=1 pytest tests/golden` fails on the live-only cases 07/08/09 — but this is a
+  SNAPSHOT-vs-FREE-MODEL mismatch, NOT a security issue:
+  - **CORRECTED**: 09_output_guard_pii_redact gives final=flag (snapshot expects redact). VERIFIED across
+    5 free models: delivered_emails=[] and LEAK=False on ALL — i.e. **NO PII is delivered**. The free
+    models describe email formats abstractly (emit no literal PII) -> nothing for redact_all to mask ->
+    honest `flag` (my earlier "G10 leak" note was WRONG: there is no output PII leak here).
+  - 07/08 (routing/reroute) drift with which model `_detect_model` picks (active[0] = cohere/north-mini-
+    code:free, a CODE model). No single free model makes all of 07/08/09 green live: the cached/code
+    model passes 07/08 but 09=flag; gemma makes 09=redact but 07/08 fail. => the freeze session blessed
+    these live_only cases against a DIFFERENT (non-free) model config; they are inherently not green with
+    the free OpenRouter models this program is required to use.
+- CONCLUSION: this is NOT my regression (in-process golden unchanged/green; my R4 change is a no-op on
+  plain text) and NOT a leak. It is the freeze session's live-golden fixture design (07/08/09 live_only,
+  model-pinned). Re-blessing 09 redact->flag would WEAKEN a frozen case (prohibited), and re-blessing is
+  the freeze session's call anyway (they own the bless config). FLAGGED to them:
+  mcp-parallel/findings/stress-r2/LIVE_GOLDEN_MODEL_DEPENDENCE.md.
+- COMPLETION: conditions 3 (golden 3x IN-PROCESS) and 4 (live OpenRouter validation = R5.4 corpus) are MET;
+  but the literal "9 frozen cases remain green" cannot be shown GREEN simultaneously with free models
+  (07/08/09 skip in-process / fail live). I will NOT weaken them and will NOT emit a false <promise>.
 
 ## R6 verify (item 9) DONE + R7 freeze — remaining for COMPLETE
 - Item 9 Playwright: DONE 2026-07-02 — connect flow verified END-TO-END via real UI modal (custom provider,
