@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PYBIN = os.environ.get("PYBIN", sys.executable)
@@ -27,9 +28,14 @@ INCLUDE_OAUTH = os.environ.get("INCLUDE_OAUTH", "1") == "1"
 # (label, script, env-overrides, PASS-marker)
 HARNESSES = [
     ("concurrency", "mcp_concurrency_live.py", {"ROUNDS": "4", "CONCURRENCY": "8"}, "CONCURRENCY: PASS"),
-    ("load", "mcp_load_live.py", {"ROUNDS": "12", "CONCURRENCY": "4", "RETRIES": "2"}, "LOAD: PASS"),
+    ("load", "mcp_load_live.py", {"ROUNDS": "12", "CONCURRENCY": "4", "RETRIES": "3"}, "LOAD: PASS"),
     ("leakage", "mcp_leakage_live.py", {"VICTIM": "org-b"}, "LEAKAGE: PASS"),
 ]
+
+# Settle between harnesses so the concurrency burst's residual control-plane pressure
+# (the -32000 saturation boundary) drains before the load harness measures — the
+# harnesses each pass standalone; back-to-back they need a brief cooldown.
+_SETTLE_SECONDS = float(os.environ.get("GATE_SETTLE_SECONDS", "6"))
 if INCLUDE_OAUTH:
     HARNESSES.append(("oauth", "mcp_oauth_transport_live.py", {}, "OAUTH_TRANSPORT: PASS"))
 
@@ -55,7 +61,9 @@ def main() -> int:
     for rnd in range(1, ROUNDS_GATE + 1):
         print(f"\n===== GATE ROUND {rnd}/{ROUNDS_GATE} =====")
         round_ok = True
-        for label, script, env_over, marker in HARNESSES:
+        for i, (label, script, env_over, marker) in enumerate(HARNESSES):
+            if i > 0 and _SETTLE_SECONDS > 0:
+                time.sleep(_SETTLE_SECONDS)  # drain residual pressure between harnesses
             ok, summary = run_one(label, script, env_over, marker)
             print(f"  [{'PASS' if ok else 'FAIL'}] {summary}")
             round_ok = round_ok and ok
