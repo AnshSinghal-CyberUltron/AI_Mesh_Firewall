@@ -199,6 +199,23 @@
       aidefence_scan piiFound:false on the IMDS URL + ULA IPv6 (a generic scanner is BLIND to infra-leak →
       the gap is real; purpose-built detect_ip_leakage required). Evidence:
       mcp-parallel/findings/backstop-p20-internal-ipv6-metadata-leak/finding.md.
+      CHG-0074 (2026-07-02, MEDIUM–HIGH — devil's-advocate on CHG-0073: were the IP patterns WIRED into the
+      live result-enforcement path, or just padding patterns.py?): tracing _scan_tool_result_floor →
+      _mcp_security_scan → scan_mcp_payload found TWO fail-opens. GAP1: the orchestrator (_scan_text_tier1)
+      DETECTS+TAGS ip_leakage (INFRA) but only REDACTS under enforcement=="redact"; under the DEFAULT
+      tag/flag/monitor posture returns the result UNMUTATED, and the mcp_proxy E12 result-redaction floor
+      (upgrades tag→redact) was gated on _findings_have_secret_or_pii — pii/secret ONLY, EXCLUDING the whole
+      ip_leakage class. Proven E2E at the real floor under default `tag`: PII/secret floored (safe) but
+      169.254.169.254 (IMDS), fc00::1234:5678, AND even pre-existing RFC1918 10.10.5.7 egressed RAW. GAP2: the
+      floor re-scan (enforcement_override="redact") BLOCKS when a value redact_all can't mask survives (a
+      private FILE PATH beside the leak), but all 3 floor sites IGNORED that blocked flag → swallowed block,
+      raw forward (also hit PII+file-path). FIX (mcp_proxy.py + mcp_scan_orchestrator.py): McpFinding gains
+      matched_kinds (+to_finding_dict); new _findings_have_infra_network_leak (network keys via
+      _INFRA_NETWORK_KEYS ONLY — file paths stay flag-tier, never force-block a benign code result) OR'd into
+      all 3 floor triggers; all 3 sites PROPAGATE the floor-block fail-closed. Net: internal-network addrs in
+      results MASKED under default posture; file-path-only stays raw; network|PII + file-path fails CLOSED.
+      +11 tests (drive the REAL floor). Gate: 11 + 1316 gateway passed, 0 failed; broker -k "not websocket"
+      108 passed. Evidence: mcp-parallel/findings/backstop-p20-ipleak-result-floor/finding.md.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

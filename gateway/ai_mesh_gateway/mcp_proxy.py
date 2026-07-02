@@ -900,6 +900,33 @@ def _findings_have_secret_or_pii(findings: list[dict] | None) -> bool:
     return _findings_have_credential(findings)
 
 
+def _findings_have_infra_network_leak(findings: list[dict] | None) -> bool:
+    """CHG-0074: True if an OUTPUT scan finding is an ``ip_leakage`` whose matched
+    detector keys include an ENFORCEABLE internal NETWORK address (private/link-
+    local/CGNAT IPv4, internal IPv6, internal hostname, internal URL) — i.e. a key
+    ``redact_all`` actually masks (``_INFRA_NETWORK_KEYS``).
+
+    WHY: the E12 result-redaction floor only fired for secret/PII
+    (``_findings_have_secret_or_pii``), so an internal-network address DETECTED +
+    TAGGED (``INFRA``) but under the default ``tag`` posture egressed RAW — a
+    fail-OPEN asymmetric with PII/secret (an internal / cloud-metadata IP in a tool
+    RESULT is the same infra-disclosure class the mandate's "no PII/IP/regulated
+    escape" forbids). Scoped to NETWORK keys ONLY so a flag-tier private FILE PATH
+    (which ``redact_all`` cannot mask) never triggers a floor re-scan that would
+    then force-BLOCK a benign code/file tool result (file paths stay flag-tier).
+    """
+    if not findings:
+        return False
+    from patterns import _INFRA_NETWORK_KEYS
+    network_keys = set(_INFRA_NETWORK_KEYS)
+    for f in findings:
+        if not isinstance(f, dict) or f.get("threat_type") != "ip_leakage":
+            continue
+        if set(f.get("matched_kinds") or ()) & network_keys:
+            return True
+    return False
+
+
 async def _scan_tool_args_block(
     arguments,
     *,
@@ -1024,7 +1051,10 @@ async def _scan_tool_result_floor(
         scanned is result_content
         and _mcp_redact_result_on_detect_enabled()
         and scan_action != "monitor"
-        and _findings_have_secret_or_pii(findings)
+        and (
+            _findings_have_secret_or_pii(findings)
+            or _findings_have_infra_network_leak(findings)  # CHG-0074
+        )
     ):
         try:
             floor_content, _fb, _ft, _ff, _fmeta = await _mcp_security_scan(
@@ -1037,6 +1067,17 @@ async def _scan_tool_result_floor(
                 actor=actor,
                 enforcement_override="redact",
             )
+            if _fb:
+                # CHG-0074: the redact re-scan itself BLOCKED — a detected value
+                # redact_all cannot mask survived the scrub (e.g. a private file path
+                # alongside the network/PII leak, caught by the orchestrator's
+                # egress-byte verify). Forwarding here would egress that value RAW, so
+                # fail CLOSED (block) — consistent with the except-handler below and
+                # the "mask, else block; never forward raw" invariant. Previously this
+                # block was swallowed and the raw result was returned.
+                return result_content, True, (_ft or tags), (_ff or findings), {
+                    **meta, "result_redaction_floor_block": True,
+                }
             if floor_content is not result_content:
                 scanned = floor_content
                 meta = {**meta, "result_redaction_floor": True}
@@ -3134,7 +3175,10 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         "result" in payload
                         and _mcp_redact_result_on_detect_enabled()
                         and _scan_action != "monitor"
-                        and _findings_have_secret_or_pii(_out_find_new)
+                        and (
+                            _findings_have_secret_or_pii(_out_find_new)
+                            or _findings_have_infra_network_leak(_out_find_new)  # CHG-0074
+                        )
                     ):
                         # ── E12: result-REDACTION floor. The output scan DETECTED a
                         # secret/PII but the resolved scan_action ("tag") did not
@@ -3155,7 +3199,35 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                             enforcement_override="redact",
                             extra_redaction_fields=_in_rfields,
                         )
-                        if _scanned_floor is not _scan_target:
+                        if _floor_blocked:
+                            # CHG-0074: the redact re-scan BLOCKED (a detected value
+                            # redact_all cannot mask survived — e.g. a private file
+                            # path beside the network/PII leak). Fail CLOSED (block)
+                            # rather than swap in / forward the raw result.
+                            decision = "block"
+                            reason = "pii_blocked_outbound"
+                            for t in (_floor_tags or []):
+                                if t not in _out_tags:
+                                    _out_tags.append(t)
+                            _out_findings.extend(_floor_find or [])
+                            adapter_resp = JSONResponse(
+                                content={
+                                    "jsonrpc": jsonrpc,
+                                    "id": msg_id,
+                                    "result": {
+                                        "content": [{
+                                            "type": "text",
+                                            "text": (
+                                                f"[BLOCKED] Response from '{tool_name}' matched "
+                                                f"compliance tags: {', '.join(_out_tags) or 'PII'}."
+                                            ),
+                                        }],
+                                        "isError": True,
+                                    },
+                                },
+                                status_code=200,
+                            )
+                        elif _scanned_floor is not _scan_target:
                             decision = "redact"
                             payload["result"] = _scanned_floor
                             adapter_resp = JSONResponse(content=payload, status_code=200)
@@ -3321,7 +3393,10 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         _scanned_content is result_content
                         and _mcp_redact_result_on_detect_enabled()
                         and _scan_action != "monitor"
-                        and _findings_have_secret_or_pii(_out_find_new2)
+                        and (
+                            _findings_have_secret_or_pii(_out_find_new2)
+                            or _findings_have_infra_network_leak(_out_find_new2)  # CHG-0074
+                        )
                     ):
                         (
                             _floor_content, _floor_blocked2, _floor_tags2, _floor_find2, _scan_meta_floor2
@@ -3335,6 +3410,46 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                             actor=mcp_actor,
                             enforcement_override="redact",
                         )
+                        if _floor_blocked2:
+                            # CHG-0074: the redact re-scan BLOCKED (a detected value
+                            # redact_all cannot mask survived — e.g. a private file
+                            # path beside the network/PII leak). Fail CLOSED (block)
+                            # rather than forward the raw result. Mirrors the
+                            # _out_blocked2 block path above.
+                            for t in (_floor_tags2 or []):
+                                if t not in _out_tags2:
+                                    _out_tags2.append(t)
+                            _out_findings2.extend(_floor_find2 or [])
+                            _merged_meta["result_redaction_floor_block"] = True
+                            await _record_gateway_event(
+                                org_slug=org_slug,
+                                server_slug=server_slug,
+                                tool_name=tool_name,
+                                decision="block",
+                                reason="pii_blocked_outbound",
+                                request_id=_req_id,
+                                latency_ms=int((time.time() - call_t0) * 1000),
+                                metadata=_merged_meta,
+                                compliance_tags=_out_tags2,
+                                scan_findings=_out_findings2,
+                            )
+                            return JSONResponse(
+                                content={
+                                    "jsonrpc": jsonrpc,
+                                    "id": msg_id,
+                                    "result": {
+                                        "content": [{
+                                            "type": "text",
+                                            "text": (
+                                                f"[BLOCKED] Response from '{tool_name}' matched "
+                                                f"compliance tags: {', '.join(_out_tags2) or 'PII'}."
+                                            ),
+                                        }],
+                                        "isError": True,
+                                    },
+                                },
+                                status_code=200,
+                            )
                         if _floor_content is not result_content:
                             _scanned_content = _floor_content
                             _merged_meta["result_redaction_floor"] = True

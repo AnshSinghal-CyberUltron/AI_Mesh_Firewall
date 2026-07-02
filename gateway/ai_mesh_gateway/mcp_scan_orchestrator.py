@@ -43,6 +43,11 @@ class McpFinding:
     tier: str = "tier1"
     threat_type: str = ""
     detail: str = ""
+    # CHG-0074: the concrete detector keys that matched (e.g. ["internal_ipv6",
+    # "file_path_unix"]). Lets a downstream enforcement floor tell an
+    # ENFORCEABLE network-infra leak (redactable) from a flag-tier file path
+    # WITHOUT re-parsing ``detail`` — see mcp_proxy._findings_have_infra_network_leak.
+    matched_kinds: list[str] = field(default_factory=list)
 
     def to_finding_dict(self) -> dict[str, Any]:
         return {
@@ -54,6 +59,7 @@ class McpFinding:
             "tier": self.tier,
             "threat_type": self.threat_type,
             "detail": self.detail,
+            "matched_kinds": list(self.matched_kinds),
         }
 
 
@@ -330,6 +336,7 @@ async def _scan_text_tier1(
                 tier="tier1",
                 threat_type=threat,
                 detail=f"Matched: {', '.join(kinds)}",
+                matched_kinds=kinds,  # CHG-0074: enables the network-infra redact floor
             )
         )
         if _enforce_blocks(enforcement):

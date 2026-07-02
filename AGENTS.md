@@ -587,6 +587,20 @@
     +21 tests. Gate: 21 + 1305 gateway passed, 0 failed. Independent oracle: aidefence_scan piiFound:false
     on the IMDS URL (a generic scanner is BLIND to infra-leak). Evidence
     mcp-parallel/findings/backstop-p20-internal-ipv6-metadata-leak/.
+  - CHG-0074 (2026-07-02) — G2 item 2/20 / 1.4 (devil's-advocate on CHG-0073: were the patterns WIRED into
+    the live result-enforcement path?), MEDIUM–HIGH fail-OPEN: tracing _scan_tool_result_floor →
+    scan_mcp_payload found (1) the orchestrator DETECTS+TAGS ip_leakage but only REDACTS under
+    enforcement=="redact"; under the DEFAULT `tag` posture the E12 result floor (gated on
+    _findings_have_secret_or_pii — pii/secret ONLY) never fired for ip_leakage → an internal/metadata IP
+    (169.254.169.254), IPv6, CGNAT, hostname AND even pre-existing RFC1918 in a tool RESULT egressed RAW.
+    (2) The floor re-scan BLOCKS on an unmaskable survivor (a private file path beside the leak) but all 3
+    sites SWALLOWED that block and forwarded raw. FIX (mcp_proxy.py + mcp_scan_orchestrator.py): McpFinding
+    gains matched_kinds; new _findings_have_infra_network_leak (network keys only via _INFRA_NETWORK_KEYS —
+    file paths stay flag-tier, never force-block a benign code result) OR'd into all 3 floor triggers; all 3
+    sites PROPAGATE the floor-block fail-closed. Net: internal-network addrs now MASKED under default posture;
+    file-path-only stays raw; network|PII + file-path fails CLOSED. +11 tests (drive the REAL floor). Gate:
+    11 + 1316 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
+    mcp-parallel/findings/backstop-p20-ipleak-result-floor/.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

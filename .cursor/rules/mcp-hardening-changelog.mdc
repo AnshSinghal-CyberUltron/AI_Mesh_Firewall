@@ -897,6 +897,31 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   infra-leak → the gap is real; purpose-built `detect_ip_leakage` is required). Evidence:
   `mcp-parallel/findings/backstop-p20-internal-ipv6-metadata-leak/`.
 
+- **CHG-0074** (2026-07-02) — G2 item 2/20 / 1.4 (**devil's-advocate on CHG-0073**: are the IP patterns
+  actually WIRED into the live tool-RESULT enforcement path, or just padding `patterns.py`?),
+  MEDIUM–HIGH, **two fail-opens**. Tracing the real path (`_scan_tool_result_floor` → `_mcp_security_scan`
+  → `scan_mcp_payload`) showed they were NOT fully wired. **Gap 1:** the orchestrator
+  (`_scan_text_tier1`) DETECTS + TAGS `ip_leakage` (`INFRA`) but only REDACTS under
+  `enforcement=="redact"`; under the DEFAULT `tag`/`flag`/`monitor` posture it returns the result
+  UNMUTATED, and the mcp_proxy **E12 result-redaction floor** that upgrades `tag`→`redact` was gated on
+  `_findings_have_secret_or_pii` (matches `threat_type in (pii,secret)` ONLY — excludes the whole
+  `ip_leakage` class). Proven end-to-end at the real floor entrypoint under the default `tag` action: PII
+  `alice@…` + secret `sk-ant-…` are floored (safe) but `169.254.169.254` (IMDS), `fc00::1234:5678`,
+  **and even PRE-EXISTING RFC1918 `10.10.5.7`** egressed RAW. **Gap 2:** the floor re-scan
+  (`enforcement_override="redact"`) BLOCKS when a value `redact_all` can't mask survives (a private FILE
+  PATH beside the leak), but all 3 floor sites only swapped on `content changed` and IGNORED the re-scan's
+  `blocked` flag → swallowed block, raw forward (inconsistent with the same fn's fail-closed
+  except-handler; also hit PII+file-path). FIX (`mcp_proxy.py` + `mcp_scan_orchestrator.py`): (a)
+  `McpFinding` gains `matched_kinds: list[str]` (+ `to_finding_dict`); the pii/secret/ip_leak finding
+  passes `matched_kinds=kinds`. (b) new `_findings_have_infra_network_leak(findings)` → True iff an
+  `ip_leakage` finding's `matched_kinds` intersect `_INFRA_NETWORK_KEYS` (network keys `redact_all` masks)
+  — SCOPED to network so a file-path-only result never triggers the floor (→ never force-blocks a benign
+  code/file result). (c) OR'd into all 3 floor triggers. (d) all 3 sites PROPAGATE the floor-block
+  fail-closed (`[BLOCKED]`/`result_redaction_floor_block`). Net: internal-network addrs in results MASKED
+  under the default posture; file-path-only stays raw/flag-tier (no regression); network|PII + file-path
+  fails CLOSED. +11 tests (drive the REAL floor). Gate: 11 + 1316 gateway passed, 0 failed; broker
+  `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p20-ipleak-result-floor/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
