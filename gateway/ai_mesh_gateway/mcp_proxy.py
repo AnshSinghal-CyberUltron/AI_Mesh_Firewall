@@ -2734,6 +2734,7 @@ async def _scanned_tools_list_response(
     org_slug: str,
     server_slug: str,
     actor,
+    request_id: str = "",
 ):
     """CHG-0077: scan tools/list tool DESCRIPTIONS / metadata from an untrusted upstream
     before returning them to the client / LLM.
@@ -2761,6 +2762,24 @@ async def _scanned_tools_list_response(
         server_slug=server_slug,
         actor=actor,
     )
+    # CHG-0081: audit the tools/list metadata-scan decision. CHG-0077 masked/blocked a
+    # poisoned tool-description leak but recorded NO gateway event — so a tool-poisoning
+    # block or a secret/PII/IP redaction on the discovery path was INVISIBLE to the
+    # MCPEvent audit/SIEM trail (breaks the ...→tag→AUDIT chain for tools/list, which the
+    # tools/call path already audits). Record block XOR redact (best-effort, no-op without
+    # org); a fully-clean list is not audited to avoid per-discovery noise.
+    if blocked or (scanned is not result):
+        await _record_gateway_event(
+            org_slug=org_slug,
+            server_slug=server_slug,
+            tool_name="tools/list",
+            decision="block" if blocked else "redact",
+            reason="tools_list_metadata_scan",
+            request_id=request_id,
+            metadata={"enforced_at": "gateway_tools_list", "scan_pipeline": "two_tier"},
+            compliance_tags=list(tags),
+            scan_findings=_find,
+        )
     if blocked:
         return JSONResponse(
             content={
@@ -2897,6 +2916,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                     return await _scanned_tools_list_response(
                         payload, jsonrpc=jsonrpc, msg_id=msg_id, enabled_info=enabled_info,
                         org_slug=org_slug, server_slug=server_slug, actor=mcp_actor,
+                        request_id=_mcp_request_correlation_id(request, msg_id),  # CHG-0081
                     )
             return adapter_resp
 
@@ -2939,6 +2959,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                     {"jsonrpc": jsonrpc, "id": msg_id, "result": {"tools": mcp_tools}},
                     jsonrpc=jsonrpc, msg_id=msg_id, enabled_info=enabled_info,
                     org_slug=org_slug, server_slug=server_slug, actor=mcp_actor,
+                    request_id=_mcp_request_correlation_id(request, msg_id),  # CHG-0081
                 )
             except httpx.TimeoutException:
                 return JSONResponse(

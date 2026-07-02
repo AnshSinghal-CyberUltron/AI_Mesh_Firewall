@@ -679,6 +679,15 @@
     (secret+IP in instructions masked+tagged; zero-width-hidden secret blocked; injection detected; benign
     intact). Gate: 5 + 1358 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
     mcp-parallel/findings/backstop-p2-ext-initialize-instructions/.
+  - CHG-0081 (2026-07-02) — G2 item 5/9 / 1.4 (devil's-advocate on the …→tag→AUDIT chain end), MEDIUM
+    audit-completeness: CHG-0077's _scanned_tools_list_response masks/blocks a poisoned tool-description leak
+    but had ZERO _record_gateway_event calls (tools/call audits heavily) → a tool-poisoning BLOCK or a
+    secret/PII/IP REDACT on the discovery path was INVISIBLE to the MCPEvent audit/SIEM trail. FIX
+    (mcp_proxy.py): _scanned_tools_list_response now audits block XOR redact (tool_name=tools/list,
+    reason=tools_list_metadata_scan, compliance tags, findings, + a threaded per-request correlation id via a
+    new request_id param = _mcp_request_correlation_id from both org sub-paths); a clean tools/list is NOT
+    audited (no noise). +3 tests. Gate: 3 + 1363 gateway passed, 0 failed; broker -k "not websocket" 108
+    passed. Evidence mcp-parallel/findings/backstop-p9-tools-list-audit/.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

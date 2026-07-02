@@ -1058,6 +1058,22 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `instructions` is detected+tagged but not removed under the default `tag` posture (same output-injection
   enforcement question as the CHG-0078 residual).
 
+- **CHG-0081** (2026-07-02) — G2 item 5/9 / 1.4 (**devil's-advocate on the …→tag→AUDIT chain end**),
+  MEDIUM audit-completeness: CHG-0077's `_scanned_tools_list_response` masks/blocks a poisoned
+  tool-description leak but had **ZERO** `_record_gateway_event` calls, while the tools/call path audits
+  heavily. So when the gateway REDACTED a secret/PII/internal-IP in a tool description, or BLOCKED a
+  poisoned tools/list (tool-poisoning / encoded-exfil), it recorded **no** MCPEvent → the most
+  forensically-important discovery-path security events were invisible to audit/SIEM (asymmetric with
+  tools/call + the ext-proxy audit CHG-0068/0070). FIX (`mcp_proxy.py`): `_scanned_tools_list_response`
+  now calls the best-effort `_record_gateway_event` on BLOCK xor REDACT (`tool_name="tools/list"`,
+  `reason="tools_list_metadata_scan"`, the compliance tags, the scan findings, and a threaded per-request
+  correlation id — new `request_id` param = `_mcp_request_correlation_id(request, msg_id)` from both org
+  sub-paths); a fully-CLEAN tools/list is NOT audited (no per-discovery noise). Fire-and-forget / no-op
+  without org (same `_record_gateway_event` → identical persistence + EnforcementEvent bridge). +3 tests
+  (secret/IP in a description → audited `decision=redact` w/ tags `INFRA,SECRET` + request-id; encoded-exfil
+  → audited `decision=block`; benign tools/list → NO audit event). Gate: 3 + 1363 gateway passed, 0 failed;
+  broker `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p9-tools-list-audit/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

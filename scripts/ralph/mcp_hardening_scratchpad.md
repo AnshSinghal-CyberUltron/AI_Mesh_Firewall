@@ -312,6 +312,17 @@
       passed, 0 failed; broker -k "not websocket" 108 passed. Evidence:
       mcp-parallel/findings/backstop-p2-ext-initialize-instructions/finding.md. RESIDUAL: injection in
       instructions detected+tagged but not removed under default tag posture (CHG-0078 residual).
+      CHG-0081 (2026-07-02, MEDIUM — audit-completeness, devil's-advocate on the …→tag→AUDIT chain end):
+      CHG-0077's _scanned_tools_list_response masks/blocks a poisoned tool-description leak but had ZERO
+      _record_gateway_event calls (tools/call audits heavily) → a tool-poisoning BLOCK or a secret/PII/IP
+      REDACT on the discovery path was INVISIBLE to the MCPEvent audit/SIEM trail (asymmetric with tools/call
+      + ext-proxy audit CHG-0068/0070). FIX (mcp_proxy.py): _scanned_tools_list_response now audits block XOR
+      redact (tool_name=tools/list, reason=tools_list_metadata_scan, compliance tags, findings, + a threaded
+      per-request correlation id via a new request_id param = _mcp_request_correlation_id(request, msg_id)
+      from both org sub-paths); a clean tools/list is NOT audited (no noise). Fire-and-forget / no-op without
+      org. +3 tests (secret/IP → audited redact w/ tags + request-id; encoded-exfil → audited block; benign →
+      NO audit). Gate: 3 + 1363 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence:
+      mcp-parallel/findings/backstop-p9-tools-list-audit/finding.md.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;
