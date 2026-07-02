@@ -1,0 +1,9 @@
+agent: claude-mcp-loop
+story: P9.30 (item 30 — cross-tenant leakage canary proof)
+files:
+  - scripts/mcp_leakage_live.py
+  - scripts/mcp_oauth_transport_live.py
+  - scripts/ralph/mcp_progress.md
+  - mcp-parallel/findings/p9-30/**
+since: 2026-07-02T10:38:00Z
+status: released
