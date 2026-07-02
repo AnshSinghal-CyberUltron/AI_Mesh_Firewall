@@ -194,7 +194,22 @@
       (subtitle) — LOGGED for stress session, NOT edited (L1381/L2330 red-700 are hover states, not defects).
       OutputPipelineTimeline live-render needs a real output-guard event (env has 0) → folds with item 10.
       Findings logged to FRONTEND_AUDIT.md for the owning session. No files changed (verify-only).
-- [ ] 18. Shared ui/* primitives (Button/Card/Dialog/Input/Select/Table/Tabs/Badge/Toast/Tooltip/…): both themes, API-compatible restyle
+- [x] 18. Shared ui/* primitives (Button/Card/Dialog/Input/Select/Table/Tabs/Badge/Toast/Tooltip/…): both themes, API-compatible restyle
+      item18 DONE. No ui/* claims. Scanned ALL 20 primitives (Badge/Button/Card/Dialog/EmptyState/Input/Label/
+      PanelHeader/Progress/SegmentedControl/Select/Skeleton/Slider/Spinner/Switch/Table/Tabs/Textarea/Toast/
+      Tooltip) for inverted-slate/dark-on-dark/bare-400/focus-none/hardcoded-color. Design system is
+      GOLD-STANDARD: Button (all 6 variants dark-variant'd, focus-visible:ring + dark offset, disabled:opacity),
+      Input (semantic tokens border-input/bg-background/text-foreground/ring-ring, theme-aware by construction),
+      Dialog (portal + focus-trap + ESC + aria-modal + scroll-lock + focus-restore w/ documented focus-loss
+      root-fix). All bg-white have dark:bg-slate-* (or intentional Switch thumb); Select focus:outline-none is
+      correctly paired with focus:ring-2 ring-ring. ONLY FIX (API-compatible, styles only): EmptyState L7 icon
+      `text-slate-400 dark:text-slate-500` → `text-slate-500 dark:text-slate-400` (inverted — icon was near-
+      invisible slate-500 on the dark slate-800 container; now matches the sibling description pattern). GATE
+      lint 42/42, build, detector 0. VERIFICATION: the 19 clean primitives are transitively live-verified via
+      every panel in items 9-17 (Button/Card/Dialog/Badge/Switch/Select/Input rendered correct BOTH themes @4
+      widths). ui/EmptyState is imported ONLY by MCPConnectorPanel + MCPScanControlMatrix (stress verify-only
+      MCP surface, needs connected MCP servers the dev DB lacks) so its live render can't be triggered here —
+      fix is code-verified + trivially correct. Deferred: none.
 
 ## Cross-cutting hardening
 - [ ] 19. Data-integrity: prove no static/mock/placeholder/wrong data anywhere; every value binds to real backend.
