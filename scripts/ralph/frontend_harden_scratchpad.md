@@ -397,3 +397,11 @@
       code-identical (its 0 was soc-kpis at 17-30s under F3 load). lint 75/75, build, detector no-new
       (3 pre-existing gradient/border-l-8 FPs). Noted pre-existing: 1.7 results page shows raw security_scan
       (1005) vs module page's output sub-filter (4) — separate design call. MCP claim re-checked: active.
+      [iter+] Overview dashboard (?tab=firewall) verify + cross-source finding (OPEN, backend-semantics, NOT
+      fixed): overview per-module cards use module-kpis endpoint; module PAGES use threat-feed source-filter
+      — they DISAGREE @24h (1.2: 1110 vs 1005; 1.4: 92929 vs 4000; 1.6: 6 vs 14; 1.5 552==552). Not fabricated
+      (different scopes), but a cross-surface consistency gap; canonical source is a backend/product call, so
+      NOT unified from frontend (risk of substituting another arguable number + reverting verified fixes).
+      Documented for backend. Overview structural verify @1440 both themes: 9 chart canvases, mainScroll 0,
+      0 overflow. KPI==API values NOT confirmed this run (soc-kpis 17-30s under F3 → 9 spinners; 375 fell to
+      login = env). Overview KPI==API + 375 re-verify PENDING rested backend. MCP claim: active.
