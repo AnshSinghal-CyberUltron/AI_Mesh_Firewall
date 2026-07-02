@@ -1,9 +1,19 @@
 ---
-iteration: 26
+iteration: 27
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter27 (2026-07-02) — P4.13/P6.18 recheck + Cursor gates green
+- **P4.13/P6.18 RECHECK:** §1+§2 still LANDED; §3 **STILL BLOCKED** — `mcp_proxy` zero
+  `broker_send_rpc` refs, 14+ direct `httpx.AsyncClient` upstream dials. Broker unified
+  `POST /{org}/rpc` → 401. Evidence: `mcp-parallel/findings/p4-13/RECHECK_ITER27.md`.
+- **Cursor gates:** P7.23 N2+N3 **26/26**; broker+agent **138/138**; frontend build ✓;
+  `mcp_sandbox_transport_verify.py` **BLOCKED** (wiring gate exit 2); P10 recursive 1×
+  ALL GREEN (broker 97, agent 41, multi-org/concurrency/load/leakage/oauth PASS).
+- Hive: joined `hive-1782991737290-ylo911` as `cursor-ralph-iter27`; memory stored.
+- 15-MCP fleet: 3 orgs × 5 servers manifest ready; headed browser (noVNC :6080).
 
 ## iter26 (2026-07-02) — P7.23 N2+N3 verified + P4.13/P6.18 partial recheck
 - **P7.23 N2+N3 DONE:** package allowlist + pinned-package enforcement in
@@ -159,9 +169,9 @@ status: ACTIVE
 - [ ] 13. Verify (Playwright + harness): with the gateway pointed only at the sandbox, an http, an sse, a
        ws, and a stdio MCP all work end-to-end THROUGH the sandbox; confirm the gateway opens NO direct
        upstream connection (network assertion) — nothing runs in the main backend.
-       **BLOCKED 2026-07-02 (iter26 recheck):** §1+§2 LANDED (`broker_send_rpc` present, broker
-       `/{org}/rpc` → 401); §3 NOT landed — `mcp_proxy` has zero `broker_send_rpc` refs, direct httpx
-       upstream dials remain. See `mcp-parallel/findings/p4-13/RECHECK_ITER26.md`.
+       **BLOCKED 2026-07-02 (iter27 recheck):** §1+§2 LANDED (`broker_send_rpc` present, broker
+       `/{org}/rpc` → 401); §3 NOT landed — `mcp_proxy` has zero `broker_send_rpc` refs, 14+
+       direct httpx upstream dials remain. See `mcp-parallel/findings/p4-13/RECHECK_ITER27.md`.
 
 ## P5 — Frontend fixes (Playwright-verified; the dialog especially)
 - [x] 14. B1: OAuth selectable ONLY for HTTP transports; block oauth+stdio in the form; render exactly
@@ -196,9 +206,9 @@ status: ACTIVE
 - [ ] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:
        all 4 transports through the sandbox under the Claude session's 15-MCP harness (concurrency/load/
        leakage). Fix any seam mismatch on the Cursor-owned side only.
-       **BLOCKED 2026-07-02 (iter26 recheck):** §1+§2 LANDED; §3 `mcp_proxy` routing still
-       missing. Cursor seam green (agent 138/138 broker+agent, 15-MCP harness GREEN 3×). See
-       `mcp-parallel/findings/p4-13/RECHECK_ITER26.md`.
+       **BLOCKED 2026-07-02 (iter27 recheck):** §1+§2 LANDED; §3 `mcp_proxy` routing still
+       missing. Cursor seam green (138/138 broker+agent, P10 recursive 1× ALL GREEN). See
+       `mcp-parallel/findings/p4-13/RECHECK_ITER27.md`.
 - [ ] 19. Re-run P1 repros → all four UI bugs gone; re-run P4 verification 3× (in-process + live).
        When P1–P6 all [x] AND integration green, output <promise>COMPLETE</promise>.
        **PARTIAL 2026-07-02 (iter24):** P10.32 recursive gate re-ran P1 UI (Playwright 12/12) + P8/P9 live
