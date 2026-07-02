@@ -447,3 +447,8 @@
       owned, verify-only) — input type=password + autoComplete=off, stored keys shown "Encrypted key set
       (••••last4)" not raw, env-var keys by NAME. SECURE, no leak. firewall-config live render + MCPConnector
       overflow re-verify PENDING backend recovery. MCP claim: active.
+      [iter+] Backend RECOVERED (control-1 restarted, auth/me 17ms). Ran gate on module-1-4 + firewall-config:
+      firewall-config LIVE CLEAN all 4 combos (ok, mainScroll=0, no leak) — closes last uncovered surface.
+      MCPConnectorPanel overflow RE-CONFIRMED STILL PRESENT (fresh: 148@768 / 529@375 both themes, server card;
+      MCP-page CP44/CP45 did NOT fix it). Whole gate = GATE PASSED (overflow is allowed/warn on never_edit
+      1-4). So blocker persists — real current overflow, never_edit, claim active. Everything else DONE.
