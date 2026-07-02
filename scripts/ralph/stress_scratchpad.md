@@ -790,6 +790,24 @@
         NOTE: input-side markdown-split (user sending 1**2**3-45-6789 to evade input PII redaction) is a
         separate, more-ambiguous case (model receives the markdown source, not the render) — left as
         follow-up; the clear rendering leak is the OUTPUT egress, now closed.
+      G45 — STREAMING PARITY FOR MARKDOWN-SPLIT PII 2026-07-02 (G44 covered non-stream ONLY):
+        THREAT/gap: G44 wired neutralize_markdown_split_pii into sanitize_output_for_verdict (the NON-
+        streaming egress). But secure_streaming.py has its OWN redact composition (G36:
+        neutralize_encoded_pii ∘ neutralize_exfil_channels ∘ redact_pii) which did NOT include the new
+        neutralizer — so a STREAMED response with markdown-emphasis-split PII (1**2**3-45-6789 -> renders
+        SSN; john`@`example.com -> email) was DETECTED (redact verdict via _scan_output_sync G44) yet
+        egressed UN-MASKED on BOTH the guard redact path AND the no-guard fallback path (probe: 6/6
+        rendered_pii_leak=True incl. the split-across-flush case). FIX: added
+        neutralize_markdown_split_pii to both streaming compositions (secure_streaming.py:418 guard,
+        :486 fallback). VERIFY: 6/6 now rendered_pii_leak=False, egress "[PII_REDACTED]"; clean-stream-
+        intact + all E14 split cases still green. FROZEN: G45 (test_g45_streaming_markdown_split_pii_
+        masked guard+fallback). Gate: streaming suite 27 green; golden+streaming 340 passed × 3
+        consecutive in-process (3.0s, GATEWAY_LIVE=0). commit 6a12232c. REDEPLOYED (rollback-pre-g45;
+        marker present; health 200) — LIVE.
+        LESSON (recurring): the STREAMING path (secure_streaming.py) has a SEPARATE egress-neutralization
+        composition from the non-stream sanitize_output_for_verdict — every new output neutralizer (G35,
+        G44, ...) must be added to BOTH or the streaming path silently leaks. Both now include the full
+        set: exfil-channels + encoded-PII + markdown-split-PII.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
