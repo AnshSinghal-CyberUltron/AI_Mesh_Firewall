@@ -43,10 +43,18 @@ function StageNode({ stage, isLast, actionColor }) {
   const Icon = STAGE_ICONS[stage.id] || Shield;
   const colors = stage.highlight ? (ACTION_COLORS[stage.highlightAction] || ACTION_COLORS.allow) : { border: "border-slate-200 dark:border-slate-700", bg: "bg-white dark:bg-slate-900/40", dot: "bg-teal-500", text: "text-slate-700 dark:text-slate-300" };
 
+  // a11y: the stage's action state is otherwise conveyed by colour ALONE (dot/border).
+  // Surface it as text for screen readers + a hover title, so a colour-blind or SR user
+  // perceives the honest action (block/redact/flag/allow) — not just a coloured dot.
+  const stageState = stage.badge || stage.highlightAction || (stage.highlight ? actionColor : "");
+  const ariaLabel = stageState
+    ? `${stage.label} — ${String(stageState).replace(/_/g, " ")}`
+    : stage.label;
+
   return (
-    <div className="flex items-stretch gap-3">
-      {/* Timeline connector */}
-      <div className="flex flex-col items-center w-6 flex-shrink-0">
+    <div className="flex items-stretch gap-3" role="listitem" aria-label={ariaLabel} title={ariaLabel}>
+      {/* Timeline connector (decorative — state is announced via the aria-label above) */}
+      <div className="flex flex-col items-center w-6 flex-shrink-0" aria-hidden="true">
         <div className={`w-5 h-5 rounded-full flex items-center justify-center ${colors.dot} ring-2 ring-white dark:ring-slate-900`}>
           <Icon className="w-2.5 h-2.5 text-white" />
         </div>
@@ -226,14 +234,14 @@ export function OutputPipelineTimeline({ event }) {
   } // end synthetic-narrative fallback
 
   return (
-    <div className="pt-1">
+    <div className="pt-1" role="region" aria-label="Output guardrail pipeline trace">
       <div className="flex items-center gap-2 mb-3">
-        <Shield className="w-3.5 h-3.5 text-teal-500" />
+        <Shield className="w-3.5 h-3.5 text-teal-500" aria-hidden="true" />
         <span className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 uppercase tracking-wider">
           Ingestion Pipeline — Step-by-Step
         </span>
       </div>
-      <div className="pl-0.5">
+      <div className="pl-0.5" role="list" aria-label="Pipeline stages in order">
         {stages.map((stage, i) => (
           <StageNode
             key={stage.id}
