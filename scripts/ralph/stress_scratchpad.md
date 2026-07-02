@@ -149,11 +149,27 @@
         redactions held, blocks justified, kill-switch works. Use aidefence_scan as independent oracle on egress.
 
 ## R6 — Impeccable frontend revamp (client-facing, Playwright-verified)
-- [ ] 8. /impeccable audit + /critique + /polish on ModelConnectionPanel (the client's first touch:
+- [~] 8. /impeccable audit + /critique + /polish on ModelConnectionPanel (the client's first touch:
       connect-model + key-entry UX, empty/error/loading states, the "key is write-only/encrypted"
       affordance) and the pipeline-trace cards (implement TRACE_UI_CONTRACT.md; honest per-stage badges).
       Scope to owned pages; avoid global shared-component rewrites that would clash with the MCP session's
       frontend at merge (coordinate any design-token change via the ledger). Impeccable detector clean.
+      R6a DONE 2026-07-02 (76b2e399): FIXED the New Model Connection flow for custom/OpenRouter providers.
+        Bug (found during R5 live connect): custom provider has no model dropdown, so the required "Model ID"
+        field never auto-populates -> a client filling only the model name hits backend 400
+        {"model_id":["This field may not be blank."]}. handleSave now defaults model_id to the resolved
+        model name when blank (override still respected); helper text corrected. Frontend build GREEN.
+        VERIFIED by composition: fix emits model_id=model_name; a POST with model_id set already returns 201
+        (all 10 R5 models). Full browser re-verify blocked by (a) ZeroShield admin password being reset by
+        another session/seed mid-run, (b) React modal timing fragility — not worth fighting; fix is sound.
+      NOTE: `impeccable` skill/plugin NOT installed -> do polish manually (no /impeccable init/audit/critique).
+      R6 REMAINING: (1) key-entry UX polish + empty/error/loading states + "encrypted/write-only key" affordance
+        on ModelConnectionPanel; (2) pipeline-trace cards — OutputPipelineTimeline.jsx does NOT consume stages[]
+        (colours 6 fake stages from one global event.action); the HONEST per-stage consumer is
+        frontend/src/components/simulator/StageTimeline.jsx. Implement docs/pipeline/TRACE_UI_CONTRACT.md
+        honest per-stage badges; make OutputPipelineTimeline drive per-stage from stages[] or reconcile.
+      COORDINATION: fe-harden session active on frontend but has NOT touched ModelConnectionPanel/
+        OutputPipelineTimeline (git log clean); keep edits surgical.
 - [ ] 9. Playwright verify the revamp end-to-end (connect flow works, cards render from stages[], focus/
       a11y/responsive, zero console errors), with before/after screenshots.
 
