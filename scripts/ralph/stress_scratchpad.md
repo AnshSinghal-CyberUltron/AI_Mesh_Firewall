@@ -405,6 +405,18 @@
         key-ID+secret escalates. Not a race.) LIVE burst: 30 concurrent attack requests (max_workers=15) -> all
         30 blocked (400), no crash, no leak-through. => pipeline maintains correct isolated enforcement under
         concurrent load.
+      R6 + PHASE-7 FRONTEND/BACKEND CONSISTENCY 2026-07-02 (live Playwright re-verify): frontend build ✓,
+        impeccable detector CLEAN on both owned components (ModelConnectionPanel + OutputPipelineTimeline),
+        owned unit tests 42/42 pass. Restarted the (recurringly-hung) control to get a healthy window, logged
+        in via the real UI form (retry-once past a transient control-500), navigated to ?tab=firewall-1-5.
+        ModelConnectionPanel renders 11 model ROWS = matches the backend's 11 routable models (10 :free
+        OpenRouter + gpt-5.2) => FRONTEND/BACKEND CONSISTENT. R6 a11y LIVE: aria-label="Disable model" on ALL
+        11 toggle rows, "Add model" trigger present, headings correct. Console errors on the page are all
+        CONTROL-PLANE 500s (auth/token, soc-kpis, threat-feed, gateways/stats — the recurring control
+        instability, external), NOT from the owned components (which rendered correctly). => R6 frontend polish
+        + Playwright verification RE-CONFIRMED (dialog a11y was live-verified iter36; model-list consistency
+        live-verified now). CONTROL remains flaky (hangs under load, auto/restart-recovers) — a pre-existing
+        infra issue outside chat-module ownership; the gateway stays healthy + enforcing throughout.
       ★ FINAL COMPLETION 2026-07-02 (post-G30, +G31): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
