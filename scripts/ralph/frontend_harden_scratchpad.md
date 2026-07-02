@@ -362,3 +362,13 @@
       verified L243), and non-rendered error codes. liveGateway:842 "ZeroShield guard models are for
       scanning only" = intentional help copy (product term, not an id leak) — left as-is. lint 75/75,
       build clean, detector [] on both edited files. MCPConnectorPanel claim re-checked: STILL active.
+      [iter+] Cross-checked modules 1.6 + 1.7 (never proven live before). BOTH data-correct: 1.6 "Isolation
+      events"=14==API(module_id=1.6); 1.7 "Outputs scanned"=4==full-sweep of all 1001 security_scan (API
+      ignores event_type param; 4 is honest, all in newest page). No data bug. But found + FIXED a real
+      honest-loading gap (commit 88b68209): FirewallModulePage KPI summary/spotlight cards rendered computed
+      "0" during initial load (board-of-zeros, looked like real empties) while the EvidenceTable already
+      showed "Loading…". Added muted "—" placeholder gated on (isLoading && threatFeed empty) so bg polls/lens
+      changes keep data. Verified both themes: — during load → 14 loaded. NEXT (root cause, logged): latency
+      probe shows soc-kpis?period=7d = 6-8s vs threat-feed 0.45s; useFirewallData's `await Promise.allSettled`
+      couples them so KPIs wait ~7s — SAME bug class as the overview fix (56ff19ca). Decouple useFirewallData
+      next iter (set each state as its fetch resolves), verify all module pages. MCP claim STILL active.
