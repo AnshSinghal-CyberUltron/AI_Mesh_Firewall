@@ -741,3 +741,120 @@ def test_correlation_id_bounds_hostile_header():
 def test_correlation_id_survives_missing_headers_attr():
     # A request object with no `.headers` must not raise (internal call paths).
     assert mcp_proxy._mcp_request_correlation_id(SimpleNamespace(), 7) == "7"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# CHG-0061: ext_mcp_proxy egress leak on NON-200 and NON-JSON bodies.
+# The outbound scan was gated on `status_code == 200` (JSON only), so a non-200
+# JSON error body, a non-200 body without result/error, or ANY non-JSON text body
+# egressed RAW/unscanned — an untrusted external server could leak a secret/PII/
+# infra string. These prove all of those bodies are now scanned (fail-closed),
+# and that binary bodies are still passed through untouched.
+# ════════════════════════════════════════════════════════════════════════════
+def _ext_send_text_resp(body_bytes, *, content_type="text/plain", status=200):
+    """An httpx response stand-in whose .json() RAISES (non-JSON body)."""
+    r = AsyncMock()
+    r.status_code = status
+    r.headers = {"content-type": content_type}
+
+    def _raise_json():
+        raise ValueError("not json")
+
+    r.json = _raise_json
+    r.aread = AsyncMock(return_value=body_bytes)
+    r.aclose = AsyncMock()
+    return r
+
+
+_BENIGN_CALL = {"jsonrpc": "2.0", "id": 20, "method": "tools/call",
+                "params": {"name": "fetch", "arguments": _BENIGN_ARG}}
+_LEAK_EMAIL = "john.doe@example.com"
+
+
+@pytest.mark.asyncio
+async def test_ext_non200_json_error_body_redacted():
+    req = _ext_request(_BENIGN_CALL)
+    upstream = _ext_send_resp(
+        {"jsonrpc": "2.0", "id": 20,
+         "error": {"code": -32000, "message": f"connect failed; reach {_LEAK_EMAIL}"}},
+        status=500,
+    )
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 500                       # upstream status preserved
+    assert _LEAK_EMAIL not in json.dumps(_decode(resp))  # email masked, not leaked
+
+
+@pytest.mark.asyncio
+async def test_ext_non200_json_detail_body_without_result_or_error_redacted():
+    req = _ext_request(_BENIGN_CALL)
+    upstream = _ext_send_resp({"detail": f"user {_LEAK_EMAIL} not found"}, status=404)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 404
+    assert _LEAK_EMAIL not in json.dumps(_decode(resp))
+
+
+@pytest.mark.asyncio
+async def test_ext_non200_json_result_body_redacted():
+    # the result branch must also run on a non-200 status
+    req = _ext_request(_BENIGN_CALL)
+    upstream = _ext_send_resp(
+        {"jsonrpc": "2.0", "id": 20,
+         "result": {"content": [{"type": "text", "text": f"owner {_LEAK_EMAIL}"}]}},
+        status=502,
+    )
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 502
+    assert _LEAK_EMAIL not in json.dumps(_decode(resp))
+
+
+@pytest.mark.asyncio
+async def test_ext_non_json_text_body_redacted():
+    req = _ext_request(_BENIGN_CALL)
+    upstream = _ext_send_text_resp(
+        f"Error page: reach owner at {_LEAK_EMAIL} for access".encode(),
+        content_type="text/plain", status=500,
+    )
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 500
+    body_text = bytes(resp.body).decode("utf-8", errors="replace")
+    assert _LEAK_EMAIL not in body_text                  # text body scanned + masked
+
+
+@pytest.mark.asyncio
+async def test_ext_binary_body_passed_through_untouched():
+    # a binary (image) body must NOT be text-scanned (would corrupt it) — pass raw
+    req = _ext_request(_BENIGN_CALL)
+    raw = b"\x89PNG\r\n\x1a\n\x00\x01\x02rawbytes-not-text"
+    upstream = _ext_send_text_resp(raw, content_type="image/png", status=200)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert bytes(resp.body) == raw                       # byte-for-byte unchanged
+
+
+@pytest.mark.asyncio
+async def test_ext_non_json_text_body_fails_closed_on_scan_error():
+    req = _ext_request(_BENIGN_CALL)
+    upstream = _ext_send_text_resp(
+        f"reach {_LEAK_EMAIL}".encode(), content_type="text/plain", status=500)
+    _real_scan = mcp_proxy._mcp_security_scan
+
+    async def _fail_output_only(*a, **k):
+        # raise ONLY on the outbound (result) scan; let the inbound arg scan run
+        # really so the request reaches the response-body stage.
+        if k.get("scan_direction") == "output":
+            raise RuntimeError("boom")
+        return await _real_scan(*a, **k)
+
+    with (
+        patch.object(mcp_proxy, "_mcp_security_scan", side_effect=_fail_output_only),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)),
+    ):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    # scan error on a text body -> WITHHELD (fail closed), raw email never egresses
+    body_text = bytes(resp.body).decode("utf-8", errors="replace")
+    assert _LEAK_EMAIL not in body_text
+    assert "withheld" in body_text.lower()

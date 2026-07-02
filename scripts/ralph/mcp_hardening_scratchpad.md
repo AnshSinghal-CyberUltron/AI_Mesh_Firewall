@@ -164,6 +164,18 @@
       zero-changed. Integrates with CHG-0057 byte-verify (ip_leak union fails closed on a survivor). +13 tests.
       Gate: 13 encoded-infra + 1176 gateway passed, 0 failed. Evidence:
       mcp-parallel/findings/backstop-p2-encoded-infra-leak/finding.md.
+      CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
+      external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
+      redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;
+      resp.json() raises) was returned verbatim, and a NON-200 JSON body bypassed both scan branches
+      (gated ==200) → returned raw. A secret/PII/infra string in a non-200 or non-JSON error body egressed
+      to the tenant unscanned (contradicts CHG-0043's scan-error-content intent, only wired for 200). FIX
+      (mcp_proxy.py): import re + _is_text_content_type(); non-JSON text-like bodies scanned via
+      _scan_tool_result_floor (WITHHELD on block/error; binary passed through untouched); dropped the
+      status==200 gate from result+error scans (any status) + new elif for non-200 bodies without
+      result/error (scan whole body). 200-without-result/error untouched (no behaviour change). +6 tests.
+      Gate: 39 ext-proxy + 1220 gateway passed, 0 failed. ORG path unaffected (sandbox-routed via broker →
+      parsed dict, same floor). Evidence: mcp-parallel/findings/backstop-p2-ext-proxy-nonok-egress/finding.md.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER

@@ -13,6 +13,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import time
 from urllib.parse import urlparse
 
@@ -1238,6 +1239,22 @@ def _ext_proxy_forward_headers(inbound, *, oauth_token: str | None = None) -> di
     return out
 
 
+# CHG-0061: content-types whose bodies are text and therefore scannable for
+# secret/PII/infra egress. Binary types (image/*, audio/*, application/octet-stream,
+# …) are NOT text-scanned — masking would corrupt them and they are not a text-leak
+# vector. A missing content-type defaults to application/json upstream, so it is
+# treated as text (scannable), which is the safe default.
+_TEXT_CONTENT_TYPE_RE = re.compile(
+    r"^\s*(?:text/|application/(?:json|xml|javascript|x-ndjson|graphql|[\w.+-]*\+(?:json|xml)))",
+    re.IGNORECASE,
+)
+
+
+def _is_text_content_type(content_type: str) -> bool:
+    """True if a response body of this content-type is text and thus scannable."""
+    return bool(content_type and _TEXT_CONTENT_TYPE_RE.match(content_type))
+
+
 @router.api_route(
     "/ext-proxy/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -1464,6 +1481,38 @@ async def ext_mcp_proxy(path: str, request: Request):
             data = resp.json()
         except Exception:
             from starlette.responses import Response
+            # CHG-0061: a NON-JSON body (an HTML error page, a plain-text error, an
+            # XML fault) can STILL carry a secret/PII/infra string from an untrusted
+            # external server (parity with the JSON error-body scan below and the SSE
+            # error-frame scan). Scan text-like bodies via the fail-closed floor before
+            # forwarding; binary bodies (images/octet-stream) pass through unscanned
+            # (text-masking would corrupt them and they are not a text-leak vector).
+            if _is_text_content_type(content_type):
+                _raw_text = body_bytes.decode("utf-8", errors="replace")
+                (
+                    _txt_scanned, _txt_blocked, _txt_tags, _tf, _tm
+                ) = await _scan_tool_result_floor(
+                    _raw_text, tool_name=_ext_tool_name, enabled_info=None,
+                    org_slug="", server_slug="", actor=None,
+                )
+                if _txt_blocked:
+                    LOG.warning(
+                        "ext_mcp_proxy.text_body_withheld host=%s tool=%s tags=%s — "
+                        "non-JSON body could not be safely inspected",
+                        hostname, _ext_tool_name or "?", _txt_tags,
+                    )
+                    return Response(
+                        content="Response withheld: body could not be safely inspected.",
+                        status_code=resp.status_code, media_type="text/plain",
+                        headers=resp_headers,
+                    )
+                _out_text = _txt_scanned if isinstance(_txt_scanned, str) else _raw_text
+                return Response(
+                    content=_out_text.encode("utf-8"),
+                    status_code=resp.status_code,
+                    media_type=content_type,
+                    headers=resp_headers,
+                )
             return Response(
                 content=body_bytes,
                 status_code=resp.status_code,
@@ -1483,11 +1532,10 @@ async def ext_mcp_proxy(path: str, request: Request):
         # ``result.content`` let those shapes egress unscanned (BACKSTOP_FINDINGS
         # G2 item 2). ``_scan_tool_result_floor`` recursively walks any payload
         # (dict/list/str) and fails CLOSED on scan error; parity with the org path.
-        if (
-            resp.status_code == 200
-            and isinstance(data, dict)
-            and data.get("result") is not None
-        ):
+        # CHG-0061: scan result/error content on ANY status (a non-200 JSON error body
+        # can carry a secret/PII/infra string just as a 200 one can — the old
+        # `status_code == 200` gate forwarded non-200 bodies raw).
+        if isinstance(data, dict) and data.get("result") is not None:
             _ext_result = data["result"]
             (
                 _scanned_content, _out_blocked, _out_tags, _out_findings, _scan_meta_out
@@ -1528,11 +1576,7 @@ async def ext_mcp_proxy(path: str, request: Request):
         # string in "connect failed: postgres://user:pass@host"). Scan + mask it
         # (redact-only — it is already an error); fail CLOSED (withhold) on a scan
         # error so un-inspected error content never egresses raw.
-        elif (
-            resp.status_code == 200
-            and isinstance(data, dict)
-            and data.get("error") is not None
-        ):
+        elif isinstance(data, dict) and data.get("error") is not None:
             _ext_err = data["error"]
             (
                 _scanned_err, _err_blocked, _err_tags, _err_findings, _err_meta
@@ -1564,6 +1608,32 @@ async def ext_mcp_proxy(path: str, request: Request):
                 )
             if _scanned_err is not _ext_err:
                 data["error"] = _scanned_err
+
+        elif resp.status_code != 200 and data is not None:
+            # CHG-0061: a non-200 body WITHOUT a JSON-RPC result/error (e.g.
+            # ``{"detail": "user john@example.com not found on db.internal"}``, a bare
+            # list, or a scalar) still egressed raw. Scan the whole body via the
+            # fail-closed floor. (A 200 body without result/error is a benign
+            # session/notification shape and is left untouched to preserve the
+            # established path's behaviour.)
+            (
+                _whole_scanned, _whole_blocked, _whole_tags, _wf, _wm
+            ) = await _scan_tool_result_floor(
+                data, tool_name=_ext_tool_name, enabled_info=None,
+                org_slug="", server_slug="", actor=None,
+            )
+            if _whole_blocked:
+                LOG.warning(
+                    "ext_mcp_proxy.nonok_body_withheld host=%s status=%s tags=%s — "
+                    "non-200 body could not be safely inspected",
+                    hostname, resp.status_code, _whole_tags,
+                )
+                return JSONResponse(
+                    content={"error": "Response withheld: body could not be safely inspected."},
+                    status_code=resp.status_code, headers=resp_headers,
+                )
+            if _whole_scanned is not data:
+                data = _whole_scanned
 
         return JSONResponse(content=data, status_code=resp.status_code, headers=resp_headers)
     except httpx.RequestError as exc:

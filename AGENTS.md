@@ -437,6 +437,19 @@
     with CHG-0057 byte-verify. RESIDUAL (pre-existing, NOT changed): content beyond _CANON_MAX_LEN=20000
     is not obfuscation-decode-scanned (plain PII beyond still raw-masked; only ENCODED past 20K escapes).
     Evidence mcp-parallel/findings/backstop-p2-decode-decoy-bypass/.
+  - CHG-0061 (2026-07-02) — G2 item 2 / 1.4 (ext_mcp_proxy non-200 / non-JSON egress leak, HIGH): the
+    tenant-facing external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound
+    result/error redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml
+    error page; resp.json() raises) was returned verbatim, and a NON-200 JSON body bypassed both scan
+    branches (gated ==200) and returned raw. A secret/PII/infra string in a non-200 or non-JSON error
+    body egressed to the tenant unscanned (contradicts CHG-0043's scan-error-content intent, only wired
+    for 200). FIX: added import re + _is_text_content_type(); non-JSON text-like bodies are scanned via
+    _scan_tool_result_floor (WITHHELD on block/error, binary passed through untouched); dropped the
+    status==200 gate from the result+error scans (any status) + new elif for non-200 bodies without
+    result/error (scan whole body). 200-without-result/error left untouched (no behaviour change).
+    mcp_proxy.py + 6 tests. Gate: 39 ext-proxy + 1220 gateway passed, 0 failed. ORG path unaffected
+    (sandbox-routed via broker → parsed dict, same floor). Evidence
+    mcp-parallel/findings/backstop-p2-ext-proxy-nonok-egress/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

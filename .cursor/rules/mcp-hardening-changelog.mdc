@@ -648,6 +648,27 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   obfuscation-decode-scanned (plain PII beyond is still raw-masked; only ENCODED content past 20K escapes).
   Evidence: `mcp-parallel/findings/backstop-p2-decode-decoy-bypass/`.
 
+- **CHG-0061** (2026-07-02) — G2 item 2 / 1.4 (ext_mcp_proxy non-200 / non-JSON egress leak, HIGH): the
+  tenant-facing external MCP passthrough `ext_mcp_proxy` (`/v1/mcp/ext-proxy/{host}/{path}`, behind auth;
+  CHG-0032/0033/0034/0043 lineage) applied its outbound result/error redaction floor ONLY to
+  `status_code == 200` JSON bodies. Two paths forwarded the untrusted external server's body RAW: (1) a
+  NON-JSON body (`resp.json()` raises — HTML error page, `text/plain` error, XML fault) was returned
+  verbatim; (2) a NON-200 JSON body bypassed both scan branches (gated `== 200`) and returned raw. So a
+  secret/PII/infra string in a non-200 or non-JSON error body (`connect failed postgres://user:pass@10.1.2.3;
+  contact john@example.com`) egressed to the tenant unscanned — contradicting the CHG-0043 intent (scan
+  error content), which was only wired for 200. FIX (`mcp_proxy.py`): `import re` (was missing) +
+  `_is_text_content_type()` (text/*, application/json|xml|javascript|x-ndjson|graphql|*+json|*+xml; missing
+  CT defaults to application/json → text). Non-JSON text-like bodies are scanned via
+  `_scan_tool_result_floor(text)` before forwarding — WITHHELD on scan block/error; binary bodies
+  (image/*, octet-stream) pass through untouched (masking would corrupt them, not a text-leak vector).
+  Dropped the `status_code == 200` gate from the `result`+`error` JSON scans (run on ANY status) + new
+  `elif status != 200 and data is not None` fallback scans the WHOLE non-200 body lacking a JSON-RPC
+  result/error (`{"detail": ...}`, list, scalar). A 200 body without result/error is left untouched
+  (benign session/notif shape — no behaviour change). Fails closed throughout. Files: mcp_proxy.py,
+  test_mcp_bare_proxy_scan.py (+6). Gate: 39 ext-proxy + 1220 gateway passed, 0 failed. ORG path
+  unaffected (sandbox-routed via `broker_send_rpc` → parsed JSON-RPC dict scanned by the same floor).
+  Evidence: `mcp-parallel/findings/backstop-p2-ext-proxy-nonok-egress/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
