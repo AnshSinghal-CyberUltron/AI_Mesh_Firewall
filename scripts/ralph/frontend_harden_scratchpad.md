@@ -489,3 +489,11 @@
       148@768/529@375); action bar wraps clean, no breakage. lint 75/75 build detector[]. Removed module-1-4
       allowOverflow gate exception. Updated status matrix 17a → 🔧✅. NOW: only remaining audit item is the
       cross-source per-module count = product decision (not a frontend defect; frontend correct-by-design).
+      [iter+] COMPLETION near — overflow fixed+verified, audit reconciled (17a→fixed, cross-source dispositioned
+      not-a-data-integrity-violation, matrix has no open ⚠ defects). REMAINING before COMPLETE: a single clean
+      full-suite gate pass, esp. the 1024 width (only overview+module-1-4 captured @1024 before F3 hit; other
+      surfaces @1024 not EXPLICITLY screenshotted — low risk since module pages are md:grid-cols-2 at 1024 =
+      verified pattern, but not literally covered). BLOCKED NOW: control-1 unhealthy again (F3), auth hangs.
+      NEXT: when backend healthy (fresh restart), run gate in backend-friendly 2-surface batches to get clean
+      all-12-surfaces × both-themes × 4-widths pass (fills 1024), mark item 24 ✅, THEN emit COMPLETE. Not
+      emitting on partial/F3-blocked evidence per "unequivocally true".
