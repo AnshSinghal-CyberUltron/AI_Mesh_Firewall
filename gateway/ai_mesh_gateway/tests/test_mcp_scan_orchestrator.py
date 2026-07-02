@@ -964,3 +964,40 @@ async def test_chg0047_real_setter_not_blocked():
         )
     assert result.blocked is False
     assert scanned["ssn"] == "MASKED"
+
+
+# ── CHG-0057: byte-verify ALL detected categories on the tier1 redact path ──────
+# If redact_all leaves a DETECTED pii/secret value verbatim (a masker bug / partial
+# mask, cf. CHG-0054), the redact path must fail CLOSED (block), not forward a
+# "redacted" result that still carries the secret. Previously only ip_leak was checked.
+
+
+@pytest.mark.asyncio
+async def test_chg0057_redact_that_leaks_pii_fails_closed():
+    import mcp_scan_orchestrator as orch
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+        patch("mcp_scan_orchestrator.redact_all", lambda t: t),   # simulate a no-op scrub
+    ):
+        _mut, findings, blocked, _rf = await orch._scan_text_tier1(
+            "contact john.doe@example.com now",
+            scan_direction="output", enforcement="redact", full_payload={},
+            org_slug="demo", server_slug="srv", tool_name="echo",
+        )
+    assert findings                       # PII detected
+    assert blocked is True                # detected value survived the scrub -> fail closed
+
+
+@pytest.mark.asyncio
+async def test_chg0057_normal_pii_redacts_not_blocked():
+    # Control: a real redact_all masks the PII -> redact (NOT block), no false-positive.
+    import mcp_scan_orchestrator as orch
+    with patch("mcp_scan_orchestrator._get_policy_sync", return_value=None):
+        mutated, findings, blocked, _rf = await orch._scan_text_tier1(
+            "contact john.doe@example.com now",
+            scan_direction="output", enforcement="redact", full_payload={},
+            org_slug="demo", server_slug="srv", tool_name="echo",
+        )
+    assert findings
+    assert blocked is False
+    assert "john.doe@example.com" not in mutated

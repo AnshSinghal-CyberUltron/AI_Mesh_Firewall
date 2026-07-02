@@ -562,6 +562,19 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   1158 gateway passed. DOCUMENTED RESIDUAL (perf/security tradeoff, NOT changed): the base64/hex decode cap
   `_MAX_DECODE_TOKENS=12` (a DoS bound) lets a crafted result pad 12+ decoy base64 tokens to hide the real
   encoded secret past the cap. Evidence: `mcp-parallel/findings/backstop-p2-url-encoding-obfuscation/`.
+- **CHG-0057** (2026-07-02) — G2 item 2 / 1.4 (fail-closed byte-truth + E2E verification): VERIFIED that the
+  MCP tool-result redaction path (`scan_mcp_payload` → `_scan_text_tier1` PII/secret branch) detects with
+  `detect_pii`/`detect_secrets`/`detect_ip_leakage` and masks with `redact_all` — ALL from `patterns.py` — so
+  CHG-0054/0055/0056 DO protect real MCP tool results end-to-end (tier1 is patterns-based; Presidio is tier2
+  only). GAP: the tier1 redact branch's fail-closed "detected-value-survives-the-scrub → block" byte-check
+  checked ONLY `ip_leak.values()`, with a comment ASSUMING "PII/secret always covered by redact_all" — an
+  assumption CHG-0054 (private-key body) showed can be violated by a masker bug. FIX: byte-verify ALL detected
+  categories — `_detected_values = list(pii.values()) + list(secrets.values()) + list(ip_leak.values())`; any
+  survivor in the scrub → `blocked=True`. NO false positives: `redact_all` replaces every detected match, so a
+  detected raw value is never a substring under normal operation — verified over the full PII/secret battery.
+  Files: mcp_scan_orchestrator.py, test_mcp_scan_orchestrator.py (+2). Gate: 2 chg0057 + 1160 gateway passed
+  (excluding another session's untracked, incomplete `test_mcp_enforcement_block_recording.py`, undefined
+  `_rest_request` helper — unrelated). Evidence: `mcp-parallel/findings/backstop-p2-tier1-byte-verify-all/`.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 

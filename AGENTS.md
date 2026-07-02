@@ -380,6 +380,15 @@
     tests. Gate: 11 url-enc + 1158 gateway passed. RESIDUAL (perf/security tradeoff, NOT changed):
     _MAX_DECODE_TOKENS=12 base64 cap lets a crafted result hide an encoded secret past 12 decoy tokens.
     Evidence mcp-parallel/findings/backstop-p2-url-encoding-obfuscation/.
+  - CHG-0057 (2026-07-02) — G2 item 2 / 1.4 (fail-closed byte-truth + E2E verification): VERIFIED the MCP
+    tool-result redaction path (scan_mcp_payload -> _scan_text_tier1 PII/secret branch) uses
+    detect_pii/detect_secrets/redact_all from patterns.py — so CHG-0054/0055/0056 protect real tool results
+    E2E (tier1 patterns-based; Presidio is tier2 only). GAP: the tier1 redact byte-check (block if a detected
+    value survives the scrub) checked ONLY ip_leak, ASSUMING pii/secret are always covered (CHG-0054 disproved
+    that). FIX: byte-verify ALL detected categories — _detected_values = pii+secrets+ip_leak; any survivor ->
+    block (fail-closed). No FP: redact_all replaces every match (verified over the full battery, zero
+    would-be false blocks). +2 tests. Gate: 2 chg0057 + 1160 gateway passed (excl. another session's untracked
+    broken test_mcp_enforcement_block_recording.py). Evidence mcp-parallel/findings/backstop-p2-tier1-byte-verify-all/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

@@ -336,12 +336,20 @@ async def _scan_text_tier1(
             blocked = True
         elif enforcement == "redact":
             candidate = redact_all(text)
-            # Egress-byte truth / fail-closed: redact_all masks internal
-            # IP/hostname/URL but NOT private file paths. If ANY detected internal
-            # value survives the scrub, do NOT forward a "redacted" result that
-            # still carries it — block instead (a redact-that-leaks is the A4-class
-            # defect). PII/secret values are always covered by redact_all.
-            if any(v and str(v) in candidate for v in ip_leak.values()):
+            # Egress-byte truth / fail-closed: if ANY detected PII/secret/internal
+            # value survives the scrub VERBATIM, do NOT forward a "redacted" result
+            # that still carries it — block instead (a redact-that-leaks is the
+            # A4-class defect). redact_all masks internal IP/host/URL but NOT private
+            # file paths, and a masker bug could leave a detected value un-scrubbed
+            # (cf. CHG-0054 private-key body). CHG-0057: byte-verify ALL detected
+            # categories, not just ip_leak — the "PII/secret always covered" assumption
+            # is now enforced, not assumed. Standard partial-masked PII (email/ssn/card,
+            # whose raw form is always altered) is never a substring of the scrub, so
+            # this does NOT false-block (verified over the full PII/secret battery).
+            _detected_values = (
+                list(pii.values()) + list(secrets.values()) + list(ip_leak.values())
+            )
+            if any(v and str(v) in candidate for v in _detected_values):
                 blocked = True
             else:
                 mutated = candidate
