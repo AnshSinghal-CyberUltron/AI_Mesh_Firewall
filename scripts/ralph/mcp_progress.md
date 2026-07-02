@@ -71,7 +71,7 @@
        See mcp-parallel/findings/p7-25/RESULT.md.
 
 ## P8 — 15-MCP parallel harness
-- [ ] 26. Provision 3 orgs × 5 servers (§1.4); extend scripts/mcp_live_matrix_harness.py / mcp_pipeline_matrix_live.py
+- [x] 26. Provision 3 orgs × 5 servers (§1.4); extend scripts/mcp_live_matrix_harness.py / mcp_pipeline_matrix_live.py — PROVISIONED: 3 orgs (zeroshield + created org-a/org-b via `ensure_zeroshield_admin --email admin@{slug}.io --org-slug {slug}`) × 5 "Everything" stdio MCP servers (everything-1..5, deterministic echo/add) = 15 MCPs. Gateway keys minted per org (POST /api/mcp-connector/org-gateway-key/ returns raw once; for existing-key orgs rotated via control ORM GatewayAPIKey.ensure_default_for_org after deleting mcp-default-{slug}). scripts/mcp_scale_provision.py + manifest scripts/ralph/.mcp_scale_manifest.json (gitignored — holds live keys: org→gateway_key→[servers]). VALIDATED: gateway echo per org (POST :8300/gateway/{org}/mcp/everything-1, Bearer org key) → "Echo: canary-{org}" for all 3. 3 per-org sandboxes running, ISOLATED: net=mcp_sandbox_net_{org} + vol=mcp_sandbox_{org}_auth each.
 - [ ] 27. Harness drives parallel tool calls across all 15 via the gateway (OpenAI/MCP path), capturing egress + audit per call
 
 ## P9 — Concurrency / load / leakage

@@ -6158,23 +6158,57 @@ async def proxy_chat(
                 )
                 # Fall through to normal processing; Tier-1 was clean.
 
+            try:
+                from enforcement import (
+                    normalize_action as _normalize_enforcement_action,
+                    resolve_enforcement as _resolve_enforcement,
+                    should_apply_redaction as _should_apply_redaction,
+                    should_hard_block as _should_hard_block,
+                )
+            except ImportError:
+                from .enforcement import (
+                    normalize_action as _normalize_enforcement_action,
+                    resolve_enforcement as _resolve_enforcement,
+                    should_apply_redaction as _should_apply_redaction,
+                    should_hard_block as _should_hard_block,
+                )
+
+            # B-ENF: prefer Tier-2 recommended_action over verdict.action (scanner
+            # maps model "redact" → action="flag"; the recommendation is authoritative).
+            _scan_meta = getattr(verdict, "scan_meta", None) or {}
+            _guard_rec = (
+                (_scan_meta.get("recommended_action") if isinstance(_scan_meta, dict) else None)
+                or verdict.action
+                or "allow"
+            )
             injection_threshold = org_config.get("prompt_injection_threshold", 0.80)
             _INJECTION_THREAT_TYPES = {"prompt_injection", "jailbreak", "goal_hijacking"}
             _is_injection = verdict.threat_type in _INJECTION_THREAT_TYPES
-            _should_block_verdict = (
-                verdict.action == "block"
-                and verdict.threat_type not in ("pii", "secret")
+            if _is_injection and _normalize_enforcement_action(_guard_rec) == "block":
+                # Injection-type threats: respect scan_block_on_injection + confidence gate
+                if (
+                    not org_config.get("scan_block_on_injection", True)
+                    or verdict.confidence < injection_threshold
+                ):
+                    _guard_rec = "monitor"
+            elif (
+                _normalize_enforcement_action(_guard_rec) == "block"
+                and _is_redactable_pii_threat(verdict.threat_type)
+            ):
+                # PII is redacted, not hard-blocked, on the input path.
+                _guard_rec = "redact"
+
+            _org_policy_action = None
+            if check_resp.get("matched_rules") or check_resp.get("matched_policy_names") or check_resp.get("matched_policies"):
+                _org_policy_action = check_resp.get("action") or None
+
+            _resolved_input_action = _resolve_enforcement(
+                _guard_rec,
+                org_policy_action=_org_policy_action,
+                enforcement_mode=enforcement_mode,
+                redaction_possible=True,
             )
-            if _is_injection:
-                # Injection-type threats: respect the scan_block_on_injection toggle
-                # and the prompt_injection_threshold confidence gate
-                _should_block_verdict = (
-                    _should_block_verdict
-                    and org_config.get("scan_block_on_injection", True)
-                    and verdict.confidence >= injection_threshold
-                )
-            # For non-injection threats (toxicity, dos, etc.), the scanner
-            # already applied its own threshold; respect the verdict directly.
+            _should_block_verdict = _should_hard_block(_resolved_input_action, enforcement_mode)
             if _should_block_verdict:
                 LOG.warning(
                     "Input blocked by scanner (type=%s, detail=%s, user=%s)",
@@ -6260,7 +6294,7 @@ async def proxy_chat(
             _text_before_pii_redact = effective_prompt
             _pii_redaction_applied = False
 
-            if verdict.action in ("block", "redact") and _redact_threat:
+            if _should_apply_redaction(_resolved_input_action, verdict.threat_type) and _redact_threat:
                 # C-2: matched_patterns can carry tier-2 guard EVIDENCE fragments
                 # (not just pattern keys) that echo scanned identifiers. Scrub
                 # before logging so raw PII never persists to the gateway logs.
@@ -6285,20 +6319,12 @@ async def proxy_chat(
             elif (
                 verdict.threat_type == "pii"
                 and not pii_detection_enabled
-                and verdict.action in ("block", "redact", "flag")
+                and _normalize_enforcement_action(_guard_rec) in ("block", "redact", "flag")
             ):
                 LOG.info(
                     "PII detected but org has PII detection disabled; allowing prompt unredacted (user=%s)",
                     user_id,
                 )
-
-            if verdict.action == "flag" and _redact_threat:
-                LOG.info("PII/secret flagged in prompt, redacting before LLM call (user=%s)", user_id)
-                # B1 (egress = truth): pass the verdict (see the redact-action branch
-                # above) so Tier-2 evidence digit spans are masked, not just regex hits.
-                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
-                redacted_prompt = effective_prompt
-                _pii_redaction_applied = True
 
             # B1 (egress = truth — fail-closed honesty): the firewall flagged genuine
             # PII/secret for redaction, but if the deterministic redactor
@@ -6314,14 +6340,20 @@ async def proxy_chat(
             # must NOT trip this guard (AttackSimulator PII scenario).
             if (
                 _pii_redaction_applied
-                and enforcement_mode == "block"
                 and (prompt or "").strip()
             ):
                 try:
                     from llm_router import _redact_text_with_backstop as _egress_backstop
                 except ImportError:  # pragma: no cover - packaging fallback
                     from .llm_router import _redact_text_with_backstop as _egress_backstop
-                if _egress_backstop(prompt, effective_prompt) == prompt:
+                _redaction_noop = _egress_backstop(prompt, effective_prompt) == prompt
+                _resolved_after_noop = _resolve_enforcement(
+                    _guard_rec,
+                    org_policy_action=_org_policy_action,
+                    enforcement_mode=enforcement_mode,
+                    redaction_possible=not _redaction_noop,
+                )
+                if _redaction_noop and _should_hard_block(_resolved_after_noop, enforcement_mode):
                     LOG.warning(
                         "PII/secret flagged but redaction was a no-op (unmaskable); "
                         "failing closed to prevent raw egress (type=%s, user=%s)",

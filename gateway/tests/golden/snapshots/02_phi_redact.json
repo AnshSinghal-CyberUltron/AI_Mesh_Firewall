@@ -1,0 +1,27 @@
+{
+  "case_id": "02_phi_redact",
+  "contract_final": "redact",
+  "final_action": "redact",
+  "stages": [
+    {
+      "action": "redact",
+      "matched_policy_names": [
+        "PHI / Health Data"
+      ],
+      "matched_rules": [
+        "Monitor diagnosis disclosure",
+        "Redact medical record numbers"
+      ],
+      "stage": "policy"
+    },
+    {
+      "action": "redact",
+      "stage": "policy_redact"
+    },
+    {
+      "action": "allow",
+      "detection_tier": "tier_1",
+      "stage": "input_scan"
+    }
+  ]
+}
