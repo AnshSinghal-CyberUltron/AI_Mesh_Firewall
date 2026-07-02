@@ -57,6 +57,11 @@
       badge dark-variants + helpText/latency contrast + pipeline-trace overflow-x-auto (was clipped @375).
       VectorPolicyPanel: 5 badge/banner dark-variant fixes + POLICY_STATUS_STYLES const (clears pre-existing
       gray-on-color); no-leak clean; live render on enterprise page → folds into item 15. lint 42/42.
+      item9 iter9 PART1: RAGPipelineTelemetry DONE — 5 charts recharts→ECharts (funnel/stacked-bar/donut/
+      radar/latency), recharts import removed, theme-aware; live both themes (0 recharts SVGs, data-identical,
+      console clean). Fixed 22 inverted slate-400/dark:slate-500 spots + colored-number light variants.
+      lint 42/42. PART2 next: RAGFeatureTestPanel (theme + data-integrity BLOCKED/ALLOWED conflation + Run
+      race) + RAGAttackTrustSimulator 1021L (med-leak raw-resp/doc-content, focus:outline-none, contrast).
 - [ ] 10. OutputGuardrailControls/Charts - [ ] 11. AttackSimulatorPanel - [ ] 12. PolicyManagement/Analytics
 - [ ] 13. LogViewer/LogDetailPage - [ ] 14. OWASPStatsPanel - [ ] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
 - [ ] 17. VERIFY-ONLY (log, don't edit): MCPConnectorPanel, ModelConnectionPanel, pipeline-trace cards

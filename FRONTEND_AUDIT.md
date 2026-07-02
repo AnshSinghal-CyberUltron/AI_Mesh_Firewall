@@ -91,7 +91,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | 6 | KillSwitchPanel / KillSwitchModelCombobox / ModelStatePanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done (critical fixes) |
 | 7 | MCPManagerPanel / MCPScannerPanel / MCPScanControlMatrix | — | 👁 | 👁 | 👁 | 👁 | 👁 | 👁 | n/a | 👁 verify-only / orphaned (see log) |
 | 8 | DatabaseConnectionPanel / VectorPolicyPanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done (VP live→item15) |
-| 9 | RAGFeatureTestPanel / RAGAttackTrustSimulator / RAGPipelineTelemetry | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 9 | RAGFeatureTestPanel / RAGAttackTrustSimulator / RAGPipelineTelemetry | me | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | 🔎 Telemetry+charts DONE; FeatureTest/AttackTrust next |
 | 10 | OutputGovernancePanel / OutputGuardrailControls / OutputGuardrailCharts / OutputGuardrailEngineCard | me | ◐ | ◐ | ◐ | ⬜ | ◐ | ◐ | ✅chart | 🔎 charts done, panels pending |
 | 11 | AttackSimulatorPanel (+ simulator/*) | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 12 | PolicyManagementPanel / PolicyAnalyticsPanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -146,6 +146,12 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ---
 
 ## Per-surface finding log (append-only)
+
+**Item 9 (part 1) — RAGPipelineTelemetry DONE (iter9 resumed loop, 2026-07-02):** workflow-analyzed all 3 RAG panels; completed RAGPipelineTelemetry.
+- **CHART MIGRATION (5 charts recharts→ECharts):** funnel (h-bar), stage-action (stacked bar), escalation (donut), stage-health (radar), latency (bar) → ECharts `option` via SafeResponsiveChart. Removed the recharts import. Fixes the old hardcoded-dark tick (`#a1a1aa`)/tooltip (`#18181b`) colors → now theme-aware. **Live-verified both themes** (firewall-1-3 Analytics/Flow tabs): **0 recharts SVGs**, ECharts canvases render, data-identical structure (0-value honest-empty since no RAG activity; escalation shows "No data for period"), no overflow @768/375, **console 0 errors**. Screenshots `mcp-parallel/findings/frontend-harden/rag/`.
+- **Theme contrast:** fixed the pervasive inverted `text-slate-400 dark:text-slate-500` (22 spots, low-contrast in BOTH themes) → `text-slate-500 dark:text-slate-400`; colored breakdown numbers (`text-{emerald,red,amber,blue}-400`) got light `-600` variants for AA on the light card.
+- No-leak: fetchError surfaces raw `HTTP status`/`err.message` (low — client-facing, no secret). Detector clean. lint 42/42, build green.
+- **REMAINING (item 9 part 2, next iter):** RAGFeatureTestPanel (pervasive slate-400/teal-400/red-400/amber-400 low-contrast-in-light labels; **data-integrity** L133 maps infra HTTP error→"BLOCKED" and 200-without-audit→"ALLOWED" conflating infra failure with guardrail verdict; Run-button race — only self-disables) and RAGAttackTrustSimulator 1021L (**med-leak** raw-response JSON dump + retrieved-doc `content` text render — evaluate as intended admin testing tool vs PII; `focus:outline-none` suppresses the global focus ring L239; several badge dark-variant + slate contrast spots).
 
 **Item 8 — DatabaseConnectionPanel + VectorPolicyPanel (iter8 resumed loop, 2026-07-02):** analyzed via parallel workflow, fixed, gated (lint 42/42, build, detector 0).
 - **No-leak PROVEN:** DB panel — Pinecone API key + Milvus token are `type=password` (masked, verified live); BYOK embedding keys are "write-only / encrypted at rest / never returned" (placeholders only); the simulator gateway key is only ever a Bearer header (never rendered); raw sim body stored in state, never dumped. VectorPolicy — metadata only (sensitive_fields are field *names*, not values); no creds. DOM leak-scan on both = none.

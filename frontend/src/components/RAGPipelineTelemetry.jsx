@@ -3,10 +3,6 @@ import {
   BarChart3, RefreshCw, TrendingUp, Shield, Clock, Activity,
   ArrowRight, ShieldAlert, AlertTriangle, ChevronDown, Zap,
 } from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, Legend,
-  PieChart, Pie, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-} from "recharts";
 import { InfoTooltip } from "./InfoTooltip";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { useAuth } from "../context/AuthContext";
@@ -25,6 +21,52 @@ const STAGE_DESCRIPTIONS = {
   generator: "Verifies approved context integrity, applies field-level redaction, and grounds responses",
 };
 const FUNNEL_COLORS = ["#8b5cf6", "#14b8a6", "#f59e0b"];
+
+// ECharts option builders — theme-aware (the zs-light/zs-dark themes handle axis/
+// grid/tooltip colors), replacing the prior recharts views that hardcoded dark
+// tick (#a1a1aa) and tooltip (#18181b) colors regardless of the active theme.
+function funnelOption(rows) {
+  return {
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    grid: { top: 8, right: 24, bottom: 4, left: 8, containLabel: true },
+    xAxis: { type: "value", minInterval: 1 },
+    yAxis: { type: "category", inverse: true, data: rows.map((r) => r.name) },
+    series: [{ type: "bar", barWidth: "55%", data: rows.map((r, i) => ({ value: r.value, itemStyle: { color: FUNNEL_COLORS[i % FUNNEL_COLORS.length], borderRadius: [0, 4, 4, 0] } })) }],
+  };
+}
+function stageActionOption(rows) {
+  const keys = [["Allowed", ACTION_COLORS.allowed], ["Blocked", ACTION_COLORS.blocked], ["Flagged", ACTION_COLORS.flagged], ["Rewritten", ACTION_COLORS.rewritten]];
+  return {
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    legend: { bottom: 0, itemWidth: 10, itemHeight: 8 },
+    grid: { top: 10, right: 8, bottom: 30, left: 8, containLabel: true },
+    xAxis: { type: "category", data: rows.map((r) => r.stage) },
+    yAxis: { type: "value", minInterval: 1 },
+    series: keys.map(([k, color]) => ({ name: k, type: "bar", stack: "a", itemStyle: { color }, data: rows.map((r) => r[k]) })),
+  };
+}
+function escalationOption(rows) {
+  return {
+    tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+    series: [{ type: "pie", radius: ["44%", "70%"], center: ["50%", "48%"], padAngle: 3, avoidLabelOverlap: true, label: { formatter: "{b} {d}%", fontSize: 11 }, labelLine: { show: true, length: 6, length2: 6 }, data: rows.map((r) => ({ name: r.name, value: r.value, itemStyle: { color: r.fill } })) }],
+  };
+}
+function latencyOption(rows) {
+  return {
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, valueFormatter: (v) => `${Math.round(v)} ms` },
+    grid: { top: 12, right: 8, bottom: 4, left: 8, containLabel: true },
+    xAxis: { type: "category", data: rows.map((r) => r.stage) },
+    yAxis: { type: "value" },
+    series: [{ type: "bar", barWidth: "55%", data: rows.map((r) => ({ value: r.latency, itemStyle: { color: r.fill, borderRadius: [4, 4, 0, 0] } })) }],
+  };
+}
+function healthRadarOption(rows) {
+  return {
+    tooltip: {},
+    radar: { radius: "62%", indicator: rows.map((r) => ({ name: r.stage, max: 100 })) },
+    series: [{ type: "radar", data: [{ value: rows.map((r) => r.score), name: "Health", areaStyle: { color: "rgba(20,184,166,0.3)" }, lineStyle: { color: "#14b8a6", width: 2 }, itemStyle: { color: "#14b8a6" } }] }],
+  };
+}
 
 // Local duplicate of SafeResponsiveChart removed — it carried the same
 // width(-1)/height(-1) recharts warning bug. Now using the shared, fixed
@@ -65,9 +107,9 @@ function StageHealthHeatmap({ stages }) {
       <table className="w-full text-xs">
         <thead>
           <tr>
-            <th className="text-left text-slate-400 dark:text-slate-500 p-2">Stage</th>
+            <th className="text-left text-slate-500 dark:text-slate-400 p-2">Stage</th>
             {metrics.map((m) => (
-              <th key={m} className="text-center text-slate-400 dark:text-slate-500 p-2">{metricLabels[m]}</th>
+              <th key={m} className="text-center text-slate-500 dark:text-slate-400 p-2">{metricLabels[m]}</th>
             ))}
           </tr>
         </thead>
@@ -147,27 +189,27 @@ function StageCard({ name, data, isLast, isExpanded, onToggle }) {
             </div>
             <div className="flex-1">
               <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{label}</span>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">{desc}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">{desc}</p>
             </div>
-            <ChevronDown size={14} className={`text-slate-400 dark:text-slate-500 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+            <ChevronDown size={14} className={`text-slate-500 dark:text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
           </div>
 
           {/* Quick stats */}
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 text-center">
-              <div className="text-[10px] text-slate-400 dark:text-slate-500">Total</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Total</div>
               <div className="text-sm font-mono font-bold text-slate-900 dark:text-slate-100">{total.toLocaleString()}</div>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 text-center">
-              <div className="text-[10px] text-slate-400 dark:text-slate-500">Blocked</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Blocked</div>
               <div className="text-sm font-mono font-bold text-red-400">{blocked.toLocaleString()}</div>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 text-center">
-              <div className="text-[10px] text-slate-400 dark:text-slate-500">Latency</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Latency</div>
               <div className="text-sm font-mono font-bold text-slate-700 dark:text-slate-300">{avgLatency.toFixed(1)}ms</div>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 text-center">
-              <div className="text-[10px] text-slate-400 dark:text-slate-500">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">
                 {rewritten > 0 ? "Rewritten" : flagged > 0 ? "Flagged" : "Allowed"}
               </div>
               <div className={`text-sm font-mono font-bold ${rewritten > 0 ? "text-blue-400" : flagged > 0 ? "text-amber-400" : "text-emerald-400"}`}>
@@ -191,13 +233,13 @@ function StageCard({ name, data, isLast, isExpanded, onToggle }) {
         {isExpanded && (
           <div className="w-full mt-2 bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-200 dark:border-slate-700/50 p-3 space-y-2">
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex justify-between"><span className="text-slate-400 dark:text-slate-500">Allowed</span><span className="text-emerald-400 font-mono">{allowed}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400 dark:text-slate-500">Blocked</span><span className="text-red-400 font-mono">{blocked}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400 dark:text-slate-500">Flagged</span><span className="text-amber-400 font-mono">{flagged}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400 dark:text-slate-500">Rewritten</span><span className="text-blue-400 font-mono">{rewritten}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Allowed</span><span className="text-emerald-600 dark:text-emerald-400 font-mono">{allowed}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Blocked</span><span className="text-red-600 dark:text-red-400 font-mono">{blocked}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Flagged</span><span className="text-amber-600 dark:text-amber-400 font-mono">{flagged}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Rewritten</span><span className="text-blue-600 dark:text-blue-400 font-mono">{rewritten}</span></div>
             </div>
             {total > 0 && (
-              <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
                 Block rate: <span className="text-slate-900 dark:text-slate-100 font-mono">{((blocked / total) * 100).toFixed(1)}%</span>
                 {rewritten > 0 && <> | Rewrite rate: <span className="text-slate-900 dark:text-slate-100 font-mono">{((rewritten / total) * 100).toFixed(1)}%</span></>}
               </div>
@@ -210,7 +252,7 @@ function StageCard({ name, data, isLast, isExpanded, onToggle }) {
       {!isLast && (
         <div className="flex items-center px-2 mt-10 flex-shrink-0">
           <div className="w-6 h-px bg-gradient-to-r from-slate-300 dark:from-slate-600 to-slate-400 dark:to-slate-500" />
-          <ArrowRight size={12} className="text-slate-400 dark:text-slate-500 -ml-0.5" />
+          <ArrowRight size={12} className="text-slate-500 dark:text-slate-400 -ml-0.5" />
         </div>
       )}
     </div>
@@ -328,7 +370,7 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
                 className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${
                   activeTab === tab.id
                     ? "bg-purple-500/20 text-purple-600 dark:text-purple-400 shadow-sm"
-                    : "text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 {tab.label}
@@ -342,13 +384,13 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
               className={`px-3 py-1 text-xs rounded-lg border transition-all ${
                 timeRange === r
                   ? "bg-purple-500/20 border-purple-500/40 text-purple-600 dark:text-purple-400"
-                  : "border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                  : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               {r}
             </button>
           ))}
-          <button onClick={fetchKpis} aria-label="Refresh" title="Refresh" className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all">
+          <button onClick={fetchKpis} aria-label="Refresh" title="Refresh" className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all">
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
@@ -368,17 +410,17 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-center">
               <Zap size={14} className="text-teal-400 mx-auto mb-1" />
               <div className="text-lg font-bold text-slate-900 dark:text-slate-100 font-mono">{totalEvents.toLocaleString()}</div>
-              <div className="text-[10px] text-slate-400 dark:text-slate-500">Total Pipeline Events</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Total Pipeline Events</div>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-center">
               <ShieldAlert size={14} className="text-red-400 mx-auto mb-1" />
-              <div className="text-lg font-bold text-red-400 font-mono">{totalBlocked.toLocaleString()}</div>
-              <div className="text-[10px] text-slate-400 dark:text-slate-500">Total Blocked</div>
+              <div className="text-lg font-bold text-red-600 dark:text-red-400 font-mono">{totalBlocked.toLocaleString()}</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Total Blocked</div>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-center">
               <Clock size={14} className="text-blue-400 mx-auto mb-1" />
               <div className="text-lg font-bold text-slate-900 dark:text-slate-100 font-mono">{avgLatency.toFixed(0)}ms</div>
-              <div className="text-[10px] text-slate-400 dark:text-slate-500">Total Avg Latency</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Total Avg Latency</div>
             </div>
           </div>
 
@@ -405,20 +447,10 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
                 <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Document Filtering Funnel</h4>
               </div>
               <div className="h-40">
-                <SafeResponsiveChart className="h-full">
-                  <BarChart data={funnelData} layout="vertical" margin={{ left: 20, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                    <XAxis type="number" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fill: "#a1a1aa", fontSize: 11 }} width={90} />
-                    <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#3f3f46", borderRadius: 8, color: "#e2e8f0" }} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                      {funnelData.map((_, i) => <Cell key={i} fill={FUNNEL_COLORS[i]} />)}
-                    </Bar>
-                  </BarChart>
-                </SafeResponsiveChart>
+                <SafeResponsiveChart className="h-full" option={funnelOption(funnelData)} />
               </div>
               {funnel.retrieved > 0 && (
-                <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 text-center">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 text-center">
                   Filtering rate: <span className="text-slate-900 dark:text-slate-100 font-mono">{((1 - (funnel.post_generator || 0) / funnel.retrieved) * 100).toFixed(1)}%</span> of documents filtered across pipeline
                 </div>
               )}
@@ -479,19 +511,7 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
                 <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Action Distribution</h4>
               </div>
               <div className="h-52">
-                <SafeResponsiveChart className="h-full">
-                  <BarChart data={stageActionData} margin={{ left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                    <XAxis dataKey="stage" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-                    <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#3f3f46", borderRadius: 8, fontSize: 12, color: "#e2e8f0" }} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Allowed" stackId="a" fill={ACTION_COLORS.allowed} radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="Blocked" stackId="a" fill={ACTION_COLORS.blocked} />
-                    <Bar dataKey="Flagged" stackId="a" fill={ACTION_COLORS.flagged} />
-                    <Bar dataKey="Rewritten" stackId="a" fill={ACTION_COLORS.rewritten} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </SafeResponsiveChart>
+                <SafeResponsiveChart className="h-full" option={stageActionOption(stageActionData)} />
               </div>
             </div>
 
@@ -503,26 +523,9 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
               </div>
               <div className="h-52">
                 {escalationPieData.length > 0 ? (
-                  <SafeResponsiveChart className="h-full">
-                    <PieChart>
-                      <Pie
-                        data={escalationPieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={40}
-                        outerRadius={70}
-                        paddingAngle={3}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        labelLine={{ stroke: "#71717a", strokeWidth: 1 }}
-                      >
-                        {escalationPieData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#3f3f46", borderRadius: 8, fontSize: 12, color: "#e2e8f0" }} />
-                    </PieChart>
-                  </SafeResponsiveChart>
+                  <SafeResponsiveChart className="h-full" option={escalationOption(escalationPieData)} />
                 ) : (
-                  <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-500 text-sm">No data for period</div>
+                  <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm">No data for period</div>
                 )}
               </div>
             </div>
@@ -534,15 +537,7 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
                 <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Stage Health Score</h4>
               </div>
               <div className="h-52">
-                <SafeResponsiveChart className="h-full">
-                  <RadarChart data={radarData}>
-                    <PolarGrid stroke="#3f3f46" />
-                    <PolarAngleAxis dataKey="stage" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-                    <PolarRadiusAxis domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
-                    <Radar name="Health" dataKey="score" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.3} />
-                    <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#3f3f46", borderRadius: 8, fontSize: 12, color: "#e2e8f0" }} />
-                  </RadarChart>
-                </SafeResponsiveChart>
+                <SafeResponsiveChart className="h-full" option={healthRadarOption(radarData)} />
               </div>
             </div>
           </div>
@@ -554,17 +549,7 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
               <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Average Latency by Stage (ms)</h4>
             </div>
             <div className="h-36">
-              <SafeResponsiveChart className="h-full">
-                <BarChart data={latencyData} margin={{ left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                  <XAxis dataKey="stage" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-                  <YAxis tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-                  <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#3f3f46", borderRadius: 8, fontSize: 12, color: "#e2e8f0" }} />
-                  <Bar dataKey="latency" radius={[4, 4, 0, 0]}>
-                    {latencyData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                  </Bar>
-                </BarChart>
-              </SafeResponsiveChart>
+              <SafeResponsiveChart className="h-full" option={latencyOption(latencyData)} />
             </div>
           </div>
         </div>
