@@ -61,3 +61,9 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   fail-SAFE (scan exception → 500, raw returned only after successful scan), NOT the bare-route fail-open.
   +2 tests; 14 bare-proxy passed, broad sweep 362 passed. Item 2 COMPLETE (byte+oracle verified,
   fail-closed bare / fail-safe main). Deferred (not leaks): main-path graceful-block; per-actor field RBAC → item 3.
+- **CHG-0006** (2026-07-02) — G2 item 3 (finding #2): `org_mcp_tool_call` (bare REST route) now enforces
+  the three per-key gates it was missing — `_tool_allowed_by_key` (403), `mcp_max_tool_calls` cap (429),
+  `_is_tool_disabled` (403) — BEFORE forwarding, at parity with `org_mcp_jsonrpc`. Was: caller could invoke
+  a tool outside its key allowlist / over cap / disabled via the REST route. +4 tests; 18 bare-proxy passed,
+  broad sweep 424 passed. REMAINING item 3: per-actor authz + field RBAC on stdio/ws adapter path (finding
+  #1); posture-vs-rule block downgrade (#3); allowlist-scope inversion (#4).

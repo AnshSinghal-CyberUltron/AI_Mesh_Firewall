@@ -2773,6 +2773,53 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
     enabled_info = await _get_enabled_tools(org_slug, server_slug)
     call_t0 = time.time()
     if tool_name:
+        # ── Per-key authorization parity with org_mcp_jsonrpc (BACKSTOP_FINDINGS
+        # G2 item 3). This bare REST route previously enforced NONE of the key
+        # controls, so a caller could invoke a tool outside its key allowlist,
+        # exceed the per-turn call cap, or call a disabled tool — all of which the
+        # JSON-RPC route blocks. Run these BEFORE the arg scan / forward. ──
+        if not _tool_allowed_by_key(tool_name, _mcp_auth):
+            await _record_gateway_event(
+                org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
+                decision="block", reason="tool_not_allowed_for_key",
+                latency_ms=int((time.time() - call_t0) * 1000),
+                metadata={"transport": "rest", "enforced_at": "gateway"},
+            )
+            return JSONResponse(
+                content={"blocked": True, "error": "blocked",
+                         "detail": "Tool not allowed for this key.", "compliance_tags": []},
+                status_code=403,
+            )
+        _mcp_cap = int(getattr(_mcp_auth, "mcp_max_tool_calls", 0) or 0)
+        if _mcp_cap > 0:
+            _call_n = await _incr_tool_call_count(_mcp_auth)
+            if _tool_call_cap_exceeded(_call_n, _mcp_cap):
+                await _record_gateway_event(
+                    org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
+                    decision="block", reason="tool_call_cap_exceeded",
+                    latency_ms=int((time.time() - call_t0) * 1000),
+                    metadata={"transport": "rest", "enforced_at": "gateway",
+                              "tool_call_count": _call_n, "tool_call_cap": _mcp_cap},
+                )
+                return JSONResponse(
+                    content={"blocked": True, "error": "blocked",
+                             "detail": f"Tool-call limit exceeded for this key ({_mcp_cap} per turn).",
+                             "compliance_tags": []},
+                    status_code=429,
+                )
+        if _is_tool_disabled(tool_name, enabled_info):
+            await _record_gateway_event(
+                org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
+                decision="block", reason="tool_disabled",
+                latency_ms=int((time.time() - call_t0) * 1000),
+                metadata={"transport": "rest", "enforced_at": "gateway"},
+            )
+            return JSONResponse(
+                content={"blocked": True, "error": "blocked",
+                         "detail": f"Tool '{tool_name}' is disabled for this server.",
+                         "compliance_tags": []},
+                status_code=403,
+            )
         scanned_args, in_blocked, in_tags, in_findings, scan_meta_in = await _scan_tool_args_block(
             arguments,
             tool_name=tool_name,

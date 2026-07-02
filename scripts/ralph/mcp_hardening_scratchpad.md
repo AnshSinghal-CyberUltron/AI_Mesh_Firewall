@@ -49,6 +49,14 @@
       REMAINING before [x]: (b) non-streaming string/structuredContent result shapes unscanned;
       (c) audit main org_mcp_jsonrpc inline result path (~2265/2451) for the same fail-open.
 - [ ] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
+      PARTIAL — CHG-0006 (2026-07-02): finding #2 closed. org_mcp_tool_call (bare REST route) now enforces
+      the three per-key gates it lacked — _tool_allowed_by_key (403), mcp_max_tool_calls cap (429),
+      _is_tool_disabled (403) — before forwarding, at parity with org_mcp_jsonrpc. +4 tests; 18 bare-proxy
+      passed, broad sweep 424 passed. REMAINING before [x]: (#1, the big one) per-actor authz + field-RBAC
+      masking NOT enforced on stdio/ws ADAPTER path (actor threaded for scan attribution only; enabled-tools
+      payload has no actor dimension); (#3) Tier-1/2 policy BLOCK gated on posture not the rule's action
+      (actor-scoped block downgraded to tag under default posture, mcp_scan_orchestrator.py); (#4)
+      _policy_applies_to_actor allowlist-scope inverts intent (policy_engine.py).
 - [ ] 4. Context minimization / least-privilege assembly.
 - [ ] 5. Compliance tagging: extend mcp_compliance_tags.py to PII/IP/regulated; tag inputs + results; enforce by tag; audit.
 - [ ] 6. End-to-end per-tool-call chain: authz → minimize → scan+redact(in&result) → tag → audit.

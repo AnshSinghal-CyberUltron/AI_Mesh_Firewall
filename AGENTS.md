@@ -26,6 +26,10 @@
     (content/structuredContent/list/str), not just `result.content`. Main `org_mcp_jsonrpc` audited
     fail-SAFE (scan error → 500, raw only after successful scan), not fail-open. 14 + 362 tests pass.
     Item 2 DONE (fail-closed bare / fail-safe main, byte+oracle verified). Next: G2 item 3 per-actor authz.
+  - CHG-0006 (2026-07-02) — G2 item 3 (finding #2): `org_mcp_tool_call` REST route now enforces the three
+    per-key gates (allowlist 403 / call-cap 429 / disabled 403) before forwarding, at parity with
+    `org_mcp_jsonrpc`. +4 tests; 18 + 424 pass. Remaining item 3: per-actor authz + field RBAC on stdio/ws
+    adapter path (finding #1); posture-vs-rule block downgrade (#3); allowlist-scope inversion (#4).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

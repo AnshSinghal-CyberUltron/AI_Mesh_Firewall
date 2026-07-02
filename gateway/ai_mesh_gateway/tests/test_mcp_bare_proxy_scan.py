@@ -54,14 +54,14 @@ def _decode(resp):
     return json.loads(bytes(resp.body))
 
 
-def _auth(org_slug="demo"):
+def _auth(org_slug="demo", *, allowed=None, cap=0):
     payload = {
         "key_id": "k1",
         "user_id": 1,
         "project_id": "p1",
         "org_slug": org_slug,
-        "mcp_allowed_tools": [],
-        "mcp_max_tool_calls": 0,
+        "mcp_allowed_tools": list(allowed or []),
+        "mcp_max_tool_calls": cap,
     }
     return AuthContext(key_hash="h" * 64, payload=payload)
 
@@ -136,6 +136,69 @@ async def test_rest_redacts_pii_in_result():
     blob = json.dumps(_decode(resp))
     assert "john.doe@example.com" not in blob  # raw PII never egresses
     assert "j***@e***.com" in blob             # masked form present
+
+
+# ── Per-key authorization parity on the bare REST route (CHG-0006, G2 item 3) ──
+
+
+@pytest.mark.asyncio
+async def test_rest_blocks_tool_not_in_key_allowlist():
+    req = _rest_request(_auth(allowed=["other_tool"]), {"name": "fetch", "arguments": _BENIGN_ARG})
+    backend = _http_resp({"result": [{"type": "text", "text": "ok"}]})
+    fake = _fake_client([backend])
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=fake),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 403
+    data = _decode(resp)
+    assert data["blocked"] is True and "not allowed" in data["detail"].lower()
+    fake.post.assert_not_awaited()  # blocked BEFORE the backend is reached
+
+
+@pytest.mark.asyncio
+async def test_rest_blocks_over_tool_call_cap():
+    req = _rest_request(_auth(cap=1), {"name": "fetch", "arguments": _BENIGN_ARG})
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "_incr_tool_call_count", AsyncMock(return_value=2)),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 429
+    assert _decode(resp)["blocked"] is True
+
+
+@pytest.mark.asyncio
+async def test_rest_blocks_disabled_tool():
+    req = _rest_request(_auth(), {"name": "fetch", "arguments": _BENIGN_ARG})
+    enabled = {"known": {"fetch"}, "enabled": set(), "disabled": {"fetch"}}
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=enabled)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 403
+    assert "disabled" in _decode(resp)["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_rest_allowed_tool_in_allowlist_passes():
+    """An allowlisted tool (with a cap not exceeded) still flows to the backend."""
+    req = _rest_request(_auth(allowed=["fetch"], cap=5),
+                        {"name": "fetch", "arguments": _BENIGN_ARG})
+    backend = _http_resp({"result": [{"type": "text", "text": "sunny in Paris"}]})
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "_incr_tool_call_count", AsyncMock(return_value=1)),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_fake_client([backend])),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 200
+    assert "sunny in Paris" in json.dumps(_decode(resp))
 
 
 @pytest.mark.asyncio

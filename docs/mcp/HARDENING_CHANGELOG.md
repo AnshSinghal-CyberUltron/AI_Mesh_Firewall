@@ -188,3 +188,30 @@ the prod compose/manifests is tracked under G3 item 12.
   routes (rest / internal / ext streaming + non-streaming, all result shapes), fail-CLOSED on the bare
   routes and fail-SAFE (500) on the main path. Deferred (NOT leaks): main-path graceful-block vs 500;
   per-actor FIELD-level RBAC masking is item 3.
+
+### CHG-0006 — Per-key authorization parity on the bare REST route (G2 item 3, finding #2)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 3 (per-user/agent/role tool authorization) — PARTIAL (closes finding #2).
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (`org_mcp_tool_call`) ·
+  `gateway/ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py` (extended `_auth`; +4 tests).
+- **WHAT:** Added the three per-key authorization gates to `org_mcp_tool_call`, run BEFORE the arg scan /
+  forward: `_tool_allowed_by_key` (→ 403), the `mcp_max_tool_calls` per-turn cap via
+  `_incr_tool_call_count` + `_tool_call_cap_exceeded` (→ 429), and `_is_tool_disabled` (→ 403).
+- **WHY (gap):** BACKSTOP_FINDINGS G2 item 3 finding #2 — the bare REST `tools/call` route enforced NONE
+  of the key controls that `org_mcp_jsonrpc` enforces (`mcp_allowed_tools`/`mcp_max_tool_calls` are
+  gateway-only, not re-checked by the backend), so a caller could invoke a tool outside its key allowlist,
+  exceed the per-turn cap, or call a disabled tool via `POST /gateway/{org}/mcp/{server}/tools/call`.
+- **NOW DOES:** The REST route blocks disallowed / over-cap / disabled tool calls before forwarding, at
+  parity with the JSON-RPC route; each records a `decision="block"` gateway audit event.
+- **Touched whose work:** extends `org_mcp_tool_call` (prior sessions); reuses the existing gate helpers.
+- **VERIFY:** `cd gateway && PYTHONPATH="$PWD/../shared:$PWD/ai_mesh_gateway" ./.venv/bin/python -m pytest
+  ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q` → 18 passed
+  (`test_rest_blocks_tool_not_in_key_allowlist` [403 + backend `post` not awaited],
+  `test_rest_blocks_over_tool_call_cap` [429], `test_rest_blocks_disabled_tool` [403],
+  `test_rest_allowed_tool_in_allowlist_passes`). Broad sweep
+  (`-k "mcp or scan or redact or proxy or jsonrpc or rate or auth or key or tool"`) → 424 passed / 18 skipped.
+- **REMAINING for G2 item 3:** finding #1 (the big one) — per-actor (user/agent/role) tool authorization +
+  field-level RBAC masking are NOT enforced on the stdio/websocket ADAPTER path (`actor` is threaded for
+  scan attribution but never used for an access decision; the enabled-tools payload carries no actor
+  dimension); finding #3 — Tier-1/2 policy BLOCK gated on posture not the rule's action (actor-scoped
+  `block` downgraded to `tag`); finding #4 — `_policy_applies_to_actor` allowlist-scope inverts intent.
