@@ -784,18 +784,16 @@ function MCPConnectorPanelInner() {
 
     // UX-02 FIX: Pre-open popup SYNCHRONOUSLY before async fetch to avoid popup blocker.
     // Browser will block window.open() after await unless it's in the same call stack as user click.
+    // If popups are blocked entirely (Cursor/Electron embedded browser), popup is
+    // null → we fall back to a SAME-TAB redirect below.
     const popup = window.open("about:blank", "mcp-oauth", "width=600,height=700");
-    if (!popup) {
-      setError("Popup blocked. Please allow popups for this site and try again.");
-      return;
-    }
 
     setOauthBusy(srv.id);
     setError(null);
     try {
       const gwBase = resolveGatewayBaseUrl();
       if (!gwBase) {
-        popup.close();
+        if (popup) popup.close();
         throw new Error("Gateway URL is not configured.");
       }
 
@@ -813,14 +811,23 @@ function MCPConnectorPanelInner() {
         error: (await res.text().catch(() => "")) || null,
       }));
       if (!res.ok) {
-        popup.close();
+        if (popup) popup.close();
         throw new Error(data.error || `HTTP ${res.status}`);
       }
 
+      if (!popup) {
+        // Popup blocked → same-tab fallback (never blocked). Remember the server
+        // so we auto-sync its tools when the callback returns us to the app.
+        try {
+          localStorage.setItem("mcp_oauth_pending", JSON.stringify({ id: srv.id }));
+        } catch { /* storage disabled — return handler just won't auto-sync */ }
+        window.location.assign(data.authorize_url);
+        return;
+      }
       // Navigate the pre-opened popup to OAuth URL
       popup.location.href = data.authorize_url;
     } catch (e) {
-      if (!popup.closed) popup.close();
+      if (popup && !popup.closed) popup.close();
       const rawMessage = e?.message || "Unknown error";
       const message = /failed to fetch|about:blank|networkerror|load failed/i.test(rawMessage)
         ? "Browser blocked the gateway request. Check gateway CORS or network configuration."
@@ -844,19 +851,27 @@ function MCPConnectorPanelInner() {
    */
   const startControlOAuth = async (srv) => {
     // Pre-open popup SYNCHRONOUSLY (same call stack as click) to dodge blockers.
+    // If the browser blocks popups entirely (e.g. the Cursor/Electron embedded
+    // browser), popup is null → we fall back to a SAME-TAB redirect below, which
+    // is never blocked.
     const popup = window.open("about:blank", "mcp-oauth-2-1", "width=620,height=760");
-    if (!popup) {
-      setError("Popup blocked. Please allow popups for this site and try again.");
-      return;
-    }
     setOauthBusy(srv.id);
     setError(null);
     try {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${srv.id}/oauth/authorize/`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.authorize_url) {
-        popup.close();
+        if (popup) popup.close();
         throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+      }
+      if (!popup) {
+        // Popup blocked → same-tab fallback. Remember which server so we
+        // auto-sync its tools when the callback returns us to the app.
+        try {
+          localStorage.setItem("mcp_oauth_pending", JSON.stringify({ id: srv.id }));
+        } catch { /* storage disabled — return handler just won't auto-sync */ }
+        window.location.assign(data.authorize_url);
+        return;
       }
       popup.location.href = data.authorize_url;
 
@@ -910,6 +925,33 @@ function MCPConnectorPanelInner() {
         oauthPollRef.current = null;
       }
     };
+  }, []);
+
+  // Same-tab OAuth return: when the popup is blocked we redirect the whole tab
+  // to the provider; the control callback then bounces the browser back here.
+  // On mount, if we stashed a pending server, refresh + auto-sync it (mirrors
+  // the popup path's poll auto-sync) so tools populate without a manual click.
+  useEffect(() => {
+    let pending = null;
+    try {
+      pending = JSON.parse(localStorage.getItem("mcp_oauth_pending") || "null");
+    } catch { pending = null; }
+    if (!pending?.id) return;
+    try { localStorage.removeItem("mcp_oauth_pending"); } catch { /* ignore */ }
+    (async () => {
+      await loadServers();
+      try {
+        const r = await fetchWithAuth(`/api/mcp-connector/servers/${pending.id}/`);
+        if (r.ok) {
+          const s = await r.json();
+          if (s.oauth_authorized) {
+            await syncServerTools(pending.id);
+            toast("OAuth authorized — tools synced", { tone: "success" });
+          }
+        }
+      } catch { /* transient — user can sync manually */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // BUG FIX (b): OAuth popup completion handler wrapped in useCallback with
