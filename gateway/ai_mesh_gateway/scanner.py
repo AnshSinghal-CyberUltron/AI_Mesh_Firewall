@@ -456,6 +456,42 @@ def _reassemble_split_words(tokens: list[str]) -> list[str]:
     return out
 
 
+# G6 (multi-turn / crescendo split injection): main._extract_prompt_from_messages
+# folds the OpenAI messages array into one string as ``[role]: content`` lines. A
+# prompt-injection phrase can be fragmented across successive USER turns, with the
+# intervening ``[assistant]: …`` turns breaking contiguity so neither any single
+# turn NOR the full concatenation matches a signature. Reassembling the USER turns
+# only (dropping non-user turns and the role markers) makes the phrase contiguous
+# again for detection. User turns are the untrusted, attacker-driven channel.
+_ROLE_LINE_RE = re.compile(r"^\[(user|assistant|system|developer|tool)\]:\s?(.*)$")
+
+
+def _reassemble_user_turns(text: str) -> str | None:
+    """Return the USER-turn-only reassembly of a folded multi-turn conversation, or
+    ``None`` when ``text`` is not a multi-turn fold (so single-turn scans are
+    unaffected). Continuation lines of a multi-line user message are kept with that
+    user turn; non-user turns are dropped."""
+    if "[user]:" not in text or "\n" not in text:
+        return None
+    role_lines = 0
+    user_parts: list[str] = []
+    cur_role: str | None = None
+    for ln in text.split("\n"):
+        m = _ROLE_LINE_RE.match(ln)
+        if m:
+            role_lines += 1
+            cur_role = m.group(1)
+            if cur_role == "user":
+                user_parts.append(m.group(2))
+        elif cur_role == "user":
+            user_parts.append(ln)  # continuation of a multi-line user message
+    # Require a real multi-turn fold: >=2 role-labelled turns and >=2 user segments.
+    if role_lines < 2 or len(user_parts) < 2:
+        return None
+    reassembled = " ".join(p for p in user_parts if p).strip()
+    return reassembled or None
+
+
 def _segment_token(
     token: str,
     vocab: frozenset[str] = _DEOBFUSCATION_VOCAB,
@@ -671,8 +707,12 @@ class InputScanner:
         text: str,
         is_rag: bool,
         toxicity_threshold: float | None = None,
+        _multiturn: bool = True,
     ) -> ScanVerdict:
-        """Synchronous prompt scanning logic, run in a thread to avoid blocking."""
+        """Synchronous prompt scanning logic, run in a thread to avoid blocking.
+
+        ``_multiturn`` guards the G6 user-turn reassembly re-scan so the derived
+        view is scanned exactly once (no unbounded recursion)."""
         if not text:
             return ScanVerdict(
                 action="allow",
@@ -856,6 +896,35 @@ class InputScanner:
         toxicity_verdict = self._check_toxicity(text, toxicity_threshold)
         if toxicity_verdict is not None:
             return toxicity_verdict
+
+        # G6: multi-turn / crescendo split injection. Everything above passed, so if
+        # `text` is a folded conversation, reassemble the USER turns only (the
+        # attacker-driven channel) and re-scan that contiguous view through the full
+        # pipeline. Honor ONLY a genuine attack block (never a length/repetition
+        # `dos` artifact of concatenation, and never a downgrade). Recursion is
+        # guarded by `_multiturn` so the reassembled view is scanned exactly once.
+        if _multiturn:
+            reassembled = _reassemble_user_turns(text)
+            if reassembled and reassembled != text:
+                mt = self._scan_prompt_sync(
+                    reassembled, is_rag, toxicity_threshold, _multiturn=False
+                )
+                if mt.action == "block" and mt.threat_type != "dos":
+                    LOG.warning(
+                        "Multi-turn split %s detected across user turns (patterns=%s)",
+                        mt.threat_type, mt.matched_patterns,
+                    )
+                    return ScanVerdict(
+                        action="block",
+                        threat_type=mt.threat_type or "prompt_injection",
+                        confidence=mt.confidence,
+                        detail=(
+                            f"Multi-turn split {mt.threat_type or 'injection'} across "
+                            f"user turns: {mt.detail}"
+                        ),
+                        matched_patterns=mt.matched_patterns,
+                        tier="tier_1_multiturn",
+                    )
 
         return ScanVerdict()
 
