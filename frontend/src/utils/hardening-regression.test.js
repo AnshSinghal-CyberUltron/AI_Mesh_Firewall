@@ -19,10 +19,9 @@ const SRC = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => readFileSync(join(SRC, rel), "utf8");
 const has = (rel, s) => read(rel).includes(s);
 
-// --- Chart migration: these surfaces were migrated recharts -> ECharts (items 1, 9-15).
-// A regression would re-introduce a recharts import. (SubmoduleResultsPage /
-// SubmoduleDetailPage / AIMeshFirewallOverview are intentionally excluded — their
-// recharts removal is tracked separately as item 24.)
+// --- Chart migration: these surfaces were migrated recharts -> ECharts (items 1, 9-15, 24).
+// A regression would re-introduce a recharts import. (AIMeshFirewallOverview and the
+// orphaned SubmoduleDetailPage are the remaining item-24 recharts removals.)
 const MIGRATED_NO_RECHARTS = [
   "components/PolicyAnalyticsPanel.jsx",
   "components/LogDetailPage.jsx",
@@ -30,6 +29,7 @@ const MIGRATED_NO_RECHARTS = [
   "components/OWASPStatsPanel.jsx",
   "components/Firewall12EnterprisePage.jsx",
   "components/RAGPipelineTelemetry.jsx",
+  "components/SubmoduleResultsPage.jsx",
 ];
 for (const f of MIGRATED_NO_RECHARTS) {
   test(`chart-migration: ${f} has no recharts import`, () => {
