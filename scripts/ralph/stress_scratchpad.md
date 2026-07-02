@@ -1003,6 +1003,27 @@
         present; health 200) — LIVE.
         NINE confirmed-live leaks fixed (G40-G46, G49, G50) + G48 defense-in-depth + 2 documented
         tradeoffs. G50 also fixed a real correctness bug in my own prior G44 fix (underscore over-strip).
+      ★★ G51 — RENDER-INVISIBLE HTML SPLIT LEAK 2026-07-02 (extends the G44/G50 rendering-layer class) ★★
+        THREAT: a markdown/HTML renderer DROPS HTML comments (<!-- -->) and EMPTY/self-closing tags
+        (<span></span>, <b></b>, <br/>), so an attacker splits a value with them to evade byte-level
+        matching while it visually reassembles: 12<!-- x -->3-45-6789 / 1<span></span>23-45-6789 / a
+        sk_live_<!-- -->abc… credential all rendered to the value but egressed with action=allow (raw).
+        FIX: extended strip_interleaved_emphasis (patterns.py, _RENDER_INVISIBLE_HTML) to also remove
+        render-invisible HTML for DETECTION, and neutralize_markdown_split_pii (output_guard.py,
+        _RENDER_INVIS_SEP token regex + _RENDER_INVIS_STRIP_RE) for NEUTRALIZATION. KEY bug found while
+        wiring: the neutralizer fast-path guard only checked for * _ ` — an HTML-only split (no emphasis
+        chars) skipped it entirely; fixed the guard to also trigger on '<'. Bounded regexes (.*? closed
+        by -->, [^>]* negated) -> ReDoS-safe (<1ms on 200KB comment/tag floods). Benign HTML with VISIBLE
+        content (<b>123</b>), space-separated comments, joined words are strict no-ops (the token regex
+        needs word chars ADJACENT to the invisible separator + the stripped form must detect as a value).
+        VERIFY: 5 split shapes (comment/empty-span/empty-b/self-close/comment-cred) -> [PII_REDACTED],
+        rendered egress value-free; 6 benign HTML unchanged. FROZEN: G51 (5 masked + 5 FP-floor). Gate:
+        golden+streaming 360 passed × 3 in-process; broad pattern/scanner/pii 282 green. commit a51330df.
+        REDEPLOYED (rollback-pre-g51; markers present; health 200) — LIVE.
+        TEN confirmed-live leaks fixed (G40-G46, G49, G50, G51) + G48 defense-in-depth + 2 documented
+        tradeoffs. The rendering-layer obfuscation class (G44/G50/G51) has now yielded 3 leaks — worth a
+        dedicated ATTACK_LANDSCAPE note: "the firewall must normalize what the CLIENT RENDERS, not just
+        the raw egress bytes" (emphasis, credential/IP under emphasis, render-invisible HTML).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
