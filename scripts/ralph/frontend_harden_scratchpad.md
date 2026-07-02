@@ -75,7 +75,18 @@
       all 8, 0 console errors + 0 net-fails when backend calm; dark+light panel shots verified (tab switch
       Attack↔Trust works, SAFE/ATTACK badges legible, Run controls, sliders, helpers). 500 bursts = known F3
       env PG "too many clients", not code. recharts still removed. Item 9 fully complete.
-- [ ] 10. OutputGuardrailControls/Charts - [ ] 11. AttackSimulatorPanel - [ ] 12. PolicyManagement/Analytics
+- [x] 10. OutputGuardrailControls/Charts - [ ] 11. AttackSimulatorPanel - [ ] 12. PolicyManagement/Analytics
+      item10 DONE (module 1.7): OutputGuardrailControls = GOLD-STANDARD semantic OKLCH tokens
+      (text-foreground/muted-foreground/bg-card/text-destructive/bg-warn/text-primary) → 0 edits, theme-correct
+      by construction; verified controls interactive (toggle Flag pill → Save enables: disabledBefore=true→
+      after=false), Hallucination row disabled-pills state correct, load/save(400/403)/reset/dirty all sound,
+      no-leak (config only). OutputGuardrailEngineCard = 3 inverted-slate contrast spots fixed; honest
+      Idle/Active/Error states, real /api/security/threat-feed data w/ canonical actionBucket color-map, counts
+      only (no-leak). OutputGuardrailCharts = already ECharts (item1/iter3), 0 recharts confirmed, verify-only.
+      GATE lint+build+detector(0 both). LIVE both themes @1440/1024/768/375: overflow=0 all 8, panels legible
+      both themes + 375 stacks clean. 500/401 cascades = F3 env (auth/me 500→downstream 401). Deferred-LOW:
+      EngineCard "0F" flagged counter is structurally always-0 (flag folds into redacted bucket) — honest 0,
+      logged not changed.
 - [ ] 13. LogViewer/LogDetailPage - [ ] 14. OWASPStatsPanel - [ ] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
 - [ ] 17. VERIFY-ONLY (log, don't edit): MCPConnectorPanel, ModelConnectionPanel, pipeline-trace cards
 - [ ] 18. Shared ui/* primitives (Button/Card/Dialog/Input/Select/Table/Tabs/Badge/Toast/Tooltip/…): both themes, API-compatible restyle

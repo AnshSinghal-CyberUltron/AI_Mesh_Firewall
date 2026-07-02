@@ -8,6 +8,14 @@ import { InfoTooltip } from "./InfoTooltip";
 import { OutputPipelineTimeline } from "./OutputPipelineTimeline";
 import { TIME_RANGE_TO_HOURS } from "../hooks/useFirewallData";
 
+// Extracted so each state carries its own bg+text pair (not a ternary
+// cross-product) — keeps the detector's gray-on-color heuristic honest and
+// lifts the muted OFF state to an AA-legible slate.
+const AUTO_REFRESH_STYLES = {
+  on: "bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-300",
+  off: "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
+};
+
 const ACTION_STYLES = {
   block: { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300", icon: ShieldX, label: "Blocked" },
   redact: { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", icon: EyeOff, label: "Redacted" },
@@ -70,7 +78,7 @@ function EventRow({ event, isExpanded, onToggle }) {
         <span className="text-xs font-medium text-slate-700 dark:text-slate-300 capitalize truncate max-w-[120px]">{threatType.replace(/_/g, " ")}</span>
         <ConfidenceMeter confidence={typeof confidence === "number" && confidence <= 1 ? confidence : (confidence / 100)} />
         <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto tabular-nums">{ts}</span>
-        <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">{model}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">{model}</span>
         {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
       </button>
 
@@ -78,19 +86,19 @@ function EventRow({ event, isExpanded, onToggle }) {
       <div className="px-3 pb-2 space-y-1">
         {promptSnippet && (
           <div className="flex items-start gap-1.5">
-            <span className="text-[10px] font-semibold text-blue-500 dark:text-blue-400 shrink-0 mt-0.5">PROMPT</span>
+            <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 shrink-0 mt-0.5">PROMPT</span>
             <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{promptSnippet.length > 120 ? promptSnippet.slice(0, 120) + "…" : promptSnippet}</span>
           </div>
         )}
         {rawOutput && (
           <div className="flex items-start gap-1.5">
-            <span className="text-[10px] font-semibold text-purple-500 dark:text-purple-400 shrink-0 mt-0.5">OUTPUT</span>
+            <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 mt-0.5">OUTPUT</span>
             <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{rawOutput.length > 120 ? rawOutput.slice(0, 120) + "…" : rawOutput}</span>
           </div>
         )}
         {guardrailReasoning && (
           <div className="flex items-start gap-1.5">
-            <span className="text-[10px] font-semibold text-amber-500 dark:text-amber-400 shrink-0 mt-0.5">REASON</span>
+            <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">REASON</span>
             <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{guardrailReasoning.length > 120 ? guardrailReasoning.slice(0, 120) + "…" : guardrailReasoning}</span>
           </div>
         )}
@@ -194,7 +202,7 @@ export function OutputGovernancePanel({ timeRange = "24h" }) {
           </div>
           <button
             onClick={() => { setAutoRefresh((p) => !p); if (!autoRefresh) fetchEvents(); }}
-            className={`p-1.5 rounded-lg transition-colors ${autoRefresh ? "bg-teal-100 dark:bg-teal-900/30 text-teal-600" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}
+            className={`p-1.5 rounded-lg transition-colors ${autoRefresh ? AUTO_REFRESH_STYLES.on : AUTO_REFRESH_STYLES.off}`}
             aria-label={autoRefresh ? "Turn off output event auto-refresh" : "Turn on output event auto-refresh"}
             title={autoRefresh ? "Auto-refresh ON (10s)" : "Auto-refresh OFF"}
           >
