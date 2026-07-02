@@ -83,11 +83,14 @@
         ASCII) BEFORE the Cf-drop, 1->1 position-preserving so the index map masks the match back onto the
         original tag bytes. detect/redact now handle tag-smuggled values on input AND output paths. No-op on
         plain/legit-unicode. 5 golden cases frozen. Full gateway 1063 passed; golden 88 passed/7 skipped 3x.
-      G19 (NEW, reproduced 2026-07-02): small-caps injection. IPA small-caps letters (ɪɢɴᴏʀᴇ...) are not
-        NFKC-folded to ASCII, so small-caps "ignore all previous instructions" bypasses. Fix: add a small-caps
-        (and other letter-like variant) fold table to scanner._normalize_unicode (like _HOMOGLYPH_TABLE).
-        Lower priority than G18. Reversed-text also bypasses but deprioritized (models rarely execute reversed
-        instructions reliably; whole-text reversal scanning risks FPs).
+      G19 DONE 2026-07-02: small-caps injection. IPA small-caps letters (ɪɢɴᴏʀᴇ…) not NFKC-folded to ASCII;
+        LLM reads them as normal text -> small-caps "ignore all previous instructions" bypassed. Fixed in
+        scanner.py: _SMALLCAP_TABLE folds each small-cap to its ASCII look-alike in _normalize_unicode (like
+        _HOMOGLYPH_TABLE). FP-safe (benign IPA prose forms no injection phrase). 4 golden frozen. Full gateway
+        1063 passed; golden 92 passed/7 skipped 3x.
+      G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
+        current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
+        would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
       G10 DONE 2026-07-02: tier-2 semantic redact was a byte no-op. Guard model flags PII/secret with no
         deterministic regex (free-text names, non-standard card/ID, passphrases) -> redact_all no-op ->
         redacted==original -> value egressed verbatim (relabeled flag). Fixed in output_guard.py:
