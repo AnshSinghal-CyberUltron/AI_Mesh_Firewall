@@ -46,7 +46,7 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 
 | cursor-ralph-iter21 | `scripts/mcp_multi_org_harness.py`, `mcp-parallel/findings/p9-28/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P9.28 concurrency 2nd-oracle corroboration + #29 saturation boundary | 2026-07-02T10:05:00Z | released |
 
-| cursor-ralph-iter22 | `scripts/mcp_multi_org_harness.py` (SUSTAINED phase), `mcp-parallel/findings/p9-29/CURSOR_*`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P9.29 CURSOR angle — broker sandbox reuse/pooling + pids cgroup limits + no orphan/503 storm under sustained load (complementary to claude-mcp-item29 `mcp_load_live.py`) | 2026-07-02T10:22:00Z | active |
+| cursor-ralph-iter22 | `scripts/mcp_multi_org_harness.py` (SUSTAINED phase), `mcp-parallel/findings/p9-29/CURSOR_*`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P9.29 CURSOR angle — broker sandbox reuse/pooling + pids cgroup limits + no orphan/503 storm under sustained load (complementary to claude-mcp-item29 `mcp_load_live.py`) | 2026-07-02T10:22:00Z | released |
 
 | claude-ralph-stress | `gateway/ai_mesh_gateway/{policy_engine,output_guard,bedrock_scanner,scanner,patterns,typed_placeholder_redactor,context_guard}.py`, `gateway/tests/golden/**`, `frontend/src/components/{ModelConnectionPanel,OutputPipelineTimeline}.jsx`, `scripts/ralph/stress_scratchpad.md`, `scripts/ralph/precommit-secret-scan.sh`, `docs/stress/**` | R0–R7 chat-pipeline adversarial stress + client E2E + trace-card polish | 2026-07-02T09:30:43Z | active |
 

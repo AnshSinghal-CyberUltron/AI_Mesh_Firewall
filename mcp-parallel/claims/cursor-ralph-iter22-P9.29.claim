@@ -14,4 +14,5 @@ note: |
   pids.current < pids_limit throughout, no orphan sandboxes spawned, no broker 503 storm,
   recovery after load. Does NOT touch scripts/mcp_load_live.py or gateway/broker routes.
 since: 2026-07-02T10:22:00Z
-status: active
+status: released
+commit: b92cd3af
