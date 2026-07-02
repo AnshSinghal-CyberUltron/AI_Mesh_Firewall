@@ -411,6 +411,51 @@ def _collapse_single_letter_runs(tokens: list[str]) -> list[str]:
     return result
 
 
+# G3: intra-word space-splitting ("ig no re all previous instructions"). Unlike
+# single-letter runs (handled above), the attacker splits a keyword into 2-4 char
+# fragments that _collapse_single_letter_runs leaves alone and _segment_token never
+# reaches (each fragment is < _CONCAT_WORD_MIN_LENGTH). We glue runs of consecutive
+# short fragments and re-segment them against the injection vocab. Because the vocab
+# is curated to injection terms (not general English), a benign short-word run does
+# NOT segment and its originals are kept verbatim => no false positives. The glue
+# length is capped, so this stays linear/ReDoS-safe.
+_SPLIT_FRAG_MAXLEN: int = 4
+_SPLIT_RUN_MIN: int = 3
+_SPLIT_GLUE_MAXLEN: int = 48
+
+
+def _reassemble_split_words(tokens: list[str]) -> list[str]:
+    """Glue runs of >= _SPLIT_RUN_MIN consecutive short fragments and re-segment them
+    IN PLACE, reconstructing space-split injection keywords; leave everything else as-is."""
+    out: list[str] = []
+    i, n = 0, len(tokens)
+    while i < n:
+        if len(tokens[i]) <= _SPLIT_FRAG_MAXLEN:
+            j = i
+            glued = ""
+            while (
+                j < n
+                and len(tokens[j]) <= _SPLIT_FRAG_MAXLEN
+                and len(glued) + len(tokens[j]) <= _SPLIT_GLUE_MAXLEN
+            ):
+                glued += tokens[j]
+                j += 1
+            segs = (
+                _segment_token(glued)
+                if (j - i) >= _SPLIT_RUN_MIN and len(glued) >= _CONCAT_WORD_MIN_LENGTH
+                else None
+            )
+            if segs and len(segs) >= 2:
+                out.extend(segs)          # accepted a real injection-vocab segmentation
+            else:
+                out.extend(tokens[i:j])   # benign run -> keep originals verbatim
+            i = j
+        else:
+            out.append(tokens[i])
+            i += 1
+    return out
+
+
 def _segment_token(
     token: str,
     vocab: frozenset[str] = _DEOBFUSCATION_VOCAB,
@@ -965,7 +1010,9 @@ class InputScanner:
         """
         unified = _normalize_unicode(text)
         normalized = _normalize_leet(unified.lower())
-        tokens = _collapse_single_letter_runs(re.findall(r"[a-zA-Z]+", normalized))
+        tokens = _reassemble_split_words(
+            _collapse_single_letter_runs(re.findall(r"[a-zA-Z]+", normalized))
+        )
 
         result_tokens: list[str] = []
         for token in tokens:
