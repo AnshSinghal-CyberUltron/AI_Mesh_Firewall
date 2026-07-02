@@ -922,6 +922,29 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   fails CLOSED. +11 tests (drive the REAL floor). Gate: 11 + 1316 gateway passed, 0 failed; broker
   `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p20-ipleak-result-floor/`.
 
+- **CHG-0075** (2026-07-02) — G2 item 2 / 1.4 (**devil's-advocate on the detect_* completeness**: does
+  the MCP tier-1 scan run EVERY detector?), HIGH: `mcp_scan_orchestrator._scan_text_tier1` ran
+  `detect_pii` + `detect_secrets` + `detect_ip_leakage` but **NOT `detect_credential_exposure`**.
+  `CREDENTIAL_EXPOSURE_PATTERNS` is a SEPARATE dict (`bearer_token`, `connection_string`,
+  `exposed_password`, `private_key_block`, `github_fine_grained_pat`, `stripe_key`, `azure_storage_key`,
+  `twilio_api_key`, `gcp_service_account_key`, `slack_token`, `jwt`) NOT read by `detect_secrets`.
+  `redact_all` masks it, but the MCP scan uses `detect_*` to DECIDE enforcement — so a credential whose
+  ONLY match was a CREDENTIAL_EXPOSURE kind (Stripe `sk_live_`, Twilio `SK<32hex>`, Azure `AccountKey=`, a
+  DB connection string's password) was never DETECTED → drove no enforcement → egressed RAW on a tool
+  RESULT (verified end-to-end at the default `tag` posture) and passed unblocked in tool ARGS to a
+  possibly-untrusted upstream. Same wrong-dict class as CHG-0071. **Part B:** 7 of those keys
+  (`github_fine_grained_pat`, `stripe_key`, `azure_storage_key`, `twilio_api_key`,
+  `gcp_service_account_key`, `slack_token`, `jwt`) had NO `COMPLIANCE_TAG_MAP` entry →
+  `get_compliance_tags` returned `[]` → never tagged `SECRET` (breaks enforce-by-tag + audit + the arg
+  force-block's SECRET-tag path). FIX: (a) `_scan_text_tier1` imports + calls
+  `detect_credential_exposure(text)`, folded into the detect branch (`kinds`/`matched_kinds`/byte-verify
+  `_detected_values` + threat precedence `pii > secret/credential > ip_leakage` — a credential exposure is
+  `threat_type="secret"` so it drives the result redact floor AND the arg credential force-block); (b)
+  `COMPLIANCE_TAG_MAP` += the 7 keys → `["SECRET","SOC2"]`. Net: Stripe/Twilio/Azure/conn-string/GCP-SA in
+  results MASKED + tagged `SECRET,SOC2`; same in args force-blocked; bearer/jwt/slack unchanged; benign
+  no-FP. +11 tests. Gate: 11 + 1327 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed.
+  Evidence: `mcp-parallel/findings/backstop-p2-cred-exposure-mcp-scan/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

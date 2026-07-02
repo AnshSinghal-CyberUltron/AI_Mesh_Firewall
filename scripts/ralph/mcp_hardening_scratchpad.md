@@ -216,6 +216,21 @@
       results MASKED under default posture; file-path-only stays raw; network|PII + file-path fails CLOSED.
       +11 tests (drive the REAL floor). Gate: 11 + 1316 gateway passed, 0 failed; broker -k "not websocket"
       108 passed. Evidence: mcp-parallel/findings/backstop-p20-ipleak-result-floor/finding.md.
+      CHG-0075 (2026-07-02, HIGH — devil's-advocate on the detect_* completeness): the MCP tier-1 scan
+      (mcp_scan_orchestrator._scan_text_tier1) ran detect_pii/secrets/ip_leakage but NOT
+      detect_credential_exposure. CREDENTIAL_EXPOSURE_PATTERNS is a SEPARATE dict (bearer/connection_string/
+      exposed_password/private_key_block/github_fine_grained_pat/stripe_key/azure_storage_key/twilio_api_key/
+      gcp_service_account_key/slack_token/jwt) NOT read by detect_secrets. redact_all masks it, but the MCP
+      scan uses detect_* to DECIDE → a credential whose ONLY match was a CREDENTIAL_EXPOSURE kind (Stripe
+      sk_live_, Twilio SK<32hex>, Azure AccountKey=, a DB conn-string password) was never DETECTED → egressed
+      RAW on a tool RESULT (verified E2E at default `tag`) and passed unblocked in tool ARGS to an untrusted
+      upstream. Same wrong-dict class as CHG-0071. PART B: 7 of those keys had NO COMPLIANCE_TAG_MAP entry →
+      get_compliance_tags [] → never tagged SECRET. FIX: (a) _scan_text_tier1 imports+calls
+      detect_credential_exposure, folded into the detect branch (kinds/matched_kinds/byte-verify + threat
+      precedence pii>secret/cred>ip_leakage → drives result floor + arg force-block); (b) COMPLIANCE_TAG_MAP
+      += the 7 keys → ["SECRET","SOC2"]. Net: Stripe/Twilio/Azure/conn-string/GCP-SA in results MASKED+tagged
+      SECRET; same in args force-blocked; benign no-FP. +11 tests. Gate: 11 + 1327 gateway passed, 0 failed;
+      broker -k "not websocket" 108 passed. Evidence: mcp-parallel/findings/backstop-p2-cred-exposure-mcp-scan/finding.md.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

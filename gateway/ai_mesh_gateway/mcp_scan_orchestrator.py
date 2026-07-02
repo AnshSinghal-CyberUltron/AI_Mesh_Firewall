@@ -18,7 +18,14 @@ from typing import Any
 from ai_mesh_shared.mcp_compliance_tags import tags_for_preset_or_entity
 
 from mcp_scan_targets import _safe_json, extract_and_bind
-from patterns import detect_ip_leakage, detect_pii, detect_secrets, get_compliance_tags, redact_all
+from patterns import (
+    detect_credential_exposure,
+    detect_ip_leakage,
+    detect_pii,
+    detect_secrets,
+    get_compliance_tags,
+    redact_all,
+)
 from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies
 
 LOG = logging.getLogger("gateway.mcp_scan")
@@ -323,9 +330,28 @@ async def _scan_text_tier1(
     # path, but the MCP tool-call scan only ran detect_pii/detect_secrets — so an
     # internal host/path in a tool RESULT was never detected/tagged/redacted.
     ip_leak = detect_ip_leakage(text)
-    if pii or secrets or ip_leak:
-        kinds = list(pii.keys()) + list(secrets.keys()) + list(ip_leak.keys())
-        threat = "pii" if pii else ("secret" if secrets else "ip_leakage")
+    # CHG-0075: also run detect_credential_exposure. CREDENTIAL_EXPOSURE_PATTERNS is a
+    # SEPARATE dict (bearer_token, connection_string w/ password, jwt, stripe_key,
+    # twilio_api_key, azure_storage_key, gcp_service_account_key, slack_token,
+    # github_fine_grained_pat) NOT read by detect_secrets. redact_all masks it, but the
+    # MCP tier-1 scan only ran detect_pii/secrets/ip_leak — so a credential whose ONLY
+    # match is a CREDENTIAL_EXPOSURE kind (e.g. a Stripe/Twilio/Azure key or a DB
+    # connection string's password) was never DETECTED, so it drove no enforcement and
+    # egressed RAW on a tool RESULT (and passed unblocked in tool ARGS to an untrusted
+    # upstream). Same wrong-dict class as CHG-0071. Folded into the secret bucket.
+    cred_exp = detect_credential_exposure(text)
+    if pii or secrets or ip_leak or cred_exp:
+        kinds = (
+            list(pii.keys()) + list(secrets.keys())
+            + list(ip_leak.keys()) + list(cred_exp.keys())
+        )
+        # threat precedence: pii > secret/credential > ip_leakage (a credential
+        # exposure is a "secret" for _findings_have_secret_or_pii / _findings_have_
+        # credential, so it drives the redact floor AND the arg credential force-block).
+        threat = (
+            "pii" if pii
+            else ("secret" if (secrets or cred_exp) else "ip_leakage")
+        )
         findings.append(
             McpFinding(
                 entity_type=kinds[0] if kinds else "PII",
@@ -354,7 +380,8 @@ async def _scan_text_tier1(
             # whose raw form is always altered) is never a substring of the scrub, so
             # this does NOT false-block (verified over the full PII/secret battery).
             _detected_values = (
-                list(pii.values()) + list(secrets.values()) + list(ip_leak.values())
+                list(pii.values()) + list(secrets.values())
+                + list(ip_leak.values()) + list(cred_exp.values())  # CHG-0075
             )
             if any(v and str(v) in candidate for v in _detected_values):
                 blocked = True

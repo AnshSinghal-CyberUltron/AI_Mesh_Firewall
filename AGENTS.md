@@ -601,6 +601,19 @@
     file-path-only stays raw; network|PII + file-path fails CLOSED. +11 tests (drive the REAL floor). Gate:
     11 + 1316 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
     mcp-parallel/findings/backstop-p20-ipleak-result-floor/.
+  - CHG-0075 (2026-07-02) — G2 item 2 / 1.4 (devil's-advocate on detect_* completeness), HIGH: the MCP
+    tier-1 scan (mcp_scan_orchestrator._scan_text_tier1) ran detect_pii/secrets/ip_leakage but NOT
+    detect_credential_exposure. CREDENTIAL_EXPOSURE_PATTERNS is a SEPARATE dict (Stripe/Twilio/Azure-storage/
+    GCP-SA/DB-connection-string/bearer/jwt/slack/gh-fine-grained-PAT) NOT read by detect_secrets → a
+    credential whose ONLY match was a CREDENTIAL_EXPOSURE kind was never DETECTED → egressed RAW on a tool
+    RESULT (verified E2E at default `tag`) and passed unblocked in tool ARGS to an untrusted upstream. Same
+    wrong-dict class as CHG-0071. PART B: 7 of those keys had NO COMPLIANCE_TAG_MAP entry → never tagged
+    SECRET. FIX: (a) _scan_text_tier1 imports+calls detect_credential_exposure, folded into the detect branch
+    (kinds/matched_kinds/byte-verify + threat precedence pii>secret/cred>ip_leakage → drives result floor +
+    arg force-block); (b) COMPLIANCE_TAG_MAP += the 7 keys → ["SECRET","SOC2"]. Net: Stripe/Twilio/Azure/
+    conn-string/GCP-SA in results MASKED+tagged SECRET; same in args force-blocked; benign no-FP. +11 tests.
+    Gate: 11 + 1327 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
+    mcp-parallel/findings/backstop-p2-cred-exposure-mcp-scan/.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)
