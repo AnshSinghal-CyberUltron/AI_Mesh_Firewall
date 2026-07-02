@@ -118,10 +118,22 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
   const [policies, setPolicies] = useState([]);
   const [policyLoading, setPolicyLoading] = useState(true);
 
-  const totalEvents = firewallData.socKpis?.total_threats || firewallData.threatFeed.length || 0;
-  const blocked = firewallData.socKpis?.blocked || 0;
-  const redacted = firewallData.socKpis?.redacted || 0;
-  const critical = firewallData.socKpis?.critical_count || 0;
+  // Module 1.2 KPIs are SCOPED to this module's own security_scan evidence — the same
+  // per-module scoping the generic module pages + module 1.4 use — NOT the org-wide
+  // soc-kpis totals. `useFirewallData("1.2").socKpis` is the WHOLE-MESH SOC feed
+  // (soc-kpis has no source filter), so binding to `socKpis.total_threats` showed the
+  // ~68k mesh-wide count instead of this module's ~900 events, contradicting the evidence
+  // list below. Use the server's scoped `threatFeedCount` + per-action aggregate.
+  const actionCounts = firewallData.threatFeedActionCounts;
+  const totalEvents = firewallData.threatFeedCount ?? firewallData.threatFeed.length ?? 0;
+  const blocked = actionCounts?.block ?? 0;
+  const redacted = actionCounts?.redact ?? 0;
+  // Critical = high-risk events within THIS module's evidence feed (no scoped critical
+  // count is exposed by the API, so derive it from the same feed the evidence list shows).
+  const critical = (firewallData.threatFeed || []).filter((ev) => {
+    const score = Number(ev.security_risk_score ?? ev.severity);
+    return Number.isFinite(score) ? score >= 80 : String(ev.severity || "").toLowerCase() === "critical";
+  }).length;
   const successRate = totalEvents > 0 ? ((Math.max(totalEvents - blocked - redacted, 0) / totalEvents) * 100) : null;
 
   const trendData = firewallData.timeSeriesData || [];
