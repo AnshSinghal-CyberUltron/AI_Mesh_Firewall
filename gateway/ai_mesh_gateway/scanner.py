@@ -162,6 +162,26 @@ ATTACK_PATTERNS: dict[str, list[str]] = {
         r"\b(?:translate|leak|dump|paste|exfiltrate|expose|disclose)\s+(?:me\s+)?(?:your|the)\s+(?:full\s+|entire\s+|complete\s+|system\s+|initial\s+|original\s+)?(?:system\s+)?(?:prompt|instructions?)",
         r"(?:content|safety|ethical|moderation)\s+(?:guideline|rule|filter|polic|restriction)s?\s+(?:do\s+not|don'?t|no\s+longer)\s+apply",
         r"\b(?:you\s+are|act\s+as|become|pretend\s+(?:you\s+are|to\s+be))\s+(?:an?\s+)?(?:ai|assistant|model|bot)\s+(?:with\s+)?no\s+(?:ethical\s+|content\s+|safety\s+)?(?:constraint|restriction|filter|limit|guideline)",
+        # G29: three MORE semantic classes, each held to the same evidence bar as G28.
+        #   (1) encode-to-evade: the aidefence oracle CONFIRMS this class as an
+        #       "encoding_attack" (an explicit instruction to encode output so a
+        #       filter/scanner cannot read it). Gated on encode-token + evasion-intent
+        #       so plain "encode the payload in base64" (benign transport) does NOT match.
+        #   (2) system-message/-instructions extraction: a direct, low-FP EXTENSION of
+        #       the already-frozen "system prompt" extraction family above (adds the
+        #       "system message" / "system instructions" phrasings; "summarize" verb).
+        #   (3) become-an-unrestricted-<entity>: an explicit jailbreak-persona demand
+        #       requiring BOTH a strong unshackle adjective AND an ai/model/oracle noun,
+        #       so "become an unrestricted free spirit" (self-help) does NOT match.
+        # The weaker fictional-/hypothetical-framing and "forget your training" forms
+        # were DELIBERATELY left to Tier-2 semantics: the oracle marked them safe and
+        # they collide with legitimate creative-writing / coaching / business-hypothetical
+        # inputs, so a Tier-1 hard block would be a false positive. Verified ZERO FP on a
+        # creative+coaching+technical+business benign corpus. All bounded => ReDoS-safe.
+        r"\b(?:base64|rot-?13|hex|binary|a\s+cipher|encoded?)\b[^.\n]{0,40}?\b(?:bypass|evade|circumvent|get\s+past|so\s+(?:the\s+)?(?:filter|scanner|detection|guard)|can(?:'?t|not)\s+(?:read|detect|see)|hide\s+from|avoid\s+detection)",
+        r"\b(?:bypass|evade|circumvent|get\s+past|sneak\s+past)\s+(?:the\s+)?(?:content|safety|security|moderation|ai)?\s*(?:filter|detection|moderation|scanner|guardrail|censorship)s?\b",
+        r"\b(?:print|show|reveal|repeat|display|leak|dump|give\s+me|summar(?:ize|ise))\s+(?:me\s+)?(?:the\s+)?(?:first\s+\d+\s+\w+\s+of\s+)?(?:your|the)\s+system\s+(?:prompt|message|instructions?)",
+        r"\bbecome\s+(?:an?\s+)?(?:unrestricted|unfiltered|unchained|unbound|jailbroken|uncensored|lawless|rule-?free)\s+(?:ai|assistant|model|bot|oracle|version|entity|being|persona|agent)\b",
         # Chat-template / role-delimiter spoofing — a user payload that smuggles a
         # forged system/developer turn via ChatML or Llama control tokens. These
         # have no natural place in a genuine user message; the quoted-mention
