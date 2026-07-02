@@ -147,6 +147,21 @@ ATTACK_PATTERNS: dict[str, list[str]] = {
         r"repeat\s+(your|the)\s+(initial|system|original)\s+(prompt|instructions)",
         r"print\s+(your|the)\s+(system\s+)?prompt",
         r"output\s+(your|the)\s+(system\s+)?prompt",
+        # G28: common SEMANTIC jailbreak / prompt-extraction phrasings that the exact-
+        # keyword patterns above miss (Tier-2 is the primary catch for semantics, but
+        # these forms are frequent + low-FP, so Tier-1 defense-in-depth is warranted).
+        # Cross-validated against the independent aidefence oracle (flagged high-conf
+        # context_manipulation) and against a benign corpus (zero false positives:
+        # "the safety guidelines apply", "bypass the CDN cache", "no length limit",
+        # "translate the following paragraph", "act as a helpful assistant" — none match).
+        # All bounded quantifiers => linear / ReDoS-safe.
+        r"\bjailbr(?:oke|oken)\b",
+        r"everything\s+(?:written\s+)?(?:above|before)\s+this\s+(?:line|message|prompt|point)",
+        r"\b(?:answer|respond|reply|talk|speak)\s+(?:to\s+me\s+)?(?:without|with\s+no)\s+(?:any\s+)?(?:filter|restriction|guardrail|censor|limitation)",
+        r"\bno\s+(?:ethical|moral|content|safety)\s+(?:constraint|restriction|guideline|boundar|limit|filter)",
+        r"\b(?:translate|leak|dump|paste|exfiltrate|expose|disclose)\s+(?:me\s+)?(?:your|the)\s+(?:full\s+|entire\s+|complete\s+|system\s+|initial\s+|original\s+)?(?:system\s+)?(?:prompt|instructions?)",
+        r"(?:content|safety|ethical|moderation)\s+(?:guideline|rule|filter|polic|restriction)s?\s+(?:do\s+not|don'?t|no\s+longer)\s+apply",
+        r"\b(?:you\s+are|act\s+as|become|pretend\s+(?:you\s+are|to\s+be))\s+(?:an?\s+)?(?:ai|assistant|model|bot)\s+(?:with\s+)?no\s+(?:ethical\s+|content\s+|safety\s+)?(?:constraint|restriction|filter|limit|guideline)",
         # Chat-template / role-delimiter spoofing — a user payload that smuggles a
         # forged system/developer turn via ChatML or Llama control tokens. These
         # have no natural place in a genuine user message; the quoted-mention
