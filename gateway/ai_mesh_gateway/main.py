@@ -1380,8 +1380,17 @@ def _extract_scannable_output_text(completion) -> str:
         # to text (stream parity — secure_streaming FIX-C) so list-shaped content is
         # scanned instead of skipped (an all-list answer otherwise yields empty scan
         # text and the output guard is bypassed entirely).
-        for _v in (_content_to_text(msg.get("content")), msg.get("reasoning_content"), msg.get("refusal")):
-            if isinstance(_v, str) and _v:
+        # G61: `reasoning_content` / `refusal` can ALSO be non-str (structured reasoning
+        # blocks — a list of dicts, or a dict; Anthropic-style thinking uses a `thinking`
+        # key, not `text`). Coerce via _tool_arg_to_text (json.dumps for any non-str) so
+        # PII in a structured reasoning/refusal channel is scanned regardless of shape —
+        # these are text-only channels (no image parts) so JSON coercion is safe.
+        for _v in (
+            _content_to_text(msg.get("content")),
+            _tool_arg_to_text(msg.get("reasoning_content")),
+            _tool_arg_to_text(msg.get("refusal")),
+        ):
+            if _v:
                 parts.append(_v)
         # R12 (#16): audio-output transcript channel.
         _au = msg.get("audio")
@@ -1418,7 +1427,9 @@ def _neutralize_secondary_output_channels(msg: dict) -> None:
     _set_completion_response_text (enforcement-only — the allow path never sets
     the text, so legitimate reasoning/tool_calls survive)."""
     try:
-        if isinstance(msg.get("reasoning_content"), str) and msg.get("reasoning_content"):
+        # G61: blank a TRUTHY reasoning_content of ANY type (a structured list/dict
+        # reasoning channel was left verbatim by the str-only check -> post-redact leak).
+        if msg.get("reasoning_content"):
             msg["reasoning_content"] = ""
         for tc in (msg.get("tool_calls") or []):
             if isinstance(tc, dict) and isinstance(tc.get("function"), dict):
@@ -1435,7 +1446,8 @@ def _neutralize_secondary_output_channels(msg: dict) -> None:
                 if _fc.get(_k):
                     _fc[_k] = ""
         # R12 (#15): blank the `refusal` text channel on enforcement.
-        if isinstance(msg.get("refusal"), str) and msg.get("refusal"):
+        # G61: blank a TRUTHY refusal of ANY type (structured list/dict refusal too).
+        if msg.get("refusal"):
             msg["refusal"] = ""
         # R12 (#16): blank an audio-output transcript on enforcement.
         # R14: also blank audio.data — the base64 audio bytes carry the SPOKEN

@@ -101,6 +101,13 @@ def _completion(model: str, *, secret_channel: str, n_choices: int = 1) -> dict:
                     {"type": "text", "text": "Here is the answer. "},
                     {"type": "text", "text": f"The key is {SECRET} for {PII}."},
                 ]
+            elif secret_channel == "list_reasoning":
+                # G61: structured reasoning_content (a LIST of blocks) — the str-only
+                # scan/enforce skipped it, leaking PII in a reasoning channel.
+                msg["reasoning_content"] = [
+                    {"type": "text", "text": f"internally the key is {SECRET} for {PII}"}]
+            elif secret_channel == "list_refusal":
+                msg["refusal"] = [{"type": "text", "text": f"I refuse but the key was {SECRET}"}]
             elif secret_channel == "dict_tool_args":
                 # G58: tool-call ``arguments`` as a PARSED DICT (some providers do
                 # this) rather than the spec's JSON string. The str-only scan +
@@ -118,7 +125,7 @@ def _completion(model: str, *, secret_channel: str, n_choices: int = 1) -> dict:
 
 SECONDARY_CHANNELS = ["content", "reasoning_content", "refusal",
                       "tool_calls", "function_call", "audio", "list_content",
-                      "dict_tool_args"]
+                      "dict_tool_args", "list_reasoning", "list_refusal"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -244,6 +251,30 @@ def test_g58_tool_arg_coercion_helper():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# G61: structured (list/dict) reasoning_content / refusal — the str-only scan +
+# enforce skipped them, leaking PII in a reasoning/refusal channel. The
+# list_reasoning / list_refusal matrix rows above cover the list shape; this pins
+# the DICT shape incl. the Anthropic-style `thinking` key (not `text`).
+# ──────────────────────────────────────────────────────────────────────────────
+def test_g61_dict_reasoning_thinking_key_scanned():
+    comp = {"choices": [{"message": {"role": "assistant", "content": "ok",
+            "reasoning_content": {"thinking": f"the key is {SECRET}"}}}]}
+    assert SECRET in gm._extract_scannable_output_text(comp), (
+        "G61: dict reasoning_content (thinking key) not scanned"
+    )
+
+
+def test_g61_structured_reasoning_refusal_blanked_on_enforcement():
+    comp = {"choices": [{"message": {"role": "assistant", "content": "ok",
+            "reasoning_content": [{"type": "text", "text": SECRET}],
+            "refusal": {"text": SECRET}}}]}
+    gm._set_completion_response_text(comp, "[REDACTED]")
+    assert SECRET not in json.dumps(comp), (
+        "G61: structured reasoning/refusal survived enforcement"
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # 2. ENFORCEMENT mutation sanitizes every choice + every secondary channel.
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("model", MODEL_IDS)
@@ -301,6 +332,10 @@ def _delta_chunk(channel: str, n_choices: int = 1) -> dict:
             elif channel == "dict_tool_args":
                 delta = {"tool_calls": [{"index": 0, "function":
                          {"name": "x", "arguments": {"key": SECRET}}}]}
+            elif channel == "list_reasoning":
+                delta = {"reasoning_content": [{"type": "text", "text": f"key {SECRET}"}]}
+            elif channel == "list_refusal":
+                delta = {"refusal": [{"type": "text", "text": f"key {SECRET}"}]}
         choices.append({"index": i, "delta": delta})
     return {"choices": choices}
 

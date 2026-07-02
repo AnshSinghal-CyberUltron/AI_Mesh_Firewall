@@ -864,9 +864,17 @@ class SecureStreamingResponse:
             parts.append(content)
 
             # FIX-A: reasoning_content streams raw to the client too — scan it.
+            # G61: coerce a non-str (structured list/dict) reasoning channel to JSON so
+            # PII in a structured reasoning block is scanned (stream parity with the
+            # non-stream _tool_arg_to_text coercion).
             reasoning = delta.get("reasoning_content")
             if isinstance(reasoning, str):
                 parts.append(reasoning)
+            elif reasoning is not None:
+                try:
+                    parts.append(json.dumps(reasoning))
+                except (TypeError, ValueError):
+                    pass
 
             # FIX-B: tool-call function name + arguments stream raw — scan them.
             tool_calls = delta.get("tool_calls")
@@ -907,9 +915,15 @@ class SecureStreamingResponse:
                             pass
 
             # R12 (#15): refusal channel streams raw — scan it.
+            # G61: coerce a non-str (structured) refusal to JSON too.
             refusal = delta.get("refusal")
             if isinstance(refusal, str):
                 parts.append(refusal)
+            elif refusal is not None:
+                try:
+                    parts.append(json.dumps(refusal))
+                except (TypeError, ValueError):
+                    pass
 
             # R13 (#16 stream parity): audio-output transcript streams raw too.
             _au = delta.get("audio")
@@ -930,7 +944,8 @@ class SecureStreamingResponse:
         frame stays well-formed."""
         if not isinstance(delta, dict):
             return
-        if isinstance(delta.get("reasoning_content"), str):
+        # G61: blank a TRUTHY reasoning of ANY type (structured list/dict too).
+        if delta.get("reasoning_content"):
             delta["reasoning_content"] = ""
         for call in (delta.get("tool_calls") or []):
             if isinstance(call, dict) and isinstance(call.get("function"), dict):
@@ -947,7 +962,7 @@ class SecureStreamingResponse:
             for _k in ("name", "arguments"):
                 if fc.get(_k):
                     fc[_k] = ""
-        if isinstance(delta.get("refusal"), str):
+        if delta.get("refusal"):  # G61: blank any-type refusal
             delta["refusal"] = ""
         # R14: blank audio.transcript AND audio.data — the base64 audio bytes
         # carry the spoken content, so redacting only the transcript still ships
