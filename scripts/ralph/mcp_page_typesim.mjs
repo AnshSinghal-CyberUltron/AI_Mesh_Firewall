@@ -109,13 +109,22 @@ export async function typeSim(page, locator, text, opts = {}) {
   await locator.click({ timeout: clickTimeout }); // ensure focus after clear
 
   const keystrokes = [];
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    await page.keyboard.type(ch, { delay }); // real-user cadence; never fill
-    const active = await describeActive(page);
+  if (opts.fast) {
+    // FAST mode: type the whole string via pressSequentially (real-user cadence,
+    // types into the focused element so a mid-type focus drop still loses chars)
+    // and check final focus once — no per-char evaluate (for matrix verification).
+    await locator.pressSequentially(text, { delay });
     const kept = await keptFocus(page, locator);
-    keystrokes.push({ index: i, char: ch, keptFocus: kept, active });
-    if (!kept && opts.stopOnFocusLoss !== false) break;
+    keystrokes.push({ index: text.length - 1, char: text.slice(-1), keptFocus: kept, active: await describeActive(page) });
+  } else {
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      await page.keyboard.type(ch, { delay }); // real-user cadence; never fill
+      const active = await describeActive(page);
+      const kept = await keptFocus(page, locator);
+      keystrokes.push({ index: i, char: ch, keptFocus: kept, active });
+      if (!kept && opts.stopOnFocusLoss !== false) break;
+    }
   }
 
   const finalValue = await locator.inputValue().catch(async () => (await locator.textContent()) || "");
