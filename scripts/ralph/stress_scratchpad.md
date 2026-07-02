@@ -982,6 +982,27 @@
         => the ReDoS/DoS sweep (all pipeline inputs bounded/linear, NO catastrophic backtracking) ALSO
         surfaced this real detection-gap leak. EIGHT confirmed-live leaks fixed now (G40-G46, G49) +
         G48 defense-in-depth + 2 documented tradeoffs.
+      ★★ G50 — OBFUSCATED CREDENTIAL/IP OUTPUT LEAK + G44 UNDERSCORE CORRECTNESS BUG 2026-07-02 ★★
+        THREAT: the interleaved-emphasis obfuscation (G44: 1**2**3 renders as the value) also hid a
+        bearer/api-key CREDENTIAL (sk_live_**abc**def) and an INTERNAL IP (10.**0**.0.5) — but G44/G35
+        only consulted detect_pii/detect_secrets, NOT detect_credential_exposure/detect_ip_leakage, so
+        the obfuscated credential/IP evaded the output guard (md_split_ip -> action=allow, raw egress).
+        ROOT-CAUSE also exposed a G44 CORRECTNESS BUG: the neutralizer stripped '_' (underscore) as
+        emphasis, which (a) DESTROYED a legitimate sk_live_ / snake_case prefix (skliveabc… -> credential
+        detector MISSED it, so even after adding the cred detector the bearer still leaked) AND (b) was a
+        FALSE POSITIVE — per CommonMark INTRA-WORD '_' is NOT emphasis (sk_live_/snake_case/12_3_ render
+        LITERALLY and do NOT reveal the value). FIX (patterns.py _MD_EMPH_INTERLEAVE, output_guard.py
+        _MD_SPLIT_TOKEN_RE + _sub, scanner.py _scan_output_sync G44 block): strip ONLY '*' and '`' intra-
+        word (they DO render), keep '_' literal; AND extend the emphasis-stripped detection+neutralize to
+        detect_credential_exposure + detect_ip_leakage. VERIFY: md_split_bearer/md_split_ip now ->
+        [PII_REDACTED] (masked), 1_2_3-45-6789 correctly KEPT (literal, no leak), 192.168.1.1 not flagged
+        (all detectors defensibly ignore that common gateway IP). Corrected the G44 golden (g44_ital_ssn
+        underscore -> g44_star_ssn single-*; added g44_underscore_literal benign). FROZEN: G50 (split
+        bearer/IP masked + FP-floor). Gate: golden+streaming 350 passed × 3 in-process; broad pattern/
+        scanner/pii/credential/ip 499 green. commit 47afb46a. REDEPLOYED (rollback-pre-g50; marker
+        present; health 200) — LIVE.
+        NINE confirmed-live leaks fixed (G40-G46, G49, G50) + G48 defense-in-depth + 2 documented
+        tradeoffs. G50 also fixed a real correctness bug in my own prior G44 fix (underscore over-strip).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
