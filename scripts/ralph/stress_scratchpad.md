@@ -162,6 +162,13 @@
         folded); detect_pii/detect_secrets/_redact_obfuscated transport loops also match the canonical decode
         so the OUTER blob is masked. Binary garbage still dropped; FP floor holds. 7 golden frozen. Full
         gateway 1077 passed; golden 144 passed/7 skipped 3x.
+      G27 DONE 2026-07-02: multi-turn split injection across the DEVELOPER role. G6 reassembled user turns
+        only; the OpenAI developer role is also client-controlled + instruction-bearing, so a developer-turn-
+        split (or mixed user+developer) injection bypassed. Fixed in scanner._reassemble_user_turns: now
+        reassembles user AND developer (_INSTRUCTION_ROLES); system excluded (legit app prompts may quote
+        injection defensively -> FP). No regression; benign dev+user allows. 3 golden frozen. Full gateway
+        1085 passed; golden 147 passed/7 skipped 3x. Residual: system-role-split injection (excluded for FP;
+        tier-2 semantic is the backstop). NOTE: this fix (and all G22-G27) also awaits the gateway redeploy.
       DEPLOY-LAG DIAGNOSIS FINALIZED 2026-07-02: container files DEFINITIVELY stale — scanner.py has G17 but
         NOT G22 (_MAX_TRANSPORT_DEPTH=0); patterns.py has 0 mac_address/google_api_key/_MAX_DECODE_DEPTH. So
         G22/G24/G25/G26 are ALL undeployed (image from ~13:30, before those commits). CONFIRMED my code is
