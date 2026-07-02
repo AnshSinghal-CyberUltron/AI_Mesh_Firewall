@@ -1,5 +1,17 @@
 # AGENTS.md — AI Mesh Firewall
 
+## MCP Hardening BACKSTOP changelog
+- Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
+  logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`
+  namespace=`mcp-hardening/changes` + `hooks_notify`), this file (one-line pointer), Cursor
+  (`.cursor/rules/mcp-hardening-changelog.mdc`), and the canonical `docs/mcp/HARDENING_CHANGELOG.md`
+  (source of truth; §0 = protocol + entry template).
+- Backstop work-list: `scripts/ralph/mcp_hardening_scratchpad.md` (G0–G7, one item/iteration).
+- Shared index: stage narrowly, commit immediately, never `git add -A`; rebase from `main` often.
+- Changelog pointers (newest last):
+  - CHG-0001 (2026-07-02) — established the four-memory changelog protocol; audited runsc fail-closed
+    enforcement in `docker_manager._resolve_runtime()`.
+
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
 - ONE story per iteration; never break a passing gate; never mark passes:true without a green gate.

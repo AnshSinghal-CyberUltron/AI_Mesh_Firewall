@@ -34,20 +34,26 @@ def _env_truthy(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _sandbox_ulimits(pids_limit: int) -> list[Any]:
-    """FD + nproc caps for sandbox containers (dict fallback when docker SDK absent)."""
+def _sandbox_ulimits() -> list[Any]:
+    """Per-process FD cap for sandbox containers (dict fallback when docker SDK absent).
+
+    We deliberately do NOT set an ``nproc`` ulimit. ``RLIMIT_NPROC`` is enforced
+    by the kernel per *host UID*, and every org sandbox runs as the same
+    ``sandbox`` user (uid 1000), so an nproc ulimit becomes ONE process budget
+    SHARED across all tenants. That (a) breaks multi-org scaling — once the shared
+    budget fills, ~half of the per-org stdio servers fail to ``fork`` with EAGAIN
+    ("resource temporarily unavailable") and surface as 0-tools — and (b) lets one
+    org starve another's ability to fork (a cross-tenant DoS on a shared limit).
+    Per-container process/thread containment is instead provided by ``pids_limit``
+    (the pids cgroup controller), which IS container-scoped and already caps
+    fork bombs per sandbox. See mcp-parallel/findings/p8-26/NPROC_ROOT_CAUSE.md.
+    """
     try:
         from docker.types import Ulimit
 
-        return [
-            Ulimit(name="nofile", soft=1024, hard=2048),
-            Ulimit(name="nproc", soft=pids_limit, hard=pids_limit),
-        ]
+        return [Ulimit(name="nofile", soft=1024, hard=2048)]
     except ImportError:
-        return [
-            {"Name": "nofile", "Soft": 1024, "Hard": 2048},
-            {"Name": "nproc", "Soft": pids_limit, "Hard": pids_limit},
-        ]
+        return [{"Name": "nofile", "Soft": 1024, "Hard": 2048}]
 
 
 def _security_opts() -> list[str]:
@@ -431,7 +437,7 @@ class DockerManager:
             "user": self.config.sandbox_user,
             "security_opt": _security_opts(),
             "cap_drop": ["ALL"],
-            "ulimits": _sandbox_ulimits(self.config.pids_limit),
+            "ulimits": _sandbox_ulimits(),
             "tmpfs": {
                 "/tmp": "rw,noexec,nosuid,size=512m",
                 "/var/npm-cache": "rw,exec,nosuid,size=1g,mode=1777",

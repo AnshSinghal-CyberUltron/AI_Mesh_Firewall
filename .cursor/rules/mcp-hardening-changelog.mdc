@@ -1,0 +1,37 @@
+---
+description: MCP-hardening BACKSTOP four-memory changelog (mirror of docs/mcp/HARDENING_CHANGELOG.md)
+globs:
+  - "gateway/**"
+  - "services/mcp-broker/**"
+  - "control/ai_mesh_control/mcp_connector/**"
+  - "shared/ai_mesh_shared/**"
+  - "docs/mcp/**"
+alwaysApply: false
+---
+
+# MCP Hardening BACKSTOP — changelog protocol (Cursor mirror)
+
+Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. Every hardening change MUST be
+logged to **all four memories in the same commit**:
+
+1. Ruflo — `mcp__ruflo__memory_store(namespace="mcp-hardening/changes", key="<CHG-id>", …)` + `hooks_notify`.
+2. Claude — one-line pointer in repo-root `AGENTS.md` (*MCP Hardening BACKSTOP changelog* section).
+3. Cursor — an entry appended to THIS file (`.cursor/rules/mcp-hardening-changelog.mdc`).
+4. Canonical — the full entry in `docs/mcp/HARDENING_CHANGELOG.md` (source of truth; §0 has the template).
+
+Minimum fields per entry: change-id · date · files · WHAT · WHY (gap/mistake/omission) · NOW DOES ·
+whose work it touched · how to VERIFY.
+
+Hard rules: one `CHG-NNNN` per logical change (never reuse an id); commit small; stage narrowly (the
+worktree/index is SHARED across sessions — never `git add -A`); rebase from `main` often. Egress bytes
+are the only source of truth for any redact/block claim; fail closed on a no-op scrub; cross-check leaks
+with `aidefence_scan` as an independent oracle. Gates green (pytest + broker + item stress harness;
+frontend build + Playwright) before marking any scratchpad item `[x]`.
+
+## Changelog (mirror — newest last)
+
+- **CHG-0001** (2026-07-02) — Establish the four-memory changelog protocol. New:
+  `docs/mcp/HARDENING_CHANGELOG.md`, this file, and the `AGENTS.md` pointer. Backstop-only; audited that
+  `docker_manager._resolve_runtime()` already fail-closes runsc enforcement
+  (`services/mcp-broker/src/sandbox/docker_manager.py:343-359`). Verify: `ls` the two new files +
+  `grep "MCP Hardening BACKSTOP changelog" AGENTS.md`.

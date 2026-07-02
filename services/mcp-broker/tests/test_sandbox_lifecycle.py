@@ -95,7 +95,17 @@ def test_ensure_creates_container_when_missing(manager: DockerManager):
     assert run_kwargs["security_opt"] == ["no-new-privileges:true"]
     assert run_kwargs["cap_drop"] == ["ALL"]
     assert run_kwargs["memswap_limit"] == "1024m"
-    assert len(run_kwargs["ulimits"]) == 2
+    # Only nofile — nproc is intentionally NOT set: RLIMIT_NPROC is per host-UID,
+    # and all org sandboxes share uid 1000(sandbox), so an nproc ulimit is a
+    # cross-tenant shared cap that breaks multi-org scaling. pids_limit (per
+    # container) provides fork containment instead.
+    assert len(run_kwargs["ulimits"]) == 1
+    _ulimit_names = [
+        (u.get("Name") if isinstance(u, dict) else getattr(u, "name", None))
+        for u in run_kwargs["ulimits"]
+    ]
+    assert "nofile" in _ulimit_names
+    assert "nproc" not in _ulimit_names
     assert run_kwargs["environment"]["ORG_SLUG"] == "acme"
     assert run_kwargs["environment"]["NPM_CONFIG_CACHE"] == "/var/npm-cache"
     assert run_kwargs["environment"]["npm_config_ignore_scripts"] == "true"

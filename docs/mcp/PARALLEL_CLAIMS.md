@@ -40,7 +40,9 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 
 | cursor-ralph-iter18 | `services/mcp-broker/sandbox-image/agent/stdio_manager.py`, `services/mcp-broker/sandbox-image/agent/tests/test_stdio_manager_packages.py`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P7.23 N2+N3 package allowlist + pinned-pkg parity | 2026-07-02T09:16:00Z | released |
 
-| cursor-ralph-iter19 | `scripts/mcp_multi_org_harness.py`, `mcp-parallel/findings/p8-26/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P8.26 3-org × 5-server provisioning + multi-org harness | 2026-07-02T09:27:00Z | active |
+| cursor-ralph-iter19 | `scripts/mcp_multi_org_harness.py`, `mcp-parallel/findings/p8-26/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P8.26 3-org × 5-server provisioning + multi-org harness | 2026-07-02T09:27:00Z | released |
+
+| cursor-ralph-iter20 | `scripts/mcp_multi_org_harness.py`, `services/mcp-broker/src/sandbox/docker_manager.py`, `services/mcp-broker/tests/test_sandbox_lifecycle.py`, `mcp-parallel/findings/p8-26/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P8.26 harness (item 27 parallel 15-MCP driver + isolation) + nproc/UID shared-cap fix | 2026-07-02T09:45:00Z | released |
 
 | claude-ralph-stress | `gateway/ai_mesh_gateway/{policy_engine,output_guard,bedrock_scanner,scanner,patterns,typed_placeholder_redactor,context_guard}.py`, `gateway/tests/golden/**`, `frontend/src/components/{ModelConnectionPanel,OutputPipelineTimeline}.jsx`, `scripts/ralph/stress_scratchpad.md`, `scripts/ralph/precommit-secret-scan.sh`, `docs/stress/**` | R0–R7 chat-pipeline adversarial stress + client E2E + trace-card polish | 2026-07-02T09:30:43Z | active |
 
@@ -49,4 +51,4 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 ## Hive
 
 - Hive ID: `hive-1782976205971-u1gav1`
-- Cursor agents: `cursor-ralph-iter1` (iter 1), `cursor-ralph-iter2` (iter 2), `cursor-ralph-iter17` (iter 17), `cursor-ralph-iter18` (iter 18), `cursor-ralph-iter19` (iter 19)
+- Cursor agents: `cursor-ralph-iter1` (iter 1), `cursor-ralph-iter2` (iter 2), `cursor-ralph-iter17` (iter 17), `cursor-ralph-iter18` (iter 18), `cursor-ralph-iter19` (iter 19), `cursor-ralph-iter20` (iter 20)
