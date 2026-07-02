@@ -1179,6 +1179,34 @@ class InputScanner:
                     tier="tier_1",
                 )
 
+        # G53: obfuscated PII/secret hidden by INLINE markdown emphasis / render-invisible
+        # HTML (``1**2**3-45-6789`` / ``12<!-- -->3-45-6789``) — the raw bytes dodge the
+        # regexes but a model reading the markdown source can reconstruct the value, just
+        # as G33 blocks text-encoded PII. Symmetric to the OUTPUT-side G44/G51 neutralizer;
+        # entity-split is already covered above (G33 decodes entities). Only fires when
+        # stripping the render-invisible markers REVEALS PII/secret the plaintext lacked,
+        # so benign markdown (**bold**, snake_case, `code`) is unaffected -> block.
+        _md_stripped = strip_interleaved_emphasis(text)
+        if _md_stripped != text:
+            _s_pii = detect_pii(_md_stripped)
+            _s_secret = detect_secrets(_md_stripped)
+            # G53: also a bearer/api-key CREDENTIAL hidden by emphasis (sk_live_**..**);
+            # internal-IP leakage is an OUTPUT concern (a user-supplied IP is not exfil).
+            _s_cred = detect_credential_exposure(_md_stripped)
+            if _s_pii or _s_secret or _s_cred:
+                _skinds = list(_s_pii.keys()) + list(_s_secret.keys()) + list(_s_cred.keys())
+                return ScanVerdict(
+                    action="block",
+                    threat_type="obfuscated_pii" if _s_pii else "obfuscated_secret",
+                    confidence=0.9,
+                    detail=(
+                        "Markdown/HTML-obfuscated PII/secret exfil attempt: "
+                        + ", ".join(_skinds)
+                    ),
+                    matched_patterns=_skinds,
+                    tier="tier_1",
+                )
+
         toxicity_verdict = self._check_toxicity(text, toxicity_threshold)
         if toxicity_verdict is not None:
             return toxicity_verdict
