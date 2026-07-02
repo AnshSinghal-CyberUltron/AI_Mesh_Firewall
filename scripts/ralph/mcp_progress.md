@@ -24,6 +24,30 @@
   RETRY_MAX=5). Causes: broker_send_jsonrpc:136 never ensure_sandbox first (no eager provision); _request_with_503_retry:104
   retries ONLY 503 (502 not retried); broker readiness=='running' not agent-bound; broker collapses agent HTTP>=400 to
   502 (routes.py:189-198). Fix=items 19-21.
+- BROKER LIFECYCLE (item#2, docs/mcp/broker-sandbox-lifecycle.md): routes.stdio_rpc:161 (docker gate cached_docker_ok
+  docker_health.py:22; quota _check_org_quota:66 MAX_ORGS=50; _resolve_running_sandbox:93->DockerManager.ensure:345->
+  create_container:300/_run_kwargs:247->_sync_registry:175; _post_agent_rpc:106 8-retry backoff-> in-container agent
+  /rpc:54->send_jsonrpc:411->_ensure_process:194 spawn npx/uvx:256->_ensure_initialized:369). Limits: mem 2048m(:269)/
+  cpu 1.0(:270)/pids 256(:271)/tmpfs /tmp noexec+npm-cache exec 1g(:274-276). Two-level reaper: broker reaper.py:31
+  (idle containers, stop not destroy) + agent stdio_manager _reaper_loop:486 (idle/hung children).
+- P7 HARDENING GAPS (confirmed ABSENT both broker & image, fix #22-23): NO security_opt=no-new-privileges, NO
+  cap_drop=ALL, NO seccomp/apparmor, NO storage_opt/volume size cap (->/data/mcp-auth grows unbounded), NO ulimits
+  (only pids), NO run-enforced user= (relies on image USER sandbox), gVisor only if MCP_SANDBOX_RUNTIME set (default
+  runc), NO egress allowlist, agent /rpc UNAUTHENTICATED (main.py:54, relies on per-org net), NO npm/PyPI PACKAGE
+  allowlist on broker path (cf gateway in-process has _PACKAGE_ALLOWLIST mcp_stdio_adapter.py:362-371), NO tini/init.
+  Edge: node -e/python -c = RCE (containment=sandbox); org_slug sanitize divergence container='-' vs volume='_'
+  (docker_manager.py:87) collision risk; host-run broker branch(:280-282) collapses per-org net to shared bridge.
+- ITEM#24 RESTART-SAFETY GAPS: registry IN-MEMORY only (registry.py:23, empty on restart); NO boot label-reconciliation;
+  orphan containers NEVER reaped (reaper iterates only registry.idle_entries:41); reaper has NO try/except (reaper.py:54)
+  -> one docker APIError kills reaping permanently (agent reaper IS re-armed :504 — asymmetry); quota bypass post-restart +
+  TOCTOU (routes.py:66/155). reap uses stop not destroy (containers+volumes accumulate).
+- ITEM#25 CRED/ENV ISOLATION (already STRONG): shared/ai_mesh_shared/mcp_stdio_common.py _build_child_env:119 —
+  _SECRET_ENV_DENYLIST:19 strips broker/gateway keys+DB/REDIS/AWS+PYTHONPATH; env passthrough is ALLOWLIST(:81);
+  LD_PRELOAD/DYLD_INSERT_LIBRARIES stripped(:140); per-org MCP_REMOTE_CONFIG_DIR pinned(:144).
+- B3 (broker side): ensure returns on container 'running'(container_status:132) NOT agent-bound; warm flag IGNORED
+  (routes.py:153); agent /health(main.py:43) only means uvicorn bound not MCP-initialized(:369); agent_url can be
+  127.0.0.1 right after create(docker_manager.py:140). Fix #19-21: eager provision+readiness poll; broker return
+  'provisioning' 503 not collapse-to-502; client backoff distinguishes provisioning from hard failure.
 - DEFENSE-IN-DEPTH (do not weaken): stdio command allowlist+no-shell (mcp_stdio_adapter.py:342/350/407), package
   allowlist/pinning(:362-371), per-org+global proc caps(:389-401), sandboxed child env pins per-org MCP_REMOTE_CONFIG_DIR(:403),
   WS SSRF guard(mcp_ws_adapter.py:124), broker fail-closed key auth(auth.py:17-23)+per-org quota(routes.py:66),
@@ -35,7 +59,12 @@
       dispatch _adapter_forward:1775→stdio_adapter.send_jsonrpc:666→broker_send_jsonrpc(mcp_sandbox_client.py:136)
       →broker stdio_rpc(routes.py:161); OAuth self-AS mcp_oauth.py + per-org proxy mcp_oauth_proxy.py inject@:1732).
       All anchors spot-verified against tree (never faked). B1/B2/B3 sites located; B4 confirmed frontend-only.
-- [ ] 2. Map broker sandbox lifecycle (create→install→start stdio→health→reap) + resource limits
+- [x] 2. Map broker sandbox lifecycle (create→install→start stdio→health→reap) + resource limits
+      EVIDENCE: docs/mcp/broker-sandbox-lifecycle.md (create=docker_manager.ensure:345/_run_kwargs:247;
+      install=lazy npx/uvx INSIDE container stdio_manager.py:256; start=_ensure_process:194; health=/health
+      main.py:43 (bound only) vs real readiness _ensure_initialized:369; reap=reaper.py:31 + agent _reaper_loop:486).
+      LIMITS: mem 2048m/cpu 1.0/pids 256/tmpfs; ABSENT (P7 #22-23): security_opt(no-new-priv), cap_drop, seccomp,
+      storage_opt/vol-quota, ulimits, run-enforced user=, pkg allowlist(broker path), tini/init. All anchors verified.
 - [ ] 3. Map control mcp_connector registration + oauth_authorized + tool-sync flow
 - [ ] 4. Map frontend MCPConnectorPanel register/authorize/list/execute + the 4 bug sites
 - [ ] 5. Write docs/mcp/ARCHITECTURE_AND_THREATS.md (isolation model + threat model + the 4 bugs)
