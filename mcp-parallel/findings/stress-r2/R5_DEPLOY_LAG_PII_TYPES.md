@@ -27,6 +27,22 @@ Rebuild + recreate the gateway image so it carries the current gateway source:
 shared infra used by concurrent sessions and a rebuild mid-run risks breaking it for everyone; a
 coordinated redeploy window is the right venue.
 
+## Confirmed: code is complete AND correctly wired (only deployment lags)
+The chat request path redacts the forwarded prompt via `INPUT_SCANNER.redact_pii(effective_prompt,
+verdict=verdict)` at **main.py:6316**, gated on the scan verdict action == redact. In-process on the
+CURRENT source, `_scan_prompt_sync` returns action=`redact` for a MAC / passport / Google key, and
+`redact_pii` masks them to `[MAC_ADDRESS_REDACTED]` / `[GOVERNMENT_ID_REDACTED]` / `[GOOGLE_API_KEY_REDACTED]`
+(no leak). So the redaction is scanner-driven (not org-policy-gated) and my G24/G25 additions are wired
+into the live chat path — a gateway REDEPLOY of the already-committed code is sufficient; no control-plane
+policy change is required.
+
+## Scope of the lag (broader than first thought)
+Container `scanner.py` has G17 but NOT G22 (`_MAX_TRANSPORT_DEPTH`=0); `patterns.py` has NONE of G22/G24/G25
+(`mac_address`=`google_api_key`=`_MAX_DECODE_DEPTH`=0). So G22 (nested decode), G24/G25 (PII/secret types),
+and G26 (compound) are ALL undeployed. The live-corpus injections that still blocked did so via the
+deployed pre-13:30 detectors (G17/G19 + earlier) or incidental heuristics — NOT via G22/G26. Everything is
+green in-process (144 golden ×3); the only gap is that the running image predates these commits.
+
 ## Impact on the COMPLETE promise
 "no PII reaches models" (R5) is violated LIVE for the MAC/gov-id types **only because the deployed
 image predates my G24/G25 commits**. Core enforcement — every injection class, standard PII

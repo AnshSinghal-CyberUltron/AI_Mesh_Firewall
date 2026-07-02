@@ -162,6 +162,17 @@
         folded); detect_pii/detect_secrets/_redact_obfuscated transport loops also match the canonical decode
         so the OUTER blob is masked. Binary garbage still dropped; FP floor holds. 7 golden frozen. Full
         gateway 1077 passed; golden 144 passed/7 skipped 3x.
+      DEPLOY-LAG DIAGNOSIS FINALIZED 2026-07-02: container files DEFINITIVELY stale — scanner.py has G17 but
+        NOT G22 (_MAX_TRANSPORT_DEPTH=0); patterns.py has 0 mac_address/google_api_key/_MAX_DECODE_DEPTH. So
+        G22/G24/G25/G26 are ALL undeployed (image from ~13:30, before those commits). CONFIRMED my code is
+        COMPLETE + CORRECTLY WIRED: chat path redacts forwarded prompt via INPUT_SCANNER.redact_pii (main.py:
+        6316), and in-process _scan_prompt_sync returns action=redact for MAC/passport/google-key and
+        redact_pii masks them ([MAC_ADDRESS_REDACTED] etc.) — scanner-driven, NOT org-policy-gated. => a plain
+        gateway REBUILD+redeploy of already-committed code closes the live MAC/gov-id leak; no control-plane
+        change needed. Decided NOT to rebuild the shared gateway image mid-run (infra outside chat-module
+        ownership; concurrent MCP sessions active; build/recreate risk). My code work is DONE + verified; the
+        sole remaining COMPLETE blocker is an external gateway redeploy. Analogous external blocker to
+        live-golden 09 / auth rate-limit.
       KILL-SWITCH LIVE-VERIFIED 2026-07-02: model-scoped kill-switch create->activate-> request=503
         kill_switch_active ->deactivate+delete->request=200 recovered. Clean cleanup, no org-wide outage.
         All 6 R5 checks now fresh-verified this session.
