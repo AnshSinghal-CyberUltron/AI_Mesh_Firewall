@@ -1024,6 +1024,30 @@
         tradeoffs. The rendering-layer obfuscation class (G44/G50/G51) has now yielded 3 leaks — worth a
         dedicated ATTACK_LANDSCAPE note: "the firewall must normalize what the CLIENT RENDERS, not just
         the raw egress bytes" (emphasis, credential/IP under emphasis, render-invisible HTML).
+      ★★ G52 — HTML-NUMERIC-ENTITY SPLIT OUTPUT LEAK 2026-07-02 (rendering-layer class, 4th leak) ★★
+        THREAT: a renderer DECODES numeric HTML entities (&#50; -> "2"), so 1&#50;3-45-6789, entities at
+        the start/end (&#49;&#50;&#51;-45-6789), hex (&#x31;), or an entity '@' (john&#64;example.com)
+        RENDER the value while evading raw detect_pii AND G35's neutralize_encoded_pii (which needs a RUN
+        of 6+ entities — interleaved/partial entities slip it). All egressed action=redact (detection
+        fired via the decode-variant path) but UNCHANGED (neutralize missed) -> rendered leak.
+        FIX: neutralize_markdown_split_pii now DECODES numeric entities (_decode_numeric_entities) before
+        re-detection. ReDoS HARDENING (this was the hard part — several catastrophic-backtracking traps):
+          - split into TWO passes: emphasis/HTML (VALUE-ANCHORED so a stray '<' fails fast, comment never
+            re-scanned per position) + entities ((?:value|entity){1,512}, disjoint char classes -> linear);
+          - BOUNDED the comment body <!--.{0,400}?--> (unbounded .*? re-scanned per value pos = ReDoS);
+          - CAPPED value/sep repetitions {1,256}/{1,64} (a greedy [\w@.\-]+ backtracks O(n^2) when a long
+            value run is wrapped by a separator char, e.g. x<!-- <150KB> -->y);
+          - len(run)>512 guard in _sub (a real value is short; bounds the per-run detect cost).
+          Verified bounded: worst-case ~1.2s on a pathological 150KB single-word-in-comment (was HANGING);
+          real outputs <10KB -> <0.1s. Both env Python 3.12/3.14 (atomic groups available but the caps are
+          the portable fix). Named entities (&amp;/&#169;) untouched.
+        VERIFY: 5 entity-split shapes -> [PII_REDACTED], rendered egress value-free; 3 benign entities +
+        all G44/G50/G51 still pass. FROZEN: G52 (5 masked + 3 FP + a ReDoS-bounded regression). Gate:
+        golden+streaming 369 passed × 3 in-process; broad pattern/scanner/output 284 green. commit
+        0d5ec9e4. REDEPLOYED (rollback-pre-g52; markers present; health 200) — LIVE.
+        ELEVEN confirmed-live leaks fixed (G40-G46, G49, G50, G51, G52) + G48 defense-in-depth + 2
+        documented tradeoffs. Rendering-layer class (G44/G50/G51/G52) = 4 leaks; render-normalization now
+        covers markdown emphasis, credential/IP-under-emphasis, render-invisible HTML, and numeric entities.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
