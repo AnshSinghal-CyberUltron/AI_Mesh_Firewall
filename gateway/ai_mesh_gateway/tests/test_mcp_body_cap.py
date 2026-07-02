@@ -131,3 +131,28 @@ async def test_org_mcp_tool_call_oversized_chunked_stream_returns_413():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+class _RespStream:
+    """An httpx-response double exposing aiter_bytes() of chunks (CHG-0064)."""
+
+    def __init__(self, chunks):
+        self._chunks = list(chunks)
+
+    async def aiter_bytes(self):
+        for c in self._chunks:
+            yield c
+
+
+@pytest.mark.asyncio
+async def test_response_over_ceiling_raises():
+    with patch.object(mcp_proxy, "_MCP_MAX_RESPONSE_BYTES", 100):
+        with pytest.raises(mcp_proxy._MCPBodyTooLarge):
+            await mcp_proxy._read_response_capped(_RespStream([b"a" * 60, b"b" * 60]))
+
+
+@pytest.mark.asyncio
+async def test_response_under_ceiling_returns_joined():
+    with patch.object(mcp_proxy, "_MCP_MAX_RESPONSE_BYTES", 100):
+        out = await mcp_proxy._read_response_capped(_RespStream([b"hi ", b"there"]))
+        assert out == b"hi there"

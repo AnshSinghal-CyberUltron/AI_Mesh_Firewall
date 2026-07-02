@@ -307,13 +307,24 @@ def _ext_request(body_obj):
     return req
 
 
+def _aiter_bytes_of(payload: bytes):
+    """A real async-generator factory matching httpx.Response.aiter_bytes (CHG-0064:
+    ext_mcp_proxy now buffers responses via _read_response_capped, which iterates
+    aiter_bytes() rather than calling aread())."""
+    async def _gen():
+        yield payload
+    return _gen
+
+
 def _ext_send_resp(json_body, *, content_type="application/json", status=200):
     """A streamed httpx response stand-in for ext_mcp_proxy (uses .send())."""
     r = AsyncMock()
     r.status_code = status
     r.headers = {"content-type": content_type}
     r.json = lambda: json_body
-    r.aread = AsyncMock(return_value=json.dumps(json_body).encode())
+    _payload = json.dumps(json_body).encode()
+    r.aread = AsyncMock(return_value=_payload)
+    r.aiter_bytes = _aiter_bytes_of(_payload)
     r.aclose = AsyncMock()
     return r
 
@@ -451,6 +462,7 @@ def _sse_resp(json_body, *, status=200):
     r = _ext_send_resp({}, content_type="text/event-stream", status=status)
     frame = f"data: {json.dumps(json_body)}\n\n".encode()
     r.aread = AsyncMock(return_value=frame)
+    r.aiter_bytes = _aiter_bytes_of(frame)  # CHG-0064: SSE buffered via aiter_bytes now
     return r
 
 
@@ -619,7 +631,10 @@ async def test_ext_sse_resources_read_result_now_scanned():
     body = bytes(resp.body).decode()
     assert "john.doe@example.com" not in body    # resource PII no longer egresses raw via SSE
     assert resp.media_type == "text/event-stream"
-    sse.aread.assert_awaited()                    # it was BUFFERED (scanned), not streamed
+    # it was BUFFERED (scanned), not streamed live — a buffered SSE returns a plain
+    # Response, not a StreamingResponse (CHG-0064: buffering now iterates aiter_bytes()).
+    from starlette.responses import StreamingResponse
+    assert not isinstance(resp, StreamingResponse)
 
 
 @pytest.mark.asyncio
@@ -762,6 +777,7 @@ def _ext_send_text_resp(body_bytes, *, content_type="text/plain", status=200):
 
     r.json = _raise_json
     r.aread = AsyncMock(return_value=body_bytes)
+    r.aiter_bytes = _aiter_bytes_of(body_bytes)
     r.aclose = AsyncMock()
     return r
 
@@ -858,3 +874,60 @@ async def test_ext_non_json_text_body_fails_closed_on_scan_error():
     body_text = bytes(resp.body).decode("utf-8", errors="replace")
     assert _LEAK_EMAIL not in body_text
     assert "withheld" in body_text.lower()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# CHG-0064: response-side memory-DoS. ext_mcp_proxy buffered an untrusted external
+# server's whole response (resp.aread()) with NO size ceiling — a timeout bounds
+# TIME, not SIZE, so a fast multi-GB response OOMs the shared gateway (cross-tenant
+# DoS). The response read is now capped; an oversize upstream body -> 502.
+# ════════════════════════════════════════════════════════════════════════════
+def _ext_send_oversized_resp(chunk, *, content_type="application/json", status=200, n=10):
+    r = AsyncMock()
+    r.status_code = status
+    r.headers = {"content-type": content_type}
+    r.json = lambda: {}
+
+    async def _big():
+        for _ in range(n):
+            yield chunk  # streamed in chunks so the cap fires mid-stream
+
+    r.aiter_bytes = _big
+    r.aread = AsyncMock(return_value=chunk * n)
+    r.aclose = AsyncMock()
+    return r
+
+
+@pytest.mark.asyncio
+async def test_ext_oversized_json_response_returns_502():
+    req = _ext_request(_BENIGN_CALL)
+    upstream = _ext_send_oversized_resp(b"x" * 60, content_type="application/json")
+    with patch.object(mcp_proxy, "_MCP_MAX_RESPONSE_BYTES", 100), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 502
+    assert _decode(resp)["code"] == "mcp_upstream_response_too_large"
+
+
+@pytest.mark.asyncio
+async def test_ext_oversized_sse_response_returns_502():
+    req = _ext_request(_BENIGN_CALL)  # tools/call -> finite SSE -> buffered+capped
+    upstream = _ext_send_oversized_resp(
+        b"data: " + b"x" * 60 + b"\n\n", content_type="text/event-stream")
+    with patch.object(mcp_proxy, "_MCP_MAX_RESPONSE_BYTES", 100), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 502
+    assert _decode(resp)["code"] == "mcp_upstream_response_too_large"
+
+
+@pytest.mark.asyncio
+async def test_ext_response_under_cap_unaffected():
+    # a normal-sized response is untouched by the cap
+    req = _ext_request(_BENIGN_CALL)
+    upstream = _ext_send_resp(
+        {"jsonrpc": "2.0", "id": 20, "result": {"content": [{"type": "text", "text": "ok"}]}})
+    with patch.object(mcp_proxy, "_MCP_MAX_RESPONSE_BYTES", 10 * 1024 * 1024), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 200

@@ -149,6 +149,13 @@ _ALLOWED_MCP_DOMAINS = {
 # no ceiling, a tenant could POST a huge body and exhaust gateway memory. The
 # RAG/embeddings paths already have 413 guards; the MCP routes had none.
 _MCP_MAX_BODY_BYTES = int(os.environ.get("MCP_MAX_BODY_BYTES", str(10 * 1024 * 1024)))
+# CHG-0064: response-side twin of the above. The ext_mcp_proxy path buffers an
+# UNTRUSTED external MCP server's whole response (resp.aread()) to scan it; an httpx
+# timeout bounds TIME, not SIZE, so a fast multi-GB response OOMs the (shared) gateway
+# — a cross-tenant DoS a compromised tenant server can inflict. This caps the buffered
+# response bytes; the streaming (non-finite SSE) passthrough is unaffected (never held
+# in memory). Env-tunable for operators who forward legitimately large tool results.
+_MCP_MAX_RESPONSE_BYTES = int(os.environ.get("MCP_MAX_RESPONSE_BYTES", str(10 * 1024 * 1024)))
 
 
 def _mcp_body_too_large(request) -> bool:
@@ -235,6 +242,35 @@ async def _mcp_read_body_capped(request) -> bytes:
     except Exception:  # pragma: no cover - non-Request test double
         pass
     return body_bytes
+
+
+async def _read_response_capped(resp) -> bytes:
+    """Buffer an httpx streaming RESPONSE body, enforcing ``_MCP_MAX_RESPONSE_BYTES`` on
+    the ACTUAL bytes read. ``resp.aread()`` buffers the whole body with no size ceiling;
+    an httpx timeout bounds only TIME, so an untrusted upstream can stream a huge body
+    fast and exhaust gateway memory (CHG-0064). Reads incrementally and raises
+    ``_MCPBodyTooLarge`` the instant the running total crosses the ceiling, so the
+    gateway never holds more than the ceiling from an untrusted upstream in memory.
+    """
+    total = 0
+    chunks: list[bytes] = []
+    async for chunk in resp.aiter_bytes():
+        total += len(chunk)
+        if total > _MCP_MAX_RESPONSE_BYTES:
+            raise _MCPBodyTooLarge()
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _mcp_upstream_too_large_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=502,
+        content={
+            "error": "upstream_response_too_large",
+            "code": "mcp_upstream_response_too_large",
+            "message": f"Upstream MCP response exceeds the {_MCP_MAX_RESPONSE_BYTES}-byte ceiling.",
+        },
+    )
 
 # ── Server config cache for transport-aware routing ──────────────────
 _server_config_cache: dict[str, dict] = {}
@@ -1448,9 +1484,19 @@ async def ext_mcp_proxy(path: str, request: Request):
                 # re-emit as SSE (parity with the non-streaming JSON branch and
                 # internal_tools_call). Closes the raw-egress leak
                 # (BACKSTOP_FINDINGS G2 item 2 — previously only tools/call SSE was
-                # scanned, so a resources/read result egressed raw). Bounded: these
-                # responses are finite, and aread() is capped by the httpx timeout.
-                sse_bytes = await resp.aread()
+                # scanned, so a resources/read result egressed raw). CHG-0064: cap the
+                # buffered bytes (a timeout bounds TIME, not SIZE — an untrusted upstream
+                # could stream a huge SSE fast and OOM the gateway).
+                try:
+                    sse_bytes = await _read_response_capped(resp)
+                except _MCPBodyTooLarge:
+                    await resp.aclose()
+                    await client.aclose()
+                    LOG.warning(
+                        "ext_mcp_proxy.sse_response_too_large host=%s tool=%s",
+                        hostname, _ext_tool_name or "?",
+                    )
+                    return _mcp_upstream_too_large_response()
                 await resp.aclose()
                 await client.aclose()
                 _reframed, _block_info = await _scan_reframe_sse_tool_result(
@@ -1520,8 +1566,16 @@ async def ext_mcp_proxy(path: str, request: Request):
                 headers=resp_headers,
             )
 
-        # For normal JSON / text / binary responses, read fully and close
-        body_bytes = await resp.aread()
+        # For normal JSON / text / binary responses, read fully and close.
+        # CHG-0064: cap the buffered bytes — a timeout bounds TIME, not SIZE, so an
+        # untrusted upstream could stream a huge fast body and OOM the (shared) gateway.
+        try:
+            body_bytes = await _read_response_capped(resp)
+        except _MCPBodyTooLarge:
+            await resp.aclose()
+            await client.aclose()
+            LOG.warning("ext_mcp_proxy.response_too_large host=%s", hostname)
+            return _mcp_upstream_too_large_response()
         await resp.aclose()
         await client.aclose()
 

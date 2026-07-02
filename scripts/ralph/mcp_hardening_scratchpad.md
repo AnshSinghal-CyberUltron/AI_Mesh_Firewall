@@ -439,6 +439,19 @@
       containment deployed. REMAINING before [x]: prove CONTAINMENT under load (fork/mem/disk/timeout bombs
       + neighbor-safe) — but destructive bombs are UNSAFE on the shared live stack (item 17 needs an
       isolated host). Evidence: mcp-parallel/findings/backstop-p12-isolation-posture/.
+      CHG-0064 (2026-07-02, HIGH — gateway-side mem-DoS from untrusted upstream, response-side twin of
+      CHG-0063): ext_mcp_proxy buffered an untrusted external MCP server's WHOLE response via resp.aread()
+      (SSE + JSON/text/binary) with NO size ceiling. The comment claimed "capped by the httpx timeout" but
+      a timeout bounds TIME not SIZE — a malicious tenant-configured external server streams a multi-GB
+      response fast → OOMs the SHARED gateway (cross-tenant DoS). FIX (mcp_proxy.py): new
+      _MCP_MAX_RESPONSE_BYTES (env, default 10MiB) + _read_response_capped() iterates resp.aiter_bytes()
+      and raises _MCPBodyTooLarge the instant the total crosses the ceiling; both aread() sites use it →
+      withhold with 502 mcp_upstream_response_too_large. Non-finite SSE passthrough unchanged (streams
+      chunk-by-chunk). Scope: ext-proxy untrusted boundary (ORG path sandbox-routed → gVisor mem/disk
+      limits contain the sandbox). +5 tests (2 unit + 3 integration 502); existing 39 ext tests updated
+      (response doubles expose aiter_bytes). Gate: 51 + 1242 gateway passed, 0 failed. Evidence:
+      mcp-parallel/findings/backstop-p10-response-mem-dos/finding.md. (Gateway-side mem containment;
+      sandbox-side containment [x]-tracked above still needs the isolated-host bomb drill.)
 - [ ] 11. PostgreSQL + Redis schemas/usage/restart-safety verified.
       LIVE VERIFIED (usage/schema) — CHG-0023 (2026-07-02): REDIS usage correct — mcp:scan_ver:* 72 keys
       (M-15 scan-config version cache-invalidation, string counters e.g. "99"); ratelimit:* 2 keys (S12

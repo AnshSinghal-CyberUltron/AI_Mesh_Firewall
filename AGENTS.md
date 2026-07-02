@@ -476,6 +476,18 @@
     + 1237 gateway passed, 0 failed. Scope: tenant-facing routes; backend-internal (X-Gateway-Internal-Key)
     paths still plain body() (lower risk, future follow-up). Evidence
     mcp-parallel/findings/backstop-p9-chunked-body-dos/.
+  - CHG-0064 (2026-07-02) — G3 item 10 (resource-limits/mem), HIGH; response-side twin of CHG-0063: the
+    tenant-facing ext_mcp_proxy buffers an UNTRUSTED external server's whole response via resp.aread()
+    (SSE + JSON/text/binary) with NO size ceiling. The comment claimed "capped by the httpx timeout" but
+    a timeout bounds TIME not SIZE — a malicious tenant-configured external MCP server can stream a
+    multi-GB response fast and OOM the SHARED gateway (cross-tenant DoS). FIX (mcp_proxy.py): new
+    _MCP_MAX_RESPONSE_BYTES (env, default 10MiB) + _read_response_capped() iterates resp.aiter_bytes()
+    incrementally and raises _MCPBodyTooLarge the instant the total crosses the ceiling; both aread()
+    sites use it → withhold with 502 mcp_upstream_response_too_large. Non-finite SSE passthrough unchanged
+    (streams chunk-by-chunk, never buffers). Scope: ext-proxy (untrusted boundary); ORG path sandbox-routed
+    (gVisor mem/disk limits contain a huge sandbox response). +5 tests (2 unit + 3 integration 502);
+    existing 39 ext tests updated (response doubles expose aiter_bytes). Gate: 51 + 1242 gateway passed,
+    0 failed. Evidence mcp-parallel/findings/backstop-p10-response-mem-dos/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
