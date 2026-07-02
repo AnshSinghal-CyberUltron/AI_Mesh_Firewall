@@ -987,3 +987,80 @@ async def test_ext_proxy_ssrf_guard_allows_safe_public_host():
          patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 200  # not SSRF-blocked
+
+
+# ── CHG-0068: ext_mcp_proxy must AUDIT its enforcement decisions (item 9). The
+# external passthrough previously recorded NONE of its blocks/redactions, so external
+# tool usage + thwarted attacks were invisible in the MCPEvent trail (every other MCP
+# path audits via _record_gateway_event). These prove the block/redact events now record.
+def _ext_request_with_org(body_obj, org_slug="demo"):
+    req = _ext_request(body_obj)
+    req.state = SimpleNamespace(auth_context=_auth(org_slug=org_slug))
+    return req
+
+
+@pytest.mark.asyncio
+async def test_ext_proxy_audits_result_redaction():
+    req = _ext_request_with_org(_BENIGN_CALL)
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 20, "result": {"content": _PII_RESULT}})
+    events = []
+
+    async def _cap(**kw):
+        events.append(kw)
+
+    with patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", new_callable=AsyncMock, return_value=None), \
+         patch.object(mcp_proxy, "_record_gateway_event", new=_cap), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 200
+    redacts = [e for e in events if e.get("decision") == "redact"]
+    assert redacts, f"no redact audit event: {events}"
+    assert redacts[0]["org_slug"] == "demo"
+    assert str(redacts[0]["server_slug"]).startswith("ext:")
+
+
+@pytest.mark.asyncio
+async def test_ext_proxy_audits_ssrf_block():
+    req = _ext_request_with_org(_BENIGN_CALL)
+    events = []
+
+    async def _cap(**kw):
+        events.append(kw)
+
+    with patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", new_callable=AsyncMock, return_value=None), \
+         patch.object(mcp_proxy, "is_safe_outbound_url", lambda *_a, **_k: (False, "cloud metadata")), \
+         patch.object(mcp_proxy, "_record_gateway_event", new=_cap):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 400
+    assert any(e.get("decision") == "block" and e.get("reason") == "ssrf_blocked" for e in events), events
+
+
+@pytest.mark.asyncio
+async def test_ext_proxy_audits_credential_block():
+    req = _ext_request_with_org({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+                                 "params": {"name": "search", "arguments": _CRED_ARG}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 5,
+                               "result": {"content": [{"type": "text", "text": "ok"}]}})
+    events = []
+
+    async def _cap(**kw):
+        events.append(kw)
+
+    with patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", new_callable=AsyncMock, return_value=None), \
+         patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True), \
+         patch.object(mcp_proxy, "_record_gateway_event", new=_cap), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert any(e.get("decision") == "block" and e.get("reason") == "credential_blocked_inbound"
+               for e in events), events
+
+
+@pytest.mark.asyncio
+async def test_ext_proxy_audit_noop_without_org():
+    # unauthenticated (no org) → _record_gateway_event returns early; audit is a safe no-op
+    req = _ext_request(_BENIGN_CALL)  # no .state → no org
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 20, "result": {"content": _PII_RESULT}})
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 200  # still works, redaction still applied
+    assert "john.doe@example.com" not in json.dumps(_decode(resp))

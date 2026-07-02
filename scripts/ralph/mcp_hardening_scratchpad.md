@@ -432,6 +432,16 @@
       amplify load). +2 tests. Gate: 6 org-scope + 67 route-patch-site + 1094 gateway passed. Evidence:
       mcp-parallel/findings/backstop-p9-scope-violation-audit/finding.md. STILL OPEN (item 9): live
       rate-limit threshold probe (>150 req/s on a dedicated key/host) + adversarial policy-enforcement.
+      CHG-0068 (2026-07-02, MEDIUM — audit-completeness on the ext-proxy path): ext_mcp_proxy recorded NO
+      audit events (ZERO _record_gateway_event calls) while every other MCP path audits heavily — so on the
+      untrusted external-passthrough surface, blocked credentials, blocked/redacted PII results, and blocked
+      SSRF targets were INVISIBLE in the MCPEvent trail (breaks the ...→tag→audit chain for external tool
+      usage). FIX (mcp_proxy.py): local async _ext_audit() calls the best-effort _record_gateway_event (org
+      from auth ctx, server_slug=ext:<host>, fire-and-forget, no-op without org) at the enforcement points —
+      SSRF block, credential-in-args block, result block, result redact. +4 tests. Gate: 49 ext + 1252
+      gateway passed, 0 failed. Additive (no behaviour change). RESIDUAL: the allow path + infra-error
+      withholds (non-200/non-JSON CHG-0061, response-too-large CHG-0064) not yet audited (follow-up).
+      Evidence: mcp-parallel/findings/backstop-p9-ext-proxy-audit/finding.md.
 - [ ] 10. Resource limits CPU/mem/disk/timeout enforced + containment proven.
       LIVE VERIFIED (config) — CHG-0015 (2026-07-02): docker inspect of all 3 live org sandboxes shows
       CapDrop=[ALL], SecurityOpt=[no-new-privileges], Privileged=false, PidsLimit=256, Memory=2GiB,

@@ -793,6 +793,25 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   iptables) is the INFRA fix (item 12); a gateway-side `is_safe_outbound_url` on the sandbox-routed upstream
   would add a second layer. Evidence: `mcp-parallel/findings/backstop-p12-sandbox-ssrf/`.
 
+- **CHG-0068** (2026-07-02) — G3 item 9 (gateway ... audit) / 1.4 `...→tag→AUDIT` chain, MEDIUM
+  (audit-completeness): `ext_mcp_proxy` recorded NO audit events — ZERO `_record_gateway_event` calls —
+  while every other MCP path (org_mcp_jsonrpc / org_mcp_tool_call / internal_tools_call) audits heavily. So
+  on the untrusted external-passthrough surface (credential-exfil attempts, PII egress, SSRF), a blocked
+  credential-in-args, a blocked/redacted PII result, and a blocked SSRF target were all INVISIBLE in the
+  MCPEvent trail — breaking the audit chain for external tool usage (a compliance/forensic blind spot; no
+  data leak). FIX (`mcp_proxy.py`): a local async `_ext_audit(decision, reason, *, tool, tags, findings)` in
+  ext_mcp_proxy calls the existing best-effort `_record_gateway_event` with the caller's org,
+  `server_slug="ext:<host>"` (external host isn't a registered org server), tool/decision/reason/latency +
+  compliance tags/findings — fire-and-forget (no added latency), safe no-op when unauthenticated (returns
+  early on empty org). Wired at: SSRF block (block/ssrf_blocked), inbound credential block
+  (block/credential_blocked_inbound), outbound result block (block/pii_blocked_outbound), outbound result
+  redaction (redact/pii_redacted_outbound). Additive — no behaviour change to forward/scan. Files:
+  mcp_proxy.py, test_mcp_bare_proxy_scan.py (+4). Gate: 49 ext (result-redaction → decision=redact w/
+  org_slug + `ext:` server_slug; SSRF → block/ssrf_blocked; credential → block/credential_blocked_inbound;
+  unauthenticated → safe no-op) + 1252 gateway passed, 0 failed. RESIDUAL (follow-up): the "allow" path +
+  infra-error withholds (non-200/non-JSON [CHG-0061], response-too-large [CHG-0064]) are not yet audited.
+  Evidence: `mcp-parallel/findings/backstop-p9-ext-proxy-audit/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

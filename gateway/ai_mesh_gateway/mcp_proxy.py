@@ -11,6 +11,7 @@ Additionally provides org-scoped external gateway routes at
 
 import hmac
 import json
+import asyncio
 import logging
 import os
 import re
@@ -92,6 +93,64 @@ def _valid_internal_key(presented: str) -> bool:
 
 _TIMEOUT = float(os.environ.get("MCP_PROXY_TIMEOUT", "30"))
 _GATEWAY_ASYNC_MCP_AUDIT = os.environ.get("GATEWAY_ASYNC_MCP_AUDIT", "false").strip().lower() in ("1", "true", "yes")
+
+# ── CP49: decouple best-effort audit from the tool-call hot path ─────────────
+# CP48 root-caused the shared ~47 RPS throughput ceiling (idle CPU; a single
+# server nearly saturated the whole fleet) to the legacy audit path: it opened a
+# FRESH httpx client PER tool call and AWAITED a POST to control (single-thread
+# daphne) INLINE — so every tool-call completion serialized behind daphne's audit
+# throughput. Fix: keep the EXACT same POST to the SAME endpoint (telemetry is
+# byte-identical — control's _record_event + EnforcementEvent bridge preserved),
+# but move it OFF the hot path via a PROCESS-LOCAL POOLED client + a BOUNDED
+# fire-and-forget task set. The enforcement DECISION is still computed and applied
+# inline; only the best-effort audit RECORD is decoupled, and it is dropped (never
+# blocks the tool call, never grows unbounded) under sustained audit backpressure.
+_control_audit_client: "httpx.AsyncClient | None" = None
+_AUDIT_TASKS: set = set()
+_AUDIT_INFLIGHT = 0
+_AUDIT_MAX_INFLIGHT = int(os.environ.get("GATEWAY_AUDIT_MAX_INFLIGHT", "64"))
+
+
+def _get_control_audit_client() -> "httpx.AsyncClient":
+    """Process-local pooled client to control — each audit is a keep-alive request,
+    not a fresh TCP+TLS handshake (one per gateway worker's event loop)."""
+    global _control_audit_client
+    if _control_audit_client is None or _control_audit_client.is_closed:
+        _control_audit_client = httpx.AsyncClient(
+            timeout=5,
+            limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
+        )
+    return _control_audit_client
+
+
+async def _post_audit_event(headers: dict, payload: dict) -> None:
+    global _AUDIT_INFLIGHT
+    try:
+        await _get_control_audit_client().post(
+            f"{_BACKEND_URL}/api/mcp-connector/internal/record-event/",
+            headers=headers,
+            json=payload,
+        )
+    except Exception as exc:  # noqa: BLE001 - audit is best-effort; never surface to the caller
+        LOG.warning("Audit event record failed (async): %s", exc)
+    finally:
+        _AUDIT_INFLIGHT -= 1
+
+
+def _spawn_audit_event(headers: dict, payload: dict) -> bool:
+    """Fire the audit POST off the tool-call hot path, bounded. Best-effort: if too
+    many audits are already draining to (serial) control, DROP this record rather
+    than block the response or grow the backlog unbounded. asyncio is single-loop
+    per worker, so the counter needs no lock."""
+    global _AUDIT_INFLIGHT
+    if _AUDIT_INFLIGHT >= _AUDIT_MAX_INFLIGHT:
+        LOG.warning("Audit dropped under backpressure (inflight=%s)", _AUDIT_INFLIGHT)
+        return False
+    _AUDIT_INFLIGHT += 1
+    task = asyncio.create_task(_post_audit_event(headers, payload))
+    _AUDIT_TASKS.add(task)  # hold a ref so the task isn't GC'd mid-flight
+    task.add_done_callback(_AUDIT_TASKS.discard)
+    return True
 
 # CP23: the control plane returns a 4xx with a ``reason`` in the body for an
 # ENFORCEMENT denial (a policy/guard blocked the call), not a server fault. When
@@ -696,16 +755,10 @@ async def _record_gateway_event(
         # legacy alias retained during the presidio->scan rename window
         "presidio_findings": scan_findings or [],
     }
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            await client.post(
-                f"{_BACKEND_URL}/api/mcp-connector/internal/record-event/",
-                headers=headers,
-                json=payload,
-            )
-    except Exception as exc:
-        LOG.warning("Audit event record failed (org=%s tool=%s): %s",
-                    org_slug, tool_name, exc)
+    # CP49: fire-and-forget (pooled, bounded) — do NOT await a per-call daphne
+    # round-trip on the hot path; that inline await was the CP48 ~47 RPS ceiling.
+    # Same endpoint + same payload → identical persistence (_record_event + bridge).
+    _spawn_audit_event(headers, payload)
 
 
 # ── Scan enforcement helpers ─────────────────────────────────────────
@@ -1366,6 +1419,29 @@ async def ext_mcp_proxy(path: str, request: Request):
             status_code=403,
         )
 
+    # CHG-0068: audit the ext-proxy ENFORCEMENT decisions (item 9 — the external
+    # passthrough previously recorded NONE of its blocks/redactions, so external tool
+    # usage + thwarted attacks [credential blocks, PII redaction, SSRF blocks] were
+    # invisible in the MCPEvent audit trail, unlike every other MCP path). Best-effort /
+    # fire-and-forget (no latency); no-op if unauthenticated (_record_gateway_event
+    # returns early on an empty org). server_slug is ``ext:<host>`` since the external
+    # host is not a registered org server.
+    _ext_org = getattr(_get_auth_context(request), "org_slug", "") or ""
+    _ext_t0 = time.time()
+
+    async def _ext_audit(decision, reason, *, tool="", tags=None, findings=None):
+        await _record_gateway_event(
+            org_slug=_ext_org,
+            server_slug=f"ext:{hostname}",
+            tool_name=tool,
+            decision=decision,
+            reason=reason,
+            latency_ms=int((time.time() - _ext_t0) * 1000),
+            metadata={"transport": "ext_proxy", "enforced_at": "gateway", "host": hostname},
+            compliance_tags=list(tags or []),
+            scan_findings=list(findings or []),
+        )
+
     # S12 (CHG-0032): per-org rate limit on the authenticated external MCP proxy —
     # parity with org_mcp_jsonrpc / org_mcp_tool_call. This route sits behind the
     # auth middleware (not in EXCLUDED_PATHS), so the caller's org context is
@@ -1395,6 +1471,7 @@ async def ext_mcp_proxy(path: str, request: Request):
         LOG.warning(
             "ext_mcp_proxy.ssrf_blocked host=%s: %s", hostname, _ssrf_reason,
         )
+        await _ext_audit("block", "ssrf_blocked")  # CHG-0068
         return JSONResponse(
             content={"error": f"Upstream URL rejected by SSRF guard: {_ssrf_reason}"},
             status_code=400,
@@ -1460,6 +1537,10 @@ async def ext_mcp_proxy(path: str, request: Request):
                         LOG.warning(
                             "ext_mcp_proxy.credential_blocked host=%s tool=%s tags=%s",
                             hostname, _ext_tool_name, _in_tags,
+                        )
+                        await _ext_audit(  # CHG-0068
+                            "block", "credential_blocked_inbound",
+                            tool=_ext_tool_name, tags=_in_tags, findings=_in_findings,
                         )
                         return JSONResponse(
                             content={
@@ -1678,6 +1759,10 @@ async def ext_mcp_proxy(path: str, request: Request):
                     "ext_mcp_proxy.result_blocked host=%s tool=%s tags=%s",
                     hostname, _ext_tool_name or "?", _out_tags,
                 )
+                await _ext_audit(  # CHG-0068
+                    "block", "pii_blocked_outbound",
+                    tool=_ext_tool_name, tags=_out_tags, findings=_out_findings,
+                )
                 return JSONResponse(
                     content={
                         "jsonrpc": data.get("jsonrpc", "2.0"),
@@ -1695,6 +1780,10 @@ async def ext_mcp_proxy(path: str, request: Request):
                 )
             if _scanned_content is not _ext_result:
                 data["result"] = _scanned_content
+                await _ext_audit(  # CHG-0068: result PII/secret masked before egress
+                    "redact", "pii_redacted_outbound",
+                    tool=_ext_tool_name, tags=_out_tags, findings=_out_findings,
+                )
 
         # CHG-0043 (was CHG-0040; renumbered — id collided w/ P4.13 ws:// change):
         # a JSON-RPC error response (no result) can STILL leak a secret in

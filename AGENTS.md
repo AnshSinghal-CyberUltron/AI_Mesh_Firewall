@@ -527,6 +527,17 @@
     env in the app-load fixture. Gate: 13 passed (-k "not websocket"; ws tests hang pre-existingly). RESIDUAL:
     network egress-lockdown (sandbox internal=true/iptables) is the INFRA fix; a gateway-side guard on the
     sandbox-routed upstream would add a 2nd layer. Evidence mcp-parallel/findings/backstop-p12-sandbox-ssrf/.
+  - CHG-0068 (2026-07-02) — G3 item 9 (audit) / 1.4 audit chain, MEDIUM (audit-completeness): ext_mcp_proxy
+    recorded NO audit events (ZERO _record_gateway_event calls) while every other MCP path audits heavily —
+    so on the untrusted external-passthrough surface, blocked credentials, blocked/redacted PII results, and
+    blocked SSRF targets were INVISIBLE in the MCPEvent trail (breaks the ...→tag→audit chain for external
+    tool usage). FIX (mcp_proxy.py): local async _ext_audit() calls the best-effort _record_gateway_event
+    (org from auth ctx, server_slug=ext:<host>, fire-and-forget, no-op without org) at the enforcement
+    points — SSRF block (block/ssrf_blocked), credential-in-args block (block/credential_blocked_inbound),
+    result block (block/pii_blocked_outbound), result redact (redact/pii_redacted_outbound). +4 tests.
+    Gate: 49 ext + 1252 gateway passed, 0 failed. Additive (no behaviour change). RESIDUAL: allow path +
+    infra-error withholds (non-200/non-JSON, response-too-large) not yet audited. Evidence
+    mcp-parallel/findings/backstop-p9-ext-proxy-audit/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
