@@ -71,6 +71,10 @@
     network isolation VERIFIED (distinct mcp_sandbox_net_<org>). item 12 gVisor UNMET INFRA PREREQ
     (runsc NOT installed — can't require here); egress GAP confirmed (networks internal=false). Evidence
     mcp-parallel/findings/backstop-p12-isolation-posture/.
+  - CHG-0016 (2026-07-02) — G3 item 9 LIVE gateway auth/authz VERIFIED: no-auth/bad-key→401, CROSS-ORG
+    key→403 org_scope_violation (both directions = auth-layer cross-tenant isolation), bad input→graceful
+    (no 500). Rate-limit exists (S12) but not tripped at 60 calls. Evidence
+    mcp-parallel/findings/backstop-p9-gateway-authz/. Remaining: rate-limit threshold + adversarial policy/audit.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

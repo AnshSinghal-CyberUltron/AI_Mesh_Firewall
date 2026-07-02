@@ -103,6 +103,14 @@
       outbound call runs in the gateway/control backend.
 - [ ] 8. No unknown npm on host — proven.
 - [ ] 9. Gateway auth/authz/validation/rate-limit/policy/audit — verified + hardened.
+      LIVE VERIFIED (auth/authz/validation) — CHG-0016 (2026-07-02): probed the live gateway. Auth ENFORCED
+      (no-auth→401, bad-key→401); CROSS-ORG key ISOLATION ENFORCED (org-a key on org-b endpoint→403
+      org_scope_violation, and vice versa — auth-layer cross-tenant isolation, both directions); input
+      validation GRACEFUL (missing-method/malformed-json/empty-tool → no 500). Rate-limit (S12) exists but a
+      60-call burst didn't trip it (higher threshold). Policy authz already unit-proven (CHG-0006/0007/0008);
+      audit wired (_record_gateway_event). Evidence: mcp-parallel/findings/backstop-p9-gateway-authz/.
+      REMAINING before [x]: probe the rate-limit THRESHOLD (larger controlled burst — deferred to avoid
+      throttling shared keys); adversarial policy-enforcement + audit-completeness checks.
 - [ ] 10. Resource limits CPU/mem/disk/timeout enforced + containment proven.
       LIVE VERIFIED (config) — CHG-0015 (2026-07-02): docker inspect of all 3 live org sandboxes shows
       CapDrop=[ALL], SecurityOpt=[no-new-privileges], Privileged=false, PidsLimit=256, Memory=2GiB,

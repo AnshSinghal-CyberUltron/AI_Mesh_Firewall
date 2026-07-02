@@ -126,3 +126,8 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   RUNTIME_REQUIRED would fail-close/kill sandboxes); item 12 egress GAP confirmed (networks internal=false =
   open NAT). Evidence: mcp-parallel/findings/backstop-p12-isolation-posture/. REMAINING item 12: install
   gVisor + require runsc; network-level egress default-deny.
+- **CHG-0016** (2026-07-02) — G3 item 9 LIVE gateway auth/authz VERIFIED: no-auth→401, bad-key→401,
+  same-org→200, CROSS-ORG key→403 org_scope_violation (BOTH directions — auth-layer cross-tenant isolation),
+  malformed/missing/empty input→graceful (no 500). Rate-limit (S12) exists but not tripped at 60 calls.
+  Evidence: mcp-parallel/findings/backstop-p9-gateway-authz/. REMAINING: rate-limit threshold + adversarial
+  policy/audit (policy authz already unit-proven CHG-0006/0007/0008).

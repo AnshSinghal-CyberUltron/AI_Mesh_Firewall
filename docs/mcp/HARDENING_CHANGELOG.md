@@ -498,3 +498,32 @@ the prod compose/manifests is tracked under G3 item 12.
 - **REMAINING for G3 item 12:** (1) install gVisor on the deploy host, then set `MCP_SANDBOX_RUNTIME=runsc`
   + `MCP_SANDBOX_RUNTIME_REQUIRED=true` and verify `Runtime=runsc` live; (2) network-level egress
   default-deny (per-org `internal=true` + broker-proxied allowlist, or per-container iptables/eBPF).
+
+### CHG-0016 — LIVE gateway auth/authz/validation VERIFIED incl. cross-org key isolation (G3 item 9)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 9 (gateway auth/authz/validation/rate-limit/policy/audit) — auth/authz/
+  validation verified LIVE; rate-limit threshold + adversarial policy/audit deferred.
+- **Files:** `mcp-parallel/findings/backstop-p9-gateway-authz/gateway_authz_evidence.txt` (evidence).
+- **WHAT:** Probed `POST {gateway}/gateway/{org}/mcp/{server}` on the running stack:
+    - **Auth ENFORCED:** no Authorization header → `401 unauthorized`; invalid key → `401 Invalid API key`.
+    - **Cross-tenant authorization ISOLATION ENFORCED:** a valid org-a key on an **org-b** endpoint →
+      `403 org_scope_violation`, and org-b key on **org-a** → `403` — rejected in BOTH directions. A
+      legitimate same-org key/endpoint → `200`. (An auth-layer cross-tenant isolation proof, complementing
+      the result/audit isolation of CHG-0013.)
+    - **Input validation GRACEFUL:** missing `method` / malformed JSON / empty tool name → handled without
+      a 500 (no crash).
+    - **Rate-limit (S12 TPM+burst/RPM):** a 60-call burst on one key returned all 200 — the limit exists
+      (recent `S12-rate-limit-mcp` commit) but is higher than 60; not aggressively probed to avoid
+      throttling keys other sessions share.
+- **WHY:** BACKSTOP item-9 evidence — the CHG-0002 audit assessed auth/authz from code; this proves the
+  gateway ENFORCES authentication + org-scoped authorization live, including that org gateway keys cannot
+  cross tenant boundaries.
+- **NOW DOES:** records live confirmation that gateway auth + org-scope authz + graceful validation hold;
+  cross-org keys are rejected. No code changed (verification only).
+- **Touched whose work:** verifies the gateway auth middleware + org-scope validation (prior sessions).
+- **VERIFY:** the probe (httpx/curl) in the evidence file — key points: no-auth `401`, cross-org
+  `403 org_scope_violation` both directions.
+- **REMAINING for G3 item 9:** probe the actual rate-limit THRESHOLD (TPM/RPM) with a larger controlled
+  burst (deferred — avoid throttling shared keys); exercise policy enforcement + audit-completeness under
+  adversarial inputs. Policy authz is already unit-proven (CHG-0006/0007/0008); audit recording is wired
+  (`_record_gateway_event`).
