@@ -55,6 +55,17 @@ _CONFUSABLE_MAP = {
     "ο": "o", "α": "a", "ι": "i", "ν": "v",
 }
 
+# G21: Unicode SMALL-CAPITAL letters (ɪɢɴᴏʀᴇ …) — legitimate IPA/phonetic letters NFKC
+# does NOT fold to ASCII, but an LLM reads them as normal text. Folding them here (a
+# 1->1 position-preserving substitution) makes canonicalize_for_detection — and thus
+# detect_pii/detect_secrets AND context_guard's canonical injection scan — resistant to
+# small-caps smuggling of both attack phrases and PII/secrets. (q/x have no small-cap.)
+_SMALLCAP_MAP = {
+    "ᴀ": "a", "ʙ": "b", "ᴄ": "c", "ᴅ": "d", "ᴇ": "e", "ꜰ": "f", "ɢ": "g", "ʜ": "h",
+    "ɪ": "i", "ᴊ": "j", "ᴋ": "k", "ʟ": "l", "ᴍ": "m", "ɴ": "n", "ᴏ": "o", "ᴘ": "p",
+    "ʀ": "r", "ꜱ": "s", "ᴛ": "t", "ᴜ": "u", "ᴠ": "v", "ᴡ": "w", "ʏ": "y", "ᴢ": "z",
+}
+
 
 def _canonicalize_with_map(text: str):
     """Return ``(canonical_text, index_map)`` using only 1->1 subs and 1->0 removals.
@@ -94,6 +105,8 @@ def _canonicalize_with_map(text: str):
             ch2 = " "
         elif ch2 in _CONFUSABLE_MAP:
             ch2 = _CONFUSABLE_MAP[ch2]
+        elif ch2 in _SMALLCAP_MAP:            # G21: small-caps -> ASCII (1->1)
+            ch2 = _SMALLCAP_MAP[ch2]
         out_chars.append(ch2)
         idx_map.append(i)
     return "".join(out_chars), idx_map

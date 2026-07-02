@@ -20,9 +20,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 try:
-    from .patterns import compile_pattern, detect_pii, detect_secrets, detect_credential_exposure
+    from .patterns import (
+        compile_pattern, detect_pii, detect_secrets, detect_credential_exposure,
+        canonicalize_for_detection,
+    )
 except ImportError:
-    from patterns import compile_pattern, detect_pii, detect_secrets, detect_credential_exposure
+    from patterns import (
+        compile_pattern, detect_pii, detect_secrets, detect_credential_exposure,
+        canonicalize_for_detection,
+    )
 
 LOG = logging.getLogger("gateway.context_guard")
 
@@ -343,9 +349,25 @@ class ContextGuard:
         if not text:
             return ContextScanVerdict()
 
+        # G21 (obfuscation parity with the chat scanner): a retrieved RAG document is
+        # attacker-influenced; an indirect injection can be smuggled with unicode
+        # tags / small-caps / homoglyph / zero-width / fullwidth so the RAW pattern
+        # match misses it while the LLM still reads it. Also match the canonical form
+        # (patterns.canonicalize_for_detection folds all of those to ASCII). The raw
+        # match is tried FIRST so plain-text evidence snippets are unchanged; the
+        # canonical form is only computed/searched when it actually differs (no-op on
+        # plain ASCII => existing behaviour and the frozen cases are untouched).
+        # NOTE: HIDDEN_INSTRUCTION_PATTERNS deliberately stay RAW-only below — they
+        # DETECT obfuscation structure (zero-width runs, control chars) that
+        # canonicalization removes.
+        canonical = canonicalize_for_detection(text)
+        canonical = canonical if canonical != text else None
+
         for pattern_str in INDIRECT_INJECTION_PATTERNS:
             compiled = compile_pattern(pattern_str)
             match = compiled.search(text)
+            if not match and canonical is not None:
+                match = compiled.search(canonical)
             if match:
                 return ContextScanVerdict(
                     action="block",
@@ -405,6 +427,8 @@ class ContextGuard:
         for pattern_str in DOCUMENT_TOXICITY_PATTERNS:
             compiled = compile_pattern(pattern_str)
             match = compiled.search(text)
+            if not match and canonical is not None:   # G21: obfuscation-resistant
+                match = compiled.search(canonical)
             if match:
                 return ContextScanVerdict(
                     action="flag",
