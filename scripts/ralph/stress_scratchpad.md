@@ -47,9 +47,13 @@
       Canonical gate cmd: `cd gateway && GATEWAY_LIVE=0 PYTHONPATH=. .venv/bin/python -m pytest tests/golden -q`.
 
 ## R3 — OSS research (GitHub MCP + browser) — REFERENCE ONLY
-- [ ] 4. Study how mature guardrail/LLM-firewall OSS handle these attacks (detection, normalization,
+- [x] 4. Study how mature guardrail/LLM-firewall OSS handle these attacks (detection, normalization,
       canonicalization, ReDoS-safe matching, multi-turn tracking). Extract APPROACHES →
       docs/stress/SOLUTIONS.md. Do NOT import/vendor/run any OSS tool — your own code only.
+      DONE 2026-07-02: docs/stress/SOLUTIONS.md — approaches A–F mapped to G1–G14 and owned files.
+      KEY impl choice for R4: canonicalize with a POSITION-PRESERVING index map (1→1 subs + 1→0 removals,
+      AVOID length-changing NFKC on the redaction path) so a match in canonical form maps back to the
+      original span and is masked in EGRESS bytes. No-op when canon==original → zero risk to the 9 frozen.
 
 ## R4 — Fix on this worktree
 - [ ] 5. Implement fixes in the chat modules (enforcement.py, policy_engine.py, bedrock_scanner.py,
