@@ -883,8 +883,9 @@ export function ModelConnectionPanel({
 
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Provider *</label>
+                <label htmlFor="mcp-provider" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Provider *</label>
                 <select
+                  id="mcp-provider"
                   value={formData.provider}
                   onChange={(e) => handleProviderChange(e.target.value)}
                   className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
@@ -896,11 +897,14 @@ export function ModelConnectionPanel({
               </div>
 
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 p-3">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label htmlFor="mcp-apikey" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   {selectedProvider?.label || "Provider"} API Key
                 </label>
                 <input
+                  id="mcp-apikey"
                   type="password"
+                  autoComplete="off"
+                  aria-label={`${selectedProvider?.label || "Provider"} API key`}
                   value={activeApiKey}
                   onChange={(e) =>
                     setProviderApiKeys((prev) => ({ ...prev, [formData.provider]: e.target.value }))
@@ -914,9 +918,10 @@ export function ModelConnectionPanel({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Model Name *</label>
+                <label htmlFor="mcp-modelname" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Model Name *</label>
                 {selectedProvider && selectedProvider.models.length > 0 ? (
                   <select
+                    id="mcp-modelname"
                     value={formData.model_name}
                     onChange={(e) => handleModelNameChange(e.target.value)}
                     required
@@ -930,6 +935,7 @@ export function ModelConnectionPanel({
                   </select>
                 ) : (
                   <input
+                    id="mcp-modelname"
                     type="text"
                     required
                     value={formData.custom_model_name}
@@ -955,10 +961,11 @@ export function ModelConnectionPanel({
               )}
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label htmlFor="mcp-modelid" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Model ID
                 </label>
                 <input
+                  id="mcp-modelid"
                   type="text"
                   value={formData.model_id}
                   onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
@@ -970,10 +977,11 @@ export function ModelConnectionPanel({
 
               {showBaseUrl && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label htmlFor="mcp-baseurl" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     API Base URL {formData.provider === "ollama" ? "*" : "(optional)"}
                   </label>
                   <input
+                    id="mcp-baseurl"
                     type="text"
                     value={formData.api_base_url}
                     onChange={(e) => setFormData({ ...formData, api_base_url: e.target.value })}
@@ -986,8 +994,9 @@ export function ModelConnectionPanel({
 
               {!showBaseUrl && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">API Base URL (optional)</label>
+                  <label htmlFor="mcp-baseurl" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">API Base URL (optional)</label>
                   <input
+                    id="mcp-baseurl"
                     type="text"
                     value={formData.api_base_url}
                     onChange={(e) => setFormData({ ...formData, api_base_url: e.target.value })}
