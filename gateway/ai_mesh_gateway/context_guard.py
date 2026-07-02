@@ -14,6 +14,7 @@ blocking the async event loop.
 
 import asyncio
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
@@ -37,6 +38,53 @@ DEFAULT_THREAD_POOL_SIZE = 4
 # beyond the slice boundary would silently bypass the guard
 # (see tests/test_context_guard.py::TestNoEarlyTruncation).
 SNIPPET_MAX_CHARS = 100
+
+# G12 (ReDoS / DoS cap on document scanning): a retrieved RAG document is
+# attacker-influenced (the indirect-injection channel). The per-document scan
+# runs the full injection/hidden/toxicity regex catalogue PLUS the PII/secret
+# detectors over the ENTIRE text — the M-19 truncation-order invariant above
+# forbids slicing the text before the decision, so scan cost is linear in the
+# attacker-controlled document length with NO upper bound. Measured: a ~21 MB
+# document pins a scan thread for ~14 s, and the pool has only
+# DEFAULT_THREAD_POOL_SIZE workers, so a handful of oversized documents starve
+# RAG scanning entirely (denial of service). policy_engine already bounds its
+# match path (``_search_with_budget``); context_guard previously had no equivalent.
+#
+# Fix: two FAIL-CLOSED bounds. Neither truncates-then-allows, so neither creates
+# an evasion — an unscannable document is BLOCKED (refused), never silently
+# ingested with a threat hiding past a cut boundary:
+#   1. ``_MAX_DOC_SCAN_LEN`` — a document longer than this is refused outright,
+#      bounding worst-case CPU per scan. Legitimate retrieval chunks are orders
+#      of magnitude smaller (upstream MAX_PROMPT_LENGTH is 10k); a multi-MB single
+#      "document" is anomalous, and refusing it is safe (block ≠ evasion).
+#   2. ``_DOC_SCAN_TIMEOUT_S`` — a wall-clock net around the whole scan, run in a
+#      daemon thread (mirroring policy_engine._run_with_timeout). If the scan
+#      overruns (pathological backtracking under the size ceiling, or a future bad
+#      catalogue pattern) the calling worker is freed and the document is BLOCKED.
+_MAX_DOC_SCAN_LEN = 1_000_000
+_DOC_SCAN_TIMEOUT_S = 3.0
+
+
+def _run_with_timeout(fn, timeout):
+    """Run ``fn()`` in a daemon thread; return its result, or ``None`` on
+    timeout/exception. Frees the caller after ``timeout`` seconds even if a
+    backtracking regex is still running (the worker is a daemon). Mirrors
+    ``policy_engine._run_with_timeout`` so context_guard shares the same
+    ReDoS-containment contract."""
+    box: dict[str, Any] = {}
+
+    def _target() -> None:
+        try:
+            box["result"] = fn()
+        except Exception:  # noqa: BLE001 — fail-closed: caught error -> None -> block
+            box["error"] = True
+
+    worker = threading.Thread(target=_target, daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if worker.is_alive() or box.get("error"):
+        return None
+    return box.get("result")
 
 
 @dataclass
@@ -234,11 +282,63 @@ class ContextGuard:
         )
 
     def _scan_single_document_sync(self, text: str) -> ContextScanVerdict:
-        """Synchronous scan of a single document.
+        """Synchronous scan of a single document under the G12 DoS/ReDoS bounds.
+
+        Fail-closed guard rails (see ``_MAX_DOC_SCAN_LEN`` / ``_DOC_SCAN_TIMEOUT_S``):
+        an oversized or unscannable document is BLOCKED, never truncated-then-allowed
+        (which would let a threat hide past the cut). The real scan happens in
+        ``_scan_single_document_impl`` over the FULL text.
+        """
+        if not text:
+            return ContextScanVerdict()
+
+        # (1) size ceiling — refuse (never truncate-then-scan-then-allow) an
+        # oversized document so a huge blob cannot pin a scan worker.
+        if len(text) > _MAX_DOC_SCAN_LEN:
+            LOG.warning(
+                "context_guard: document %d chars exceeds scan ceiling %d; blocked (possible DoS)",
+                len(text), _MAX_DOC_SCAN_LEN,
+            )
+            return ContextScanVerdict(
+                action="block",
+                threat_type="scan_budget_exceeded",
+                confidence=0.9,
+                detail=(
+                    f"Document refused: length {len(text)} exceeds scan ceiling "
+                    f"{_MAX_DOC_SCAN_LEN} (fail-closed, possible DoS payload)."
+                ),
+                matched_patterns=["scan_budget_exceeded"],
+            )
+
+        # (2) wall-clock net — run the real scan under a budget so a backtracking
+        # pattern cannot pin the worker. On overrun, fail closed (block) + free it.
+        verdict = _run_with_timeout(
+            lambda: self._scan_single_document_impl(text), _DOC_SCAN_TIMEOUT_S
+        )
+        if verdict is None:
+            LOG.warning(
+                "context_guard: document scan exceeded %.1fs budget; blocked (possible ReDoS)",
+                _DOC_SCAN_TIMEOUT_S,
+            )
+            return ContextScanVerdict(
+                action="block",
+                threat_type="scan_budget_exceeded",
+                confidence=0.9,
+                detail=(
+                    f"Document refused: scan exceeded {_DOC_SCAN_TIMEOUT_S:.1f}s budget "
+                    "(fail-closed, possible ReDoS payload)."
+                ),
+                matched_patterns=["scan_budget_exceeded"],
+            )
+        return verdict
+
+    def _scan_single_document_impl(self, text: str) -> ContextScanVerdict:
+        """Synchronous scan of a single document (full-text detection core).
 
         Scans the FULL ``text`` — the ``[:SNIPPET_MAX_CHARS]`` slices below
         truncate only the evidence snippet reported in the verdict, never the
-        text being scanned (see module-level truncation-order invariant).
+        text being scanned (see module-level truncation-order invariant). The
+        DoS/ReDoS bounds live in ``_scan_single_document_sync`` which wraps this.
         """
         if not text:
             return ContextScanVerdict()
