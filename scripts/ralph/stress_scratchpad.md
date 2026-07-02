@@ -1198,6 +1198,26 @@
         DATA-SHAPE-BYPASS class (G57 list content, G58 dict tool-args): the guard's text EXTRACTORS must
         coerce EVERY non-str shape the OpenAI schema permits (list content, dict tool-args) or the channel is
         silently unscanned. Reuse _content_to_text / _tool_arg_to_text (main.py) — do NOT re-inline str-only checks.
+    - 🔴 G59 INPUT redaction skipped conversation-history tool_call arguments -> raw PII to model (2026-07-02):
+        Pivoted from output extraction to INPUT ENFORCEMENT (the 'no PII reaches models' guarantee). The input
+        scan FOLDS tool_calls (G7, main.py ~1229) so PII in a prior assistant turn's tool_calls[].function.
+        arguments triggers a redact verdict — but LLMRouter._apply_redaction (the wire redactor for BOTH
+        acompletion + acompletion_stream) redacted only message CONTENT (str+list) + tool DEFINITIONS, NOT the
+        tool-CALL arguments. PROBED (real _apply_redaction): a history assistant turn with tool_calls
+        arguments={ssn,key} -> the `tool` msg content email WAS redacted but the tool_calls SSN+stripe key
+        rode to the model RAW (detect-but-don't-enforce; defeats no-PII-to-model for any multi-turn/history-
+        replay chat). FIX (owned chat module llm_router.py): _redact_fn_call_arguments (redacts the arguments
+        STRING via _redact_text_with_backstop=redact_all+digit-backstop; coerces a non-conforming parsed DICT
+        to JSON first — output-side G58 parity) + _redact_message_tool_calls, wired into the _apply_redaction
+        loop. Structural fields (name/id/type) left intact (function-calling contract preserved); no redaction
+        signal -> verbatim (no over-redact). VERIFY (hermetic wire capture, EGRESS BYTES = truth): str + dict +
+        function_call arg PII reached the wire before, now masked on the exact upstream bytes; benign args +
+        names preserved. FROZEN 3 wire-capture tests in test_egress_wire_capture.py (the sibling of the existing
+        tool-DESCRIPTION redaction tests). GATE: golden 406×3; router/redact 284 pass; gateway suite 1454 pass.
+        commit c2145ac6 (own msg, pathspec). REDEPLOYING (rollback gateway-rollback-pre-g59; both healthy).
+        EIGHTEEN confirmed-live leaks fixed (G40-G46, G49-G59) + G48 defense-in-depth + 2 documented tradeoffs.
+        The tool-call channel is now symmetric: SCANNED (G7 input fold, G58 output extract) AND ENFORCED
+        (G58 output neutralize, G59 input redact) for str AND dict arguments, on input and output.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
