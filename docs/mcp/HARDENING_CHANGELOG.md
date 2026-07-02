@@ -1014,3 +1014,34 @@ the prod compose/manifests is tracked under G3 item 12.
   → 1069 passed, 0 failed.
 - **REMAINING (unchanged):** the gateway `INFRA`/`SECRET`/`PII` vocabulary vs the control ComplianceTag catalog
   codes (GDPR-PII/…) still mismatch for catalog reporting — item 5's separate cross-plane vocab decision.
+
+### CHG-0031 — Per-org rate limit on the bare REST tool-call route (gateway rate-limit parity, G3 item 9)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 9 (gateway auth/authz/validation/**rate-limit**/policy/audit). Closes a
+  bare-REST-vs-JSON-RPC rate-limit parity gap; item 9 stays open (threshold probe + adversarial policy +
+  audit-completeness remain).
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (new `_mcp_org_rate_limit_raw`; `_enforce_mcp_org_rate_limits`
+  refactored onto it; `org_mcp_tool_call` now calls the raw check); `gateway/ai_mesh_gateway/tests/
+  test_mcp_rate_limit.py` (+3 tests).
+- **WHAT:** `_enforce_mcp_org_rate_limits` (per-org TPM + burst/req-s + RPM/req-min, atomic Redis `INCR`,
+  fail-open by design) was called ONLY by `org_mcp_jsonrpc` (mcp_proxy.py:2092). The bare REST tool-call route
+  `org_mcp_tool_call` enforced the per-KEY tool-call CAP (`_incr_tool_call_count`) + per-key authz (CHG-0006)
+  but NOT the per-ORG rate limit — so a tenant could exceed org burst/RPM/TPM ceilings by driving
+  `POST /{org}/mcp/{server}/tools/call` (the bare route) while the JSON-RPC route capped them. Extracted the
+  shared check into `_mcp_org_rate_limit_raw` (returns a PLAIN 429 `JSONResponse`); the JSON-RPC route wraps it
+  into its JSON-RPC-200 envelope (unchanged), and the bare REST route returns it as-is (REST-appropriate 429).
+  The raw check runs early in `org_mcp_tool_call` — right after auth resolution, before arg parsing/forward.
+- **WHY:** the architecture mandate requires gateway rate-limiting; a route with no per-org ceiling is a
+  capacity-protection bypass (the same bare-route parity class as CHG-0006's missing authz gates).
+- **NOW DOES:** both MCP tool-call entry points (JSON-RPC + bare REST) enforce the identical per-org
+  TPM/burst/RPM ceilings; the bare route returns a plain HTTP 429 with `Retry-After` on breach. `org_mcp_jsonrpc`
+  behaviour is byte-identical (same underlying limiters, same JSON-RPC wrapping).
+- **Touched whose work:** the gateway MCP proxy rate-limit path (S12 author); extends the bare-route parity
+  work started in CHG-0006. No behaviour change to the JSON-RPC route.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_rate_limit.py -q` →
+  7 passed (+3: `_mcp_org_rate_limit_raw` returns a plain 429 / None-under-limit;
+  `org_mcp_tool_call` TPM-exceeded → plain 429 `org_rate_limit_exceeded`; burst-exceeded → plain 429
+  `burst_limit_exceeded`). Broad sweep `ai_mesh_gateway/tests` → 1072 passed, 0 failed.
+- **REMAINING for G3 item 9:** live threshold probe (a controlled burst > 150 req/s on a dedicated key/host);
+  adversarial policy-enforcement + audit-completeness checks. `ext_mcp_proxy` (the external passthrough proxy)
+  also does not call the per-org limiter — a separate follow-up if that path is tenant-exposed.

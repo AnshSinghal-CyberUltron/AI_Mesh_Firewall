@@ -256,3 +256,12 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   redact posture the call BLOCKS (no redact-that-leaks). Public IPs / example addrs not flagged. Files:
   mcp_scan_orchestrator.py (`_scan_text_tier1` + `_tags_for_finding`), test_mcp_scan_orchestrator.py (+5).
   Gate: 32 orchestrator + 1069 broad sweep passed. Distinct from item 5's tag-vocab mismatch (still open).
+- **CHG-0031** (2026-07-02) — G3 item 9 (gateway rate-limit parity): the bare REST tool-call route
+  `org_mcp_tool_call` enforced the per-KEY tool-call cap + per-key authz (CHG-0006) but NOT the per-ORG
+  TPM/burst/RPM rate limit that `org_mcp_jsonrpc` applies (called only at mcp_proxy.py:2092) — so a tenant
+  could exceed org burst/RPM/TPM ceilings by driving the bare `/tools/call` route. Extracted the shared check
+  into `_mcp_org_rate_limit_raw` (plain 429 JSONResponse, atomic-INCR limiter, fail-open by design); the
+  JSON-RPC route wraps it into its JSON-RPC-200 envelope (byte-identical behaviour), the bare route returns it
+  as-is (REST 429 + Retry-After). Files: mcp_proxy.py, test_mcp_rate_limit.py (+3). Gate: 7 rate-limit + 1072
+  broad sweep passed. Same bare-route parity class as CHG-0006. REMAINING (item 9): live threshold probe +
+  adversarial policy-enforcement + audit-completeness; ext_mcp_proxy also lacks the per-org limiter (follow-up).

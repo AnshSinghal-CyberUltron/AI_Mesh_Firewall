@@ -1785,15 +1785,14 @@ def _rate_limit_response_to_jsonrpc(
     )
 
 
-async def _enforce_mcp_org_rate_limits(
-    auth_ctx,
-    *,
-    jsonrpc: str = "2.0",
-    msg_id,
-) -> JSONResponse | None:
-    """Apply per-org TPM + burst/RPM ceilings (parity with chat/embeddings paths).
+async def _mcp_org_rate_limit_raw(auth_ctx) -> JSONResponse | None:
+    """Raw per-org TPM + burst/RPM check → a plain 429 ``JSONResponse`` (or None).
 
-    Returns a JSON-RPC error envelope (HTTP 200) when limited, else None.
+    Shared by the JSON-RPC route (which JSON-RPC-wraps this) and the bare REST
+    route (which returns it as-is), so BOTH MCP tool-call entry points enforce the
+    same per-org capacity ceilings. Extracted for CHG-0031: ``org_mcp_tool_call``
+    (the bare REST route) had the per-key tool-call CAP but NOT the per-org
+    TPM/burst/RPM rate limit that ``org_mcp_jsonrpc`` applies — a parity gap.
     """
     if auth_ctx is None:
         return None
@@ -1813,18 +1812,29 @@ async def _enforce_mcp_org_rate_limits(
         estimated_tokens=20,
     )
     if rl_resp is not None:
-        return _rate_limit_response_to_jsonrpc(rl_resp, jsonrpc=jsonrpc, msg_id=msg_id)
+        return rl_resp
 
-    burst_resp = await gateway_main._enforce_org_burst_rpm(
+    return await gateway_main._enforce_org_burst_rpm(
         auth_ctx,
         event_type="mcp_blocked",
         user_id=user_id,
         project_id=project_id,
     )
-    if burst_resp is not None:
-        return _rate_limit_response_to_jsonrpc(
-            burst_resp, jsonrpc=jsonrpc, msg_id=msg_id,
-        )
+
+
+async def _enforce_mcp_org_rate_limits(
+    auth_ctx,
+    *,
+    jsonrpc: str = "2.0",
+    msg_id,
+) -> JSONResponse | None:
+    """Apply per-org TPM + burst/RPM ceilings (parity with chat/embeddings paths).
+
+    Returns a JSON-RPC error envelope (HTTP 200) when limited, else None.
+    """
+    raw = await _mcp_org_rate_limit_raw(auth_ctx)
+    if raw is not None:
+        return _rate_limit_response_to_jsonrpc(raw, jsonrpc=jsonrpc, msg_id=msg_id)
     return None
 
 
@@ -2835,6 +2845,15 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
             "agent_id": getattr(_mcp_auth, "prefix", None) or "",
             "roles": list(getattr(_mcp_auth, "roles", None) or []),
         }
+
+    # S12 (CHG-0031): per-org TPM + burst/RPM rate limit — parity with
+    # org_mcp_jsonrpc. This bare REST route enforced the per-key tool-call CAP but
+    # NOT the per-org rate limit, so a tenant could exceed org burst/RPM ceilings
+    # via /tools/call while the JSON-RPC route capped them. Returns a plain 429.
+    _rl_rest = await _mcp_org_rate_limit_raw(_mcp_auth)
+    if _rl_rest is not None:
+        return _rl_rest
+
     try:
         parsed = json.loads(body) if body else {}
     except Exception:

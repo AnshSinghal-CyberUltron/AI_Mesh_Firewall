@@ -157,3 +157,46 @@ async def test_org_mcp_jsonrpc_under_limit_proceeds_to_initialize():
     assert "result" in data
     assert data["result"]["protocolVersion"] == "2024-11-05"
     assert "error" not in data
+
+
+# ── CHG-0031: the bare REST route org_mcp_tool_call now enforces per-org rate
+# limits too (it previously had the per-key tool-call CAP but NOT the per-org
+# TPM/burst/RPM limit that org_mcp_jsonrpc applied). It returns a PLAIN 429, not
+# the JSON-RPC-200 envelope the JSON-RPC route uses.
+
+
+@pytest.mark.asyncio
+async def test_mcp_org_rate_limit_raw_returns_plain_429_and_none_under_limit():
+    with patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
+         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+        resp = await mcp_proxy._mcp_org_rate_limit_raw(_auth())
+    assert resp.status_code == 429                      # plain 429, NOT a 200 envelope
+    assert _decode(resp)["code"] == "org_rate_limit_exceeded"
+
+    with patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
+         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+        assert await mcp_proxy._mcp_org_rate_limit_raw(_auth()) is None
+
+
+@pytest.mark.asyncio
+async def test_org_mcp_tool_call_tpm_exceeded_returns_plain_429():
+    req = _make_request(_auth())
+    req.body = AsyncMock(return_value=b'{"name": "echo", "arguments": {}}')
+    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), \
+         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
+         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 429                      # bare REST 429, not JSON-RPC 200
+    assert _decode(resp)["code"] == "org_rate_limit_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_org_mcp_tool_call_burst_exceeded_returns_plain_429():
+    req = _make_request(_auth())
+    req.body = AsyncMock(return_value=b'{"name": "echo", "arguments": {}}')
+    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), \
+         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
+         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=_burst_429()):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 429
+    assert _decode(resp)["code"] == "burst_limit_exceeded"

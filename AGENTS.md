@@ -162,6 +162,13 @@
     paths, so if a detected internal value survives the scrub under redact it BLOCKS (no redact-that-leaks).
     Public IPs not flagged. Files mcp_scan_orchestrator.py + test_mcp_scan_orchestrator.py (+5). Gate: 32 +
     1069 broad sweep passed. (Distinct from item 5's tag-vocab mismatch, still open.)
+  - CHG-0031 (2026-07-02) — G3 item 9 (gateway rate-limit parity): the bare REST route org_mcp_tool_call
+    enforced the per-KEY tool-call cap but NOT the per-ORG TPM/burst/RPM rate limit that org_mcp_jsonrpc
+    applies — a tenant could exceed org ceilings via /tools/call. Extracted _mcp_org_rate_limit_raw (plain 429);
+    the JSON-RPC route wraps it (unchanged), the bare route returns it as-is. Files mcp_proxy.py +
+    test_mcp_rate_limit.py (+3). Gate: 7 rate-limit + 1072 broad sweep passed. Same bare-route parity class as
+    CHG-0006. REMAINING (item 9): live threshold probe + adversarial policy + audit-completeness; ext_mcp_proxy
+    also lacks the per-org limiter (follow-up if tenant-exposed).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

@@ -203,6 +203,15 @@
       audit wired (_record_gateway_event). Evidence: mcp-parallel/findings/backstop-p9-gateway-authz/.
       REMAINING before [x]: probe the rate-limit THRESHOLD (larger controlled burst — deferred to avoid
       throttling shared keys); adversarial policy-enforcement + audit-completeness checks.
+      CHG-0031 (2026-07-02): rate-limit PARITY gap CLOSED on the bare REST route. _enforce_mcp_org_rate_limits
+      (per-org TPM+burst/RPM, atomic Redis INCR, fail-open by design) was called ONLY by org_mcp_jsonrpc
+      (mcp_proxy.py:2092); org_mcp_tool_call (bare REST /tools/call) had the per-KEY tool-call cap +authz
+      (CHG-0006) but NOT the per-ORG rate limit — a tenant could exceed org burst/RPM/TPM via the bare route.
+      Extracted _mcp_org_rate_limit_raw (plain 429 JSONResponse); the JSON-RPC route wraps it (unchanged), the
+      bare route returns it as-is (REST 429 + Retry-After). +3 tests; test_mcp_rate_limit.py 7 passed, broad
+      sweep 1072 passed. STILL OPEN (item 9): live threshold probe (controlled >150 req/s burst on a dedicated
+      key/host); adversarial policy-enforcement + audit-completeness; ext_mcp_proxy (external passthrough) also
+      lacks the per-org limiter (follow-up if tenant-exposed).
 - [ ] 10. Resource limits CPU/mem/disk/timeout enforced + containment proven.
       LIVE VERIFIED (config) — CHG-0015 (2026-07-02): docker inspect of all 3 live org sandboxes shows
       CapDrop=[ALL], SecurityOpt=[no-new-privileges], Privileged=false, PidsLimit=256, Memory=2GiB,
