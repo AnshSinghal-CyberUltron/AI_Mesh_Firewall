@@ -88,7 +88,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | 3 | GatewayKeyPanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
 | 4 | ModelGovernancePanel (+Fields) | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
 | 5 | RoutingGovernancePanel / RoutingAuditPanel / PolicyDomainSwitcher | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
-| 6 | KillSwitchPanel / KillSwitchModelCombobox / ModelStatePanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 6 | KillSwitchPanel / KillSwitchModelCombobox / ModelStatePanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done (critical fixes) |
 | 7 | MCPManagerPanel / MCPScannerPanel / MCPScanControlMatrix | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 8 | DatabaseConnectionPanel / VectorPolicyPanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 9 | RAGFeatureTestPanel / RAGAttackTrustSimulator / RAGPipelineTelemetry | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -146,6 +146,16 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ---
 
 ## Per-surface finding log (append-only)
+
+**Item 6 — KillSwitch/ModelState (iter6 resumed loop, 2026-07-02):** analyzed via parallel workflow (safety-critical control surface), verified live (firewall-1-6; 11 real models, KillSwitch empty state), console 0 errors, responsive (panels 351px @375 via F-RESP-1), no page overflow. **All destructive testing used route intercepts — no model was actually isolated (verified 0 isolated after).**
+- **F-MS1 FIXED (CRITICAL safety):** `handleIsolate`/`handleRecover` POSTed without checking `res.ok` → a failed isolate/recover **silently no-op'd**, leaving the operator believing a kill succeeded. Now: `window.confirm` + `res.ok` check + `setLoadError`. **Verified live:** intercepted isolate→500 shows *"Could not isolate … the model was not changed"* and the model stayed active; dismissing the confirm blocks the action. Also fixed a latent bug: `recover` now `encodeURIComponent`s the model name (names contain `/`).
+- **F-KS1 FIXED (CRITICAL data-integrity):** `fetchKillSwitches` swallowed non-ok/network errors → the safety list collapsed into "No kill-switches configured", hiding ACTIVE switches. Added `loadError` + banner + Retry; empty message suppressed on error. **Verified live** (500 intercept → error+Retry, not false-empty).
+- **F-KS-confirm FIXED (safety):** activate/deactivate now `window.confirm` (block/restore org traffic). (activate/deactivate already checked res.ok — good.)
+- **F-MS-leak FIXED (med, no-leak):** audit-log rows now run through `filterUserManagedModels` so the reserved guard model's raw id can't surface (mirrors allowlist/governance panels).
+- **Theme contrast FIXED:** ModelState audit-table Time/Risk/Reason cells + Auto-refresh + Risk-Score micro-labels (`text-slate-400`/`slate-500` w/o dark variant → `text-slate-500 dark:text-slate-400`); KillSwitch inactive badge `dark:text-slate-400`→`slate-300`.
+- **No-leak PROVEN:** only key STATUS (`api_key_set`) + short `api_key_prefix` (deliberate, ~`zs_a1b2`, not the credential) + model names/org-slug (own org) render — no raw keys/hostnames/IPs.
+- lint 42/42, build green, detector clean. Evidence: `mcp-parallel/findings/frontend-harden/killswitch/`.
+- **DEFERRED (logged for a follow-up polish pass — real but lower-priority):** (a) ModelState threshold range `onChange` fires a PATCH per drag-step and isn't disabled in-flight → request storm (needs debounce/commit-on-release); (b) `fetchAuditLogs` swallows errors (secondary read); (c) KillSwitch 8-col controls table relies on `overflow-x-auto` — safety controls are the least-discoverable column at 375 (consider a stacked/card layout); (d) combobox prints raw `LiteLLM id:` (low); (e) `actionLoading` single scalar + post-action full-table loading flash (minor UX).
 
 **Item 5 — Routing panels + TWO cross-cutting infra fixes (iter5 resumed loop, 2026-07-02):** analyzed all 3 via a parallel workflow, verified live (firewall-1-5), console clean.
 - **No-leak PROVEN (code-level):** RoutingGovernance shows model names/weights/formula (public), no secrets/topology. RoutingAudit uses curated field accessors (`getRoutingExtra`/`getEventMetadata`) — renders models/scores/reason/sensitivity/`endpoint_name` (friendly), NOT raw `metadata`/`prompt_lineage`/`data_accessed`/`endpoint_identifier`. PolicyDomainSwitcher renders static labels only. (No live routing events in dev DB → row-render verified by code, not screenshot.)

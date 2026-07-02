@@ -39,7 +39,12 @@
       iter3: DONE. Live-verified both themes @4 widths (7 real keys), console clean, modal validates, no
       overflow, no-leak PROVEN (list has no raw key; prefix only). Fixed F-GK1 (fetch error→error state,
       not false-empty), F-GK2 (badge dark: text variants), F-GK3 (create error text hardened). lint 37/37.
-- [ ] 6. KillSwitch/ModelState - [ ] 7. MCPManager/Scanner/ScanControlMatrix
+- [x] 6. KillSwitch/ModelState - [ ] 7. MCPManager/Scanner/ScanControlMatrix
+      item6 iter6: DONE (safety-critical). Workflow-analyzed + live-verified (11 real models; intercepts→
+      0 real isolations). Fixed CRITICAL F-MS1 (isolate/recover res.ok+confirm+error, +encode bug),
+      F-KS1 (kill-switch load-error state), F-KS-confirm, F-MS-leak (audit guard-model mask), theme
+      contrast (audit cells/badges/labels). No-leak proven (key status/prefix only). lint 42/42. Deferred:
+      slider PATCH-storm, audit fetch err, KS 8-col table @375, combobox litellm id — logged in AUDIT.
 - [ ] 8. DatabaseConnection/VectorPolicy - [ ] 9. RAGFeatureTest/RAGAttackTrust/PipelineTelemetry
 - [ ] 10. OutputGuardrailControls/Charts - [ ] 11. AttackSimulatorPanel - [ ] 12. PolicyManagement/Analytics
 - [ ] 13. LogViewer/LogDetailPage - [ ] 14. OWASPStatsPanel - [ ] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
