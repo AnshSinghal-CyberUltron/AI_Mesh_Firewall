@@ -96,27 +96,63 @@ def test_all_transports_accepted_on_post_rpc(agent_client, transport):
         return
 
     if transport == "sse":
-        class _FakeStream:
+        pending: list[dict] = []
+
+        class _FakeSseGet:
             status_code = 200
+            headers = {"content-type": "text/event-stream"}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_a):
+                return False
 
             async def aiter_lines(self):
                 yield "event: endpoint"
                 yield "data: /messages?sessionId=sess-unified"
                 yield ""
+                delivered = 0
+                while delivered < 2:
+                    if pending:
+                        payload = pending.pop(0)
+                        yield "event: message"
+                        yield "data: " + json.dumps(payload)
+                        yield ""
+                        delivered += 1
+                    else:
+                        import asyncio
+                        await asyncio.sleep(0.01)
 
-        @asynccontextmanager
-        async def _fake_stream(*_a, **_k):
-            yield _FakeStream()
+        class _FakePostStream:
+            status_code = 202
+            headers = {"content-type": "text/plain"}
 
-        mock_post = httpx.Response(
-            200,
-            json={"jsonrpc": "2.0", "id": 102, "result": {"tools": [{"name": "sse-tool"}]}},
-        )
+            async def __aenter__(self):
+                return self
 
-        with (
-            patch("httpx.AsyncClient.stream", side_effect=_fake_stream),
-            patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_post)),
-        ):
+            async def __aexit__(self, *_a):
+                return False
+
+            async def aread(self):
+                return b"Accepted"
+
+        def _stream(method, *_a, **kw):
+            req = kw.get("json") or {}
+            rid = req.get("id")
+            if method == "GET":
+                return _FakeSseGet()
+            if req.get("method") == "initialize":
+                pending.append(
+                    {"jsonrpc": "2.0", "id": rid, "result": {"protocolVersion": "2024-11-05"}}
+                )
+            else:
+                pending.append(
+                    {"jsonrpc": "2.0", "id": rid, "result": {"tools": [{"name": "sse-tool"}]}}
+                )
+            return _FakePostStream()
+
+        with patch("httpx.AsyncClient.stream", side_effect=_stream):
             resp = agent_client.post(
                 "/rpc",
                 json={

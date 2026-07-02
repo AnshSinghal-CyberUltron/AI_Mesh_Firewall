@@ -1,9 +1,18 @@
 ---
-iteration: 31
+iteration: 32
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter32 (2026-07-02) — SSE reader + stale-session fix (agent)
+- **P4.13/P6.18 RECHECK:** Fixed Cursor-owned agent: `sse_manager.py` (persistent GET /sse reader +
+  stream POST + message-event responses); streamable-http stale-session recovery verified live.
+  Rebuilt `ai-mesh/mcp-sandbox:latest` + recreated sandboxes. **3/4 transports PASS** 3× (stdio,
+  streamable-http, sse); **ws BLOCKED** (no stub + `mcp_ws_adapter`). Network: gateway no :443.
+  Playwright B1/B2/B4 **12/12**; broker gate **83 passed**. **Cannot `[x]`** until ws through sandbox.
+  Evidence: `RECHECK_ITER32.md`.
+- Hive: `cursor-ralph-iter32` on `hive-1782991737290-ylo911`.
 
 ## iter31 (2026-07-02) — §3 DEPLOYED to live gateway
 - **P4.13/P6.18 RECHECK:** Runtime gateway **NOW has §3** (2 `broker_send_rpc` refs after
@@ -211,9 +220,9 @@ status: ACTIVE
 - [ ] 13. Verify (Playwright + harness): with the gateway pointed only at the sandbox, an http, an sse, a
        ws, and a stdio MCP all work end-to-end THROUGH the sandbox; confirm the gateway opens NO direct
        upstream connection (network assertion) — nothing runs in the main backend.
-       **e2e INCOMPLETE 2026-07-02 (iter31):** §3 **deployed** (runtime 2 refs); flag ON;
-       stdio PASS; gateway http/sse still FAIL (session/sse); ws `mcp_ws_adapter` + no stub.
-       Playwright PASS; ss shows no gateway :443. See `RECHECK_ITER31.md`.
+       **e2e PARTIAL 2026-07-02 (iter32):** stdio + streamable-http + sse PASS 3× via gateway→broker→
+       sandbox; ws BLOCKED (`mcp_ws_adapter` + no ws stub). Agent SSE fix (`sse_manager.py`) + stale-
+       session invalidation. Playwright PASS; ss no gateway :443. Cannot `[x]` until 4/4. `RECHECK_ITER32.md`.
 
 ## P5 — Frontend fixes (Playwright-verified; the dialog especially)
 - [x] 14. B1: OAuth selectable ONLY for HTTP transports; block oauth+stdio in the form; render exactly
@@ -248,8 +257,8 @@ status: ACTIVE
 - [ ] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:
        all 4 transports through the sandbox under the Claude session's 15-MCP harness (concurrency/load/
        leakage). Fix any seam mismatch on the Cursor-owned side only.
-       **e2e INCOMPLETE 2026-07-02 (iter31):** §3 deployed; stdio only green in 4-transport verify;
-       http/sse/ws incomplete. See `RECHECK_ITER31.md`.
+       **e2e PARTIAL 2026-07-02 (iter32):** Cursor agent seam fixed (http/sse live); 3/4 transports
+       green 3×; ws still Claude-owned (`mcp_ws_adapter`). See `RECHECK_ITER32.md`.
 - [ ] 19. Re-run P1 repros → all four UI bugs gone; re-run P4 verification 3× (in-process + live).
        When P1–P6 all [x] AND integration green, output <promise>COMPLETE</promise>.
        **PARTIAL 2026-07-02 (iter24):** P10.32 recursive gate re-ran P1 UI (Playwright 12/12) + P8/P9 live

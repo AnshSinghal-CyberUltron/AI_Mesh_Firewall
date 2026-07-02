@@ -1,0 +1,10 @@
+agent: cursor-ralph-iter32
+story: P4.13/P6.18 iter32
+since: 2026-07-02T12:55:00Z
+status: released
+files:
+  - services/mcp-broker/sandbox-image/agent/sse_manager.py
+  - services/mcp-broker/sandbox-image/agent/upstream_manager.py
+  - services/mcp-broker/sandbox-image/agent/tests/test_upstream_proxy.py
+  - services/mcp-broker/sandbox-image/agent/tests/test_rpc_unified.py
+  - mcp-parallel/findings/p4-13/RECHECK_ITER32.md
