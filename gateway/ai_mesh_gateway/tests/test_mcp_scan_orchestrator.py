@@ -277,6 +277,45 @@ async def test_block_rule_not_honored_under_monitor_posture():
 
 
 @pytest.mark.asyncio
+async def test_scan_enforces_actor_scoped_block_on_adapter_path():
+    """CHG-0008 (G2 item 3, finding #1): END-TO-END proof that scan_mcp_payload —
+    the path the stdio/websocket ADAPTER uses via _mcp_security_scan(actor=...) —
+    enforces a per-ROLE block policy under the DEFAULT 'tag' posture, blocking the
+    scoped role and NOT a different role. Uses a REAL compiled bundle (no mocked
+    evaluate), combining actor-scoping (_policy_applies_to_actor) with the CHG-0007
+    rule-block honoring. This is the per-actor ACCESS authorization the audit
+    claimed was absent on the adapter path — it is enforced, one layer down."""
+    compiled = [{
+        "policy": {"id": 1, "code": "P1", "name": "p1", "priority": 10,
+                   "severity": "high", "allowed_roles": ["admin"]},
+        "rules": [{"id": 11, "name": "kw", "rule_type": "keywords",
+                   "condition": {"keywords": ["forbidden"]}, "action": "block"}],
+    }]
+    mock_sync = MagicMock()
+    mock_sync.get_policies_for_server.return_value = compiled
+
+    async def _run(actor_roles):
+        with (
+            patch("mcp_scan_orchestrator._get_policy_sync", return_value=mock_sync),
+            patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+        ):
+            _, result = await scan_mcp_payload(
+                {"text": "this is forbidden content"},
+                scan_direction="input",
+                enforcement="tag",   # DEFAULT posture, NOT block
+                effective_controls=_ctrl("input"),
+                org_slug="demo", server_slug="stub", tool_name="echo",
+                actor={"roles": actor_roles},
+            )
+        return result
+
+    blocked = await _run(["admin"])
+    assert blocked.blocked is True     # scoped role -> block rule applies -> blocked
+    allowed = await _run(["intern"])
+    assert allowed.blocked is False    # non-scoped role -> policy skipped -> not blocked
+
+
+@pytest.mark.asyncio
 async def test_a4_tier2_block_floor_on_redact_verdict():
     """A4 Tier-2 parity: a Bedrock 'redact' verdict under a 'block' posture BLOCKS."""
     verdict = MagicMock()

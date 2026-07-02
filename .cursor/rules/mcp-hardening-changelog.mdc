@@ -74,3 +74,11 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `_policy_applies_to_actor` is a policy-SCOPING primitive (documented, mirrors control plane) — do NOT
   invert it; the real gap is the absent deny-by-default per-actor tool-authz primitive (#1). +2 tests; 15
   orchestrator + 427 broad pass. REMAINING item 3: finding #1 (per-actor authz + field RBAC on stdio/ws).
+- **CHG-0008** (2026-07-02) — G2 item 3 authz COMPLETE (finding #1 CORRECTED): per-actor ACCESS authz
+  (block/allow by user/agent/role) IS enforced on the stdio/ws adapter path via
+  `evaluate_mcp_policies(actor=...)` + `_policy_applies_to_actor` (+ CHG-0007) — audit's "actor never used
+  for an access decision" was imprecise (it's used one layer down; already unit-tested in
+  test_policy_engine_actor_scoping.py). Added end-to-end proof (real bundle, tag posture: scoped role
+  blocked, other role allowed); 27 tests pass. SPLIT-OUT as item 3b: per-policy FIELD-level redaction
+  (`redaction_fields`) is HTTP-only; gateway bundle has no field-redaction support — needs a bundle-format
+  extension to reach the adapter path.

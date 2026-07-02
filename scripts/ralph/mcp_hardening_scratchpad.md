@@ -48,7 +48,21 @@
       masked egress hasPII=false, raw hasPII=true.
       REMAINING before [x]: (b) non-streaming string/structuredContent result shapes unscanned;
       (c) audit main org_mcp_jsonrpc inline result path (~2265/2451) for the same fail-open.
-- [ ] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
+- [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
+      DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
+      user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER
+      (scan orchestrator: evaluate_mcp_policies(actor) + _policy_applies_to_actor + CHG-0007 rule-block
+      honoring, end-to-end proof in test_scan_enforces_actor_scoped_block_on_adapter_path), and per-key
+      controls on the bare REST route (CHG-0006 allowlist/cap/disabled). Finding #1 was IMPRECISE (actor
+      IS used for an access decision, one layer down); the mcp_proxy.py:301-307 cache-key TODO is a
+      documented non-issue (tool enable/disable is server-scoped by design). Finding #4 was a FALSE
+      POSITIVE (CHG-0007). Gate: 27 authz/scoping tests + 427 broad sweep pass.
+- [ ] 3b. Per-policy FIELD-level redaction (redaction_fields) on the stdio/ws adapter path (split from #3).
+      HTTP path (MCPToolCallView, control views.py:1113) masks specific NAMED result fields for matched
+      actor-scoped policies via apply_field_redaction/redact_structured; the gateway policy engine/bundle
+      has NO field-redaction support (only redaction_hints), so the adapter path does content-scan but not
+      field-level RBAC masking. Needs a bundle-format extension: add redaction_fields to compiled policies
+      + gateway EvaluationResult + apply on the adapter response. Cross-cutting (control compiler + gateway).
       PARTIAL — CHG-0006 (2026-07-02): finding #2 closed. org_mcp_tool_call (bare REST route) now enforces
       the three per-key gates it lacked — _tool_allowed_by_key (403), mcp_max_tool_calls cap (429),
       _is_tool_disabled (403) — before forwarding, at parity with org_mcp_jsonrpc. +4 tests; 18 bare-proxy

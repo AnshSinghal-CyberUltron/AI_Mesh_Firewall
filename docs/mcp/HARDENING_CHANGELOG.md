@@ -251,3 +251,34 @@ the prod compose/manifests is tracked under G3 item 12.
   RBAC masking on the stdio/websocket adapter path (the enabled-tools payload needs an actor dimension, or
   the adapter path must route through actor-scoped policy eval). Tier-2 posture-gating of a `verdict.action
   == "block"` is a separate LLM-judge semantic (deferred, not an authored-rule authz concern).
+
+### CHG-0008 — Per-actor ACCESS authz is enforced on the adapter path (finding #1 corrected) — CLOSES G2 item 3 authz
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 3 (per-user/agent/role tool authorization) — authorization COMPLETE; a
+  narrower field-redaction follow-up is split out as item 3b.
+- **Files:** `gateway/ai_mesh_gateway/tests/test_mcp_scan_orchestrator.py` (+1 end-to-end test).
+- **WHAT:** Added `test_scan_enforces_actor_scoped_block_on_adapter_path` — an end-to-end proof (REAL
+  compiled bundle, no mocked evaluate) that `scan_mcp_payload` (the path the stdio/ws ADAPTER uses via
+  `_mcp_security_scan(actor=...)`) enforces a per-ROLE block policy under the DEFAULT `tag` posture:
+  blocks the scoped role, allows a different role.
+- **WHY (finding #1 — CORRECTED):** the audit claimed "actor is never used for an access decision on the
+  adapter path." VERIFIED IMPRECISE: per-actor ACCESS authz (block/allow by user/agent/role) IS enforced
+  via `evaluate_mcp_policies(actor=...)` + `_policy_applies_to_actor` — already unit-tested in
+  `test_policy_engine_actor_scoping.py` — which the adapter path invokes through the scan orchestrator;
+  CHG-0007 added rule-block honoring under the default posture, and this change proves the full chain
+  end-to-end. The `mcp_proxy.py:301-307` "cache key" gap is a DOCUMENTED non-issue (tool enable/disable is
+  server-scoped by design; per-actor authz lives in the per-call policy layer, correctly actor-keyed, not
+  in the enabled-tools cache).
+- **NOW DOES:** per-actor tool ACCESS authorization (block/allow by user/agent/role) is enforced + tested
+  across the HTTP path (`MCPToolCallView`), the stdio/ws ADAPTER path (scan orchestrator), and the bare
+  REST route's per-key controls (CHG-0006).
+- **Touched whose work:** backstop-only (net-new test + audit correction). No product code changed this entry.
+- **VERIFY:** `cd gateway && PYTHONPATH="$PWD/../shared:$PWD/ai_mesh_gateway" ./.venv/bin/python -m pytest
+  ai_mesh_gateway/tests/test_mcp_scan_orchestrator.py ai_mesh_gateway/tests/test_policy_engine_actor_scoping.py -q`
+  → 27 passed.
+- **SPLIT-OUT as item 3b (the genuine remaining gap):** per-policy FIELD-level redaction (`redaction_fields`
+  → `apply_field_redaction`/`redact_structured`, control `views.py:1113`) masks specific NAMED result
+  fields for matched actor-scoped policies on the HTTP path only. The gateway policy engine/bundle has NO
+  field-redaction support (only `redaction_hints`), so the stdio/ws adapter path does content-scan but not
+  field-level RBAC masking. Closing it needs a bundle-format extension (add `redaction_fields` to compiled
+  policies + gateway `EvaluationResult` + apply on the adapter response) — a scoped cross-cutting follow-up.

@@ -35,6 +35,11 @@
     — parity with control-plane engine). **#4 FALSE POSITIVE** — `_policy_applies_to_actor` is correct
     policy-SCOPING (mirrors control plane); do NOT invert it. +2 tests; 15 + 427 pass. Remaining item 3:
     finding #1 (per-actor authz + field RBAC on stdio/ws adapter path).
+  - CHG-0008 (2026-07-02) — G2 item 3 AUTHZ DONE (finding #1 CORRECTED): per-actor ACCESS authz
+    (block/allow by user/agent/role) IS enforced on the stdio/ws adapter path via `evaluate_mcp_policies(actor)`
+    + `_policy_applies_to_actor` (+CHG-0007) — the audit's "no access decision on adapter path" was
+    imprecise. Added end-to-end proof (27 pass). SPLIT-OUT item 3b: per-policy FIELD-level redaction
+    (`redaction_fields`) is HTTP-only; needs a gateway bundle-format extension.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
