@@ -214,7 +214,10 @@ class CircuitBreaker:
         """Record a successful LLM response."""
         try:
             total_key = self._window_key("total", model)
-            pipe = self._redis.pipeline(transaction=False)
+            # CHG-0086: MULTI/EXEC so INCR + EXPIRE commit atomically — a mid-pipeline
+            # failure (connection drop) between them would otherwise orphan the counter
+            # with NO TTL (same class as CHG-0062/0084). execute() still returns results.
+            pipe = self._redis.pipeline(transaction=True)
             pipe.incr(total_key)
             pipe.expire(total_key, WINDOW_SECONDS * 3)
             await pipe.execute()
@@ -230,7 +233,7 @@ class CircuitBreaker:
         try:
             total_key = self._window_key("total", model)
             error_key = self._window_key("errors", model)
-            pipe = self._redis.pipeline(transaction=False)
+            pipe = self._redis.pipeline(transaction=True)  # CHG-0086: atomic INCR+EXPIRE
             pipe.incr(total_key)
             pipe.expire(total_key, WINDOW_SECONDS * 3)
             pipe.incr(error_key)
@@ -355,7 +358,7 @@ class CircuitBreaker:
         HALF_OPEN alongside a stale probe count.
         """
         epoch_key = self._epoch_key(model)
-        pipe = self._redis.pipeline(transaction=False)
+        pipe = self._redis.pipeline(transaction=True)  # CHG-0086: atomic INCR+EXPIRE(+DELETE)
         pipe.incr(epoch_key)
         pipe.expire(epoch_key, self._ttl(3))
         pipe.delete(self._legacy_probes_key(model))
@@ -375,7 +378,10 @@ class CircuitBreaker:
     async def _admit_probe(self, model: str, epoch: int) -> int:
         """Atomically claim a probe slot; returns the admission number."""
         admit_key = self._admit_key(model, epoch)
-        pipe = self._redis.pipeline(transaction=False)
+        # CHG-0086: MULTI/EXEC — this method's docstring promises an ATOMIC probe-slot
+        # claim, but INCR + EXPIRE were not wrapped, so a mid-pipeline failure could
+        # orphan the admit counter with no TTL.
+        pipe = self._redis.pipeline(transaction=True)
         pipe.incr(admit_key)
         pipe.expire(admit_key, self._ttl())
         results = await pipe.execute()

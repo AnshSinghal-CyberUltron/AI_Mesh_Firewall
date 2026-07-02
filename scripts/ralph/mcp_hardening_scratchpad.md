@@ -373,6 +373,16 @@
       1449 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence:
       mcp-parallel/findings/backstop-p12-oauth-token-file-perms/finding.md. RESIDUAL: ideally write inside the
       per-tenant sandbox FS (item 12); shred on revocation.
+      CHG-0086 (2026-07-02, LOW–MEDIUM — ARCH item 11 Redis correctness; closes the CHG-0084 residual):
+      circuit_breaker.py used pipeline(transaction=False) at 4 INCR/DELETE+EXPIRE sites (record_success,
+      record_error, _bump_epoch, _admit_probe — the last's docstring even claims "Atomically claim a probe
+      slot"). A mid-pipeline connection drop could orphan a counter with NO TTL (same class as CHG-0062/0084).
+      FIX (circuit_breaker.py): all 4 → pipeline(transaction=True) (MULTI/EXEC); execute() still returns
+      results (24 breaker tests green). Completes the Redis-atomicity trilogy (CHG-0062 rate-limit / CHG-0084
+      leakage-detector / CHG-0086 circuit-breaker); grep pipeline(transaction=False) circuit_breaker.py =>
+      NONE; no remaining non-atomic TTL-setter found. +1 test. Gate: 1 + 1454 gateway passed, 0 failed;
+      broker -k "not websocket" 108 passed. Evidence:
+      mcp-parallel/findings/backstop-p11-circuit-breaker-atomicity/finding.md.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

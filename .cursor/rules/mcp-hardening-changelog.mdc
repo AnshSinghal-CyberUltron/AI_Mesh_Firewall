@@ -1151,6 +1151,23 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   read vector; a stronger posture writes them inside the per-tenant gVisor sandbox FS (item 12, future);
   consider shredding on token revocation.
 
+- **CHG-0086** (2026-07-02) — ARCH item 11 (**PostgreSQL + Redis correctness**; closes the CHG-0084
+  residual), LOW–MEDIUM: `circuit_breaker.py` used `pipeline(transaction=False)` at **4** sites that INCR
+  (or DELETE) + EXPIRE — `record_success` (total), `record_error` (total + errors), `_bump_epoch` (epoch +
+  probes DELETE), `_admit_probe` (admit — whose docstring says *"Atomically claim a probe slot"* yet the
+  INCR+EXPIRE were not wrapped). A non-transactional pipeline batches but does NOT MULTI/EXEC, so a
+  connection drop mid-write (INCR sent, EXPIRE not) orphans the counter with **no TTL** (same class as
+  CHG-0062/0084). Counters are per-model (bounded) → smaller impact than CHG-0084, but atomic TTL-setting is
+  the correct pattern and `_admit_probe`'s "atomic" contract was unmet. FIX (`circuit_breaker.py`): all 4 →
+  `pipeline(transaction=True)` (MULTI/EXEC) so INCR (+DELETE) and its EXPIRE commit atomically; the counter
+  can never be left without a TTL. `execute()` still returns per-command results (`record_error` reads
+  `results[0]`/`results[2]`, `_admit_probe` reads `results[0]`) — verified by the existing 24 breaker tests.
+  +1 test (record_success/error pipelines are `transaction=True` with paired INCR+EXPIRE). Gate: 1 + 1454
+  gateway passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p11-circuit-breaker-atomicity/`. **RESIDUAL:** all gateway INCR/SADD+EXPIRE
+  on the MCP/rate-limit/breaker paths are now atomic (CHG-0062/0084/0086); `oauth_proxy`/`model_state` use
+  `setex`/`set(ex=)` (atomic by construction). No remaining non-atomic TTL-setter found.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
