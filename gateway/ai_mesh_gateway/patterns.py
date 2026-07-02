@@ -68,6 +68,19 @@ def _canonicalize_with_map(text: str):
     out_chars: List[str] = []
     idx_map: List[int] = []
     for i, ch in enumerate(src):
+        cp = ord(ch)
+        # G18: Unicode Tag block "ASCII smuggling". TAG SPACE..TAG TILDE
+        # (U+E0020..U+E007E) mirror printable ASCII 0x20..0x7E but are category Cf, so
+        # the drop below would silently REMOVE them — hiding tag-encoded PII/secrets
+        # from detection while the original tag bytes still egress (LLMs decode them).
+        # DECODE the printable mirror back to ASCII here (BEFORE the Cf-drop). It is a
+        # 1->1 position-preserving substitution, so index_map[k]=i still masks the
+        # match back onto the original tag bytes. Tag controls (U+E0000/E0001/E007F)
+        # are also Cf and fall through to the drop below.
+        if 0xE0020 <= cp <= 0xE007E:
+            out_chars.append(chr(cp - 0xE0000))
+            idx_map.append(i)
+            continue
         cat = unicodedata.category(ch)
         if cat in ("Cf", "Mn", "Me"):                 # invisibles / combining marks -> drop
             continue

@@ -619,3 +619,39 @@ def test_g17_tag_decoder_unit():
 def test_g17_benign_not_blocked():
     """FP floor: a benign instruction-shaped message (no tags) stays allow."""
     assert _verdict("Please follow all the previous instructions in the onboarding doc.") == "allow"
+
+
+# ================================================================== fixed gap (now FROZEN)
+# G18 — Unicode Tag block "ASCII smuggling" of PII/secret. Tag chars are category Cf,
+# so patterns._canonicalize_with_map DROPPED them — a tag-encoded SSN/email/card/key
+# vanished from the canonical form (detect_pii=False) while the original tag bytes
+# still egressed (LLMs decode them) = leak. FIXED in patterns.py: decode the printable
+# tag mirror (U+E0020..U+E007E -> ASCII) BEFORE the Cf-drop, 1->1 position-preserving
+# so the index map still masks the match back onto the original tag bytes. FROZEN.
+def _undo_tags(s: str) -> str:
+    return "".join(chr(ord(c) - 0xE0000) if 0xE0000 <= ord(c) <= 0xE007F else c for c in s)
+
+
+_G18_TAG_SECRETS = [
+    ("g18_tag_ssn",   "my ssn is " + _tags(SSN),         "123-45-6789"),
+    ("g18_tag_email", "reach me at " + _tags(EMAIL),     "john.doe@example.com"),
+    ("g18_tag_card",  "card " + _tags(CARD),             "4111 1111 1111 1111"),
+    ("g18_tag_key",   "aws key " + _tags("AKIAIOSFODNN7EXAMPLE"), "AKIAIOSFODNN7EXAMPLE"),
+]
+
+
+@pytest.mark.parametrize("label,payload,needle", _G18_TAG_SECRETS)
+def test_g18_tag_smuggled_pii_detected_and_masked(label, payload, needle):
+    """A tag-encoded PII/secret must be DETECTED and MASKED out of the egress bytes
+    (checked by decoding the tag block back to ASCII in the redacted output)."""
+    assert patterns.detect_pii(payload) or patterns.detect_secrets(payload), (
+        f"{label}: tag-smuggled secret not detected")
+    redacted = patterns.redact_all(payload)
+    assert needle not in _undo_tags(redacted), f"{label}: tag-smuggled secret survived redaction (LEAK)"
+
+
+def test_g18_canonicalize_decodes_tags_position_preserving():
+    """The canonical form reveals the tag-encoded ASCII (so downstream detection works)
+    while plain/legit-unicode text is unaffected."""
+    assert patterns.canonicalize_for_detection(_tags("123-45-6789")) == "123-45-6789"
+    assert patterns.canonicalize_for_detection("normal 123-45-6789") == "normal 123-45-6789"
