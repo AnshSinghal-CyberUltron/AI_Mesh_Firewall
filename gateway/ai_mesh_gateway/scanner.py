@@ -120,6 +120,17 @@ ATTACK_PATTERNS: dict[str, list[str]] = {
         r"ignore\s+(previous|all\s+previous|earlier|above|all)\s+instructions",
         r"disregard\s+(previous|all|above|your)\s+instructions",
         r"forget\s+(previous|everything|your\s+instructions)",
+        # G15: the three verb patterns above accept only a SINGLE qualifier (so the
+        # two-word "all previous" only worked for "ignore"), and "override" was
+        # absent — "disregard/forget/override all previous instructions" (and the
+        # prior/earlier/above variants) bypassed Tier-1 even single-turn, while
+        # context_guard already had the full verb alternation. Add one unified verb-
+        # alternation pattern that allows an optional second qualifier. Object stays
+        # "instructions" (NOT the broader context/rules/messages set context_guard
+        # uses for RAG docs) so benign chat like "disregard the previous messages"
+        # or "forget the above context" is not false-blocked. Linear-time (fixed
+        # quantifiers, no ambiguous optional-repeat) => ReDoS-safe.
+        r"(?:ignore|disregard|forget|override)\s+(?:all|every|any|the|previous|prior|above|preceding|earlier)(?:\s+(?:previous|prior|above|preceding|earlier))?\s+instructions",
         r"new\s+instructions:",
         r"system\s*prompt\s*:",
         r"you\s+are\s+now",
