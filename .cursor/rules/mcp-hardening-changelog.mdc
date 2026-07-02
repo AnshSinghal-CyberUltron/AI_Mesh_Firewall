@@ -294,3 +294,14 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   Files: mcp_proxy.py, test_mcp_rate_limit.py (+4). Gate: 14 rate-limit + 1081 broad sweep passed. Documented
   limitation: a chunked request omitting Content-Length isn't caught (infra body limit covers it; an app-layer
   streaming cap is deferred to avoid re-mocking the body-read across the MCP test harness).
+- **CHG-0035** (2026-07-02, verification — read-only) — after the CHG-0033 credential leak, audited every OTHER
+  security-critical egress/isolation path for the same class of gap. ALL CLEAN. (1) Sandbox agent HTTP
+  (`upstream_manager.py`): `follow_redirects=False` (no SSRF-via-redirect), per-method timeouts, no `verify=False`
+  anywhere in the broker/sandbox (TLS verify default-on). (2) WS (`ws_manager.py`): ws/wss scheme only,
+  `websockets.connect` uses the default verifying SSL context, bounded handshake; no CERT_NONE/check_hostname
+  bypass. (3) Container (`docker_manager`): no-new-privileges + Docker DEFAULT seccomp (NOT unconfined) +
+  cap_drop=ALL + read_only rootfs + `memswap_limit=mem_limit` (swap disabled) + pids/mem/cpu limits. (4)
+  Cross-tenant harness (`scripts/mcp_multi_org_harness.py`): byte-level canary cross-target oracle + JSON-RPC id
+  round-trip + fail-closed negative matrix (any non-401/403 on a cross-tenant call = breach). Evidence:
+  mcp-parallel/findings/backstop-p12b-sandbox-egress-hygiene/audit.md. No code changed. RESIDUAL (item 12,
+  unchanged): runc (not gVisor) + per-org networks internal=false (no egress default-deny) — infra, not code.

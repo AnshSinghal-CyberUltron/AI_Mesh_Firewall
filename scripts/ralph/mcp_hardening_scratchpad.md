@@ -267,6 +267,15 @@
       before [x]: install gVisor + require runsc (verify Runtime=runsc live); network egress default-deny
       (per-org internal=true + broker-proxied allowlist, or iptables/eBPF). NOTE: risky to change live (would
       break the running stack). Evidence: mcp-parallel/findings/backstop-p12-isolation-posture/.
+      CHG-0035 (2026-07-02, verification): CODE-level sandbox security audited CLEAN (the runc/egress gaps above
+      are the only residuals, and both are INFRA). docker_manager: no-new-privileges + DEFAULT seccomp (code
+      explicitly does NOT pass seccomp=unconfined) + cap_drop=ALL + read_only rootfs + memswap_limit=mem_limit
+      (swap DISABLED) + pids/mem/cpu limits + tmpfs-only-for-caches. Sandbox AGENT egress hygiene also clean:
+      HTTP follow_redirects=False + no verify=False anywhere (TLS verify default-on) + timeouts; WS ws/wss-only
+      + default verifying SSL context. And the cross-tenant multi-org harness (scripts/mcp_multi_org_harness.py,
+      item 19) oracle is SOUND: byte-level canary cross-target detection + JSON-RPC id round-trip + fail-closed
+      negative matrix (any non-401/403 on a cross-tenant call = breach). Evidence:
+      mcp-parallel/findings/backstop-p12b-sandbox-egress-hygiene/audit.md.
 
 ## G4 — Production hardening (Phase 3)
 - [ ] 13. Monitoring + metrics + tracing wired; backup; auto-recovery (sandbox/broker/Redis/PG self-heal).

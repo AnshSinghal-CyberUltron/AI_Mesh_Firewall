@@ -1133,3 +1133,34 @@ the prod compose/manifests is tracked under G3 item 12.
   request that omits Content-Length (the adversarial case). The infra-layer body limit (nginx/ALB) covers
   that today; a future streaming cap (`request.stream()` with an abort) would close it at the app layer, but
   that requires re-mocking the body-read across the MCP test harness (deferred to avoid a large test churn).
+
+### CHG-0035 — Verification: sandbox-agent egress hygiene + container security + cross-tenant oracle (read-only)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 items 10/12 (sandbox security posture / egress) + G5 item 19 (cross-tenant canary).
+  A read-only audit triggered by CHG-0033 — I checked every OTHER security-critical egress/isolation path for
+  a similar class of gap. All CLEAN; no code changed.
+- **Files:** `mcp-parallel/findings/backstop-p12b-sandbox-egress-hygiene/audit.md` (evidence). No source edits.
+- **WHAT (all verified CLEAN):**
+    - **Sandbox agent HTTP dialing** (`upstream_manager.py`): `follow_redirects=False` (no SSRF-via-redirect /
+      egress bypass), per-method timeouts, and NO `verify=False` anywhere in the broker/sandbox (TLS verify is
+      the httpx default — no MITM window).
+    - **Sandbox agent WebSocket** (`ws_manager.py`): scheme restricted to ws/wss; `websockets.connect` passes
+      no `ssl=` override so `wss://` uses the default verifying SSL context; handshake bounded by open_timeout
+      + wait_for. No `CERT_NONE`/`check_hostname=False`/`_create_unverified` anywhere.
+    - **Container security** (`docker_manager._run_kwargs`/`_security_opts`): no-new-privileges + Docker DEFAULT
+      seccomp (explicitly NOT `unconfined`) + `cap_drop=ALL` + `read_only=True` rootfs + `pids_limit=256` +
+      `mem_limit` with `memswap_limit=mem_limit` (SWAP DISABLED) + `nano_cpus` + writable tmpfs only for caches.
+    - **Cross-tenant harness** (`scripts/mcp_multi_org_harness.py`, another session): byte-level canary
+      cross-target oracle (`conc~<org>~<server>~…` echoed back + owner compared + JSON-RPC id round-trip) and a
+      fail-closed negative matrix (attacker key vs victim org path — any non-401/403 counts as a breach/failure).
+- **WHY:** after finding the CHG-0033 credential leak, the backstop must confirm the sibling egress/isolation
+  paths don't share the defect; these are exactly the item-12 (seccomp/cap_drop/egress) + item-19 (canary)
+  claims, now evidenced rather than assumed.
+- **NOW DOES:** nothing changed — documents that these paths are sound. RESIDUAL (unchanged, item 12): runc
+  (not gVisor) + per-org networks `internal=false` (no network-level egress default-deny) — INFRA
+  prerequisites, not code gaps. Minor note: the harness's redundant get-sum operand hash can collide
+  (~1/640k/pair) but the echo canary is the definitive detector, so no false PASS.
+- **Touched whose work:** verifies the broker/sandbox-agent security (prior sessions) + the multi-org canary
+  harness (another session). No edits.
+- **VERIFY:** the three `grep` commands in the evidence file reproduce the audited facts (follow_redirects=False;
+  no verify=False; cap_drop/read_only/memswap_limit/seccomp).

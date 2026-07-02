@@ -191,6 +191,14 @@
     (Content-Length pre-check, body-read flow untouched). Files mcp_proxy.py + test_mcp_rate_limit.py (+4).
     Gate: 14 + 1081 broad sweep passed. Documented limitation: doesn't catch chunked-without-Content-Length
     (infra body limit covers it; app-layer streaming cap deferred to avoid test-harness churn).
+  - CHG-0035 (2026-07-02, verification) — read-only audit triggered by CHG-0033: checked the sibling
+    security-critical egress/isolation paths for the same leak class. All CLEAN. Sandbox agent HTTP:
+    follow_redirects=False + no verify=False anywhere (TLS verify default-on) + timeouts. WS: ws/wss only,
+    default verifying SSL context. Container (docker_manager): no-new-privileges + DEFAULT seccomp (not
+    unconfined) + cap_drop=ALL + read_only rootfs + memswap_limit=mem (swap off) + pids/mem/cpu limits.
+    Multi-org cross-tenant harness: byte-level canary oracle + fail-closed negative matrix. Evidence
+    mcp-parallel/findings/backstop-p12b-sandbox-egress-hygiene/audit.md. No code changed. RESIDUAL (item 12):
+    runc (not gVisor) + open per-org NAT — infra, not code.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
