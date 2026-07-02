@@ -471,36 +471,52 @@ _ROT13_MAP = str.maketrans(
 )
 
 
-def _decode_transport_variants(text: str) -> list[str]:
-    """
-    Best-effort bounded transport decode (base64 / hex / ROT13) of embedded
-    tokens so an encoded injection payload can be rescanned. Single decode depth,
-    only tokens up to _TRANSPORT_DECODE_MAX_LEN, only readable ASCII results.
-    """
-    variants: list[str] = []
-    if not text or len(text) > MAX_PROMPT_LENGTH:
-        return variants
-    seen: set[str] = set()
-    # ROT13 whole-text variant — letters-only Caesar shift, no token extraction
-    # needed (the whole prompt may be ROT13-encoded). Bounded by the
-    # MAX_PROMPT_LENGTH guard above. Rescanned by the tier-0.5 deobfuscation pass.
+def _decode_one_layer(text: str, seen: set[str]) -> list[str]:
+    """One transport-decode layer over ``text``: whole-text ROT13 + nested base64/hex
+    tokens + text-encodings (HTML/URL/escape). Adds each new readable variant to
+    ``seen`` (dedup). Bounded token counts/lengths -> linear, ReDoS-safe."""
+    out: list[str] = []
     try:
         _rot = text.translate(_ROT13_MAP)
-        if _rot != text and _rot.isprintable():
+        if _rot != text and _rot.isprintable() and _rot not in seen:
             seen.add(_rot)
-            variants.append(_rot)
+            out.append(_rot)
     except Exception:  # noqa: BLE001 - decode helpers must never break the scan
         pass
     # G22: each token is decoded through nested layers (double-base64 / base64-of-hex).
     for token in _BASE64_TOKEN_RE.findall(text)[:8]:
         if len(token) > _TRANSPORT_DECODE_MAX_LEN:
             continue
-        variants.extend(_nested_decode_variants(token, False, seen))
+        out.extend(_nested_decode_variants(token, False, seen))
     for token in _HEX_TOKEN_RE.findall(text)[:8]:
         if len(token) > _TRANSPORT_DECODE_MAX_LEN:
             continue
-        variants.extend(_nested_decode_variants(token, True, seen))
-    variants.extend(_decode_text_encoding_variants(text))
+        out.extend(_nested_decode_variants(token, True, seen))
+    for v in _decode_text_encoding_variants(text):
+        if v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+def _decode_transport_variants(text: str) -> list[str]:
+    """
+    Best-effort bounded transport decode (base64 / hex / ROT13 / HTML-entity / URL /
+    source-escape) of embedded payloads so an encoded injection can be rescanned.
+    Only tokens up to _TRANSPORT_DECODE_MAX_LEN, only readable ASCII results.
+    """
+    if not text or len(text) > MAX_PROMPT_LENGTH:
+        return []
+    seen: set[str] = set()
+    level1 = _decode_one_layer(text, seen)
+    variants = list(level1)
+    # G34: ONE additional decode layer catches 2-stage cross-encoding laundering that
+    # a single pass misses — URL-of-base64, base64-of-ROT13, base64-of-URL, ROT13-of-
+    # URL, etc. Bounded to depth 2 over already-bounded token counts/lengths (linear,
+    # ReDoS/DoS-safe); `seen` dedups and prevents any re-processing loop.
+    for v in level1:
+        if v and len(v) <= MAX_PROMPT_LENGTH:
+            variants.extend(_decode_one_layer(v, seen))
     return variants
 
 
