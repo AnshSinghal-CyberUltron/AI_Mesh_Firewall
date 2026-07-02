@@ -1103,3 +1103,33 @@ the prod compose/manifests is tracked under G3 item 12.
   Authorization). Broad sweep `ai_mesh_gateway/tests` → 1077 passed, 0 failed.
 - **REMAINING:** none for the ext-proxy header hygiene. (Follow-up idea: enforce a per-key tool allowlist on
   ext_mcp_proxy too, if that transport is meant to be tool-scoped — currently transport-level only.)
+
+### CHG-0034 — Per-request body-size ceiling on the MCP routes (gateway validation / DoS, G3 item 9)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 9 (gateway auth/authz/**validation**/rate-limit/policy/audit) + the resource
+  mandate. The RAG/embeddings paths have 413 payload guards; the MCP routes had NONE.
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (`_MCP_MAX_BODY_BYTES` + `_mcp_body_too_large` +
+  `_mcp_body_too_large_response`; guard added to `org_mcp_jsonrpc`, `org_mcp_tool_call`, `ext_mcp_proxy`);
+  `gateway/ai_mesh_gateway/tests/test_mcp_rate_limit.py` (+4 tests).
+- **WHAT:** every MCP tool-call handler buffers the whole request into memory (`await request.body()` /
+  `await request.json()`) with no size ceiling, so a tenant could POST a very large body and exhaust gateway
+  memory (a DoS / availability gap). Added a per-request ceiling (`MCP_MAX_BODY_BYTES`, default 10 MiB,
+  env-configurable) enforced by `_mcp_body_too_large(request)` — rejects an oversized declared Content-Length
+  with a 413 `mcp_body_too_large` BEFORE the body is read, on all three tenant-facing MCP entry points.
+- **WHY:** the architecture mandate requires gateway request VALIDATION + resource limits; an unbounded body
+  on the hot MCP path is a straightforward memory-exhaustion vector that the sibling RAG/embeddings paths
+  already guard against.
+- **NOW DOES:** `org_mcp_jsonrpc`, `org_mcp_tool_call`, and `ext_mcp_proxy` reject a body whose declared
+  Content-Length exceeds the ceiling with HTTP 413 before buffering it. The guard is defensive against test
+  doubles (missing headers → allow) and leaves the existing body-read flow untouched (no change to
+  request.body()/json() — so it's non-invasive on the hot path).
+- **Touched whose work:** the gateway MCP proxy validation path; complements the CHG-0031/0032 rate-limit
+  coverage (both are pre-processing DoS gates).
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_rate_limit.py -q` →
+  14 passed (+4: `_mcp_body_too_large` helper matrix; each of the three routes returns 413
+  `mcp_body_too_large` on an oversized Content-Length). Broad sweep `ai_mesh_gateway/tests` → 1081 passed, 0
+  failed.
+- **REMAINING (documented limitation):** this is a Content-Length pre-check — it does NOT catch a chunked
+  request that omits Content-Length (the adversarial case). The infra-layer body limit (nginx/ALB) covers
+  that today; a future streaming cap (`request.stream()` with an abort) would close it at the app layer, but
+  that requires re-mocking the body-read across the MCP test harness (deferred to avoid a large test churn).

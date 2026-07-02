@@ -285,3 +285,12 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   bearer for the upstream (if any) as the SOLE Authorization. Files: mcp_proxy.py,
   test_mcp_bare_proxy_scan.py (+2). Gate: 20 bare-proxy + 1077 broad sweep passed. Now the external server
   receives only safe/protocol headers + its own token; the caller's gateway key never leaves the gateway.
+- **CHG-0034** (2026-07-02) — G3 item 9 (gateway validation / DoS): the MCP tool-call handlers buffered the
+  whole request (`request.body()`/`json()`) with NO size ceiling — a tenant could POST a huge body and exhaust
+  gateway memory (RAG/embeddings already have 413 guards; MCP had none). Added `_MCP_MAX_BODY_BYTES` (default
+  10 MiB, env `MCP_MAX_BODY_BYTES`) + `_mcp_body_too_large()` + a 413 `mcp_body_too_large` response, enforced
+  BEFORE the body read on all three tenant-facing entry points (org_mcp_jsonrpc, org_mcp_tool_call,
+  ext_mcp_proxy). Non-invasive (Content-Length pre-check; body-read flow unchanged; defensive on test doubles).
+  Files: mcp_proxy.py, test_mcp_rate_limit.py (+4). Gate: 14 rate-limit + 1081 broad sweep passed. Documented
+  limitation: a chunked request omitting Content-Length isn't caught (infra body limit covers it; an app-layer
+  streaming cap is deferred to avoid re-mocking the body-read across the MCP test harness).

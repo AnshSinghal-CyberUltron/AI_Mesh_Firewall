@@ -231,6 +231,16 @@
       ext_mcp_proxy) enforce the per-org TPM/burst/RPM ceiling → code-level rate-limit coverage COMPLETE. +3
       tests; test_mcp_rate_limit.py 10 passed, broad sweep 1075 passed. Item 9 still [ ]: live threshold probe
       (controlled >150 req/s on a dedicated key/host) + adversarial policy-enforcement + audit-completeness.
+      CHG-0034 (2026-07-02): gateway VALIDATION/DoS gap CLOSED — the MCP routes buffered the whole body
+      (request.body()/json()) with NO size ceiling (RAG/embeddings already 413-guard; MCP had none). Added
+      _MCP_MAX_BODY_BYTES (default 10MiB, env MCP_MAX_BODY_BYTES) + _mcp_body_too_large() -> 413
+      mcp_body_too_large BEFORE buffering, on all three entry points (org_mcp_jsonrpc, org_mcp_tool_call,
+      ext_mcp_proxy). Also AUDITED the sibling gateway->upstream egress paths for the CHG-0033 credential-leak
+      pattern: internal_discover_tools/internal_tools_call build CLEAN upstream headers from the server's own
+      auth_token (+ is_safe_outbound_url SSRF guard) and the sandbox path (broker_send_rpc) too — so CHG-0033
+      was the isolated leak. Non-invasive Content-Length pre-check. +4 tests; test_mcp_rate_limit.py 14 passed,
+      broad sweep 1081 passed. LIMITATION (documented): doesn't catch chunked-without-Content-Length (infra
+      body limit covers it; app-layer streaming cap deferred to avoid MCP test-harness churn).
 - [ ] 10. Resource limits CPU/mem/disk/timeout enforced + containment proven.
       LIVE VERIFIED (config) — CHG-0015 (2026-07-02): docker inspect of all 3 live org sandboxes shows
       CapDrop=[ALL], SecurityOpt=[no-new-privileges], Privileged=false, PidsLimit=256, Memory=2GiB,

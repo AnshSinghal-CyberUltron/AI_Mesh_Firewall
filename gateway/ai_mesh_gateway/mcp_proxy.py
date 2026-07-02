@@ -100,6 +100,47 @@ _ALLOWED_MCP_DOMAINS = {
     "mcp.linear.app",
 }
 
+# CHG-0034: per-request body-size ceiling for the MCP routes (validation / DoS).
+# The MCP tool-call handlers buffer the whole body (request.body()/json()); with
+# no ceiling, a tenant could POST a huge body and exhaust gateway memory. The
+# RAG/embeddings paths already have 413 guards; the MCP routes had none.
+_MCP_MAX_BODY_BYTES = int(os.environ.get("MCP_MAX_BODY_BYTES", str(10 * 1024 * 1024)))
+
+
+def _mcp_body_too_large(request) -> bool:
+    """True when the declared Content-Length exceeds the MCP body ceiling.
+
+    A cheap first-line DoS guard: an honest/naive oversized body is rejected
+    BEFORE it is buffered by request.body()/json(). Defensive against test doubles
+    (no headers/content-length → False). NOTE: a chunked request that omits
+    Content-Length is not caught here — the infra-layer body limit and a future
+    streaming cap cover that adversarial case.
+    """
+    hdrs = getattr(request, "headers", None)
+    if not hdrs:
+        return False
+    try:
+        cl = hdrs.get("content-length")
+    except Exception:  # noqa: BLE001 — non-mapping test double
+        return False
+    if not cl:
+        return False
+    try:
+        return int(cl) > _MCP_MAX_BODY_BYTES
+    except (ValueError, TypeError):
+        return False
+
+
+def _mcp_body_too_large_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=413,
+        content={
+            "error": "payload_too_large",
+            "code": "mcp_body_too_large",
+            "message": f"MCP request body exceeds the {_MCP_MAX_BODY_BYTES}-byte ceiling.",
+        },
+    )
+
 # ── Server config cache for transport-aware routing ──────────────────
 _server_config_cache: dict[str, dict] = {}
 _server_config_ttl: dict[str, float] = {}
@@ -1091,6 +1132,10 @@ async def ext_mcp_proxy(path: str, request: Request):
     _ext_rl = await _mcp_org_rate_limit_raw(_get_auth_context(request))
     if _ext_rl is not None:
         return _ext_rl
+
+    # CHG-0034: reject an oversized body before buffering it (DoS guard).
+    if _mcp_body_too_large(request):
+        return _mcp_body_too_large_response()
 
     target_url = f"https://{hostname}/{remaining}"
 
@@ -2123,6 +2168,10 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
     if err:
         return err
 
+    # CHG-0034: reject an oversized body before buffering it (DoS guard).
+    if _mcp_body_too_large(request):
+        return _mcp_body_too_large_response()
+
     # M-04: actor identity ({user_id, agent_id, roles}) for actor-scoped MCP
     # policies, derived from the authenticated API key's context.
     _mcp_auth = _get_auth_context(request)
@@ -2883,6 +2932,10 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
     err = _validate_org_scope(request, org_slug)
     if err:
         return err
+
+    # CHG-0034: reject an oversized body before buffering it (DoS guard).
+    if _mcp_body_too_large(request):
+        return _mcp_body_too_large_response()
 
     body = await request.body()
 

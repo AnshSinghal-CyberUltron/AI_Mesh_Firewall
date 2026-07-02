@@ -184,6 +184,13 @@
     new _ext_proxy_forward_headers strips hop-by-hop + credential/identity headers (authorization/cookie/
     x-api-key/x-gateway-*) and injects ONLY the upstream's own stored OAuth token (if any) as Authorization.
     Files mcp_proxy.py + test_mcp_bare_proxy_scan.py (+2). Gate: 20 bare-proxy + 1077 broad sweep passed.
+  - CHG-0034 (2026-07-02) — G3 item 9 (gateway validation/DoS): the MCP routes buffered the whole body
+    (request.body()/json()) with NO size ceiling (RAG/embeddings already 413-guard). Added _MCP_MAX_BODY_BYTES
+    (default 10MiB, env MCP_MAX_BODY_BYTES) + _mcp_body_too_large() → 413 mcp_body_too_large on an oversized
+    Content-Length, BEFORE buffering, on org_mcp_jsonrpc + org_mcp_tool_call + ext_mcp_proxy. Non-invasive
+    (Content-Length pre-check, body-read flow untouched). Files mcp_proxy.py + test_mcp_rate_limit.py (+4).
+    Gate: 14 + 1081 broad sweep passed. Documented limitation: doesn't catch chunked-without-Content-Length
+    (infra body limit covers it; app-layer streaming cap deferred to avoid test-harness churn).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

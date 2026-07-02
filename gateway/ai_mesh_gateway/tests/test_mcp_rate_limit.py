@@ -244,3 +244,53 @@ async def test_ext_mcp_proxy_disallowed_domain_403_before_rate_limit():
          patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
         resp = await mcp_proxy.ext_mcp_proxy("evil.example.org/mcp", req)
     assert resp.status_code == 403
+
+
+# ── CHG-0034: per-request body-size ceiling (validation / DoS) on the MCP routes.
+# The MCP handlers had no body-size guard (RAG/embeddings do); a huge Content-Length
+# is now rejected with 413 BEFORE the body is buffered.
+
+
+def test_mcp_body_too_large_helper():
+    big = str(mcp_proxy._MCP_MAX_BODY_BYTES + 1)
+    ok = str(mcp_proxy._MCP_MAX_BODY_BYTES)
+    assert mcp_proxy._mcp_body_too_large(SimpleNamespace(headers={"content-length": big})) is True
+    assert mcp_proxy._mcp_body_too_large(SimpleNamespace(headers={"content-length": ok})) is False
+    assert mcp_proxy._mcp_body_too_large(SimpleNamespace(headers={})) is False
+    assert mcp_proxy._mcp_body_too_large(SimpleNamespace(headers={"content-length": "nope"})) is False
+    assert mcp_proxy._mcp_body_too_large(SimpleNamespace()) is False  # test double, no headers
+
+
+@pytest.mark.asyncio
+async def test_org_mcp_jsonrpc_oversized_body_413():
+    req = _make_request(_auth())
+    req.headers = {"content-length": str(mcp_proxy._MCP_MAX_BODY_BYTES + 1)}
+    req.json = AsyncMock(return_value={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
+    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None):
+        resp = await mcp_proxy.org_mcp_jsonrpc("demo", "srv", req)
+    assert resp.status_code == 413
+    assert _decode(resp)["code"] == "mcp_body_too_large"
+
+
+@pytest.mark.asyncio
+async def test_org_mcp_tool_call_oversized_body_413():
+    req = _make_request(_auth())
+    req.headers = {"content-length": str(mcp_proxy._MCP_MAX_BODY_BYTES + 1)}
+    req.body = AsyncMock(return_value=b"{}")
+    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 413
+    assert _decode(resp)["code"] == "mcp_body_too_large"
+
+
+@pytest.mark.asyncio
+async def test_ext_mcp_proxy_oversized_body_413():
+    req = _make_request(_auth())
+    req.headers = {"content-length": str(mcp_proxy._MCP_MAX_BODY_BYTES + 1)}
+    req.body = AsyncMock(return_value=b"")
+    with patch.object(mcp_proxy, "_ALLOWED_MCP_DOMAINS", {"mcp.example.com"}), \
+         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
+         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+        resp = await mcp_proxy.ext_mcp_proxy("mcp.example.com/mcp", req)
+    assert resp.status_code == 413
+    assert _decode(resp)["code"] == "mcp_body_too_large"
