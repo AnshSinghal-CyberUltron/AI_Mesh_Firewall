@@ -169,6 +169,37 @@
         bounded ReDoS-safe patterns to scanner ATTACK_PATTERNS.prompt_injection (Tier-2 is primary semantic
         catch; these are Tier-1 defense-in-depth). ZERO FP on a tricky benign corpus + all frozen benign. 14
         golden frozen. Full gateway 1087 passed; golden 161 passed/7 skipped 3x.
+      G29 DONE 2026-07-02 (commit 9313fb41): three MORE semantic classes, same evidence bar as G28.
+        Re-probed my scanner vs aidefence oracle over persona/hypothetical/fictional/test-framing/prefix/
+        encoding-instruction/override/data-exfil phrasings. Added ONLY the classes with hard evidence +
+        zero benign FP: (1) encode-to-evade — oracle CONFIRMS as encoding_attack (conf 0.6): gated on
+        encode-token(base64/rot13/hex/cipher) + evasion-intent(bypass/evade/so-the-filter/cannot-read/
+        avoid-detection), OR bypass/evade + filter/detection/moderation/scanner noun; benign base64/hex
+        transport & "bypass the CDN cache" do NOT match. (2) system-message/-instructions extraction —
+        low-FP extension of the FROZEN system-prompt extraction family (adds "system message"/"system
+        instructions" + summarize verb). (3) become-an-unrestricted-<entity> — jailbreak-persona demand
+        requiring strong adjective(unrestricted/unfiltered/jailbroken/uncensored/lawless) AND ai/model/
+        oracle/version noun; "unrestricted free spirit" (self-help) does NOT match. DELIBERATELY DEFERRED
+        to Tier-2 (oracle marked them SAFE + real creative/coaching/business-hypothetical FP risk):
+        fictional-world-no-rules, "if you had no restrictions", "disregard your training", "obey me". This
+        is the honest, contradiction-surviving cut — a Tier-1 hard block on those would be a false positive.
+        Verified ZERO FP on creative+coaching+technical+business benign corpus + all frozen benign; 7/7
+        attacks block, 7/7 benign allow end-to-end through _scan_prompt_sync. 8 block + 14 FP-floor golden
+        frozen. Adversarial golden 180 passed x3; full non-live gateway 1092 passed; frozen offline golden
+        183 passed/7 live-skipped. All bounded => ReDoS-safe.
+      CASE-09 LIVE-FLAKE ROOT CAUSE PINNED 2026-07-02 (refines the 141-147 note): the live output-guard
+        failure (expected redact, got flag) is the harness's HARDCODED max_tokens:64 in live_driver.py:107.
+        At 64 tokens cohere/north-mini-code:free is cut MID-LIST before emitting a complete example email,
+        so the output-guard has no PII span to redact -> honest flag (VERIFIED: zero literal emails in the
+        flagged egress -> NO leak). Re-ran the SAME prompt at max_tokens:128 -> model emits "u***@e***.com,
+        t***@e***.org" -> output-guard REDACTS -> final=redact. So the security property HOLDS (complete PII
+        is masked; truncated output has nothing to mask). PROVEN NOT my regression: case 09 is live_only/
+        characterize=live -> characterize_live_chat() HTTP POST to the DEPLOYED gateway; the in-process
+        scanner.py (my G29 edit) is never loaded on that path. Fix options (coordinate w/ MCP/freeze owner
+        of test_chat_pipeline_golden.py + live_driver.py): thread a per-case max_tokens (>=128) so the free
+        model reaches a redactable email, OR make 09 a deterministic PII-injection output_guard case. NOT
+        touched this iteration (one-item rule + shared-harness ownership). Still gates R5 "no PII/redactions
+        hold" only in the sense of test determinism, not a real leak.
       R2 PROBE + INDEPENDENT-ORACLE VALIDATION 2026-07-02: probed base64url(-_)/tool-role/monospace/double-
         struck/fraktur — ALL handled (no new gap; English text base64url == base64, no -_; NFKC folds the math-
         alphanumeric variants). Cross-checked my redact_all egress with the INDEPENDENT aidefence_has_pii oracle
