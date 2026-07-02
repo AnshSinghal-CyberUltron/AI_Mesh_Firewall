@@ -91,6 +91,14 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      R6 INCREMENT 4 2026-07-02: impeccable AUDIT + WCAG contrast polish on ModelConnectionPanel. Rendered the
+        Add-Model-Configuration modal via Playwright (logged in admin@zeroshield.io, 1440w); audited. Found 2
+        helper texts using bare text-slate-400 on white (~2.9:1 = FAILS WCAG AA 4.5:1). Bumped to
+        text-slate-500 dark:text-slate-400 (slate-500 ≈4.6:1). Verified LIVE: computed color now oklch(0.554)
+        =slate-500. Detector clean, build ✓. R6 for owned components now: detector-clean + a11y (both) +
+        WCAG-contrast + functionally live-verified (R5). REMAINING for "polish complete": screenshot both
+        owned surfaces at BOTH themes × 4 widths (375/768/1024/1440) to confirm no layout/contrast breakage;
+        pipeline-trace card now renderable (R5 iter24 generated enforcement events) so it can be audited live.
       R6 INCREMENT 3 2026-07-02: impeccable detector CLEAN on both owned components. Ran
         `node .claude/skills/impeccable/scripts/detect.mjs <files>`. ModelConnectionPanel.jsx: 0 findings.
         OutputPipelineTimeline.jsx: 2 gray-on-color findings on the colors literal = FALSE POSITIVE (dot=teal
