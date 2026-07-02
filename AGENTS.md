@@ -277,6 +277,17 @@
     + key_prefix in metadata, never leaks into the target's stream); all 4 routes use it. 429
     audit deliberately skipped (burst amplification). +2 tests. Gate: 6 org-scope + 67 route
     (patch-site) + 1094 gateway passed. Evidence mcp-parallel/findings/backstop-p9-scope-violation-audit/.
+  - CHG-0046 (2026-07-02) — G2 item 2 (result-redaction FAIL-OPEN, HIGH): the two-tier scanner
+    flattens each scan target via _safe_json (so a NUMBER/LIST/OBJECT value IS scanned) and redacts
+    via setter(new_text). For key_path/simple-key targeting a NON-STRING value, the setter was a
+    NO-OP (mcp_scan_targets.py:108 dot-path, :123 simple-key) — so a detected secret/PII was reported
+    redacted (result_redacted=True) yet egressed RAW, and since result_redacted flips the returned
+    object identity the E12 result-floor was BYPASSED (scanned is no longer `is result_content`). FIX:
+    bind the SAME real mutators the string targets use (dot-path _mutate_dot_path via a hoisted
+    _make_setter; simple-key node[key]=new) so redaction actually replaces the value; clean values
+    untouched. +4 tests (3 unit + 1 e2e byte-assert). Gate: 39 scan-target/orchestrator + 1098 gateway
+    passed. Evidence mcp-parallel/findings/backstop-p2-nonstring-redact-setter/. Follow-up: general
+    fail-closed OUTPUT byte-check in _scan_tool_result_floor.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

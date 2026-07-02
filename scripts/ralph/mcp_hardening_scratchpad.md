@@ -80,6 +80,18 @@
       still reads (no orphan); invalid key -> plaintext fallback (never breaks flow). Wired _flow_save/
       _flow_pop/_token_save/_token_load. OAuth callback re-audited CLEAN (CSRF+PKCE via _flow_pop, SSRF
       _assert_safe_url, no redirect follow). +4 tests (test_mcp_oauth_encryption.py); broad sweep 1092 passed.
+      CHG-0046 (2026-07-02, HIGH — result-redaction FAIL-OPEN re-opened in item 2): the two-tier scanner
+      flattens each scan target via _safe_json (NUMBER/LIST/OBJECT value IS scanned) and redacts via
+      setter(new_text). For key_path/simple-key targeting a NON-STRING value the setter was a NO-OP
+      (mcp_scan_targets.py:108 dot-path, :123 simple-key) → a detected secret/PII was reported redacted
+      (result_redacted=True) yet egressed RAW; and because result_redacted flips the returned object identity,
+      the E12 result-floor was BYPASSED (scanned no longer `is result_content`). FIX: bind the SAME real
+      mutators the string targets use (dot-path _mutate_dot_path via hoisted _make_setter; simple-key
+      node[key]=new) so redaction replaces the value; clean values untouched (setter fires only when
+      new_text!=text). Entire-mode default already correct. +4 tests (3 unit setter-mutation + 1 e2e
+      byte-assert). Gate: 39 scan-target/orchestrator + 1098 gateway passed. Evidence:
+      mcp-parallel/findings/backstop-p2-nonstring-redact-setter/finding.md. FOLLOW-UP: general fail-closed
+      OUTPUT byte-check in _scan_tool_result_floor (block if any detected value survives the scrub).
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER

@@ -93,19 +93,27 @@ def extract_scan_targets(
 
     if "." in path:
         values = _get_by_dot_path(payload, path)
+
         # Dot-path mutation is best-effort: rebuild only when a single dict path.
+        def _make_setter(i: int) -> Callable[[str], None]:
+            def _set(v: str) -> None:
+                _mutate_dot_path(payload, path, i, v)
+
+            return _set
+
         for idx, val in enumerate(values):
             if isinstance(val, str):
-
-                def _make_setter(i: int) -> Callable[[str], None]:
-                    def _set(v: str) -> None:
-                        _mutate_dot_path(payload, path, i, v)
-
-                    return _set
-
                 targets.append((val, _make_setter(idx)))
             else:
-                targets.append((_safe_json(val), lambda _v, _val=val: None))
+                # CHG-0046: a non-string dot-path target (number / list / object)
+                # previously got a NO-OP setter, so a detected secret/PII inside it
+                # was reported redacted (scan_mcp_payload sets result_redacted=True)
+                # yet egressed RAW — and the E12 result-floor is then BYPASSED
+                # (the returned payload is a fresh object, so `scanned is
+                # result_content` is False). Bind the SAME real mutator so redaction
+                # replaces the value with the masked string (fail-closed byte truth,
+                # never report-redact-while-forwarding-raw).
+                targets.append((_safe_json(val), _make_setter(idx)))
         return targets
 
     # Simple key name — walk all matching keys.
@@ -120,7 +128,14 @@ def extract_scan_targets(
 
                         targets.append((v, _set_str))
                     else:
-                        targets.append((_safe_json(v), lambda _n, _p=node, _k=k: None))
+                        # CHG-0046: a non-string keyed value (number / list / object)
+                        # was bound to a NO-OP setter — detected secret/PII in it was
+                        # reported redacted but forwarded RAW. Bind a REAL setter so
+                        # the masked string replaces the value in place (fail-closed).
+                        def _set_nonstr(new: str, _p=node, _k=k) -> None:
+                            _p[_k] = new
+
+                        targets.append((_safe_json(v), _set_nonstr))
                 else:
                     _walk(v, node, k)
         elif isinstance(node, list):

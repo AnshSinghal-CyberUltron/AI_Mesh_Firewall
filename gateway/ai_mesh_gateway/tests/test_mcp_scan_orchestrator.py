@@ -827,3 +827,50 @@ async def test_public_ip_not_flagged_as_ip_leakage():
         )
     assert not any(f.threat_type == "ip_leakage" for f in result.findings)
     assert "8.8.8.8" in str(out)                            # untouched
+
+
+# ── CHG-0046: non-string key_path target redaction is real, not a no-op ──────────
+# A redact rule on a key_path pointing at a NON-STRING value (number/list) must MASK
+# the value in the output payload. Before the fix the setter for a non-string target
+# was a no-op, so scan_mcp_payload set result_redacted=True while the RAW value
+# egressed (report-redact / forward-raw) — and the E12 result-floor was bypassed.
+
+
+@pytest.mark.asyncio
+async def test_chg0046_keypath_nonstring_value_setter_applied_end_to_end():
+    # Prove scan_mcp_payload APPLIES tier1 redaction to a NON-STRING key_path target.
+    # tier1 is stubbed to return a masked text so the assertion is decoupled from the
+    # redaction-pattern internals; the point under test is that the setter is now real
+    # (before CHG-0046 the non-string setter was a no-op, so the raw int survived while
+    # result_redacted was set → report-redact / forward-raw).
+    ctrl = {
+        "scan_controls_configured": True,
+        "tier1_output": {
+            "enabled": True, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": "t1",
+        },
+        "tier2_output": {
+            "enabled": False, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": None,
+        },
+    }
+
+    async def _fake_tier1(text, **kwargs):
+        # Simulate a redaction that changed the text (masked the numeric value).
+        return "MASKED", [], False, []
+
+    with (
+        patch("mcp_scan_orchestrator._scan_text_tier1", new=_fake_tier1),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        scanned, result = await scan_mcp_payload(
+            {"ssn": 123456789, "note": "ok"},
+            scan_direction="output",
+            enforcement="redact",
+            effective_controls=ctrl,
+            org_slug="demo", server_slug="stub", tool_name="echo",
+        )
+    assert result.blocked is False
+    assert scanned["ssn"] == "MASKED"                       # non-string value REPLACED (was no-op → 123456789)
+    assert "123456789" not in str(scanned)                  # raw value gone from egress bytes
+    assert scanned["note"] == "ok"                          # untouched field intact

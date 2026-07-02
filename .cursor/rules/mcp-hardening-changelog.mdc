@@ -409,6 +409,22 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   audit under a burst would amplify load). Files: mcp_proxy.py, test_mcp_org_scope_data_path.py (+2).
   Gate: 6 org-scope + 67 route-patch-site + 1094 gateway passed. Evidence:
   `mcp-parallel/findings/backstop-p9-scope-violation-audit/`.
+- **CHG-0046** (2026-07-02) — G2 item 2 (result-redaction FAIL-OPEN, HIGH): the two-tier scanner flattens
+  each scan target to text via `_safe_json` (so a NUMBER / LIST / OBJECT value IS scanned) and applies
+  redaction by calling the target's `setter(new_text)` (`mcp_scan_orchestrator.py:526`, which also sets
+  `result_redacted=True`). For `key_path` / simple-key targeting a NON-STRING value the setter was a NO-OP
+  (`mcp_scan_targets.py:108` dot-path `lambda: None`, `:123` simple-key `lambda: None`) — so a detected
+  secret/PII in a numeric/list/object value was **reported redacted yet egressed RAW**, and because
+  `result_redacted=True` flips the returned object identity, the E12 result-floor was BYPASSED
+  (`_scan_tool_result_floor` only re-scans when `scanned is result_content`). Violates "fail closed on a
+  no-op scrub / never report-redact while forwarding-raw". FIX: bind the SAME real mutators the string
+  targets use — dot-path via `_mutate_dot_path` (hoisted `_make_setter`), simple-key via in-place
+  `node[key] = new` — so redaction replaces the value with the masked string; clean values untouched
+  (setter fires only when `new_text != text`). Entire-mode (default) was already correct. Files:
+  mcp_scan_targets.py, test_mcp_scan_targets.py (+3), test_mcp_scan_orchestrator.py (+1 e2e). Gate: 39
+  scan-target/orchestrator + 1098 gateway passed. Evidence:
+  `mcp-parallel/findings/backstop-p2-nonstring-redact-setter/`. Follow-up: a general fail-closed OUTPUT
+  byte-check in `_scan_tool_result_floor` would backstop any residual no-op scrub.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
