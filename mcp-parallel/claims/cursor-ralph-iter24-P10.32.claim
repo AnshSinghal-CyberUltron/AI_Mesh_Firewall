@@ -1,0 +1,10 @@
+agent: cursor-ralph-iter24
+story: P10.32 recursive verification P3-P9
+files:
+  - scripts/mcp_p10_recursive_gate.py
+  - mcp-parallel/findings/p10-32/**
+  - docs/mcp/PARALLEL_CLAIMS.md
+  - .cursor/ralph/scratchpad.md
+  - scripts/ralph/mcp_progress.md
+since: 2026-07-02T11:00:00Z
+status: released
