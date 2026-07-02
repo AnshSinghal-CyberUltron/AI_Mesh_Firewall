@@ -79,14 +79,15 @@
         [REDACTED_PII/CARD/PHI/SECRET]. Bounded 3..120 chars, literal, redactable-categories-only (surgical;
         never blanks a legit answer or acts on jailbreak evidence). No main.py change. 7 golden cases frozen.
         Full gateway 1056 passed; golden 70 passed/7 skipped 3x.
-      G16 (NEW, reproduced 2026-07-02): the tier-2 display OutputVerdict.matched_patterns still carries a RAW
-        no-op-redactable value (redact_all can't mask a free-text name) and flows to the client enforcement
-        envelope (main.py:7457) — a metadata side-channel that can leak the just-redacted value. Distinct from
-        G10 (response-body egress, now fixed). Fix needs a key-vs-value discriminator: matched_patterns holds
-        EITHER pattern-keys ("ssn"/"email" — must stay readable) OR raw evidence spans (must be masked), and
-        length alone can't tell them apart. Candidate: mask only entries that also appear in redaction_spans.
-        NEXT-tier item (raw_output/response_snippet telemetry fields are by-design operator control-plane, not
-        a client leak).
+      G16 DONE 2026-07-02: tier-2 display matched_patterns leaked the raw no-op-redactable value (free-text
+        name) to the client enforcement envelope (main.py:7457) — metadata side-channel distinct from G10.
+        Fixed in output_guard.py: _mask_evidence_span (redact_all for standard PII, partial-mask for free-text)
+        + _looks_like_pattern_key discriminator (lowercase snake_case = category label, kept readable);
+        inspect() applies it to the tier-2 display copy. _redaction_spans_from also excludes key-shaped tokens
+        (hardens G10). Real bedrock path returns raw evidence spans (bedrock_scanner: evidence<=80 chars);
+        tests use pattern-keys — discriminator handles both. 8 golden cases frozen. Full gateway 1056 passed;
+        golden 78 passed/7 skipped 3x. Residual: the tier-2 `detail` free-text string could still quote a raw
+        value (guard model description); lower risk (model is prompted to describe, not quote) — track if seen.
       G15 DONE 2026-07-02: scanner injection verb-alternation coverage. "ignore all previous instructions"
         blocked but disregard/forget/override + two-word qualifier bypassed even single-turn (disregard/forget
         patterns took only ONE qualifier; no "override"). Fixed by adding one unified verb-alternation pattern
