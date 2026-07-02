@@ -332,6 +332,16 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   backend branch, and the REST `org_mcp_tools_list` (now also resolves `_get_auth_context`). A key allowlisted
   to `echo` now sees only `echo` in tools/list (JSON-RPC + REST). Files: mcp_proxy.py,
   test_mcp_bare_proxy_scan.py (+2). Gate: 22 bare-proxy + 1083 broad sweep passed.
+- **CHG-0039** (2026-07-02) — G2 item 2 (result-scan completeness on the external proxy): `ext_mcp_proxy`
+  buffered + scanned an SSE response ONLY for `tools/call` (CHG-0004); every other method's SSE streamed
+  through UNSCANNED — so a `resources/read` / `prompts/get` result (finite, can carry PII/secrets from the
+  external server, e.g. a code file read containing an API key) egressed RAW over SSE. Added
+  `_EXT_FINITE_RESULT_METHODS` (tools/call + resources/list + resources/read + prompts/list + prompts/get +
+  tools/list) + `_ext_scan_result`; the SSE branch now buffers + scans those finite request/response methods
+  (via `_scan_reframe_sse_tool_result`, which walks the whole result), while `notifications/*` / `*subscribe`
+  / long-lived streams still pass through live (no bounded result; buffering could hang). The non-streaming
+  JSON branch already scanned any method's result; the org path rejects these methods (`-32601`). Files:
+  mcp_proxy.py, test_mcp_bare_proxy_scan.py (+2). Gate: 24 bare-proxy + 1085 broad sweep passed.
 - **CHG-0039** (2026-07-02) — P4.13 Blocker 2: `MCPServerRegistration.url` URLField→CharField + migration
   `0015` so `ws://` registers (serializer `is_safe_outbound_url` unchanged); `ws-everything.stub` added to
   `MCP_ALLOW_INTERNAL_HOSTS`; ws stub echo `Echo: {message}` parity; P10 agent-pytest timeout 180→360s.

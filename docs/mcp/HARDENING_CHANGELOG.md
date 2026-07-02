@@ -1267,3 +1267,30 @@ the prod compose/manifests is tracked under G3 item 12.
 - **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q`
   → 22 passed (+2: `_filter_tools_by_key_allowlist` matrix; `org_mcp_tools_list` hides `get-sum` for a key
   allowlisted to `echo`). Broad sweep `ai_mesh_gateway/tests` → 1083 passed, 0 failed.
+
+### CHG-0039 — Scan resources/read + prompts/get SSE results on the external proxy (G2 item 2 completeness)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 2 (byte-verified result redaction) — extends the ext-proxy SSE result scan
+  from tools/call ONLY to all FINITE MCP request/response methods.
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (`_EXT_FINITE_RESULT_METHODS` + `_ext_scan_result`;
+  the ext_mcp_proxy SSE branch now gates on `_ext_scan_result` not `_ext_is_tools_call`);
+  `gateway/ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py` (+2).
+- **WHAT:** `ext_mcp_proxy` (the transparent proxy to allowlisted EXTERNAL MCP servers) buffered + scanned an
+  SSE response ONLY for `tools/call` (CHG-0004); every other method's SSE streamed through UNSCANNED. But
+  `resources/read`, `resources/list`, `prompts/get`, `prompts/list` (and tools/list) are FINITE
+  request/response methods whose result can carry PII/secrets from the external server (e.g. a code file read
+  via `resources/read` containing an API key). So those results egressed RAW over SSE — a 1.4 leak the
+  non-streaming JSON branch already closed (it scans ANY method's result). Now the SSE branch buffers + scans
+  those finite methods too (via `_scan_reframe_sse_tool_result`, which walks the whole result), while
+  genuinely-streaming methods (`notifications/*`, `*subscribe`, long-lived streams) still pass through live —
+  they have no bounded result and buffering could hang. The buffer (`aread`) is bounded by the httpx timeout.
+- **WHY:** "prevent MCP data leakage" — MCP resource/prompt content is data that must be scanned before it
+  reaches the client, exactly like tool results; the SSE variant was the one path still forwarding it raw.
+- **NOW DOES:** a `resources/read`/`prompts/get`/… SSE result with PII/secrets is masked (or blocked) before
+  re-emission on ext-proxy; notifications/subscriptions still stream through (no hang). The org path already
+  rejects these methods (`-32601`), so this closes the only reachable unscanned resource-content path.
+- **Touched whose work:** extends the ext-proxy SSE scan (CHG-0004/0005). Non-finite passthrough unchanged.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q`
+  → 24 passed (+2: a `resources/read` SSE PII result is buffered + masked, not forwarded raw; a
+  `notifications/*` SSE still streams through unbuffered — `aread` not awaited). Broad sweep
+  `ai_mesh_gateway/tests` → 1085 passed, 0 failed.

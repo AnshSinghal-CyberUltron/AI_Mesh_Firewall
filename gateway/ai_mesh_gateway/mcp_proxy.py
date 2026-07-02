@@ -1105,6 +1105,16 @@ _EXT_CREDENTIAL_HEADERS = frozenset({
     "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key",
 })
 
+# CHG-0039: MCP request/response methods whose result is FINITE (bounded) and can
+# carry content the 1.4 result scan must inspect. An SSE response for one of these
+# is buffered + scanned like tools/call (the buffer is bounded by the httpx
+# timeout). Genuinely-streaming methods (notifications/*, *subscribe) are NOT here
+# — they can be long-lived, so they stream through unscanned (no result to scan).
+_EXT_FINITE_RESULT_METHODS = frozenset({
+    "tools/call", "tools/list", "resources/list", "resources/read",
+    "prompts/list", "prompts/get",
+})
+
 
 def _ext_proxy_forward_headers(inbound, *, oauth_token: str | None = None) -> dict:
     """Least-privilege outbound header set for the external MCP proxy forward.
@@ -1192,11 +1202,17 @@ async def ext_mcp_proxy(path: str, request: Request):
     # if the body is not a tools/call JSON-RPC, this is a no-op. ──
     _ext_tool_name = ""
     _ext_is_tools_call = False
+    # CHG-0039: True when the response should be result-scanned (finite methods:
+    # tools/call + resources/* + prompts/*), so the SSE branch buffers+scans them
+    # too — not just tools/call. Notifications/subscriptions stay pass-through.
+    _ext_scan_result = False
     if body:
         try:
             _ext_req = json.loads(body)
         except Exception:
             _ext_req = None
+        if isinstance(_ext_req, dict):
+            _ext_scan_result = str(_ext_req.get("method") or "") in _EXT_FINITE_RESULT_METHODS
         if isinstance(_ext_req, dict) and _ext_req.get("method") == "tools/call":
             _ext_is_tools_call = True
             _ext_params = _ext_req.get("params") or {}
@@ -1254,12 +1270,14 @@ async def ext_mcp_proxy(path: str, request: Request):
 
         # For SSE / streaming responses, stream through
         if "text/event-stream" in content_type:
-            if _ext_is_tools_call:
-                # Finite tools/call SSE result — BUFFER, scan/redact each data
-                # frame, and re-emit as SSE (parity with the non-streaming JSON
-                # branch and internal_tools_call). Closes the raw-egress leak
-                # (BACKSTOP_FINDINGS G2 item 2). Bounded: a tools/call response
-                # is finite, so aread() cannot hang on an open stream.
+            if _ext_scan_result:
+                # Finite request/response SSE result (tools/call OR resources/* OR
+                # prompts/*, CHG-0039) — BUFFER, scan/redact each data frame, and
+                # re-emit as SSE (parity with the non-streaming JSON branch and
+                # internal_tools_call). Closes the raw-egress leak
+                # (BACKSTOP_FINDINGS G2 item 2 — previously only tools/call SSE was
+                # scanned, so a resources/read result egressed raw). Bounded: these
+                # responses are finite, and aread() is capped by the httpx timeout.
                 sse_bytes = await resp.aread()
                 await resp.aclose()
                 await client.aclose()
@@ -1302,13 +1320,14 @@ async def ext_mcp_proxy(path: str, request: Request):
                     headers=_sse_headers,
                 )
 
-            # Non-tools/call SSE (e.g. notifications / long-lived streams): there
-            # is no tool RESULT to scan, and buffering could hang an open stream,
-            # so pass it through live (inbound args, if any, were still scanned).
+            # Non-finite SSE (notifications / *subscribe / long-lived streams):
+            # buffering could hang an open stream and there is no bounded RESULT to
+            # scan, so pass it through live (inbound args, if any, were still
+            # scanned). Finite result methods are handled by the scanned branch above.
             LOG.warning(
-                "ext_mcp_proxy.streaming_egress_unscanned host=%s tool=%s — non-tools/call "
-                "SSE response passed through (no tool result to scan)",
-                hostname, _ext_tool_name or "?",
+                "ext_mcp_proxy.streaming_egress_unscanned host=%s method-passthrough — "
+                "non-finite SSE response streamed through (no bounded result to scan)",
+                hostname,
             )
             async def stream_gen():
                 try:

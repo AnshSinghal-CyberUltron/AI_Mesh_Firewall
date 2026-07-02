@@ -48,6 +48,15 @@
       masked egress hasPII=false, raw hasPII=true.
       REMAINING before [x]: (b) non-streaming string/structuredContent result shapes unscanned;
       (c) audit main org_mcp_jsonrpc inline result path (~2265/2451) for the same fail-open.
+      CHG-0039 (2026-07-02): closed the last ext-proxy SSE unscanned path. CHG-0004 buffered+scanned SSE ONLY
+      for tools/call; every OTHER method's SSE streamed through UNSCANNED — so a resources/read / prompts/get
+      result (finite, can carry PII/secrets from the external server, e.g. a code file with an API key)
+      egressed RAW over SSE. Added _EXT_FINITE_RESULT_METHODS (tools/call + resources/* + prompts/* +
+      tools/list) + _ext_scan_result; the SSE branch now buffers+scans those finite request/response methods,
+      while notifications/subscriptions still stream through live (no bounded result; buffering could hang).
+      The non-streaming JSON branch already scanned any result; the org path rejects these methods (-32601), so
+      this closes the only reachable unscanned resource-content path. +2 tests; test_mcp_bare_proxy_scan.py 24
+      passed, broad sweep 1085 passed.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER

@@ -220,6 +220,13 @@
     at all 4 tools/list sites (org_mcp_jsonrpc adapter+backend branches, REST org_mcp_tools_list which now
     resolves _get_auth_context). Least-privilege: a key sees only tools it can call. Files mcp_proxy.py +
     test_mcp_bare_proxy_scan.py (+2). Gate: 22 bare-proxy + 1083 broad sweep passed.
+  - CHG-0039 (2026-07-02) — G2 item 2 (result-scan completeness): ext_mcp_proxy buffered+scanned an SSE
+    response only for tools/call (CHG-0004); every OTHER method's SSE streamed through UNSCANNED — so a
+    resources/read / prompts/get result (finite, can carry PII/secrets from the external server) egressed RAW.
+    Added _EXT_FINITE_RESULT_METHODS (tools/call + resources/* + prompts/* + tools/list) + _ext_scan_result;
+    the SSE branch now buffers+scans those finite methods, while notifications/subscriptions still stream
+    through (no bounded result; buffering could hang). Non-streaming JSON branch already scanned any result.
+    Files mcp_proxy.py + test_mcp_bare_proxy_scan.py (+2). Gate: 24 bare-proxy + 1085 broad sweep passed.
   - CHG-0039 (2026-07-02) — P4.13 Blocker 2: MCPServerRegistration.url URLField→CharField + migration 0015
     so ws:// registers (serializer SSRF guard unchanged); ws-everything.stub in MCP_ALLOW_INTERNAL_HOSTS;
     ws stub echo prefix fixed. 4/4 transports PASS ROUNDS=3; gateway ss :443 empty. Cross-seam (control,

@@ -598,3 +598,44 @@ async def test_org_mcp_tools_list_hides_tools_outside_key_allowlist():
     data = json.loads(resp.body.decode())
     names = [t.get("tool_name") or t.get("name") for t in data]
     assert names == ["echo"]  # get-sum hidden by the key allowlist
+
+
+# ── CHG-0039: extend ext_mcp_proxy SSE result scanning beyond tools/call to the
+# other FINITE request/response methods (resources/*, prompts/*). Previously a
+# resources/read SSE result egressed RAW (only tools/call SSE was scanned).
+
+
+@pytest.mark.asyncio
+async def test_ext_sse_resources_read_result_now_scanned():
+    req = _ext_request({"jsonrpc": "2.0", "id": 8, "method": "resources/read",
+                        "params": {"uri": "file:///doc.txt"}})
+    sse = _sse_resp({"jsonrpc": "2.0", "id": 8,
+                     "result": {"contents": [{"uri": "file:///doc.txt",
+                                              "text": "reach john.doe@example.com"}]}})
+    client = _ext_client(sse)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 200
+    body = bytes(resp.body).decode()
+    assert "john.doe@example.com" not in body    # resource PII no longer egresses raw via SSE
+    assert resp.media_type == "text/event-stream"
+    sse.aread.assert_awaited()                    # it was BUFFERED (scanned), not streamed
+
+
+@pytest.mark.asyncio
+async def test_ext_sse_notification_still_streams_through_unbuffered():
+    """A non-finite method (notifications) is NOT buffered — it streams through
+    live (buffering could hang a long-lived stream)."""
+    from starlette.responses import StreamingResponse
+    req = _ext_request({"jsonrpc": "2.0", "method": "notifications/progress", "params": {}})
+    sse = _ext_send_resp({}, content_type="text/event-stream")
+
+    async def _aiter():
+        yield b"data: {\"jsonrpc\":\"2.0\"}\n\n"
+
+    sse.aiter_bytes = _aiter
+    client = _ext_client(sse)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert isinstance(resp, StreamingResponse)     # pass-through, not buffered
+    sse.aread.assert_not_awaited()                 # NOT buffered (no hang risk)
