@@ -1330,7 +1330,7 @@ async def internal_discover_tools(request: Request):
         "params": {},
     }
 
-    if transport in ("stdio", "websocket"):
+    if _is_sandbox_routed(transport):
         return await _adapter_forward(
             transport, config, org_slug, server_slug,
             tools_list_body, "2.0", 1,
@@ -1528,7 +1528,7 @@ async def internal_tools_call(request: Request):
         "params": {"name": tool_name, "arguments": arguments},
     }
 
-    if transport in ("stdio", "websocket"):
+    if _is_sandbox_routed(transport):
         return await _adapter_forward(
             transport, config, org_slug, server_slug,
             call_body, "2.0", 1,
@@ -1915,6 +1915,27 @@ async def _maybe_inject_oauth_header(args: list[str], org_slug: str, server_slug
         LOG.warning("needs-reauth check failed for %s: %s", mcp_url, exc)
 
 
+def _is_sandbox_routed(transport: str) -> bool:
+    """Transports routed through the per-org sandbox (gateway NEVER dials upstream).
+
+    stdio + websocket always route via the sandbox adapter. streamable-http + sse
+    route via the sandbox too (P4.13/P6.18 §3) when ``MCP_HTTP_VIA_SANDBOX`` is on
+    (default) — the sandbox agent dials the upstream (egress-allowlisted); set the
+    flag off to fall back to the legacy direct-httpx path.
+    """
+    if transport in ("stdio", "websocket"):
+        return True
+    if transport in ("streamable-http", "sse"):
+        # Default OFF for a safe rollout (like MCP_STDIO_IN_PROCESS): the legacy
+        # direct-httpx path stays the default until an operator opts in per env /
+        # compose. When ON, remote transports route through the sandbox agent
+        # (gateway never dials the upstream MCP host).
+        return os.environ.get("MCP_HTTP_VIA_SANDBOX", "false").strip().lower() in (
+            "1", "true", "yes", "on",
+        )
+    return False
+
+
 async def _adapter_forward(
     transport: str,
     server_config: dict,
@@ -1924,10 +1945,37 @@ async def _adapter_forward(
     jsonrpc: str,
     msg_id,
 ) -> JSONResponse:
-    """Forward a JSON-RPC message to a stdio or websocket adapter."""
+    """Forward a JSON-RPC message to the per-org sandbox for a non-backend transport
+    (stdio, websocket, or — P4.13/P6.18 §3 — streamable-http/sse via the broker)."""
     method = body.get("method", "")
     params = body.get("params", {})
     try:
+        if transport in ("streamable-http", "sse"):
+            # P4.13/P6.18 §3: route remote transports through the sandbox agent
+            # (gateway → broker → sandbox → upstream). The gateway builds the
+            # upstream block (url + egress allowlist + injected Bearer) and the
+            # sandbox does the dial — the gateway never connects to the MCP host.
+            from mcp_sandbox_client import broker_send_rpc
+
+            upstream_url = server_config.get("url", "")
+            oauth_token = None
+            try:
+                from mcp_oauth_proxy import get_stored_token
+                oauth_token = await get_stored_token(org_slug, upstream_url)
+            except Exception:  # noqa: BLE001 — no token store / not authed → None
+                oauth_token = None
+            up_config = {
+                "server_slug": server_slug,
+                "transport": transport,
+                "url": upstream_url,
+                "allowed_hosts": server_config.get("allowed_hosts") or [],
+                "headers": dict(server_config.get("upstream_headers") or {}),
+            }
+            result = await broker_send_rpc(
+                org_slug, up_config, method, params if params else None,
+                msg_id=msg_id, oauth_token=oauth_token,
+            )
+            return JSONResponse(content=result, status_code=200)
         if transport == "stdio":
             from mcp_stdio_adapter import send_jsonrpc as stdio_send
 
@@ -2039,7 +2087,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
     # ── Resolve server transport for routing ──
     server_config = await _get_server_config(org_slug, server_slug)
     transport = (server_config or {}).get("transport", "streamable-http")
-    is_adapter_transport = transport in ("stdio", "websocket")
+    is_adapter_transport = _is_sandbox_routed(transport)
 
     # ── initialize: respond locally as the MCP server ──
     if method == "initialize":
