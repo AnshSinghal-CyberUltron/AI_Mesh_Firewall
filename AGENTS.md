@@ -699,6 +699,18 @@
     block/redact; clean list not audited. Reuses the floor chain (CHG-0074/0075/0076/0079). +3 tests. Gate: 3
     + 1369 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
     mcp-parallel/findings/backstop-p9-bare-rest-parity/.
+  - CHG-0083 (2026-07-02) — G2 item 2 / 1.4 (found by a category×obfuscation regression-matrix pre-flight),
+    HIGH: several CREDENTIALS live in PII_PATTERNS (detect_pii, NOT detect_secrets) — aws_access_key
+    (AKIA/ASIA), aws_secret_access_key, api_key_openai, github_token, private_key_header. The CHG-0076
+    (text-encoding) + CHG-0079 (invisible-unicode) encoded-exfil BLOCK only ran detect_secrets/cred/ip, so an
+    OBFUSCATED AWS/GitHub/OpenAI key (HTML-entity/zero-width) slipped past the block while its raw form masks
+    (a model client reads it deobfuscated). FIX (mcp_scan_orchestrator.py): the encoded _hidden probe now
+    also includes decoded detect_pii matches whose compliance tag is SECRET (credentials misfiled as PII);
+    generic PII (email/phone/ssn/cc → never SECRET) stays EXCLUDED (scraped-HTML FP guard). +27 tests (incl. a
+    durable adversarial matrix). Gate: 27 + 1369 gateway passed, 0 failed; broker -k "not websocket" 108
+    passed. Evidence mcp-parallel/findings/backstop-p2-obfuscated-cred-in-pii/. RESIDUAL: aws_access_key etc.
+    really belong in SECRET_PATTERNS (future cleanup); obfuscated SSN/CC still not blocked by the encoded path
+    (raw masks).
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

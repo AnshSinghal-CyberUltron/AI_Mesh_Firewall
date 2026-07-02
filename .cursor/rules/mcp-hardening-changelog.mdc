@@ -1092,6 +1092,27 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   unchanged, no audit). Gate: 3 + 1369 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed.
   Evidence: `mcp-parallel/findings/backstop-p9-bare-rest-parity/`.
 
+- **CHG-0083** (2026-07-02) — G2 item 2 / 1.4 (**found by a category×obfuscation regression-matrix
+  pre-flight** — strict: obfuscated secret/cred/IP MUST block), HIGH: several CREDENTIALS live in
+  `PII_PATTERNS` (detected by `detect_pii`, NOT `detect_secrets`) — `aws_access_key` (AKIA/ASIA),
+  `aws_secret_access_key`, `api_key_openai`, `github_token`, `private_key_header`. The CHG-0076
+  (text-encoding) + CHG-0079 (invisible/confusable-unicode) encoded-exfil BLOCK computed `_hidden` from
+  `detect_secrets` + `detect_credential_exposure` + `detect_ip_leakage∩_INFRA_NETWORK_KEYS` — so an
+  OBFUSCATED AWS/GitHub/OpenAI key (HTML-entity / zero-width / homoglyph) slipped past the block while its
+  RAW form masks (the decode reveals the key but `_hidden` never ran `detect_pii` on the decoded variant; a
+  markdown/model client reads it deobfuscated). FIX (`mcp_scan_orchestrator.py`): the encoded-exfil
+  `_hidden` probe now also includes decoded `detect_pii` matches whose compliance tag is **SECRET** (the
+  credentials-misfiled-as-PII set). Generic PII (email/phone/ssn/cc → GDPR/PII/HIPAA/PCI-DSS, never SECRET)
+  is EXCLUDED so an entity-encoded scraped-HTML contact email/SSN does not false-block a legit web/HTML tool
+  result (consistent w/ CHG-0076's PII exclusion); the SECRET-tag filter is the principled near-zero-FP
+  boundary. +27 tests (obfuscated AKIA/ASIA/`ghp_`/`sk-proj-` via HTML-entity+zero-width → BLOCK; obfuscated
+  generic email/SSN/phone → NOT blocked; raw AWS key still masked; a durable adversarial matrix of 12
+  sensitive categories raw→masked/blocked + benign→unchanged). Gate: 27 + 1369 gateway passed, 0 failed;
+  broker `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p2-obfuscated-cred-in-pii/`.
+  **RESIDUAL:** aws_access_key etc. really belong in SECRET_PATTERNS (future cleanup, touches detect_*
+  semantics + tag map across sessions); obfuscated SSN/credit-card still not blocked by the encoded path
+  (SECRET-tagged only; raw forms mask).
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

@@ -452,6 +452,18 @@ async def _scan_text_tier1(
                 k: v for k, v in detect_ip_leakage(_variant).items()
                 if k in _INFRA_NETWORK_KEYS
             })
+            # CHG-0083: several CREDENTIALS live in PII_PATTERNS (detect_pii), not
+            # SECRET_PATTERNS — aws_access_key (AKIA/ASIA), aws_secret_access_key,
+            # api_key_openai, github_token, private_key_header. detect_secrets misses
+            # them, so an OBFUSCATED AWS key (HTML-entity / zero-width / homoglyph) slipped
+            # past the encoded-exfil block above while its raw form masks. Include decoded
+            # detect_pii matches whose compliance tag is SECRET (credentials misfiled as
+            # PII) — NOT generic PII (email/phone/ssn/cc: tags GDPR/PII/HIPAA/PCI-DSS, never
+            # SECRET), which stays excluded to avoid FP on entity-encoded scraped-HTML PII.
+            _hidden.update({
+                k: v for k, v in detect_pii(_variant).items()
+                if "SECRET" in get_compliance_tags([k])
+            })
             if _hidden:
                 findings.append(
                     McpFinding(

@@ -336,6 +336,19 @@
       (tool-call secret result → masked AND audited redact; REST tools-list secret+IP in description → masked
       + audited redact; benign → no audit). Gate: 3 + 1369 gateway passed, 0 failed; broker -k "not websocket"
       108 passed. Evidence: mcp-parallel/findings/backstop-p9-bare-rest-parity/finding.md.
+      CHG-0083 (2026-07-02, HIGH — found by a category×obfuscation regression-matrix pre-flight): several
+      CREDENTIALS live in PII_PATTERNS (detect_pii, NOT detect_secrets) — aws_access_key (AKIA/ASIA),
+      aws_secret_access_key, api_key_openai, github_token, private_key_header. The CHG-0076 (text-encoding) +
+      CHG-0079 (invisible-unicode) encoded-exfil BLOCK only ran detect_secrets/cred/ip, so an OBFUSCATED
+      AWS/GitHub/OpenAI key (HTML-entity/zero-width) slipped past the block while its raw form masks (a model
+      client reads it deobfuscated). FIX (mcp_scan_orchestrator.py): the encoded _hidden probe now also
+      includes decoded detect_pii matches whose compliance tag is SECRET (credentials misfiled as PII);
+      generic PII (email/phone/ssn/cc → never SECRET) stays EXCLUDED (scraped-HTML FP guard). SECRET-tag
+      filter = principled near-zero-FP boundary. +27 tests (incl. a durable adversarial matrix of 12
+      categories raw→masked/blocked + benign→unchanged). Gate: 27 + 1369 gateway passed, 0 failed; broker -k
+      "not websocket" 108 passed. Evidence: mcp-parallel/findings/backstop-p2-obfuscated-cred-in-pii/finding.md.
+      RESIDUAL: aws_access_key etc. really belong in SECRET_PATTERNS (future cleanup); obfuscated SSN/CC still
+      not blocked by the encoded path (raw masks).
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;
