@@ -121,8 +121,13 @@ _SRCSET_URL_RE = re.compile(r'(?:https?:)?//[^\s,]+')
 _SRCSET_MAX_LEN = 4096
 _HTML_BEACON_RES = (_HTML_ATTR_RE, _HTML_HREF_RE, _HTML_META_URL_RE, _CSS_URL_RE)
 # Cap the number of URLs inspected per output so a pathological response with
-# thousands of links cannot make neutralization super-linear.
-_MAX_EXFIL_URLS = 256
+# thousands of links cannot make neutralization super-linear. G49: raised from 256 —
+# a legitimate single answer virtually never has this many DISTINCT URLs, and when the
+# budget IS exhausted _scan_exfil_channels emits a sentinel so _check_exfil_channel
+# fails CLOSED (block) instead of silently allowing a beacon hidden past the cap.
+_MAX_EXFIL_URLS = 1024
+# Sentinel finding kind yielded when the URL budget is exhausted (see G49).
+_EXFIL_BUDGET_SENTINEL = "__budget_exhausted__"
 
 
 def _url_tail(url: str) -> str:
@@ -242,6 +247,7 @@ def _scan_exfil_channels(text: str):
     for sm in _HTML_SRCSET_RE.finditer(text):
         for um in _SRCSET_URL_RE.finditer(sm.group(1)):
             if budget <= 0:
+                yield _EXFIL_BUDGET_SENTINEL, "", "url_budget_exhausted"  # G49
                 return
             budget -= 1
             u = um.group(0).strip().rstrip(").,'\"")
@@ -251,6 +257,7 @@ def _scan_exfil_channels(text: str):
     for kind, regex in passes:
         for m in regex.finditer(text):
             if budget <= 0:
+                yield _EXFIL_BUDGET_SENTINEL, "", "url_budget_exhausted"  # G49
                 return
             budget -= 1
             if kind in ("image", "link"):
@@ -924,6 +931,21 @@ class OutputGuard:
         :func:`neutralize_exfil_channels` on the sanitized egress.
         """
         findings = list(_scan_exfil_channels(text))
+        # G49: the URL scan hit its per-output budget — a benign single answer never has
+        # this many distinct URLs, a beacon could hide past the cap, and running the
+        # (uncapped) egress neutralizer on an output this large would be a soft-DoS. Fail
+        # CLOSED: block the output as a probable data-exfiltration / URL-flood pattern.
+        if any(k == _EXFIL_BUDGET_SENTINEL for k, _u, _r in findings):
+            return OutputVerdict(
+                action="block",
+                threat_type="exfil_channel",
+                confidence=0.6,
+                detail=(
+                    f"Output contains an unusually large number of URLs (> {_MAX_EXFIL_URLS}); "
+                    "blocked as a probable data-exfiltration / URL-flood pattern."
+                ),
+                matched_patterns=["exfil_url_flood"],
+            )
         if not findings:
             return OutputVerdict()
         kinds = sorted({k for k, _u, _r in findings})

