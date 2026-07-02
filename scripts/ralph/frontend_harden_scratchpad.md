@@ -461,3 +461,10 @@
       class) = intent mismatch. Needs product decision on canonical per-lane semantics + coordinated FE+BE
       change. Documented fully-actionable; OPEN pending product call. Both open items now = (1) MCPConnector
       never_edit overflow, (2) this cross-layer semantics item — neither a safe frontend-only fix. MCP: active.
+      [iter+] WHOLE-FRONTEND detector sweep: 113 files, 16 findings in 9 files, ALL verified false-positives
+      (inspected each) — ternary/hover cross-products w/ proper dark: variants (KillSwitch:136, StageTimeline:251,
+      MCPManager:920 delete-btn), active-nav borders (Sidebar border-l-2, Tabs border-b-2), theme-aware/brand
+      gradients (RAGSetupGuide, Login title, SubmoduleResults map+border-l-8, Overview palette). ZERO real
+      theme/contrast/AI-slop issues in either theme — closes "colour/both-themes contrast" exhaustively. Also:
+      lint 75/75 + build clean on shared tree. Killed full 96-combo gate (F3-polluted w/ AUTH_FAILED mid-run;
+      per-surface verifications more reliable). MCP claim: active.
