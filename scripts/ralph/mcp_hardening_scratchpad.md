@@ -28,8 +28,15 @@
         #8 G6 item 21 — emit redact signal, Redact badge+field list, fix StatCard under-count, extend Playwright, fix mojibake.
 
 ## G2 — 1.4 Context Assembly & MCP Guardrails (log every edit)
-- [ ] 2. Field-level redaction of MCP tool RESULTS (byte-verified, fail-closed).
-      PARTIAL — CHG-0003 (2026-07-02): fail-CLOSED result-scan error path done. `_scan_tool_result_floor`
+- [x] 2. Field-level redaction of MCP tool RESULTS (byte-verified, fail-closed).
+      DONE via CHG-0003+0004+0005 (2026-07-02). Result redaction is byte + independent-aidefence-oracle
+      verified across ALL bare routes (rest/internal/ext streaming+non-streaming) and ALL result shapes
+      (content/structuredContent/list/str); fail-CLOSED on the bare routes, fail-SAFE (500, no raw egress)
+      on the main org_mcp_jsonrpc path (audited: scan exception propagates → 500, raw returned only after
+      a successful scan). Gate: test_mcp_bare_proxy_scan.py 14 passed; broad sweep 362 passed.
+      DEFERRED (NOT leaks): main-path graceful-block vs 500 (availability enhancement); per-actor
+      FIELD-level RBAC masking → tracked under item 3.
+      History — CHG-0003 (fail-closed result-scan error). `_scan_tool_result_floor`
       (mcp_proxy.py ~690-780) now blocks (SCAN_ERROR + result_scan_failclosed) instead of forwarding RAW
       on a scan exception — BOTH the primary output scan AND the redaction-floor re-scan. +2 byte-level
       tests (scanner patched to raise → raw PII absent + blocked); test_mcp_bare_proxy_scan.py 10 passed,

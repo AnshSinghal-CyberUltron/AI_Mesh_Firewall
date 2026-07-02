@@ -22,6 +22,10 @@
     tools/call SSE results (`_scan_reframe_sse_tool_result`), re-emits masked or blocks; non-tools/call SSE
     passes through. 12 + 342 tests pass; aidefence oracle confirms clean egress. Remaining: string/
     structuredContent shapes, main-path inline audit.
+  - CHG-0005 (2026-07-02) — CLOSES G2 item 2: ext-proxy (non-streaming + SSE) scans the WHOLE `result`
+    (content/structuredContent/list/str), not just `result.content`. Main `org_mcp_jsonrpc` audited
+    fail-SAFE (scan error → 500, raw only after successful scan), not fail-open. 14 + 362 tests pass.
+    Item 2 DONE (fail-closed bare / fail-safe main, byte+oracle verified). Next: G2 item 3 per-actor authz.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

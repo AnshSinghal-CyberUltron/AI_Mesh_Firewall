@@ -829,12 +829,13 @@ async def _scan_reframe_sse_tool_result(
             out_lines.append(raw_line)  # not JSON — leave the frame verbatim
             continue
         result_obj = obj.get("result") if isinstance(obj, dict) else None
-        content = result_obj.get("content") if isinstance(result_obj, dict) else None
-        if content is None:
-            out_lines.append(raw_line)  # no tool result in this frame
+        if result_obj is None:
+            out_lines.append(raw_line)  # no tool result in this frame (e.g. a notification)
             continue
+        # Scan the ENTIRE result (dict content/structuredContent, list, or str) —
+        # not just ``result.content`` — so every output shape is covered.
         scanned, blocked, tags, _findings, _meta = await _scan_tool_result_floor(
-            content,
+            result_obj,
             tool_name=tool_name,
             enabled_info=enabled_info,
             org_slug=org_slug,
@@ -849,8 +850,8 @@ async def _scan_reframe_sse_tool_result(
                 "id": obj.get("id") if isinstance(obj, dict) else None,
                 "jsonrpc": obj.get("jsonrpc", "2.0") if isinstance(obj, dict) else "2.0",
             }
-        if scanned is not content:
-            result_obj["content"] = scanned
+        if scanned is not result_obj:
+            obj["result"] = scanned
             out_lines.append(f"data: {json.dumps(obj)}")
         else:
             out_lines.append(raw_line)
@@ -1214,17 +1215,22 @@ async def ext_mcp_proxy(path: str, request: Request):
         # in. enabled_info=None → action defaults to "tag", so the floor applies
         # (never "monitor"). Best-effort — only when a tools/call result is
         # present; never raises (the scan helper is fail-safe). ──
+        # Scan the ENTIRE ``result`` (whatever shape) — not just dict
+        # ``result.content``. MCP tool output can also live in ``structuredContent``
+        # or be a plain string, and older code that only scanned dict
+        # ``result.content`` let those shapes egress unscanned (BACKSTOP_FINDINGS
+        # G2 item 2). ``_scan_tool_result_floor`` recursively walks any payload
+        # (dict/list/str) and fails CLOSED on scan error; parity with the org path.
         if (
             resp.status_code == 200
             and isinstance(data, dict)
-            and isinstance(data.get("result"), dict)
-            and data["result"].get("content") is not None
+            and data.get("result") is not None
         ):
-            _ext_result_content = data["result"]["content"]
+            _ext_result = data["result"]
             (
                 _scanned_content, _out_blocked, _out_tags, _out_findings, _scan_meta_out
             ) = await _scan_tool_result_floor(
-                _ext_result_content,
+                _ext_result,
                 tool_name=_ext_tool_name,
                 enabled_info=None,
                 org_slug="",
@@ -1251,8 +1257,8 @@ async def ext_mcp_proxy(path: str, request: Request):
                     status_code=200,
                     headers=resp_headers,
                 )
-            if _scanned_content is not _ext_result_content:
-                data["result"]["content"] = _scanned_content
+            if _scanned_content is not _ext_result:
+                data["result"] = _scanned_content
 
         return JSONResponse(content=data, status_code=resp.status_code, headers=resp_headers)
     except httpx.RequestError as exc:

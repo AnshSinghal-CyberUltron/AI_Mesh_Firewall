@@ -55,3 +55,9 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   leak-pinning test; `test_mcp_bare_proxy_scan.py` 12 passed, broad sweep 342 passed. Independent oracle:
   aidefence_has_pii(masked egress)=false, (raw)=true. REMAINING: string/`structuredContent` shapes; main
   inline path audit.
+- **CHG-0005** (2026-07-02) — CLOSES G2 item 2: ext-proxy (non-streaming + SSE helper) now scans the
+  ENTIRE `result` (dict content/structuredContent, list, or str), not just `result.content` —
+  string/structuredContent shapes were egressing unscanned. Audited the main `org_mcp_jsonrpc` paths:
+  fail-SAFE (scan exception → 500, raw returned only after successful scan), NOT the bare-route fail-open.
+  +2 tests; 14 bare-proxy passed, broad sweep 362 passed. Item 2 COMPLETE (byte+oracle verified,
+  fail-closed bare / fail-safe main). Deferred (not leaks): main-path graceful-block; per-actor field RBAC → item 3.

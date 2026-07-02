@@ -153,3 +153,38 @@ the prod compose/manifests is tracked under G3 item 12.
   the scanner under test.
 - **REMAINING for G2 item 2:** (2) plain-string / `structuredContent` result shapes in the ext
   non-streaming branch; (3) audit the main `org_mcp_jsonrpc` inline result path for the same fail-open.
+
+### CHG-0005 — Whole-`result` scan (all shapes) + main-path fail-open audit — CLOSES G2 item 2
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 2 (field-level redaction of RESULTS, byte-verified, fail-closed) — COMPLETE.
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (`ext_mcp_proxy` non-streaming branch;
+  `_scan_reframe_sse_tool_result`) · `gateway/ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py` (+2 tests).
+- **WHAT:** Broadened the ext-proxy result scan (both the non-streaming JSON branch AND the SSE reframe
+  helper) to scan the ENTIRE `result` — dict `content`/`structuredContent`, a bare list, or a plain
+  string — instead of only dict `result.content`. Also **audited the main `org_mcp_jsonrpc` paths** for
+  the CHG-0003 fail-open class.
+- **WHY (gap):** BACKSTOP_FINDINGS G2 item 2 — a result under `structuredContent`, or a plain-string
+  result, egressed UNSCANNED on the ext path (the condition required `isinstance(result, dict) and
+  result.content is not None`). My own CHG-0004 SSE helper inherited the same `content`-only limitation.
+- **NOW DOES:** Every ext-proxy result shape is scanned/redacted (parity with the org path, which already
+  scanned the whole `result`). `_scan_tool_result_floor` recursively walks dict/list/str and fails CLOSED
+  on scan error.
+- **(c) AUDIT RESULT — main path is fail-SAFE, NOT fail-open (no fix needed):** the adapter branch
+  (`if is_adapter_transport`, line ~2332) is a plain `if`, and the http/sse branch's `try` (~2468) has
+  ONLY `except httpx.TimeoutException`/`except httpx.RequestError` — no generic `except`. So a scanner
+  exception at the inline `_mcp_security_scan` (adapter ~2367, http/sse ~2528) PROPAGATES → HTTP 500;
+  the raw upstream `data` is returned only AFTER a successful scan (~2647), so it is never egressed on
+  scan error. The CHG-0003 fail-OPEN was specific to the bare routes' shared helper, which explicitly
+  caught the exception and returned raw. (Converting the main-path 500 into a graceful block is a
+  deferred AVAILABILITY enhancement — not a leak.)
+- **Touched whose work:** extends `ext_mcp_proxy` (prior sessions); backstop-only audit of the main path.
+- **VERIFY:** `cd gateway && PYTHONPATH="$PWD/../shared:$PWD/ai_mesh_gateway" ./.venv/bin/python -m pytest
+  ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q` → 14 passed
+  (`test_ext_redacts_pii_in_structured_content`, `test_ext_redacts_pii_in_string_result`). Broad sweep
+  (`-k "mcp or scan or redact or e12 or result or floor or bare or proxy or sse or adapter or jsonrpc"`)
+  → 362 passed / 18 skipped. Audit evidence: `grep -n "except httpx" gateway/ai_mesh_gateway/mcp_proxy.py`
+  (only Timeout/RequestError on the http/sse try; no generic except).
+- **G2 item 2 STATUS:** COMPLETE — result redaction is byte + independent-oracle verified across all bare
+  routes (rest / internal / ext streaming + non-streaming, all result shapes), fail-CLOSED on the bare
+  routes and fail-SAFE (500) on the main path. Deferred (NOT leaks): main-path graceful-block vs 500;
+  per-actor FIELD-level RBAC masking is item 3.

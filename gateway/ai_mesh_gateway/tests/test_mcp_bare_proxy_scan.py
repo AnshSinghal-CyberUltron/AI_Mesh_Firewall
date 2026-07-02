@@ -342,6 +342,37 @@ async def test_ext_result_scan_error_fails_closed():
     assert "error" in _decode(resp)             # returned as a JSON-RPC block error
 
 
+@pytest.mark.asyncio
+async def test_ext_redacts_pii_in_structured_content():
+    """CHG-0005 (G2 item 2): PII in ``result.structuredContent`` (no ``content``
+    key) is now scanned — the old branch only scanned dict ``result.content`` and
+    let this shape egress raw."""
+    req = _ext_request({"jsonrpc": "2.0", "id": 11, "method": "tools/call",
+                        "params": {"name": "fetch", "arguments": _BENIGN_ARG}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 11,
+                               "result": {"structuredContent": {"owner": _PII_RESULT_TEXT}}})
+    client = _ext_client(upstream)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    blob = json.dumps(_decode(resp))
+    assert "john.doe@example.com" not in blob   # structuredContent PII no longer egresses raw
+    assert "j***@e***.com" in blob
+
+
+@pytest.mark.asyncio
+async def test_ext_redacts_pii_in_string_result():
+    """A plain-string ``result`` (not a dict) is now scanned too."""
+    req = _ext_request({"jsonrpc": "2.0", "id": 12, "method": "tools/call",
+                        "params": {"name": "fetch", "arguments": _BENIGN_ARG}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 12, "result": _PII_RESULT_TEXT})
+    client = _ext_client(upstream)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    blob = json.dumps(_decode(resp))
+    assert "john.doe@example.com" not in blob
+    assert "j***@e***.com" in blob
+
+
 def _sse_resp(json_body, *, status=200):
     """A buffered SSE (text/event-stream) response stand-in: aread() yields one
     ``data:`` frame carrying ``json_body`` (mirrors an MCP tools/call SSE result)."""
