@@ -1396,14 +1396,49 @@ def neutralize_encoded_pii(text: str) -> str:
 # A value run interspersed with these visually reassembles, so match the whole run, strip
 # the separators, and re-detect. Each subpattern is bounded (``.*?`` closed by ``-->``,
 # ``[^>]*`` negated) and the two char classes are disjoint -> LINEAR (no ReDoS).
+# The comment body is CAPPED ({0,400}) — a real render-away obfuscation comment is tiny, and
+# an unbounded ``.*?`` re-scanned per value position is a ReDoS. Empty/self-closing tag bodies
+# are likewise negated-class bounded.
 _RENDER_INVIS_SEP = (
     r"(?:[*`]"
-    r"|<!--.*?-->"
-    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]*>\s*</[a-zA-Z]+\s*>"
-    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]*/\s*>)"
+    r"|<!--.{0,400}?-->"
+    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]{0,400}>\s*</[a-zA-Z]+\s*>"
+    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]{0,400}/\s*>)"
 )
-_MD_SPLIT_TOKEN_RE = re.compile(rf"[\w@.\-]+(?:{_RENDER_INVIS_SEP}+[\w@.\-]+)+", re.DOTALL)
+_NUMERIC_ENTITY_RE = re.compile(r"&#(x[0-9a-fA-F]{1,6}|[0-9]{1,7});")
+_ENT = _NUMERIC_ENTITY_RE.pattern
+# TWO ReDoS-safe token passes (applied sequentially in neutralize_markdown_split_pii):
+#  1) EMPHASIS/HTML — VALUE-ANCHORED (a value char precedes any separator), so a match fails
+#     fast at a stray ``<`` and the bounded comment is never re-scanned per position.
+#  2) ENTITIES — a plain run of value chars OR numeric entities. Value chars and ``&`` are
+#     DISJOINT and the entity is bounded (no ``.*?``), so this is linear. The ``stripped !=
+#     run`` guard in ``_sub`` leaves a run with no separator (a plain value) untouched.
+# G52: numeric entities DECODE to a char (unlike the strip-to-nothing emphasis/HTML), so the
+# run is decoded, not stripped, before re-detection.
+# The value/separator repetitions are CAPPED (a real PII/secret value segment is short) so
+# each match ATTEMPT is O(cap), not O(len) — otherwise a long value run wrapped by a
+# separator char (``x<!-- <150KB> -->y``) makes re restart+backtrack O(n^2). Caps well above
+# any real obfuscated value; longer runs are simply not one value.
+_EMPH_HTML_TOKEN_RE = re.compile(
+    rf"[\w@.\-]{{1,256}}(?:{_RENDER_INVIS_SEP}{{1,64}}[\w@.\-]{{1,256}})+", re.DOTALL
+)
+_ENTITY_TOKEN_RE = re.compile(rf"(?:[\w@.\-]|{_ENT}){{1,512}}")
 _RENDER_INVIS_STRIP_RE = re.compile(_RENDER_INVIS_SEP, re.DOTALL)
+
+
+def _decode_numeric_entities(s: str) -> str:
+    """Decode numeric HTML entities (&#50; / &#x33;) to their char — a renderer does, so a
+    value split with them reassembles. Only numeric entities (the obfuscation vector);
+    named entities (&amp; etc.) are left alone to keep FP low."""
+    def _one(m: "re.Match[str]") -> str:
+        tok = m.group(1)
+        try:
+            cp = int(tok[1:], 16) if tok[0] in "xX" else int(tok)
+        except ValueError:  # pragma: no cover
+            return m.group(0)
+        return chr(cp) if 0 <= cp <= 0x10FFFF else m.group(0)
+
+    return _NUMERIC_ENTITY_RE.sub(_one, s)
 
 
 def neutralize_markdown_split_pii(text: str) -> str:
@@ -1413,14 +1448,20 @@ def neutralize_markdown_split_pii(text: str) -> str:
     ``**bold**``, `` `code` ``, ``2*3``) is left untouched (strict no-op)."""
     # Fast-path skip only when NONE of the render-invisible separators can be present:
     # markdown emphasis (* `) or an HTML tag/comment '<' (G51). ('_' alone never masks.)
-    if not text or not ("*" in text or "`" in text or "<" in text):
+    if not text or not ("*" in text or "`" in text or "<" in text or "&" in text):
         return text
 
     def _sub(m: "re.Match[str]") -> str:
         run = m.group(0)
+        # A single PII/secret/credential value (even 3x-inflated by obfuscation markers) is
+        # short; a very long run is never one value, so skip it — bounds the per-run detect
+        # cost (no ReDoS on a pathological multi-KB run) with no loss of coverage.
+        if len(run) > 512:
+            return run
         # G50/G51: strip render-invisible separators (emphasis + HTML comments/empty tags);
-        # '_' stays literal (CommonMark).
-        stripped = _RENDER_INVIS_STRIP_RE.sub("", run)
+        # '_' stays literal (CommonMark). G52: then DECODE numeric HTML entities (they
+        # render to a char, not nothing).
+        stripped = _decode_numeric_entities(_RENDER_INVIS_STRIP_RE.sub("", run))
         # G50: also cover CREDENTIAL (bearer/api keys) + internal IP detectors — the
         # same interleaved-emphasis trick hides an obfuscated ``sk_live_**…**`` token or
         # ``10.**0**.0.5`` internal IP from the raw-text credential/IP checks.
@@ -1432,7 +1473,9 @@ def neutralize_markdown_split_pii(text: str) -> str:
         return run
 
     try:
-        return _MD_SPLIT_TOKEN_RE.sub(_sub, text)
+        out = _EMPH_HTML_TOKEN_RE.sub(_sub, text)   # pass 1: emphasis + render-invisible HTML
+        out = _ENTITY_TOKEN_RE.sub(_sub, out)        # pass 2: numeric HTML entities
+        return out
     except Exception:  # noqa: BLE001 - sanitizer must never break the egress
         return text
 

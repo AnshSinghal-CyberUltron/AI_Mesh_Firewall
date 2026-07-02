@@ -1252,6 +1252,51 @@ def test_g51_benign_html_not_masked(label, payload):
     assert _og.neutralize_markdown_split_pii(payload) == payload, f"{label}: benign HTML mutated (FP)"
 
 
+# ── G52: numeric HTML ENTITIES interleaved in a value — extends G44/G50/G51 ──────────
+# A renderer DECODES numeric entities (&#50; -> '2'), so 1&#50;3-45-6789 (entities at the
+# start/end, hex entities, an entity '@' in an email) renders the value while evading the raw
+# regexes AND G35's 6+-run neutralizer. neutralize_markdown_split_pii now DECODES numeric
+# entities before re-detection (a separate ReDoS-safe pass). Named entities (&amp;) untouched.
+_G52_LEAK = [
+    ("g52_one_entity",   "SSN 1&#50;3-45-6789 here"),
+    ("g52_lead_entity",  "SSN &#49;&#50;&#51;-45-6789 x"),
+    ("g52_hex_entity",   "SSN &#x31;2&#x33;-45-6789 y"),
+    ("g52_entity_email", "reach john&#64;example.com now"),
+    ("g52_tail_entity",  "SSN 12&#51;-45-6789 ok"),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G52_LEAK)
+def test_g52_entity_split_masked(label, payload):
+    import html as _html
+    out = _og.neutralize_markdown_split_pii(payload)
+    assert "[PII_REDACTED]" in out, f"{label}: entity-split value not masked"
+    dec = _html.unescape(out)
+    assert "123-45-6789" not in dec and "john@example.com" not in dec, (
+        f"{label}: value survives in rendered egress"
+    )
+
+
+@pytest.mark.parametrize("label,payload", [
+    ("g52_named_amp", "Tom &amp; Jerry are a duo"),
+    ("g52_copyright", "&#169; 2026 Acme Corporation"),
+    ("g52_plain_num", "the values 42 and 100 are shown"),
+])
+def test_g52_benign_entity_not_masked(label, payload):
+    assert _og.neutralize_markdown_split_pii(payload) == payload, f"{label}: benign entity mutated (FP)"
+
+
+def test_g52_render_normalize_redos_bounded():
+    """The render-normalization neutralizer stays bounded on pathological inputs (long value
+    runs, comment/entity floods) — no catastrophic backtracking (G51/G52 ReDoS regression)."""
+    import time
+    for bad in ("1" + "<!--" * 30000, "&#50;" * 40000,
+                "x<!-- " + "a" * 120000 + " -->y", "<x></x>" * 20000):
+        t = time.time()
+        _og.neutralize_markdown_split_pii(bad[:200000])
+        assert (time.time() - t) < 4.0, "neutralize_markdown_split_pii ReDoS on pathological input"
+
+
 # ── G49: exfil beacon hidden PAST the URL-scan budget (padding-flood evasion) ─────────
 # _scan_exfil_channels caps inspected URLs (_MAX_EXFIL_URLS) as a DoS guard. Padding an
 # output with that many benign URLs before an exfil beacon used to exhaust the budget

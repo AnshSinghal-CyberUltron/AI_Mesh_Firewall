@@ -134,9 +134,9 @@ _MD_EMPH_INTERLEAVE = re.compile(r"(?<=[\w@.\-])[*`]+(?=[\w@.\-])")
 # is bounded — ``.*?`` is closed by ``-->``, ``[^>]*`` is a negated class — so LINEAR (no
 # ReDoS). Detection-only (reveals the hidden value); never mutates the delivered egress.
 _RENDER_INVISIBLE_HTML = re.compile(
-    r"<!--.*?-->"                                 # HTML comment
-    r"|<([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>\s*</\1\s*>"  # <tag ...></tag>  (empty paired)
-    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]*/\s*>",         # <tag .../>       (self-closing)
+    r"<!--.{0,400}?-->"                              # HTML comment (body capped -> ReDoS-safe)
+    r"|<([a-zA-Z][a-zA-Z0-9]*)\b[^>]{0,400}>\s*</\1\s*>"  # <tag ...></tag>  (empty paired)
+    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]{0,400}/\s*>",         # <tag .../>       (self-closing)
     re.DOTALL,
 )
 
@@ -743,6 +743,17 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "exposed_password": ["SECRET", "SOC2"],
     "connection_string": ["SECRET", "SOC2"],
     "private_key_block": ["SECRET", "SOC2"],
+    # CHG-0075: the rest of CREDENTIAL_EXPOSURE_PATTERNS had NO tag-map entry, so
+    # get_compliance_tags returned [] — a detected Stripe/Twilio/Azure/GCP/Slack/JWT/
+    # fine-grained-PAT credential was never tagged SECRET (breaks enforce-by-tag +
+    # audit, and the arg credential force-block's SECRET-tag path). All are secrets.
+    "github_fine_grained_pat": ["SECRET", "SOC2"],
+    "stripe_key": ["SECRET", "SOC2"],
+    "azure_storage_key": ["SECRET", "SOC2"],
+    "twilio_api_key": ["SECRET", "SOC2"],
+    "gcp_service_account_key": ["SECRET", "SOC2"],
+    "slack_token": ["SECRET", "SOC2"],
+    "jwt": ["SECRET", "SOC2"],
 }
 
 
