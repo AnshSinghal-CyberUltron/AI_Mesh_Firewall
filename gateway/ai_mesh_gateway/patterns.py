@@ -47,13 +47,32 @@ _CANON_MAX_LEN = 20000  # hard cap (upstream MAX_PROMPT_LENGTH is 10k)
 _DASH_CHARS = frozenset("‐‑‒–—―−﹘﹣－")
 
 # Cross-script confusables NFKC leaves untouched (Cyrillic/Greek -> Latin skeleton).
+# G56: a SINGLE homoglyph substituted into a PII/secret/credential value (``sk_live_abcԁ…``
+# with Cyrillic ԁ, ``exampӏe.com`` with palochka ӏ) breaks the raw regex AND was not folded
+# here, so it evaded detection AND masking on both input and output. The lowercase Cyrillic +
+# Greek caps below were the original set; the rest complete the standard Unicode Latin-lookalike
+# confusable set (Cyrillic lowercase ԁ/һ/ӏ/ԛ/ԝ, the classic Cyrillic UPPERCASE homoglyphs
+# А/В/Е/К/М/Н/О/Р/С/Т/У/Х/Ѕ/Ј/І…, Greek ρ/κ/τ and the lunate sigma). NFKC runs BEFORE this map
+# (line below), so Greek lunate ϲ (U+03F2) folds to final sigma ς first -> ς is what we map to c.
+# Only consulted inside canonicalize_for_detection, and a match fires only when the CANONICAL
+# form is a real PII/secret pattern, so legitimate Cyrillic/Greek prose is unaffected (FP-safe).
 _CONFUSABLE_MAP = {
     "а": "a", "е": "e", "о": "o", "р": "p", "с": "c",
     "х": "x", "у": "y", "і": "i", "ј": "j", "ѕ": "s",
+    # Cyrillic lowercase (NFKC-identity) not covered above
+    "ԁ": "d", "һ": "h", "ӏ": "l", "ԛ": "q", "ԝ": "w",
     "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H",
     "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O",
     "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X",
     "ο": "o", "α": "a", "ι": "i", "ν": "v",
+    # Greek lowercase homoglyphs (post-NFKC): rho/kappa/tau look like p/k/t; final sigma ς
+    # (what the lunate sigma ϲ folds to) imitates a Latin c; mu imitates u (micro-sign µ
+    # NFKC-folds to μ first, so this covers both).
+    "ρ": "p", "κ": "k", "τ": "t", "ς": "c", "μ": "u",
+    # Cyrillic UPPERCASE — visually identical to Latin capitals (classic homoglyph set)
+    "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O",
+    "Р": "P", "С": "C", "Т": "T", "У": "Y", "Х": "X", "Ѕ": "S", "Ј": "J",
+    "І": "I", "Ԛ": "Q", "Ԝ": "W", "Ԁ": "D", "Һ": "H",
 }
 
 # G21: Unicode SMALL-CAPITAL letters (ɪɢɴᴏʀᴇ …) — legitimate IPA/phonetic letters NFKC

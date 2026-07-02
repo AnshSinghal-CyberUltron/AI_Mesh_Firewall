@@ -1506,6 +1506,70 @@ def test_g55_transport_decode_redos_bounded():
         assert (time.time() - t) < 4.0, f"{fn.__name__} slow on many-base64 payload (perf regression)"
 
 
+# ── G56: confusable-map completeness — a SINGLE homoglyph substitution in a value ──────────
+# _CONFUSABLE_MAP folded a handful of Cyrillic/Greek homoglyphs (а/е/о/р/с…), but the classic
+# Cyrillic UPPERCASE set (А/В/Е/К/М/Н/О/Р/С/Т/У/Х/Ѕ/Ј/І) and several lowercase (ԁ→d, һ→h, ӏ→l,
+# ԛ→q, ԝ→w, ρ→p, κ→k, τ→t, ς→c, μ→u) were MISSING — so a value with ONE such char (``sk_live_abcԁ…``,
+# ``exampӏe.com``, ``githμb_pat_…``) broke the raw regex AND was not canonicalized, evading
+# detection AND masking on input and output. Each fold is a 1->1 position-preserving sub, so
+# redact_all still masks the ORIGINAL bytes; only fires when the canonical form is a real
+# PII/secret pattern, so legitimate Cyrillic/Greek prose is untouched (FP-safe).
+# (confusable char, ascii it imitates)
+_G56_CONFUSABLES = [
+    ("ԁ", "d"), ("һ", "h"), ("ӏ", "l"), ("ԛ", "q"), ("ԝ", "w"),
+    ("ρ", "p"), ("κ", "k"), ("τ", "t"), ("μ", "u"), ("ϲ", "c"),  # ϲ NFKC->ς->c
+    ("А", "A"), ("Е", "E"), ("О", "O"), ("Р", "P"), ("С", "C"),
+    ("Ѕ", "S"), ("Ј", "J"), ("І", "I"),
+]
+
+
+@pytest.mark.parametrize("conf,ascii_ch", _G56_CONFUSABLES)
+def test_g56_confusable_folds_to_ascii(conf, ascii_ch):
+    """Every listed homoglyph canonicalizes to the ASCII letter it imitates."""
+    assert patterns.canonicalize_for_detection(conf) == ascii_ch, (
+        f"U+{ord(conf):04X} did not fold to {ascii_ch!r} (canon={patterns.canonicalize_for_detection(conf)!r})"
+    )
+
+
+# (label, homoglyph-substituted value, plaintext fragment that must NOT survive in egress)
+_G56_LEAK = [
+    ("g56_stripe_komi_d", "key sk_live_abcԁ" + "1234efgh5678ij", "sk_live_abcd1234"),
+    ("g56_email_palochka", "reach robert.baker@exampӏe.com now", "baker@example.com"),
+    ("g56_ghpat_mu",       "token githμb_pat_11ABCDE0000aaaaaaaaaaabbb", "github_pat_11ABCDE"),
+    ("g56_email_rho",      "mail robert.baker@examρle.com today", "baker@example.com"),
+    ("g56_stripe_lunate_c","key sk_live_abϲd1234efgh5678ij", "sk_live_abcd1234"),
+    ("g56_email_shha",     "reach josһua.brown@example.com now", "joshua.brown@example.com"),
+]
+
+
+@pytest.mark.parametrize("label,payload,plain", _G56_LEAK)
+def test_g56_homoglyph_value_detected_and_masked(label, payload, plain):
+    """A single-homoglyph PII/secret/credential is detected AND removed from the egress bytes
+    (redact_all masks the original obfuscated span, so the plaintext can't be reconstructed)."""
+    detected = bool(patterns.detect_pii(payload) or patterns.detect_secrets(payload)
+                    or patterns.detect_credential_exposure(payload))
+    assert detected, f"{label}: single-homoglyph value evaded detection"
+    canon_egress = patterns.canonicalize_for_detection(patterns.redact_all(payload))
+    assert plain not in canon_egress, f"{label}: value reconstructable from egress (LEAK)"
+
+
+@pytest.mark.parametrize("label,payload", [
+    ("g56_russian",   "Привет мир, как дела сегодня друзья"),
+    ("g56_greek",     "Καλημέρα κόσμε τι κάνεις σήμερα"),
+    ("g56_micro",     "the sample is 50μg/mL at 5μF capacitance"),
+    ("g56_cyr_caps",  "СОВЕТ РОСТ ТОК МОРС important note"),
+    ("g56_greek_math","let ρ=0.5 and κ=2 with τ constant"),
+])
+def test_g56_legit_cyrillic_greek_not_flagged(label, payload):
+    """The expanded confusable folds must not turn legitimate Cyrillic/Greek/scientific text
+    into a false PII/secret/credential/IP match, nor mutate it under redaction."""
+    assert not patterns.detect_pii(payload), f"{label}: false PII"
+    assert not patterns.detect_secrets(payload), f"{label}: false secret"
+    assert not patterns.detect_credential_exposure(payload), f"{label}: false credential"
+    assert not patterns.detect_ip_leakage(payload), f"{label}: false IP leak"
+    assert patterns.redact_all(payload) == payload, f"{label}: benign text mutated by redaction (FP)"
+
+
 # ── G49: exfil beacon hidden PAST the URL-scan budget (padding-flood evasion) ─────────
 # _scan_exfil_channels caps inspected URLs (_MAX_EXFIL_URLS) as a DoS guard. Padding an
 # output with that many benign URLs before an exfil beacon used to exhaust the budget
