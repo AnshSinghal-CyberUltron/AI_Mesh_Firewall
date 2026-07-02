@@ -1015,6 +1015,28 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (FP-risky) or the near-zero-FP subset: DROP a tools/list tool whose DESCRIPTION carries injection
   (building on CHG-0077). 2 subtle payloads still missed are also missed by the chat scanner (need tier-2).
 
+- **CHG-0079** (2026-07-02) — G2 item 2 / 1.4 (found while **FP-grounding the CHG-0078 follow-up**),
+  MEDIUM–HIGH: the follow-up was to enforce (drop) poisoned tool descriptions. An FP probe **REJECTED**
+  heuristic-drop — a legit "Detects jailbreak attempts and prompt injection" security-tool description
+  trips the injection patterns (FP), while the classic `<IMPORTANT>…read ~/.ssh/id_rsa…` poison is missed
+  by both — so the clean signal is **OBFUSCATION**, not injection-content heuristics. GAP: the chat scanner
+  deobfuscates via `scanner._normalize_unicode` before scanning, but `mcp_scan_orchestrator._scan_text_tier1`
+  ran `_injection_match` + `detect_secrets/…/ip_leakage` on RAW text. Invisible/confusable unicode —
+  zero-width chars (`I​g​n​o​r​e`), bidi-override, homoglyphs (fullwidth `Ｉ`, Cyrillic look-alikes),
+  the Unicode-tag block, combining marks — dodged the raw regexes (`redact_all` also doesn't strip
+  zero-width). So a zero-width-broken / homoglyph injection, or a secret / internal-IP hidden that way,
+  bypassed the MCP firewall while a markdown/model client reads the deobfuscated value. FIX
+  (`mcp_scan_orchestrator.py`): `_scan_text_tier1` computes `_deob = _normalize_unicode(text)` (decode
+  unicode-tags → strip zero-width & bidi → NFKC → drop combining marks → fold homoglyphs) and (a) runs
+  `_injection_match` on `_deob` too; (b) adds `_deob` to the CHG-0076 hidden-secret/credential/internal-IP
+  variant probe → an obscured secret/IP **blocks fail-closed** (redact_all can't mask the obfuscated run;
+  monitor stays observe-only). **ASCII fast-path** (`text.isascii()` short-circuits — the common case pays
+  nothing); local import (no cycle); injection enforcement unchanged. Extends CHG-0076 to a 2nd obfuscation
+  channel. +8 tests; **ZERO FP** on benign non-ASCII (emoji ZWJ family `👨‍👩‍👧`, Japanese, accented
+  café/résumé/naïve, plain ASCII — normalize is a detection-only probe, never mutates emitted bytes). Gate:
+  8 + 1350 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p2-mcp-unicode-deobfuscation/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

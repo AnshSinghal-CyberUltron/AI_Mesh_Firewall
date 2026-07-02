@@ -325,7 +325,20 @@ async def _scan_text_tier1(
                 mutated = apply_redaction(text, eval_result.redaction_hints)
             return mutated, findings, blocked, list(eval_result.redaction_fields)
 
-    if _injection_match(text):
+    # CHG-0079: deobfuscate INVISIBLE / CONFUSABLE unicode (zero-width, bidi-override,
+    # homoglyph, unicode-tag block, combining-mark smuggling) before detection. The chat
+    # scanner normalizes via _normalize_unicode before scanning, but the MCP tier-1
+    # scanned RAW text — so a zero-width-broken ("I​g​n​o​r​e…") or homoglyph ("Ｉgnore…")
+    # injection, or a similarly hidden secret / internal-IP (below), bypassed it. Only
+    # NON-ASCII text can carry these characters, so pure-ASCII text (the common case)
+    # skips the normalize cost entirely.
+    if not text.isascii():
+        from scanner import _normalize_unicode  # local: scanner doesn't import this module
+        _deob = _normalize_unicode(text)
+    else:
+        _deob = text
+
+    if _injection_match(text) or (_deob != text and _injection_match(_deob)):
         findings.append(
             McpFinding(
                 entity_type="prompt_injection",
@@ -423,7 +436,13 @@ async def _scan_text_tier1(
     # entity-encoded contact email does not false-block a legitimate web/HTML tool result.
     if not blocked and enforcement != "monitor":
         from scanner import _decode_text_encoding_variants  # local: avoid import cycle
-        for _variant in _decode_text_encoding_variants(text):
+        _variants = list(_decode_text_encoding_variants(text))
+        # CHG-0079: also probe the INVISIBLE/CONFUSABLE-unicode-deobfuscated view
+        # (zero-width / bidi / homoglyph / unicode-tag smuggling) — a secret / internal
+        # IP hidden that way dodges the raw regexes but the model reads it deobfuscated.
+        if _deob != text:
+            _variants.append(_deob)
+        for _variant in _variants:
             if _variant == text:
                 continue
             _hidden: dict[str, str] = {}

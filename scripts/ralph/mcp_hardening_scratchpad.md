@@ -282,6 +282,23 @@
       ENFORCEMENT (default block/neutralize, or DROP a tools/list tool whose description carries injection —
       near-zero-FP, builds on CHG-0077) is a separate FP decision for a future iteration; 2 subtle payloads
       still missed are also missed by the chat scanner (need tier-2 Bedrock).
+      CHG-0079 (2026-07-02, MEDIUM–HIGH — found while FP-grounding the CHG-0078 follow-up): an FP probe
+      REJECTED heuristic-drop of poisoned tool descriptions (a legit "Detects jailbreak attempts and prompt
+      injection" security tool trips the injection patterns; the <IMPORTANT>…read ~/.ssh/id_rsa… poison is
+      missed by both) → the clean signal is OBFUSCATION. GAP: the chat scanner deobfuscates via
+      scanner._normalize_unicode before scanning, but mcp_scan_orchestrator._scan_text_tier1 scanned RAW text
+      — so a zero-width-broken (I<zwsp>gnore) / homoglyph (fullwidth Ｉgnore) injection, or a secret/internal-
+      IP hidden that way (redact_all doesn't strip zero-width), bypassed the MCP firewall while a markdown/
+      model client reads the deobfuscated value. FIX (mcp_scan_orchestrator.py): _scan_text_tier1 computes
+      _deob=_normalize_unicode(text) (strip zero-width & bidi + fold homoglyphs + decode unicode-tags + drop
+      combining marks) and runs _injection_match on it + adds it to the CHG-0076 hidden-secret/cred/internal-
+      IP variant probe (obscured secret/IP → BLOCK fail-closed). ASCII fast-path; local import (no cycle);
+      injection enforcement unchanged. Extends CHG-0076 to a 2nd obfuscation channel. +8 tests; ZERO FP
+      (emoji ZWJ 👨‍👩‍👧 + Japanese + accents + ASCII all clean — detection-only probe). Gate: 8 + 1350 gateway
+      passed, 0 failed; broker -k "not websocket" 108 passed. Evidence:
+      mcp-parallel/findings/backstop-p2-mcp-unicode-deobfuscation/finding.md. RESIDUAL: heuristic-drop of
+      poisoned tool descriptions REJECTED on FP grounds; injection under default tag posture remains
+      tagged-but-forwarded (CHG-0078 residual).
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

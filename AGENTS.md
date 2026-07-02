@@ -652,6 +652,21 @@
     0 failed; broker -k "not websocket" 108 passed. Evidence mcp-parallel/findings/backstop-p2-mcp-injection-parity/.
     RESIDUAL: output-injection ENFORCEMENT (default block/neutralize, or drop a tools/list tool whose
     description carries injection) is a separate FP decision — future iteration.
+  - CHG-0079 (2026-07-02) — G2 item 2 / 1.4 (found while FP-grounding the CHG-0078 follow-up), MEDIUM–HIGH:
+    an FP probe REJECTED heuristic-drop of poisoned tool descriptions (a legit "Detects jailbreak attempts
+    and prompt injection" security tool trips the injection patterns; the <IMPORTANT>…read ~/.ssh/id_rsa…
+    poison is missed by both) → the clean signal is OBFUSCATION. GAP: the chat scanner deobfuscates via
+    scanner._normalize_unicode before scanning, but mcp_scan_orchestrator._scan_text_tier1 scanned RAW text —
+    so a zero-width-broken (I<zwsp>gnore) / homoglyph (fullwidth Ｉgnore) injection, or a secret/internal-IP
+    hidden that way (redact_all doesn't strip zero-width), bypassed the MCP firewall while a markdown/model
+    client reads the deobfuscated value. FIX (mcp_scan_orchestrator.py): _scan_text_tier1 computes
+    _deob=_normalize_unicode(text) (strip zero-width & bidi + fold homoglyphs + decode unicode-tags + drop
+    combining marks) and runs _injection_match on it + adds it to the CHG-0076 hidden-secret/cred/internal-IP
+    variant probe (obscured secret/IP → BLOCK fail-closed). ASCII fast-path (text.isascii() short-circuits);
+    local import (no cycle); injection enforcement unchanged. Extends CHG-0076 to a 2nd obfuscation channel.
+    +8 tests; ZERO FP (emoji ZWJ 👨‍👩‍👧 + Japanese + accents + ASCII all clean — detection-only probe). Gate:
+    8 + 1350 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
+    mcp-parallel/findings/backstop-p2-mcp-unicode-deobfuscation/.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)
