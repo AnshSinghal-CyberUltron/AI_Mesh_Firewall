@@ -163,13 +163,28 @@
         (all 10 R5 models). Full browser re-verify blocked by (a) ZeroShield admin password being reset by
         another session/seed mid-run, (b) React modal timing fragility — not worth fighting; fix is sound.
       NOTE: `impeccable` skill/plugin NOT installed -> do polish manually (no /impeccable init/audit/critique).
-      R6 REMAINING: (1) key-entry UX polish + empty/error/loading states + "encrypted/write-only key" affordance
-        on ModelConnectionPanel; (2) pipeline-trace cards — OutputPipelineTimeline.jsx does NOT consume stages[]
-        (colours 6 fake stages from one global event.action); the HONEST per-stage consumer is
-        frontend/src/components/simulator/StageTimeline.jsx. Implement docs/pipeline/TRACE_UI_CONTRACT.md
-        honest per-stage badges; make OutputPipelineTimeline drive per-stage from stages[] or reconcile.
+      R6b DONE 2026-07-02 (022fd820): HONEST per-stage pipeline-trace card. OutputPipelineTimeline.jsx used
+        to colour every fabricated stage from ONE global event.action. Now when the gateway's real
+        pipeline_trace.stages[] is present it renders each stage with its OWN action/badge in array order per
+        docs/pipeline/TRACE_UI_CONTRACT.md (redact->flag honesty rule when redact_noop; tier/rule/policy tags;
+        per-stage latency). Pure logic in frontend/src/utils/pipelineTrace.js, unit-tested 5/5 (node --test);
+        synthetic narrative kept as fallback. `npm run build` green.
+      R6 REMAINING: (1) optional ModelConnectionPanel key-entry/empty/error/loading polish (the "encrypted at
+        rest / never cached in browser" affordance ALREADY exists in the panel); (2) item 9 Playwright verify:
+        connect flow works (with R6a model_id fix), trace card renders per-stage from stages[], focus/a11y/
+        responsive, zero console errors, before/after screenshots. NOTE StageTimeline.jsx (simulator/) is the
+        OTHER honest consumer — not owned/claimed; leave it to fe-harden.
       COORDINATION: fe-harden session active on frontend but has NOT touched ModelConnectionPanel/
         OutputPipelineTimeline (git log clean); keep edits surgical.
+
+## R6 verify (item 9) + R7 freeze — REMAINING for COMPLETE
+- Item 9 Playwright: drive connect flow end-to-end (custom provider, blank model_id now works via R6a),
+  render an event with a real pipeline_trace and assert per-stage badges differ (honest), zero console errors.
+- R7: re-run `GATEWAY_LIVE=0 PYTHONPATH=. .venv/bin/python -m pytest tests/golden -q` 3x (all green) AND
+  re-run the R5.4 live corpus (enforcement holds) — then all completion conditions met.
+- COMPLETION CHECKLIST (do NOT emit promise until ALL true): 9 frozen green [x]; new attack cases green [x];
+  golden 3x in-process [x]; live OpenRouter validation [x R5.4]; frontend polish [~ R6a+R6b done];
+  Playwright verify [ ]; no secret leak [x].
 - [ ] 9. Playwright verify the revamp end-to-end (connect flow works, cards render from stages[], focus/
       a11y/responsive, zero console errors), with before/after screenshots.
 
