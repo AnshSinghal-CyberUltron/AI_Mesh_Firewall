@@ -389,6 +389,20 @@
     block (fail-closed). No FP: redact_all replaces every match (verified over the full battery, zero
     would-be false blocks). +2 tests. Gate: 2 chg0057 + 1160 gateway passed (excl. another session's untracked
     broken test_mcp_enforcement_block_recording.py). Evidence mcp-parallel/findings/backstop-p2-tier1-byte-verify-all/.
+  - CHG-0058 (2026-07-02) — G2 / 1.4 (encoded internal-network-address leak, HIGH; found continuing the
+    CHG-0054/0055/0056/0057 adversarial obfuscation sweep): redact_all de-obfuscated base64/hex/url blobs but
+    the decode branches in _redact_obfuscated checked only pii/secrets, NOT detect_ip_leakage — so an internal
+    IP/host/URL inside an encoded blob (base64("db.internal:5432"), base64("http://192.168.50.123:8080/admin"),
+    %-encoded internal URL) egressed verbatim (trivially decodable). SECONDARY gap: the base64 gate _B64ISH_RE
+    needs {12,} chars, so a bare short internal IPv4 (10.1.2.3 -> MTAuMS4yLjM=, 11 chars) slipped under (hex
+    short-IPs already covered: 8 bytes=16 hex >= floor). FIX: (1) _dec_has_infra() (network keys only:
+    internal_ipv4/hostname/url; file-paths excluded) added to the base64/hex + url-decode branches -> mask the
+    whole token [ENCODED_SECRET_REDACTED]; (2) _iter_short_b64_infra() — a dedicated 8..11-char short-token pass
+    (network-key-only, bounded, maximal-run pinned) closing the sub-gate short-IP leak WITHOUT touching
+    detect_pii/detect_secrets. No FP: _IP_LEAKAGE_EXAMPLE_ADDRS textbook carve-out preserved on the decode path;
+    encoded file paths untouched; benign short-base64 battery zero-changed. patterns.py + 13 tests. Gate: 13
+    encoded-infra + 1176 gateway passed, 0 failed. Integrates with CHG-0057 byte-verify (ip_leak union fails
+    closed on a survivor). Evidence mcp-parallel/findings/backstop-p2-encoded-infra-leak/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

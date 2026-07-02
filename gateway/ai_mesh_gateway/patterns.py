@@ -956,6 +956,49 @@ def _detect_all_spans(text: str):
                     yield label, m.start(), m.end()
 
 
+# CHG-0058: an ENCODED (base64/hex/url) internal IP/host/URL bypassed the obfuscation
+# pass — its decode checks only detect_pii/detect_secrets, NOT ip_leakage. Scope the
+# encoded-infra check to the NETWORK-address keys redact_all actually masks (internal
+# IP / hostname / URL); file-path leak types are excluded (flag-tier + FP-prone).
+_INFRA_NETWORK_KEYS = ("internal_ipv4", "internal_hostname", "internal_url")
+
+
+def _dec_has_infra(s: str) -> bool:
+    """True if a DECODED obfuscated blob carries an internal network address."""
+    return any(k in _INFRA_NETWORK_KEYS for k in detect_ip_leakage(s))
+
+
+# CHG-0058: the shared base64 gate (_B64ISH_RE, {12,}) needs >=12 base64 chars, i.e. a
+# decoded payload of ~>=9 bytes. A BARE short internal IPv4 whose string form is <=8 bytes
+# (e.g. "10.1.2.3" -> "MTAuMS4yLjM=", 11 base64 chars) falls just under the gate, so a lone
+# short internal IP could egress base64-encoded and be trivially recovered. This dedicated
+# SHORT-token pass (a maximal run of 8..11 base64 chars, the band the main gate misses)
+# decodes and masks ONLY when the result is an internal NETWORK address (specific, low-FP)
+# -- it deliberately does NOT run the full PII/secret suite, so it changes nothing about
+# detect_pii/detect_secrets and only tightens the fail-closed redaction path. The leading
+# look-behind + trailing look-ahead pin it to maximal runs, so 12+ char tokens (already
+# handled by the main pass) are never partially re-matched. Token count is bounded.
+_SHORT_B64_RE = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{8,11}={0,2}(?![A-Za-z0-9+/])")
+
+
+def _iter_short_b64_infra(text: str):
+    """Yield ``(token, decoded)`` for SHORT base64 tokens (8..11 chars, below the main
+    _B64ISH_RE gate) whose decode is an internal network address. Bounded + network-key-
+    only => low FP, decode-bomb safe."""
+    if not text:
+        return
+    scan = text[:_CANON_MAX_LEN]
+    seen = 0
+    for m in _SHORT_B64_RE.finditer(scan):
+        if seen >= _MAX_DECODE_TOKENS:
+            break
+        seen += 1
+        tok = m.group(0)
+        dec = _decode_one(tok, False)
+        if dec is not None and _dec_has_infra(dec):
+            yield tok, dec
+
+
 def _redact_obfuscated(original: str, result: str) -> str:
     """Mask obfuscated PII/secret (G1) and encoded PII/secret blobs (G2) in ``result``.
 
@@ -975,9 +1018,14 @@ def _redact_obfuscated(original: str, result: str) -> str:
         # G26: mask the OUTER encoded blob when its decode carries PII/secret in either
         # raw OR canonical (unicode-obfuscated, e.g. base64 ∘ zero-width) form.
         dcanon = canonicalize_for_detection(dec)
-        if (_detect_pii_core(dec) or _detect_secrets_core(dec)
-                or (dcanon != dec and (_detect_pii_core(dcanon) or _detect_secrets_core(dcanon)))):
+        if (_detect_pii_core(dec) or _detect_secrets_core(dec) or _dec_has_infra(dec)
+                or (dcanon != dec and (_detect_pii_core(dcanon) or _detect_secrets_core(dcanon)
+                                       or _dec_has_infra(dcanon)))):
             masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
+    # CHG-0058: short base64 tokens (8..11 chars) below the main gate carrying a bare
+    # internal network address (e.g. base64("10.1.2.3")). Network-key-only, bounded.
+    for tok, _dec in _iter_short_b64_infra(original):
+        masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
     # CHG-0056: percent/URL-encoding obfuscation — a %XX-encoded PII/secret (e.g. an
     # email in a URL query param) breaks the raw pattern but is trivially recoverable.
     # Decode tokens carrying a %XX and, if the decoded form matches PII/secret, mask the
@@ -988,7 +1036,7 @@ def _redact_obfuscated(original: str, result: str) -> str:
             dec = urllib.parse.unquote(tok)
         except Exception:
             continue
-        if dec != tok and (_detect_pii_core(dec) or _detect_secrets_core(dec)):
+        if dec != tok and (_detect_pii_core(dec) or _detect_secrets_core(dec) or _dec_has_infra(dec)):
             masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
     for sub, tag in sorted(masks, key=lambda x: -len(x[0])):
         if sub and sub in result:

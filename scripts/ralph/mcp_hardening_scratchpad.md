@@ -144,6 +144,21 @@
       Gate: 2 chg0057 + 1160 gateway passed (excl. another session's untracked broken
       test_mcp_enforcement_block_recording.py = undefined _rest_request helper, unrelated). Evidence:
       mcp-parallel/findings/backstop-p2-tier1-byte-verify-all/finding.md.
+      CHG-0058 (2026-07-02, HIGH — encoded internal-network-address leak; found continuing the
+      CHG-0054/0055/0056/0057 adversarial obfuscation sweep): redact_all de-obfuscated base64/hex (G2) + URL
+      (CHG-0056) blobs but the decode branches in _redact_obfuscated checked only pii/secrets, NOT
+      detect_ip_leakage — so an internal IP/host/URL inside an encoded blob (base64("db.internal:5432"),
+      base64("http://192.168.50.123:8080/admin"), %-encoded internal URL) egressed verbatim. SECONDARY gap: the
+      base64 gate _B64ISH_RE needs {12,} chars, so a bare short internal IPv4 (10.1.2.3 -> MTAuMS4yLjM=, 11
+      chars) slipped under (hex short-IPs already covered: 8 bytes=16 hex >= {8,} floor). FIX (patterns.py): (1)
+      _dec_has_infra() network-keys-only added to the base64/hex + url-decode branches -> mask whole token
+      [ENCODED_SECRET_REDACTED]; file-path keys excluded (matches redact_all scope). (2) _SHORT_B64_RE +
+      _iter_short_b64_infra() — dedicated 8..11-char short-token pass, network-key-only (does NOT touch
+      detect_pii/detect_secrets), maximal-run-pinned, bounded. NO FP: _IP_LEAKAGE_EXAMPLE_ADDRS textbook
+      carve-out preserved on the decode path; encoded file paths untouched; benign short-b64 battery
+      zero-changed. Integrates with CHG-0057 byte-verify (ip_leak union fails closed on a survivor). +13 tests.
+      Gate: 13 encoded-infra + 1176 gateway passed, 0 failed. Evidence:
+      mcp-parallel/findings/backstop-p2-encoded-infra-leak/finding.md.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER
