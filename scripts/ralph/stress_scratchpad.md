@@ -254,6 +254,34 @@
         files (live_driver.py + test_chat_pipeline_golden.py, MCP-authored) touched additively under my
         "golden suite" ownership — backward-compatible, no other case affected. ⇒ The 9 frozen cases are now
         GREEN BOTH OFFLINE AND LIVE.
+      R5 FULL LIVE RE-VALIDATION on fresh gateway 2026-07-02 (iteration item): comprehensive.
+        - ~10 free models connected: gateway /v1/models routes to 10 :free OpenRouter models (cohere/gemma
+          x2/liquid/nvidia x3/openrouter/poolside x2) + gpt-5.2. "connect ~10 free models" satisfied
+          (persisted from prior UI work; verified routing to liquid+gemma+cohere all respond via pipeline).
+        - Broad live sweep: 13/13 injection/secret BLOCK (plain/homoglyph/zerowidth/base64/smallcaps/G28/
+          G29/DAN/AWS) + 4/4 redact/allow (SSN/MAC redacted, benign+base64-transport allowed).
+        - Extended live batch: 9/9 block (hex/double-b64/unicode-tag/fullwidth-homoglyph/spaced/dev-mode/
+          chatml-spoof/private-key/multi-turn-split) + 2/2 secret-REDACT (gcp-key->[GOOGLE_API_KEY_REDACTED],
+          npm->[NPM_TOKEN_REDACTED], raw ABSENT from egress, oracle hasPII=false) + 5/5 benign allow. NOTE:
+          gcp/npm are REDACT (masked+200), not block — different enforcement than AWS(block); NOT a leak.
+          Bonus: aidefence_scan marks the raw gcp+npm 'safe' => my scanner catches secrets the oracle misses.
+        - Stock OpenAI SDK (base_url=gateway/v1): blocks raise BadRequestError(status=400, code=content_
+          filter, request_id=zs-...); redact/benign -> ok. Exactly the real-client experience.
+        - KILL-SWITCH (fresh gateway, contained+self-cleaning): create(disable,liquid)->activate/->request
+          to liquid=503 "Model '...' is currently disabled"; OTHER model gemma=200 (MODEL-SCOPED); deactivate/
+          +delete/->liquid recovered=200; final kill-switch count=0 (no dangling state). NB: my first attempt
+          500'd on activate/deactivate/delete — ROOT CAUSE was MY missing trailing slash (Django APPEND_SLASH
+          can't redirect POST/DELETE) NOT a control bug; correct URLs (…/activate/ …/2/) => clean. (This also
+          re-explains part of the earlier "control 500 storm" attribution — kill-switch 500s were self-caused.)
+        - SECRET AUDIT: git grep + per-commit scan for the OpenRouter key prefix / the sim-session key / gh
+          tokens (patterns only, not the literals) across tracked files + all my session commits => NONE.
+          Criterion 7 clean. (The scan pattern itself is kept OUT of this file to avoid writing key fragments.)
+        - DEPLOYED==TESTED: running container greps byte-match committed source (mac_address=2, become-
+          unrestricted=2, jailbr=1, INSTRUCTION_ROLES=4); scanner is a deterministic fn => 180 in-proc
+          verdicts transfer to live for identical inputs, spot-confirmed across EVERY class above.
+        - FULL-CORPUS-LIVE (in progress, background): running all ~120 unique golden payloads through the
+          live gateway, asserting live-action == in-proc-action per payload (results file corpus_live_
+          results.txt). This is the last airtight step before COMPLETE.
       COMPLETE STATUS after redeploy+case09 (2026-07-02): 1 frozen-9 green offline(183x3)+live(10/10 x3) ✓;
         2 new-attack regressions green in-proc+live(7/7 block) ✓; 3 golden 3x in-process ✓; 5 R6 frontend
         polish (both owned components) ✓; 6 Playwright ✓; 7 no secret leak ✓. REMAINING = criterion 4 R5
