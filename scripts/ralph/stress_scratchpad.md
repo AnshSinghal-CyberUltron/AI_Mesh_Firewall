@@ -347,6 +347,18 @@
         gateway won't start, check control health first. Rollback images kept: gateway:rollback-preG30 /
         rollback-preG31. LESSON: prefer `docker compose up -d --no-deps gateway` OR `docker start gateway` to
         avoid the dependency-health gate stopping the gateway when control is flaky.
+      RIGOR-VERIFIED OUTPUT GUARD 2026-07-02 (continuous-verification, no fix needed): probed the OUTPUT-side
+        defense (model-output scanning, distinct from all input-side G-work). Egress-bytes truth via
+        sanitize_output_for_verdict (always neutralize_exfil_channels FIRST, then category redaction):
+        PII/secrets in model output MASKED (SSN->***-**-6789, email->j***@e***.com, AWS->AKIA****MPLE,
+        card->****-****-****-1111, incl homoglyph/zero-width variants). EXFIL CHANNELS (output_guard.py
+        _url_smuggles_data / _scan_exfil_channels): 6/6 STRONG exfil payloads neutralized — markdown-IMAGE
+        defanged to a plain link (kills zero-click auto-render beacon) + payload -> [exfil-redacted], link+PII,
+        bare+encoded-PII, path-blob. Images trip on EITHER signal (encoded blob >=24ch decoding to >=8 printable
+        OR PII/secret); links/bare trip ONLY on PII/secret (opaque-token FP avoidance). 3/3 benign PASS (logo
+        image, utm/ref tracking link, presigned S3 X-Amz-Signature) = zero FP. My initial weak probes
+        ("?data=secret123", "?leak=abc123") correctly NOT neutralized (short opaque != exfil signal; neutralizing
+        would be an FP). => output-side PII masking + exfil-channel defense CONFIRMED ROBUST, no gap.
       ★ FINAL COMPLETION 2026-07-02 (post-G30, +G31): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
