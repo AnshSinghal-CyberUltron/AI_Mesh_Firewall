@@ -1,9 +1,28 @@
 ---
-iteration: 21
+iteration: 22
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter22 (2026-07-02) — P9.29 sustained load: Cursor 2nd-oracle pooling/reuse/cgroup corroboration
+- Item #29 was already marked [x] by the parallel Claude session (`scripts/mcp_load_live.py`, host-cgroup
+  sampling, GREEN 3× / 9000 calls). This iteration adds an INDEPENDENT Cursor oracle (different harness +
+  different sampling) — the iter21-for-#28 pattern repeated for #29.
+- Added a `SUSTAINED=1` phase (Phase 3.6) to Cursor-owned `scripts/mcp_multi_org_harness.py`: holds a
+  STEADY 90-in-flight for 90s across all 15 targets (continuously refilled = true stream), + a 300-wide
+  overload micro-burst (503/retry probe) + a recovery probe. Reliability split HTTP-503 vs JSON-RPC-error;
+  503-storm metric = max-503-per-second (bucketed by completion ts). Default (`SUSTAINED` unset) unchanged.
+- Sampled IN-CONTAINER cgroup `pids.current` + container IDs every 3s during run1 (Claude sampled the HOST
+  cgroup — both agree). **RESULT: GREEN 3× (10,055 sustained calls):** container count=5 constant + IDs
+  unchanged (`ce651a98198c`/`2047af4aa278`/`3c2353b834fa`) = reuse/pooling holds, no dup, no orphan spawn;
+  **pids.current flat 123/256** (1 transient 125 blip) = no per-call fork growth; mem flat ≪2 GB; **http_503=0
+  / max_503_per_sec=0** (no storm); overload 300-wide = 300/300 passed 0×503 each run (2× ceiling absorbed
+  as latency); recovery 15/15; pids drained to 123. Only blip = control `-32000` (0.17% agg, Claude ceiling).
+- `docker_manager` NOT touched → broker gate not required (verification-only). No four-memory changelog entry
+  (no hardening code changed). Findings: `mcp-parallel/findings/p9-29/CURSOR_POOLING.md`.
+- iter22 gateway-wiring recheck (P4.13/P6.18): still BLOCKED — `broker_send_rpc` absent from gateway; broker
+  exposes only `/{org_slug}/stdio/rpc`, no transport-agnostic `/{org}/rpc` (see below).
 
 ## iter21 (2026-07-02) — P9.28 concurrency: independent 2nd-oracle corroboration + #29 saturation boundary
 - Item #28 was already landed by the parallel Claude session (commit `070c3917`, `scripts/mcp_concurrency_live.py`,

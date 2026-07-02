@@ -70,6 +70,28 @@ CONCURRENCY_ROUNDS = int(os.environ.get("CONCURRENCY_ROUNDS", "3"))
 # client thread pool). Capped so we don't fork unbounded threads.
 CONCURRENCY_WORKERS = int(os.environ.get("CONCURRENCY_WORKERS", "240"))
 
+# P9.29 SUSTAINED LOAD (Cursor angle). Opt-in via SUSTAINED=1 so the default #28
+# gate behaviour is unchanged. Instead of a single burst, this holds a STEADY
+# in-flight concurrency (SUSTAINED_INFLIGHT) for SUSTAINED_SECONDS, continuously
+# refilling as calls complete, to prove: (a) the per-org sandbox is REUSED — no
+# duplicate containers, no runaway process/pid growth (pooling holds); (b) no 503
+# storm — 503s (if any) stay bounded and never cluster; (c) the fleet RECOVERS
+# after load. Default in-flight (90 = ~6/target across 15) sits below the
+# ~180-wide control/gateway saturation ceiling documented in p9-28, so at this
+# depth the Cursor-owned broker path should be clean; an optional short overload
+# micro-burst (SUSTAINED_OVERLOAD=1) then probes 503/error handling + recovery.
+SUSTAINED = os.environ.get("SUSTAINED", "0") == "1"
+SUSTAINED_SECONDS = float(os.environ.get("SUSTAINED_SECONDS", "90"))
+SUSTAINED_INFLIGHT = int(os.environ.get("SUSTAINED_INFLIGHT", "90"))
+SUSTAINED_WORKERS = int(os.environ.get("SUSTAINED_WORKERS", "120"))
+# Gate thresholds for the sustained (sub-saturation) window.
+SUSTAINED_MAX_ERR_RATE = float(os.environ.get("SUSTAINED_MAX_ERR_RATE", "0.02"))
+SUSTAINED_MAX_503_RATE = float(os.environ.get("SUSTAINED_MAX_503_RATE", "0.01"))
+SUSTAINED_MAX_503_BURST = int(os.environ.get("SUSTAINED_MAX_503_BURST", "20"))
+# Optional overload micro-burst (503/retry probe) after the steady window.
+SUSTAINED_OVERLOAD = os.environ.get("SUSTAINED_OVERLOAD", "0") == "1"
+SUSTAINED_OVERLOAD_WIDTH = int(os.environ.get("SUSTAINED_OVERLOAD_WIDTH", "300"))
+
 
 @dataclass
 class Target:
@@ -99,6 +121,9 @@ class CallRecord:
     canary_recv: str = ""
     cross_target: bool = False
     errored: bool = False
+    # Wall-clock completion time (epoch seconds) — used only by the sustained
+    # phase to bucket 503s per second and detect a 503 storm/cluster.
+    ts_done: float = 0.0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -252,6 +277,130 @@ def call_get_sum_conc(t: Target, rnd: int, seq: int) -> CallRecord:
                       canary_sent=expected, canary_recv=txt, errored=errored)
 
 
+def call_echo_sustained(t: Target, seq: int) -> CallRecord:
+    """One echo in the sustained steady-state stream (phase='sustained').
+
+    Identical wire semantics to ``call_echo_conc`` (unique canary naming its owning
+    target so a cross-wired reply is caught), but tagged 'sustained' and stamped
+    with a completion timestamp for the 503-storm/per-second bucket analysis."""
+    rec = call_echo_conc(t, 0, seq)
+    rec.phase = "sustained"
+    rec.ts_done = time.time()
+    return rec
+
+
+def call_get_sum_sustained(t: Target, seq: int) -> CallRecord:
+    """One get-sum in the sustained steady-state stream (phase='sustained')."""
+    rec = call_get_sum_conc(t, 0, seq)
+    rec.phase = "sustained"
+    rec.ts_done = time.time()
+    return rec
+
+
+def run_sustained(
+    targets: list[Target], seconds: float, inflight: int, workers: int
+) -> list[CallRecord]:
+    """Hold a STEADY ``inflight`` concurrency across all targets for ``seconds``.
+
+    Continuously refills as calls complete (a true sustained stream, not a single
+    burst) so we measure steady-state pooling/reuse, not cold-start. Calls are
+    round-robined evenly across every (org, server) target and alternate
+    echo/get-sum. Returns every CallRecord produced within the window (plus the
+    in-flight tail drained at the deadline)."""
+    from concurrent.futures import FIRST_COMPLETED, wait
+
+    records: list[CallRecord] = []
+    deadline = time.time() + seconds
+    n = len(targets)
+    seq = 0
+
+    def _submit(ex: ThreadPoolExecutor):
+        nonlocal seq
+        t = targets[seq % n]
+        s = seq
+        seq += 1
+        if s % 2 == 0:
+            return ex.submit(call_echo_sustained, t, s)
+        return ex.submit(call_get_sum_sustained, t, s)
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        pending = {_submit(ex) for _ in range(inflight)}
+        while time.time() < deadline and pending:
+            done, pending = wait(pending, timeout=0.5, return_when=FIRST_COMPLETED)
+            for fut in done:
+                records.append(fut.result())
+            while len(pending) < inflight and time.time() < deadline:
+                pending.add(_submit(ex))
+        for fut in as_completed(pending):
+            records.append(fut.result())
+    return records
+
+
+def analyze_sustained(records: list[CallRecord]) -> dict:
+    """Classify the sustained stream and detect a 503 storm.
+
+    Reuses the item-#28 zero-tolerance isolation classes (dropped / id_mismatch /
+    mixed / cross_target) and, on top, splits reliability into HTTP-503 (broker /
+    gateway backpressure) vs JSON-RPC error body (correct id, no result). A 503
+    STORM = 503s clustered in time; we bucket completions per wall-clock second
+    and take the max 503-per-second as the burst metric."""
+    def _cls(c: CallRecord) -> str:
+        if c.http_status == 0 or c.rpc_id_recv is None:
+            return "dropped"
+        if c.rpc_id_recv != c.rpc_id_sent:
+            return "id_mismatch"
+        if c.cross_target:
+            return "cross_target"
+        if c.http_status == 503:
+            return "http_503"
+        if c.errored:
+            return "errored"
+        if c.canary_recv != "" and c.canary_recv != c.canary_sent:
+            return "mixed"
+        return "passed"
+
+    classes = [(_cls(c), c) for c in records]
+    total = len(records)
+    counts = {k: sum(1 for cl, _ in classes if cl == k) for k in (
+        "passed", "errored", "http_503", "dropped", "id_mismatch",
+        "mixed", "cross_target")}
+    isolation_violations = (counts["dropped"] + counts["id_mismatch"]
+                            + counts["mixed"] + counts["cross_target"])
+    # error rate = anything that wasn't a clean pass (reliability, load-facing).
+    err_rate = (total - counts["passed"]) / total if total else 0.0
+    rate_503 = counts["http_503"] / total if total else 0.0
+
+    # 503 storm detection: bucket 503 completions by integer second.
+    per_sec: dict[int, int] = {}
+    for cl, c in classes:
+        if cl == "http_503":
+            per_sec[int(c.ts_done)] = per_sec.get(int(c.ts_done), 0) + 1
+    max_503_burst = max(per_sec.values()) if per_sec else 0
+
+    lat = sorted(c.latency_ms for c in records if c.ok)
+    def _pct(p: float) -> float | None:
+        if not lat:
+            return None
+        return lat[min(len(lat) - 1, int(len(lat) * p))]
+
+    return {
+        "total": total,
+        "passed": counts["passed"],
+        "errored_jsonrpc": counts["errored"],
+        "http_503": counts["http_503"],
+        "dropped": counts["dropped"],
+        "id_mismatch": counts["id_mismatch"],
+        "mixed": counts["mixed"],
+        "cross_target": counts["cross_target"],
+        "isolation_violations": isolation_violations,
+        "err_rate": round(err_rate, 5),
+        "rate_503": round(rate_503, 5),
+        "max_503_per_sec": max_503_burst,
+        "latency_ms": {"p50": _pct(0.50), "p95": _pct(0.95), "p99": _pct(0.99),
+                       "max": (lat[-1] if lat else None)},
+    }
+
+
 def call_cross_tenant(attacker: Target, victim_org: str) -> CallRecord:
     """attacker.key against victim_org's path — MUST be rejected (401/403)."""
     rid = str(uuid.uuid4())
@@ -326,14 +475,17 @@ def main() -> int:
     for rec in run_parallel([lambda t=t: call_tools_list(t) for t in targets]):
         summary.add(rec)
 
-    # Phases 2+3: echo + get-sum across all targets, all rounds, fired together
-    for rnd in range(1, ROUNDS + 1):
-        fns: list = []
-        for t in targets:
-            fns.append(lambda t=t, r=rnd: call_echo(t, r))
-            fns.append(lambda t=t, r=rnd: call_get_sum(t, r))
-        for rec in run_parallel(fns):
-            summary.add(rec)
+    # Phases 2+3: echo + get-sum across all targets, all rounds, fired together.
+    # Skipped in SUSTAINED mode — the sustained stream (below) subsumes them and
+    # keeps a re-run fast enough to grade 3× consecutively.
+    if not SUSTAINED:
+        for rnd in range(1, ROUNDS + 1):
+            fns: list = []
+            for t in targets:
+                fns.append(lambda t=t, r=rnd: call_echo(t, r))
+                fns.append(lambda t=t, r=rnd: call_get_sum(t, r))
+            for rec in run_parallel(fns):
+                summary.add(rec)
 
     # Phase 3.5: HIGH-CONCURRENCY STORM (P9.28) — for each round, fire
     # CONCURRENCY_DEPTH calls per target for ALL 15 targets at once
@@ -343,19 +495,20 @@ def main() -> int:
     # owning (org, server) so a cross-wired response is flagged cross_target.
     conc_submitted = 0
     conc_records: list[CallRecord] = []
-    for rnd in range(1, CONCURRENCY_ROUNDS + 1):
-        fns = []
-        for t in targets:
-            for seq in range(CONCURRENCY_DEPTH):
-                if seq % 2 == 0:
-                    fns.append(lambda t=t, r=rnd, s=seq: call_echo_conc(t, r, s))
-                else:
-                    fns.append(lambda t=t, r=rnd, s=seq: call_get_sum_conc(t, r, s))
-        conc_submitted += len(fns)
-        recs = run_parallel(fns, workers=min(len(fns), CONCURRENCY_WORKERS))
-        for rec in recs:
-            summary.add(rec)
-            conc_records.append(rec)
+    if not SUSTAINED:
+        for rnd in range(1, CONCURRENCY_ROUNDS + 1):
+            fns = []
+            for t in targets:
+                for seq in range(CONCURRENCY_DEPTH):
+                    if seq % 2 == 0:
+                        fns.append(lambda t=t, r=rnd, s=seq: call_echo_conc(t, r, s))
+                    else:
+                        fns.append(lambda t=t, r=rnd, s=seq: call_get_sum_conc(t, r, s))
+            conc_submitted += len(fns)
+            recs = run_parallel(fns, workers=min(len(fns), CONCURRENCY_WORKERS))
+            for rec in recs:
+                summary.add(rec)
+                conc_records.append(rec)
 
     # Concurrency integrity — classify every stormed call precisely. The item
     # #28 invariants (zero-tolerance) are: DROPPED (no JSON-RPC response came
@@ -399,6 +552,80 @@ def main() -> int:
     }
     print("concurrency integrity:", json.dumps(concurrency_integrity))
 
+    # Phase 3.6: SUSTAINED LOAD (P9.29, Cursor angle). Opt-in. Hold a steady
+    # in-flight concurrency for a sustained window, then (optionally) an overload
+    # micro-burst to probe 503/error handling, then a RECOVERY probe. The gate is
+    # zero isolation violations + bounded error/503 rate + no 503 storm +
+    # full recovery. Out-of-band docker reuse/cgroup checks are captured by the
+    # findings runner alongside this (broker sandbox pooling is Cursor-owned).
+    sustained_report: dict | None = None
+    if SUSTAINED:
+        print(f"sustained: inflight={SUSTAINED_INFLIGHT} for {SUSTAINED_SECONDS}s "
+              f"across {len(targets)} targets ...")
+        s_recs = run_sustained(targets, SUSTAINED_SECONDS, SUSTAINED_INFLIGHT,
+                               SUSTAINED_WORKERS)
+        for rec in s_recs:
+            summary.add(rec)
+        s_analysis = analyze_sustained(s_recs)
+        wall = max((c.ts_done for c in s_recs), default=0.0) - \
+            min((c.ts_done for c in s_recs), default=0.0)
+        s_analysis["throughput_rps"] = round(len(s_recs) / wall, 2) if wall > 0 else None
+
+        overload = None
+        if SUSTAINED_OVERLOAD:
+            print(f"sustained: overload micro-burst {SUSTAINED_OVERLOAD_WIDTH}-wide "
+                  f"(503/retry probe) ...")
+            ofns = []
+            per = max(1, SUSTAINED_OVERLOAD_WIDTH // len(targets))
+            for t in targets:
+                for s in range(per):
+                    if s % 2 == 0:
+                        ofns.append(lambda t=t, s=s: call_echo_sustained(t, 10_000 + s))
+                    else:
+                        ofns.append(lambda t=t, s=s: call_get_sum_sustained(t, 10_000 + s))
+            orecs = run_parallel(ofns, workers=min(len(ofns), CONCURRENCY_WORKERS))
+            for rec in orecs:
+                summary.add(rec)
+            overload = analyze_sustained(orecs)
+
+        # RECOVERY probe: after load, every target must serve tools/list again —
+        # proves no lasting exhaustion, no wedged pool, sandbox still reused.
+        rec_probe = run_parallel([lambda t=t: call_tools_list(t) for t in targets])
+        for rec in rec_probe:
+            summary.add(rec)
+        recovery_ok = sum(1 for c in rec_probe if c.ok)
+
+        s_ok = (
+            s_analysis["isolation_violations"] == 0
+            and s_analysis["err_rate"] <= SUSTAINED_MAX_ERR_RATE
+            and s_analysis["rate_503"] <= SUSTAINED_MAX_503_RATE
+            and s_analysis["max_503_per_sec"] <= SUSTAINED_MAX_503_BURST
+            and recovery_ok == len(targets)
+        )
+        sustained_report = {
+            "config": {
+                "inflight": SUSTAINED_INFLIGHT, "seconds": SUSTAINED_SECONDS,
+                "workers": SUSTAINED_WORKERS,
+                "thresholds": {
+                    "max_err_rate": SUSTAINED_MAX_ERR_RATE,
+                    "max_503_rate": SUSTAINED_MAX_503_RATE,
+                    "max_503_burst": SUSTAINED_MAX_503_BURST,
+                },
+            },
+            "steady": s_analysis,
+            "overload_burst": overload,
+            "recovery": {"ready": recovery_ok, "targets": len(targets)},
+            "pass": s_ok,
+        }
+        print("sustained:", json.dumps({
+            "steady": {k: s_analysis[k] for k in (
+                "total", "passed", "errored_jsonrpc", "http_503",
+                "isolation_violations", "err_rate", "rate_503",
+                "max_503_per_sec", "throughput_rps", "latency_ms")},
+            "recovery": sustained_report["recovery"],
+            "pass": s_ok,
+        }, indent=2))
+
     # Phase 4: cross-tenant negative matrix — one server per org attacking every other org
     cross_fns: list = []
     by_org: dict[str, Target] = {}
@@ -416,13 +643,18 @@ def main() -> int:
     # reliability signal (item #29), reported but not a #28 gate failure unless
     # CONCURRENCY_STRICT_ERRORS=1 is set (used by the #29 load gate).
     strict_errors = os.environ.get("CONCURRENCY_STRICT_ERRORS", "0") == "1"
-    non_conc_fails = [c for c in summary.calls if c.phase != "concurrency" and not c.ok]
+    # The 'sustained' phase is graded by its own bounded-error/503/recovery gate
+    # (sustained_report["pass"]) — its individual errored-under-load records are a
+    # reliability signal, not a per-call gate failure, so exclude them here.
+    non_conc_fails = [c for c in summary.calls
+                      if c.phase not in ("concurrency", "sustained") and not c.ok]
     fails = non_conc_fails + gate_violations
     if strict_errors:
         fails = fails + [c for cl, c in conc_cls if cl == "errored"]
+    sustained_fail = bool(sustained_report) and not sustained_report["pass"]
     lat = [c.latency_ms for c in summary.calls
-           if c.phase in ("echo", "sum", "concurrency") and c.ok]
-    _phases = ("capability", "echo", "sum", "concurrency", "cross-tenant")
+           if c.phase in ("echo", "sum", "concurrency", "sustained") and c.ok]
+    _phases = ("capability", "echo", "sum", "concurrency", "sustained", "cross-tenant")
     report = {
         "gateway": GATEWAY_URL,
         "orgs": orgs,
@@ -432,6 +664,7 @@ def main() -> int:
         "total_calls": len(summary.calls),
         "failures": len(fails),
         "concurrency_integrity": concurrency_integrity,
+        "sustained": sustained_report,
         "phase_counts": {
             p: sum(1 for c in summary.calls if c.phase == p) for p in _phases
         },
@@ -454,12 +687,16 @@ def main() -> int:
         "targets", "rounds", "total_calls", "failures", "concurrency_integrity",
         "phase_counts", "phase_pass", "latency_ms")}, indent=2))
     print(f"report -> {REPORT_PATH}")
-    verdict = "GREEN" if not fails else "RED"
+    verdict_fail = bool(fails) or sustained_fail
+    verdict = "GREEN" if not verdict_fail else "RED"
     print("HARNESS:", verdict)
     if fails:
         for c in fails[:10]:
             print(f"  FAIL {c.phase} {c.org}/{c.server} {c.tool} status={c.http_status} {c.detail}")
-    return 0 if not fails else 1
+    if sustained_fail:
+        print(f"  FAIL sustained gate: {json.dumps(sustained_report['steady'])} "
+              f"recovery={sustained_report['recovery']}")
+    return 0 if not verdict_fail else 1
 
 
 if __name__ == "__main__":
