@@ -85,6 +85,16 @@
       adapter path through actor-scoped policy eval).
 - [ ] 4. Context minimization / least-privilege assembly.
 - [ ] 5. Compliance tagging: extend mcp_compliance_tags.py to PII/IP/regulated; tag inputs + results; enforce by tag; audit.
+      LIVE VERIFIED (mostly done) — CHG-0017 (2026-07-02): sent PII through the live gateway + queried
+      MCPEvents. Redaction comprehensive (ssn/card/email all masked, combined too, 0 leak). compliance_tags
+      recorded AND COMPLETE (email-only→['GDPR','PII']; email+ssn→['GDPR','HIPAA','PII']). decision=redact
+      under default tag posture (E12 floor CHG-0005). So tag inputs+results, enforce-by-tag (via redaction),
+      and audit ALL WORK — refutes the audit's "tags audit-only/no enforcement" framing. THE ONE REMAINING
+      GAP before [x]: vocabulary mismatch — gateway emits GDPR/HIPAA/PII/PCI-DSS/… but the ComplianceTag
+      catalog uses GDPR-PII/HIPAA-PHI/PCI-CARD/…, so MCPEvent.compliance_tags joins ZERO catalog rows
+      (catalog reporting broken for gateway events). Fix = unify vocab onto ComplianceTag.code (cross-plane:
+      gateway patterns.py + control catalog/migration; breaks 8 gateway tests) — owning-session semantic
+      decision, NOT a unilateral backstop edit. Evidence: mcp-parallel/findings/backstop-p5-compliance-tags/.
 - [ ] 6. End-to-end per-tool-call chain: authz → minimize → scan+redact(in&result) → tag → audit.
 
 ## G3 — Architecture hardening (log every edit)

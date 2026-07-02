@@ -1,0 +1,22 @@
+# Compliance tagging LIVE verification (backstop CHG-0017, 2026-07-02)
+# via zeroshield gateway echo tool + control MCPEvents audit query
+
+REDACTION (comprehensive, all entity types masked, 0 leak):
+  ssn "123-45-6789"           -> "***-**-6789"          (isolation + combined)
+  ssn spaced "123 45 6789"    -> "***-**-6789"
+  credit card 4111...1111     -> "****-****-****-1111"
+  email z***@c***.com         -> masked
+  combined email+ssn          -> both masked (raw email & ssn ABSENT from egress)
+
+COMPLIANCE TAGS (recorded on MCPEvents, decision=redact, COMPLETE across categories):
+  email-only event   -> compliance_tags = ['GDPR', 'PII']
+  email+ssn event    -> compliance_tags = ['GDPR', 'HIPAA', 'PII']   (all categories present)
+  -> tagging of inputs+results WORKS; enforcement via redaction (E12 floor fires even at scan_action=tag);
+     audit records tags. NO tag-completeness gap.
+
+THE ONE REAL GAP (item 5): vocabulary mismatch.
+  Gateway emits gateway COMPLIANCE_TAG_MAP codes: GDPR, HIPAA, PII, PCI-DSS, PHI, SECRET, INFRA, SOC2.
+  ComplianceTag catalog codes: GDPR-PII, HIPAA-PHI, PCI-CARD, FERPA, ITAR, SOC2-CONF.
+  -> MCPEvent.compliance_tags (gateway-populated) do NOT join the catalog. Reporting-by-catalog is broken
+     for gateway events. Fix = unify vocabularies (semantic, cross-plane: gateway patterns.py + control
+     catalog/migration) — owning-session decision, not a unilateral backstop change.

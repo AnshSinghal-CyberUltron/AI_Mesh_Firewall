@@ -75,6 +75,11 @@
     key→403 org_scope_violation (both directions = auth-layer cross-tenant isolation), bad input→graceful
     (no 500). Rate-limit exists (S12) but not tripped at 60 calls. Evidence
     mcp-parallel/findings/backstop-p9-gateway-authz/. Remaining: rate-limit threshold + adversarial policy/audit.
+  - CHG-0017 (2026-07-02) — G2 item 5 LIVE compliance-tagging verified; narrowed to vocabulary-only gap.
+    Redaction comprehensive (ssn/card/email masked, 0 leak); tags recorded+complete (email+ssn →
+    ['GDPR','HIPAA','PII']); decision=redact under tag posture. ONLY gap: gateway codes ≠ catalog codes so
+    MCPEvent.compliance_tags joins 0 catalog rows. Fix = unify vocab (cross-plane) — owning session.
+    Evidence mcp-parallel/findings/backstop-p5-compliance-tags/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

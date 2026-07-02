@@ -527,3 +527,39 @@ the prod compose/manifests is tracked under G3 item 12.
   burst (deferred — avoid throttling shared keys); exercise policy enforcement + audit-completeness under
   adversarial inputs. Policy authz is already unit-proven (CHG-0006/0007/0008); audit recording is wired
   (`_record_gateway_event`).
+
+### CHG-0017 — LIVE compliance-tagging verified; item-5 narrowed to a vocabulary-only gap (G2 item 5)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 5 (compliance tagging PII/IP/regulated; tag inputs+results; enforce by tag;
+  audit) — tagging/enforcement/audit VERIFIED LIVE; only the catalog-join vocabulary remains.
+- **Files:** `mcp-parallel/findings/backstop-p5-compliance-tags/compliance_tag_evidence.txt` (evidence).
+- **WHAT:** Sent PII through the live gateway echo tool and queried the resulting `MCPEvent` audit rows.
+  Findings:
+    - **Redaction is comprehensive (0 leak):** ssn `123-45-6789` → `***-**-6789` (dashed/only/spaced),
+      credit card `4111 1111 1111 1111` → `****-****-****-1111`, email → `a***@b***.com`; a COMBINED
+      email+ssn message masks BOTH (raw email & ssn absent from egress). Strong live 1.4 evidence across
+      entity types, not just email.
+    - **Compliance tags are recorded AND complete:** an email-only event → `['GDPR','PII']`; an email+ssn
+      event → `['GDPR','HIPAA','PII']` (every regulated category present is tagged). `decision=redact` even
+      though `scan_action=tag` — the E12 result floor (CHG-0005) fires under the default posture. So tagging
+      of inputs+results, tag-driven redaction, and audit recording all WORK live.
+    - **The ONE real remaining gap — vocabulary mismatch:** the recorded tags use the gateway
+      `COMPLIANCE_TAG_MAP` codes (`GDPR/HIPAA/PII/PCI-DSS/PHI/SECRET/INFRA/SOC2`), NOT the `ComplianceTag`
+      catalog codes (`GDPR-PII/HIPAA-PHI/PCI-CARD/FERPA/ITAR/SOC2-CONF`). So `MCPEvent.compliance_tags`
+      (gateway-populated) joins ZERO catalog rows — catalog-based compliance reporting is broken for gateway
+      events.
+- **WHY:** the CHG-0002 audit framed item 5 as "tags audit-only, no enforcement, fragmented vocabulary."
+  Live evidence REFINES that: enforcement works (redaction), tags are complete, audit records them — the
+  ONLY substantive gap is the catalog-join vocabulary.
+- **NOW DOES:** records the precise live state so item 5 is scoped to the single vocabulary-unification task
+  (not the broader "no enforcement" concern). No code changed (unifying the vocabularies is a cross-plane
+  semantic decision — gateway `patterns.py` + control catalog/migration — that would break the 8 gateway
+  tests asserting the current codes; it belongs to the owning session, not a unilateral backstop edit).
+- **Touched whose work:** verifies the gateway `patterns.COMPLIANCE_TAG_MAP` + control `ComplianceTag`
+  catalog (prior sessions). No files edited.
+- **VERIFY:** send email+ssn to the live gateway echo tool, then GET `/api/mcp-connector/events/?hours=1`
+  (admin JWT) and read `compliance_tags` → `['GDPR','HIPAA','PII']` (gateway codes, not catalog). Evidence:
+  `mcp-parallel/findings/backstop-p5-compliance-tags/compliance_tag_evidence.txt`.
+- **REMAINING for G2 item 5:** unify the tag vocabularies onto a single set keyed on `ComplianceTag.code`
+  (or extend the catalog to include the gateway codes) so `MCPEvent.compliance_tags` joins the catalog;
+  update the 8 gateway tests + any dashboard filters accordingly.

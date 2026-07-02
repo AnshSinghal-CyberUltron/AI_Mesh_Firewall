@@ -131,3 +131,10 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   malformed/missing/empty input→graceful (no 500). Rate-limit (S12) exists but not tripped at 60 calls.
   Evidence: mcp-parallel/findings/backstop-p9-gateway-authz/. REMAINING: rate-limit threshold + adversarial
   policy/audit (policy authz already unit-proven CHG-0006/0007/0008).
+- **CHG-0017** (2026-07-02) — G2 item 5 LIVE compliance-tagging verified; narrowed to vocabulary-only gap.
+  Live: redaction comprehensive (ssn/card/email all masked, combined too, 0 leak); compliance_tags recorded
+  AND complete (email+ssn event → ['GDPR','HIPAA','PII']); decision=redact under default tag posture (E12
+  floor). REFINES the audit: enforcement + complete tags + audit all WORK — the ONLY gap is vocabulary:
+  gateway codes (GDPR/HIPAA/PII…) ≠ catalog codes (GDPR-PII/HIPAA-PHI…), so MCPEvent.compliance_tags joins
+  ZERO catalog rows. Fix = unify vocab (cross-plane, breaks 8 gateway tests) — owning-session decision.
+  Evidence: mcp-parallel/findings/backstop-p5-compliance-tags/.
