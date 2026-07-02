@@ -475,3 +475,8 @@
       overflow + cross-source product-decision) are genuinely external. Loop correctly NOT emitting COMPLETE.
       NB for future: the owning (mcp-page) session checks detector/themes but not RESPONSIVE overflow — the
       148/529 overflow will persist until they run a width sweep or the stress never_edit claim releases.
+      [iter+] Behavioral+data-integrity: operator-lens time-range switch VERIFIED live (module 1.5): 7d→552,
+      6h→283, 1h→0 — UI==API every range (hours param 168→6→1, active button 7d→6h→1h). 1h honestly shows "0"
+      (real empty), not stuck "—". Exercises useFirewallData decouple + honest-loading + 1.5 threatFeedCount
+      override together across ranges. Control-works+reflects-state+data-integrity confirmed for the lens.
+      MCP claim: active; blocker unchanged.
