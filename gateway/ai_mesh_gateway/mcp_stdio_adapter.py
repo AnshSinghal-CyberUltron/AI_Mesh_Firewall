@@ -588,6 +588,12 @@ def _server_config_for_broker(
     return effective_org, cfg
 
 
+# B3 item#19: orgs whose per-org sandbox we've already eagerly warmed this
+# process, so the readiness-blocking warm runs once (on the first stdio op /
+# first-sync) rather than on every RPC.
+_WARMED_ORGS: set[str] = set()
+
+
 async def _send_jsonrpc_broker(
     org_slug: str,
     server_slug: str,
@@ -599,11 +605,23 @@ async def _send_jsonrpc_broker(
     msg_id: int | str | None,
     server_config: dict | None,
 ) -> dict:
-    from ai_mesh_gateway.mcp_sandbox_client import broker_send_jsonrpc
+    from ai_mesh_gateway.mcp_sandbox_client import broker_send_jsonrpc, ensure_sandbox
 
     effective_org, cfg = _server_config_for_broker(
         org_slug, server_slug, command, args, env, server_config,
     )
+    # Eagerly provision + warm the per-org sandbox on the first broker
+    # interaction (first-sync / first tool call) so it hits a READY agent
+    # instead of racing the cold start (B3: "MCP sandbox is temporarily
+    # unavailable"). Best-effort: on failure fall through to broker_send_jsonrpc,
+    # whose stdio_rpc still ensures + retries lazily.
+    if effective_org not in _WARMED_ORGS:
+        try:
+            await ensure_sandbox(effective_org)
+        except Exception as exc:  # noqa: BLE001 — non-fatal warm, lazy path still applies
+            LOG.warning("eager sandbox warm failed for org=%s: %s", effective_org, exc)
+        else:
+            _WARMED_ORGS.add(effective_org)
     return await broker_send_jsonrpc(
         effective_org,
         cfg,

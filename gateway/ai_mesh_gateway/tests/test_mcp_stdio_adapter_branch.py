@@ -41,6 +41,47 @@ def _in_process_default(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("MCP_STDIO_IN_PROCESS", "true")
 
 
+@pytest.fixture(autouse=True)
+def _reset_warm_and_mock_ensure(monkeypatch: pytest.MonkeyPatch):
+    """B3 item#19: reset the per-process warmed-orgs memo between tests and mock
+    the eager ensure_sandbox so the broker branch never makes a real HTTP call
+    in unit tests. Returns the mock for assertions."""
+    import mcp_stdio_adapter as adapter
+
+    adapter._WARMED_ORGS.clear()
+    ensure_mock = AsyncMock(return_value={"status": "running", "agent_ready": True})
+    monkeypatch.setattr(
+        "ai_mesh_gateway.mcp_sandbox_client.ensure_sandbox", ensure_mock
+    )
+    yield ensure_mock
+    adapter._WARMED_ORGS.clear()
+
+
+@pytest.mark.asyncio
+async def test_broker_branch_eager_warms_once_per_org(
+    monkeypatch: pytest.MonkeyPatch, _reset_warm_and_mock_ensure
+):
+    """B3 item#19: the broker branch eagerly warms the per-org sandbox on the
+    FIRST stdio op, then reuses it (memoized) — ensure_sandbox is called once
+    per org, and every RPC is still delegated to broker_send_jsonrpc."""
+    monkeypatch.setenv("MCP_STDIO_IN_PROCESS", "false")
+    ensure_mock = _reset_warm_and_mock_ensure
+    with patch(
+        "ai_mesh_gateway.mcp_sandbox_client.broker_send_jsonrpc",
+        new=AsyncMock(return_value={"jsonrpc": "2.0", "id": 1, "result": {}}),
+    ) as send_mock:
+        await send_jsonrpc(
+            ORG, SERVER, COMMAND, ARGS, ENV, "tools/list", None, 1,
+            server_config=SERVER_CONFIG,
+        )
+        await send_jsonrpc(
+            ORG, SERVER, COMMAND, ARGS, ENV, "tools/list", None, 2,
+            server_config=SERVER_CONFIG,
+        )
+    assert ensure_mock.await_count == 1  # warmed once per org (memoized)
+    assert send_mock.await_count == 2    # both RPCs delegated to the broker
+
+
 @pytest.mark.asyncio
 async def test_send_jsonrpc_broker_branch_delegates(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("MCP_STDIO_IN_PROCESS", "false")

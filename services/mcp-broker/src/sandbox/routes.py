@@ -90,6 +90,47 @@ def _ensure_response(docker_manager: DockerManager, org_slug: str) -> dict[str, 
     }
 
 
+def _warm_ready_timeout() -> float:
+    return float(os.environ.get("MCP_SANDBOX_WARM_READY_TIMEOUT", "20"))
+
+
+def _warm_ready_interval() -> float:
+    return float(os.environ.get("MCP_SANDBOX_WARM_READY_INTERVAL", "0.5"))
+
+
+async def _agent_health_ok(agent_url: str | None) -> bool:
+    """True when the in-container agent HTTP socket is bound (GET /health 2xx)."""
+    if not agent_url:
+        return False
+    health_url = f"{agent_url.rstrip('/')}/health"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(health_url)
+            return resp.status_code < 400
+    except httpx.HTTPError:
+        return False
+
+
+async def _wait_agent_ready(agent_url: str | None, timeout: float) -> bool:
+    """Poll the in-container agent /health until ready or the bounded deadline.
+
+    B3 item#19 — when a caller *warms* the sandbox we block (bounded) until the
+    agent socket binds, so their first RPC hits a READY agent instead of racing
+    the cold start (which surfaced "MCP sandbox is temporarily unavailable").
+    ``timeout <= 0`` disables the wait (used by unit tests to avoid real HTTP).
+    """
+    if timeout <= 0 or not agent_url:
+        return False
+    deadline = time.time() + timeout
+    interval = _warm_ready_interval()
+    while True:
+        if await _agent_health_ok(agent_url):
+            return True
+        if time.time() >= deadline:
+            return False
+        await asyncio.sleep(interval)
+
+
 async def _resolve_running_sandbox(
     docker_manager: DockerManager, org_slug: str
 ) -> SandboxContainerInfo:
@@ -150,11 +191,22 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
     )
 
     @router.post("/{org_slug}/ensure")
-    def ensure_sandbox(org_slug: str, body: EnsureRequest) -> dict[str, Any]:
+    async def ensure_sandbox(org_slug: str, body: EnsureRequest) -> dict[str, Any]:
         _require_docker(docker_manager)
         _check_org_quota(docker_manager, org_slug)
-        response = _ensure_response(docker_manager, org_slug)
+        response = await asyncio.to_thread(_ensure_response, docker_manager, org_slug)
         docker_manager.touch_activity(org_slug)
+        # B3 item#19: honor `warm` — wait (bounded) for the in-container agent to
+        # bind so the caller's first RPC hits a ready agent (no cold-start 502
+        # race). `provisioning` lets the caller distinguish "still starting" from
+        # a ready sandbox or a hard failure.
+        agent_ready = False
+        if body.warm and response.get("status") == "running":
+            agent_ready = await _wait_agent_ready(
+                response.get("agent_url"), _warm_ready_timeout()
+            )
+        response["agent_ready"] = agent_ready
+        response["provisioning"] = bool(body.warm and not agent_ready)
         return response
 
     @router.post("/{org_slug}/stdio/rpc")

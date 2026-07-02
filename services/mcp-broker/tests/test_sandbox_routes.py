@@ -300,3 +300,51 @@ def test_destroy_is_idempotent(broker_client: TestClient, docker_manager: Docker
     assert resp2.status_code == 200
     running.remove.assert_called_once_with(force=True)
     volume.remove.assert_called_once_with(force=True)
+
+
+def test_ensure_warm_reports_agent_ready(broker_client, docker_manager, monkeypatch):
+    """B3 item#19: with warm=True and a bound agent, ensure blocks until the
+    agent /health is OK and reports agent_ready=True / provisioning=False."""
+    import sandbox.routes as routes
+
+    created = _mock_container()
+    docker_manager.client.containers.run.return_value = created
+    monkeypatch.setattr(routes, "_warm_ready_timeout", lambda: 5.0)
+    monkeypatch.setattr(routes, "_agent_health_ok", AsyncMock(return_value=True))
+
+    resp = broker_client.post(
+        f"/v1/sandbox/{ORG}/ensure",
+        json={"warm": True},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "running"
+    assert body["agent_ready"] is True
+    assert body["provisioning"] is False
+
+
+def test_ensure_warm_reports_provisioning_when_agent_not_ready(
+    broker_client, docker_manager, monkeypatch
+):
+    """B3 item#19: when the agent socket never binds within the bounded warm
+    window, ensure reports provisioning=True — a distinct 'still starting'
+    state, NOT a hard 502."""
+    import sandbox.routes as routes
+
+    created = _mock_container()
+    docker_manager.client.containers.run.return_value = created
+    monkeypatch.setattr(routes, "_warm_ready_timeout", lambda: 0.2)
+    monkeypatch.setattr(routes, "_warm_ready_interval", lambda: 0.01)
+    monkeypatch.setattr(routes, "_agent_health_ok", AsyncMock(return_value=False))
+
+    resp = broker_client.post(
+        f"/v1/sandbox/{ORG}/ensure",
+        json={"warm": True},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "running"
+    assert body["provisioning"] is True
+    assert body["agent_ready"] is False
