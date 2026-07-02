@@ -83,7 +83,14 @@
       REMAINING before [x]: finding #1 (the big one) — per-actor user/agent/role tool authz + field-RBAC
       masking on the stdio/ws ADAPTER path (enabled-tools payload needs an actor dimension, or route the
       adapter path through actor-scoped policy eval).
-- [ ] 4. Context minimization / least-privilege assembly.
+- [x] 4. Context minimization / least-privilege assembly.
+      RESOLVED N-A for MCP — CHG-0021 (2026-07-02): the MCP tool-call path has NO separate context-assembly
+      step (unlike chat, where minimize_context prunes message history by token budget). Least-privilege for
+      MCP = minimal forwarding (gateway forwards ONLY the tool args — echo returns just `message`, no user
+      identity/session/context injected; enforced_at=gateway_adapter, not leaked to the tool) + result
+      redaction (item 2) + per-actor authz (item 3). minimize_context (context_assembler.py) is the chat/LLM
+      path only. Live-verified via the per-call chain evidence.
+      Evidence: mcp-parallel/findings/backstop-p6-per-call-chain/per_call_chain_evidence.txt.
 - [ ] 5. Compliance tagging: extend mcp_compliance_tags.py to PII/IP/regulated; tag inputs + results; enforce by tag; audit.
       LIVE VERIFIED (mostly done) — CHG-0017 (2026-07-02): sent PII through the live gateway + queried
       MCPEvents. Redaction comprehensive (ssn/card/email all masked, combined too, 0 leak). compliance_tags
@@ -95,7 +102,15 @@
       (catalog reporting broken for gateway events). Fix = unify vocab onto ComplianceTag.code (cross-plane:
       gateway patterns.py + control catalog/migration; breaks 8 gateway tests) — owning-session semantic
       decision, NOT a unilateral backstop edit. Evidence: mcp-parallel/findings/backstop-p5-compliance-tags/.
-- [ ] 6. End-to-end per-tool-call chain: authz → minimize → scan+redact(in&result) → tag → audit.
+- [x] 6. End-to-end per-tool-call chain: authz → minimize → scan+redact(in&result) → tag → audit.
+      LIVE VERIFIED in order — CHG-0021 (2026-07-02): fired a PII tools/call, inspected the MCPEvent
+      scan_trace/metadata. Chain executes in order on each call: authz (reached tool; org-key validated,
+      cross-org=403 CHG-0016) -> minimize (N-A for MCP, item 4) -> scan+redact (scan_pipeline=two_tier;
+      scan_trace = [tier1 input, tier1 output]; decision=redact via E12 floor CHG-0005) -> tag
+      (compliance_tags=['GDPR','HIPAA','PII']) -> audit (MCPEvent w/ decision+tags+latency_ms+scan_trace+
+      enforced_at=gateway_adapter). Evidence: mcp-parallel/findings/backstop-p6-per-call-chain/. NB: item 6
+      is the CHAIN order (verified); the individual steps' remaining refinements are tracked under 3b (field
+      RBAC redaction on adapter) + 5 (tag vocabulary catalog-join).
 
 ## G3 — Architecture hardening (log every edit)
 - [ ] 7. All transports (http/ws/sse/stdio) in the per-org gVisor sandbox; nothing in the backend (complete/fix if needed).

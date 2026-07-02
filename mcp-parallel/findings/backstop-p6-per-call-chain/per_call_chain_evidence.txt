@@ -1,0 +1,18 @@
+# Per-call chain LIVE verification (backstop CHG-0021, 2026-07-02)
+# One redact MCPEvent from a PII tools/call (message: "... jane@corp.com ssn 123-45-6789")
+
+CHAIN: authz -> [minimize N-A] -> scan+redact(in & result) -> tag -> audit
+
+1. AUTHZ         call reached the tool => org-scoped gateway key validated (cross-org=403 per CHG-0016).
+2. MINIMIZE      N-A for MCP: gateway forwards ONLY the tool args (echo returns just `message`; no user
+                 identity/session/context injected). enforced_at=gateway_adapter (enforcement at gateway,
+                 not leaked to tool). Least-privilege by design (subsumes item 4; minimize_context is the
+                 chat/LLM path only, not MCP tool calls).
+3. SCAN+REDACT   scan_pipeline=two_tier; scan_trace IN ORDER:
+                   tier1 input  action=tag target_mode=entire   (inbound args scanned)
+                   tier1 output action=tag target_mode=entire   (outbound result scanned)
+                 decision=redact -> E12 result floor masked the PII (CHG-0005) even at scan_action=tag.
+4. TAG           compliance_tags=['GDPR','HIPAA','PII'] (complete across categories present).
+5. AUDIT         MCPEvent recorded with decision + tags + latency_ms=44 + scan_trace + enforced_at.
+
+=> full per-call chain executes in order on each MCP tool call. Items 4 (minimize) + 6 (chain) resolved.

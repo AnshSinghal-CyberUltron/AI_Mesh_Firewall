@@ -89,6 +89,10 @@
   - CHG-0020 (2026-07-02) — G4 item 13 LIVE observability: metrics + health + auto-recovery (docker
     healthchecks + reaper) WIRED. GAPS: distributed tracing (OTEL) not configured; gateway has no docker
     healthcheck; backup unverified. Evidence mcp-parallel/findings/backstop-p13-observability/.
+  - CHG-0021 (2026-07-02) — G2 items 4 & 6 RESOLVED: LIVE per-call chain verified in order (authz → minimize
+    [N-A for MCP] → scan+redact [scan_trace tier1 in→out, decision=redact] → tag [GDPR,HIPAA,PII] → audit).
+    item 4 minimize = N-A (gateway forwards only tool args; minimize_context is chat-only). Only G2 open: 3b
+    (field RBAC) + 5 (vocab). Evidence mcp-parallel/findings/backstop-p6-per-call-chain/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

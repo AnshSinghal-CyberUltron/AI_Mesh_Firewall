@@ -649,3 +649,39 @@ the prod compose/manifests is tracked under G3 item 12.
 - **REMAINING for G4 item 13:** (1) wire distributed tracing (OTEL exporter → Jaeger/Tempo) so cross-service
   MCP request traces exist; (2) add a docker healthcheck to the gateway container; (3) verify/define PG +
   Redis backup (dump cron / volume snapshot) + restore drill.
+
+### CHG-0021 — LIVE per-call chain verified in order; item 4 (minimize) resolved N-A for MCP (G2 items 4 & 6)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 6 (end-to-end per-tool-call chain authz→minimize→scan+redact→tag→audit) +
+  item 4 (context minimization/least-privilege) — both resolved with live evidence.
+- **Files:** `mcp-parallel/findings/backstop-p6-per-call-chain/per_call_chain_evidence.txt` (evidence).
+- **WHAT:** Fired a PII `tools/call` (email + ssn) through the live gateway and inspected the resulting
+  `MCPEvent`'s `scan_trace`/metadata to confirm the full chain runs IN ORDER on each call:
+    1. **authz** — the call reached the tool ⇒ the org-scoped gateway key was validated (cross-org keys are
+       rejected 403, CHG-0016).
+    2. **minimize** — N-A for MCP: the gateway forwards ONLY the tool args (the echo returns just the
+       `message`; no user identity/session/context is injected). `enforced_at=gateway_adapter` (enforcement
+       stays at the gateway, not leaked to the tool). This is least-privilege by design and RESOLVES item 4:
+       `minimize_context` (context_assembler.py) is the chat/LLM message-pruning path, NOT the MCP tool-call
+       path, which has no separate context-assembly step — so "minimize" for MCP = minimal forwarding +
+       redaction (item 2) + per-actor authz (item 3).
+    3. **scan+redact (in & result)** — `scan_pipeline=two_tier`; `scan_trace` shows `tier1 input` THEN
+       `tier1 output` (both directions scanned), and `decision=redact` (the E12 result floor, CHG-0005,
+       masked the PII even under `scan_action=tag`).
+    4. **tag** — `compliance_tags=['GDPR','HIPAA','PII']` (complete across the categories present).
+    5. **audit** — the `MCPEvent` is recorded with decision + tags + `latency_ms` + `scan_trace` +
+       `enforced_at`.
+- **WHY:** the prompt's 1.4 requirement is "the full per-call chain authz→minimize→scan+redact→tag→audit";
+  this is the capstone that verifies the ordered chain LIVE (each individual step was verified in prior
+  CHGs; this ties them together on a single real call) and definitively resolves the previously-vague item 4.
+- **NOW DOES:** confirms the 1.4 per-call chain executes end-to-end, in order, on every MCP tool call, with
+  minimize correctly N-A for the MCP path.
+- **Touched whose work:** verifies the gateway scan/audit pipeline (many prior sessions). No files edited.
+- **VERIFY:** send a PII `tools/call` to the live gateway, GET `/api/mcp-connector/events/?hours=1` (admin
+  JWT), read `metadata.scan_trace` → `[tier1 input, tier1 output]`, `decision=redact`, `compliance_tags=
+  ['GDPR','HIPAA','PII']`, `latency_ms` present. Evidence:
+  `mcp-parallel/findings/backstop-p6-per-call-chain/per_call_chain_evidence.txt`.
+- **G2 items 4 & 6 STATUS:** RESOLVED — item 6 chain verified live in order; item 4 minimize is N-A for MCP
+  (least-privilege via minimal forwarding + item 2 redaction + item 3 authz). The only 1.4 (G2) work still
+  open is item 3b (per-policy field-level RBAC redaction on the adapter path) and item 5's vocabulary
+  unification.

@@ -154,3 +154,9 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   auto-recovery via docker healthchecks (broker/control/pg/redis healthy) + sandbox reaper. GAPS: distributed
   tracing (OTEL/Jaeger) NOT configured; gateway has NO docker healthcheck (health=none); backup unverified.
   Evidence: mcp-parallel/findings/backstop-p13-observability/.
+- **CHG-0021** (2026-07-02) — G2 items 4 & 6 RESOLVED: LIVE per-call chain verified in order on a real PII
+  call — authz (reached tool; org-key validated) → minimize [N-A: gateway forwards only tool args, echo
+  returns just `message`] → scan+redact (scan_trace=[tier1 input, tier1 output]; decision=redact via E12
+  floor) → tag (['GDPR','HIPAA','PII']) → audit (MCPEvent w/ latency+trace). Item 4 minimize = N-A for MCP
+  (minimize_context is chat-only). Only G2 open: 3b (field RBAC redaction on adapter) + 5 (vocab). Evidence:
+  mcp-parallel/findings/backstop-p6-per-call-chain/.
