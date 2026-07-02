@@ -1,9 +1,28 @@
 ---
-iteration: 20
+iteration: 21
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter21 (2026-07-02) — P9.28 concurrency: independent 2nd-oracle corroboration + #29 saturation boundary
+- Item #28 was already landed by the parallel Claude session (commit `070c3917`, `scripts/mcp_concurrency_live.py`,
+  240-in-flight dual-oracle, GREEN 3×). This iteration added a **second, differently-designed** concurrency
+  storm to the Cursor-owned `scripts/mcp_multi_org_harness.py` (Phase 3.5): per round fire `CONCURRENCY_DEPTH`(12)
+  calls PER target for all 15 at once (180/round, 540/run) in ONE 240-wide pool → tests the broker/sandbox
+  stdio id-demux. Every reply classified `passed/errored/dropped/id_mismatch/mixed/cross_target`; #28 gate =
+  zero-tolerance on drop/id_mismatch/mixed/cross_target (errored=reliability→#29).
+- **RESULT: GREEN 3× — gate_violations=0 every run (1620 stormed calls, 0 dropped/mixed/cross/id-mismatch)**;
+  cross-tenant 6/6 rejected. Detector proven to FIRE (negative-control over the real classification predicate:
+  synthetic drop/id_mismatch/mixed/cross all flag; errored kept distinct; clean=passed).
+- **NET-NEW for #29:** depth sweep 60→240-wide — isolation perfect at every depth; ONLY application errors
+  appear at ≥180-wide. Root-caused: control(Django) `tool_not_registered` 403 + DRF `Internal server error` 500
+  forwarded by gateway `mcp_proxy.py:2540` as -32000 → **control+gateway load ceiling (Claude-owned) = item #29**;
+  no Cursor-owned component implicated (single server @60-deep = 100% clean). Findings: `mcp-parallel/findings/p9-28/RESULT.md`
+  (+ concurrency_report_run{1,2,3}.json + saturation_depth16_report.json).
+- `docker_manager` NOT touched → broker gate not required. iter22 gateway-wiring recheck: still BLOCKED —
+  `broker_send_rpc` absent from gateway; broker exposes only `/{org_slug}/stdio/rpc` (no transport-agnostic
+  `/{org}/rpc`). P4.13/P6.18 remain blocked on Claude.
 
 ## iter20 (2026-07-02) — P8.26 multi-org harness DONE + nproc/UID scaling bug FIXED
 - Built `scripts/mcp_multi_org_harness.py`: parallel `tools/list`+`echo`(unique canary+id)+`get-sum`

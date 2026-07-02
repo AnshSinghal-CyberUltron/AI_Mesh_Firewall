@@ -1,0 +1,13 @@
+{
+  "agent": "cursor-ralph-iter21",
+  "story": "P9.28",
+  "scope": [
+    "scripts/mcp_multi_org_harness.py",
+    "mcp-parallel/findings/p9-28/**",
+    "docs/mcp/PARALLEL_CLAIMS.md",
+    ".cursor/ralph/scratchpad.md",
+    "scripts/ralph/mcp_progress.md"
+  ],
+  "since": "2026-07-02T10:05:00Z",
+  "status": "released"
+}
