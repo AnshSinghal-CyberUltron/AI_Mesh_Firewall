@@ -23,6 +23,9 @@
  *   VISUAL_OUT       output dir (default tests/visual/__output__)
  *   VISUAL_SETTLE    ms to wait after load (default 3800)
  *   VISUAL_ONLY      comma list of surface ids to run (default all)
+ *   VISUAL_WIDTHS    comma list of widths (default from surfaces.json)
+ *   VISUAL_THEMES    comma list of themes (default light,dark)
+ *   VISUAL_PAUSE     ms between combos, eases dev-DB pressure (default 700)
  *   PLAYWRIGHT_PATH  explicit path to a playwright module (fallback resolver)
  *   VISUAL_CHROME    chrome executable (default /opt/google/chrome/chrome)
  */
@@ -67,6 +70,9 @@ const ONLY = (process.env.VISUAL_ONLY || "").split(",").map((s) => s.trim()).fil
 
 const cfg = JSON.parse(readFileSync(join(__dirname, "surfaces.json"), "utf8"));
 const surfaces = cfg.surfaces.filter((s) => ONLY.length === 0 || ONLY.includes(s.id));
+// Optional overrides to run a lighter subset (eases dev-DB pressure; see README F3 note).
+const widths = process.env.VISUAL_WIDTHS ? process.env.VISUAL_WIDTHS.split(",").map(Number) : cfg.widths;
+const themes = process.env.VISUAL_THEMES ? process.env.VISUAL_THEMES.split(",") : cfg.themes;
 
 const seed = (token, theme) =>
   `try{${token ? `localStorage.setItem('auth_access',${JSON.stringify(token)});` : "localStorage.removeItem('auth_access');"}` +
@@ -137,8 +143,8 @@ async function run() {
   const report = [];
   const failures = [];
   for (const s of surfaces) {
-    for (const theme of cfg.themes) {
-      for (const w of cfg.widths) {
+    for (const theme of themes) {
+      for (const w of widths) {
         const ctx = await browser.newContext({ viewport: { width: w, height: 900 } });
         await ctx.addInitScript(seed(s.auth ? TOKEN : "", theme));
         const page = await ctx.newPage();
@@ -187,7 +193,7 @@ async function run() {
   }
   await browser.close();
   writeFileSync(join(OUT, "report.json"), JSON.stringify(report, null, 1));
-  console.log(`\n${report.length} combos audited across ${surfaces.length} surfaces x ${cfg.themes.length} themes x ${cfg.widths.length} widths.`);
+  console.log(`\n${report.length} combos audited across ${surfaces.length} surfaces x ${themes.length} themes x ${widths.length} widths.`);
   console.log(`report -> ${join(OUT, "report.json")} ; screenshots -> ${join(OUT, "screenshots")}`);
   if (failures.length) {
     console.error(`\nGATE FAILED — ${failures.length} regression(s):`);

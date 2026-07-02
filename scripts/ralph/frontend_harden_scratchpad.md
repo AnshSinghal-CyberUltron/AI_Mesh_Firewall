@@ -282,6 +282,22 @@
         transient wide loading skeletons; all findings re-confirmed vs healthy backend. GATE lint 42/42, build, detector 0.
 
 ## Freeze the frontend
-- [ ] 23. Add Playwright visual+behavior snapshots per surface (both themes) as a regression gate.
+- [x] 23. Add Playwright visual+behavior snapshots per surface (both themes) as a regression gate.
+      item23 DONE. Two-layer gate:
+      (1) LIVE Playwright harness `frontend/tests/visual/audit.mjs` (+ surfaces.json, run.sh, README,
+          .gitignore; npm run test:visual). Audits EVERY surface (overview+1.1-1.7+config+profile+settings
+          +login) × BOTH themes × 4 widths. Per combo asserts: no real horizontal overflow (the mainScroll
+          metric that catches <main>-absorbed overflow docOver misses; excludes overflow-hidden/scroller/
+          transform), no leak (sk-/AKIA/pcsk_/ghp_/PEM/JWT scan of DOM+inputs), no pageerror/JS console
+          error, and 0 recharts SVGs on migratedChart surfaces. Writes PNG per combo (visual) + report.json
+          (behavior); threshold-based (no brittle pixel baselines); exit!=0 on regression. F3-robust
+          (auth retry w/ backoff, inter-combo pause, network noise reported not gated; MCPConnectorPanel
+          allowOverflow=reported-not-gated since stress-owned). Validated live: overview light+dark @1440
+          GATE PASSED exit 0; measurements correct (mainScroll/overflow/echarts/recharts).
+      (2) BROWSERLESS static gate `src/utils/hardening-regression.test.js` — runs in npm test/lint (node
+          --test, no browser/backend), 16 assertions locking in the loop's fixes: no recharts import in the
+          6 migrated files, SafeResponsiveChart option/uplot API, the 4 item-22 responsive fixes, HowToUse
+          item-16 grid, useBackendHealth wiring, no inverted-slate in fixed files. lint now 58/58 (was 42).
+      GATE lint 58/58, build green.
 - [ ] 24. Full re-verify pass; FRONTEND_AUDIT.md all resolved; impeccable clean; console/network clean.
       Only when ALL items done in BOTH themes at ALL widths → output <promise>COMPLETE</promise>.
