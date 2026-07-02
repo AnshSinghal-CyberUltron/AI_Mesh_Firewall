@@ -42,6 +42,51 @@ _SECRET_CHARSET = frozenset(
 # unbounded API key/JWT body truncated mid-token) arms the anchor.
 _SECRET_ANCHOR_MIN = 32
 
+# G40: cap on how long the buffer will HOLD an unclosed markdown media/link opener
+# (``![alt](url…`` / ``[text](url…`` whose closing ``)`` has not arrived) so the
+# COMPLETED beacon is scanned + defanged whole instead of having its prefix released
+# early on a BUFFER_LIMIT flush. An unclosed opener cannot render; it only becomes a
+# (possibly zero-click) exfil beacon once its ``)`` arrives — but a base64/hex exfil
+# payload contains no SENTENCE_BOUNDARIES char, so a >buffer_max_bytes payload forces
+# a mid-URL flush and the clean-release path would ship the beacon prefix before the
+# ``)`` is seen. Holding to this cap keeps the opener buffered until it closes (then
+# the G13/G36 redact path neutralizes it) or, at the cap, we fail closed and defang
+# in place. Sized well above any real inline-image URL yet bounded so a never-closing
+# opener cannot grow the buffer without limit.
+MAX_OPEN_MEDIA_HOLDBACK = 8192
+
+
+def _open_media_opener_start(text: str) -> int | None:
+    """Return the char index of the start of an UNCLOSED markdown media/link opener
+    that abuts the buffer edge (``![alt](url…`` or ``[text](url…`` whose ``)`` has
+    not yet arrived), else ``None``.
+
+    Cheap + linear (no backtracking regex): only the rightmost ``](`` can be the
+    open tail. If a ``)`` follows it the construct is already closed (no open tail);
+    otherwise the opener starts at the ``[`` that pairs with that ``](`` (extended
+    left one char to include a leading ``!`` so the zero-click IMAGE form is held as
+    one unit)."""
+    j = text.rfind("](")
+    if j == -1:
+        return None
+    if text.find(")", j + 2) != -1:  # a ')' after '(' => construct already closed
+        return None
+    lb = text.rfind("[", 0, j)       # the '[' paired with this '](' ']'
+    if lb == -1:
+        return None
+    return lb - 1 if lb > 0 and text[lb - 1] == "!" else lb
+
+
+def _defang_open_media(text: str) -> str:
+    """Fail-closed neutralization for an unclosed media opener that has grown past
+    ``MAX_OPEN_MEDIA_HOLDBACK``: drop the opener + its in-progress URL so no
+    (zero-click or one-click) beacon can reassemble client-side. The trailing URL
+    bytes that arrive in later deltas carry no opener and render as inert text."""
+    start = _open_media_opener_start(text)
+    if start is None:
+        return text
+    return text[:start] + "[exfil-redacted]"
+
 
 def _trailing_secret_run(text: str) -> str:
     """Return the trailing contiguous ``_SECRET_CHARSET`` run of ``text`` (after
@@ -427,8 +472,21 @@ class SecureStreamingResponse:
 
         verdict = await self._scanner.scan_output(full_text)
 
+        # G40 defense-in-depth: the no-OutputGuard fallback lacks the guard's
+        # exfil-channel + encoded-PII neutralization (G13/G35), so a streamed
+        # markdown-image/link beacon or encoded-PII run would ride out here
+        # un-neutralized even when the G40 buffer retention held it whole. Apply
+        # the same sanitizers before release. Strict no-op on benign text
+        # (neutralize_* early-return without a URL / encoded run), so the clean
+        # hot path and the "clean stream delivered intact" invariant are preserved.
+        from output_guard import (  # noqa: PLC0415
+            neutralize_encoded_pii,
+            neutralize_exfil_channels,
+        )
+        neutralized = neutralize_encoded_pii(neutralize_exfil_channels(full_text))
+
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
-            redacted_text = self._scanner.redact_pii(full_text)
+            redacted_text = self._scanner.redact_pii(neutralized)
             # Telemetry honesty (mirror of non-stream main.py:1566 / 7289): a
             # matched-pattern verdict whose redactor leaves the bytes verbatim is
             # a "flag", not a redaction — never claim "redact" on a verbatim
@@ -452,6 +510,16 @@ class SecureStreamingResponse:
                 self._secret_anchor = _trailing_secret_run(full_text)
             for redacted_chunk in self._yield_redacted(redacted_text):
                 yield redacted_chunk
+            self._clear_buffers()
+        elif neutralized != full_text:
+            # G40: an exfil beacon / encoded-PII run was defanged though the
+            # scanner returned no PII/secret verdict (arbitrary-data beacon). Emit
+            # the neutralized text (single rebuilt chunk) so no auto-render / raw
+            # payload reaches the client on the fallback path.
+            self._record_output(neutralized)
+            self._record_metric("redact")
+            for chunk in self._yield_redacted(neutralized):
+                yield chunk
             self._clear_buffers()
         elif reason == FlushReason.DONE:
             self._record_output(full_text)
@@ -705,13 +773,38 @@ class SecureStreamingResponse:
         a later scan does detect the (now complete) PII, the block/redact paths
         operate on the FULL buffer (tail included) and the tail is dropped/redacted
         rather than streamed raw. A short buffer (< lookahead) retains everything
-        and releases nothing this flush (it is released at the DONE flush)."""
+        and releases nothing this flush (it is released at the DONE flush).
+
+        G40: the same "never release a partial that could complete into something
+        dangerous" rule applies to an UNCLOSED markdown media/link opener at the
+        buffer tail. A base64/hex exfil payload has no SENTENCE_BOUNDARIES char, so
+        a >buffer_max_bytes beacon forces a mid-URL BUFFER_LIMIT flush; the unclosed
+        ``![alt](url…`` matches no exfil pattern (clean verdict), so absent this
+        guard its prefix would be released and the client would reassemble the full
+        auto-render beacon. We extend the retained window to cover the whole open
+        opener so the completed beacon is scanned + defanged whole. If it grows past
+        MAX_OPEN_MEDIA_HOLDBACK (a never-closing opener), we fail closed: defang the
+        opener in place and flush the neutralized buffer."""
+        min_retain = STREAM_LOOKAHEAD_BYTES
+        full_text = "".join(c for _, c in self._chunk_queue)
+        open_start = _open_media_opener_start(full_text)
+        if open_start is not None:
+            open_tail_bytes = len(full_text[open_start:].encode("utf-8"))
+            if open_tail_bytes > MAX_OPEN_MEDIA_HOLDBACK:
+                # Pathological never-closing opener: neutralize + flush, then clear.
+                neutralized = _defang_open_media(full_text)
+                for chunk in self._yield_redacted(neutralized):
+                    yield chunk
+                self._clear_buffers()
+                return
+            # Hold the whole open opener so the completed beacon is scanned whole.
+            min_retain = max(min_retain, open_tail_bytes)
         acc = 0
         keep_from = 0
         for i in range(len(self._chunk_queue) - 1, -1, -1):
             acc += len(self._chunk_queue[i][1].encode("utf-8"))
             keep_from = i
-            if acc >= STREAM_LOOKAHEAD_BYTES:
+            if acc >= min_retain:
                 break
         release = self._chunk_queue[:keep_from]
         retain = self._chunk_queue[keep_from:]

