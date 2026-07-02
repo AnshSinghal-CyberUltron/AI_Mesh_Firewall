@@ -480,3 +480,12 @@
       (real empty), not stuck "—". Exercises useFirewallData decouple + honest-loading + 1.5 threatFeedCount
       override together across ranges. Control-works+reflects-state+data-integrity confirmed for the lens.
       MCP claim: active; blocker unchanged.
+      [iter+] ★★★ MCPConnectorPanel overflow FIXED (commit 09466fda) — the ~17-iter blocker is RESOLVED.
+      Cursor MCP-page session (owner/editor) RELEASED all claims (iter34-39) → mandate verify-only trigger
+      "MCP session holds MCPConnectorPanel" now FALSE; no active files: claim on it. True root cause: card
+      top-row right-side action bar (badges+Scan select+OAuth btns) was shrink-0+non-wrapping → forced card
+      ~500-900px. Fix = 3 styles-only: flex-wrap top row + flex-wrap/min-w-0 action bar (drop shrink-0) +
+      grid-cols-1 container. LIVE-verified 22 servers rendered: realOver=0 all 4 widths BOTH themes (was
+      148@768/529@375); action bar wraps clean, no breakage. lint 75/75 build detector[]. Removed module-1-4
+      allowOverflow gate exception. Updated status matrix 17a → 🔧✅. NOW: only remaining audit item is the
+      cross-source per-module count = product decision (not a frontend defect; frontend correct-by-design).

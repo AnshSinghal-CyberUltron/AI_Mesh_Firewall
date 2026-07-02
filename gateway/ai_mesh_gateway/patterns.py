@@ -1197,10 +1197,15 @@ def _redact_obfuscated(original: str, result: str) -> str:
     for tok, dec in _iter_transport_decodes(original):
         # G26: mask the OUTER encoded blob when its decode carries PII/secret in either
         # raw OR canonical (unicode-obfuscated, e.g. base64 ∘ zero-width) form.
+        # G55: also when the decode is a CREDENTIAL-only value (connection string /
+        # basic-auth / stripe/github/azure key — not in SECRET_PATTERNS), else a base64/hex-
+        # encoded credential would be flagged by the guard yet egress un-masked here.
         dcanon = canonicalize_for_detection(dec)
         if (_detect_pii_core(dec) or _detect_secrets_core(dec) or _dec_has_infra(dec)
+                or _detect_credential_exposure_core(dec)
                 or (dcanon != dec and (_detect_pii_core(dcanon) or _detect_secrets_core(dcanon)
-                                       or _dec_has_infra(dcanon)))):
+                                       or _dec_has_infra(dcanon)
+                                       or _detect_credential_exposure_core(dcanon)))):
             masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
     # CHG-0058: short base64 tokens (8..11 chars) below the main gate carrying a bare
     # internal network address (e.g. base64("10.1.2.3")). Network-key-only, bounded.
@@ -1216,7 +1221,8 @@ def _redact_obfuscated(original: str, result: str) -> str:
             dec = urllib.parse.unquote(tok)
         except Exception:
             continue
-        if dec != tok and (_detect_pii_core(dec) or _detect_secrets_core(dec) or _dec_has_infra(dec)):
+        if dec != tok and (_detect_pii_core(dec) or _detect_secrets_core(dec)
+                           or _dec_has_infra(dec) or _detect_credential_exposure_core(dec)):
             masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
     for sub, tag in sorted(masks, key=lambda x: -len(x[0])):
         if sub and sub in result:
@@ -1306,12 +1312,22 @@ def detect_ip_leakage(text: str) -> Dict[str, str]:
     zero-width-split / homoglyph internal address on OUTPUT (e.g. ``１０.２０.３０.４０``) can no
     longer evade the raw regex the way it did detect_pii/detect_secrets before G1. The
     canonical pass is skipped when it adds nothing (plain ASCII), so plain-text behaviour and
-    the frozen suite are unchanged."""
+    the frozen suite are unchanged.
+
+    G55: also matches bounded base64/hex TRANSPORT decodes, so an internal address emitted
+    base64/hex-encoded on OUTPUT (``aG9zdCBpcyAxMC4yMC4zMC40MA==``) is flagged at the guard
+    (previously only ``redact_all``'s _dec_has_infra masked it — moot when detection missed
+    and the verdict stayed ``allow`` so the blob egressed raw). Mirrors detect_pii/detect_secrets."""
     found = _detect_ip_leakage_core(text)
     canon = canonicalize_for_detection(text)
     if canon != text:
         for k, v in _detect_ip_leakage_core(canon).items():
             found.setdefault(k, v)
+    for _tok, dec in _iter_transport_decodes(text):
+        dec_canon = canonicalize_for_detection(dec)
+        for src in ((dec, dec_canon) if dec_canon != dec else (dec,)):
+            for k, v in _detect_ip_leakage_core(src).items():
+                found.setdefault(k, v)
     return found
 
 
@@ -1331,10 +1347,21 @@ def detect_credential_exposure(text: str) -> Dict[str, str]:
     (G54). Matches the raw text AND its canonical form, so a fullwidth / zero-width-split /
     homoglyph credential on OUTPUT (a connection string, basic-auth blob, stripe/github/azure
     key the raw regex missed) no longer evades the check — mirrors detect_pii/detect_secrets.
-    Canonical pass skipped on plain ASCII (no behaviour change for plain text)."""
+    Canonical pass skipped on plain ASCII (no behaviour change for plain text).
+
+    G55: also matches bounded base64/hex TRANSPORT decodes. The credential-only patterns
+    (connection string, basic-auth, stripe/github/azure key) are NOT in SECRET_PATTERNS, so a
+    base64/hex-encoded credential on OUTPUT decoded to none of detect_pii/detect_secrets and
+    evaded the whole output guard (verdict allow -> encoded blob egressed raw -> client decodes
+    it). This decode pass closes that gap the same way detect_pii/detect_secrets already do."""
     found = _detect_credential_exposure_core(text)
     canon = canonicalize_for_detection(text)
     if canon != text:
         for k, v in _detect_credential_exposure_core(canon).items():
             found.setdefault(k, v)
+    for _tok, dec in _iter_transport_decodes(text):
+        dec_canon = canonicalize_for_detection(dec)
+        for src in ((dec, dec_canon) if dec_canon != dec else (dec,)):
+            for k, v in _detect_credential_exposure_core(src).items():
+                found.setdefault(k, v)
     return found

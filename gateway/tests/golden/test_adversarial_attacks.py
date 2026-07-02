@@ -1420,6 +1420,92 @@ def test_g54_canon_detector_redos_bounded():
         assert (time.time() - t) < 4.0, f"{fn.__name__} ReDoS on pathological obfuscated input"
 
 
+# ── G55: OUTPUT-side base64/hex TRANSPORT-encoded CREDENTIAL / internal IP ─────────────────
+# detect_pii/detect_secrets transport-decode base64/hex internally (G2/G26), but
+# detect_credential_exposure / detect_ip_leakage did NOT — and the credential-only patterns
+# (connection string, basic-auth, stripe/github/azure key) are absent from SECRET_PATTERNS.
+# So a base64/hex-encoded credential or internal IP emitted on OUTPUT decoded to none of the
+# consulted detectors -> the output guard returned ALLOW -> the encoded blob egressed RAW ->
+# the client decodes it back. Fix: both detectors now run a bounded transport-decode pass
+# (mirroring detect_pii/detect_secrets), and _redact_obfuscated masks the encoded blob when the
+# decode is a credential. detect_pii/detect_secrets already covered encoded PII/secret (G2/G35).
+def _b64(s):
+    return base64.b64encode(s.encode()).decode()
+
+
+def _hexenc(s):
+    return s.encode().hex()
+
+
+# (label, plaintext credential the encoded blob decodes to)
+_G55_ENC_CRED = [
+    ("g55_stripe_b64",  "sk_live_abcd1234efgh5678ijkl"),
+    ("g55_connstr_b64", "mongodb://admin:s3cretpwd@dbhost:27017/prod"),
+    ("g55_basic_b64",   "Basic YWxhZGRpbjpvcGVuc2VzYW1lMTIz"),
+    ("g55_ghpat_b64",   "github_pat_11ABCDE0000aaaaaaaaaaabbb"),
+]
+_G55_ENC_IP = [
+    ("g55_ip10_b64",  "10.20.30.40"),
+    ("g55_ip172_b64", "172.16.5.9"),
+]
+
+
+@pytest.mark.parametrize("label,secret", _G55_ENC_CRED)
+def test_g55_encoded_credential_flagged_and_masked(label, secret):
+    """A base64/hex-encoded credential must be flagged by the output guard (raw+canon missed
+    it; the transport-decode pass now catches it) AND the encoded blob masked out of egress."""
+    for enc in (_b64(secret), _hexenc(secret)):
+        payload = f"the value is {enc}"
+        assert not patterns._detect_credential_exposure_core(payload), (
+            f"{label}: raw detector matched the encoded blob — test no longer proves the gap"
+        )
+        assert patterns.detect_credential_exposure(payload), f"{label}: encoded credential not detected"
+        g = _og.OutputGuard(_SCANNER, {})
+        assert g._check_credential_exposure(payload, "redact").action in ("redact", "block"), (
+            f"{label}: output guard did not flag the encoded credential"
+        )
+        redacted = patterns.redact_all(payload)
+        assert enc not in redacted, f"{label}: encoded credential blob survived redaction (LEAK)"
+
+
+@pytest.mark.parametrize("label,ip", _G55_ENC_IP)
+def test_g55_encoded_ip_flagged_and_masked(label, ip):
+    """A base64-encoded internal IP must be flagged (transport-decode) and masked out."""
+    payload = f"host is {_b64(ip)}"
+    assert not patterns._detect_ip_leakage_core(payload), f"{label}: raw detector matched (gap gone)"
+    assert patterns.detect_ip_leakage(payload), f"{label}: encoded internal IP not detected"
+    g = _og.OutputGuard(_SCANNER, {"output_block_on_ip_leakage": True})
+    assert g._check_ip_leakage(payload, "redact").action in ("redact", "block"), (
+        f"{label}: output guard did not flag the encoded internal IP"
+    )
+    assert _b64(ip) not in patterns.redact_all(payload), f"{label}: encoded IP blob survived redaction (LEAK)"
+
+
+@pytest.mark.parametrize("label,payload", [
+    ("g55_b64_english", "msg " + _b64("the quick brown fox jumps over the lazy dog")),
+    ("g55_b64_json",    "data " + _b64('{"name":"alice","role":"admin","active":true}')),
+    ("g55_git_sha",     "commit 3a68734b0cae9afce42e0b0f52dafbf2b9112a9dc changed it"),
+    ("g55_uuid_hex",    "trace id 550e8400e29b41d4a716446655440000 today"),
+])
+def test_g55_benign_encoded_not_flagged(label, payload):
+    """Benign base64/hex blobs that decode to nothing sensitive stay clean (no new FP from the
+    added transport-decode pass on the credential/IP detectors)."""
+    assert not patterns.detect_credential_exposure(payload), f"{label}: benign encoded flagged as credential (FP)"
+    assert not patterns.detect_ip_leakage(payload), f"{label}: benign encoded flagged as IP (FP)"
+
+
+def test_g55_transport_decode_redos_bounded():
+    """The 4x transport-decode (pii/secret/credential/ip) stays bounded on a large many-token
+    base64 payload — the added credential/IP decode passes do not blow up."""
+    import time
+    big = (_b64("the quick brown fox ") + " ") * 4000
+    big = big[:200000]
+    for fn in (patterns.detect_credential_exposure, patterns.detect_ip_leakage, patterns.redact_all):
+        t = time.time()
+        fn(big)
+        assert (time.time() - t) < 4.0, f"{fn.__name__} slow on many-base64 payload (perf regression)"
+
+
 # ── G49: exfil beacon hidden PAST the URL-scan budget (padding-flood evasion) ─────────
 # _scan_exfil_channels caps inspected URLs (_MAX_EXFIL_URLS) as a DoS guard. Padding an
 # output with that many benign URLs before an exfil beacon used to exhaust the budget
