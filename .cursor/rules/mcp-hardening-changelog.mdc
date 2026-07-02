@@ -101,3 +101,9 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   ("nothing in the backend" unmet). NOT a data leak (1.4 result scan applies to http/sse per CHG-0005) —
   an isolation-architecture gap. Owning session: switch http/sse + ws to broker_send_rpc (unified /{org}/rpc
   route already exists at routes.py:296).
+- **CHG-0012** (2026-07-02) — G5 item 20 harness upgrade: `scripts/mcp_live_matrix_harness.py` was fully
+  SEQUENTIAL and never checked response bytes (a redact-but-forward counted as `allowed`). Now runs all
+  calls CONCURRENTLY (CONCURRENCY-bounded semaphore) and asserts on RESPONSE BYTES via `find_leaked_values`
+  — any sent sensitive value appearing raw in the egress is a LEAK that FAILS the run. New
+  `scripts/test_mcp_live_matrix_oracle.py` (5 pass). REMAINING: run LIVE at peak load (3×), zero leaks;
+  add per-actor authz-denial + tag-enforcement cases under load.

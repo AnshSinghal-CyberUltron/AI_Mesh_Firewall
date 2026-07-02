@@ -134,6 +134,13 @@
       chaos with the corrected+gated oracle + capture REAL sandbox egress bytes cross-checked with an
       independent aidefence oracle (tied to item 14 true scale — still a hardcoded-3-org=15-sandbox ceiling).
 - [ ] 20. 1.4 under peak load — redaction + per-actor authz + tagging hold; no PII/IP/regulated escape.
+      HARNESS UPGRADED — CHG-0012 (2026-07-02): mcp_live_matrix_harness.py was fully SEQUENTIAL (not peak
+      load) + classified only allowed/blocked/errors, never inspecting response bytes (a redact-but-forward
+      counted as allowed). Now runs all calls CONCURRENTLY (CONCURRENCY-bounded semaphore, asyncio.gather)
+      + asserts on RESPONSE BYTES via find_leaked_values (any sent sensitive value appearing raw in the
+      egress = LEAK → run FAILS). New scripts/test_mcp_live_matrix_oracle.py: 5 pass. REMAINING before [x]:
+      run LIVE at peak load (high CONCURRENCY / 5k-10k in-flight, tied to item 15) against the stack, prove
+      ZERO leaks 3× consecutively; extend with per-actor authz-denial + tag-enforcement cases under load.
 
 ## G6 — Frontend (strictly; log edits to owned panels)
 - [ ] 21. MCP panels reflect 1.4 (tags, per-actor tool controls, redaction indicators), real data, no leak, both themes.

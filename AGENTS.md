@@ -54,6 +54,10 @@
     http/sse→control backend (calls upstream directly, no broker); ws→in-gateway. So http/sse/ws don't
     egress via the per-org sandbox. NOT a data leak (result scan applies per CHG-0005) — isolation gap.
     Owning session: route http/sse + ws through `broker_send_rpc` (unified `/{org}/rpc` route ready).
+  - CHG-0012 (2026-07-02) — G5 item 20 harness upgrade: `mcp_live_matrix_harness.py` was sequential + never
+    checked response bytes (redact-but-forward counted as allowed). Now concurrent (CONCURRENCY semaphore) +
+    asserts RESPONSE BYTES via `find_leaked_values` (raw sent value in egress = leak → FAIL). New
+    `scripts/test_mcp_live_matrix_oracle.py` (5 pass). Remaining: run LIVE at peak load 3×, zero leaks.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

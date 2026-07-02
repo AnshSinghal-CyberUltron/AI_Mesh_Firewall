@@ -372,3 +372,29 @@ the prod compose/manifests is tracked under G3 item 12.
   (`mcp_ws_adapter.py`) to delegate to `broker_send_rpc` (the unified `/{org}/rpc` route already exists),
   then prove NO transport's outbound call executes in the gateway/control backend. Until then, do not mark
   "all transports in the sandbox" done.
+
+### CHG-0012 — 1.4-under-load harness: concurrent + asserts redaction BYTES (G5 item 20 harness upgrade)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G5 item 20 (1.4 guardrails under peak load) — harness upgraded; the LIVE peak-load
+  run (3×) remains.
+- **Files:** `scripts/mcp_live_matrix_harness.py` · `scripts/test_mcp_live_matrix_oracle.py` (new).
+- **WHAT:** Rewrote the live scan-matrix harness to (1) fire all calls CONCURRENTLY under a
+  `CONCURRENCY`-bounded semaphore (agents run via `asyncio.gather`; was fully sequential), and (2) assert on
+  the RESPONSE BYTES: `find_leaked_values(body, sensitive)` returns any sent sensitive value that appears
+  RAW in the serialized response — a non-empty result is a LEAK that FAILS the run. Added `redacted`/`leaked`
+  counters + `leak_samples`; the gate now fails on ANY raw-PII leak.
+- **WHY (gap):** BACKSTOP_FINDINGS G5 item 20 — the harness ran every call sequentially (not a peak-load
+  test) and classified only allowed/blocked/errors, NEVER inspecting the response for the PII it sent, so a
+  path that logs a "redact" verdict yet forwards the raw value was counted as `allowed` (a silent leak
+  passing as success).
+- **NOW DOES:** a real concurrent peak-load matrix with byte-level leak detection — an INDEPENDENT substring
+  check over the egress JSON (does not rely on the scanner's own regexes/verdict; egress bytes are the only
+  source of truth). PASS requires zero raw-PII leaks.
+- **Touched whose work:** the live-matrix harness (old `AI Mesh v1.2` commit; not in the active migration).
+- **VERIFY:** `gateway/.venv/bin/python scripts/test_mcp_live_matrix_oracle.py` → `ALL 5 REDACTION-ORACLE
+  TESTS PASSED` (raw leak detected, masking/blocking honoured, partial leak caught). Harness imports:
+  `gateway/.venv/bin/python -c "import sys;sys.path.insert(0,'scripts');import mcp_live_matrix_harness"`.
+- **REMAINING for G5 item 20:** run it LIVE at peak load (high `CONCURRENCY`; 5k-10k in-flight tied to
+  item 15) against the running stack and prove ZERO leaks 3× consecutively; extend with per-actor authz-
+  denial and tag-enforcement cases under load. This entry upgrades the harness logic (verified) — the live
+  peak-load proof is separate.
