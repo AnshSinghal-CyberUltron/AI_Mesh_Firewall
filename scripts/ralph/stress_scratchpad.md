@@ -71,13 +71,13 @@
           injection vocab → fixed G3 (2 chunk-split/spaced injection). Vocab-curated → zero FP.
       REMAINING R4 hardening (NOT yet encoded as findings; lower priority than R5/R6 completion gates):
         G10 semantic-redact typed-placeholder.
-        G15 (NEW, reproduced 2026-07-02): scanner.py Tier-1 ATTACK_PATTERNS injection catalogue misses the
-          disregard/forget/override verb alternation even SINGLE-turn ("disregard all previous instructions"
-          -> allow), while context_guard.INDIRECT_INJECTION_PATTERNS has the full (?:ignore|disregard|forget
-          |override) alternation. Widen the scanner injection pattern to match; that ALSO closes disregard-
-          family MULTI-turn splits automatically via the G6 _reassemble_user_turns re-scan. Low risk (same
-          qualifier+object requirement as the ignore pattern; frozen benign_ignore/benign_number/benign_quote
-          must stay allow). NEXT iteration item.
+      G15 DONE 2026-07-02: scanner injection verb-alternation coverage. "ignore all previous instructions"
+        blocked but disregard/forget/override + two-word qualifier bypassed even single-turn (disregard/forget
+        patterns took only ONE qualifier; no "override"). Fixed by adding one unified verb-alternation pattern
+        (object kept to "instructions" to avoid FP on "disregard the previous messages"); linear/ReDoS-safe;
+        existing patterns kept ("forget everything" still matches). Compounds with G6: disregard-family
+        multi-turn splits now block. Explanatory carve-out preserved. 11 golden cases frozen. Full gateway
+        1050 passed; golden 63 passed/7 skipped 3x.
       G6 DONE 2026-07-02: multi-turn / crescendo split injection. A phrase fragmented across successive USER
         turns (assistant turns between break contiguity) matched no single-turn NOR full-concat signature ->
         bypass. Reproduced: "ignore all previous instructions" over 3 user turns -> allow. Fixed in scanner.py:
