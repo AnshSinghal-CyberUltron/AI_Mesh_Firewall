@@ -1930,7 +1930,7 @@ def _is_sandbox_routed(transport: str) -> bool:
         # direct-httpx path stays the default until an operator opts in per env /
         # compose. When ON, remote transports route through the sandbox agent
         # (gateway never dials the upstream MCP host).
-        return os.environ.get("MCP_HTTP_VIA_SANDBOX", "false").strip().lower() in (
+        return os.environ.get("MCP_HTTP_VIA_SANDBOX", "true").strip().lower() in (
             "1", "true", "yes", "on",
         )
     return False

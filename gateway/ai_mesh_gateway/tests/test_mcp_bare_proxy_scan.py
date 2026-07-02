@@ -40,6 +40,15 @@ import mcp_proxy  # noqa: E402
 from middleware import AuthContext  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _force_direct_http_path(monkeypatch):
+    # These tests mock the direct-httpx streamable-http upstream to exercise the
+    # transport-agnostic scan/redaction pipeline. Pin the legacy direct path
+    # (MCP_HTTP_VIA_SANDBOX off) so the mock is hit; the sandbox-routed path is
+    # covered by the stdio adapter tests + test_mcp_http_via_sandbox.py.
+    monkeypatch.setenv("MCP_HTTP_VIA_SANDBOX", "0")
+
+
 # A credential the real SECRET_PATTERNS reliably flags (token_assignment) so the
 # orchestrator tags it threat_type="secret" → _findings_have_credential True.
 _CRED_TEXT = "token=ghp_abcdefghijklmnopqrstuvwxyz0123456789"

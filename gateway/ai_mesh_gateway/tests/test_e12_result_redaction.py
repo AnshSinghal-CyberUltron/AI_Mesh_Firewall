@@ -36,6 +36,15 @@ import mcp_proxy  # noqa: E402
 from middleware import AuthContext  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _force_direct_http_path(monkeypatch):
+    # These tests mock the direct-httpx streamable-http upstream to exercise the
+    # transport-agnostic scan/redaction pipeline. Pin the legacy direct path
+    # (MCP_HTTP_VIA_SANDBOX off) so the mock is hit; the sandbox-routed path is
+    # covered by the stdio adapter tests + test_mcp_http_via_sandbox.py.
+    monkeypatch.setenv("MCP_HTTP_VIA_SANDBOX", "0")
+
+
 # A tool RESULT carrying BOTH a real-looking secret AND an SSN.
 _RAW_TOKEN = "ghp_REALLOOKINGSECRET1234"
 _RAW_SSN = "123-45-6789"
