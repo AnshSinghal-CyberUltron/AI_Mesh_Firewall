@@ -769,6 +769,27 @@
         evaluated with GATEWAY_LIVE=0 (the in-process/offline characterization), which is 303×3 green.
         The live path is validated separately in R5 (block/allow spot-checks) and is subject to tier-2
         non-determinism by design (fail-FP-conservative, never fail-open-leak).
+      G44 — OUTPUT MARKDOWN-SPLIT PII LEAK (rendering-layer) FIXED 2026-07-02 (pivot from exfil-URLs):
+        THREAT: inline markdown emphasis/code INTERLEAVED among a PII value's chars keeps the raw bytes
+        off the PII regexes while a markdown client RENDERS the value: 1**2**3-45-6789 -> bold "2" ->
+        "123-45-6789"; john`@`example.com -> email; 4111**1111**1111**1111 -> card. detect_pii + the
+        INDEPENDENT aidefence oracle BOTH miss it byte-level (hasPII=false) — but the rendered form IS
+        the PII, so it's a real rendering-layer exfil-evasion (distinct from spaced-SSN, which renders as
+        spaced digits). FIX (output-only, low blast radius): patterns.strip_interleaved_emphasis (regex
+        (?<=[\w@.\-])[*_`]+(?=[\w@.\-]) — strips ONLY emphasis BETWEEN word/PII chars, leaves **bold**/
+        _italic_/`code` wrapping-a-token intact); output_guard.neutralize_markdown_split_pii masks any
+        _MD_SPLIT_TOKEN_RE run whose emphasis-stripped form is PII/secret -> "[PII_REDACTED]", wired into
+        sanitize_output_for_verdict; scanner._scan_output_sync detects it (threat_type pii/secret +
+        matched_patterns) so _check_pii_secrets ELEVATES to redact -> triggers sanitize. Only fires when
+        stripping REVEALS PII, so benign a_b_c / snake_case / 2*3 / **bold** / `code` / file_name.txt are
+        strict no-ops. ReDoS-safe (disjoint word vs emphasis char classes -> linear; <35ms/80KB).
+        VERIFY: full output-guard path (inspect->sanitize) redacts all 5 leak shapes (SSN/email/CC/
+        italic/backtick), rendered egress PII-free; 5 FP unchanged. FROZEN: G44 (5 leak + 5 FP = 10).
+        Gate: golden 313 in-process × 3 (2.8s, GATEWAY_LIVE=0); broad pattern/scanner/pii/output slice
+        460 passed. commit b52b8520. REDEPLOYED (rollback-pre-g44; marker present; health 200) — LIVE.
+        NOTE: input-side markdown-split (user sending 1**2**3-45-6789 to evade input PII redaction) is a
+        separate, more-ambiguous case (model receives the markdown source, not the render) — left as
+        follow-up; the clear rendering leak is the OUTPUT egress, now closed.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
