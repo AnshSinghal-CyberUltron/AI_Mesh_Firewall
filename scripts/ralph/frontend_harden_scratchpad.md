@@ -306,11 +306,15 @@
         hardcoded chartTheme + isDark-ternary theming; FIXED fabricated arrowTimings (lat×0.3/0.4/0.3 →
         honest "--" + real end-to-end avg in heading). Live-verified both themes: 0 recharts SVGs, honest
         empty states, 0 overflow, clean console. Added to static no-recharts guard (17 tests).
-      · [ ] AIMeshFirewallOverview.jsx — LIVE, 4 recharts charts still (harness reports recharts=4). NEXT.
-      · [ ] SafeResponsiveChart.jsx — recharts is the intentional FALLBACK for un-migrated children; remove
-        its recharts import LAST, only after every live consumer is migrated.
-      · [ ] Orphaned dead code w/ recharts (not rendered): SubmoduleDetailPage.jsx, module-specific-charts.jsx
-        — migrate or note-as-orphaned in final pass.
-      Remaining before COMPLETE: AIMeshFirewallOverview migration; then SafeResponsiveChart fallback removal;
-      then a full re-verify sweep (all surfaces both themes 4 widths, console/network clean) + confirm
+      · [x] AIMeshFirewallOverview.jsx — DONE (commit 691e58ce): 3 recharts charts → ECharts (2 donuts +
+        grouped bar); removed recharts import + ChartTooltip + renderCustomLabel helpers. Live-verified both
+        themes @1440/375: recharts 4→0, echarts 9-11 canvases, 0 overflow/leak, clean console. (uPlot
+        time-series were already migrated.) Added to static no-recharts guard (18 tests).
+      · [ ] SafeResponsiveChart.jsx — recharts is the FALLBACK for un-migrated children. NO LIVE component
+        passes recharts children anymore (verified: only orphaned SubmoduleDetailPage:138 does). Safe to
+        remove the recharts import/children path once the 2 orphaned files below are handled. NEXT.
+      · [ ] Orphaned dead code w/ recharts (imported NOWHERE, never rendered): SubmoduleDetailPage.jsx,
+        module-specific-charts.jsx — migrate or remove-as-dead-code (verify no importer first).
+      Remaining before COMPLETE: handle the 2 orphaned files → remove SafeResponsiveChart's recharts fallback
+      → full re-verify sweep (all surfaces both themes 4 widths, console/network clean) → confirm
       FRONTEND_AUDIT.md fully resolved.
