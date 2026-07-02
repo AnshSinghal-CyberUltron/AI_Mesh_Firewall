@@ -91,7 +91,7 @@ async function cardFacts(page, nameIncludes) {
       return {
         authorizeCount: authBtns.length,
         authorizeLabels: authBtns.map((b) => (b.textContent || "").trim()),
-        hasAuthorizationRequiredBadge: /authorization required/i.test(cardText),
+        hasAuthorizationRequiredBadge: /pending authorization|authorization required/i.test(cardText),
         hasNoUrlError: /Server has no URL|OAuth is only for HTTP/i.test(cardText),
         toolsCount: (cardText.match(/(\d+)\s+tools/i) || [])[1] ?? null,
         cardSnippet: cardText.slice(0, 1200),

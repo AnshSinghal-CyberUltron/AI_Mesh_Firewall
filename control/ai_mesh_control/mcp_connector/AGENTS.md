@@ -40,11 +40,14 @@ frontend renders. Map + evidence: `docs/mcp/control-plane-flow.md`.
   registration — the serializer requires url for HTTP). The stdio+mcp-remote (Linear) case still
   authorizes via the **gateway** `oauth/start` path (that button is legit, NOT a duplicate to delete).
   Test: `tests/test_oauth_transport_guard.py::OAuthStartViewTransportGuardTests` (SimpleTestCase, no DB).
-- **B2:** the OAuth callback (`views.py:2658` → `_store_oauth_tokens`) flips `oauth_authorized` True but
-  does **not** trigger a sync — a fresh authorized server still shows 0 tools until a manual sync. A
-  fresh *unauthorized* oauth server's sync returns `([], "needs re-authentication")` (`:448/452`),
-  setting `connection_status="failed"` + `needs_reauth=True`. Frontend must render a distinct
-  "Pending authorization" state (item #15); consider auto-resync after callback.
+- **B2 — pending-state FIXED (item #15, frontend):** `MCPConnectorPanel.renderServerCard` now renders a
+  distinct amber **"Pending authorization"** connection badge (replacing the misleading grey "Unknown")
+  and **"Authorize to load tools"** (replacing "0 tools") whenever `awaitingAuth` (=`serverAwaitingAuth`
+  && !needs_reauth). Sync stays gated by `syncBlockedForAuth`. Backend note still applies: the OAuth
+  callback (`views.py` → `_store_oauth_tokens`) flips `oauth_authorized` True but does **not** auto-sync
+  — tools appear on the next (now-unblocked) sync; a fresh *unauthorized* oauth sync returns
+  `([], "needs re-authentication")` setting `connection_status="failed"` + `needs_reauth=True`.
+  (Optional future nicety: auto-resync right after a successful callback.)
 - **B3:** nothing here provisions the per-org broker sandbox — the gateway does it lazily on first
   discover/tool-call. Item #19 adds eager provisioning on register/authorize/first-sync.
 

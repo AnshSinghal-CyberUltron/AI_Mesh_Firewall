@@ -1075,6 +1075,11 @@ function MCPConnectorPanelInner() {
     const conn = connectionInfo(srv.connection_status);
     const risk = riskBadge(srv.risk_level);
     const absUrl = srv.gateway_endpoint ? toAbsoluteGatewayUrl(srv.gateway_endpoint) : null;
+    // B2: a server that requires OAuth but has not completed it must read as a
+    // DISTINCT "Pending authorization" state — never a normal-looking card with a
+    // grey "Unknown" status + "0 tools" (which misleads the operator into thinking
+    // it is ready/empty). needs_reauth has its own badge and takes precedence.
+    const awaitingAuth = !srv.needs_reauth && serverAwaitingAuth(srv);
     return (
       <Card key={srv.id}>
         <CardContent className="p-4">
@@ -1084,22 +1089,30 @@ function MCPConnectorPanelInner() {
                 <Server className="w-4 h-4 text-teal-500 shrink-0" />
                 {srv.name}
                 {srv.is_active && <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
-                <Badge variant={conn.badge}>
-                  <span className={`mr-1.5 inline-block w-1.5 h-1.5 rounded-full ${conn.dot}`} />
-                  {conn.label}
-                </Badge>
+                {awaitingAuth ? (
+                  <Badge variant="warning">
+                    <span className="mr-1.5 inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    Pending authorization
+                  </Badge>
+                ) : (
+                  <Badge variant={conn.badge}>
+                    <span className={`mr-1.5 inline-block w-1.5 h-1.5 rounded-full ${conn.dot}`} />
+                    {conn.label}
+                  </Badge>
+                )}
                 {srv.risk_level && srv.risk_level !== "low" && (
                   <Badge variant={risk}>{srv.risk_level} risk</Badge>
                 )}
                 {srv.needs_reauth && <Badge variant="warning">needs re-auth</Badge>}
-                {!srv.needs_reauth && serverAwaitingAuth(srv) && (
-                  <Badge variant="warning">authorization required</Badge>
-                )}
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-all">{srv.url}</p>
               {srv.description && <p className="text-xs text-slate-400 mt-0.5">{srv.description}</p>}
               <div className="flex items-center gap-3 mt-2 flex-wrap">
-                {srv.tools_count != null && (
+                {awaitingAuth ? (
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <Wrench className="w-3 h-3" /> Authorize to load tools
+                  </span>
+                ) : srv.tools_count != null && (
                   <span className="text-[10px] text-slate-500 flex items-center gap-1">
                     <Wrench className="w-3 h-3" /> {srv.tools_count} tools
                   </span>
