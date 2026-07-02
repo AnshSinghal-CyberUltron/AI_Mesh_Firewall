@@ -76,6 +76,19 @@ _REDACTABLE_OUTPUT_CATEGORIES = frozenset({"pii", "pci", "phi", "secret", "crede
 _MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(\s*<?(https?://[^)\s<>]+)>?\s*\)", re.IGNORECASE)
 _MD_LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(\s*<?(https?://[^)\s<>]+)>?\s*\)", re.IGNORECASE)
 _BARE_URL_RE = re.compile(r"(?<![\]\(\[])https?://[^\s)<>\[\]]+", re.IGNORECASE)
+# G41: HTML/SVG/CSS ZERO-CLICK auto-render beacons. A model steered by indirect
+# injection can emit raw HTML/CSS that a client renderer auto-fetches (exfil) even when
+# markdown images are sanitized — and the markdown-only defense above misses them (an
+# <img> src is only a "bare URL" to the scanner, which trips solely on a PII payload, so
+# an ARBITRARY-data HTML beacon rode out un-neutralized). These match the zero-click
+# media attributes (src/srcset/poster/data on img/iframe/video/audio/source/embed/object),
+# SVG <image|use href>, and CSS url(...). Each captures the URL as group(1). Every
+# quantifier is a bounded/greedy negated char class ([^"'>\s]+) or a bounded {0,200} —
+# no nested/ambiguous repetition, so they are LINEAR-time (ReDoS-safe).
+_HTML_SRC_RE = re.compile(r'\b(?:src|srcset|poster|data)\s*=\s*["\']?\s*(https?://[^"\'>\s]+)', re.IGNORECASE)
+_HTML_SVG_HREF_RE = re.compile(r'<\s*(?:image|use)\b[^>]{0,200}?\bhref\s*=\s*["\']?\s*(https?://[^"\'>\s]+)', re.IGNORECASE)
+_CSS_URL_RE = re.compile(r'url\(\s*["\']?\s*(https?://[^"\')\s]+)', re.IGNORECASE)
+_HTML_BEACON_RES = (_HTML_SRC_RE, _HTML_SVG_HREF_RE, _CSS_URL_RE)
 # Cap the number of URLs inspected per output so a pathological response with
 # thousands of links cannot make neutralization super-linear.
 _MAX_EXFIL_URLS = 256
@@ -179,16 +192,29 @@ def _scan_exfil_channels(text: str):
         return
     seen: set[tuple[str, str]] = set()
     budget = _MAX_EXFIL_URLS
-    for kind, regex in (("image", _MD_IMAGE_RE), ("link", _MD_LINK_RE), ("bare", _BARE_URL_RE)):
+    # G41: "html" is a zero-click auto-render class (like "image") — trips on EITHER
+    # signal. url is group(1) for html beacons, group(2) for md image/link, whole
+    # match for bare.
+    passes = (
+        ("image", _MD_IMAGE_RE), ("link", _MD_LINK_RE), ("bare", _BARE_URL_RE),
+        ("html", _HTML_SRC_RE), ("html", _HTML_SVG_HREF_RE), ("html", _CSS_URL_RE),
+    )
+    for kind, regex in passes:
         for m in regex.finditer(text):
             if budget <= 0:
                 return
             budget -= 1
-            url = (m.group(2) if kind != "bare" else m.group(0)).strip().rstrip(").,'\"")
+            if kind in ("image", "link"):
+                url = m.group(2)
+            elif kind == "html":
+                url = m.group(1)
+            else:  # bare
+                url = m.group(0)
+            url = url.strip().rstrip(").,'\"")
             reason = _url_smuggles_data(url)
             if not reason:
                 continue
-            if kind != "image" and reason != "sensitive_payload":
+            if kind not in ("image", "html") and reason != "sensitive_payload":
                 continue
             key = (kind, url)
             if key in seen:
@@ -226,7 +252,22 @@ def neutralize_exfil_channels(text: str) -> str:
             return _defang(url)
         return m.group(0)
 
-    out = _MD_IMAGE_RE.sub(_img_sub, text)
+    def _html_sub(m: "re.Match[str]") -> str:
+        # G41: zero-click HTML/CSS beacon — trip on EITHER signal (like an image). Replace
+        # the whole URL (not just the payload) with the marker so no scheme/host/payload
+        # remains: the tag can no longer auto-fetch the attacker AND carries no data.
+        url = m.group(1).strip().rstrip(").,'\"")
+        if _url_smuggles_data(url):
+            return m.group(0).replace(m.group(1), "[exfil-redacted]", 1)
+        return m.group(0)
+
+    # G41: neutralize HTML/SVG/CSS zero-click beacons FIRST so the URL is gone before the
+    # bare-URL pass (which would otherwise only strip a PII payload and leave the tag's
+    # auto-render intact). Strict no-op on benign media (gated by _url_smuggles_data).
+    out = text
+    for _re in _HTML_BEACON_RES:
+        out = _re.sub(_html_sub, out)
+    out = _MD_IMAGE_RE.sub(_img_sub, out)
     out = _MD_LINK_RE.sub(_link_sub, out)
     out = _BARE_URL_RE.sub(_bare_sub, out)
     return out
