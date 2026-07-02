@@ -91,6 +91,16 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      R6 TRACE-CARD LIVE-VERIFIED 2026-07-02 (LAST R6 GAP CLOSED): rendered OutputPipelineTimeline in isolation
+        in the running SPA (dynamic import via Vite deps /node_modules/.vite/deps/react.js + react-dom_client.js;
+        synthetic redact event) since a real output-guard event is model-dependent + login flaky. Result:
+        renders correctly BOTH themes (screenshots) — 6 honest stage list-items with action-as-TEXT aria-labels
+        ("2. Policy Engine — redacted", "3. Model Routing — rerouted", "5. Output Guard — redacted"); role=
+        region/list/listitem present (a11y fix works live); badges ALLOWED/REDACTED/REROUTED with good contrast
+        light AND dark; FINAL RESPONSE shows the SANITIZED output "Your SSN is ***-**-**** on file." — raw SSN
+        NOT visible (no PII leak in the card). Both owned components now FULLY R6-verified. REMAINING for
+        unequivocal COMPLETE: only R5 kill-switch not RE-verified fresh THIS session (org-global toggle =
+        concurrent-session hazard; verified in an earlier iteration). Next: brief coordinated kill-switch check.
       R6 ROBUSTNESS CONFIRMED 2026-07-02: code-level dark/responsive audit of both owned components.
         ModelConnectionPanel 163 dark: variants, OutputPipelineTimeline 53; NO unpaired bg-white (dark theme
         won't break); inputs w-full, tables overflow-x-auto, only max-w-[]+truncate caps (no mobile overflow)
