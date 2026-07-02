@@ -1175,6 +1175,29 @@
         SIXTEEN confirmed-live leaks fixed (G40-G46, G49-G57) + G48 defense-in-depth + 2 documented tradeoffs.
         NOTE for other sessions: main.py now has _content_to_text() (near _extract_response_from_completion,
         ~line 1296) — the canonical content-list->str coercion; reuse it rather than re-inlining.
+    - 🔴 G58 DICT-shaped tool-call arguments bypass output scan + enforcement (2026-07-02):
+        Continued the data-shape-bypass vein. Per the OpenAI spec tool_calls[].function.arguments is a JSON
+        STRING, but some providers/proxies (LiteLLM in paths) return a PARSED DICT. The OUTPUT scan
+        (_extract_scannable_output_text), enforcement (_neutralize_secondary_output_channels), and the STREAM
+        equivalents (_extract_content_delta / _blank_streaming_secondary_channels) all handled ONLY str args
+        (isinstance(...,str)). PROBED (deployed code): a benign-content response with tool_calls arguments={
+        email,ssn,key} DICT -> scan text was 'Here you go.\nsend' (dict PII INVISIBLE -> guard sees benign ->
+        verdict allow -> raw egress) AND after _set_completion_response_text the arguments dict shipped
+        VERBATIM (name blanked, dict untouched) -> post-redact leak too. The INPUT side already coerced non-str
+        args (json.dumps in _extract_prompt_from_messages line ~1235) — pure output-side asymmetry. FIX (owned
+        main.py + secure_streaming.py): added _tool_arg_to_text() (str identity; dict/other -> json.dumps;
+        None -> '') used in the output scan for tool_calls + legacy function_call (non-stream + stream); and
+        blank a TRUTHY arg of ANY type on enforcement (non-stream _neutralize_secondary_output_channels +
+        streaming _blank_streaming_secondary_channels — the str-only check left dict args verbatim on a redact
+        rebuild). str args unchanged -> zero regression. VERIFY: dict-arg PII now scanned + neutralized end-to-
+        end across non-stream, stream, and function_call. FROZEN in test_e14_cross_model.py: dict_tool_args
+        channel added to the cross-model scan/enforce matrix (×5 models, both stream + non-stream builders) +
+        3 dedicated G58 tests + a helper unit test. GATE: golden 406×3; gateway suite 1449 pass; e14 165 pass.
+        commit b063b2c4 (own msg, pathspec). REDEPLOYING (rollback gateway-rollback-pre-g58; both healthy).
+        SEVENTEEN confirmed-live leaks fixed (G40-G46, G49-G58) + G48 defense-in-depth + 2 documented tradeoffs.
+        DATA-SHAPE-BYPASS class (G57 list content, G58 dict tool-args): the guard's text EXTRACTORS must
+        coerce EVERY non-str shape the OpenAI schema permits (list content, dict tool-args) or the channel is
+        silently unscanned. Reuse _content_to_text / _tool_arg_to_text (main.py) — do NOT re-inline str-only checks.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
