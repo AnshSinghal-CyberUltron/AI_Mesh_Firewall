@@ -325,6 +325,12 @@
       Live sweep of the chart-migration-edited surfaces both themes @768/375: overview recharts=0 echarts=11
       overflow=0 jsErr=0; module-1-3 recharts=0 echarts=2 overflow=0 jsErr=0. Static gate 62/62. Full-matrix
       live pass is F3-limited (AUTH_FAILED bursts = dev-DB, not regressions).
+      FULL RE-VERIFY SWEEP DONE (2026-07-02, live mainScroll harness both themes @768/375, the overflow-prone
+      widths; 1440/1024 covered by item-22 scans): overview ✅, 1-1 ✅, 1-2 ✅ (FOUND+FIXED a data-dependent
+      header opBadge-pill overflow the item-22 scan missed — 47a19544), 1-3 ✅, 1-5 ✅, 1-6 ✅, 1-7 ✅,
+      firewall-config ✅, profile ✅, settings ✅, login ✅ — ALL recharts=0, overflow=0, leak=0, jsErr=0 both
+      themes. ONLY 1-4 MCPConnectorPanel still overflows (data-dependent, verify-only). So EVERY OWNED surface
+      is now re-verified clean both themes.
       ⛔ COMPLETE BLOCKER (the ONLY open item): item 17a MCPConnectorPanel — the MCP server cards (884px) overflow
       <main> @768/375 WHEN they render (data-dependent). It's `never_edit` (stress claim claude-ralph-stress-
       iter1-R0 still ACTIVE), so I've LOGGED it + the fix (single responsive column / min-w-0) but CANNOT fix
