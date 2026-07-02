@@ -10,9 +10,12 @@ MCPServerCreateSerializer.validate must reject auth_type="oauth" for any
 non-HTTP transport, while still accepting it for streamable-http / sse.
 """
 
-from django.test import TestCase
+from types import SimpleNamespace
+
+from django.test import SimpleTestCase, TestCase
 
 from mcp_connector.serializers import MCPServerCreateSerializer
+from mcp_connector.views import oauth_http_transport_error
 
 
 class OAuthTransportGuardTests(TestCase):
@@ -84,3 +87,51 @@ class OAuthTransportGuardTests(TestCase):
             }
         )
         self.assertTrue(ok, msg=f"expected valid, got {errors}")
+
+
+class OAuthStartViewTransportGuardTests(SimpleTestCase):
+    """B1: the *authorize* endpoint (MCPServerOAuthStartView) must enforce the
+    same HTTP-only invariant as registration — server-side, BEFORE discovery or
+    any auth_type mutation. This is what makes the dup/broken control authorize
+    path unreachable ('Server has no URL' + the oauth+stdio guard-bypass)."""
+
+    def test_stdio_row_is_rejected_with_transport_error_not_no_url(self):
+        # A stdio row (even one carrying an mcp-remote HTTPS URL in args and a
+        # populated url column) must be rejected with the TRANSPORT error, never
+        # allowed to proceed to discovery or flip auth_type.
+        srv = SimpleNamespace(transport="stdio", url="https://mcp.linear.app/mcp")
+        err = oauth_http_transport_error(srv)
+        self.assertIsNotNone(err)
+        self.assertRegex(err, r"HTTP MCP transport")
+        # It must NOT be the misleading "Server has no URL" message.
+        self.assertNotRegex(err, r"has no URL")
+
+    def test_websocket_row_is_rejected(self):
+        srv = SimpleNamespace(transport="websocket", url="wss://mcp.linear.app/mcp")
+        err = oauth_http_transport_error(srv)
+        self.assertIsNotNone(err)
+        self.assertRegex(err, r"HTTP MCP transport")
+
+    def test_stdio_row_without_url_still_gets_transport_error(self):
+        # Order matters: transport is checked first, so a URL-less stdio row gets
+        # the clear transport error, not "Server has no URL".
+        srv = SimpleNamespace(transport="stdio", url="")
+        err = oauth_http_transport_error(srv)
+        self.assertRegex(err, r"HTTP MCP transport")
+
+    def test_streamable_http_with_url_is_eligible(self):
+        srv = SimpleNamespace(transport="streamable-http", url="https://mcp.example.com/mcp")
+        self.assertIsNone(oauth_http_transport_error(srv))
+
+    def test_sse_with_url_is_eligible(self):
+        srv = SimpleNamespace(transport="sse", url="https://mcp.example.com/sse")
+        self.assertIsNone(oauth_http_transport_error(srv))
+
+    def test_http_transport_missing_url_is_the_only_no_url_path(self):
+        # The corrupted-data edge case (HTTP transport but empty url) is the ONLY
+        # remaining path to the "Server has no URL" message — unreachable via
+        # normal registration (serializer requires url for HTTP transports).
+        srv = SimpleNamespace(transport="streamable-http", url="")
+        err = oauth_http_transport_error(srv)
+        self.assertIsNotNone(err)
+        self.assertRegex(err, r"has no URL")

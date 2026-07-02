@@ -30,10 +30,16 @@ frontend renders. Map + evidence: `docs/mcp/control-plane-flow.md`.
   promptly, add it to `_SERVER_RELEVANT_FIELDS` (`signals.py:167`) so a save bumps the version.
 
 ## Gotchas / known issues (targets for B1/B2/B3 fixes)
-- **B1 bypass:** `MCPServerOAuthStartView.post` (`views.py:2513`) writes `server.auth_type="oauth"`
-  directly at `:2582`, guarded only by `server.url` present (`:2524` → 400 "Server has no URL" at `:2526`).
-  It does **NOT** re-apply the `serializers.py:177` transport guard. This control OAuth path is
-  redundant with the gateway's `mcp_oauth_proxy`. B1 (item #13) removes/guards it so `:2526` is unreachable.
+- **B1 bypass — FIXED (item #13):** `MCPServerOAuthStartView.post` now calls
+  `oauth_http_transport_error(server)` FIRST (module fn near the view) which enforces
+  `transport ∈ (streamable-http, sse)` *before* the url check and *before* any `auth_type` write.
+  A stdio/websocket row gets a clear transport error (not the misleading "Server has no URL"), can
+  never reach discovery, and can never be flipped to `auth_type="oauth"` (the old bypass at the
+  `server.save(... "auth_type" ...)` block is now reachable only for validated HTTP rows). "Server has
+  no URL" is now reachable ONLY for a corrupted HTTP-transport row with an empty url (unreachable via
+  registration — the serializer requires url for HTTP). The stdio+mcp-remote (Linear) case still
+  authorizes via the **gateway** `oauth/start` path (that button is legit, NOT a duplicate to delete).
+  Test: `tests/test_oauth_transport_guard.py::OAuthStartViewTransportGuardTests` (SimpleTestCase, no DB).
 - **B2:** the OAuth callback (`views.py:2658` → `_store_oauth_tokens`) flips `oauth_authorized` True but
   does **not** trigger a sync — a fresh authorized server still shows 0 tools until a manual sync. A
   fresh *unauthorized* oauth server's sync returns `([], "needs re-authentication")` (`:448/452`),
@@ -45,3 +51,11 @@ frontend renders. Map + evidence: `docs/mcp/control-plane-flow.md`.
 ## Tests
 `cd control && python manage.py test mcp_connector` (or pytest). Key: `tests/test_oauth_transport_guard.py`,
 `tests/test_scan_controls.py`, `tests/test_scan_version_bump.py`.
+
+**Test-env gotcha (verified iter):** control migrations are **Postgres-native** (a `RunSQL`
+`CREATE EXTENSION …`), so `manage.py test` on sqlite dies during `setup_databases` with
+`near "EXTENSION": syntax error`. To run DB-independent tests without a Postgres stack, make them
+`SimpleTestCase` (no DB) and run via pytest-django:
+`PYTHONPATH=ai_mesh_control:../shared DJANGO_SETTINGS_MODULE=main_app.settings DJANGO_SECRET_KEY=x DEBUG=True DJANGO_CACHE_BACKEND=locmem pytest ai_mesh_control/mcp_connector/tests/test_oauth_transport_guard.py -k OAuthStartViewTransportGuard`.
+Settings require `DJANGO_SECRET_KEY` when DEBUG=False; `main_app/__init__.py` imports `celery`; settings
+imports `ai_mesh_shared` (repo `shared/` on path). DB falls back to sqlite only when `DATABASE_URL` unset.

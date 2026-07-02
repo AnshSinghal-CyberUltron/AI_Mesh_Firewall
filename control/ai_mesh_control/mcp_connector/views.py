@@ -2500,6 +2500,41 @@ def _oauth_frontend_return_url(ok: bool, server_name: str = "", error: str = "")
     return base
 
 
+# OAuth 2.1 authorization-code (PKCE) is HTTP-only: the control-plane flow runs
+# RFC 9728/8414 discovery + token exchange against an HTTP MCP endpoint URL.
+_OAUTH_HTTP_TRANSPORTS = ("streamable-http", "sse")
+
+
+def oauth_http_transport_error(server) -> str | None:
+    """Return an error string iff ``server`` is INELIGIBLE for the control-plane
+    HTTP OAuth flow, else ``None`` (B1 / MCP OAuth bug #1/#2 root fix).
+
+    The registration serializer already rejects ``auth_type="oauth"`` on non-HTTP
+    transports (``serializers.py`` transport guard). This is the matching
+    server-side invariant for the *authorize* endpoint — enforcing it here makes
+    the dup/broken control authorize path structurally unreachable:
+      * a stdio / websocket row can never reach discovery (it authorizes upstream
+        inside the gateway sandbox, not via this endpoint), so the misleading
+        "Server has no URL" 400 is unreachable for the transport that actually
+        triggered it; and
+      * because the transport is validated BEFORE ``auth_type`` is persisted, the
+        endpoint can no longer flip a stdio/websocket row to ``auth_type="oauth"``
+        (the old guard-bypass that created an invalid oauth+stdio row).
+    Order matters: check transport first so stdio gets the clear transport error,
+    not the confusing "no URL" one.
+    """
+    if getattr(server, "transport", None) not in _OAUTH_HTTP_TRANSPORTS:
+        return (
+            "OAuth 2.1 (authorize via provider) requires an HTTP MCP transport "
+            "(streamable-http or sse). stdio servers such as Linear via mcp-remote "
+            "authorize upstream inside the gateway sandbox — this endpoint does not "
+            "apply; leave the auth type as 'none'."
+        )
+    if not server.url:
+        return "Server has no URL; OAuth is only for HTTP transports."
+    return None
+
+
 class MCPServerOAuthStartView(APIView):
     """Begin the OAuth 2.1 authorization-code (PKCE) flow for a server.
 
@@ -2521,9 +2556,14 @@ class MCPServerOAuthStartView(APIView):
         except MCPServerRegistration.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        if not server.url:
+        # B1 root fix: enforce the HTTP-transport invariant BEFORE any discovery
+        # or auth_type mutation, so oauth+stdio is unreachable here (matches the
+        # registration serializer's transport guard) and the auth_type="oauth"
+        # persisted below can never land on a non-HTTP row.
+        oauth_transport_err = oauth_http_transport_error(server)
+        if oauth_transport_err:
             return Response(
-                {"error": "Server has no URL; OAuth is only for HTTP transports."},
+                {"error": oauth_transport_err},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
