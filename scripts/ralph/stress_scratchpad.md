@@ -1070,6 +1070,37 @@
         recurrently hangs under the multi-session load. Always check control health when a gateway
         redeploy shows unhealthy — it's usually control, not the gateway image.)
         TWELVE confirmed-live leaks fixed (G40-G46, G49-G53) + G48 defense-in-depth + 2 documented tradeoffs.
+    - 🔴 G54 OUTPUT-side unicode/zero-width/homoglyph-obfuscated CREDENTIAL / internal IP (2026-07-02):
+        detect_pii/detect_secrets canonicalize before matching (G1), but detect_credential_exposure and
+        detect_ip_leakage ran RAW regex ONLY — so a fullwidth / zero-width-split / homoglyph credential
+        (connection string, basic-auth, stripe/github/azure key) or internal IP emitted by a manipulated
+        model EVADED the output guard entirely (OutputGuard.inspect -> verdict allow -> egressed RAW; a
+        client renders the value). PROBED end-to-end: 5 obfuscated credentials + 2 internal IPs, all
+        verdict=allow, value reconstructable via the same canonicalizer the firewall uses on INPUT.
+        ROOT CAUSE (two parts): (1) DETECTION — the two detectors skipped the canonical pass; (2) REDACTION
+        — _detect_all_spans (the canon index-map masker inside _redact_obfuscated) covered only
+        PII/PHI/PCI/SECRET, NOT IP_LEAKAGE/CREDENTIAL, so even a fired verdict would be flagged-yet-egressed-
+        raw (no-op scrubber = fail-open). FIX (owned patterns.py): (a) detect_ip_leakage /
+        detect_credential_exposure now match raw AND canonical form (split into *_core + canon wrapper,
+        skipped on plain ASCII -> zero plain-text change), mirroring detect_pii/detect_secrets; (b) new
+        _detect_infra_cred_spans wired into _redact_obfuscated masks the obfuscation-revealed infra/credential
+        span back onto the ORIGINAL bytes (example-address carve-out preserved). RESULT: 5 credential leaks
+        CLOSED (redact/credential, masked); internal IPs reach PARITY with plain IPs (opt-in
+        output_block_on_ip_leakage -> block+[INTERNAL_IPV4_REDACTED]; default guard_rated_clean FP-suppression
+        unchanged & symmetric for plain+obf). FP floor clean (fullwidth JP prose, exempt example IP
+        192.168.0.1, v10.20.30.40-beta, markdown). ReDoS-bounded (144KB obfuscated: detect_ip 15ms /
+        detect_cred 24ms / redact_all 344ms). STREAMING inherits via inspect()+redact_pii->redact_all (no
+        separate neutralizer). ORACLE NOTE: aidefence PII engine returns hasPII=false for credential-exposure
+        / infra-IP (narrower taxonomy — flags SSN/email only), so evidence rests on the deterministic byte-
+        probe (raw-egress-before -> masked-after) + the firewall's own domain detectors + canonical industry
+        secret formats (all independent of the new code — the cred/IP PATTERNS predate this change).
+        FROZEN: 16 G54 golden cases. GATE: golden 366×3 in-process (was 350; +16); gateway suite 1350 pass;
+        streaming 203 pass. commit 707957b7. REDEPLOYED (rollback gateway-rollback-pre-g54; marker
+        _detect_infra_cred_spans present ×2; control healthy — no hang this time) — LIVE-verified in-container
+        (obf cred+IP flagged, egress masked, benign fullwidth not flagged).
+        THIRTEEN confirmed-live leaks fixed (G40-G46, G49-G54) + G48 defense-in-depth + 2 documented tradeoffs.
+        Obfuscation-canonicalization now SYMMETRIC across ALL four detector families (pii/secret/credential/ip)
+        on BOTH input and output.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
