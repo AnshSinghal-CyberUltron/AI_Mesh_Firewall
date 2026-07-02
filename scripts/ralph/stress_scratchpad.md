@@ -431,7 +431,20 @@
         injections -> 400 block, benign encodings -> 200 allow, plain attack/PII/benign unregressed, live
         golden 10/10. => prompt-laundering (R1) coverage now includes text-encodings in addition to
         base64/hex/rot13.
-      ★ FINAL COMPLETION 2026-07-02 (post-G30, +G31, +G32): ALL 7 criteria met. The prior sole blocker — the tier-2
+      G33 DONE 2026-07-02 (commit 1e2b2ecf) — obfuscated PII/secret exfil via text-encodings (G32 follow-up).
+        G32 fed the INJECTION deobfuscation path; PII/secret detection (detect_pii/detect_secrets fold base64/
+        hex only) still MISSED HTML-entity/URL/escape-encoded PII -> an HTML/URL-encoded SSN/email/AWS-key
+        reached the model. The RAW PII is absent from egress (it's encoded), but a model trivially decodes it
+        => encoded PII/secret in a prompt is a laundering exfil attempt. Added a check in _scan_prompt_sync
+        (after plain PII/secret detection, before toxicity): run detect_pii/detect_secrets on the text-encoding-
+        decoded variants; if the DECODED form carries PII/secret the plaintext lacked -> BLOCK (blocking
+        sidesteps masking an encoded span; only fires on genuinely-hidden payloads). Plain PII/secret STILL
+        redacts (unchanged); benign entities/URLs/escapes still allow (zero FP incl. "&#36;99.00" -> $99.00).
+        G33 golden: 5 encoded-exfil block + 4 benign allow + plain-still-redact. Adversarial 217, golden 220x3,
+        full gateway 1135 passed. REDEPLOYED (rollback-preG33, --no-deps) + LIVE-VERIFIED: HTML-SSN/URL-AWS ->
+        400, plain SSN -> 200 redact, benign entity/attack unregressed. => prompt-laundering coverage now spans
+        BOTH injection (G32) AND PII/secret exfil (G33) across HTML/URL/escape encodings.
+      ★ FINAL COMPLETION 2026-07-02 (post-G30, +G31, +G32, +G33): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
         enforcement (no block->allow), all 41 block payloads block, translate now allow->allow; only safe-
