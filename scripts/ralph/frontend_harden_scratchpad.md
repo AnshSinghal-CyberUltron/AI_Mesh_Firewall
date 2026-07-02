@@ -413,3 +413,11 @@
       Minor note (not fixed): login footer trust badges (99.99%/SOC2/10M+) are static marketing chrome
       (pre-auth, can't bind live) — product call, not a dashboard data-integrity bug. Backend soc-kpis STILL
       24-30s (sustained multi-session load) → overview KPI==API still pending. MCP claim: active.
+      [iter+] LogDetailPage (Inspect/Scan Detail Report) NO-LEAK verified CLEAN, no fix. It renders raw
+      model/output/JSON WITHOUT the app's model-id scrubbers, BUT scanned 1000+ events (routing+security_scan
+      +mcp_scan) across every rendered field → 0 internal model IDs (backend sanitizes at source; routed=BYOK
+      names, request IDs scrubbed zs-…). A naive sanitizer would OVER-REDACT user BYOK anthropic/claude-opus
+      → "ZeroShield Model" (data-integrity regression), so NOT applied; field-specific guard-only scrub =
+      backend-coordinated, flagged. Live: light/1440 + dark 1440/1024/768/375 — 0 leak, 0 overflow all
+      widths, controls (Copy/Share/Export/Back), ECharts pipeline chart, honest Offline state, clean console,
+      good dark contrast. MCP claim: active. Backend recovered to ~9.8s this iter (overview KPI==API still TODO).
