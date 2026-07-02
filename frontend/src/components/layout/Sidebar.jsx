@@ -212,7 +212,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
           <div key={item.id}>
             {item.section && !isCollapsed && (
               <div className="px-3 pt-4 pb-2">
-                <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-400 uppercase tracking-wider">
                   {item.section}
                 </span>
               </div>
@@ -402,7 +402,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                 </div>
                 <ChevronUp
                   className={cn(
-                    "w-4 h-4 text-slate-400 dark:text-slate-500 dark:text-slate-400 transition-transform flex-shrink-0",
+                    "w-4 h-4 text-slate-500 dark:text-slate-400 dark:text-slate-400 transition-transform flex-shrink-0",
                     showAccountMenu && "rotate-180"
                   )}
                 />

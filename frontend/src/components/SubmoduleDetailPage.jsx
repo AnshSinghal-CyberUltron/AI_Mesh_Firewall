@@ -799,7 +799,7 @@ function QuickStatus({ label, value, detail }) {
 
 function EmptyState({ message, compact = false }) {
   return (
-    <div className={cn("flex items-center justify-center text-sm text-slate-400 dark:text-slate-500", compact ? "h-[260px]" : "h-[280px]")}>
+    <div className={cn("flex items-center justify-center text-sm text-slate-500 dark:text-slate-400", compact ? "h-[260px]" : "h-[280px]")}>
       {message}
     </div>
   );

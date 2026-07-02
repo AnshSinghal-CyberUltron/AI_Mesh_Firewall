@@ -227,7 +227,7 @@ export function VectorProviderConfigPanel() {
                       aria-label={`${provider.label} embedding model (BYOK)`}
                       className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                     />
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Your own embedding model — the gateway scans (and optionally redacts) documents, then embeds with this model before storing. No system embedding vault.</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Your own embedding model — the gateway scans (and optionally redacts) documents, then embeds with this model before storing. No system embedding vault.</p>
                   </div>
                   <div>
                     <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Reranker Model</label>
@@ -239,7 +239,7 @@ export function VectorProviderConfigPanel() {
                       aria-label={`${provider.label} reranker model`}
                       className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                     />
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Per-org reranker (e.g. the provider's hosted bge-reranker-v2-m3). Retrieved docs are reordered by relevance before guardrail scoring. Leave blank to disable reranking.</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Per-org reranker (e.g. the provider's hosted bge-reranker-v2-m3). Retrieved docs are reordered by relevance before guardrail scoring. Leave blank to disable reranking.</p>
                   </div>
                   <div>
                     <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">BYOK Embedding Key <span className="text-slate-400">(write-only)</span></label>
@@ -252,7 +252,7 @@ export function VectorProviderConfigPanel() {
                       aria-label={`${provider.label} BYOK embedding key (write-only)`}
                       className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                     />
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Key for an external embedding provider (OpenRouter / OpenAI-compatible) when the embedding model routes through litellm rather than the vector DB&apos;s own inference. Encrypted at rest; never returned. Falls back to gateway env credentials when empty.</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Key for an external embedding provider (OpenRouter / OpenAI-compatible) when the embedding model routes through litellm rather than the vector DB&apos;s own inference. Encrypted at rest; never returned. Falls back to gateway env credentials when empty.</p>
                   </div>
                 </div>
 

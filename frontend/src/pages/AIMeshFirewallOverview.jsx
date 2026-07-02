@@ -553,7 +553,7 @@ function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 
           <div className="flex h-[280px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 px-6 text-center dark:border-slate-700">
             <Activity className="h-6 w-6 text-slate-300 dark:text-slate-600" />
             <p className="text-sm text-slate-500 dark:text-slate-400">No enforcement events in this window — the chart populates as traffic flows.</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">Try a wider lens (7d / 30d) using the time selector above.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Try a wider lens (7d / 30d) using the time selector above.</p>
           </div>
         ) : (
           // Dense stacked telemetry via uPlot (canvas, fast, drag-to-zoom).
@@ -576,7 +576,7 @@ function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 
           />
         )}
         {sparse && (
-          <p className="mt-2 text-center text-[11px] text-slate-400 dark:text-slate-500">Sparse window — {nonZeroBuckets} active interval{nonZeroBuckets === 1 ? "" : "s"}. Widen the lens for more context.</p>
+          <p className="mt-2 text-center text-[11px] text-slate-500 dark:text-slate-400">Sparse window — {nonZeroBuckets} active interval{nonZeroBuckets === 1 ? "" : "s"}. Widen the lens for more context.</p>
         )}
       </div>
 

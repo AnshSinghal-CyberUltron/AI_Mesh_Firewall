@@ -411,5 +411,5 @@ function SeverityBadge({ value }) {
 }
 
 function EmptyState({ message }) {
-  return <div className="flex h-[280px] items-center justify-center text-sm text-slate-400 dark:text-slate-500">{message}</div>;
+  return <div className="flex h-[280px] items-center justify-center text-sm text-slate-500 dark:text-slate-400">{message}</div>;
 }

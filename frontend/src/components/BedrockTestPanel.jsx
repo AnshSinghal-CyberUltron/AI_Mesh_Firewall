@@ -208,7 +208,7 @@ export function ZeroShieldGuardModelTestPanel({ embedded = false }) {
                   <AlertTriangle className="w-5 h-5 text-red-600" />
                 )}
                 <span className={`text-sm font-bold ${
-                  healthResult.available ? "text-emerald-700" : "text-red-700"
+                  healthResult.available ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"
                 }`}>
                   {healthResult.available ? "Available" : "Unavailable"}
                 </span>
@@ -270,9 +270,9 @@ export function ZeroShieldGuardModelTestPanel({ embedded = false }) {
                   <div>
                     <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">Recommended Action</div>
                     <div className={`text-sm font-bold ${
-                      scanResult.recommended_action === "block" ? "text-red-700" :
-                      scanResult.recommended_action === "flag" ? "text-amber-700" :
-                      "text-emerald-700"
+                      scanResult.recommended_action === "block" ? "text-red-700 dark:text-red-300" :
+                      scanResult.recommended_action === "flag" ? "text-amber-700 dark:text-amber-300" :
+                      "text-emerald-700 dark:text-emerald-300"
                     }`}>
                       {scanResult.recommended_action}
                     </div>
@@ -306,9 +306,9 @@ export function ZeroShieldGuardModelTestPanel({ embedded = false }) {
                       <div>
                         <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">Action</div>
                         <div className={`text-sm font-bold ${
-                          scanResult.body.tier1_result.action === "block" ? "text-red-700" :
-                          scanResult.body.tier1_result.action === "flag" ? "text-amber-700" :
-                          "text-emerald-700"
+                          scanResult.body.tier1_result.action === "block" ? "text-red-700 dark:text-red-300" :
+                          scanResult.body.tier1_result.action === "flag" ? "text-amber-700 dark:text-amber-300" :
+                          "text-emerald-700 dark:text-emerald-300"
                         }`}>
                           {scanResult.body.tier1_result.action}
                         </div>
@@ -337,7 +337,7 @@ export function ZeroShieldGuardModelTestPanel({ embedded = false }) {
                   {scanResult.body.pipeline_note && (
                     <div className="flex items-start gap-1.5 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-lg">
                       <Info className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                      <p className="text-[10px] text-amber-700">{scanResult.body.pipeline_note}</p>
+                      <p className="text-[10px] text-amber-700 dark:text-amber-300">{scanResult.body.pipeline_note}</p>
                     </div>
                   )}
                 </>

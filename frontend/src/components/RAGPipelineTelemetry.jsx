@@ -202,7 +202,7 @@ function StageCard({ name, data, isLast, isExpanded, onToggle }) {
             </div>
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 text-center">
               <div className="text-[10px] text-slate-500 dark:text-slate-400">Blocked</div>
-              <div className="text-sm font-mono font-bold text-red-400">{blocked.toLocaleString()}</div>
+              <div className="text-sm font-mono font-bold text-red-600 dark:text-red-400">{blocked.toLocaleString()}</div>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 text-center">
               <div className="text-[10px] text-slate-500 dark:text-slate-400">Latency</div>
@@ -212,7 +212,7 @@ function StageCard({ name, data, isLast, isExpanded, onToggle }) {
               <div className="text-[10px] text-slate-500 dark:text-slate-400">
                 {rewritten > 0 ? "Rewritten" : flagged > 0 ? "Flagged" : "Allowed"}
               </div>
-              <div className={`text-sm font-mono font-bold ${rewritten > 0 ? "text-blue-400" : flagged > 0 ? "text-amber-400" : "text-emerald-400"}`}>
+              <div className={`text-sm font-mono font-bold ${rewritten > 0 ? "text-blue-600 dark:text-blue-400" : flagged > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
                 {rewritten > 0 ? rewritten : flagged > 0 ? flagged : allowed}
               </div>
             </div>
@@ -464,9 +464,9 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
               </div>
               <div className="space-y-3 mt-4">
                 {[
-                  { label: "Normal (Level 0)", desc: "Standard enforcement", value: escalation.normal || 0, color: "bg-emerald-500", textColor: "text-emerald-400" },
-                  { label: "Elevated (Level 1)", desc: "Stricter filtering active", value: escalation.elevated || 0, color: "bg-amber-500", textColor: "text-amber-400" },
-                  { label: "Strict (Level 2)", desc: "Maximum enforcement", value: escalation.strict || 0, color: "bg-red-500", textColor: "text-red-400" },
+                  { label: "Normal (Level 0)", desc: "Standard enforcement", value: escalation.normal || 0, color: "bg-emerald-500", textColor: "text-emerald-600 dark:text-emerald-400" },
+                  { label: "Elevated (Level 1)", desc: "Stricter filtering active", value: escalation.elevated || 0, color: "bg-amber-500", textColor: "text-amber-600 dark:text-amber-400" },
+                  { label: "Strict (Level 2)", desc: "Maximum enforcement", value: escalation.strict || 0, color: "bg-red-500", textColor: "text-red-600 dark:text-red-400" },
                 ].map((item) => {
                   const pct = totalEscalation > 0 ? ((item.value / totalEscalation) * 100).toFixed(1) : 0;
                   return (

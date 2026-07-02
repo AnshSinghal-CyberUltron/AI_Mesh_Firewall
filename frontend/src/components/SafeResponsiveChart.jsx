@@ -65,7 +65,7 @@ export function SafeResponsiveChart({ className, children, minSize = 24, option,
   const isReady = size.width > minSize && size.height > minSize;
 
   const placeholder = (
-    <div className="h-full flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">
+    <div className="h-full flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
       Preparing chart…
     </div>
   );

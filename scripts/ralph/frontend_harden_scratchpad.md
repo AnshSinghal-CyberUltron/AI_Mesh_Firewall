@@ -243,7 +243,22 @@
       telemetry.py redact_all scrub verified item 10. LIVE DOM leak-scan (sk-/AKIA/pcsk_/JWT/ghp_/PEM) across
       overview + modules 1.1-1.7 = 0 hits ALL 8 (+ item-17 0 hits on 1.4/1.5). PII displays = operator's OWN
       data (profile email, allowlist emails, login field). No files changed.
-- [ ] 21. Theme audit: every surface correct in dark AND light (contrast/focus/hover/disabled).
+- [x] 21. Theme audit: every surface correct in dark AND light (contrast/focus/hover/disabled).
+      item21 DONE. Codebase-wide contrast sweep + fixes (24 real spots across 9 files): 11 inverted-slate
+      `text-slate-400 dark:text-slate-500`→`slate-500 dark:slate-400` (VectorProviderConfigPanel×3, Overview×2,
+      Sidebar×2, Login, SubmoduleDetailPage, SafeResponsiveChart, FirewallModulePage); 8 BedrockTestPanel
+      dark-on-dark verdict strings (text-{red,amber,emerald}-700 → +dark:*-300); 5 RAGPipelineTelemetry
+      meaningful bare-400 (blocked-count, status ternary, escalation-level textColors → -600 dark:-400).
+      FOCUS a11y PROVEN: 0 focus:outline-none WITHOUT a paired ring across all components (Button/Input/Select/
+      Switch/Tabs/Textarea/Tooltip use focus-visible:ring). Decorative section/header ICONS on bg-*-500/10 chips
+      (RAGPipelineTelemetry 6, RAGFeatureTest feature-icon config, RAGAttackTrust Crosshair/Zap) left per
+      convention. VERIFY-ONLY/orphaned MCP theme spots LOGGED not edited: MCPScanControlMatrix×7, MCPManagerPanel
+      ×5(orphaned), MCPConnectorPanel×1. Pre-existing detector aesthetic FPs (NOT contrast bugs, NOT mine):
+      Overview/SubmoduleDetail ai-color-palette = curated multi-color palette MAPS for per-module differentiation
+      (violet/purple/indigo among ~9 options); Login gradient-text = BRAND teal→cyan hero (from-teal-600 to-
+      cyan-600), not slop; Sidebar side-tab = legit active-nav border-l-2 — all documented, left intentional.
+      GATE lint 42/42, build, detector 0 on all contrast-fixed files. Prior per-surface theme fixes (items
+      9-20) + this sweep = every surface contrast-correct both themes.
 - [ ] 22. Responsive audit: no overflow/overlap at 1440/1024/768/375 on every surface.
 
 ## Freeze the frontend
