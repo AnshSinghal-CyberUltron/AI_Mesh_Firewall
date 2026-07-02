@@ -265,3 +265,13 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   as-is (REST 429 + Retry-After). Files: mcp_proxy.py, test_mcp_rate_limit.py (+3). Gate: 7 rate-limit + 1072
   broad sweep passed. Same bare-route parity class as CHG-0006. REMAINING (item 9): live threshold probe +
   adversarial policy-enforcement + audit-completeness; ext_mcp_proxy also lacks the per-org limiter (follow-up).
+- **CHG-0032** (2026-07-02) — G3 item 9: closed the `ext_mcp_proxy` rate-limit follow-up from CHG-0031. The
+  authenticated external MCP proxy (`/v1/mcp/ext-proxy/{host}/{path}`, behind the auth middleware — NOT in
+  `EXCLUDED_PATHS`, so `request.state.auth_context` with `org_slug` is populated) did inbound credential + SSE
+  result scanning but enforced NO per-org rate limit, so a tenant could drive the external proxy past its org
+  burst/RPM/TPM ceilings. Added `_mcp_org_rate_limit_raw(_get_auth_context(request))` right after the domain
+  allowlist check (plain 429 before any scan/forward; fail-open/no-op if unauthenticated). Now ALL THREE
+  tenant-facing MCP entry points (`org_mcp_jsonrpc`, `org_mcp_tool_call`, `ext_mcp_proxy`) enforce the identical
+  per-org limiter. Files: mcp_proxy.py, test_mcp_rate_limit.py (+3: ext-proxy TPM/burst → 429 before forward;
+  disallowed domain still 403 first). Gate: 10 rate-limit + 1075 broad sweep passed. Code-level rate-limit
+  coverage complete; item 9 REMAINING: live threshold probe + adversarial policy + audit-completeness.

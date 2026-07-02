@@ -1049,6 +1049,16 @@ async def ext_mcp_proxy(path: str, request: Request):
             status_code=403,
         )
 
+    # S12 (CHG-0032): per-org rate limit on the authenticated external MCP proxy —
+    # parity with org_mcp_jsonrpc / org_mcp_tool_call. This route sits behind the
+    # auth middleware (not in EXCLUDED_PATHS), so the caller's org context is
+    # available; the handler is transport-level (no org-scoping) but the per-org
+    # TPM/burst/RPM ceiling still applies to the CALLER's org. Returns a plain 429
+    # (before any scan/forward work). Fail-open + no-op if unauthenticated.
+    _ext_rl = await _mcp_org_rate_limit_raw(_get_auth_context(request))
+    if _ext_rl is not None:
+        return _ext_rl
+
     target_url = f"https://{hostname}/{remaining}"
 
     headers = {

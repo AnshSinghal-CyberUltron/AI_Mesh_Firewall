@@ -212,6 +212,14 @@
       sweep 1072 passed. STILL OPEN (item 9): live threshold probe (controlled >150 req/s burst on a dedicated
       key/host); adversarial policy-enforcement + audit-completeness; ext_mcp_proxy (external passthrough) also
       lacks the per-org limiter (follow-up if tenant-exposed).
+      CHG-0032 (2026-07-02): ext_mcp_proxy rate-limit follow-up CLOSED. The authenticated external MCP proxy
+      (/v1/mcp/ext-proxy/{host}/{path}, behind auth middleware — NOT in EXCLUDED_PATHS, so org_slug is
+      available) had inbound credential + SSE result scanning but NO per-org rate limit. Added
+      _mcp_org_rate_limit_raw(_get_auth_context(request)) after the domain allowlist check (plain 429 before
+      scan/forward). Now ALL THREE tenant-facing MCP entry points (org_mcp_jsonrpc, org_mcp_tool_call,
+      ext_mcp_proxy) enforce the per-org TPM/burst/RPM ceiling → code-level rate-limit coverage COMPLETE. +3
+      tests; test_mcp_rate_limit.py 10 passed, broad sweep 1075 passed. Item 9 still [ ]: live threshold probe
+      (controlled >150 req/s on a dedicated key/host) + adversarial policy-enforcement + audit-completeness.
 - [ ] 10. Resource limits CPU/mem/disk/timeout enforced + containment proven.
       LIVE VERIFIED (config) — CHG-0015 (2026-07-02): docker inspect of all 3 live org sandboxes shows
       CapDrop=[ALL], SecurityOpt=[no-new-privileges], Privileged=false, PidsLimit=256, Memory=2GiB,

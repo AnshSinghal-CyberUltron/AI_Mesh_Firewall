@@ -169,6 +169,14 @@
     test_mcp_rate_limit.py (+3). Gate: 7 rate-limit + 1072 broad sweep passed. Same bare-route parity class as
     CHG-0006. REMAINING (item 9): live threshold probe + adversarial policy + audit-completeness; ext_mcp_proxy
     also lacks the per-org limiter (follow-up if tenant-exposed).
+  - CHG-0032 (2026-07-02) — G3 item 9: closed the ext_mcp_proxy rate-limit follow-up. The authenticated
+    external MCP proxy (/v1/mcp/ext-proxy/{host}/{path}, behind auth middleware, NOT in EXCLUDED_PATHS) had
+    inbound credential + SSE result scanning but NO per-org rate limit — a tenant could drive it past org
+    ceilings. Added _mcp_org_rate_limit_raw(_get_auth_context(request)) after the domain allowlist check
+    (plain 429 before scan/forward). Now ALL THREE tenant-facing MCP entry points (org_mcp_jsonrpc,
+    org_mcp_tool_call, ext_mcp_proxy) enforce the per-org TPM/burst/RPM ceiling. Files mcp_proxy.py +
+    test_mcp_rate_limit.py (+3). Gate: 10 rate-limit + 1075 broad sweep passed. Code-level rate-limit coverage
+    complete; item 9 REMAINING: live threshold probe + adversarial policy + audit-completeness.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

@@ -200,3 +200,47 @@ async def test_org_mcp_tool_call_burst_exceeded_returns_plain_429():
         resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
     assert resp.status_code == 429
     assert _decode(resp)["code"] == "burst_limit_exceeded"
+
+
+# ── CHG-0032: the authenticated external MCP proxy (ext_mcp_proxy) also enforces
+# the per-org rate limit now (it previously had inbound credential scanning but no
+# per-org ceiling). Returns a plain 429 before any scan/forward.
+
+
+@pytest.mark.asyncio
+async def test_ext_mcp_proxy_tpm_exceeded_returns_429_before_forward():
+    req = _make_request(_auth())
+    req.headers = {}
+    req.body = AsyncMock(return_value=b"")
+    with patch.object(mcp_proxy, "_ALLOWED_MCP_DOMAINS", {"mcp.example.com"}), \
+         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
+         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+        resp = await mcp_proxy.ext_mcp_proxy("mcp.example.com/mcp", req)
+    assert resp.status_code == 429
+    assert _decode(resp)["code"] == "org_rate_limit_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_ext_mcp_proxy_burst_exceeded_returns_429_before_forward():
+    req = _make_request(_auth())
+    req.headers = {}
+    req.body = AsyncMock(return_value=b"")
+    with patch.object(mcp_proxy, "_ALLOWED_MCP_DOMAINS", {"mcp.example.com"}), \
+         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
+         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=_burst_429()):
+        resp = await mcp_proxy.ext_mcp_proxy("mcp.example.com/mcp", req)
+    assert resp.status_code == 429
+    assert _decode(resp)["code"] == "burst_limit_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_ext_mcp_proxy_disallowed_domain_403_before_rate_limit():
+    """Guard: the domain allowlist still rejects (403) before the rate-limit gate."""
+    req = _make_request(_auth())
+    req.headers = {}
+    req.body = AsyncMock(return_value=b"")
+    with patch.object(mcp_proxy, "_ALLOWED_MCP_DOMAINS", {"mcp.example.com"}), \
+         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
+         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+        resp = await mcp_proxy.ext_mcp_proxy("evil.example.org/mcp", req)
+    assert resp.status_code == 403

@@ -1044,4 +1044,30 @@ the prod compose/manifests is tracked under G3 item 12.
   `burst_limit_exceeded`). Broad sweep `ai_mesh_gateway/tests` → 1072 passed, 0 failed.
 - **REMAINING for G3 item 9:** live threshold probe (a controlled burst > 150 req/s on a dedicated key/host);
   adversarial policy-enforcement + audit-completeness checks. `ext_mcp_proxy` (the external passthrough proxy)
-  also does not call the per-org limiter — a separate follow-up if that path is tenant-exposed.
+  also does not call the per-org limiter — a separate follow-up if that path is tenant-exposed. → DONE in CHG-0032.
+
+### CHG-0032 — Per-org rate limit on the authenticated external MCP proxy (ext_mcp_proxy, G3 item 9)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 9 (gateway rate-limit). Closes the `ext_mcp_proxy` follow-up flagged in
+  CHG-0031 — now ALL THREE tenant-facing MCP entry points enforce the per-org ceiling.
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (`ext_mcp_proxy` calls `_mcp_org_rate_limit_raw` after the
+  domain allowlist check); `gateway/ai_mesh_gateway/tests/test_mcp_rate_limit.py` (+3 tests).
+- **WHAT:** `ext_mcp_proxy` (`/v1/mcp/ext-proxy/{host}/{path}`) is a transparent proxy to allowlisted EXTERNAL
+  MCP servers with inbound credential scanning + SSE result scanning (CHG-0004/0005), BUT applied NO per-org
+  rate limit. The route is NOT in `middleware.EXCLUDED_PATHS`, so it sits behind the auth middleware — a valid
+  API key (with `org_slug`) is required and `request.state.auth_context` is populated — yet the handler never
+  consulted it for capacity. So a tenant could drive the external proxy past its org burst/RPM/TPM ceilings.
+  Added `_mcp_org_rate_limit_raw(_get_auth_context(request))` right after the domain allowlist check (before
+  any scan/forward work); on breach it returns a plain 429, else proceeds. The handler stays transport-level
+  (no org-SCOPING), but the ceiling is charged to the CALLER's org.
+- **WHY:** completes the gateway rate-limit coverage — CHG-0031 covered the bare REST route; this covers the
+  external proxy. A tenant-authenticated route with no per-org ceiling is a capacity-protection bypass.
+- **NOW DOES:** `org_mcp_jsonrpc`, `org_mcp_tool_call`, AND `ext_mcp_proxy` all enforce the identical per-org
+  TPM/burst/RPM limiter (atomic Redis `INCR`, fail-open by design). ext-proxy returns a plain 429 on breach.
+- **Touched whose work:** the gateway MCP proxy rate-limit path; direct continuation of CHG-0031. Behaviour
+  unchanged when under limit (the raw check returns None → proceeds to the existing scan/forward).
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_rate_limit.py -q` →
+  10 passed (+3: ext-proxy TPM-exceeded → 429 before forward; burst-exceeded → 429; disallowed domain still
+  403 before the rate-limit gate). Broad sweep `ai_mesh_gateway/tests` → 1075 passed, 0 failed.
+- **REMAINING for G3 item 9:** live threshold probe; adversarial policy-enforcement + audit-completeness. All
+  three tenant-facing MCP entry points now rate-limited — the code-level rate-limit coverage is complete.
