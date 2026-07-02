@@ -567,6 +567,22 @@
         scratchpad probe_confusable_pii.py, not committed — throwaway.) Golden+adversarial suite
         re-run THIS round: 260 passed × 3 consecutive in-process (23.9s / 70.4s / 102.5s — timing
         variance is concurrent-session load; count deterministic).
+      R2 OUTPUT-SIDE CONFUSABLE/SPLIT PII REDACTION RE-PROBE 2026-07-02 (egress-bytes-are-truth):
+        Fed 7 simulated model OUTPUTS leaking PII via confusable/split forms through redact_all and
+        inspected the EGRESS bytes + cross-checked with the aidefence oracle. All robust:
+          - zwsp-split email, fullwidth email       -> "[EMAIL_REDACTED]" (fully masked)
+          - nbsp-hyphen SSN (U+2011), circled SSN   -> "[SSN_REDACTED]"   (fully masked)
+          - fullwidth SSN (１２３-４５-６７８９)          -> "***-**-６７８９" (first-5 MASKED; last-4 revealed)
+          - math-bold SSN (U+1D7E3..)                -> "***-**-𝟨𝟩𝟪𝟫"   (first-5 MASKED; last-4 revealed)
+          - plain SSN (control)                      -> "***-**-6789"    (first-5 MASKED; last-4 revealed)
+        The last-4 reveal is the EXISTING FROZEN partial-mask policy (identical for plain + confusable);
+        the sensitive first-5 is masked in EVERY case. Independent oracle on the egress bytes:
+        aidefence_has_pii("Sure, the SSN is ***-**-６７８９ …")=false AND aidefence_has_pii("ssn ***-**-6789")
+        =false -> the confusable-last-4 egress is treated identically to plain-last-4 and carries NO PII.
+        => output-side confusable/split PII redaction robust; the only non-cosmetic difference (last-4 left
+        in original glyph vs ASCII) is oracle-clean and within the frozen last-4 convention. NO gap, NO fix
+        (changing the frozen redact_all last-4 format would risk the frozen-9 for zero security gain).
+        (probe: scratchpad probe_output_confusable.py, throwaway.)
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
