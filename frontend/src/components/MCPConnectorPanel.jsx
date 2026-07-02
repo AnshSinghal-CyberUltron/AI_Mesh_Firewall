@@ -6,7 +6,7 @@
  * dev may use in-process gateway spawn when MCP_STDIO_IN_PROCESS=true.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Server,
   Shield,
@@ -394,16 +394,24 @@ function MCPConnectorPanelInner() {
     }
   }, [fetchWithAuth]);
 
-  const executableTools = (Array.isArray(tools) ? tools : [])
-    .filter((tool) => tool?.enabled !== false)
-    .filter((tool) => !executeServerSlug || tool.server_slug === executeServerSlug)
-    .sort((left, right) => {
-      const leftLabel = `${left.server_name || left.server_slug || ""}/${left.name || ""}`;
-      const rightLabel = `${right.server_name || right.server_slug || ""}/${right.name || ""}`;
-      return leftLabel.localeCompare(rightLabel);
-    });
+  // CP44 (impeccable perf): memoize derived lists so they don't recompute on
+  // every render (audit dim 2 — 0 useMemo → filtered/sorted lists recomputed).
+  const executableTools = useMemo(
+    () => (Array.isArray(tools) ? tools : [])
+      .filter((tool) => tool?.enabled !== false)
+      .filter((tool) => !executeServerSlug || tool.server_slug === executeServerSlug)
+      .sort((left, right) => {
+        const leftLabel = `${left.server_name || left.server_slug || ""}/${left.name || ""}`;
+        const rightLabel = `${right.server_name || right.server_slug || ""}/${right.name || ""}`;
+        return leftLabel.localeCompare(rightLabel);
+      }),
+    [tools, executeServerSlug],
+  );
 
-  const selectedExecuteTool = executableTools.find((tool) => makeExecuteToolKey(tool) === executeToolKey) || null;
+  const selectedExecuteTool = useMemo(
+    () => executableTools.find((tool) => makeExecuteToolKey(tool) === executeToolKey) || null,
+    [executableTools, executeToolKey],
+  );
 
   useEffect(() => {
     if (!selectedExecuteTool && executeToolKey) {
@@ -1136,10 +1144,14 @@ function MCPConnectorPanelInner() {
 
   /* ────────── derived status-strip values ────────── */
 
-  const connectedCount = servers.filter(
-    (s) => connectionInfo(s.connection_status).badge === "success"
-  ).length;
-  const toolsDiscovered = servers.reduce((acc, s) => acc + (s.tools_count || 0), 0);
+  const connectedCount = useMemo(
+    () => servers.filter((s) => connectionInfo(s.connection_status).badge === "success").length,
+    [servers],
+  );
+  const toolsDiscovered = useMemo(
+    () => servers.reduce((acc, s) => acc + (s.tools_count || 0), 0),
+    [servers],
+  );
   const tier2On =
     health?.mcp_tier2_enabled ??
     health?.tier2_enabled ??
@@ -1380,7 +1392,7 @@ function MCPConnectorPanelInner() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-9 w-9"
                   aria-label="Sync tools from server"
                   onClick={() => syncServerTools(srv.id)}
                   disabled={syncingServer === srv.id || syncBlockedForAuth(srv)}
@@ -1392,7 +1404,7 @@ function MCPConnectorPanelInner() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-9 w-9"
                   aria-label="View tool controls"
                   onClick={() => {
                     if (expandedServer === srv.id) {
