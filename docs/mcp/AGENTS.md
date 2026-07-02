@@ -34,6 +34,12 @@ subsystem map you need. Every anchor was read from the tree and spot-verified wh
   mcp-remote is the legit gateway-owned-OAuth exception. ≤1 Authorize button; fresh oauth = pending badge
   not 0-tools card. B1 remaining = delete/hard-gate the reachable control authorize path (views.py:2513
   "Server has no URL" + guard-bypass); recommend unifying HTTP-oauth onto the gateway path.
+- `oss-research-concurrency-load.md` — pooling/warm-start/backpressure patterns mapped to the repo's mature
+  concurrency model (pool+reuse, request-id demux, caps 20/16/4). **Contains the B3 ROOT CAUSE**: broker
+  returns 502 for cold-start agent-connection errors but the client retries only 503 → first-call-after-
+  register surfaces "temporarily unavailable". Fix = eager warm (honor ignored `warm` flag) + broker 503-
+  provisioning+Retry-After (not 502) + client readiness poll. P8/P9 sizing: 15 MCPs fit under caps; pre-warm
+  to skip the `MAX_CONCURRENT_INITS=4` bottleneck; no-503-storm = Retry-After + per-sandbox circuit breaker.
 - `oss-research-npm-untrusted-checklist.md` — the npm/Node **supply-chain** layer (N1–N7) for P7 #22–23:
   `npx`/`uvx` runs postinstall RCE + fetches unpinned-latest before the server starts (Shai-Hulud vector).
   Verified path asymmetry (gateway path has allowlist+pin default-OFF; broker path has neither; neither sets
