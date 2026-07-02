@@ -459,6 +459,13 @@ class DockerManager:
             ),
             "UV_CACHE_DIR": "/var/cache/uv",
             "XDG_CACHE_HOME": "/var/cache",
+            # uvx installs tools to UV_TOOL_DIR (default ~/.local/share/uv/tools)
+            # and links executables into UV_TOOL_BIN_DIR (default ~/.local/bin) —
+            # BOTH on the read-only rootfs, so any uvx/Python MCP server (Fetch,
+            # semgrep-mcp, …) failed to start ("Read-only file system"). Point them
+            # at the writable /var/cache tmpfs so uvx servers can install+run. (CP36)
+            "UV_TOOL_DIR": "/var/cache/uv/tools",
+            "UV_TOOL_BIN_DIR": "/var/cache/uv/bin",
         }
         environment.update(self._egress_proxy_env())
         kwargs: dict[str, Any] = {

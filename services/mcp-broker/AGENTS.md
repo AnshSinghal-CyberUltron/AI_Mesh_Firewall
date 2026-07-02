@@ -85,3 +85,18 @@ here. Map + evidence: `docs/mcp/broker-sandbox-lifecycle.md`.
   (proven via `docker run` probe of the sandbox image). Default multi-tenant limits stay
   modest → Ruflo clean-errors (MCP_OUT_OF_MEMORY) with actionable dev guidance rather than
   a raw crash. Verify: `scripts/ralph/mcp_page_cp21_ruflo.py` (clean-error branch, product path).
+
+## Sandbox child-env passthrough for uvx / Node heap (CP36)
+- Spawned stdio MCP servers get a **rebuilt-fresh** env from `_SAFE_ENV_PASSTHROUGH`
+  (`shared/ai_mesh_shared/mcp_stdio_common.py`) — `create_subprocess_exec(env=...)` does
+  NOT inherit the parent, so a var set only in `docker_manager._run_kwargs` (the container
+  env) is INVISIBLE to the child unless it is ALSO in the allowlist. Two things must line up:
+  the container env (value) + the allowlist (passthrough).
+- `uvx`/Python MCP servers (Fetch, semgrep-mcp) install tools to `UV_TOOL_DIR` + link bins into
+  `UV_TOOL_BIN_DIR`, both defaulting to the **read-only rootfs** (`~/.local/...`) → "Read-only file
+  system" start failure. Fix: container sets `UV_TOOL_DIR=/var/cache/uv/tools` +
+  `UV_TOOL_BIN_DIR=/var/cache/uv/bin` (writable tmpfs) AND they are in `_SAFE_ENV_PASSTHROUGH`.
+- `NODE_OPTIONS` (the CP20 `--max-old-space-size` heap cap) was ALSO not in the allowlist, so the
+  actual Node MCP-server child ran WITHOUT the cap — added to the passthrough so CP20 reaches the
+  real servers. Changing `_SAFE_ENV_PASSTHROUGH` requires a sandbox image rebuild (the shared module
+  is baked) + a gateway `docker cp` (in-process path).

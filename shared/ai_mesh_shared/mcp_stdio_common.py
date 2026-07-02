@@ -94,7 +94,17 @@ _SAFE_ENV_PASSTHROUGH = {
     "NPM_CONFIG_PREFIX",
     "UV_CACHE_DIR",
     "UV_PYTHON_INSTALL_DIR",
+    # uvx installs tools to UV_TOOL_DIR + links bins into UV_TOOL_BIN_DIR; both
+    # default to the read-only rootfs (~/.local/...), so uvx/Python MCP servers
+    # (Fetch, semgrep-mcp) failed to start until the container points them at a
+    # writable tmpfs AND they are passed through to the spawned child. (CP36)
+    "UV_TOOL_DIR",
+    "UV_TOOL_BIN_DIR",
     "XDG_CACHE_HOME",
+    # The container sets NODE_OPTIONS=--max-old-space-size (the per-org graceful-OOM
+    # heap cap, CP20). Since this child env is rebuilt FRESH (not inherited), it must
+    # be passed through or the actual Node MCP server runs WITHOUT the heap cap. (CP36)
+    "NODE_OPTIONS",
 }
 
 

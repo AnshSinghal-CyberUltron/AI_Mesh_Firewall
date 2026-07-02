@@ -25,7 +25,7 @@ PRESETS = [
     {"name": "cp33-semgrep", "transport": "stdio", "command": "npx", "args": ["-y", "mcp-server-semgrep"], "auth_type": "none"},
     {"name": "cp33-memory", "transport": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-memory"], "auth_type": "none"},
     {"name": "cp33-filesystem", "transport": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/data/mcp-auth"], "auth_type": "none"},
-    {"name": "cp33-fetch", "transport": "stdio", "command": "npx", "args": ["-y", "mcp-server-fetch"], "auth_type": "none"},
+    {"name": "cp33-fetch", "transport": "stdio", "command": "uvx", "args": ["mcp-server-fetch"], "auth_type": "none"},  # CP36: uvx (Python pkg), not npx
     {"name": "cp33-everything", "transport": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-everything"], "auth_type": "none"},
     {"name": "cp33-vibecheck", "transport": "stdio", "command": "npx", "args": ["-y", "@pv-bhat/vibe-check-mcp", "start", "--stdio"], "auth_type": "none"},
 ]
