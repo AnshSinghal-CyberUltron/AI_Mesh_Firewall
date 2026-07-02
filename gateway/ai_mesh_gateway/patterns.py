@@ -304,7 +304,12 @@ PII_PATTERNS: Dict[str, str] = {
     # distinctive E.164 marker (order-id / revenue runs never carry it) and every group
     # is a fixed bounded quantifier under a single non-nested repeat, so it stays
     # LINEAR-time (no ReDoS).
-    "phone_intl": r"\+(?:\d{10,15}|\d{1,4}[\s\-]?\d{6,12}|\d{1,3}(?:[\s\-]\d{1,5}){2,6})\b",
+    # G38: widen the grouped-international branch's per-group max from 5 to 7 digits
+    # so UK-style numbers (+44 7911 123456 — a 6-digit trailing group) redact like
+    # +91/+1 already do; enforcement-consistency for international phone PII. Still
+    # requires the leading '+' AND >=2 grouped runs, so benign "+5 -3 +2"/"score
+    # +10 +20 +30" do NOT match (verified 0 FP).
+    "phone_intl": r"\+(?:\d{10,15}|\d{1,4}[\s\-]?\d{6,12}|\d{1,3}(?:[\s\-]\d{1,7}){2,6})\b",
     # Dotted phone ("415.555.0142"). The 3.3.4 dotted grouping is distinctive;
     # fixed quantifiers keep it linear and the \b bounds avoid swallowing
     # adjacent digits. Version strings ("1.2.3") and dotted-quad IPs do not fit
