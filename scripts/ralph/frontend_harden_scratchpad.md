@@ -51,7 +51,12 @@
       F-KS1 (kill-switch load-error state), F-KS-confirm, F-MS-leak (audit guard-model mask), theme
       contrast (audit cells/badges/labels). No-leak proven (key status/prefix only). lint 42/42. Deferred:
       slider PATCH-storm, audit fetch err, KS 8-col table @375, combobox litellm id — logged in AUDIT.
-- [ ] 8. DatabaseConnection/VectorPolicy - [ ] 9. RAGFeatureTest/RAGAttackTrust/PipelineTelemetry
+- [x] 8. DatabaseConnection/VectorPolicy - [ ] 9. RAGFeatureTest/RAGAttackTrust/PipelineTelemetry
+      item8 iter8: DONE. Workflow-analyzed. DatabaseConnectionPanel (module 1.3) live-verified both themes
+      @4 widths: no-leak PROVEN (masked keys, write-only BYOK, gateway key never rendered), fixed pipeline
+      badge dark-variants + helpText/latency contrast + pipeline-trace overflow-x-auto (was clipped @375).
+      VectorPolicyPanel: 5 badge/banner dark-variant fixes + POLICY_STATUS_STYLES const (clears pre-existing
+      gray-on-color); no-leak clean; live render on enterprise page → folds into item 15. lint 42/42.
 - [ ] 10. OutputGuardrailControls/Charts - [ ] 11. AttackSimulatorPanel - [ ] 12. PolicyManagement/Analytics
 - [ ] 13. LogViewer/LogDetailPage - [ ] 14. OWASPStatsPanel - [ ] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
 - [ ] 17. VERIFY-ONLY (log, don't edit): MCPConnectorPanel, ModelConnectionPanel, pipeline-trace cards

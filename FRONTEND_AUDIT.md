@@ -90,7 +90,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | 5 | RoutingGovernancePanel / RoutingAuditPanel / PolicyDomainSwitcher | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
 | 6 | KillSwitchPanel / KillSwitchModelCombobox / ModelStatePanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done (critical fixes) |
 | 7 | MCPManagerPanel / MCPScannerPanel / MCPScanControlMatrix | — | 👁 | 👁 | 👁 | 👁 | 👁 | 👁 | n/a | 👁 verify-only / orphaned (see log) |
-| 8 | DatabaseConnectionPanel / VectorPolicyPanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 8 | DatabaseConnectionPanel / VectorPolicyPanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done (VP live→item15) |
 | 9 | RAGFeatureTestPanel / RAGAttackTrustSimulator / RAGPipelineTelemetry | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 10 | OutputGovernancePanel / OutputGuardrailControls / OutputGuardrailCharts / OutputGuardrailEngineCard | me | ◐ | ◐ | ◐ | ⬜ | ◐ | ◐ | ✅chart | 🔎 charts done, panels pending |
 | 11 | AttackSimulatorPanel (+ simulator/*) | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -146,6 +146,13 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ---
 
 ## Per-surface finding log (append-only)
+
+**Item 8 — DatabaseConnectionPanel + VectorPolicyPanel (iter8 resumed loop, 2026-07-02):** analyzed via parallel workflow, fixed, gated (lint 42/42, build, detector 0).
+- **No-leak PROVEN:** DB panel — Pinecone API key + Milvus token are `type=password` (masked, verified live); BYOK embedding keys are "write-only / encrypted at rest / never returned" (placeholders only); the simulator gateway key is only ever a Bearer header (never rendered); raw sim body stored in state, never dumped. VectorPolicy — metadata only (sensitive_fields are field *names*, not values); no creds. DOM leak-scan on both = none.
+- **DatabaseConnectionPanel fixed:** F-DB-theme1 pipeline `final_action` badges got `dark:text-{emerald,red,amber}-300` (were dark-on-dark); latency + helpText + stage-latency `text-slate-400`→`text-slate-500 dark:text-slate-400`; **F-DB-resp** pipeline stage-trace row `overflow-x-auto` (was clipped by `overflow-hidden` parent → trailing stages invisible at 375). Controls sound (test/simulate POST, disable in-flight, reflect returned state, surface errors). **Live-verified** both themes @375/768/1024: masked key, no leaks, no overflow (351/720/880).
+- **VectorPolicyPanel fixed:** 5 badge/banner/label dark-variant contrast spots (ActionBadge map, modal error, compile banner, red banner, namespace label); extracted `POLICY_STATUS_STYLES` const for the enabled/disabled badge (adds `dark:text-emerald-300` + clears a **pre-existing** `gray-on-color` detector false-positive from the ternary). No-leak clean; controls solid (create/edit/delete/compile POST + refetch). **Live render verification folds into item 15** (it's mounted on Firewall12EnterprisePage / `?tab=firewall-1-2`, has no anchor heading).
+- Evidence: `mcp-parallel/findings/frontend-harden/db-vector/`.
+- **DEFERRED/LOW (logged):** DB Milvus `connection_url` renders as `type=text` (user's own input; only a leak if a user pastes creds into the URI — low); DB `result.details`/`simResult.error` echo raw backend strings (frontend does no scrubbing — backend-dependent); DB Test button doesn't client-validate required fields (backend rejects + surfaces error — minor); VP Cancel bypasses close-while-submitting guard + `parseFloat||0.85` silent threshold fallback + modal `grid-cols-3` at 375 (minor).
 
 **Item 7 — MCP panels: VERIFY-ONLY / ORPHANED (iter7 resumed loop, 2026-07-02):** evidence changed the disposition — none of the three is an editable live surface of mine.
 - **MCPManagerPanel.jsx (1945 L) + MCPScannerPanel.jsx (1026 L) = ORPHANED DEAD CODE.** Imported/rendered NOWHERE in `src` (only referenced in two code comments); no lazy/dynamic import. Vite/Rollup tree-shakes them out → they don't ship in the bundle and are unreachable in the app. `MCPConnectorPanel` is the live MCP surface (firewall-submodules.jsx:152, module 1.4). **No action:** not a live surface to harden; NOT deleting during the parallel MCP session's active work (their territory + revival risk) — flagged as a **cleanup candidate to coordinate with the MCP session** (removing ~2971 lines of dead MCP source).
