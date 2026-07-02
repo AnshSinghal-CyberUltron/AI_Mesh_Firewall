@@ -87,3 +87,17 @@ These carry substantial PRIOR fixes — treat as verification-first, don't blind
   Buttons: "Check Health" / "Send Test"; result cell "Recommended Action" = block|flag|allow.
 - Durable gate: `scripts/playwright_demo_simulators.mjs` (run from frontend/). Double-checks each verdict:
   `waitForResponse` captures the real API status AND asserts the on-screen label; raw PII never rendered.
+
+## MCP page (?tab=firewall-1-4) — data honesty (CP45)
+- **Aggregated lists need composite React keys.** The Tool Discovery tab (`renderTools`)
+  shows tools across ALL servers; keying by bare `tool.name` collides when servers share a
+  tool (echo/add/printEnv across `everything` presets) → "two children with the same key" →
+  rows swap identity → WRONG value vs WRONG row. Use `${makeExecuteToolKey(tool)}-${idx}`
+  (`server_slug::name-idx`), same as the Execute tab. Any list aggregated across servers:
+  key on server_slug + name (+ idx), never a field that repeats across servers.
+- **Gateway API key is masked-by-default, reveal-once.** `renderGatewayKeyBanner` shows
+  `{prefix}••••`; the backend GET (`/org-gateway-key/`) returns NO plaintext (only prefix
+  metadata) — plaintext arrives ONLY on POST-create (`default_gateway_key`) and the MCP
+  default key is hash-only at rest. So on any reload the reveal/copy buttons are absent and
+  no raw key is in the DOM. Never render `orgGatewayKey.key` outside the explicit
+  `keyRevealed` toggle.

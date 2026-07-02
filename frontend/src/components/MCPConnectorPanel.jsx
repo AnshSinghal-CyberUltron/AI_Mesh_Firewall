@@ -1879,7 +1879,10 @@ function MCPConnectorPanelInner() {
       ) : (
         <div className="grid gap-2">
           {(Array.isArray(tools) ? tools : []).map((tool, idx) => (
-            <Card key={tool.name || idx}>
+            // Aggregated across all servers → a bare tool.name collides when two servers
+            // expose the same tool (e.g. multiple `everything`/echo presets). Key on
+            // server_slug::name (+idx tiebreaker), matching the Execute tab (line ~2004).
+            <Card key={`${makeExecuteToolKey(tool)}-${idx}`}>
               <CardContent className="p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
