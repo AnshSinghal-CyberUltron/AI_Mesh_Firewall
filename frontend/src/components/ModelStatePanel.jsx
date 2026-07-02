@@ -215,8 +215,8 @@ export function ModelStatePanel() {
   return (
     <div className="ai-mesh-card ai-mesh-grid-bg rounded-3xl p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="min-w-0">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center">
             Model State & Risk Monitor
             <InfoTooltip title="Real-Time Model Health">
@@ -230,7 +230,7 @@ export function ModelStatePanel() {
             ) : null}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleSyncStates}

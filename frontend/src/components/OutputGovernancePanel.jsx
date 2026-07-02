@@ -182,8 +182,8 @@ export function OutputGovernancePanel({ timeRange = "24h" }) {
 
   return (
     <div className="ai-mesh-card ai-mesh-grid-bg rounded-3xl p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="min-w-0">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center">
             Output Governance Log
             <InfoTooltip title="Output Governance">
@@ -194,7 +194,7 @@ export function OutputGovernancePanel({ timeRange = "24h" }) {
             Real-time output-governance evidence — prompt, raw output, detected risks, action, final output
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-1.5 text-[11px]">
             <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 tabular-nums">{blocked} blocked</span>
             <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 tabular-nums">{redacted} redacted</span>
