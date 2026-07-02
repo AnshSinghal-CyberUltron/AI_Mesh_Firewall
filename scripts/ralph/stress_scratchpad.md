@@ -1259,6 +1259,24 @@
         OUTPUT scan+enforce now coerces EVERY non-str shape across ALL model-authored text channels (content,
         reasoning_content, refusal, tool_calls args, function_call) — data-shape-bypass class fully closed on
         BOTH input (G60 name, G59 tool args) and output (G57 content, G58 tool args, G61 reasoning/refusal).
+    - 🟠 G62 bare DICT-shaped output content skipped the guard (defense-in-depth, 2026-07-02):
+        BROAD PROBE this iter confirmed the pipeline is comprehensively hardened — realistic vectors all safe
+        (input_text-key parts, multi tool_calls PII-in-3rd, developer-role redacted, input dict-content REJECTED
+        at boundary line 4564, embeddings/completions/moderations list-inputs fully firewalled). Two blind spots
+        remained, both NON-CONFORMING/exotic: (#1) OUTPUT content as a bare DICT ({'type':'text','text':...}
+        returned instead of wrapped in a list) -> _content_to_text coerced it to '' -> guard SKIPPED (the exact
+        G57 bypass class, dict shape); (#2) annotation-URL citation exfil. Fixed #1 (G62 — completes G57 shape
+        coverage; reasoning/refusal already handled dict via G61): fold a bare dict content's str `text` value
+        (main.py _content_to_text + streaming _extract_content_delta FIX-C), IMAGE-SAFE (only str text, never
+        base64). Enforcement already overwrites content wholesale. NOTE: this is DEFENSE-IN-DEPTH — no mainstream
+        provider returns bare-dict content (unlike G57-G61 which had realistic triggers); recorded honestly.
+        VERIFY: dict {text}/{type,text} scanned + overwritten on redact (non-stream+stream); image-only dict NOT
+        folded. FROZEN: dict_content matrix channel + _content_to_text helper test. GATE: golden 406×3; gateway
+        suite 1501 pass; e14 222 pass. commit bb664a96 (own msg, pathspec). REDEPLOYING (rollback pre-g62).
+        DEFERRED: annotation-URL exfil (content-part annotations[].url_citation is an unscanned model-authored
+        URL channel; exotic one-click vector — fold+neutralize is a larger fix, revisit if a realistic trigger).
+        TWENTY confirmed-live leaks + G62 defense-in-depth (G40-G46, G49-G62) + G48 + 2 tradeoffs. OUTPUT content
+        extraction now handles EVERY shape: str, list, dict — no content shape can skip the output guard.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
