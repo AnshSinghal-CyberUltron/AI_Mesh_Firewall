@@ -139,9 +139,14 @@ function FleetRowActions({
   };
 
   const handleDeactivateKs = async (ksId) => {
+    const confirmed = window.confirm(
+      `Deactivate kill switch for API key ${row.prefix}? Traffic for this key will be allowed again.`,
+    );
+    if (!confirmed) return;
     setLoading(`ks-${ksId}`);
     try {
       await api.deactivateKillSwitch(ksId);
+      onFlash?.(`Kill switch deactivated for ${row.prefix}.`, "success");
       onActionComplete?.();
     } catch (err) {
       onFlash?.(err.message || "Failed to deactivate kill switch.", "error");
@@ -149,6 +154,10 @@ function FleetRowActions({
       setLoading(null);
     }
   };
+
+  const activeKillSwitches = (row.active_kill_switches || []).filter((ks) => ks.is_active);
+  const hasActiveKillSwitch = activeKillSwitches.length > 0;
+  const primaryKillSwitch = activeKillSwitches[0];
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -164,7 +173,24 @@ function FleetRowActions({
           Set simulator
         </button>
       )}
-      {row.is_active !== false && (
+      {row.is_active !== false && hasActiveKillSwitch && (
+        <button
+          type="button"
+          aria-label={`Deactivate kill switch for ${row.prefix}`}
+          disabled={!!loading}
+          onClick={() => handleDeactivateKs(primaryKillSwitch.id)}
+          className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-800 hover:bg-red-100 disabled:opacity-60 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
+          title="Deactivate the active credential kill switch"
+        >
+          {loading === `ks-${primaryKillSwitch.id}` ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <PowerOff className="h-3 w-3" />
+          )}
+          Deactivate
+        </button>
+      )}
+      {row.is_active !== false && !hasActiveKillSwitch && (
         <button
           type="button"
           disabled={!!loading}
@@ -189,10 +215,11 @@ function FleetRowActions({
         )}
         {row.is_active !== false ? "Disable" : "Enable"}
       </button>
-      {(row.active_kill_switches || []).filter((ks) => ks.is_active).map((ks) => (
+      {(row.active_kill_switches || []).filter((ks) => ks.is_active).slice(1).map((ks) => (
         <button
           key={ks.id}
           type="button"
+          aria-label={`Deactivate kill switch ${ks.model_name} for ${row.prefix}`}
           disabled={loading === `ks-${ks.id}`}
           onClick={() => handleDeactivateKs(ks.id)}
           className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300"
@@ -233,6 +260,7 @@ export function ApiKeyFleetTable({
   const [killModalRow, setKillModalRow] = useState(null);
   const [killModalLoading, setKillModalLoading] = useState(false);
   const [flash, setFlash] = useState(null);
+  const hasLoadedExpandedBehaviorRef = useRef(false);
 
   useEffect(() => {
     if (!flash) return undefined;
@@ -274,13 +302,19 @@ export function ApiKeyFleetTable({
 
   const behaviorSnapshotEqual = useCallback((prev, next) => {
     if (!prev || !next) return false;
+    const prevRecent = Array.isArray(prev.recent_requests) ? prev.recent_requests : [];
+    const nextRecent = Array.isArray(next.recent_requests) ? next.recent_requests : [];
+    const prevRecentHead = prevRecent[0] || {};
+    const nextRecentHead = nextRecent[0] || {};
     return (
       prev.request_count === next.request_count
       && prev.blocked_count === next.blocked_count
       && prev.redacted_count === next.redacted_count
       && prev.risk_score === next.risk_score
       && prev.risk_band === next.risk_band
-      && JSON.stringify(prev.recent_requests) === JSON.stringify(next.recent_requests)
+      && prevRecent.length === nextRecent.length
+      && prevRecentHead.created_at === nextRecentHead.created_at
+      && prevRecentHead.action === nextRecentHead.action
     );
   }, []);
 
@@ -291,8 +325,9 @@ export function ApiKeyFleetTable({
       setExpandedBehavior(null);
     }
     try {
-      const data = await module2Api.getUebaBehavior(keyId, period, { useCache: false });
+      const data = await module2Api.getUebaBehavior(keyId, period, { useCache: silent });
       if (seq !== behaviorSeqRef.current) return;
+      hasLoadedExpandedBehaviorRef.current = true;
       setExpandedBehavior((prev) => {
         if (silent && prev && behaviorSnapshotEqual(prev, data)) return prev;
         return data;
@@ -359,27 +394,17 @@ export function ApiKeyFleetTable({
     };
   }, [expandedBehavior, expandedKeyId, rows]);
 
-  const expandedRowFingerprint = useMemo(() => {
-    const row = rows.find((r) => r.key_id === expandedKeyId);
-    if (!row) return "";
-    return `${row.request_count}:${row.blocked_count}:${row.risk_score}`;
-  }, [rows, expandedKeyId]);
-
   useEffect(() => {
     if (expandedKeyId) {
+      hasLoadedExpandedBehaviorRef.current = false;
       loadExpandedBehavior(expandedKeyId);
     }
   }, [period, expandedKeyId, loadExpandedBehavior]);
 
   useEffect(() => {
-    if (!expandedKeyId || refreshSignal === 0) return;
+    if (!expandedKeyId || refreshSignal === 0 || expandLoading || !hasLoadedExpandedBehaviorRef.current) return;
     debouncedBehaviorReload(expandedKeyId);
-  }, [refreshSignal, expandedKeyId, debouncedBehaviorReload]);
-
-  useEffect(() => {
-    if (!expandedKeyId || !expandedRowFingerprint) return;
-    debouncedBehaviorReload(expandedKeyId);
-  }, [expandedRowFingerprint, expandedKeyId, debouncedBehaviorReload]);
+  }, [refreshSignal, expandedKeyId, debouncedBehaviorReload, expandLoading]);
 
   useEffect(() => {
     if (!expandedKeyId) return undefined;

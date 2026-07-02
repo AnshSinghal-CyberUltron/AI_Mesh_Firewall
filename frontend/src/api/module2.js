@@ -65,6 +65,7 @@ export function createModule2Api(fetchWithAuth) {
 
   return {
     getDashboard: (period = "24h", opts = {}) => get("/dashboard/", { period }, opts),
+    getUebaBundle: (period = "24h", opts = {}) => get("/ueba/api-keys/bundle/", { period }, opts),
     getUebaSummary: (period = "24h", opts = {}) => get("/ueba/api-keys/summary/", { period }, opts),
     getUebaTimeline: (period = "24h", opts = {}) => get("/ueba/api-keys/timeline/", { period }, opts),
     getUebaRegistry: (period = "24h", opts = {}) => get("/ueba/api-keys/registry/", { period }, opts),
@@ -87,6 +88,7 @@ export function createModule2Api(fetchWithAuth) {
       if (filters.severity) params.severity = filters.severity;
       if (filters.source) params.source = filters.source;
       if (filters.search) params.search = filters.search;
+      if (filters.period) params.period = filters.period;
       if (filters.page) params.page = String(filters.page);
       if (filters.page_size) params.page_size = String(filters.page_size);
       return get("/incidents/", params, opts);
@@ -126,6 +128,19 @@ export function createModule2Api(fetchWithAuth) {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `Resolve failed (${res.status})`);
+      }
+      clearModule2Cache();
+      notifyIncidentQueueMutated();
+      return res.json();
+    },
+    bulkResolveIncidents: async (incidentIds, notes = "") => {
+      const res = await fetchWithAuth("/api/module2/incidents/bulk-resolve/", {
+        method: "POST",
+        body: JSON.stringify({ incident_ids: incidentIds, notes }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Bulk resolve failed (${res.status})`);
       }
       clearModule2Cache();
       notifyIncidentQueueMutated();

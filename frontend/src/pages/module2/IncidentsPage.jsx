@@ -31,6 +31,7 @@ import {
   Module2PageSkeleton,
 } from "../../components/module2/PageStates";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
+import { PeriodSelector } from "../../components/module2/PeriodSelector";
 import { module2TooltipProps } from "../../components/module2/module2Chart";
 import {
   applyIncidentListMutation,
@@ -44,6 +45,7 @@ import { ANALYST_BRIEF_TITLE, INCIDENTS_GUIDE, PAGE_BRIEFS } from "./pageCopy";
 
 const REFRESH_DEBOUNCE_MS = 300;
 const PAGE_SIZE = 25;
+const DEFAULT_PERIOD = "7d";
 const SOURCE_CHIPS = [
   { value: "", label: "All lanes" },
   { value: "chat", label: "Chat" },
@@ -251,6 +253,9 @@ function IncidentsPageInner() {
   const [error, setError] = useState(null);
   const [searchInput, setSearchInput] = useState(search);
   const [page, setPage] = useState(1);
+  const [period, setPeriod] = useState(DEFAULT_PERIOD);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkResolving, setBulkResolving] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [rowActionId, setRowActionId] = useState(null);
   const [actionNotice, setActionNotice] = useState(null);
@@ -289,6 +294,7 @@ function IncidentsPageInner() {
           severity: severityFilter,
           source: sourceFilter,
           search,
+          period,
           page,
           page_size: PAGE_SIZE,
         },
@@ -296,6 +302,7 @@ function IncidentsPageInner() {
       );
       if (seq !== loadSeqRef.current) return;
       setData(res);
+      setSelectedIds(new Set());
       setError(null);
     } catch (e) {
       if (seq !== loadSeqRef.current) return;
@@ -304,7 +311,7 @@ function IncidentsPageInner() {
     } finally {
       if (seq === loadSeqRef.current && !silent) setLoading(false);
     }
-  }, [api, statusFilter, queueFilter, severityFilter, sourceFilter, search, page]);
+  }, [api, statusFilter, queueFilter, severityFilter, sourceFilter, search, period, page]);
 
   const refreshLive = useCallback(() => {
     clearTimeout(refreshTimerRef.current);
@@ -343,12 +350,12 @@ function IncidentsPageInner() {
   }, [search]);
 
   useEffect(() => {
-    const filterKey = `${statusFilter}|${queueFilter}|${severityFilter}|${sourceFilter}|${search}`;
+    const filterKey = `${statusFilter}|${queueFilter}|${severityFilter}|${sourceFilter}|${search}|${period}`;
     if (filterKeyRef.current && filterKeyRef.current !== filterKey) {
       setPage(1);
     }
     filterKeyRef.current = filterKey;
-  }, [statusFilter, queueFilter, severityFilter, sourceFilter, search]);
+  }, [statusFilter, queueFilter, severityFilter, sourceFilter, search, period]);
 
   const handleStatusFilter = useCallback(
     (value) => {
@@ -443,6 +450,56 @@ function IncidentsPageInner() {
   const summary = data?.summary || {};
   const incidents = data?.results || [];
   const totalPages = data?.total_pages || 1;
+
+  const toggleRowSelected = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectableOnPage = useMemo(
+    () => incidents.filter((row) => row.status !== "resolved"),
+    [incidents],
+  );
+
+  const toggleSelectAllOnPage = useCallback(() => {
+    setSelectedIds((prev) => {
+      const pageIds = selectableOnPage.map((row) => row.id);
+      const allSelected = pageIds.length > 0 && pageIds.every((id) => prev.has(id));
+      if (allSelected) return new Set();
+      return new Set(pageIds);
+    });
+  }, [selectableOnPage]);
+
+  const handleBulkResolve = useCallback(async () => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    const confirmed = window.confirm(
+      `Resolve ${ids.length} selected incident${ids.length === 1 ? "" : "s"}? `
+      + "This closes the cases and moves them to resolved history.",
+    );
+    if (!confirmed) return;
+    setBulkResolving(true);
+    setActionNotice(null);
+    try {
+      const result = await api.bulkResolveIncidents(ids);
+      setActionNotice({
+        type: "success",
+        text: `Resolved ${result.resolved_count ?? ids.length} incident(s).`,
+      });
+      setSelectedIds(new Set());
+      await load({ silent: true });
+    } catch (e) {
+      setActionNotice({ type: "error", text: e.message || "Bulk resolve failed." });
+      await load({ silent: true });
+    } finally {
+      setBulkResolving(false);
+    }
+  }, [api, load, selectedIds]);
+
   const hasSummary = data?.summary != null && typeof data.summary.total === "number";
   const filteredCount = data?.count ?? 0;
   const hasFilters = Boolean(statusFilter || queueFilter || severityFilter || sourceFilter || search);
@@ -504,6 +561,7 @@ function IncidentsPageInner() {
         subtitle="Triage, escalate, and resolve formal security cases raised by alert rules and anomaly detection"
         actions={
           <>
+            <PeriodSelector value={period} onChange={setPeriod} />
             <button
               type="button"
               onClick={() => setGuideOpen(true)}
@@ -570,7 +628,7 @@ function IncidentsPageInner() {
         <div className="mt-4">
           <ChartCard
             title="Incidents by Enforcement Lane"
-            titleHelpText="Org-wide counts (not affected by table filters). Use lane chips below to focus the table."
+            titleHelpText="Counts for the selected time range (table filters apply separately below)."
           >
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={sourceChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -612,6 +670,22 @@ function IncidentsPageInner() {
               Clear all filters
             </button>
           )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                disabled={bulkResolving}
+                onClick={handleBulkResolve}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {bulkResolving ? "Resolving…" : `Resolve selected (${selectedIds.size})`}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
@@ -710,6 +784,34 @@ function IncidentsPageInner() {
             )}
             <DataTable
               columns={[
+                {
+                  key: "select",
+                  label: (
+                    <input
+                      type="checkbox"
+                      aria-label="Select all resolvable incidents on this page"
+                      checked={
+                        selectableOnPage.length > 0
+                        && selectableOnPage.every((row) => selectedIds.has(row.id))
+                      }
+                      onChange={toggleSelectAllOnPage}
+                      className="rounded border-slate-300"
+                    />
+                  ),
+                  render: (r) => (
+                    r.status === "resolved" ? (
+                      <span className="inline-block w-4" />
+                    ) : (
+                      <input
+                        type="checkbox"
+                        aria-label={`Select incident ${r.id}`}
+                        checked={selectedIds.has(r.id)}
+                        onChange={() => toggleRowSelected(r.id)}
+                        className="rounded border-slate-300"
+                      />
+                    )
+                  ),
+                },
                 {
                   key: "id",
                   label: "Case",

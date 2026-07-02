@@ -686,6 +686,49 @@ def _is_redactable_pii_threat(threat_type: str) -> bool:
     return "pii" in t or "phone" in t or t.startswith("phi") or t.startswith("pci")
 
 
+# Tier-1/2 categories that must stay on the block path even when the prompt also
+# carries maskable PII (injection + exfiltration beats redact-and-forward).
+_INJECTION_ATTACK_BLOCK_THREATS = frozenset({
+    "prompt_injection",
+    "jailbreak",
+    "goal_hijacking",
+    "sql_injection",
+    "command_injection",
+    "path_traversal",
+    "vector_injection",
+    "rag_poisoning",
+    "tool_overreach",
+    "dos",
+    "toxicity",
+})
+
+
+def _prompt_has_maskable_pii(text: str) -> bool:
+    """True when deterministic tier-1 PII patterns match (SSN, email, card, phone, …)."""
+    try:
+        from patterns import detect_pii
+    except ImportError:  # pragma: no cover - packaging fallback
+        from .patterns import detect_pii
+    return bool(detect_pii(text or ""))
+
+
+def _should_prefer_pii_redaction_over_block(verdict, prompt: str) -> bool:
+    """Prefer redact-and-forward when a block verdict targets maskable PII content.
+
+    Prod symptom: Attack Simulator ``sensitive-data`` prompt (OWASP LLM02) was
+    blocked at input_scan in prod while localhost redacted — tier-2 often returns
+    ``block`` + ``sensitive_content`` even though tier-1 already said ``redact``.
+    """
+    if getattr(verdict, "action", None) != "block":
+        return False
+    threat = (getattr(verdict, "threat_type", None) or "").lower()
+    if threat in _INJECTION_ATTACK_BLOCK_THREATS:
+        return False
+    if _is_redactable_pii_threat(threat):
+        return True
+    return _prompt_has_maskable_pii(prompt)
+
+
 def _build_safe_block_response(
     status_code: int,
     code: str,
@@ -6289,6 +6332,17 @@ async def proxy_chat(
                 )
             # For non-injection threats (toxicity, dos, etc.), the scanner
             # already applied its own threshold; respect the verdict directly.
+            # OWASP LLM02: maskable PII in the prompt should redact, not block —
+            # tier-2 may escalate to ``block`` + ``sensitive_content`` even when
+            # tier-1 already returned ``redact`` + ``pii``.
+            if _should_block_verdict and _should_prefer_pii_redaction_over_block(verdict, prompt):
+                LOG.info(
+                    "Maskable PII present — preferring redaction over block "
+                    "(type=%s, user=%s)",
+                    verdict.threat_type,
+                    user_id,
+                )
+                _should_block_verdict = False
             if _should_block_verdict:
                 LOG.warning(
                     "Input blocked by scanner (type=%s, detail=%s, user=%s)",
@@ -6430,6 +6484,9 @@ async def proxy_chat(
                 _pii_redaction_applied
                 and enforcement_mode == "block"
                 and (_text_before_pii_redact or "").strip()
+                # Only fail-closed when redact_pii itself was a total no-op; if bytes
+                # changed, maskable PII was handled and must not over-block.
+                and effective_prompt == _text_before_pii_redact
             ):
                 try:
                     from llm_router import _redact_text_with_backstop as _egress_backstop

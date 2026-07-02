@@ -73,16 +73,11 @@ function UebaApiKeysPageInner() {
       setLoadError(null);
     }
     try {
-      clearModule2Cache();
-      const [sum, tl, reg] = await Promise.all([
-        api.getUebaSummary(period),
-        api.getUebaTimeline(period),
-        api.getUebaRegistry(period),
-      ]);
+      const bundle = await api.getUebaBundle(period, { useCache: silent });
       if (seq !== loadSeqRef.current) return;
-      setSummary(sum);
-      setTimeline(tl);
-      setRegistry(reg);
+      setSummary(bundle.summary);
+      setTimeline(bundle.timeline);
+      setRegistry(bundle.registry);
       setRefreshError(null);
       setRefreshSignal((n) => n + 1);
     } catch (err) {
@@ -196,8 +191,6 @@ function UebaApiKeysPageInner() {
     await load({ silent: true });
   }, [load]);
 
-  useContainmentPolling(refreshLive, { enabled: !!summary, intervalMs: CONTAINMENT_POLL_MS });
-
   useEffect(() => {
     const onTelemetry = () => {
       if (!initialSelectDone.current && simulatorCtx.keyId) {
@@ -219,6 +212,8 @@ function UebaApiKeysPageInner() {
   const { connected: wsConnected } = useRealtimeNotifications({
     onEnforcementEvent: refreshLive,
   });
+
+  useContainmentPolling(refreshLive, { enabled: !!summary && !wsConnected, intervalMs: CONTAINMENT_POLL_MS });
 
   if (loading && !summary) {
     return (

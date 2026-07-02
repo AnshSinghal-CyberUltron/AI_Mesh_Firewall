@@ -216,9 +216,101 @@ class Module2PagesApiTests(TestCase):
             "severity=urgent",
             "source=foo",
             "queue=everything",
+            "period=90d",
         ):
             resp = self.client.get(f"/api/module2/incidents/?{query}")
             self.assertEqual(resp.status_code, 400, query)
+
+    def test_incidents_list_period_filters_summary_and_rows(self):
+        old = self._incident(self.org, "Old incident", status="open", severity="medium")
+        recent = self._incident(self.org, "Recent incident", status="open", severity="high")
+        cutoff = timezone.now() - timedelta(days=10)
+        SecurityIncident.objects.filter(pk=old.pk).update(created_at=cutoff)
+
+        resp = self.client.get("/api/module2/incidents/?period=7d")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        titles = [row["title"] for row in data["results"]]
+        self.assertIn("Recent incident", titles)
+        self.assertNotIn("Old incident", titles)
+        self.assertEqual(data["summary"]["total"], 1)
+
+    def test_incidents_bulk_resolve_selected_rows(self):
+        open_a = self._incident(self.org, "Bulk A", status="open", severity="medium")
+        open_b = self._incident(self.org, "Bulk B", status="investigating", severity="high")
+        resolved = self._incident(self.org, "Already done", status="resolved", severity="low")
+
+        resp = self.client.post(
+            "/api/module2/incidents/bulk-resolve/",
+            {"incident_ids": [open_a.id, open_b.id, resolved.id]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["resolved_count"], 2)
+        self.assertIn(open_a.id, body["resolved_ids"])
+        self.assertIn(open_b.id, body["resolved_ids"])
+
+        open_a.refresh_from_db()
+        open_b.refresh_from_db()
+        resolved.refresh_from_db()
+        self.assertEqual(open_a.status, "resolved")
+        self.assertEqual(open_b.status, "resolved")
+        self.assertEqual(resolved.status, "resolved")
+
+    def test_incidents_bulk_resolve_rejects_empty_ids(self):
+        resp = self.client.post(
+            "/api/module2/incidents/bulk-resolve/",
+            {"incident_ids": []},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_incidents_bulk_resolve_rejects_non_integer_ids(self):
+        resp = self.client.post(
+            "/api/module2/incidents/bulk-resolve/",
+            {"incident_ids": ["abc", 5]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_incidents_bulk_resolve_skips_foreign_org_ids(self):
+        local_open = self._incident(self.org, "Local open", status="open")
+        foreign_open = self._incident(self.other_org, "Foreign open", status="open")
+        resp = self.client.post(
+            "/api/module2/incidents/bulk-resolve/",
+            {"incident_ids": [local_open.id, foreign_open.id]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["resolved_count"], 1)
+        self.assertEqual(body["skipped_count"], 1)
+        self.assertEqual(body["resolved_ids"], [local_open.id])
+
+    def test_incidents_bulk_resolve_applies_notes(self):
+        incident = self._incident(self.org, "Needs note", status="open")
+        note = "resolved via bulk operation"
+        resp = self.client.post(
+            "/api/module2/incidents/bulk-resolve/",
+            {"incident_ids": [incident.id], "notes": note},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        incident.refresh_from_db()
+        self.assertEqual(incident.status, "resolved")
+        self.assertEqual(incident.notes, note)
+
+    def test_ueba_bundle_returns_summary_timeline_registry(self):
+        resp = self.client.get("/api/module2/ueba/api-keys/bundle/?period=24h")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("summary", data)
+        self.assertIn("timeline", data)
+        self.assertIn("registry", data)
+        self.assertIn("summary", data["summary"])
+        self.assertIn("timeline", data["timeline"])
+        self.assertIn("results", data["registry"])
 
     def test_incident_summary_counts_statuses_with_enforcement_join(self):
         """select_related(enforcement_event) must not break status KPI aggregation."""

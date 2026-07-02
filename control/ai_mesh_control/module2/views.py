@@ -151,11 +151,28 @@ def _build_event_trend(events_qs, since, hours, bucket_hours):
     window_end = since + timedelta(hours=bucket_count * bucket_hours)
     rows = list(
         events_qs.filter(created_at__gte=since, created_at__lt=window_end).values(
-            "created_at", "action", "metadata"
+            "created_at", "action", "endpoint_id", "metadata"
         )
     )
+    collapsed_rows = _collapse_prepared_event_rows(rows)
+    return _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_hours)
+
+
+def _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_hours):
+    bucket_count = max(hours // bucket_hours, 1)
+    timeline = []
+    for i in range(bucket_count):
+        start = since + timedelta(hours=i * bucket_hours)
+        timeline.append(
+            {
+                "timestamp": start.isoformat(),
+                "total": 0,
+                "blocked": 0,
+                "redacted": 0,
+            }
+        )
     bucket_seconds = bucket_hours * 3600
-    for item in collapse_events_by_request(rows):
+    for item in collapsed_rows:
         ts = item.created_at
         if not ts:
             continue
@@ -171,7 +188,31 @@ def _build_event_trend(events_qs, since, hours, bucket_hours):
     return timeline
 
 
+def _collapse_prepared_event_rows(raw_rows):
+    prepared = []
+    for ev in raw_rows:
+        meta = dict(ev.get("metadata") or {})
+        if ev.get("endpoint_id"):
+            meta.setdefault("endpoint_id", ev["endpoint_id"])
+        prepared.append(
+            {
+                "created_at": ev.get("created_at"),
+                "action": ev.get("action"),
+                "metadata": meta,
+            }
+        )
+    return list(collapse_events_by_request(prepared))
+
+
 def _collect_key_metrics(keys_qs, events_qs):
+    raw_rows = list(
+        events_qs.values("created_at", "action", "endpoint_id", "metadata")
+    )
+    collapsed_rows = _collapse_prepared_event_rows(raw_rows)
+    return _collect_key_metrics_from_collapsed(keys_qs, collapsed_rows)
+
+
+def _collect_key_metrics_from_collapsed(keys_qs, collapsed_rows):
     keys = list(keys_qs)
     key_by_prefix = {k.prefix: k for k in keys}
     prefix_lookup = {k.prefix.lower(): k.prefix for k in keys}
@@ -188,22 +229,7 @@ def _collect_key_metrics(keys_qs, events_qs):
         }
     )
 
-    raw_rows = list(
-        events_qs.values("created_at", "action", "endpoint_id", "metadata")
-    )
-    prepared = []
-    for ev in raw_rows:
-        meta = dict(ev.get("metadata") or {})
-        if ev.get("endpoint_id"):
-            meta.setdefault("endpoint_id", ev["endpoint_id"])
-        prepared.append(
-            {
-                "created_at": ev.get("created_at"),
-                "action": ev.get("action"),
-                "metadata": meta,
-            }
-        )
-    for item in collapse_events_by_request(prepared):
+    for item in collapsed_rows:
         meta = item.metadata or {}
         prefix = _key_prefix_from_meta(meta)
         if not prefix:
@@ -490,6 +516,119 @@ class UebaApiKeyRegistryView(APIView):
                 "results": results,
             }
         )
+
+
+def _ueba_period_bundle(request, period: str):
+    """Shared UEBA context: one keys query + one events query for summary/timeline/registry."""
+    started_at = timezone.now()
+    since = timezone.now() - timedelta(hours=_hours_from_period(period))
+    hours = _hours_from_period(period)
+    org = _org_or_403(request)
+
+    keys_qs = GatewayAPIKey.objects.select_related("owner").order_by("-created_at")
+    if org:
+        keys_qs = keys_qs.filter(organization=org)
+    elif not request.user.is_superuser:
+        keys_qs = keys_qs.none()
+
+    events = _enforcement_events_for_request(
+        request, EnforcementEvent.objects.filter(created_at__gte=since)
+    )
+    event_rows = list(events.values("created_at", "action", "endpoint_id", "metadata"))
+    collapsed_rows = _collapse_prepared_event_rows(event_rows)
+    key_by_prefix, metrics = _collect_key_metrics_from_collapsed(keys_qs, collapsed_rows)
+    kill_by_prefix = _kill_switches_by_prefix(org)
+    rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
+    rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+    total_events = sum(m["total"] for m in metrics.values())
+    blocked_events = sum(m["blocked"] for m in metrics.values())
+    key_count = keys_qs.count()
+    active_key_count = keys_qs.filter(is_active=True).count()
+    containment = _build_key_containment_payload(org, keys_qs)
+    registry_results = _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix)
+
+    risky_rows = list(rows)
+    tracked_prefixes = {r["prefix"] for r in risky_rows[:5]}
+    bucket_size = 1 if hours <= 24 else 6
+    base_timeline = _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_size)
+    timeline = []
+    for row in base_timeline:
+        timeline.append(
+            {
+                "timestamp": row["timestamp"],
+                "total_events": row["total"],
+                "blocked": row["blocked"],
+                "redacted": row["redacted"],
+                "keys": {prefix: 0 for prefix in tracked_prefixes},
+            }
+        )
+    if tracked_prefixes:
+        bucket_seconds = bucket_size * 3600
+        bucket_count = len(timeline)
+        window_end = since + timedelta(hours=bucket_count * bucket_size)
+        for item in collapsed_rows:
+            ts = item.created_at
+            if not ts:
+                continue
+            if ts < since or ts >= window_end:
+                continue
+            idx = int((ts - since).total_seconds() // bucket_seconds)
+            if idx < 0 or idx >= bucket_count:
+                continue
+            prefix = _key_prefix_from_meta(item.metadata or {})
+            canonical = prefix.lower()
+            matched = next((p for p in tracked_prefixes if p.lower() == canonical), None)
+            if matched:
+                timeline[idx]["keys"][matched] += 1
+
+    elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
+    logger.info(
+        "module2_ueba_bundle_ready org=%s period=%s keys=%s events=%s elapsed_ms=%s",
+        getattr(org, "id", None),
+        period,
+        key_count,
+        total_events,
+        elapsed_ms,
+    )
+    return {
+        "period": period,
+        "summary": {
+            "period": period,
+            "summary": {
+                "total_keys": key_count,
+                "active_keys": active_key_count,
+                "keys_with_activity": len(rows),
+                "high_risk_keys": sum(1 for r in rows if r["risk_band"] == "high"),
+                "total_events": total_events,
+                "blocked_events": blocked_events,
+                "disabled_keys": containment["disabled_keys"],
+                "active_kill_switches": containment["active_kill_switches"],
+            },
+            "containment": containment,
+            "top_risky_keys": rows[:10],
+        },
+        "timeline": {
+            "period": period,
+            "tracked_prefixes": sorted(tracked_prefixes),
+            "timeline": timeline,
+        },
+        "registry": {
+            "period": period,
+            "count": key_count,
+            "results": registry_results,
+        },
+        "elapsed_ms": elapsed_ms,
+    }
+
+
+class UebaApiKeyBundleView(APIView):
+    """GET /api/module2/ueba/api-keys/bundle/ — summary + timeline + registry in one round trip."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        period = request.query_params.get("period", "24h")
+        return Response(_ueba_period_bundle(request, period))
 
 
 class UebaApiKeyTimelineView(APIView):
@@ -903,6 +1042,9 @@ class ThreatIntelSyncView(APIView):
         )
 
 
+_VALID_INCIDENT_PERIODS = frozenset({"", "1h", "24h", "7d", "30d"})
+
+
 class IncidentListView(APIView):
     """GET /api/module2/incidents/ — paginated, filterable security incident queue."""
 
@@ -916,6 +1058,16 @@ class IncidentListView(APIView):
             qs = qs.filter(organization=org)
         elif not request.user.is_superuser:
             qs = qs.none()
+
+        period = request.query_params.get("period", "").strip()
+        if period and period not in _VALID_INCIDENT_PERIODS - {""}:
+            return Response(
+                {"detail": "Invalid period filter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if period:
+            since = timezone.now() - timedelta(hours=_hours_from_period(period))
+            qs = qs.filter(created_at__gte=since)
 
         summary = build_incident_queue_summary(qs, org_id=org.id if org else None)
 
@@ -1042,14 +1194,16 @@ class IncidentListView(APIView):
                 "page": page,
                 "page_size": page_size,
                 "total_pages": total_pages,
+                "period": period or None,
                 "summary": summary,
                 "results": out,
             }
         )
         elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
         logger.info(
-            "module2_incident_list_ready org=%s status=%s queue=%s severity=%s source=%s search=%s count=%s elapsed_ms=%s",
+            "module2_incident_list_ready org=%s period=%s status=%s queue=%s severity=%s source=%s search=%s count=%s elapsed_ms=%s",
             getattr(org, "id", None),
+            period or "-",
             status_filter or "-",
             queue_filter or "-",
             severity_filter or "-",
@@ -1059,6 +1213,76 @@ class IncidentListView(APIView):
             elapsed_ms,
         )
         return response
+
+
+class IncidentBulkResolveView(APIView):
+    """POST /api/module2/incidents/bulk-resolve/ — resolve multiple selected incidents."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        org = _org_or_403(request)
+        if org is None and not request.user.is_superuser:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+
+        raw_ids = request.data.get("incident_ids")
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return Response(
+                {"detail": "incident_ids must be a non-empty list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            incident_ids = [int(x) for x in raw_ids]
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "incident_ids must contain integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        qs = SecurityIncident.objects.filter(organization=org) if org else SecurityIncident.objects.all()
+        resolvable = qs.filter(
+            pk__in=incident_ids,
+            status__in=("open", "investigating", "escalated"),
+        )
+        notes = str(request.data.get("notes") or "").strip()
+        now = timezone.now()
+        resolved_ids: list[int] = []
+        for incident in resolvable:
+            incident.status = "resolved"
+            incident.resolved_at = now
+            if notes:
+                incident.notes = notes
+            incident.save(update_fields=["status", "resolved_at", "notes"])
+            resolved_ids.append(incident.id)
+
+        from module2.analytics import invalidate_incident_summary_cache
+        from ws.notify import send_enforcement_notification
+
+        invalidate_incident_summary_cache(org.id if org else None)
+        for incident_id in resolved_ids:
+            try:
+                send_enforcement_notification(
+                    {
+                        "type": "resolution_event",
+                        "security_incident_id": str(incident_id),
+                        "incident_id": str(incident_id),
+                        "incident_status": "resolved",
+                        "resolved_by_id": request.user.id,
+                        "resolved_at": now.isoformat(),
+                        "organization_id": org.id if org else None,
+                    },
+                    organization_id=org.id if org else None,
+                )
+            except Exception:
+                logger.warning("Failed to broadcast bulk resolution for incident %s", incident_id)
+
+        return Response(
+            {
+                "resolved_count": len(resolved_ids),
+                "resolved_ids": resolved_ids,
+                "skipped_count": len(incident_ids) - len(resolved_ids),
+            }
+        )
 
 
 class IncidentDetailView(APIView):

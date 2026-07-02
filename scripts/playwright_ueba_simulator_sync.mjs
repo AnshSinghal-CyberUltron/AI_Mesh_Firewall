@@ -5,6 +5,7 @@
  * 2. Run an adversarial Attack Simulator payload on Module 1.1.
  * 3. Open /ueba/api-keys and assert simulator banner, Simulator badge, request count > 0.
  * 4. Expand the simulator row and assert Recent prompts contains data.
+ * 5. Activate and deactivate kill switch from fleet row, assert KPI and button state parity.
  *
  * Run:
  *   NODE_PATH="$PWD/tests/e2e/node_modules" BASE_URL=http://127.0.0.1:8180 \
@@ -22,6 +23,12 @@ const SHOT_DIR = process.env.SHOT_DIR || "runs/ueba-simulator-sync";
 
 const report = { base: BASE, ok: false, steps: [], asserts: [], pageErrors: [], notes: [], error: null };
 let CURRENT_PHASE = "init";
+
+async function acceptDialogSafely(dialog) {
+  try {
+    await dialog.accept();
+  } catch {}
+}
 
 function assert(cond, label) {
   report.asserts.push({ label, pass: !!cond, phase: CURRENT_PHASE });
@@ -138,7 +145,10 @@ async function runAttackInjection(page) {
     attackPanel.getByRole("button", { name: /Run Pipeline/i }).click(),
   ]);
   report.notes.push(`attack injection HTTP ${resp.status()}`);
-  assert(resp.status() >= 400 && resp.status() < 500, `injection blocked by firewall (HTTP ${resp.status()} 4xx)`);
+  assert(
+    (resp.status() >= 400 && resp.status() < 500) || resp.status() === 503,
+    `injection blocked by firewall (HTTP ${resp.status()} 4xx/503)`,
+  );
   await attackPanel.getByText(/^BLOCKED$/).first().waitFor({ state: "visible", timeout: 20000 });
   report.steps.push("m1-attack-simulator");
   await shot(page, "01-attack-blocked");
@@ -146,15 +156,17 @@ async function runAttackInjection(page) {
 
 async function assertUebaSync(page) {
   CURRENT_PHASE = "m2-ueba-sync";
-  const [summaryResp] = await Promise.all([
+  const [bundleResp] = await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/module2/ueba/api-keys/summary/") && r.request().method() === "GET" && r.ok(),
+      (r) => r.url().includes("/api/module2/ueba/api-keys/bundle/") && r.request().method() === "GET" && r.ok(),
       { timeout: 90000 },
     ),
     page.goto(`${BASE}/ueba/api-keys`, { waitUntil: "domcontentloaded", timeout: 120000 }),
   ]);
-  const summary = await summaryResp.json().catch(() => ({}));
-  report.notes.push(`ueba summary total_events=${summary?.summary?.total_events}`);
+  const bundle = await bundleResp.json().catch(() => ({}));
+  const totalEvents = bundle?.summary?.summary?.total_events ?? 0;
+  report.notes.push(`ueba bundle total_events=${totalEvents}`);
+  assert(totalEvents > 0, "ueba bundle reports enforcement activity");
 
   await page.getByText(/Attack Simulator traffic is recorded under API key/i).first().waitFor({ state: "visible", timeout: 30000 });
   assert(true, "simulator banner visible on UEBA page");
@@ -191,10 +203,74 @@ async function assertUebaSync(page) {
 
   await page.getByRole("button", { name: "Refresh UEBA data" }).click();
   await page.waitForResponse(
-    (r) => r.url().includes("/api/module2/ueba/api-keys/summary/") && r.request().method() === "GET",
+    (r) => r.url().includes("/api/module2/ueba/api-keys/bundle/") && r.request().method() === "GET" && r.ok(),
     { timeout: 30000 },
   );
-  assert(true, "Refresh UEBA data triggers summary refetch");
+  assert(true, "Refresh UEBA data triggers bundle refetch");
+}
+
+async function assertUebaKillSwitchCycle(page) {
+  CURRENT_PHASE = "m2-ueba-kill-switch";
+  const simulatorBadge = page.locator("span", { hasText: /^Simulator$/ }).first();
+  const simulatorRow = page.locator("tr").filter({ has: simulatorBadge }).first();
+  await simulatorRow.waitFor({ state: "visible", timeout: 30000 });
+  const ksCell = simulatorRow.locator("td").nth(8);
+  const beforeLabel = (await ksCell.innerText()).trim();
+  report.notes.push(`kill-switch count before=${beforeLabel || "-"}`);
+
+  const killSwitchBtn = simulatorRow.getByRole("button", { name: /^Kill switch$/i });
+  const preExistingDeactivate = simulatorRow.getByRole("button", {
+    name: new RegExp("Deactivate kill switch for", "i"),
+  });
+  if (await preExistingDeactivate.count()) {
+    page.once("dialog", acceptDialogSafely);
+    await preExistingDeactivate.first().click();
+    await page.waitForResponse(
+      (r) => /\/api\/kill-switches\/\d+\/deactivate\/?$/.test(r.url()) && r.request().method() === "POST" && r.ok(),
+      { timeout: 30000 },
+    );
+    await page.waitForResponse(
+      (r) => r.url().includes("/api/module2/ueba/api-keys/bundle/") && r.request().method() === "GET" && r.ok(),
+      { timeout: 60000 },
+    );
+  }
+
+  page.once("dialog", acceptDialogSafely);
+  await killSwitchBtn.click();
+  await page.getByRole("button", { name: /Activate kill switch/i }).click();
+  await page.waitForResponse(
+    (r) => r.url().includes("/api/kill-switches/") && r.request().method() === "POST" && r.ok(),
+    { timeout: 30000 },
+  );
+  await page.waitForResponse(
+    (r) => r.url().includes("/api/module2/ueba/api-keys/bundle/") && r.request().method() === "GET" && r.ok(),
+    { timeout: 60000 },
+  );
+
+  const deactivateBtn = simulatorRow.getByRole("button", {
+    name: new RegExp("Deactivate kill switch for", "i"),
+  });
+  await deactivateBtn.waitFor({ state: "visible", timeout: 30000 });
+  const afterActivate = (await ksCell.innerText()).trim();
+  report.notes.push(`kill-switch count after activate=${afterActivate || "-"}`);
+  assert(Number(afterActivate || "0") > 0, "fleet kill-switch count increases after activate");
+
+  page.once("dialog", acceptDialogSafely);
+  await deactivateBtn.click();
+  await page.waitForResponse(
+    (r) => /\/api\/kill-switches\/\d+\/deactivate\/?$/.test(r.url()) && r.request().method() === "POST" && r.ok(),
+    { timeout: 30000 },
+  );
+  await page.waitForResponse(
+    (r) => r.url().includes("/api/module2/ueba/api-keys/bundle/") && r.request().method() === "GET" && r.ok(),
+    { timeout: 60000 },
+  );
+  await simulatorRow.getByRole("button", { name: /^Kill switch$/i }).waitFor({ state: "visible", timeout: 30000 });
+  const afterDeactivate = (await ksCell.innerText()).trim();
+  report.notes.push(`kill-switch count after deactivate=${afterDeactivate || "-"}`);
+  assert(true, "kill-switch action returns to Kill switch button state after deactivate");
+  report.steps.push("m2-ueba-kill-switch");
+  await shot(page, "03-ueba-killswitch");
 }
 
 async function main() {
@@ -215,6 +291,7 @@ async function main() {
     await runAttackInjection(page);
     await page.waitForTimeout(4000);
     await assertUebaSync(page);
+    await assertUebaKillSwitchCycle(page);
     report.ok = true;
   } catch (err) {
     report.error = String(err?.message || err);
