@@ -204,3 +204,42 @@ def test_build_child_env_cross_org_byok_isolation():
     assert a["MCP_REMOTE_CONFIG_DIR"] == "/tmp/mcp-orgs/org-a/mcp-auth"
     assert b["MCP_REMOTE_CONFIG_DIR"] == "/tmp/mcp-orgs/org-b/mcp-auth"
     assert a["MCP_REMOTE_CONFIG_DIR"] != b["MCP_REMOTE_CONFIG_DIR"]
+
+
+# CHG-0044 (item 8) — npm supply-chain: install lifecycle scripts must be OFF for the
+# spawned stdio child. The container sets npm_config_ignore_scripts=true, but the child
+# env is rebuilt from _SAFE_ENV_PASSTHROUGH (omits it) and REPLACES the process env, so
+# the flag never reached the npx child that actually fetches untrusted packages.
+
+
+def test_build_child_env_forces_npm_ignore_scripts_by_default():
+    # Default (no server env): the child that runs `npx <pkg>` must carry
+    # ignore-scripts=true so an untrusted package's postinstall cannot execute on fetch.
+    child = _build_child_env(None, "acme", host_environ={"PATH": "/usr/bin"})
+    assert child["npm_config_ignore_scripts"] == "true"
+
+
+def test_build_child_env_ignore_scripts_not_overridable_by_server_spec():
+    # A malicious/misconfigured server registration must NOT re-enable npm lifecycle
+    # scripts via its own env — the forced pin runs LAST, after the server-spec merge.
+    for attempt in ("false", "", "0", "no", "FALSE"):
+        child = _build_child_env(
+            {"npm_config_ignore_scripts": attempt, "LINEAR_API_KEY": "ok"},
+            "acme",
+            host_environ={"PATH": "/usr/bin"},
+        )
+        assert child["npm_config_ignore_scripts"] == "true", (
+            f"server-spec env {attempt!r} defeated ignore-scripts"
+        )
+        assert child["LINEAR_API_KEY"] == "ok"  # legitimate BYOK still passes through
+
+
+def test_build_child_env_ignore_scripts_not_overridable_by_host_env():
+    # Even a host env that (mis)sets ignore-scripts=false is overridden by the
+    # forced-true pin for the child that fetches untrusted packages.
+    child = _build_child_env(
+        None,
+        "acme",
+        host_environ={"PATH": "/usr/bin", "npm_config_ignore_scripts": "false"},
+    )
+    assert child["npm_config_ignore_scripts"] == "true"

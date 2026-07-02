@@ -141,6 +141,17 @@ def _build_child_env(
         child.pop(dangerous, None)
     for secret in _SECRET_ENV_DENYLIST:
         child.pop(secret, None)
+    # BACKSTOP CHG-0044 (item 8, supply-chain RCE): FORCE npm/npx install lifecycle
+    # scripts OFF for every spawned stdio child — unconditionally and LAST, so a
+    # malicious server-spec `env` cannot re-enable them. The container sets
+    # ``npm_config_ignore_scripts=true`` (docker_manager), but this child env is
+    # rebuilt FRESH from ``_SAFE_ENV_PASSTHROUGH`` (which omits it) and REPLACES the
+    # process environment (``create_subprocess_exec(env=...)`` does not inherit the
+    # parent) — so without this the ``npx`` child ran with ignore-scripts defaulting
+    # to FALSE and an untrusted package's preinstall/install/postinstall executed on
+    # fetch (the exact supply-chain vector the container-level flag claims to kill).
+    # Pinned here == pinned for the child that actually fetches untrusted packages.
+    child["npm_config_ignore_scripts"] = "true"
     child["MCP_REMOTE_CONFIG_DIR"] = (
         remote_config_dir or f"/tmp/mcp-orgs/{org_slug}/mcp-auth"
     )

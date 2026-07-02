@@ -244,6 +244,19 @@
       every registered server's package spec); (2) bake a locked .npmrc/private registry into the sandbox
       image (registry still default public npmjs); (3) malicious-postinstall fixture proven inert via egress
       capture (audit's item-8 acceptance).
+      CHG-0044 (2026-07-02, HIGH — corrects a CHG-0022 assumption): CHG-0022 assumed "sandbox HAD
+      npm_config_ignore_scripts" — TRUE at the CONTAINER level (docker_manager:418) but it NEVER reached the
+      actual npx child. The stdio server is spawned via create_subprocess_exec(env=_build_child_env(...)):
+      env= REPLACES the process env, and _build_child_env rebuilds it FRESH from _SAFE_ENV_PASSTHROUGH, which
+      OMITS npm_config_ignore_scripts. No baked .npmrc exists. So the npx child ran with ignore-scripts=false
+      → install/postinstall lifecycle scripts of an untrusted tenant-registered package executed on fetch (the
+      exact supply-chain RCE the container flag claimed to kill). FIX: _build_child_env
+      (shared/ai_mesh_shared/mcp_stdio_common.py) force-pins npm_config_ignore_scripts=true unconditionally +
+      LAST (server-spec/host env cannot override; package bin still runs). +3 tests (default true; server-spec
+      false/''/0/no/FALSE all forced true; host false forced true). Gate: 19 stdio_common + 101 broker + 1092
+      gateway passed. Evidence: mcp-parallel/findings/backstop-p8-npm-ignore-scripts/finding.md. NOTE: this
+      closes the core RUNTIME gap; sub-items (1) prod-pin-enable, (2) baked .npmrc/private registry, (3) live
+      malicious-postinstall egress-capture proof REMAIN (need a dedicated host) — so item 8 stays [ ].
 - [ ] 9. Gateway auth/authz/validation/rate-limit/policy/audit — verified + hardened.
       LIVE VERIFIED (auth/authz/validation) — CHG-0016 (2026-07-02): probed the live gateway. Auth ENFORCED
       (no-auth→401, bad-key→401); CROSS-ORG key ISOLATION ENFORCED (org-a key on org-b endpoint→403

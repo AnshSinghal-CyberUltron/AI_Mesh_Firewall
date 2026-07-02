@@ -256,6 +256,17 @@
     CSRF state + PKCE verifier restored via _flow_pop, token endpoint via _assert_safe_url (SSRF),
     follow_redirects=False. Files mcp_oauth_proxy.py + test_mcp_oauth_encryption.py (new, +4). Gate: 4
     oauth-enc + 1092 broad sweep passed.
+  - CHG-0044 (2026-07-02) — G3 item 8 (supply-chain RCE, HIGH): docker_manager sets
+    npm_config_ignore_scripts=true on the CONTAINER env, but the stdio server is spawned with
+    create_subprocess_exec(env=_build_child_env(...)) which REPLACES the env and rebuilds it
+    from the _SAFE_ENV_PASSTHROUGH allowlist (which omits ignore_scripts) — so the npx child
+    that fetches untrusted packages ran with ignore-scripts=false and install/postinstall
+    lifecycle scripts executed on fetch (no baked .npmrc fallback). FIX: _build_child_env
+    (shared/ai_mesh_shared/mcp_stdio_common.py) force-pins npm_config_ignore_scripts=true
+    unconditionally + LAST (mirrors the MCP_REMOTE_CONFIG_DIR pin), so neither server-spec nor
+    host env can re-enable scripts; the package bin still runs. Touches broker sandbox agent +
+    gateway legacy stdio adapter (shared helper). +3 tests. Gate: 19 stdio_common + 101 broker
+    + 1092 gateway passed. Evidence mcp-parallel/findings/backstop-p8-npm-ignore-scripts/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
