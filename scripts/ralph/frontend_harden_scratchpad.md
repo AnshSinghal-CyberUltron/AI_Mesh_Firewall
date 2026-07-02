@@ -389,3 +389,11 @@
       MCP claim (claude-ralph-stress-iter1-R0) re-checked = active. Re-confirmed the server-card overflow
       root cause: bare `grid gap-3` at MCPConnectorPanel L1528 (no grid-cols-1/min-w-0) → cards size to
       max-content; break-all on URL insufficient (header row forces width).
+      [iter+] FIXED org-wide-vs-scoped bug on SubModuleResultsPage flow nodes (commit c19e0a7c): the
+      "Detailed Results" page (Open detailed results) showed org-wide socKpis totals for ALL modules —
+      1.5 "Request/Router: 93,553" vs its 552 routing events (same class as the 1.2 fix). getModuleResults
+      Config now uses scoped threatFeedCount+actionCounts for non-1.1 lanes (1.1=ingress stays org-wide);
+      1.6 Risk uses scoped critical. LIVE: 1.5 →552 (both themes), 1.7 →1005/468/143/394 scoped; 1.1
+      code-identical (its 0 was soc-kpis at 17-30s under F3 load). lint 75/75, build, detector no-new
+      (3 pre-existing gradient/border-l-8 FPs). Noted pre-existing: 1.7 results page shows raw security_scan
+      (1005) vs module page's output sub-filter (4) — separate design call. MCP claim re-checked: active.
