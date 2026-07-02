@@ -101,6 +101,10 @@ def _completion(model: str, *, secret_channel: str, n_choices: int = 1) -> dict:
                     {"type": "text", "text": "Here is the answer. "},
                     {"type": "text", "text": f"The key is {SECRET} for {PII}."},
                 ]
+            elif secret_channel == "dict_content":
+                # G62: a bare DICT content (non-conforming single content-part) — the
+                # str/list-only _content_to_text coerced it to "" and SKIPPED the guard.
+                msg["content"] = {"type": "text", "text": f"The key is {SECRET} for {PII}"}
             elif secret_channel == "list_reasoning":
                 # G61: structured reasoning_content (a LIST of blocks) — the str-only
                 # scan/enforce skipped it, leaking PII in a reasoning channel.
@@ -125,7 +129,7 @@ def _completion(model: str, *, secret_channel: str, n_choices: int = 1) -> dict:
 
 SECONDARY_CHANNELS = ["content", "reasoning_content", "refusal",
                       "tool_calls", "function_call", "audio", "list_content",
-                      "dict_tool_args", "list_reasoning", "list_refusal"]
+                      "dict_tool_args", "list_reasoning", "list_refusal", "dict_content"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -275,6 +279,22 @@ def test_g61_structured_reasoning_refusal_blanked_on_enforcement():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# G62: a bare DICT content (non-conforming single content-part) — the str/list-only
+# _content_to_text coerced it to "" so the guard was SKIPPED (the G57 bypass class,
+# dict shape). The dict_content matrix row above covers scan+enforce across models;
+# this pins the helper contract incl. image-safety (never fold a binary payload).
+# ──────────────────────────────────────────────────────────────────────────────
+def test_g62_content_to_text_handles_dict():
+    assert gm._content_to_text("plain") == "plain"
+    assert gm._content_to_text({"type": "text", "text": SECRET}) == SECRET
+    assert gm._content_to_text({"text": SECRET}) == SECRET
+    # image/binary part dict has no str text -> NOT folded (no base64 bloat / leak-safe)
+    assert gm._content_to_text({"type": "image_url",
+                                "image_url": {"url": "data:image/png;base64,AAAA"}}) == ""
+    assert gm._content_to_text([{"type": "text", "text": SECRET}]) == SECRET
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # 2. ENFORCEMENT mutation sanitizes every choice + every secondary channel.
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("model", MODEL_IDS)
@@ -332,6 +352,8 @@ def _delta_chunk(channel: str, n_choices: int = 1) -> dict:
             elif channel == "dict_tool_args":
                 delta = {"tool_calls": [{"index": 0, "function":
                          {"name": "x", "arguments": {"key": SECRET}}}]}
+            elif channel == "dict_content":
+                delta = {"content": {"type": "text", "text": f"key {SECRET}"}}
             elif channel == "list_reasoning":
                 delta = {"reasoning_content": [{"type": "text", "text": f"key {SECRET}"}]}
             elif channel == "list_refusal":

@@ -1320,6 +1320,14 @@ def _content_to_text(content) -> str:
             for p in content
             if isinstance(p, dict) and isinstance(p.get("text"), str)
         )
+    # G62: a non-conforming DICT content (e.g. a single content-part {"type":"text",
+    # "text":"…"} returned bare instead of wrapped in a list) otherwise coerced to ""
+    # and SKIPPED the output guard entirely — the exact G57 bypass class for the dict
+    # shape (reasoning_content/refusal already handle dict via G61). Fold only a str
+    # ``text`` value (never an image/binary payload -> no base64 bloat).
+    if isinstance(content, dict):
+        _t = content.get("text")
+        return _t if isinstance(_t, str) else ""
     return ""
 
 

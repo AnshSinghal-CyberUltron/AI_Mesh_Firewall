@@ -854,11 +854,16 @@ class SecureStreamingResponse:
                 continue
 
             # FIX-C: content may be a list of content-part dicts; coerce to text.
+            # G62: a bare DICT content (non-conforming) — fold its str `text` value too
+            # (stream parity with the non-stream _content_to_text) so it isn't skipped.
             content = delta.get("content")
             if isinstance(content, list):
                 content = "".join(
                     p.get("text") or "" for p in content if isinstance(p, dict)
                 )
+            elif isinstance(content, dict):
+                _ct = content.get("text")
+                content = _ct if isinstance(_ct, str) else ""
             elif not isinstance(content, str):
                 content = ""
             parts.append(content)
