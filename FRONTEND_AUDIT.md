@@ -103,7 +103,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ### Verify-only (item 17 — never edit)
 | # | Surface | Owner | State |
 |---|---|---|---|
-| 17a | MCPConnectorPanel | stress/never_edit | 👁 ⬜ |
+| 17a | MCPConnectorPanel | stress/never_edit | 👁 ⚠ — item22: MCP server cards 884px wide overflow `<main>` @768 (mainScroll 140) & @375 (521); fits @1024/1440. Stress session owns fix. |
 | 17b | ModelConnectionPanel | stress | 👁 ⬜ |
 | 17c | OutputPipelineTimeline (pipeline-trace cards) | stress | 👁 ⬜ |
 
@@ -139,13 +139,26 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | 19 | Data-integrity proof (no mock/placeholder anywhere) | ⬜ |
 | 20 | No-leak proof (no key/PII/secret/topology) | ⬜ |
 | 21 | Theme audit (dark+light contrast/focus/hover/disabled) — see R2 | ⬜ |
-| 22 | Responsive audit (1440/1024/768/375, no overflow/overlap) | ⬜ |
+| 22 | Responsive audit (1440/1024/768/375, no overflow/overlap) | ✅ — `mainScroll` audit (catches `<main>`-absorbed overflow docOver misses); fixed SubModuleResultsPage + CollectionManagerPanel + ModelStatePanel + OutputGovernancePanel; MCPConnectorPanel overflow @768/375 LOGGED (verify-only); residual 12px = scrollbar artifact |
 | 23 | Playwright visual+behavior snapshot regression gate | ⬜ |
 | 24 | Full re-verify; bundle check (R3); console/network clean; all resolved | ⬜ |
 
 ---
 
 ## Per-surface finding log (append-only)
+
+**Item 22 — Responsive audit DONE (iter resumed loop, 2026-07-02):** gated (lint 42/42, build clean, detector 0 on all 4 edited files); live-verified both themes @ 1440/1024/768/375.
+- **METHOD FIX (the crux):** the prior per-surface checks used `document.documentElement.scrollWidth − clientWidth` (docOver), which reads **0** even when content overflows — because the app's `<main>` has `overflow-y-auto`, and CSS computes its `overflow-x` to **`auto`**, so `<main>` silently **absorbs** horizontal overflow into an internal scrollbar that never reaches `documentElement`. Built a **`mainScroll` audit** (`main.scrollWidth − main.clientWidth`) that catches exactly this class of bug. Swept overview + 1.1–1.7 + profile/settings/firewall-config/login + the state-routed `SubModuleResultsPage` drill-down.
+- **REAL overflows found + FIXED (data-dependent — only manifest once panels populate; `mainScroll` metric, both themes):**
+  - **SubModuleResultsPage** (drill-down via "Open detailed results"): the 4-node flow **pipeline** (`min-w-[160px]` nodes + `w-16` arrows ≈ **928 px**) + the **Detailed Records** toolbar had no wrap/scroll → `<main>` scrolled (`mainScroll` **1030>375** @375, **908>768** @768). Fix: flow card `overflow-x-auto` (scrolls within its own card like the table), toolbar+pagination `flex-wrap`, `p-4 sm:p-6 lg:p-8`. Re-verified `mainScroll == clientW` @375/768 both themes. Also LOGGED for item 24: fabricated `arrowTimings` (`lat×0.3/0.4/0.3` split) + still-recharts charts. **(commit 9491ae34)**
+  - **rag/CollectionManagerPanel** (module 1.3): "Create New Collection" was `grid-cols-3` crammed into 375 — the provider `<select>`/input intrinsic min-width forced the grid wider than the viewport (Create button `right=436`, `mainScroll` **61**). Fix: `grid-cols-1 sm:grid-cols-3` + `sm:col-span-2` + input `min-w-0`.
+  - **ModelStatePanel** (module 1.6): header (title + Sync states/Audit Log/Live toolbar) didn't wrap → `flex-wrap` + title `min-w-0`.
+  - **OutputGovernancePanel** (module 1.7): header (title + blocked/redacted/flagged chips + toggle) didn't wrap → `flex-wrap` + title `min-w-0`. **(commit eb466821)**
+  - Re-verified the 3 panel fixes across **all 4 widths**: `mainScroll=0` @ 1440/1024/768 and **realCount=0** @375 (real offenders, `overflow-hidden`/scroller/transform excluded).
+- **VERIFY-ONLY — LOGGED, NOT FIXED (`claude-ralph-stress-iter1-R0` owns `never_edit: MCPConnectorPanel.jsx`):** the module-1.4 **MCP server cards** (name + URL + tools count + status) are **884 px wide** and overflow `<main>` at **768 (mainScroll 140)** and **375 (mainScroll 521)**; they fit at 1024/1440. **This corrects item 17's "overflow=0 in all 16"** — that sweep used the docOver method and so missed the `<main>`-absorbed overflow. The stress session owns the fix (e.g. make the server list a single responsive column / `min-w-0` the card grid).
+- **Residual `mainScroll=12` on tall pages is NOT a bug:** it's the **vertical-scrollbar-width artifact** of `scrollWidth − clientWidth` (it correlates with page height / scrollbar presence, is **0** on short pages like 1.2/1.5, and the only element extending past the fold is the decorative `ai-mesh-hero-glow` which is **clipped by the hero's `overflow-hidden`**). Proven not-real: **0** `w-screen`/`100vw`/`100dvw` in the entire `src`, dark-theme settled run measured `mainScroll=0` everywhere, and screenshots @375 show no cut-off/no horizontal scrollbar.
+- **CLEAN (no real overflow, both themes @ 4 widths):** overview, 1.1 (wide keys table is contained in its `overflow-x-auto` scroller — `main.scrollWidth 387` vs table `right 817` proves containment), 1.2, 1.5, profile, settings, login, firewall-config (its `truncate` model-ID/description flags are intentional ellipsis — `ModelGovernanceFields` uses `flex-1 min-w-0 … truncate`).
+- **ENVIRONMENTAL (F3):** running many concurrent Playwright fleets saturated the dev Postgres pool → the **control plane hung and auto-restarted** (`/api/auth/me` 2-min hang; app fell back to login → "no main"); it also produced transient wide **loading skeletons** that a poorly-timed scan misreads as overflow. All findings above were re-confirmed against a **healthy** backend (single sequential contexts). Real-user single-session load does not hit F3.
 
 **Item 9 (part 1) — RAGPipelineTelemetry DONE (iter9 resumed loop, 2026-07-02):** workflow-analyzed all 3 RAG panels; completed RAGPipelineTelemetry.
 - **CHART MIGRATION (5 charts recharts→ECharts):** funnel (h-bar), stage-action (stacked bar), escalation (donut), stage-health (radar), latency (bar) → ECharts `option` via SafeResponsiveChart. Removed the recharts import. Fixes the old hardcoded-dark tick (`#a1a1aa`)/tooltip (`#18181b`) colors → now theme-aware. **Live-verified both themes** (firewall-1-3 Analytics/Flow tabs): **0 recharts SVGs**, ECharts canvases render, data-identical structure (0-value honest-empty since no RAG activity; escalation shows "No data for period"), no overflow @768/375, **console 0 errors**. Screenshots `mcp-parallel/findings/frontend-harden/rag/`.

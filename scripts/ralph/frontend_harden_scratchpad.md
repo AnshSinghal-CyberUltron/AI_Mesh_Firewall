@@ -259,7 +259,27 @@
       cyan-600), not slop; Sidebar side-tab = legit active-nav border-l-2 — all documented, left intentional.
       GATE lint 42/42, build, detector 0 on all contrast-fixed files. Prior per-surface theme fixes (items
       9-20) + this sweep = every surface contrast-correct both themes.
-- [ ] 22. Responsive audit: no overflow/overlap at 1440/1024/768/375 on every surface.
+- [x] 22. Responsive audit: no overflow/overlap at 1440/1024/768/375 on every surface.
+      item22 DONE. KEY METHOD FIX: docOver (`documentElement.scrollWidth-clientWidth`) reads 0 even when
+      content overflows, because `<main>` has `overflow-y-auto` → CSS computes overflow-x to `auto` →
+      `<main>` ABSORBS horizontal overflow into an internal scrollbar. Built a `mainScroll` audit
+      (`main.scrollWidth-clientWidth`) that catches it. Swept overview + 1.1-1.7 + profile/settings/
+      firewall-config/login + SubModuleResultsPage drill-down, both themes @ 4 widths.
+      REAL overflows FIXED (4 files, all data-dependent — only appear once panels populate):
+      · SubModuleResultsPage: 4-node flow pipeline (min-w-[160px]×4≈928px) + Detailed Records toolbar
+        (mainScroll 1030>375@375, 908>768@768) → flow card overflow-x-auto, toolbar/pagination flex-wrap,
+        p-4 sm:p-6 lg:p-8. LOGGED for item24: fabricated arrowTimings (lat×0.3/0.4/0.3) + still-recharts. (9491ae34)
+      · rag/CollectionManagerPanel: grid-cols-3 form crammed@375 (Create btn right=436, mainScroll 61)
+        → grid-cols-1 sm:grid-cols-3 + sm:col-span-2 + input min-w-0.
+      · ModelStatePanel: header+Sync/Audit/Live toolbar → flex-wrap + min-w-0.
+      · OutputGovernancePanel: header+blocked/redacted/flagged chips → flex-wrap + min-w-0. (eb466821)
+      Re-verified 3 panel fixes @ all 4 widths: mainScroll=0 @1440/1024/768, realCount=0 @375.
+      VERIFY-ONLY LOGGED (never_edit): MCPConnectorPanel (1.4) MCP server cards 884px overflow main
+        @768(140)/@375(521) — corrects item17's "overflow=0" (docOver blind spot). Stress session owns fix.
+      Residual uniform mainScroll=12 on tall pages = vertical-scrollbar-width artifact (0 w-screen/100vw
+        in src; ai-mesh-hero-glow clipped by hero overflow-hidden; dark settled run=0; screenshots clean).
+      ENVIRONMENTAL F3: concurrent Playwright fleets saturated dev Postgres → control-plane restart +
+        transient wide loading skeletons; all findings re-confirmed vs healthy backend. GATE lint 42/42, build, detector 0.
 
 ## Freeze the frontend
 - [ ] 23. Add Playwright visual+behavior snapshots per surface (both themes) as a regression gate.
