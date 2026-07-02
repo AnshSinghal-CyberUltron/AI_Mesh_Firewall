@@ -44,7 +44,7 @@
 - [ ] 16. Playwright verify: register → pending state → authorize → tools populate
 
 ## P5 — Fix B4 (modal focus loss)
-- [ ] 17. Stabilize the Add Server modal/form subtree (define fields outside render / stable keys / no portal-children recreation) so focus persists per keystroke
+- [x] 17. Stabilize the Add Server modal/form subtree (define fields outside render / stable keys / no portal-children recreation) so focus persists per keystroke — NO CODE CHANGE NEEDED (prior fix holds): Dialog.jsx onCloseRef(:22)+stable handleKey useCallback + effect deps [open,handleKey](:68) → focus-trap effect runs only on open-toggle not per keystroke; MCPConnectorPanel has NO component defined in render (only top-level fn decls StatusDot/StatCard/Inner/Panel), render helpers are function CALLS {renderServers()}. VERIFIED behaviorally: scripts/playwright_mcp_p1_dialog_focus_repro.mjs (system chromium) → b4BugConfirmed=false, focusLossFields=[], focus kept 24 keystrokes across name/url/description/stdio-command/bearer. (Parallel loop P1.3 = same result.)
 - [ ] 18. Playwright verify: type a long string into each field without losing focus; presets prefill correctly
 
 ## P6 — Fix B3 (sandbox temporarily unavailable)
