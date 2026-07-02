@@ -396,6 +396,15 @@
         commit = CLEAN. Their work is preserved on main. FIX GOING FORWARD: use `git commit -- <path>` (path-
         scoped) so a stray shared-index entry can't ride along, since `git add <file>` stages only my file
         but `git commit` (no pathspec) commits the WHOLE index.
+      RIGOR-VERIFIED CONCURRENCY 2026-07-02 (Phase-6 race/concurrency, no gap): IN-PROCESS hammered the
+        scanner with 1600 interleaved concurrent scans (8 cases x 200, ThreadPoolExecutor max_workers=32) of
+        a labeled corpus (block/redact/allow) -> 0 errors, 0 RACES: every case produced a CONSISTENT, ISOLATED
+        verdict across all 200 concurrent instances (redact 400/400, allow 600/600, block cases consistent) =
+        no state bleed, thread-safe. (The apparent 200 "mismatches" were my mislabel: bare AWS access-key-ID
+        "AKIAIOSFODNN7EXAMPLE" -> redact 20/20 DETERMINISTIC, masked to AKIA****MPLE raw-absent = correct; only
+        key-ID+secret escalates. Not a race.) LIVE burst: 30 concurrent attack requests (max_workers=15) -> all
+        30 blocked (400), no crash, no leak-through. => pipeline maintains correct isolated enforcement under
+        concurrent load.
       ★ FINAL COMPLETION 2026-07-02 (post-G30, +G31): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
