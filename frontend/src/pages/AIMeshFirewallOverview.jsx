@@ -317,51 +317,21 @@ function AttackVectorTrendChart({ data, compact = false }) {
       {empty ? (
         <div className="flex h-[300px] items-center justify-center text-sm text-slate-400">No attack events recorded in this period</div>
       ) : (
-        <SafeResponsiveChart className={`${compact ? "h-[240px]" : "h-[300px]"} w-full`}>
-          <AreaChart data={data} margin={{ top: 4, right: compact ? 0 : 4, bottom: 0, left: compact ? -14 : -8 }}>
-            <defs>
-              {VECTOR_KEYS.map((k) => (
-                <linearGradient key={k} id={`vgrad-${k.replace(/\s+/g, "")}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={VECTOR_COLORS[k]} stopOpacity={0.28} />
-                  <stop offset="95%" stopColor={VECTOR_COLORS[k]} stopOpacity={0.02} />
-                </linearGradient>
-              ))}
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.15} />
-            <XAxis
-              dataKey="time"
-              stroke="#94a3b8"
-              tick={{ fontSize: 11, fill: "#94a3b8" }}
-              tickLine={false}
-              axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }}
-              interval={compact ? 1 : 0}
-              minTickGap={compact ? 18 : 8}
-              label={compact ? undefined : { value: "Time (UTC)", position: "insideBottom", offset: -2, fontSize: 10, fill: "#64748b" }}
-            />
-            <YAxis
-              stroke="#94a3b8"
-              tick={{ fontSize: 11, fill: "#94a3b8" }}
-              tickLine={false}
-              axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }}
-              width={compact ? 28 : 40}
-              label={compact ? undefined : { value: "Events", angle: -90, position: "insideLeft", offset: 12, fontSize: 10, fill: "#64748b" }}
-            />
-            <Tooltip content={<ChartTooltip />} />
-            {VECTOR_KEYS.map((k) => (
-              <Area
-                key={k}
-                type="monotone"
-                dataKey={k}
-                stroke={VECTOR_COLORS[k]}
-                strokeWidth={2}
-                fill={`url(#vgrad-${k.replace(/\s+/g, "")})`}
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
-                name={k}
-              />
-            ))}
-          </AreaChart>
-        </SafeResponsiveChart>
+        // Overlapping (non-stacked) multi-series threat areas via uPlot — canvas,
+        // drag-to-zoom; index x + xLabels preserve the time axis; hover shows each
+        // vector's raw value (data-identical to the prior recharts areas).
+        <SafeResponsiveChart
+          className={`${compact ? "h-[240px]" : "h-[300px]"} w-full`}
+          uplot={{
+            time: false,
+            xLabels: data.map((d) => d.time),
+            data: [
+              data.map((_, i) => i),
+              ...VECTOR_KEYS.map((k) => data.map((d) => Number(d[k]) || 0)),
+            ],
+            series: VECTOR_KEYS.map((k) => ({ label: k, stroke: VECTOR_COLORS[k], area: true, width: 2 })),
+          }}
+        />
       )}
     </OverviewChartCard>
   );
@@ -586,25 +556,24 @@ function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 
             <p className="text-xs text-slate-400 dark:text-slate-500">Try a wider lens (7d / 30d) using the time selector above.</p>
           </div>
         ) : (
-          <SafeResponsiveChart className="h-[280px]">
-            <AreaChart data={enforcementSeries} margin={{ top: 4, right: 4, bottom: 4, left: compact ? -14 : -8 }}>
-              <defs>
-                {ENF_SERIES.map((s) => (
-                  <linearGradient key={s.key} id={`mesh-enf-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={s.color} stopOpacity={0.4} />
-                    <stop offset="95%" stopColor={s.color} stopOpacity={0.04} />
-                  </linearGradient>
-                ))}
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.15} vertical={false} />
-              <XAxis dataKey="time" stroke="#94a3b8" tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }} interval="preserveStartEnd" minTickGap={compact ? 24 : 44} />
-              <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }} width={compact ? 26 : 34} allowDecimals={false} />
-              <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#94a3b8", strokeWidth: 1, strokeDasharray: "4 4" }} />
-              {ENF_SERIES.map((s) => (
-                <Area key={s.key} type="monotone" dataKey={s.key} stackId="1" stroke={s.color} strokeWidth={1.8} fill={`url(#mesh-enf-${s.key})`} name={s.name} dot={sparse ? { r: 2.5, strokeWidth: 0 } : false} activeDot={{ r: 4, strokeWidth: 0 }} isAnimationActive={false} />
-              ))}
-            </AreaChart>
-          </SafeResponsiveChart>
+          // Dense stacked telemetry via uPlot (canvas, fast, drag-to-zoom).
+          // index x + xLabels keeps the bucket-label axis; tooltip shows raw
+          // per-series values (data-identical to the prior recharts stack).
+          <SafeResponsiveChart
+            className="h-[280px]"
+            uplot={{
+              stacked: true,
+              time: false,
+              xLabels: enforcementSeries.map((d) => d.time),
+              data: [
+                enforcementSeries.map((_, i) => i),
+                enforcementSeries.map((d) => Number(d.allowed) || 0),
+                enforcementSeries.map((d) => Number(d.blocked) || 0),
+                enforcementSeries.map((d) => Number(d.redacted) || 0),
+              ],
+              series: ENF_SERIES.map((s) => ({ label: s.name, stroke: s.color, area: true, width: 1.8 })),
+            }}
+          />
         )}
         {sparse && (
           <p className="mt-2 text-center text-[11px] text-slate-400 dark:text-slate-500">Sparse window — {nonZeroBuckets} active interval{nonZeroBuckets === 1 ? "" : "s"}. Widen the lens for more context.</p>

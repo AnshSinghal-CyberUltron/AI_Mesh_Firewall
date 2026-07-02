@@ -17,14 +17,13 @@
       Fixed F1 (light tooltip/axis now readable) + F2 (donut label clip) + radar theme deprecation.
       Harness recipe + findings F3 (backend PG 500 bursts), F4 (KPI=0 vs chart-has-data) logged in AUDIT.
       Remaining 11 recharts panels migrate under items 3–16; recharts removal = item 24 exit check.
-- [ ] 2. uPlot for dense time-series charts (telemetry/logs/trends). Verify data-identical + interactive + faster.
-      iter(resumed)1: FOUNDATION + first chart proven. uplotTheme.js(+test), UPlotChart.jsx (canvas, theme-
-      reactive, sparkline+drag-zoom modes), SafeResponsiveChart `uplot` path (passes measured px size).
-      Migrated Overview "Pressure Curve" sparkline (×7) recharts→uPlot; LIVE-verified isolated browser: 7
-      uplot canvases both themes, no overflow @375, console 0 errors, data-identical curve. lint 34/34.
-      Classification workflow → 11 uPlot candidates / 41 ECharts (matrix in AUDIT). NOT [x]: stacked
-      telemetry (AttackVectorTrend/GlobalTraffic) + interactive/zoom verify remain; need stacked-area
-      support in UPlotChart. F5 (shared MCP browser lock) worked around via isolated standalone playwright.
+- [x] 2. uPlot for dense time-series charts (telemetry/logs/trends). Verify data-identical + interactive + faster.
+      iter(resumed)1: foundation + Pressure sparkline (×7). iter2: DONE — stacked-area support
+      (uplotStack.js +tests, raw-value tooltips), compactNum axis (fixes 5-digit y-clip), migrated Overview
+      "Enforcement actions over time" (stacked) + AttackVectorTrend (overlapping). All 3 Overview AreaCharts
+      → uPlot. LIVE-verified both themes @1024/768/375: uplot(recharts=false), data-identical, hover shows
+      time+raw values, no overflow, 0 chart errors. Fixed a gradient-bbox crash. lint 37/37.
+      Remaining 8 uPlot candidates migrate under per-surface items (12/13/15). recharts removal = item 24.
 
 ## Per-surface sweep (ONE panel per iteration → verify (both themes, 4 widths) → fix → re-verify → commit)
 - [ ] 3. GatewayKeyPanel     - [ ] 4. ModelGovernancePanel   - [ ] 5. RoutingGovernance/Audit

@@ -80,7 +80,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | # | Surface | Owner | Dark | Light | 1440 | 1024 | 768 | 375 | Impec | State |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | SafeResponsiveChart → ECharts | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ proven live |
-| 2 | uPlot dense time-series | me | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | ✅ | 🔎 foundation+sparkline proven |
+| 2 | uPlot dense time-series | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ engine + Overview telemetry done |
 
 ### Panels (items 3–16)
 | # | Surface | Owner | Dark | Light | 1440 | 1024 | 768 | 375 | Impec | State |
@@ -192,5 +192,15 @@ verify-only files, which have no charts):
 **uPlot (dense time-series, 11):** AIMeshFirewallOverview ×3 (Pressure sparkline ✅done, AttackVectorTrend [stacked], GlobalTraffic enforcement [stacked]); SubmoduleDetailPage ×3 (request-volume area, enforcement lines, multi-metric trend); SubmoduleResultsPage ×1 (7-day high-density area); PolicyAnalyticsPanel ×1 (effectiveness % trend); module-specific-charts ×2 (stacked telemetry area, multi-series trend line); Firewall12EnterprisePage ×1 (event/threat volume trend).
 **ECharts (categorical/pie/radar, 41):** module-specific-log-charts ×21, RAGPipelineTelemetry ×5 (all aggregate KPIs, NOT time-series), + donuts/bars/radars elsewhere.
 Next uPlot work needs **stacked-area support** in UPlotChart (cumulative-sum bands) for AttackVectorTrend + GlobalTraffic; then interactive (cursor+zoom) verification → item 2 [x].
+
+**Item 2 DONE (iter2 resumed loop, 2026-07-02):** uPlot engine complete + both Overview dense-telemetry charts migrated & live-verified.
+- Added stacked-area support to `UPlotChart` (`utils/uplotStack.js` cumulative-sum + bands; +3 tests). **Tooltip shows RAW per-series values** (not cumulative) via a `value` fn reading a live data ref → data-identity preserved.
+- Added `compactNum` axis formatter (5000→"5k") — fixes a real bug where a fixed 46px y-axis clipped 5-digit telemetry values ("10,000"→"0,000"); exact values stay in the tooltip. x legend labeled "Time".
+- **Migrated GlobalTraffic "Enforcement actions over time"** (3 stacked areas) + **AttackVectorTrendChart** (5 overlapping areas). All 3 Overview AreaCharts now uPlot (0 recharts AreaCharts left in the file).
+- Live-verified (isolated browser, real data): both charts uPlot (recharts=false), drawn both themes (colored px ~10-19k), hover shows time + raw per-series values, **no overflow @1024/768/375**, **0 chart/page errors**. Screenshots `…/uplot-overview/{enf,avt}-{light,dark}2.png`.
+- **Crash fixed (learning):** a series `fill` gradient fn reading `u.bbox.top/height` threw `createLinearGradient: non-finite` before layout → crashed the whole Overview (blank). Now guards non-finite bbox and falls back to a flat translucent fill.
+- lint 37/37, build green; chart files detector-clean.
+- **Remaining 8 uPlot candidates migrate under their per-surface items** (SubmoduleDetailPage ×3 → item 15; SubmoduleResultsPage → 15; PolicyAnalyticsPanel → 12; module-specific-charts ×2 → 13/15; Firewall12EnterprisePage → 15). recharts removal = item 24.
+- **Pre-existing slop (not mine) on AIMeshFirewallOverview L84-85:** `ai-color-palette` violet gradients (×3) — for the Overview's dedicated theme/slop pass (items 21/24), NOT introduced by the chart migration (chart edit regions are detector-clean).
 
 - **F5 (env hazard — worked around):** all Claude sessions' Playwright MCP share one Chrome profile (`ms-playwright-mcp/mcp-chrome-6078e4c`) → "Browser is already in use" when a prior/parallel session holds it (an orphaned `playwright-mcp` + idle Chrome on about:blank held the lock). Do NOT force-kill in the shared env. **Workaround (used):** a standalone `playwright` (from the npx cache `~/.npm/_npx/9833c18b2d85bc59/node_modules/playwright`) via `launchPersistentContext` with an **isolated** `/tmp` profile + `executablePath:/opt/google/chrome/chrome`. Scripts in scratchpad; reusable when the MCP browser is locked.
