@@ -89,21 +89,49 @@ def test_oauth_client_role_rejected(agent_client):
     assert resp.json()["error"]["code"] == -32602
 
 
+class _FakeStreamCtx:
+    """Fake httpx streaming response (SSE) context manager — the modern streamable-
+    http upstream keeps the SSE connection open, so the agent must stream-read it."""
+
+    def __init__(self, *, status=200, headers=None, sse_frames=None, text=""):
+        self.status_code = status
+        self.headers = headers or {}
+        self._sse = sse_frames or []
+        self.text = text
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_a):
+        return False
+
+    async def aread(self):
+        return self.text.encode()
+
+    async def aiter_lines(self):
+        for payload in self._sse:
+            yield "event: message"
+            yield "data: " + json.dumps(payload)
+            yield ""
+
+
+def _fake_stream(*, result=None, err_status=None, session_id="sess-abc"):
+    """Return a patch target for httpx.AsyncClient.stream that echoes the request id
+    (so both the auto-initialize handshake and the real method get a matching reply)."""
+    def _stream(self, _method, _url, *, json=None, headers=None, timeout=None):  # noqa: A002
+        if err_status:
+            return _FakeStreamCtx(status=err_status, headers={"content-type": "text/plain"}, text="unauthorized")
+        req_id = (json or {}).get("id")
+        return _FakeStreamCtx(
+            headers={"content-type": "text/event-stream", "mcp-session-id": session_id},
+            sse_frames=[{"jsonrpc": "2.0", "id": req_id, "result": result if result is not None else {}}],
+        )
+    return _stream
+
+
 def test_streamable_http_tools_list(agent_client):
-    mock_response = httpx.Response(
-        200,
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "result": {"tools": [{"name": "echo"}]},
-        },
-        headers={"Mcp-Session-Id": "sess-abc"},
-    )
-
-    async def fake_post(*_args, **_kwargs):
-        return mock_response
-
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=fake_post)):
+    with patch("httpx.AsyncClient.stream", new=_fake_stream(result={"tools": [{"name": "echo"}]})), \
+         patch("httpx.AsyncClient.post", new=AsyncMock(return_value=httpx.Response(202))):
         resp = agent_client.post("/rpc", json=_http_payload())
 
     assert resp.status_code == 200
@@ -114,9 +142,9 @@ def test_streamable_http_tools_list(agent_client):
 
 
 def test_streamable_http_401_needs_reauth(agent_client):
-    mock_response = httpx.Response(401, text="unauthorized")
-
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_response)):
+    # A 401 during the (auto) handshake surfaces as -32001 needs_reauth.
+    with patch("httpx.AsyncClient.stream", new=_fake_stream(err_status=401)), \
+         patch("httpx.AsyncClient.post", new=AsyncMock(return_value=httpx.Response(202))):
         resp = agent_client.post("/rpc", json=_http_payload())
 
     body = resp.json()

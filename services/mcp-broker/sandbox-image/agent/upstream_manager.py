@@ -344,6 +344,16 @@ async def _post_streamable_http(
     method_timeout: float,
     msg_id: int | str | None,
 ) -> dict[str, Any]:
+    """POST one JSON-RPC message to a Streamable-HTTP upstream and return the reply.
+
+    Streamable-HTTP servers answer a POST with either a single ``application/json``
+    body OR a ``text/event-stream`` that STAYS OPEN for server→client messages. A
+    non-streaming ``client.post()`` (or ``response.aread()``) would block waiting for
+    a body/EOF that never arrives — the classic hang. So we STREAM the response and
+    return on the FIRST SSE ``data:`` frame that is a JSON-RPC *response* (has
+    ``result``/``error``) matching our request id, then exit the context (closing the
+    stream). Plain-JSON responses are read directly.
+    """
     assert session.client is not None
     headers = {
         **session.headers,
@@ -353,24 +363,65 @@ async def _post_streamable_http(
     if session.session_id:
         headers["Mcp-Session-Id"] = session.session_id
     started = time.time()
+    want_id = message.get("id")
     try:
-        response = await session.client.post(
-            session.url,
-            json=message,
-            headers=headers,
-            timeout=method_timeout,
-        )
+        async with session.client.stream(
+            "POST", session.url, json=message, headers=headers, timeout=method_timeout,
+        ) as response:
+            if response.status_code == 401:
+                raise UpstreamError(-32001, "upstream returned 401; re-authenticate", needs_reauth=True)
+            if response.status_code >= 400:
+                body = (await response.aread())[:500].decode("utf-8", "replace")
+                raise UpstreamError(-32000, f"upstream HTTP {response.status_code}: {body}")
+            sid = response.headers.get("mcp-session-id")
+            if sid:
+                session.session_id = sid
+
+            def _wrap(payload: dict[str, Any]) -> dict[str, Any]:
+                return _wrap_response(
+                    payload if isinstance(payload, dict)
+                    else {"jsonrpc": "2.0", "id": msg_id, "result": payload},
+                    transport=session.transport, msg_id=msg_id, needs_reauth=False,
+                    upstream_status=response.status_code, session_id=session.session_id,
+                    duration_ms=int((time.time() - started) * 1000),
+                )
+
+            if "text/event-stream" not in response.headers.get("content-type", ""):
+                raw = await response.aread()
+                if len(raw) > _MAX_RESPONSE_BYTES:
+                    raise UpstreamError(-32000, "upstream response too large")
+                if not raw:
+                    return _wrap({"jsonrpc": "2.0", "id": msg_id, "result": {}})
+                try:
+                    return _wrap(json.loads(raw))
+                except json.JSONDecodeError as exc:
+                    raise UpstreamError(-32000, f"upstream returned non-JSON: {exc}") from exc
+
+            data_lines: list[str] = []
+            total = 0
+            async for line in response.aiter_lines():
+                if line.startswith("data:"):
+                    data_lines.append(line[5:].lstrip())
+                    total += len(line)
+                    if total > _MAX_RESPONSE_BYTES:
+                        raise UpstreamError(-32000, "upstream response too large")
+                elif line == "" and data_lines:
+                    payload = "\n".join(data_lines)
+                    data_lines = []
+                    try:
+                        parsed = json.loads(payload)
+                    except json.JSONDecodeError:
+                        continue
+                    # Ignore server-initiated requests/notifications; return the RESPONSE
+                    # to our request (matching id, or any response if we didn't set one).
+                    if isinstance(parsed, dict) and ("result" in parsed or "error" in parsed):
+                        if want_id is None or parsed.get("id") == want_id:
+                            return _wrap(parsed)
+            raise UpstreamError(-32000, "upstream SSE closed without a matching response")
     except httpx.TimeoutException as exc:
         raise UpstreamError(-32003, "upstream request timeout") from exc
     except httpx.HTTPError as exc:
         raise UpstreamError(-32000, f"upstream HTTP error: {exc}") from exc
-    return await _read_json_response(
-        response,
-        transport=session.transport,
-        msg_id=msg_id,
-        session=session,
-        started=started,
-    )
 
 
 async def _post_sse(
@@ -402,6 +453,41 @@ async def _post_sse(
         session=session,
         started=started,
     )
+
+
+async def _initialize_session(
+    session: UpstreamSession, connect_timeout: float, init_timeout: float
+) -> None:
+    """Run the MCP initialize handshake against the upstream, once per session.
+
+    The gateway routes SINGLE methods through the sandbox (it no longer performs the
+    handshake itself for sandbox-routed transports), so the agent must ``initialize``
+    the upstream before the first real method, then send ``notifications/initialized``.
+    """
+    init_msg = {
+        "jsonrpc": "2.0", "id": "_agent_init", "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "mcp-sandbox-agent", "version": "0.2.0"},
+        },
+    }
+    if session.transport == "streamable-http":
+        await _post_streamable_http(session, init_msg, init_timeout, "_agent_init")
+    elif session.transport == "sse":
+        await _post_sse(session, init_msg, connect_timeout, init_timeout, "_agent_init")
+    # Best-effort notifications/initialized (a notification — no response expected).
+    try:
+        notif = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+        headers = {**session.headers, "Content-Type": "application/json"}
+        if session.session_id:
+            headers["Mcp-Session-Id"] = session.session_id
+        assert session.client is not None
+        target = session.sse_messages_url or session.url
+        await session.client.post(target, json=notif, headers=headers, timeout=connect_timeout)
+    except Exception:  # noqa: BLE001 — notification delivery is best-effort
+        pass
+    session.initialized = True
 
 
 async def send_upstream_jsonrpc(
@@ -462,6 +548,14 @@ async def send_upstream_jsonrpc(
 
     async with session.lock:
         try:
+            # Auto-handshake: initialize the upstream session on first real method
+            # (streamable-http/sse only; websocket manages its own handshake).
+            if (
+                not session.initialized
+                and transport in ("streamable-http", "sse")
+                and method not in ("initialize", "notifications/initialized")
+            ):
+                await _initialize_session(session, connect_timeout, init_timeout)
             if transport == "streamable-http":
                 result = await _post_streamable_http(session, message, method_timeout, msg_id)
             elif transport == "sse":
