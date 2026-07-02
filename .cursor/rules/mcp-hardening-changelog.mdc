@@ -160,3 +160,9 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   floor) → tag (['GDPR','HIPAA','PII']) → audit (MCPEvent w/ latency+trace). Item 4 minimize = N-A for MCP
   (minimize_context is chat-only). Only G2 open: 3b (field RBAC redaction on adapter) + 5 (vocab). Evidence:
   mcp-parallel/findings/backstop-p6-per-call-chain/.
+- **CHG-0022** (2026-07-02) — G3 item 8: `docker_manager._run_kwargs` now propagates
+  MCP_STDIO_REQUIRE_PINNED_PACKAGES + MCP_STDIO_PACKAGE_ALLOWLIST into the sandbox env (default OFF
+  pass-through) so the agent's stdio_manager pin/allowlist checks are reachable. Was: only
+  npm_config_ignore_scripts set → pin/allowlist defaulted OFF/unreachable (npx <arbitrary>@latest risk).
+  Default OFF so live UNPINNED servers still run. +1 broker test; 27 passed. REMAINING: set REQUIRE_PINNED=true
+  (needs all servers pinned) + locked .npmrc/registry in sandbox image.

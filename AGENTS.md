@@ -93,6 +93,10 @@
     [N-A for MCP] → scan+redact [scan_trace tier1 in→out, decision=redact] → tag [GDPR,HIPAA,PII] → audit).
     item 4 minimize = N-A (gateway forwards only tool args; minimize_context is chat-only). Only G2 open: 3b
     (field RBAC) + 5 (vocab). Evidence mcp-parallel/findings/backstop-p6-per-call-chain/.
+  - CHG-0022 (2026-07-02) — G3 item 8: `docker_manager._run_kwargs` now propagates the npm pin/allowlist
+    env (MCP_STDIO_REQUIRE_PINNED_PACKAGES/PACKAGE_ALLOWLIST) into the sandbox (default OFF pass-through) so
+    the agent's enforcement is reachable; was unreachable (defaulted OFF). +1 broker test; 27 passed.
+    Remaining: enable in prod (pin all servers) + locked .npmrc/registry in sandbox image.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

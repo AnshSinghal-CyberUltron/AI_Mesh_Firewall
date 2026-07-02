@@ -416,6 +416,20 @@ class DockerManager:
             "NPM_CONFIG_CACHE": "/var/npm-cache",
             # Kill postinstall lifecycle scripts during npx fetch (supply-chain RCE vector).
             "npm_config_ignore_scripts": "true",
+            # BACKSTOP CHG-0022 (item 8): propagate the npm/PyPI package pin + allowlist
+            # controls INTO the sandbox so the agent's stdio_manager can enforce them.
+            # The enforcement code (sandbox-image/.../stdio_manager.py: _REQUIRE_PINNED_
+            # PACKAGES / _PACKAGE_ALLOWLIST) reads these envs, but they were never
+            # propagated by _run_kwargs — so they defaulted OFF (allow-any, no pin) and
+            # only npm_config_ignore_scripts was active. Pass-through (default OFF) so an
+            # operator opts in via the broker env WITHOUT breaking existing unpinned
+            # servers (e.g. the "everything" test server is registered unpinned).
+            "MCP_STDIO_REQUIRE_PINNED_PACKAGES": os.environ.get(
+                "MCP_STDIO_REQUIRE_PINNED_PACKAGES", "false"
+            ),
+            "MCP_STDIO_PACKAGE_ALLOWLIST": os.environ.get(
+                "MCP_STDIO_PACKAGE_ALLOWLIST", ""
+            ),
             "UV_CACHE_DIR": "/var/cache/uv",
             "XDG_CACHE_HOME": "/var/cache",
         }

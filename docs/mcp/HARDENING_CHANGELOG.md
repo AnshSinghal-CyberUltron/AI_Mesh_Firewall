@@ -685,3 +685,31 @@ the prod compose/manifests is tracked under G3 item 12.
   (least-privilege via minimal forwarding + item 2 redaction + item 3 authz). The only 1.4 (G2) work still
   open is item 3b (per-policy field-level RBAC redaction on the adapter path) and item 5's vocabulary
   unification.
+
+### CHG-0022 — Propagate npm/PyPI pin + allowlist controls into the sandbox (G3 item 8)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 8 (no unknown npm on the host — supply-chain) — makes the pin/allowlist
+  controls reachable; enforcing them in prod is a separate operator step.
+- **Files:** `services/mcp-broker/src/sandbox/docker_manager.py` (`_run_kwargs` environment) ·
+  `services/mcp-broker/tests/test_sandbox_lifecycle.py` (+1 test).
+- **WHAT:** `_run_kwargs` now propagates `MCP_STDIO_REQUIRE_PINNED_PACKAGES` and
+  `MCP_STDIO_PACKAGE_ALLOWLIST` from the broker's env into the sandbox container env (pass-through, default
+  OFF), so the sandbox agent's `stdio_manager` enforcement (`_REQUIRE_PINNED_PACKAGES` / `_PACKAGE_ALLOWLIST`
+  checks) becomes reachable and operator-configurable.
+- **WHY (gap):** BACKSTOP_FINDINGS item 8 — CONFIRMED LIVE: `docker inspect org-a-mcp-sandbox` showed
+  `npm_config_ignore_scripts=true` (postinstall-RCE blocked) but NO pin/allowlist envs; `_run_kwargs` set
+  only `ignore_scripts`, so the enforcement code (which reads those envs) defaulted OFF (allow-any, no pin).
+  An org could `npx <arbitrary>@latest` (typosquat / backdoored-release / Shai-Hulud vector).
+- **NOW DOES:** the pin/allowlist controls reach the sandbox; setting them on the broker (e.g.
+  `MCP_STDIO_REQUIRE_PINNED_PACKAGES=true`) now enforces them per the agent's existing checks. Default OFF
+  so it does NOT break the currently-running UNPINNED servers (the live "everything" test server is
+  registered `@modelcontextprotocol/server-everything` with no version).
+- **Touched whose work:** broker `docker_manager` (prior sessions; NOT in the hot P4.13/P6.18 zone — last
+  touched `ef43c41f`). Change is my-diff-only + non-breaking (default OFF).
+- **VERIFY:** `cd services/mcp-broker && .venv/bin/python -m pytest tests/test_sandbox_lifecycle.py -q` →
+  27 passed (new `test_run_kwargs_propagate_npm_supply_chain_controls`: default OFF + operator-set
+  propagation). A newly-created sandbox's `docker inspect ... Config.Env` would then show the vars.
+- **REMAINING for G3 item 8:** to actually ENFORCE in prod: set `MCP_STDIO_REQUIRE_PINNED_PACKAGES=true`
+  (requires pinning every registered server's package spec) and bake a locked `.npmrc` / private registry
+  into the sandbox image (registry is still default public npmjs). This entry makes the controls
+  propagate/configurable; turning them ON is an operator/registration policy step.

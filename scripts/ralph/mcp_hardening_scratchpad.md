@@ -136,6 +136,15 @@
       broker_send_rpc (unified /{org}/rpc handles ws) OR document ws as legacy; independent live
       http-via-sandbox drive (register a streamable-http server, assert 0 direct upstream dials).
 - [ ] 8. No unknown npm on host — proven.
+      PROGRESS — CHG-0022 (2026-07-02): confirmed live gap (sandbox had npm_config_ignore_scripts but NOT
+      the pin/allowlist envs; docker_manager._run_kwargs only set ignore_scripts, so the agent's pin/allowlist
+      enforcement defaulted OFF/unreachable). FIXED: _run_kwargs now propagates MCP_STDIO_REQUIRE_PINNED_
+      PACKAGES + MCP_STDIO_PACKAGE_ALLOWLIST into the sandbox env (default OFF pass-through, non-breaking —
+      live UNPINNED "everything" servers still run). +1 broker test; test_sandbox_lifecycle.py 27 passed.
+      REMAINING before [x]: (1) ENABLE in prod — set MCP_STDIO_REQUIRE_PINNED_PACKAGES=true (requires pinning
+      every registered server's package spec); (2) bake a locked .npmrc/private registry into the sandbox
+      image (registry still default public npmjs); (3) malicious-postinstall fixture proven inert via egress
+      capture (audit's item-8 acceptance).
 - [ ] 9. Gateway auth/authz/validation/rate-limit/policy/audit — verified + hardened.
       LIVE VERIFIED (auth/authz/validation) — CHG-0016 (2026-07-02): probed the live gateway. Auth ENFORCED
       (no-auth→401, bad-key→401); CROSS-ORG key ISOLATION ENFORCED (org-a key on org-b endpoint→403

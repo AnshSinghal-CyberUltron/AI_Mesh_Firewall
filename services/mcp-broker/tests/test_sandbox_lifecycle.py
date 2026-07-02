@@ -297,6 +297,26 @@ def test_runtime_required_succeeds_when_runsc_available():
     assert run_kwargs["runtime"] == "runsc"
 
 
+def test_run_kwargs_propagate_npm_supply_chain_controls(monkeypatch: pytest.MonkeyPatch):
+    """BACKSTOP CHG-0022 (item 8): the npm/PyPI pin + allowlist controls are propagated
+    INTO the sandbox env (default OFF pass-through) so the agent's stdio_manager can
+    enforce them. Previously only npm_config_ignore_scripts was set, leaving the pin/
+    allowlist checks unreachable (default allow-any / no-pin)."""
+    manager = DockerManager(client=_mock_client(), config=SandboxDockerConfig())
+    # Default: propagated with safe OFF defaults (existing unpinned servers still run).
+    monkeypatch.delenv("MCP_STDIO_REQUIRE_PINNED_PACKAGES", raising=False)
+    monkeypatch.delenv("MCP_STDIO_PACKAGE_ALLOWLIST", raising=False)
+    env = manager._run_kwargs("acme")["environment"]
+    assert env["MCP_STDIO_REQUIRE_PINNED_PACKAGES"] == "false"
+    assert env["MCP_STDIO_PACKAGE_ALLOWLIST"] == ""
+    # When an operator sets them on the broker, they now REACH the sandbox.
+    monkeypatch.setenv("MCP_STDIO_REQUIRE_PINNED_PACKAGES", "true")
+    monkeypatch.setenv("MCP_STDIO_PACKAGE_ALLOWLIST", "@scope/pkg,@other/pkg")
+    env2 = manager._run_kwargs("acme")["environment"]
+    assert env2["MCP_STDIO_REQUIRE_PINNED_PACKAGES"] == "true"
+    assert env2["MCP_STDIO_PACKAGE_ALLOWLIST"] == "@scope/pkg,@other/pkg"
+
+
 def test_egress_lockdown_injects_proxy_env():
     config = SandboxDockerConfig(
         egress_lockdown=True,
