@@ -77,10 +77,35 @@
         mcp-parallel/findings/stress-r2/REGRESSION_B1_FAILCLOSED.md.
 
 ## R5 — Client E2E stress with 10 real free OpenRouter models
-- [ ] 6. Playwright as a client: in ModelConnectionPanel, add provider (OpenAI-compatible, base URL
+- [~] 6. Playwright as a client: in ModelConnectionPanel, add provider (OpenAI-compatible, base URL
       https://openrouter.ai/api/v1), enter OPENROUTER_KEY (from env, typed into the UI — NEVER stored by
       you), connect 10 FREE models (query OpenRouter /models, pricing.prompt==0). Verify they appear as
       connected. (Pre-commit key scan must stay clean.)
+      R5.1 DONE 2026-07-02 — RUNTIME + AUTH + NAV established (recipe for next iteration):
+        * STACK IS UP via docker compose (another session started it): control :8100 (healthy),
+          gateway :8300, frontend host port :8180 (container 5173), postgres/redis/rabbitmq healthy.
+          `docker ps` to confirm; `docker compose up -d control gateway frontend` if any down.
+        * FRONTEND = http://localhost:8180  (proxies /api->control:8100, /v1 + /health -> gateway:8300).
+        * AUTH: login page at /login. Users seeded: admin@zeroshield.io (org ZeroShield id 2), admin@default.local,
+          admin@acme.local, admin@org-a.io, admin@org-b.io. Seed password unknown (ZS_PASSWORD env at seed).
+          I reset a DEV password for admin@zeroshield.io (local test only, NOT committed) via:
+            docker compose exec -T control python manage.py shell -c "<get_user_model>; u=...get(email=...); u.set_password('<devpw>'); u.is_active=True; u.save()"
+          Log in, then frontend auto-provisions an org gateway key (useGatewayCredential -> /api/gateways/simulator-default/).
+        * NAV to the connect form: click sidebar item **"Inputs"** (Sidebar.jsx id 'firewall-config') ->
+          page AIMeshFirewallConfig (?tab=firewall-config). Nav item may be below the fold — click via
+          browser_evaluate: find button whose textContent==='Inputs' and .click(). Section "LLM Model
+          Connections" / "LLM Router & Model Provider" holds ModelConnectionPanel (showProviderForm=true
+          via LlmConnectionsCard). api_key field is type=password (masked -> safe in screenshots).
+        * CONNECT FLOW: ModelConnectionPanel PROVIDERS has NO 'openrouter' -> select provider **"Custom / Other"**
+          (value 'custom') which reveals the base-URL field (showBaseUrl = provider==='custom'). Set base URL
+          https://openrouter.ai/api/v1, type the OpenRouter key (never persist), add the free model IDs, connect.
+        * FREE MODELS (pricing.prompt==0, 25 available 2026-07-02; use ~10): cohere/north-mini-code:free,
+          nvidia/nemotron-3.5-content-safety:free, nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,
+          poolside/laguna-xs.2:free, poolside/laguna-m.1:free, google/gemma-4-26b-a4b-it:free,
+          google/gemma-4-31b-it:free, nvidia/nemotron-3-super-120b-a12b:free, liquid/lfm-2.5-1.2b-instruct:free,
+          openrouter/free. (Re-query live: curl https://openrouter.ai/api/v1/models | filter pricing.prompt==0.)
+        * Evidence screenshot (pre-key, gitignored): .playwright-mcp/r5-model-connection-page-authed.png
+      R5.2 NEXT: change provider->Custom, enter base URL + OpenRouter key, connect ~10 free models, verify connected.
 - [ ] 7. Run the adversarial corpus END-TO-END via the stock OpenAI SDK (org gateway key) through the
       full pipeline against the real models: assert enforcement is correct (no PII leak to any model;
       redact stays redact; blocks are justified), routing/kill-switch behave, and the trace is honest.
