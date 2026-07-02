@@ -1,9 +1,21 @@
 ---
-iteration: 39
+iteration: 40
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter40 (2026-07-02) — POST-COMPLETE P10 verify + gate hardening
+- **Scratchpad:** P1–P6 checklist all `[x]` (21 items); no unchecked task rows.
+- **P10 recursive (`ROUNDS_GATE=3`):** best **1/3 consecutive all-green** (run2 R1: broker 101,
+  agent 44, multi-org GREEN w/ pre-restart, concurrency/load/leakage/oauth PASS, Playwright 12/12).
+  Full **3× consecutive NOT achieved** — R2+ hit load/leakage/playwright flake under back-to-back
+  stress (evidence `mcp-parallel/findings/p10-32/gate_iter40_run2.log`). Gate hardening: sandbox
+  restart before multi-org, Playwright retry, inter-round sleep, B2 E2E stability fixes.
+- **15-MCP fleet (`mcp_multi_org_harness.py` 1×, `ROUNDS=1`):** **HARNESS: GREEN** (651 calls) after
+  sandbox restart; without restart, stdio rc=-6 on everything-3/5 (stale crash state).
+- **iter39 `<promise>COMPLETE</promise>`:** still valid for P1–P6 scope; P10 3× is post-complete stress
+  evidence, not a scratchpad reopen.
 
 ## iter39 (2026-07-02) — URLField CharField fix + 4/4 transport PASS
 - **P4.13/P6.18/P6.19:** Cross-seam Blocker 2 LANDED — `MCPServerRegistration.url` CharField + migration

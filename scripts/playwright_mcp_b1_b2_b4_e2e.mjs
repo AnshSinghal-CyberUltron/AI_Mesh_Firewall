@@ -27,7 +27,7 @@ const PASS = process.env.TEST_PASSWORD || "Adm1n!Pass#2024";
 const CHROME = process.env.CHROME_PATH || "/usr/bin/chromium-browser";
 const SHOT_DIR = process.env.SHOT_DIR || "mcp-parallel/findings/p5-17";
 const OUT = process.env.E2E_REPORT || `${SHOT_DIR}/report.json`;
-const HTTP_NAME = "e2e-verify-http-oauth";
+const HTTP_NAME = "e2e-combined-http-oauth";
 const HTTP_URL = "https://example.com/mcp";
 const TYPED_LEN = 24;
 
@@ -99,6 +99,15 @@ async function typeAndTrack(page, locator, fieldKey, text) {
   return { field: fieldKey, focusKeptAllKeystrokes: focusKeptAll };
 }
 
+
+async function dismissRegisterDialog(page) {
+  const dialogTitle = page.getByText("Register MCP Server", { exact: false }).first();
+  if (!(await dialogTitle.isVisible().catch(() => false))) return;
+  // Dialog onClose only hides the modal — Cancel would delete addServerId (B2).
+  await page.keyboard.press("Escape");
+  await dialogTitle.waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
+}
+
 async function main() {
   mkdir();
   const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
@@ -126,6 +135,8 @@ async function main() {
     A("E2E-B1-2 Linear: ≤1 Authorize button", linear && linear.authorizeCount <= 1, linear?.authorizeCount);
 
     // ---- E2E-2: HTTP oauth (B2) ----
+    await deleteByName(page, "e2e-verify-http-oauth");
+    await deleteByName(page, "e2e-combined-http-oauth");
     await deleteByName(page, HTTP_NAME);
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.locator("text=/MCP Guardrails/i").first().waitFor({ state: "visible", timeout: 60000 });
@@ -139,7 +150,7 @@ async function main() {
       page.waitForResponse((r) => r.url().includes("/api/mcp-connector/servers/") && r.request().method() === "POST", { timeout: 60000 }),
       page.getByRole("button", { name: /^Register$/, exact: true }).click(),
     ]);
-    await page.waitForTimeout(1500);
+    await page.locator("h4", { hasText: HTTP_NAME }).first().waitFor({ state: "visible", timeout: 30000 });
     const http = await cardFacts(page, HTTP_NAME);
     report.findings.http = http;
     await shot(page, "02-http-oauth-pending-card");
@@ -148,6 +159,7 @@ async function main() {
     A("E2E-B2-3 Authorize to load tools (no N tools)", http && http.hasAuthorizeToLoadTools && !http.showsNumericToolsCount, http);
     A("E2E-B2-4 exactly ONE Authorize", http && http.authorizeCount === 1, http?.authorizeCount);
     A("E2E-B2-5 Sync disabled pre-auth", http && http.syncDisabled === true, http?.syncDisabled);
+    await dismissRegisterDialog(page);
 
     // ---- E2E-3: Dialog focus (B4) ----
     await page.getByRole("button", { name: /^Register Server$/i }).first().click();

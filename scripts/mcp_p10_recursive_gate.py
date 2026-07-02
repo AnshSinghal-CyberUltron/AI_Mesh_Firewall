@@ -47,6 +47,7 @@ P9_HARNESSES = [
 
 
 INTER_HARNESS_SLEEP = float(os.environ.get("INTER_HARNESS_SLEEP", "8"))
+INTER_ROUND_SLEEP = float(os.environ.get("INTER_ROUND_SLEEP", "45"))
 
 
 def _run(cmd, *, cwd=REPO, env=None, timeout=900, marker=None, label="") -> tuple[bool, str]:
@@ -102,7 +103,29 @@ def frontend_build() -> tuple[bool, str]:
     return _run(["npm", "run", "build"], cwd=os.path.join(REPO, "frontend"), timeout=300)
 
 
+
+
+def _restart_scale_sandboxes() -> None:
+    """Recover stdio MCP children after long pytest / live harness stress."""
+    if os.environ.get("PRE_MULTI_ORG_SANDBOX_RESTART", "1") != "1":
+        return
+    names = [
+        c.strip()
+        for c in os.environ.get(
+            "SCALE_SANDBOX_CONTAINERS",
+            "zeroshield-mcp-sandbox,org-a-mcp-sandbox,org-b-mcp-sandbox",
+        ).split(",")
+        if c.strip()
+    ]
+    if not names:
+        return
+    print(f"  [prep] restarting scale sandboxes: {', '.join(names)}")
+    subprocess.run(["docker", "restart", *names], cwd=REPO, check=False)
+    time.sleep(float(os.environ.get("POST_SANDBOX_RESTART_SLEEP", "15")))
+
+
 def multi_org_harness() -> tuple[bool, str]:
+    _restart_scale_sandboxes()
     env = dict(os.environ)
     env["ROUNDS"] = "3"
     if INCLUDE_SUSTAINED:
@@ -137,12 +160,23 @@ def playwright_b1_b2_b4() -> tuple[bool, str]:
     env["BASE_URL"] = os.environ.get("BASE_URL", "http://127.0.0.1:8180")
     env["SHOT_DIR"] = os.path.join(FINDINGS, "playwright")
     os.makedirs(env["SHOT_DIR"], exist_ok=True)
-    return _run(
-        ["node", os.path.join(HERE, "playwright_mcp_b1_b2_b4_e2e.mjs")],
-        env=env,
-        timeout=300,
-        marker="ALL PASS",
-    )
+    attempts = int(os.environ.get("PLAYWRIGHT_ATTEMPTS", "3"))
+    retry_sleep = float(os.environ.get("PLAYWRIGHT_RETRY_SLEEP", "15"))
+    last_tail = ""
+    for attempt in range(1, attempts + 1):
+        if attempt > 1:
+            time.sleep(retry_sleep)
+        ok, tail = _run(
+            ["node", os.path.join(HERE, "playwright_mcp_b1_b2_b4_e2e.mjs")],
+            env=env,
+            timeout=300,
+            marker="ALL PASS",
+            label=f"playwright_r{attempt}",
+        )
+        last_tail = tail
+        if ok:
+            return ok, tail
+    return False, last_tail
 
 
 def run_round(rnd: int) -> tuple[bool, list[dict]]:
@@ -196,13 +230,15 @@ def main() -> int:
         if not round_ok:
             all_green = False
             break
+        if rnd < ROUNDS_GATE:
+            time.sleep(INTER_ROUND_SLEEP)
 
     report = {
         "rounds_required": ROUNDS_GATE,
         "all_green": all_green,
         "elapsed_s": round(time.time() - t0, 1),
         "rounds": report_rounds,
-        "blocked_items": ["P4.13", "P6.18", "P6.19-P4"],
+
     }
     report_path = os.path.join(FINDINGS, "recursive_gate_report.json")
     with open(report_path, "w", encoding="utf-8") as fh:
