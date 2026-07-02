@@ -531,6 +531,21 @@ function MCPConnectorPanelInner() {
           });
         }
         setAddSaving(false);
+      } else {
+        // Retry after a failed connect — apply any form edits to the existing row
+        // (so "fix + retry" actually takes effect) before re-connecting (CP08).
+        setAddSaving(true);
+        const payload = buildServerPayload(addForm);
+        const patchRes = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!patchRes.ok) {
+          const body = await patchRes.json().catch(() => ({}));
+          throw new Error(body.detail || body.error || `HTTP ${patchRes.status}`);
+        }
+        setAddSaving(false);
       }
 
       // Step 2 (bug #2 / CP07) — attempt the MCP connection + tool discovery INLINE.
