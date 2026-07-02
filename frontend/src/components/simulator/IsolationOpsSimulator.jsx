@@ -39,6 +39,7 @@ export function IsolationOpsSimulator() {
 
   const [cbState, setCbState] = useState(null);
   const [cbResult, setCbResult] = useState(null);
+  const [cbTriggering, setCbTriggering] = useState(false);
   const [errorCount, setErrorCount] = useState(10);
   const [polling, setPolling] = useState(false);
 
@@ -157,7 +158,16 @@ export function IsolationOpsSimulator() {
   };
 
   const handleCbTrigger = async () => {
-    const model = gatewayModels.selectedModel || "gpt-4o-mini";
+    // Require a real selection — the live/isolate tabs already do. Silently
+    // firing a trigger against a hardcoded "gpt-4o-mini" the operator never
+    // chose (then reporting that model back) is a fabricated action.
+    if (!gatewayModels.selectedModel) {
+      setCbResult({ final_action: "error", error: "Select a connected model before triggering the circuit breaker." });
+      return;
+    }
+    if (cbTriggering) return;
+    setCbTriggering(true);
+    const model = gatewayModels.selectedModel;
     let parsed = null;
     let httpOk = false;
     try {
@@ -182,10 +192,15 @@ export function IsolationOpsSimulator() {
     });
     setPolling(true);
     await loadCbState();
+    setCbTriggering(false);
   };
 
   const handleCbReset = async () => {
-    const model = gatewayModels.selectedModel || "gpt-4o-mini";
+    if (!gatewayModels.selectedModel) {
+      setCbResult({ final_action: "error", error: "Select a connected model before resetting the circuit breaker." });
+      return;
+    }
+    const model = gatewayModels.selectedModel;
     await fetchWithAuth("/api/admin/gateway/circuit-breaker/reset/", {
       method: "POST",
       body: JSON.stringify({ model }),
@@ -248,7 +263,7 @@ export function IsolationOpsSimulator() {
       onKeyChange={engine.setGatewayKey}
       scenarios={[]}
       onExecute={tab === "live" ? handleLiveChat : tab === "circuit" ? handleCbTrigger : handleIsolate}
-      executing={liveLoading || isolating || engine.executing}
+      executing={liveLoading || isolating || cbTriggering || engine.executing}
       result={tab === "live" ? liveResult : tab === "circuit" ? cbResult : isolateResult}
       extraActions={
         <button
@@ -268,7 +283,7 @@ export function IsolationOpsSimulator() {
               Playground key risk: <strong className="font-mono text-slate-800 dark:text-slate-200">{riskDisplay}</strong>
             </span>
             {engine.keyPrefix && (
-              <span className="text-slate-500 dark:text-slate-500 font-mono">prefix {engine.keyPrefix}</span>
+              <span className="text-slate-500 dark:text-slate-400 font-mono">prefix {engine.keyPrefix}</span>
             )}
           </div>
 

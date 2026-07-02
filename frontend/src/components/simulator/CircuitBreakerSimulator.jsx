@@ -13,11 +13,11 @@ export function CircuitBreakerSimulator() {
   const [errorCount, setErrorCount] = useState(10);
   const [polling, setPolling] = useState(false);
   const [riskModel, setRiskModel] = useState("gpt-4o");
-  const [riskCount, setRiskCount] = useState(20);
   const [riskSeverity, setRiskSeverity] = useState(0.85);
   const [riskType, setRiskType] = useState("output_guard");
   const [riskResult, setRiskResult] = useState(null);
   const [riskInjecting, setRiskInjecting] = useState(false);
+  const [triggering, setTriggering] = useState(false);
 
   // Load circuit breaker state
   // Phase 1 Fx-3: route through Django admin proxy (IsAdminOrSuperuser)
@@ -51,6 +51,11 @@ export function CircuitBreakerSimulator() {
   const handleTrigger = async () => {
     // Phase 1 Fx-3: proxy trigger through Django admin RBAC instead of
     // engine.executeScenario which uses the per-org gateway key (non-admin).
+    // handleTrigger bypasses the hook's executeScenario, so engine.executing
+    // never flips — drive the Execute button's in-flight disable off a local
+    // `triggering` flag to prevent double-submit / concurrent injections.
+    if (triggering) return;
+    setTriggering(true);
     let parsed = null;
     let httpOk = false;
     try {
@@ -81,6 +86,7 @@ export function CircuitBreakerSimulator() {
     });
     setPolling(true);
     await loadState();
+    setTriggering(false);
   };
 
   const handleReset = async () => {
@@ -118,7 +124,6 @@ export function CircuitBreakerSimulator() {
               auto_isolated: data?.status === "isolated",
               composite_score: data?.risk_score,
               threshold: data?.threshold,
-              events_injected: riskCount,
             }
           : { error: data?.error || data?.detail || "Failed to isolate model" },
       );
@@ -144,11 +149,11 @@ export function CircuitBreakerSimulator() {
       onKeyChange={engine.setGatewayKey}
       scenarios={[]}
       onExecute={handleTrigger}
-      executing={engine.executing}
+      executing={engine.executing || triggering}
       result={result}
       customInput={
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Target Model</label>
               <input
@@ -254,30 +259,49 @@ export function CircuitBreakerSimulator() {
           </div>
         )}
 
-        {/* Trigger result */}
-        {result && !result.error && (
-          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
-            <h4 className="text-xs font-semibold text-amber-400 mb-1">Error Injection Result</h4>
-            <div className="grid grid-cols-3 gap-3 text-[11px]">
-              <div>
-                <span className="text-slate-600 dark:text-slate-400">Model</span>
-                <div className="font-medium text-slate-800 dark:text-slate-200">{result.model}</div>
-              </div>
-              <div>
-                <span className="text-slate-600 dark:text-slate-400">Errors Injected</span>
-                <div className="font-medium text-red-700 dark:text-red-300">{result.errors_injected}</div>
-              </div>
-              <div>
-                <span className="text-slate-600 dark:text-slate-400">New State</span>
-                <div className={`font-bold uppercase ${
-                  result.state === "open" ? "text-red-700 dark:text-red-300" :
-                  result.state === "half_open" ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"
-                }`}>
-                  {result.state}
+        {/* Trigger result — the injection response is normalised to {ok, data}.
+            A failed trigger (ok:false) must NOT render a green success card:
+            read Model/Errors from the operator's own request inputs and take
+            the authoritative post-injection state from the freshly-loaded
+            cbState (falling back to the response's own state field). */}
+        {result && (
+          result.ok ? (
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+              <h4 className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-1">Error Injection Result</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px]">
+                <div>
+                  <span className="text-slate-600 dark:text-slate-400">Model</span>
+                  <div className="font-medium text-slate-800 dark:text-slate-200 break-all">{targetModel}</div>
+                </div>
+                <div>
+                  <span className="text-slate-600 dark:text-slate-400">Errors Injected</span>
+                  <div className="font-medium text-red-700 dark:text-red-300">{errorCount}</div>
+                </div>
+                <div>
+                  <span className="text-slate-600 dark:text-slate-400">New State</span>
+                  {(() => {
+                    const st = cbState?.models?.find((m) => m.model === targetModel)?.state ?? result.data?.state;
+                    return (
+                      <div className={`font-bold uppercase ${
+                        st === "open" ? "text-red-700 dark:text-red-300" :
+                        st === "half_open" || st === "half-open" ? "text-amber-700 dark:text-amber-300" :
+                        st ? "text-emerald-700 dark:text-emerald-300" : "text-slate-500 dark:text-slate-400"
+                      }`}>
+                        {st || "—"}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+              <h4 className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">Error Injection Failed</h4>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 break-words">
+                {result.data?.message || "The circuit-breaker trigger did not complete. Check the target model and gateway connection."}
+              </p>
+            </div>
+          )
         )}
 
         {/* Model Risk Injection Section */}
@@ -286,7 +310,7 @@ export function CircuitBreakerSimulator() {
             <TrendingUp className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
             Model Risk Injection (Auto-Isolation Test)
           </h4>
-          <div className="grid grid-cols-4 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
             <div>
               <label className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Model</label>
               <input
@@ -312,17 +336,6 @@ export function CircuitBreakerSimulator() {
               </select>
             </div>
             <div>
-              <label className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Events: {riskCount}</label>
-              <input
-                type="range"
-                min="5"
-                max="100"
-                value={riskCount}
-                onChange={(e) => setRiskCount(parseInt(e.target.value))}
-                className="w-full mt-2"
-              />
-            </div>
-            <div>
               <label className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Severity: {riskSeverity.toFixed(2)}</label>
               <input
                 type="range"
@@ -338,25 +351,28 @@ export function CircuitBreakerSimulator() {
           <button
             onClick={handleRiskInject}
             disabled={riskInjecting || engine.connectionStatus === "disconnected"}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-red-600 hover:bg-red-500 disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:text-slate-500 text-white transition-colors"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              riskInjecting || engine.connectionStatus === "disconnected"
+                ? "bg-slate-300 text-slate-500 dark:bg-slate-700 dark:text-slate-400 cursor-not-allowed"
+                : "bg-red-600 hover:bg-red-500 text-white"
+            }`}
           >
             <ShieldOff className="w-3 h-3" />
             {riskInjecting ? "Injecting..." : "Inject Risk Events"}
           </button>
           {riskResult && !riskResult.error && (
             <div className={`mt-3 p-3 rounded-lg border ${riskResult.auto_isolated ? "bg-red-500/10 border-red-500/30" : "bg-amber-500/10 border-amber-500/30"}`}>
-              <h4 className={`text-xs font-semibold mb-1 ${riskResult.auto_isolated ? "text-red-400" : "text-amber-400"}`}>
+              <h4 className={`text-xs font-semibold mb-1 ${riskResult.auto_isolated ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
                 {riskResult.auto_isolated ? "AUTO-ISOLATED" : "Risk Score Updated"}
               </h4>
-              <div className="grid grid-cols-3 gap-3 text-[11px]">
+              <div className="grid grid-cols-2 gap-3 text-[11px]">
                 <div><span className="text-slate-600 dark:text-slate-400">Composite Score</span><div className="font-semibold text-slate-800 dark:text-slate-200">{riskResult.composite_score?.toFixed(1)}</div></div>
                 <div><span className="text-slate-600 dark:text-slate-400">Threshold</span><div className="font-semibold text-slate-800 dark:text-slate-200">{riskResult.threshold}</div></div>
-                <div><span className="text-slate-600 dark:text-slate-400">Events Injected</span><div className="font-semibold text-slate-800 dark:text-slate-200">{riskResult.events_injected}</div></div>
               </div>
             </div>
           )}
           {riskResult?.error && (
-            <div className="mt-3 p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400">{riskResult.error}</div>
+            <div className="mt-3 p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-700 dark:text-red-400">{riskResult.error}</div>
           )}
         </div>
       </div>

@@ -1134,14 +1134,11 @@ export function normalizeOutputGuardResult(data, httpStatus) {
     compliance_tags: zs.compliance_tags || [],
     raw_text: content,
     safe_text: zs.redacted_response || zs.rewritten_response || content,
-    redacted_tokens: [],
-    hallucination: {
-      risk_score: zs.factuality_warning ? 0.7 : 0,
-      pattern_score: 0,
-      grounding_score: 1,
-      contradiction_score: 0,
-      matched_markers: [],
-    },
+    // The gateway returns a single boolean factuality signal, not granular
+    // grounding/pattern/contradiction sub-scores. Carry ONLY the real flag so
+    // the UI cannot render fabricated per-metric percentages (grounding was
+    // hardcoded 100%, pattern/contradiction 0%, risk a boolean→70% literal).
+    factuality_warning: Boolean(zs.factuality_warning),
     escalation_flag: Boolean(zs.review_required || zs.security_incident),
     latency_ms: zs.processing_time_ms,
   };

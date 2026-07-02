@@ -306,7 +306,12 @@ function StageDetailCard({ stage, onClose, isPinned }) {
     <div className={`rounded-2xl border bg-white/95 p-4 shadow-2xl backdrop-blur-sm dark:bg-slate-900/95 ${theme.card}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <h4 className="text-sm font-semibold capitalize text-slate-900 dark:text-slate-100">
-          {(stage.name || "").replace(/_/g, " ")} - <span className={theme.icon}>{stage.action}</span>
+          {(stage.name || "").replace(/_/g, " ")}
+          {stage.action && (
+            <span className={`ml-1.5 inline-block rounded px-1.5 py-0.5 align-middle text-xs font-semibold ${theme.badge}`}>
+              {stage.action}
+            </span>
+          )}
         </h4>
         <button
           onClick={onClose}
@@ -495,7 +500,8 @@ function StageDetailCard({ stage, onClose, isPinned }) {
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Docs:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">
-              {stage.docs_in} in {"->"} {stage.docs_out} out ({stage.docs_dropped} dropped)
+              {stage.docs_in} in {"->"} {stage.docs_out ?? "—"} out
+              {stage.docs_dropped != null ? ` (${stage.docs_dropped} dropped)` : ""}
             </span>
           </div>
         )}

@@ -75,7 +75,29 @@
       all 8, 0 console errors + 0 net-fails when backend calm; dark+light panel shots verified (tab switch
       Attack↔Trust works, SAFE/ATTACK badges legible, Run controls, sliders, helpers). 500 bursts = known F3
       env PG "too many clients", not code. recharts still removed. Item 9 fully complete.
-- [x] 10. OutputGuardrailControls/Charts - [ ] 11. AttackSimulatorPanel - [ ] 12. PolicyManagement/Analytics
+- [x] 10. OutputGuardrailControls/Charts - [x] 11. AttackSimulatorPanel (+ simulator/*) - [ ] 12. PolicyManagement/Analytics
+      item11 DONE (module 1.1 + simulator/* across 1.1/1.3/1.4/1.5/1.6): 10-agent Workflow surfaced ~40
+      findings; fixed. HIGH DATA-INTEGRITY (fabricated verdicts): CircuitBreaker read flat result.model/state
+      but store is {ok,data} → always-blank + always-green "healthy" even on error (now reads data + honest
+      error panel); MCPGuardrail actionTone() had no "error"/"flag" branch → 500 rendered green ALLOW (added
+      ERROR/FLAG tones); OutputGuard hallucination meters were 3/4 hardcoded constants in
+      normalizeOutputGuardResult (grounding always 100%, pattern/contradiction 0%, risk=boolean→70%) → replaced
+      with honest single factuality_warning signal; MCPGuardrail dry-run defaulted allow on 200-with-null-body
+      (now requires body). IN-FLIGHT RACES (Execute never disabled → concurrent setResult races): fixed
+      ModelRouting/OutputGuard/CircuitBreaker/IsolationOps-circuit via local executing flags. LEAK: AttackSim
+      raw-JSON dump/copy bypassed sanitizeGuardText (Bedrock/provider literals the file says "must never reach
+      the operator UI") → added recursive sanitizeResultForDump. THEME: 5 AttackSim verdict labels (text-*-700
+      no dark → dark-on-dark), SimulatorShell status badges + copy check, StageTimeline verdict word (-500 icon
+      color as text → reuse -700/-300 badge token), +misc slate/amber. RESPONSIVE: grid-cols-4/3/2 → sm/lg
+      breakpoints (CircuitBreaker, ModelRouting, RAGIngestion, OutputGuard, SimulatorShell trace overflow).
+      MISC: removed no-op riskCount slider + fabricated events_injected; honest latency "—" (was fake 0.1ms);
+      burst-count clamp to 100; collection-required validation; copy-fail no-op; StageTimeline undefined-docs
+      guard; IsolationOps gpt-4o-mini phantom fallback removed. GATE lint 42/42, build, detector 0 on 8/9 edited
+      (StageTimeline 2 PRE-EXISTING FPs = dark:variant on light emerald tint, correct code). LIVE both themes
+      @1440/1024/768/375: overflow=0 all 8, 0 console/net; AttackSim + shared SimulatorShell verified legible,
+      keys masked. Deferred-LOW (logged): dialog focus-trap/esc, StageTimeline type=button, bulk-ingest count,
+      deriveResultAction "allow" default (load-bearing for normalized success shapes), ModelRouting dead
+      scored_models viz (honest placeholder).
       item10 DONE (module 1.7): OutputGuardrailControls = GOLD-STANDARD semantic OKLCH tokens
       (text-foreground/muted-foreground/bg-card/text-destructive/bg-warn/text-primary) → 0 edits, theme-correct
       by construction; verified controls interactive (toggle Flag pill → Save enables: disabledBefore=true→

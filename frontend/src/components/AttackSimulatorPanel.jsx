@@ -41,6 +41,24 @@ function sanitizeGuardText(text) {
     .trim();
 }
 
+/** Deep-clone a result object and neutralize any upstream provider/model
+ *  literals in EVERY string value, so the "Raw Response JSON" dump/copy honors
+ *  the same no-topology invariant as the rendered guard text. */
+function sanitizeResultForDump(value) {
+  if (typeof value === "string") {
+    let out = value;
+    for (const pattern of PROVIDER_LITERAL_PATTERNS) out = out.replace(pattern, ZEROSHIELD_GUARD_MODEL_LABEL);
+    return out;
+  }
+  if (Array.isArray(value)) return value.map(sanitizeResultForDump);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = sanitizeResultForDump(v);
+    return out;
+  }
+  return value;
+}
+
 const ATTACK_SCENARIOS = [
   {
     id: "prompt-injection",
@@ -153,18 +171,18 @@ function getStatusConfig(httpStatus, action) {
     || (httpStatus >= 400 && httpStatus !== 403 && httpStatus !== 429 && httpStatus !== 422
         && !["block", "redact", "flag"].includes(action))
   ) {
-    return { color: "amber", label: "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700" };
+    return { color: "amber", label: "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" };
   }
   if (httpStatus === 403 || action === "block") {
-    return { color: "red", label: "BLOCKED", icon: AlertTriangle, bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800", text: "text-red-700" };
+    return { color: "red", label: "BLOCKED", icon: AlertTriangle, bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800", text: "text-red-700 dark:text-red-300" };
   }
   if (action === "redact") {
-    return { color: "blue", label: "REDACTED", icon: Shield, bg: "bg-blue-50 dark:bg-blue-900/20", border: "border-blue-200 dark:border-blue-800", text: "text-blue-700" };
+    return { color: "blue", label: "REDACTED", icon: Shield, bg: "bg-blue-50 dark:bg-blue-900/20", border: "border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" };
   }
   if (action === "flag") {
-    return { color: "amber", label: "FLAGGED", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700" };
+    return { color: "amber", label: "FLAGGED", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" };
   }
-  return { color: "green", label: "ALLOWED", icon: CheckCircle, bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800", text: "text-emerald-700" };
+  return { color: "green", label: "ALLOWED", icon: CheckCircle, bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300" };
 }
 
 function getSignalBadges(zeroshield = {}) {
@@ -530,7 +548,7 @@ export function AttackSimulatorPanel() {
 
   const handleCopyResult = () => {
     if (result) {
-      copyToClipboard(JSON.stringify(result, null, 2));
+      copyToClipboard(JSON.stringify(sanitizeResultForDump(result), null, 2));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -691,7 +709,7 @@ export function AttackSimulatorPanel() {
               className="flex items-center gap-2 rounded-2xl bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:bg-orange-400"
             >
               {burstRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-              {burstRunning ? "Bursting..." : `Burst Test (×${Math.max(1, Number(burstCount) || 10)})`}
+              {burstRunning ? "Bursting..." : `Burst Test (×${Math.min(100, Math.max(1, Number(burstCount) || 10))})`}
             </button>
             <InfoTooltip title="Burst Test">
               Sends concurrent /v1/chat/completions requests using the current prompt to stress authentication and rate limiting.
@@ -701,7 +719,7 @@ export function AttackSimulatorPanel() {
           </div>
         </div>
         {selectedScenario && (
-          <span className="text-[10px] text-slate-400">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400">
             Scenario: {ATTACK_SCENARIOS.find((s) => s.id === selectedScenario)?.description}
           </span>
         )}
@@ -860,8 +878,8 @@ export function AttackSimulatorPanel() {
                     }`}>
                       {stage.action.toUpperCase()}
                     </div>
-                    <div className="text-[10px] text-slate-400">
-                      {Number.isFinite(Number(stage.latency_ms)) ? `${stage.latency_ms}ms` : "0.1ms"}
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                      {Number.isFinite(Number(stage.latency_ms)) ? `${stage.latency_ms}ms` : "—"}
                     </div>
                   </div>
                 ))}
@@ -1015,7 +1033,7 @@ export function AttackSimulatorPanel() {
             {showRawJson && (
               <div className="px-3 pb-3">
                 <pre className="bg-slate-900 text-slate-100 rounded-lg p-3 text-[10px] font-mono overflow-x-auto max-h-64 overflow-y-auto">
-                  {JSON.stringify(result, null, 2)}
+                  {JSON.stringify(sanitizeResultForDump(result), null, 2)}
                 </pre>
               </div>
             )}
@@ -1106,17 +1124,17 @@ export function AttackSimulatorPanel() {
             </div>
             <div className="space-y-1">
               {burstResults.results.map((r) => (
-                <div key={r.index} className="flex items-center gap-2 text-[11px]">
+                <div key={r.index} className="flex flex-wrap items-center gap-2 text-[11px]">
                   <span className="text-slate-500 w-4 text-right">#{r.index}</span>
                   <span className={`w-16 font-semibold ${
-                    r.action === "block" ? "text-red-600" :
-                    r.action === "redact" ? "text-blue-600" :
-                    r.action === "error" ? "text-red-400" : "text-emerald-600"
+                    r.action === "block" ? "text-red-600 dark:text-red-400" :
+                    r.action === "redact" ? "text-blue-600 dark:text-blue-400" :
+                    r.action === "error" ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
                   }`}>
                     {r.action.toUpperCase()}
                   </span>
-                  <span className="text-slate-400">{r.latency}ms</span>
-                  {r.rate_limited && <span className="text-amber-500 text-[10px]">RATE LIMITED</span>}
+                  <span className="text-slate-500 dark:text-slate-400">{r.latency}ms</span>
+                  {r.rate_limited && <span className="text-amber-600 dark:text-amber-400 text-[10px]">RATE LIMITED</span>}
                   {r.request_id && <span className="text-slate-500 font-mono text-[10px] ml-auto">{r.request_id}</span>}
                 </div>
               ))}

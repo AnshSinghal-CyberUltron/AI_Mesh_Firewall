@@ -82,6 +82,25 @@ function actionTone(action) {
       text: "text-sky-700 dark:text-sky-300",
     };
   }
+  if (a === "flag" || a === "alert") {
+    return {
+      label: "FLAG",
+      icon: AlertTriangle,
+      ring: "border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-900/20",
+      text: "text-amber-700 dark:text-amber-300",
+    };
+  }
+  // A backend failure (non-2xx / gateway down → action "error") must render as
+  // a distinct ERROR verdict, never fall through to the green ALLOW default —
+  // showing a 500 as "ALLOWED" in a security console is a fabricated decision.
+  if (a === "error") {
+    return {
+      label: "ERROR",
+      icon: AlertTriangle,
+      ring: "border-rose-300 bg-rose-50/80 dark:border-rose-700 dark:bg-rose-900/20",
+      text: "text-rose-700 dark:text-rose-300",
+    };
+  }
   return {
     label: "ALLOW",
     icon: ShieldCheck,
@@ -293,7 +312,10 @@ export function MCPGuardrailSimulator() {
     if (!result) return null;
     const { status, data, mode: m } = result;
     if (m === MODE_DRYRUN) {
-      const action = data?.action || (status === 200 ? "allow" : "error");
+      // A 200 with a null/unparseable body carries no real policy decision —
+      // don't fabricate a green "allow"; only claim allow when the dry-run
+      // actually returned a body (a real evaluation with no blocking action).
+      const action = data?.action || (status === 200 && data != null ? "allow" : "error");
       return {
         action,
         matched_policies: data?.matched_policies || [],
@@ -378,7 +400,7 @@ export function MCPGuardrailSimulator() {
             <select
               value={serverId}
               onChange={(e) => setServerId(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
               {servers.length === 0 && <option value="">No servers registered</option>}
               {servers.map((s) => (
@@ -405,7 +427,7 @@ export function MCPGuardrailSimulator() {
               value={toolName}
               onChange={(e) => setToolName(e.target.value)}
               disabled={!serverTools.length}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
               {!serverTools.length && (
                 <option value="">No tools discovered for this server</option>
@@ -454,7 +476,7 @@ export function MCPGuardrailSimulator() {
               onChange={(e) => setArgsText(e.target.value)}
               rows={8}
               className={classNames(
-                "w-full rounded-lg border bg-slate-50 p-3 font-mono text-[12px] text-slate-800 focus:outline-none dark:bg-slate-900 dark:text-slate-100",
+                "w-full rounded-lg border bg-slate-50 p-3 font-mono text-[12px] text-slate-800 dark:bg-slate-900 dark:text-slate-100",
                 argsError || !parsedArgs.ok
                   ? "border-red-400 focus:border-red-500"
                   : "border-slate-200 focus:border-indigo-500 dark:border-slate-700",

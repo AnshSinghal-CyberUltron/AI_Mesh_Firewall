@@ -63,10 +63,15 @@ export function ModelRoutingSimulator() {
   const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
   const [weights, setWeights] = useState({ cost_weight: 0.25, latency_weight: 0.25, quality_weight: 0.25, risk_weight: 0.25 });
+  // handleExecute bypasses the hook's executeScenario (calls engine.gatewayFetch
+  // directly), so engine.executing never flips. Track a local flag so the
+  // Execute button disables in-flight and concurrent clicks can't race setResult.
+  const [executing, setExecuting] = useState(false);
 
   const activeWeights = selected?.preferences || weights;
 
   const handleExecute = async () => {
+    if (executing) return;
     if (!gatewayModels.selectedModel) {
       setResult({ error: "Connect at least one model with an API key under Model Connection." });
       return;
@@ -78,6 +83,8 @@ export function ModelRoutingSimulator() {
       return;
     }
     const prefs = selected?.preferences || weights;
+    setExecuting(true);
+    try {
     const res = await engine.gatewayFetch("/v1/chat/completions", {
       method: "POST",
       body: JSON.stringify(
@@ -113,6 +120,9 @@ export function ModelRoutingSimulator() {
             ...res.data,
           },
     );
+    } finally {
+      setExecuting(false);
+    }
   };
 
   // Bar chart rendering
@@ -133,7 +143,7 @@ export function ModelRoutingSimulator() {
       selectedScenario={selected}
       onSelectScenario={setSelected}
       onExecute={handleExecute}
-      executing={engine.executing}
+      executing={engine.executing || executing}
       result={result}
       customInput={
         <div className="space-y-3">
@@ -155,7 +165,7 @@ export function ModelRoutingSimulator() {
           <label className="text-[11px] text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1">
             <Sliders className="w-3 h-3" /> Priority Weights
           </label>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {Object.entries(WEIGHT_LABELS).map(([key, label]) => {
               return (
                 <div key={key}>
