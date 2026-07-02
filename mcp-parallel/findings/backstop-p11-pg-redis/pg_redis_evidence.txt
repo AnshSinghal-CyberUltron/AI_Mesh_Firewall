@@ -1,0 +1,18 @@
+# PostgreSQL + Redis correctness LIVE verification (backstop CHG-0023, 2026-07-02)
+
+REDIS (usage correct + live):
+  mcp:scan_ver:*  -> 72 keys  (scan-config version cache-invalidation, M-15; type=string, e.g. "99";
+                                control INCRs on scan/tool changes -> gateway invalidates enabled-tools cache)
+  ratelimit:*     -> 2 keys   (S12 TPM+burst/RPM limiter active)
+  mcp:toolcalls:* -> 0 keys   (per-key tool-call cap counter; 0 active = test keys are uncapped (cap=0),
+                                and the counter has a 60s TTL. Mechanism present in mcp_proxy.py.)
+
+POSTGRES (persistence + schema correct at scale):
+  mcp_connector_mcpevent -> 109,362 events across 3 orgs
+  compliance_tags column populated: block=10, redact=265 tagged events (audit + tag persistence works)
+
+RESTART-SAFETY (graceful by design; full drill deferred):
+  Redis unreachable -> gateway degrades to pure-TTL cache validity (M-15), does NOT crash.
+  PG event recording is best-effort / fire-and-forget -> does not block tool calls.
+  GAP: actual restart DRILL (kill Redis/PG mid-load, verify recovery + no leakage) is UNSAFE on the shared
+  stack -> item 18 chaos territory (needs a dedicated host).

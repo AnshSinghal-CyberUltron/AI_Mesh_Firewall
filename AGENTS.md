@@ -97,6 +97,10 @@
     env (MCP_STDIO_REQUIRE_PINNED_PACKAGES/PACKAGE_ALLOWLIST) into the sandbox (default OFF pass-through) so
     the agent's enforcement is reachable; was unreachable (defaulted OFF). +1 broker test; 27 passed.
     Remaining: enable in prod (pin all servers) + locked .npmrc/registry in sandbox image.
+  - CHG-0023 (2026-07-02) — G3 item 11 LIVE PG+Redis correctness: Redis usage correct (scan_ver 72 keys
+    M-15 cache-invalidation; ratelimit 2 keys S12; toolcalls mechanism present); PG persistence correct at
+    scale (109,362 MCPEvents/3 orgs; compliance_tags populated). Restart-safety graceful by design; actual
+    restart-drill = item-18 chaos (unsafe on shared stack). Evidence mcp-parallel/findings/backstop-p11-pg-redis/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

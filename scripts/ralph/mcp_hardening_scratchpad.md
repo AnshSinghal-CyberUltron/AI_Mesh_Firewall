@@ -162,6 +162,14 @@
       + neighbor-safe) — but destructive bombs are UNSAFE on the shared live stack (item 17 needs an
       isolated host). Evidence: mcp-parallel/findings/backstop-p12-isolation-posture/.
 - [ ] 11. PostgreSQL + Redis schemas/usage/restart-safety verified.
+      LIVE VERIFIED (usage/schema) — CHG-0023 (2026-07-02): REDIS usage correct — mcp:scan_ver:* 72 keys
+      (M-15 scan-config version cache-invalidation, string counters e.g. "99"); ratelimit:* 2 keys (S12
+      active); mcp:toolcalls:* mechanism present (0 active = uncapped test keys, 60s TTL). POSTGRES correct
+      at scale — mcp_connector_mcpevent 109,362 events / 3 orgs; compliance_tags populated (block=10,
+      redact=265). RESTART-SAFETY graceful by design (Redis-unreachable -> pure-TTL, no crash; PG recording
+      best-effort/non-blocking). REMAINING before [x]: actual restart DRILL (kill Redis/PG mid-load, verify
+      recovery + no leakage during recovery) = item 18 chaos (UNSAFE on shared stack; needs dedicated host).
+      Evidence: mcp-parallel/findings/backstop-p11-pg-redis/pg_redis_evidence.txt.
 - [ ] 12. gVisor + seccomp/no-new-privileges/cap_drop/egress-lockdown enforced.
       LIVE VERIFIED — CHG-0015 (2026-07-02): PRESENT live = cap_drop=ALL, no-new-privileges, per-org network
       (mcp_sandbox_net_<org> distinct per org — host-run shared-bridge fallback NOT active). GAPS:

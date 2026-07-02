@@ -713,3 +713,32 @@ the prod compose/manifests is tracked under G3 item 12.
   (requires pinning every registered server's package spec) and bake a locked `.npmrc` / private registry
   into the sandbox image (registry is still default public npmjs). This entry makes the controls
   propagate/configurable; turning them ON is an operator/registration policy step.
+
+### CHG-0023 — LIVE PostgreSQL + Redis correctness verification (G3 item 11)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 11 (PostgreSQL + Redis schemas/usage/restart-safety) — usage/schema verified
+  live; the full restart-drill is item-18 chaos territory.
+- **Files:** `mcp-parallel/findings/backstop-p11-pg-redis/pg_redis_evidence.txt` (evidence).
+- **WHAT:** Inspected the live Redis + Postgres backing the gateway/control:
+    - **Redis — usage correct + live:** `mcp:scan_ver:*` = 72 keys (scan-config version cache-invalidation,
+      M-15; `type=string`, e.g. `99` — control `INCR`s on scan/tool-config changes and the gateway
+      invalidates its enabled-tools cache); `ratelimit:*` = 2 keys (S12 TPM+burst/RPM limiter active);
+      `mcp:toolcalls:*` = 0 (per-key call-cap counter — 0 active because the test keys are uncapped and the
+      counter has a 60s TTL; the mechanism is present in `mcp_proxy.py`).
+    - **Postgres — persistence + schema correct at scale:** `mcp_connector_mcpevent` holds **109,362 events
+      across 3 orgs**; the `compliance_tags` column is populated (block=10, redact=265 tagged events) — so
+      audit + tag persistence works.
+    - **Restart-safety — graceful by design:** Redis unreachable → the gateway degrades to pure-TTL cache
+      validity (M-15), it does NOT crash; PG event recording is best-effort / fire-and-forget so it does not
+      block tool calls.
+- **WHY:** the CHG-0002 audit left item 11 (Phase-3) unchecked; this is the first live evidence that the
+  Redis usage (scan-version invalidation, rate-limit, call-cap) and PG event/tag persistence are correct.
+- **NOW DOES:** confirms both data stores are used correctly and persist events/tags at scale (109k events);
+  no code changed (verification only).
+- **Touched whose work:** verifies the gateway/control Redis + PG usage (prior sessions). No files edited.
+- **VERIFY:** `docker exec ai_mesh_firewall-redis-1 redis-cli --scan --pattern 'mcp:*' | wc -l` (→ scan_ver
+  keys); `docker exec ai_mesh_firewall-postgres-1 psql -U ai_mesh_firewall -d ai_mesh_firewall -tAc 'select
+  count(*) from mcp_connector_mcpevent;'` (→ 100k+). Evidence:
+  `mcp-parallel/findings/backstop-p11-pg-redis/pg_redis_evidence.txt`.
+- **REMAINING for G3 item 11:** the actual restart DRILL — kill Redis/PG mid-load and verify recovery + no
+  cross-tenant leakage during recovery — is UNSAFE on the shared stack (item 18 chaos; needs a dedicated host).
