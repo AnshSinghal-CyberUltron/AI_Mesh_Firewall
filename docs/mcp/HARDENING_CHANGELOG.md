@@ -1164,3 +1164,33 @@ the prod compose/manifests is tracked under G3 item 12.
   harness (another session). No edits.
 - **VERIFY:** the three `grep` commands in the evidence file reproduce the audited facts (follow_redirects=False;
   no verify=False; cap_drop/read_only/memswap_limit/seccomp).
+
+### CHG-0036 — FINDING: the MCP guardrail UI does not reflect 1.4 compliance tags (G6 item 21)
+- **Date:** 2026-07-02
+- **Type:** finding only (no code change — the fix spans a control-plane change I cannot safely gate from
+  this session + a Playwright-gated frontend change owned by fe-harden).
+- **Scratchpad item:** G6 item 21 ("MCP panels reflect 1.4 — tags, redaction indicators"). Corrects the
+  fe-harden "item 11 DONE" claim (commit 6658f9fc).
+- **Files:** `mcp-parallel/findings/backstop-p21-frontend-tag-reflection/finding.md` (evidence). No edits.
+- **WHAT:** `frontend/src/components/simulator/MCPGuardrailSimulator.jsx` builds its `verdict` (≈311-354)
+  from `action`/`matched_policies`/`matched_rules`/`redacted_input_args`/`redacted_output`/`blocked` — but
+  never `compliance_tags`, and never renders a tag chip. So the PII/PHI/PCI/GDPR/HIPAA/INFRA framework tags
+  the mandate wants surfaced are shown NOWHERE. Additionally the LIVE mode (2xx branch ≈338-345) is nearly
+  blank — `matched_policies:[]`, no redaction display, no tags — so a live tool call the gateway REDACTED
+  (CHG-0024/0030) shows no redaction indicator. **Root cause:** the dry-run endpoint `POST /api/policies/test/`
+  (`control/…/policy/evaluation_views.py` PolicyTestView) IMPORTS `get_compliance_tags` (line 25) but its
+  policy-match response payload (≈551-585) omits `compliance_tags` entirely; likewise the live
+  `/api/mcp-connector/tools/call/` response keeps compliance_tags only in the MCPEvent audit, not the client
+  body. So the frontend cannot reflect tags because the backend never sends them.
+- **WHY (recorded, not fixed here):** (1) the control change is not safely gate-able — there is NO control
+  venv and Django tests need a test DB, and "DO NOT FAKE GREEN" forbids an ungate-able cross-plane edit;
+  (2) the frontend change is owned + actively iterated by fe-harden and its gate needs Playwright (no dev
+  server confirmed up) — a dormant partial risks conflict; (3) the tag-vocab entanglement (item 5: gateway
+  GDPR/HIPAA/PII/INFRA vs control GDPR-PII/HIPAA-PHI/… catalog codes) is an owning-session semantic decision.
+- **FIX (for owners):** control — add `compliance_tags` to the PolicyTestView + MCPToolCallView response
+  (via `get_compliance_tags`, unifying the vocab per item 5); frontend — capture
+  `compliance_tags: data?.compliance_tags || []` in every verdict branch + render a chip list (mirror the
+  matched_policies block ≈582-600) + enrich the LIVE 2xx branch to read decision/redacted_output/tags. Gate:
+  npm build + Playwright (chips render for a PII payload, both themes).
+- **VERIFY:** `grep -n compliance_tags frontend/src/components/simulator/MCPGuardrailSimulator.jsx` → none;
+  `grep -n compliance_tags control/ai_mesh_control/policy/evaluation_views.py` → import only, not in payload.

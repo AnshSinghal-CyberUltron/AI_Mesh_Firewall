@@ -305,3 +305,13 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   round-trip + fail-closed negative matrix (any non-401/403 on a cross-tenant call = breach). Evidence:
   mcp-parallel/findings/backstop-p12b-sandbox-egress-hygiene/audit.md. No code changed. RESIDUAL (item 12,
   unchanged): runc (not gVisor) + per-org networks internal=false (no egress default-deny) — infra, not code.
+- **CHG-0036** (2026-07-02, FINDING — no code change) — G6 item 21: the MCP guardrail UI does NOT reflect 1.4
+  compliance tags, correcting the fe-harden "item 11 DONE" claim (commit 6658f9fc). `MCPGuardrailSimulator.jsx`
+  builds its verdict without ever capturing/rendering `compliance_tags`, and its LIVE 2xx branch is nearly
+  blank (no redaction indicator, no tags) for a call the gateway redacted. ROOT CAUSE: `PolicyTestView`
+  (`/api/policies/test/`) imports `get_compliance_tags` but omits `compliance_tags` from its response payload,
+  and `/api/mcp-connector/tools/call/` keeps tags only in the MCPEvent audit — the frontend cannot reflect what
+  the backend never sends. Fix spans control (add compliance_tags to the response + unify vocab per item 5) +
+  frontend (chip render + Playwright + enrich the live branch) — neither safely gate-able from this session
+  (no control venv/test DB; no dev server; fe-harden owns item 21). Evidence:
+  mcp-parallel/findings/backstop-p21-frontend-tag-reflection/finding.md.

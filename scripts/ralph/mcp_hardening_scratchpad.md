@@ -371,6 +371,16 @@
       → renders `·`, pure-ASCII source). npm run build ✓. REMAINING (owned by fe-harden): explicit redact
       signal from tools/call + Redact badge + redacted-field list on execute; fix Redact StatCard
       under-count; extend Playwright gate to cover tags/actor/redaction; both themes.
+      CHG-0036 (2026-07-02, FINDING): item 21 is NOT met for the TAG dimension (corrects fe-harden's simulator
+      "item 11 DONE"). MCPGuardrailSimulator.jsx builds its verdict without compliance_tags and renders no tag
+      chip; the LIVE 2xx branch is nearly blank (no redaction indicator / tags) for a call the gateway
+      redacted. ROOT CAUSE is BACKEND: PolicyTestView (/api/policies/test/) imports get_compliance_tags but
+      omits compliance_tags from the response payload, and /api/mcp-connector/tools/call/ keeps tags only in
+      the MCPEvent audit — the UI can't reflect what the backend never sends. FIX (owners): control adds
+      compliance_tags to those responses (unifying vocab per item 5) + frontend renders a tag chip list +
+      enriches the live branch (Playwright gate). NOT safely gate-able from this session: no control venv/test
+      DB (DO NOT FAKE GREEN), no dev server for Playwright, fe-harden owns the panel. Evidence:
+      mcp-parallel/findings/backstop-p21-frontend-tag-reflection/finding.md.
 
 ## G7 — Recursive verification
 - [ ] 22. Re-run G2–G6 end-to-end 3×; adversarial pass; Ruflo consensus green. Only then <promise>COMPLETE</promise>.

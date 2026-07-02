@@ -199,6 +199,15 @@
     Multi-org cross-tenant harness: byte-level canary oracle + fail-closed negative matrix. Evidence
     mcp-parallel/findings/backstop-p12b-sandbox-egress-hygiene/audit.md. No code changed. RESIDUAL (item 12):
     runc (not gVisor) + open per-org NAT — infra, not code.
+  - CHG-0036 (2026-07-02, FINDING) — G6 item 21: the MCP guardrail UI does NOT reflect 1.4 compliance tags,
+    correcting fe-harden's "item 11 DONE". MCPGuardrailSimulator.jsx verdict never captures/renders
+    compliance_tags; LIVE mode is nearly blank (no redaction/tags). ROOT CAUSE: PolicyTestView
+    (/api/policies/test/) imports get_compliance_tags but omits compliance_tags from its response payload, and
+    /api/mcp-connector/tools/call/ keeps tags only in the MCPEvent audit — so the frontend can't reflect what
+    the backend never sends. Fix spans control (add compliance_tags to response, unify vocab per item 5) +
+    frontend (chip render + Playwright) — neither safely gate-able here (no control venv; no dev server; owned
+    by fe-harden). Evidence mcp-parallel/findings/backstop-p21-frontend-tag-reflection/finding.md. No code
+    changed.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
