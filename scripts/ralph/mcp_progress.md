@@ -1,8 +1,8 @@
 # MCP Gateway Ralph Progress   (mark [x] when DONE + verified; never fake green)
 
 ## Codebase Patterns (append reusable learnings at top)
+- P4.13 WIRING + WS GAP (iter33): Gateway ws **still** `mcp_ws_adapter` (not `broker_send_rpc`). Cursor ws stub live (`mcp_ws_everything_stub.mjs`); broker-direct ws tools/list+call PASS. Control `URLField` rejects `ws://` registration. 3/4 gateway e2e R2–3; cannot `[x]`. Evidence: `RECHECK_ITER33.md`.
 - SSE MCP TRANSPORT (iter32, P4.13): legacy HTTP+SSE servers return **202 Accepted** on POST to
-  `/message?sessionId=…`; the JSON-RPC response arrives on the **long-lived GET /sse** `message` event.
   A blocking `client.post()` hangs until timeout. Fix = background SSE reader (`sse_manager.py`) +
   `client.stream(POST)` (do not read body) + wait on queued message events. Streamable-http stale
   session: agent caches `Mcp-Session-Id` per `server_slug`; upstream restart invalidates it →
@@ -117,3 +117,4 @@
 - [x] 32. Re-run P3–P9 end-to-end (in-process + live); adversarial pass; all green 3× → emit COMPLETE — **DONE (iter24):** `scripts/mcp_p10_recursive_gate.py` orchestrates broker 95/95 + agent 41/41 + multi-org harness (ROUNDS=3) + concurrency + load + leakage + oauth + Playwright B1/B2/B4 + frontend build, **3× consecutive all-green** (~633s). Prior `mcp_p9_gate.py` P9-only pass also green. Evidence: `mcp-parallel/findings/p10-32/RECURSIVE_VERIFICATION.md`. **P4.13/P6.18 4-TRANSPORT ISOLATION — NOW RESOLVED (this session):** §1 broker `/{org}/rpc` (aa30d807), §2 gateway `broker_send_rpc` (1aba6304), §3-image unified agent (3c54d339), §3-proxy `_adapter_forward`+`_is_sandbox_routed` (bb4983da), §4 egress-assert (17021381), AGENT streamable-http hang FIXED (23d0ba26: stream SSE + auto-init), HTTP-via-sandbox DEFAULT ON (826d9908). VALIDATED e2e: agent tools/list 12 tools 0.2s + echo (was 60s hang); broker→sandbox→upstream echo 200 in 0.067s; regression flag-on: stdio concurrency + B1 8/8 + **P9 gate PASS 3× all-green**. ALL FOUR transports (stdio/ws/streamable-http/sse) route gateway→broker→sandbox→upstream; gateway never dials MCP upstream directly; per-org egress allowlist enforced in sandbox. Evidence: `mcp-parallel/findings/p4-13/SECTION3_PROXY_AND_AGENT_FIX_DONE.md`. Network assertion PASS (`scripts/mcp_egress_assert.py`).
 - **iter31 (2026-07-02):** Gateway image rebuilt — §3 live (2 `broker_send_rpc` refs). 4-transport verify still FAIL (stdio only); P4.13/P6.18 remain `[ ]`. `RECHECK_ITER31.md`.
 - **iter32 (2026-07-02):** Agent SSE reader + stale-session fix (`sse_manager.py`); sandbox image rebuilt. stdio+http+sse PASS 3×; ws BLOCKED. P4.13/P6.18 remain `[ ]`. `RECHECK_ITER32.md`.
+- **iter33 (2026-07-02):** ws stub (`mcp_ws_everything_stub.mjs`) + broker-direct ws PASS; gateway ws still `mcp_ws_adapter`; URLField blocks `ws://` registration. 3/4 gateway transports PASS R2–3. P4.13/P6.18 remain `[ ]`. `RECHECK_ITER33.md`.

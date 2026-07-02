@@ -1,0 +1,12 @@
+agent: cursor-ralph-iter33
+story: P4.13/P6.18 iter33
+since: 2026-07-02T13:15:00Z
+status: released
+files:
+  - scripts/mcp_ws_everything_stub.mjs
+  - scripts/mcp_transport_stubs_up.sh
+  - scripts/mcp_register_transport_servers.py
+  - mcp-parallel/findings/p4-13/RECHECK_ITER33.md
+  - docs/mcp/PARALLEL_CLAIMS.md
+  - .cursor/ralph/scratchpad.md
+  - scripts/ralph/mcp_progress.md

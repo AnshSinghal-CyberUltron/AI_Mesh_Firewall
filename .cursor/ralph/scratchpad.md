@@ -1,9 +1,19 @@
 ---
-iteration: 32
+iteration: 33
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter33 (2026-07-02) — ws stub prep + gateway gap recheck
+- **P4.13/P6.18 RECHECK:** Gateway ws routing **unchanged** — still `mcp_ws_adapter` (`mcp_proxy.py:2000`),
+  NOT `broker_send_rpc`. Cursor added `scripts/mcp_ws_everything_stub.mjs` + `upsert_ws` in
+  `mcp_transport_stubs_up.sh`; broker-direct ws tools/list+call **PASS** (agent `ws_manager.py` ok).
+  Control registration **FAIL** — Django `URLField` rejects `ws://` (no manifest ws slug). **3/4**
+  gateway transports PASS R2–3 (stdio+http+sse); ws BLOCKED. ss: no gateway :443. Playwright **12/12**;
+  broker **83 passed**. **Cannot `[x]`** until Claude migrates ws gateway + fixes URLField.
+  Evidence: `RECHECK_ITER33.md`.
+- Hive: `cursor-ralph-iter33` on `hive-1782991737290-ylo911`.
 
 ## iter32 (2026-07-02) — SSE reader + stale-session fix (agent)
 - **P4.13/P6.18 RECHECK:** Fixed Cursor-owned agent: `sse_manager.py` (persistent GET /sse reader +
@@ -223,6 +233,8 @@ status: ACTIVE
        **e2e PARTIAL 2026-07-02 (iter32):** stdio + streamable-http + sse PASS 3× via gateway→broker→
        sandbox; ws BLOCKED (`mcp_ws_adapter` + no ws stub). Agent SSE fix (`sse_manager.py`) + stale-
        session invalidation. Playwright PASS; ss no gateway :443. Cannot `[x]` until 4/4. `RECHECK_ITER32.md`.
+       **iter33 update:** ws stub live; broker-direct ws PASS; URLField blocks ws registration; gateway
+       ws still Claude-owned. 3/4 R2–3. `RECHECK_ITER33.md`.
 
 ## P5 — Frontend fixes (Playwright-verified; the dialog especially)
 - [x] 14. B1: OAuth selectable ONLY for HTTP transports; block oauth+stdio in the form; render exactly
@@ -257,8 +269,8 @@ status: ACTIVE
 - [ ] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:
        all 4 transports through the sandbox under the Claude session's 15-MCP harness (concurrency/load/
        leakage). Fix any seam mismatch on the Cursor-owned side only.
-       **e2e PARTIAL 2026-07-02 (iter32):** Cursor agent seam fixed (http/sse live); 3/4 transports
-       green 3×; ws still Claude-owned (`mcp_ws_adapter`). See `RECHECK_ITER32.md`.
+       **e2e PARTIAL 2026-07-02 (iter33):** ws stub + broker-direct ws PASS; gateway ws still
+       `mcp_ws_adapter`; URLField blocks ws registration. 3/4 transports green R2–3. See `RECHECK_ITER33.md`.
 - [ ] 19. Re-run P1 repros → all four UI bugs gone; re-run P4 verification 3× (in-process + live).
        When P1–P6 all [x] AND integration green, output <promise>COMPLETE</promise>.
        **PARTIAL 2026-07-02 (iter24):** P10.32 recursive gate re-ran P1 UI (Playwright 12/12) + P8/P9 live
