@@ -80,7 +80,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | # | Surface | Owner | Dark | Light | 1440 | 1024 | 768 | 375 | Impec | State |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | SafeResponsiveChart → ECharts | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ proven live |
-| 2 | uPlot dense time-series | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 2 | uPlot dense time-series | me | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | ✅ | 🔎 foundation+sparkline proven |
 
 ### Panels (items 3–16)
 | # | Surface | Owner | Dark | Light | 1440 | 1024 | 768 | 375 | Impec | State |
@@ -179,3 +179,18 @@ verify-only files, which have no charts):
 ### New findings
 - **F3 (backend infra, NOT frontend — documented, worked around):** Postgres intermittently returns `FATAL: sorry, too many clients already` → app-wide **500s** under concurrent dashboard load (many polling panels × parallel Ralph sessions; `max_connections=100`, idle ~10). Transient; retry when calm. Out of frontend scope + shared-env risk to fix. **Frontend robustness sub-finding:** a transient 500 on `/api/auth/me/` currently forces a logout→`/login` bounce (a blip logs you out) — candidate hardening (item 19).
 - **F4 (data-integrity — investigate, item 19):** module 1.7 **KPI stat cards read 0** (OUTPUTS SCANNED/BLOCKED/…) while the **charts endpoint has real rows** (event_timeline 43). Possible mismatch between the module-KPIs source and the module-charts source, or a lens-window difference. Verify which is correct before signing off data-integrity.
+
+**Item 2 — uPlot foundation + sparkline (iter1 resumed loop, 2026-07-02):** built the dense-time-series path and proved it live.
+- `utils/uplotTheme.js` (+ `uplotTheme.test.js`, 3 tests) — light/dark axis/grid colors from DESIGN.md, series palette shared with ECharts (`CHART_PALETTE`) so both chart libs read as one system.
+- `components/charts/UPlotChart.jsx` — canvas dense-time-series chart; theme-reactive (rebuild on theme), size via `setSize`, data via `setData`, `sparkline` mode + drag-to-zoom cursor for full charts; imports `uplot/dist/uPlot.min.css`.
+- `SafeResponsiveChart` gains a `uplot` prop path (passes the measured px size uPlot needs) — third mode, still backward-compatible.
+- Migrated the Overview **"Pressure Curve" sparkline** (×7 SubModuleCards) recharts→uPlot. **Live-verified (isolated browser):** 7 `.uplot` canvases, both themes, no overflow @375, **console 0 errors**, curve data-identical (flat baseline + real blocked-event spike). Screenshots: `mcp-parallel/findings/frontend-harden/uplot-overview/`.
+- lint 34/34, build green, detector clean. Bundle 2.58 MB (recharts+echarts+uplot coexist; nets down at item 24). Note: `utils/*.js` imported by node --test need explicit `.js` in relative imports (Vite resolves extensionless, node ESM does not).
+- **Item 2 NOT done:** only a single-series sparkline migrated; the interactive/stacked telemetry charts remain. 11 uPlot candidates total (see matrix below).
+
+### uPlot-vs-ECharts migration matrix (from classification workflow — 52 charts across 10 files)
+**uPlot (dense time-series, 11):** AIMeshFirewallOverview ×3 (Pressure sparkline ✅done, AttackVectorTrend [stacked], GlobalTraffic enforcement [stacked]); SubmoduleDetailPage ×3 (request-volume area, enforcement lines, multi-metric trend); SubmoduleResultsPage ×1 (7-day high-density area); PolicyAnalyticsPanel ×1 (effectiveness % trend); module-specific-charts ×2 (stacked telemetry area, multi-series trend line); Firewall12EnterprisePage ×1 (event/threat volume trend).
+**ECharts (categorical/pie/radar, 41):** module-specific-log-charts ×21, RAGPipelineTelemetry ×5 (all aggregate KPIs, NOT time-series), + donuts/bars/radars elsewhere.
+Next uPlot work needs **stacked-area support** in UPlotChart (cumulative-sum bands) for AttackVectorTrend + GlobalTraffic; then interactive (cursor+zoom) verification → item 2 [x].
+
+- **F5 (env hazard — worked around):** all Claude sessions' Playwright MCP share one Chrome profile (`ms-playwright-mcp/mcp-chrome-6078e4c`) → "Browser is already in use" when a prior/parallel session holds it (an orphaned `playwright-mcp` + idle Chrome on about:blank held the lock). Do NOT force-kill in the shared env. **Workaround (used):** a standalone `playwright` (from the npx cache `~/.npm/_npx/9833c18b2d85bc59/node_modules/playwright`) via `launchPersistentContext` with an **isolated** `/tmp` profile + `executablePath:/opt/google/chrome/chrome`. Scripts in scratchpad; reusable when the MCP browser is locked.

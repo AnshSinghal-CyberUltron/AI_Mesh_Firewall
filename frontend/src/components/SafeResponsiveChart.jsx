@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { ResponsiveContainer } from "recharts";
 import { EChart } from "./charts/EChart";
+import { UPlotChart } from "./charts/UPlotChart";
 
 /**
  * ResizeObserver-gated chart wrapper.
  *
- * Two modes, one API (backward compatible):
- *  - **ECharts (preferred):** pass an `option` prop → renders the theme-aware
- *    <EChart> once the wrapper has a real measured size. This is the recharts→
- *    ECharts migration target (FRONTEND_AUDIT.md R1); extra props forward to EChart.
+ * Three modes, one API (backward compatible):
+ *  - **ECharts (preferred, interactive dashboards):** pass an `option` prop →
+ *    renders the theme-aware <EChart> once the wrapper has a real measured size
+ *    (FRONTEND_AUDIT.md R1); extra props forward to EChart.
+ *  - **uPlot (dense time-series):** pass a `uplot` prop object ({data, series, …})
+ *    → renders <UPlotChart> with the MEASURED pixel size (uPlot needs explicit
+ *    width/height, which this wrapper already computes).
  *  - **recharts (legacy):** pass recharts JSX as `children` → renders the original
  *    <ResponsiveContainer> path unchanged, so un-migrated panels keep working.
  *
@@ -21,7 +25,7 @@ import { EChart } from "./charts/EChart";
  * The wrapper div must carry an explicit height (via `className`, e.g. h-[200px]),
  * since the inner chart fills 100% height.
  */
-export function SafeResponsiveChart({ className, children, minSize = 24, option, ...echartProps }) {
+export function SafeResponsiveChart({ className, children, minSize = 24, option, uplot, ...echartProps }) {
   const containerRef = useRef(null);
   // Track the MEASURED pixel size of the wrapper, not just a ready flag. We hand
   // those explicit px dimensions to <ResponsiveContainer> below (instead of
@@ -73,6 +77,16 @@ export function SafeResponsiveChart({ className, children, minSize = 24, option,
     return (
       <div ref={containerRef} className={className}>
         {isReady ? <EChart option={option} {...echartProps} /> : placeholder}
+      </div>
+    );
+  }
+
+  // uPlot path (dense time-series): hand the measured pixel size to <UPlotChart>,
+  // which uPlot requires (it does not self-size). Re-measured by the ResizeObserver.
+  if (uplot) {
+    return (
+      <div ref={containerRef} className={className}>
+        {isReady ? <UPlotChart {...uplot} width={size.width} height={size.height} /> : placeholder}
       </div>
     );
   }

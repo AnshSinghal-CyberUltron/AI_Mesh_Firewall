@@ -229,17 +229,20 @@ function SubModuleCard({ id, title, icon: Icon, color, summary, metrics, chartDa
             <span>Pressure Curve</span>
             <span>{curveSubtitle}</span>
           </div>
-          <SafeResponsiveChart className="h-[72px] w-full">
-            <AreaChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id={`mesh-card-${id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={tone.hex} stopOpacity={0.28} />
-                  <stop offset="95%" stopColor={tone.hex} stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <Area type="monotone" dataKey="value" stroke={tone.hex} strokeWidth={2.2} fill={`url(#mesh-card-${id})`} dot={false} />
-            </AreaChart>
-          </SafeResponsiveChart>
+          {/* Dense time-series sparkline via uPlot (canvas, fast) — index x keeps
+              recharts' even spacing; single area series in the module tone. */}
+          <SafeResponsiveChart
+            className="h-[72px] w-full"
+            uplot={{
+              sparkline: true,
+              time: false,
+              data: [
+                (chartData || []).map((_, i) => i),
+                (chartData || []).map((d) => Number(d?.value) || 0),
+              ],
+              series: [{ label: "Pressure", stroke: tone.hex, area: true, width: 2.2 }],
+            }}
+          />
         </div>
       </div>
     </button>

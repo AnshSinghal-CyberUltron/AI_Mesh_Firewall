@@ -18,6 +18,13 @@
       Harness recipe + findings F3 (backend PG 500 bursts), F4 (KPI=0 vs chart-has-data) logged in AUDIT.
       Remaining 11 recharts panels migrate under items 3–16; recharts removal = item 24 exit check.
 - [ ] 2. uPlot for dense time-series charts (telemetry/logs/trends). Verify data-identical + interactive + faster.
+      iter(resumed)1: FOUNDATION + first chart proven. uplotTheme.js(+test), UPlotChart.jsx (canvas, theme-
+      reactive, sparkline+drag-zoom modes), SafeResponsiveChart `uplot` path (passes measured px size).
+      Migrated Overview "Pressure Curve" sparkline (×7) recharts→uPlot; LIVE-verified isolated browser: 7
+      uplot canvases both themes, no overflow @375, console 0 errors, data-identical curve. lint 34/34.
+      Classification workflow → 11 uPlot candidates / 41 ECharts (matrix in AUDIT). NOT [x]: stacked
+      telemetry (AttackVectorTrend/GlobalTraffic) + interactive/zoom verify remain; need stacked-area
+      support in UPlotChart. F5 (shared MCP browser lock) worked around via isolated standalone playwright.
 
 ## Per-surface sweep (ONE panel per iteration → verify (both themes, 4 widths) → fix → re-verify → commit)
 - [ ] 3. GatewayKeyPanel     - [ ] 4. ModelGovernancePanel   - [ ] 5. RoutingGovernance/Audit
