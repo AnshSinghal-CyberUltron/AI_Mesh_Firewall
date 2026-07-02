@@ -435,6 +435,13 @@ SECRET_PATTERNS: Dict[str, str] = {
     "password_assignment": r'password["\s]*[:=][\s"\']*' + _CREDENTIAL_VALUE,
     "secret_assignment": r'secret["\s]*[:=][\s"\']*' + _CREDENTIAL_VALUE,
     "token_assignment": r'token["\s]*[:=][\s"\']*' + _TOKEN_VALUE,
+    # CHG-0055: api_key / apikey / access_key assignments are as sensitive as the
+    # password/secret/token ones above but were NOT in the inventory — an
+    # ``API_KEY=<non-provider-format-token>`` (e.g. below the openai 32-char
+    # threshold) egressed UNMASKED. Same ``_TOKEN_VALUE`` guard (>=8 chars with a
+    # digit, not an instructional prose word) so ``api_key=none`` / ``api key:
+    # forgotten?`` stay false-positive-safe. Case-insensitive via compile_pattern.
+    "api_key_assignment": r'(?:api[_-]?key|access[_-]?key)["\s]*[:=][\s"\']*' + _TOKEN_VALUE,
     # RAG-C5-CRED-COVERAGE: standalone credential FORMATS the assignment patterns
     # above miss. detect_secrets had no Slack token / JWT / Bearer inventory, so
     # these credential forms were stored unblocked at RAG ingest (and unredacted in
@@ -593,6 +600,7 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "password_assignment": ["SECRET"],
     "secret_assignment": ["SECRET"],
     "token_assignment": ["SECRET"],
+    "api_key_assignment": ["SECRET"],
     "medical_license": ["PHI", "HIPAA"],
     "medical_record": ["PHI", "HIPAA"],
     "insurance_id": ["PHI", "HIPAA"],
@@ -845,6 +853,7 @@ _SECRET_MASKERS = {
     "password_assignment": _mask_secret_assignment,
     "secret_assignment": _mask_secret_assignment,
     "token_assignment": _mask_secret_assignment,
+    "api_key_assignment": _mask_secret_assignment,
 }
 
 _CREDENTIAL_MASKERS = {

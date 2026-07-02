@@ -363,6 +363,14 @@
     PEM-key recognizer (piiFound:false on raw AND redacted) — confirmation via gateway detect_pii + bytes.
     patterns.py, +5 tests. Gate: 5 pk-redaction + 74 redaction-adjacent + 1122 gateway passed. Evidence
     mcp-parallel/findings/backstop-p2-private-key-body-leak/.
+  - CHG-0055 (2026-07-02) — G2 item 2 / 1.4 (secret-inventory gap, MEDIUM; found continuing the CHG-0054
+    adversarial verification): the inventory redacted password=/secret=/token= assignments but NOT
+    api_key=/apikey=/access_key= — so API_KEY=<value> whose value didn't match a provider format (e.g. below
+    the openai 32-char threshold) egressed UNMASKED (api_key=/apikey:/access_key=/api-key = all cases). FIX:
+    new api_key_assignment = (?:api[_-]?key|access[_-]?key)[:=]<val> reusing the _TOKEN_VALUE FP guard (>=8
+    chars w/ a digit, not prose) so api_key=none / DEBUG=true stay safe; tagged SECRET; masked via
+    _mask_secret_assignment -> api_key=***; detect_secrets now flags it. patterns.py + 13 tests. Gate: 13
+    api-key + 1135 gateway passed. Evidence mcp-parallel/findings/backstop-p2-api-key-assignment-gap/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

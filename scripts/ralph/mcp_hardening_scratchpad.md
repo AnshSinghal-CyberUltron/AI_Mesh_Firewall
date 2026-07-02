@@ -114,6 +114,15 @@
       detect_pii + byte inspection. patterns.py + test_private_key_redaction.py (+5). Gate: 5 pk-redaction +
       74 redaction-adjacent + 1122 gateway passed. Evidence: mcp-parallel/findings/backstop-p2-private-key-body-leak/finding.md.
       FOLLOW-UP: detect_secrets inventory omits private keys (detect_pii covers them) — cross-plane unification.
+      CHG-0055 (2026-07-02, MEDIUM — secret-inventory gap, found continuing the CHG-0054 adversarial 1.4
+      verification): the inventory redacted password=/secret=/token= assignments but NOT
+      api_key=/apikey=/access_key= — so API_KEY=<value> whose value didn't match a provider format (e.g.
+      sk-abcdef0123456789ABCDEFxyz, 24 chars, below the openai 32 threshold) egressed UNMASKED (api_key=/
+      apikey:/access_key=/api-key = all cases). FIX: new api_key_assignment =
+      (?:api[_-]?key|access[_-]?key)[:=]<val> reusing the _TOKEN_VALUE FP guard (>=8 chars w/ a digit, not
+      prose) so api_key=none / DEBUG=true stay FP-safe; tagged SECRET; masked via _mask_secret_assignment ->
+      api_key=***; detect_secrets now flags api_key_assignment. patterns.py + test_api_key_assignment_redaction.py
+      (+13). Gate: 13 api-key + 1135 gateway passed. Evidence: mcp-parallel/findings/backstop-p2-api-key-assignment-gap/finding.md.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER
