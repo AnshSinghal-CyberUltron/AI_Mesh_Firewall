@@ -36,8 +36,9 @@ status: ACTIVE
       (seccomp, no-new-privileges, cap_drop, read-only rootfs, egress allow-listing) + per-tenant patterns.
       **Done 2026-07-02:** extended `docs/mcp/oss-research-docker-hardening.md` + `mcp-parallel/findings/p2-6/`
       (`_run_kwargs` map, runsc fail-closed pattern, egress default-deny-proxy).
-- [ ] 7. Web research: MCP OAuth 2.1 (PKCE, RFC 9728/8414) + why oauth needs an HTTP URL; correct UX for
+- [x] 7. Web research: MCP OAuth 2.1 (PKCE, RFC 9728/8414) + why oauth needs an HTTP URL; correct UX for
       stdio-wrapped-remote; running http/ws clients inside a sandboxed agent. Record to mcp-parallel/findings.
+      **Done 2026-07-02:** `docs/mcp/oss-research-oauth-sandbox-client.md` + `mcp-parallel/findings/p2-7/`.
 
 ## P3 — Contract-first seam (with the Claude session)
 - [ ] 8. Draft docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md: the sandbox-agent endpoints for http/ws/sse proxy

@@ -59,3 +59,5 @@ carry an HTTP URL in its args (the B1 nuance), handled by `_maybe_inject_oauth_h
 Sources: [MCP Authorization 2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization),
 [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728), [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html),
 [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414), [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591).
+
+Companion: `oss-research-oauth-sandbox-client.md` (P2.7) — in-sandbox OAuth client implications for P3/P4.
