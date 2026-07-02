@@ -81,10 +81,15 @@ status: ACTIVE
        **Verified 2026-07-02 (iter14):** fix already in `04748af5` (renderServerCard awaitingAuth);
        Playwright 6/6 PASS (`playwright_mcp_b2_verify.mjs` → `mcp-parallel/findings/p5-15/`).
        Amber "Pending authorization" badge + "Authorize to load tools"; no Unknown/0-tools card.
-- [ ] 16. B4: stabilize the Add-Server dialog so controlled inputs KEEP focus per keystroke (fix the
+- [x] 16. B4: stabilize the Add-Server dialog so controlled inputs KEEP focus per keystroke (fix the
        remount: no field-component defined in render / stable keys / portal children not recreated).
-- [ ] 17. Playwright verify B1/B2/B4 end-to-end with screenshots (Linear-stdio → no OAuth; HTTP-oauth →
+       **Verified 2026-07-02 (iter15):** B4 NOT reproducing — prior Dialog.jsx onCloseRef fix holds;
+       Playwright 11/11 PASS (`playwright_mcp_b4_verify.mjs` → `mcp-parallel/findings/p5-16/`).
+       24 keystrokes × 5 fields + GitHub preset prefill + 37 keys on prefilled field; focus kept.
+- [x] 17. Playwright verify B1/B2/B4 end-to-end with screenshots (Linear-stdio → no OAuth; HTTP-oauth →
        one Authorize + pending state → tools populate; type long strings in every dialog field, focus kept).
+       **Verified 2026-07-02 (iter15):** combined E2E 12/12 PASS (`playwright_mcp_b1_b2_b4_e2e.mjs` →
+       `mcp-parallel/findings/p5-17/`). Tools-populate after authorize = manual OAuth (headed noVNC).
 
 ## P6 — Integrate + verify with the parallel session
 - [ ] 18. Pull the Claude branch's gateway+broker changes (via the contract); run an integration check:

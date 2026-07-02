@@ -1,0 +1,15 @@
+{
+  "agent": "cursor-ralph-iter15",
+  "story": "P5.16",
+  "title": "B4 Add-Server dialog focus verify",
+  "files": [
+    "scripts/playwright_mcp_b4_verify.mjs",
+    "mcp-parallel/findings/p5-16/**",
+    "docs/mcp/PARALLEL_CLAIMS.md",
+    ".cursor/ralph/scratchpad.md",
+    "scripts/ralph/mcp_progress.md"
+  ],
+  "hive": "hive-1782976205971-u1gav1",
+  "since": "2026-07-02T17:00:00Z",
+  "status": "released"
+}
