@@ -1048,6 +1048,28 @@
         ELEVEN confirmed-live leaks fixed (G40-G46, G49, G50, G51, G52) + G48 defense-in-depth + 2
         documented tradeoffs. Rendering-layer class (G44/G50/G51/G52) = 4 leaks; render-normalization now
         covers markdown emphasis, credential/IP-under-emphasis, render-invisible HTML, and numeric entities.
+      G53 — INPUT-SIDE MARKDOWN/HTML-OBFUSCATED PII/SECRET/CREDENTIAL 2026-07-02 (input parity w/ output):
+        AUDIT FIRST: input INJECTION deobfuscation is COMPREHENSIVE — probed 8 aggressive obfuscations
+        (char-emphasis i*g*n*o*r*e, Cyrillic homoglyph, leetspeak, zero-width, base64, small-caps, entities,
+        combined) -> ALL blocked (multi-tier deobfuscation). And entity-split PII in input already BLOCKS
+        (G33). GAP: markdown-emphasis / HTML-comment / empty-tag split PII in a PROMPT (1**2**3-45-6789,
+        12<!-- -->3-45-6789, sk_live_**..**) was ALLOWED -> the obfuscated value reaches the model, which
+        can reconstruct it from the markdown source (the input canonicalizer folds zw/unicode/entities but
+        NOT markdown emphasis / render-invisible HTML). FIX: added G53 block in scanner._scan_prompt_sync —
+        strip_interleaved_emphasis (the same output-side normalizer) + detect_pii/secret/credential -> block
+        obfuscated_pii (mirrors the G33 encoded-PII block; IP excluded — a user-supplied IP is not exfil).
+        Only fires when stripping REVEALS PII, so benign **bold**/snake_case/2*3/**budget** stay allow and
+        plain PII still redacts. (The pre-existing backtick->command_injection block on `code` is NOT G53.)
+        VERIFY: 4 obfuscated-PII/cred inputs block, 5 benign markdown allow, plain SSN redacts. FROZEN: G53
+        (4 block + 5 allow); golden+streaming 378 passed × 3 in-process; broad input/scanner/pii/enforcement
+        477 green. commit 082e14f0. REDEPLOYED (rollback-pre-g53; marker G53 present) — LIVE.
+      ⚠ CONTROL-HANG INCIDENT (recurring) 2026-07-02: after the G53 gateway recreate, gateway went
+        UNHEALTHY — root cause was the CONTROL plane hung (Up 3h, unreachable; gateway couldn't reach
+        control:8000/register). NOT a gateway/G53 defect. FIX: `docker compose restart control` -> control
+        200 -> gateway registered -> healthy 200. (Same class as the earlier control-hang; control plane
+        recurrently hangs under the multi-session load. Always check control health when a gateway
+        redeploy shows unhealthy — it's usually control, not the gateway image.)
+        TWELVE confirmed-live leaks fixed (G40-G46, G49-G53) + G48 defense-in-depth + 2 documented tradeoffs.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
