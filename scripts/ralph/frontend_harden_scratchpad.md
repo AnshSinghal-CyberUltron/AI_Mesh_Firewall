@@ -229,7 +229,20 @@
       (Header/Firewall12/hook; Sidebar has 1 PRE-EXISTING side-tab FP on the nav border-l-2, not mine). LIVE dark
       @1440: all 3 indicators resolve from real health (Connected/operational/Operational, backend up); flip
       logic symmetric for down-state.
-- [ ] 20. No-leak: prove no raw key/PII/secret/topology is ever displayed.
+- [x] 20. No-leak: prove no raw key/PII/secret/topology is ever displayed.
+      item20 DONE (PROVEN, no new code fixes — leak fixes were items 9-11, masking items 3/6/8). STATIC sweep:
+      0 type=text key/secret inputs, 0 raw-secret-field renders (ModelConnection L689 shows env-var NAME not
+      value), 0 console.log secret leaks, 0 HARDCODED creds/tokens in source. Provider/model literals only in
+      CONFIG surfaces (ModelConnection catalog — admin's own model choices, verify-only) + intended mock attack
+      payloads (OutputGuardSim IP-leakage test scenario). err.message renders = client-side fetch errors (no
+      server stack/paths); no err.stack rendered. Hostnames/IPs = operator's own gatewayUrl config + doc URL-
+      rewrite helpers (resolve to user's own deployment). POSITIVE masking confirmed: keys ENTERED via
+      type=password (6 panels), DISPLAYED as prefix-only (key_prefix/api_key_prefix — GatewayKey/KillSwitch/
+      MCPConnector/DatabaseConnection). Raw JSON dumps (SimulatorShell/RAGAttackTrust) = operator's own admin-sim
+      data behind opt-in toggle (assessed items 9/11); AttackSim guard-model dump sanitized item 11; backend
+      telemetry.py redact_all scrub verified item 10. LIVE DOM leak-scan (sk-/AKIA/pcsk_/JWT/ghp_/PEM) across
+      overview + modules 1.1-1.7 = 0 hits ALL 8 (+ item-17 0 hits on 1.4/1.5). PII displays = operator's OWN
+      data (profile email, allowlist emails, login field). No files changed.
 - [ ] 21. Theme audit: every surface correct in dark AND light (contrast/focus/hover/disabled).
 - [ ] 22. Responsive audit: no overflow/overlap at 1440/1024/768/375 on every surface.
 
