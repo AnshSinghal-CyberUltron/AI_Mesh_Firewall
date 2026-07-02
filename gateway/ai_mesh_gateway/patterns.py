@@ -1139,6 +1139,36 @@ def _iter_short_b64_infra(text: str):
             yield tok, dec
 
 
+def _detect_infra_cred_spans(text: str):
+    """Yield ``(label, start, end)`` for internal-network (IP/host/URL) and credential-exposure
+    matches — the two categories :func:`_detect_all_spans` omits. Used ONLY on the canonical
+    form inside :func:`_redact_obfuscated` (G54) so an obfuscation-revealed internal address or
+    credential is masked back onto the ORIGINAL bytes instead of being flagged-yet-egressed-raw
+    (the report-redacted-while-forwarding-raw fail-open). Scoped to the network infra keys
+    ``redact_all`` already masks on the raw pass (file paths excluded — flag-tier + FP-prone),
+    with the same example-address carve-out; all credential keys are masked (no benign-address
+    exemption applies to a credential)."""
+    for label in _INFRA_NETWORK_KEYS:
+        pattern_str = IP_LEAKAGE_PATTERNS.get(label)
+        if not pattern_str:
+            continue
+        compiled = compile_pattern(pattern_str)
+        for m in compiled.finditer(text):
+            val = m.group(0)
+            if not val:
+                continue
+            if label == "internal_ipv4" and val in _IP_LEAKAGE_EXAMPLE_ADDRS:
+                continue
+            if label == "internal_url" and _ip_url_host(val) in _IP_LEAKAGE_EXAMPLE_ADDRS:
+                continue
+            yield label, m.start(), m.end()
+    for label, pattern_str in CREDENTIAL_EXPOSURE_PATTERNS.items():
+        compiled = compile_pattern(pattern_str)
+        for m in compiled.finditer(text):
+            if m.group(0):
+                yield label, m.start(), m.end()
+
+
 def _redact_obfuscated(original: str, result: str) -> str:
     """Mask obfuscated PII/secret (G1) and encoded PII/secret blobs (G2) in ``result``.
 
@@ -1150,6 +1180,16 @@ def _redact_obfuscated(original: str, result: str) -> str:
     canon, idx = _canonicalize_with_map(original)
     if canon and canon != original:
         for label, a, b in _detect_all_spans(canon):
+            if 0 <= a < len(idx) and 0 <= b - 1 < len(idx):
+                orig_sub = original[idx[a]: idx[b - 1] + 1]
+                if orig_sub:
+                    masks.append((orig_sub, f"[{label.upper()}_REDACTED]"))
+        # G54: infra (internal IP/host/URL) + credential spans that ONLY the canonical form
+        # reveals (fullwidth / zero-width / homoglyph). detect_ip_leakage /
+        # detect_credential_exposure now flag these on the output guard, but _detect_all_spans
+        # above covers only PII/PHI/PCI/SECRET — so without this the masked category would be
+        # FLAGGED-yet-FORWARDED-RAW. Map each canonical match back onto the original bytes.
+        for label, a, b in _detect_infra_cred_spans(canon):
             if 0 <= a < len(idx) and 0 <= b - 1 < len(idx):
                 orig_sub = original[idx[a]: idx[b - 1] + 1]
                 if orig_sub:
@@ -1238,8 +1278,8 @@ def _ip_url_host(value: str) -> str:
     return host.rstrip(":/").split("/")[0].split(":")[0]
 
 
-def detect_ip_leakage(text: str) -> Dict[str, str]:
-    """Detect internal IP/infrastructure leakage patterns in text.
+def _detect_ip_leakage_core(text: str) -> Dict[str, str]:
+    """Raw internal IP/infrastructure leakage detection over one text form (no canon).
 
     R2: skips canonical example/default-gateway addresses so a benign textbook
     example doesn't destroy the response. Uses ``finditer`` (not ``search``) so
@@ -1260,12 +1300,41 @@ def detect_ip_leakage(text: str) -> Dict[str, str]:
     return found
 
 
-def detect_credential_exposure(text: str) -> Dict[str, str]:
-    """Detect credential exposure patterns in text."""
+def detect_ip_leakage(text: str) -> Dict[str, str]:
+    """Detect internal IP/infrastructure leakage, resistant to unicode/zero-width/homoglyph
+    obfuscation (G54). Matches the raw text AND its canonical form — so a fullwidth /
+    zero-width-split / homoglyph internal address on OUTPUT (e.g. ``１０.２０.３０.４０``) can no
+    longer evade the raw regex the way it did detect_pii/detect_secrets before G1. The
+    canonical pass is skipped when it adds nothing (plain ASCII), so plain-text behaviour and
+    the frozen suite are unchanged."""
+    found = _detect_ip_leakage_core(text)
+    canon = canonicalize_for_detection(text)
+    if canon != text:
+        for k, v in _detect_ip_leakage_core(canon).items():
+            found.setdefault(k, v)
+    return found
+
+
+def _detect_credential_exposure_core(text: str) -> Dict[str, str]:
+    """Raw credential-exposure detection over one text form (no canonicalization)."""
     found: Dict[str, str] = {}
     for cred_type, pattern_str in CREDENTIAL_EXPOSURE_PATTERNS.items():
         compiled = compile_pattern(pattern_str)
         match = compiled.search(text)
         if match:
             found[cred_type] = match.group(0)
+    return found
+
+
+def detect_credential_exposure(text: str) -> Dict[str, str]:
+    """Detect credential exposure, resistant to unicode/zero-width/homoglyph obfuscation
+    (G54). Matches the raw text AND its canonical form, so a fullwidth / zero-width-split /
+    homoglyph credential on OUTPUT (a connection string, basic-auth blob, stripe/github/azure
+    key the raw regex missed) no longer evades the check — mirrors detect_pii/detect_secrets.
+    Canonical pass skipped on plain ASCII (no behaviour change for plain text)."""
+    found = _detect_credential_exposure_core(text)
+    canon = canonicalize_for_detection(text)
+    if canon != text:
+        for k, v in _detect_credential_exposure_core(canon).items():
+            found.setdefault(k, v)
     return found

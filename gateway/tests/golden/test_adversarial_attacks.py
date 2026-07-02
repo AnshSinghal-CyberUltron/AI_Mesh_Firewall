@@ -1327,6 +1327,99 @@ def test_g53_input_benign_markdown_allowed(payload):
     assert _verdict(payload) == "allow", f"benign markdown input wrongly blocked: {payload[:40]!r}"
 
 
+# ── G54: OUTPUT-side unicode/zero-width/homoglyph-obfuscated CREDENTIAL / internal IP ──────
+# detect_pii/detect_secrets canonicalize before matching (G1), but detect_credential_exposure
+# and detect_ip_leakage did NOT — so a fullwidth / zero-width-split credential (connection
+# string, basic-auth, stripe/github/azure key) or internal IP emitted by a manipulated model
+# EVADED the output guard entirely (verdict allow -> egressed RAW; a client renders the value).
+# Fix (patterns.py): both detectors now match the canonical form too, and _redact_obfuscated
+# masks the obfuscation-revealed infra/credential span back onto the original bytes (the
+# categories _detect_all_spans omits) so a redact/block verdict is not a no-op scrubber.
+_FW_D = {c: chr(ord("０") + i) for i, c in enumerate("0123456789")}
+_FW_U = {c: chr(ord("Ａ") + i) for i, c in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ")}
+_FW_L = {c: chr(ord("ａ") + i) for i, c in enumerate("abcdefghijklmnopqrstuvwxyz")}
+
+
+def _fw(s):
+    """Fold ASCII letters/digits to their fullwidth (NFKC-1:1) form."""
+    return "".join(_FW_D.get(c, _FW_U.get(c, _FW_L.get(c, c))) for c in s)
+
+
+# (label, obfuscated payload, plain credential the canonical form reveals)
+_G54_CRED_LEAK = [
+    ("g54_stripe_fw",   "Key: " + _fw("sk_live_abcd1234efgh5678ij"),          "sk_live_abcd1234efgh5678ij"),
+    ("g54_connstr_fw",  "URI " + _fw("mongodb") + "://" + _fw("host01:27017/appdb?tls=true"), "mongodb://host01:27017/appdb"),
+    ("g54_basic_fw",    "Auth: " + _fw("Basic") + " " + _fw("YWxhZGRpbjpvcGVuc2VzYW1l"), "Basic YWxhZGRpbjpvcGVuc2VzYW1l"),
+    ("g54_ghpat_fw",    "PAT " + _fw("github_pat_11ABCDE0000aaaaaaaaaaa"),     "github_pat_11ABCDE0000aaaaaaaaaaa"),
+    ("g54_ssn_zwsp",    "id 55​5-1​2-345​6 on file",                          "555-12-3456"),  # PII sanity (ZWSP)
+]
+# (label, obfuscated internal-IP payload, plain IP the canonical form reveals)
+_G54_IP_LEAK = [
+    ("g54_ip_fw",   "Server at " + _fw("10.20.30.40") + " prod",  "10.20.30.40"),
+    ("g54_ip_zwsp", "host 172.16.​5.9 internal",                  "172.16.5.9"),
+]
+
+
+@pytest.mark.parametrize("label,payload,plain", _G54_CRED_LEAK)
+def test_g54_obfuscated_credential_masked_in_egress(label, payload, plain):
+    """The obfuscated credential/PII must NOT survive in the egress bytes: redact_all masks
+    the value so the client cannot canonically reconstruct it."""
+    redacted = patterns.redact_all(payload)
+    canon = patterns.canonicalize_for_detection(redacted)
+    assert plain not in canon, f"{label}: obfuscated value reconstructable from egress (LEAK)"
+    assert redacted != payload, f"{label}: redact_all was a no-op on the obfuscated value"
+
+
+@pytest.mark.parametrize("label,payload,plain", _G54_CRED_LEAK[:-1])  # credential rows only
+def test_g54_obfuscated_credential_verdict_fires(label, payload, plain):
+    """The output guard credential check must FLAG the obfuscated credential (raw regex missed
+    it; the canonical pass now catches it). Sync path — no tier-2/Bedrock dependency."""
+    g = _og.OutputGuard(_SCANNER, {})
+    assert not patterns._detect_credential_exposure_core(payload), (
+        f"{label}: raw (non-canon) detector unexpectedly matched — test no longer proves the gap"
+    )
+    v = g._check_credential_exposure(payload, "redact")
+    assert v.action in ("redact", "block"), f"{label}: obfuscated credential not flagged by output guard"
+
+
+@pytest.mark.parametrize("label,payload,plain", _G54_IP_LEAK)
+def test_g54_obfuscated_ip_parity(label, payload, plain):
+    """An obfuscated internal IP reaches PARITY with a plain one: the guard flags it (raw miss,
+    canon hit) and redact_all masks it out of the egress bytes (fail-closed)."""
+    g = _og.OutputGuard(_SCANNER, {})
+    assert not patterns._detect_ip_leakage_core(payload), f"{label}: raw detector matched (gap gone)"
+    v = g._check_ip_leakage(payload, "redact")
+    assert v.action in ("redact", "block"), f"{label}: obfuscated internal IP not flagged"
+    canon = patterns.canonicalize_for_detection(patterns.redact_all(payload))
+    assert plain not in canon, f"{label}: internal IP reconstructable from egress (LEAK)"
+
+
+@pytest.mark.parametrize("label,payload", [
+    ("g54_fw_prose",     "会議は" + _fw("2024") + "年" + _fw("15") + "時に開始します。"),  # fullwidth digits, no secret
+    ("g54_fw_example_ip", "Router default is " + _fw("192.168.0.1") + " per the manual."),  # example addr exempt
+    ("g54_plain_benign",  "The temperature is 20.30 degrees, section 40.10 applies."),
+    ("g54_version",       "Upgrade to v10.20.30.40-beta build today."),
+])
+def test_g54_benign_fullwidth_not_flagged(label, payload):
+    """Canonicalizing the credential/IP detectors must not create false positives: benign
+    fullwidth prose, the exempt example IP, and dotted version strings stay clean + unmasked."""
+    assert not patterns.detect_credential_exposure(payload), f"{label}: benign flagged as credential (FP)"
+    assert not patterns.detect_ip_leakage(payload), f"{label}: benign flagged as IP leak (FP)"
+    assert patterns.redact_all(payload) == payload, f"{label}: benign text mutated by redaction (FP)"
+
+
+def test_g54_canon_detector_redos_bounded():
+    """The canonicalizing credential/IP detectors + redact_all stay bounded on a large
+    obfuscated payload — no catastrophic backtracking (ReDoS regression)."""
+    import time
+    big = (_fw("10.20.30.40") + " ") * 12000 + _fw("mongodb://admin:s3cretpwd@db/prod")
+    big = big[:200000]
+    for fn in (patterns.detect_ip_leakage, patterns.detect_credential_exposure, patterns.redact_all):
+        t = time.time()
+        fn(big)
+        assert (time.time() - t) < 4.0, f"{fn.__name__} ReDoS on pathological obfuscated input"
+
+
 # ── G49: exfil beacon hidden PAST the URL-scan budget (padding-flood evasion) ─────────
 # _scan_exfil_channels caps inspected URLs (_MAX_EXFIL_URLS) as a DoS guard. Padding an
 # output with that many benign URLs before an exfil beacon used to exhaust the budget
