@@ -92,6 +92,49 @@ def _valid_internal_key(presented: str) -> bool:
 _TIMEOUT = float(os.environ.get("MCP_PROXY_TIMEOUT", "30"))
 _GATEWAY_ASYNC_MCP_AUDIT = os.environ.get("GATEWAY_ASYNC_MCP_AUDIT", "false").strip().lower() in ("1", "true", "yes")
 
+# CP23: the control plane returns a 4xx with a ``reason`` in the body for an
+# ENFORCEMENT denial (a policy/guard blocked the call), not a server fault. When
+# the gateway records the backend's non-200 it must classify these as
+# ``decision="block"`` — recording them as ``error`` under-counts blocks and
+# inflates the error rate (the CP22 anomaly). These are the ``reason`` codes the
+# control ``MCPToolCallView`` puts in its 400/403 RESPONSE BODY.
+_ENFORCEMENT_BODY_REASONS = frozenset({
+    "tool_disabled",
+    "tool_not_registered",
+    "tool_not_allowed",
+    "invalid_arguments",          # schema validation failure (control returns 400)
+    "schema_validation_failed",
+    "blocked_by_policy",
+    "blocked_by_builtin_policy",
+    "org_scope_violation",
+    "scope_denied",
+    "policy_block",
+})
+
+
+def _classify_backend_failure(status_code: int, data) -> tuple[str, str, str]:
+    """Classify a non-200 control ``/tools/call`` response.
+
+    Returns ``(decision, reason, enforced_at)``. An enforcement denial (a 400/403
+    carrying a known enforcement ``reason``, or a policy block) is a
+    ``decision="block"`` attributed to the backend guard — NOT an ``error`` — so
+    the audit counters reflect real enforced reality (CP22/CP23). Genuine faults
+    (5xx, malformed request, server-not-found, no reason) stay ``error``.
+    """
+    reason = ""
+    err = ""
+    if isinstance(data, dict):
+        reason = str(data.get("reason") or "").strip().lower()
+        err = str(data.get("error") or "").strip().lower()
+    if status_code in (400, 403):
+        if reason in _ENFORCEMENT_BODY_REASONS:
+            return "block", reason, "backend"
+        # Policy blocks carry a free-text ``reason`` (the policy message); identify
+        # them by the stable error marker instead.
+        if "blocked by policy" in err or ("block" in err and "polic" in err):
+            return "block", (reason or "blocked_by_policy"), "backend"
+    return "error", f"backend_error_http_{status_code}", "gateway"
+
 # Allowlist of external MCP server domains that can be proxied.
 # Prevents open-relay abuse while still allowing known MCP endpoints.
 _ALLOWED_MCP_DOMAINS = {
@@ -3039,17 +3082,24 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                 else:
                     # Record the failed call too, so audit history captures the
                     # attempt (and any inbound findings) regardless of success.
+                    # CP23: a control 4xx enforcement denial (tool disabled / not
+                    # registered / schema-invalid / policy block) is a BLOCK, not an
+                    # error — classify it so the counters reflect real enforcement.
+                    _decision, _reason, _enforced_at = _classify_backend_failure(
+                        resp.status_code, data
+                    )
                     await _record_gateway_event(
                         org_slug=org_slug,
                         server_slug=server_slug,
                         tool_name=tool_name,
-                        decision="error",
-                        reason=f"backend_error_http_{resp.status_code}",
+                        decision=_decision,
+                        reason=_reason,
                         request_id=_req_id,
                         latency_ms=int((time.time() - call_t0) * 1000),
                         metadata={
                             "transport": transport,
-                            "enforced_at": "gateway",
+                            "enforced_at": _enforced_at,
+                            "backend_status": resp.status_code,
                             "scan_direction": "inbound",
                             "scan_action": _scan_action,
                             "scan_pipeline": "two_tier",
