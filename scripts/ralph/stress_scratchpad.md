@@ -830,6 +830,33 @@
         exfil-channels (G36), encoded-PII (G36/G35), markdown-split-PII (G45), AND tier-2 semantic spans
         (G46). Remaining non-stream-only branch: hallucination->rewrite (streaming coerces rewrite->block
         earlier, and hallucination is a rewrite/quality concern not a PII LEAK, so no leak gap there).
+      G47 — SYSTEM-MESSAGE PII IS FORWARDED RAW (characterized design-tradeoff, DOCUMENTED not fixed):
+        FINDING: llm_router._apply_redaction (line 651) DELIBERATELY skips role=="system" messages
+        ("System messages (instructions) are left untouched"). Multi-turn input scanning
+        (_extract_prompt_from_messages) DOES flatten+scan ALL messages incl. system, so PII in a system
+        message produces a redact verdict; but _apply_redaction redacts only USER/assistant turns.
+        Verified in-process: body=[system "account SSN on file is 123-45-6789", user "my email is
+        bob@example.com"] -> _apply_redaction masks the user email (b***@e***.com) but the SYSTEM SSN
+        survives RAW -> reaches the model. The main.py fail-closed no-op guard (6341-6359) checks the
+        FLATTENED effective_prompt (where the SSN IS redacted) so it is NOT triggered -> for the
+        PII-ONLY-IN-SYSTEM sub-case, telemetry can attest "redact" while the egress system message is
+        raw (a phantom-redaction / "egress=truth" nuance).
+        WHY DOCUMENTED, NOT FIXED (disciplined, non-regressing): the skip is a DELIBERATE, TESTED design
+        decision — test_apply_redaction_leaves_system_message_untouched pins it with a system message
+        "agent id 8929554991" (an APP-OWNED internal identifier that looks like a phone). System messages
+        are treated as TRUSTED app config (instructions/IDs/examples) that must NOT be mangled; the
+        firewall protects USER content. Reversing the skip breaks that test and mangles legit system
+        prompts (contact emails, format examples, agent IDs). A naive fail-closed byte-verify of the
+        forwarded system message would OVER-BLOCK the tested agent-ID case (flagged as phone -> survives
+        in system -> fail closed -> blocks a request the test requires to PASS). There is no fix that
+        closes the narrow leak WITHOUT regressing the intended trusted-system-message behavior, and the
+        deterministic redactor cannot distinguish "app's agent ID" from "real user PII" in a system slot.
+        RECOMMENDATION (owner decision, out of scope for an autonomous non-regressing fix): if system
+        messages should be treated as untrusted for a given org, add an ORG-CONFIG opt-in
+        (redact_system_messages) that applies redact_all to system content too — off by default to
+        preserve current behavior; that is a product/policy choice, not a safe unilateral code change.
+        => R5 "no PII reaches models" holds for USER content (verified live: benign-intent PII redacted,
+        exfil blocked); system-message content is trusted-by-design and is the documented exception.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
