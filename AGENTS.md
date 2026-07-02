@@ -721,6 +721,19 @@
     gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
     mcp-parallel/findings/backstop-p11-leakage-detector-ttl-leak/. RESIDUAL: circuit_breaker.py uses
     transaction=False pipelines for INCR+EXPIRE (batched, small orphan window) — lower priority.
+  - CHG-0085 (2026-07-02) — ARCH credential-at-rest (found by a security review of the MCP OAuth proxy),
+    HIGH: mcp_oauth_proxy._write_mcp_remote_tokens persists mcp-remote token files under /tmp/mcp-orgs/{org}/
+    mcp-auth/... — access_token + refresh_token, client_secret, PKCE code_verifier — via Path.write_text +
+    mkdir(exist_ok=True) with DEFAULT perms (verified on-host: 0664 world-readable files, 0775
+    world-traversable dirs). So a co-located process/tenant on the shared gateway host could read another
+    org's OAuth creds at rest → upstream-MCP account takeover (Redis copies were already encrypted per
+    CHG-0042; the on-disk copies were not). FIX (mcp_oauth_proxy.py): new _write_secure_text creates files
+    via os.open(O_CREAT, 0o600) (restrictive mode at creation, umask-proof) + re-chmod; _write_mcp_remote_
+    tokens chmods the org tree (/tmp/mcp-orgs/{org}, mcp-auth, each mcp-remote-{ver}) to 0700. Content
+    unchanged. +2 tests (all dirs 0700 + files 0600; os.walk finds ZERO group/world paths; secrets intact).
+    Gate: 2 + 1449 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
+    mcp-parallel/findings/backstop-p12-oauth-token-file-perms/. RESIDUAL: ideally write inside the per-tenant
+    sandbox FS (item 12); shred on revocation.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

@@ -404,6 +404,22 @@ async def _discover_oauth_metadata(server_url: str) -> dict:
         }
 
 
+def _write_secure_text(path: Path, content: str) -> None:
+    """CHG-0085: write ``content`` with owner-only (0600) perms — the file is created
+    with the restrictive mode at open() time (no world-readable window), and re-chmod'd
+    in case it pre-existed with looser perms. 0600 is umask-proof (umask only clears
+    bits; 600 already has no group/other bits)."""
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, content.encode("utf-8"))
+    finally:
+        os.close(fd)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
 def _write_mcp_remote_tokens(
     org_slug: str,
     server_url: str,
@@ -414,27 +430,43 @@ def _write_mcp_remote_tokens(
 
     Writes to several version sub-directories so the files are found
     regardless of which mcp-remote version npx resolves.
+
+    CHG-0085: these files hold OAuth access/refresh tokens + client_secret + the PKCE
+    code_verifier. They were written with ``Path.write_text`` / ``mkdir`` defaults
+    (0644 world-readable files, 0755 world-traversable dirs), so a co-located process /
+    tenant on the shared host could read another org's OAuth credentials at rest. The
+    whole org tree is now owner-only (0700 dirs, 0600 files).
     """
-    config_dir = Path(f"/tmp/mcp-orgs/{org_slug}/mcp-auth")
+    org_dir = Path(f"/tmp/mcp-orgs/{org_slug}")
+    config_dir = org_dir / "mcp-auth"
     server_hash = hashlib.md5(server_url.encode()).hexdigest()
 
     for ver in ("0.1.37", "0.1.38", "0.1.39", "0.1.40", "0.1.41", "0.1.42", "0.1.43"):
         vdir = config_dir / f"mcp-remote-{ver}"
         vdir.mkdir(parents=True, exist_ok=True)
+        # Lock down the org credential tree (idempotent; also fixes pre-existing dirs
+        # that mkdir(exist_ok=True) would leave at their old looser mode). 0700 on the
+        # org dir blocks another user from traversing in to the token files.
+        for _d in (org_dir, config_dir, vdir):
+            try:
+                os.chmod(_d, 0o700)
+            except OSError:
+                pass
 
-        (vdir / f"{server_hash}_tokens.json").write_text(json.dumps({
+        _write_secure_text(vdir / f"{server_hash}_tokens.json", json.dumps({
             "access_token": token_data.get("access_token"),
             "refresh_token": token_data.get("refresh_token"),
             "token_type": token_data.get("token_type", "bearer"),
         }))
-        (vdir / f"{server_hash}_client_info.json").write_text(json.dumps({
+        _write_secure_text(vdir / f"{server_hash}_client_info.json", json.dumps({
             "clientId": flow.get("client_id"),
             "clientSecret": flow.get("client_secret", ""),
             "redirectUrl": flow.get("callback_url"),
             "redirectUris": [flow.get("callback_url")],
         }))
-        (vdir / f"{server_hash}_code_verifier.txt").write_text(
-            flow.get("code_verifier", "")
+        _write_secure_text(
+            vdir / f"{server_hash}_code_verifier.txt",
+            flow.get("code_verifier", ""),
         )
 
     LOG.info(
