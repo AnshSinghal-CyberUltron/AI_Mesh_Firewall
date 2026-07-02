@@ -528,7 +528,17 @@
         preG37, --no-deps) + LIVE: gemma spoof 400, Claude transcript 200, benign 200, plain attack 400. Bounded
         => ReDoS-safe. => chat-template/role-delimiter spoofing now covers ChatML + Llama + Gemma + special-role
         tokens at tier-1; Claude Human/Assistant + semantic role-play at tier-2.
-      ★ FINAL COMPLETION 2026-07-02 (+G30..G37): ALL 7 criteria met. The prior sole blocker — the tier-2
+      G38 DONE 2026-07-02 (commit 345c8536) — international phone PII consistency. Probed additional/intl PII:
+        IBAN, BTC/ETH wallet, ITIN, US phone, +91 phone all redact ✓; DOB "03/15/1985" allow (oracle-confirmed
+        NOT PII — bare dates are ubiquitous, redacting would be FP-prone — correct); but UK "+44 7911 123456"
+        (6-digit trailing group) slipped the grouped-intl phone branch (per-group max was 5). Scanner POLICY
+        redacts phones (US/+91 do), so +44 missing = enforcement-consistency gap. Widened phone_intl per-group
+        max 5->7 (still requires leading + AND >=2 groups). Verified +44/+91/US/+61 redact; ZERO FP on benign
+        "+N -N" arithmetic (score +10 +20 +30, delta +3 -1 +4 -2, budget +50 -20) + bare date allowed. G38
+        golden: 4 intl-phone redact + 4 FP-floor allow. Adversarial 250, golden 253x3, full gateway 1176.
+        REDEPLOYED (rollback-preG38, --no-deps) + LIVE: +44 phone http=200 raw ABSENT from egress (redacted),
+        benign 200, attack 400. ReDoS-safe (bounded). => international phone PII coverage now consistent.
+      ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
         enforcement (no block->allow), all 41 block payloads block, translate now allow->allow; only safe-
