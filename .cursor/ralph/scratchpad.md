@@ -1,9 +1,18 @@
 ---
-iteration: 35
+iteration: 36
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter36 (2026-07-02) — ws blockers recheck + 3-transport R1
+- **P4.13/P6.18 RECHECK:** ws blockers **unchanged** in git AND live — gateway ws still
+  `mcp_ws_adapter` (`mcp_proxy.py:2017 git / :2001 container), NOT `broker_send_rpc`;
+  control `URLField` (`models.py:41`) still rejects `ws://`. No rebuild needed (git=container).
+  **3/3** gateway transports PASS **R1** after stubs-up (stdio+http+sse; no regression vs iter35).
+  ws BLOCKED (no manifest slug). ss: no gateway :443. **Cannot `[x]`** until Claude lands both ws
+  seams. Evidence: `RECHECK_ITER36.md`.
+- Hive: `cursor-ralph-iter36` on `hive-1782991737290-ylo911`.
 
 ## iter35 (2026-07-02) — cold-run flake fix + 3-transport ROUNDS=3
 - **P4.13/P6.18 RECHECK:** ws blockers **unchanged** — gateway ws still `mcp_ws_adapter`
