@@ -1,0 +1,7 @@
+agent: cursor-chat-pipeline-freeze
+story: P3b-main-py-enforcement
+scope: gateway/ai_mesh_gateway/main.py:3500-6600
+status: released
+since: 2026-07-02T10:00:00Z
+released: 2026-07-02T10:20:00Z
+notes: ONE bounded edit complete — resolve_enforcement() wired in proxy_chat input-scan path.

@@ -28,15 +28,41 @@ tier-2 `redact` → `flag` (scanner.py:1370) while block paths use `verdict.acti
 **Fix direction:** `enforcement.resolve_enforcement()` created; main.py swap pending
 (claim `main.py:3500-6600` before edit).
 
-## B-POL (confirmed at unit layer)
+## B-POL (live — iteration 2)
 
-**Symptom (reported):** `matched_rules: []` for SSN/CC/email/phone in live traces.
+**Root cause (confirmed):** Redis had **no** `policies:compiled:*` bundles (`policy_count: 0` on
+gateway `/health`). Policy engine evaluation is correct when bundles exist.
 
-**Unit probe:** Compiled `PKG2_PIPE_PII` bundle shape matches when `condition.regex`
-is present — `evaluate()` returns matched rules for all four identifier types.
+**Live repro after fix:**
+```bash
+docker compose exec control python manage.py seed_policy_package --org-slug zeroshield
+# → policies:compiled:zeroshield pushed (45 policies)
+curl /v1/policy/check prompt="Contact alice@corp.com ssn 123-45-6789"
+# → action=redact, matched_rules=["Redact email addresses","Redact US SSN"]
+```
 
-**Hypothesis for live miss:** bundle not compiled/pushed to `POLICY_SYNC`, wrong
-`policy_domain` filter, or org slug mismatch — needs live Redis verification.
+**No policy_engine.py code change required** — compile+push is control-plane
+(`seed_policy_package` / `compile_policies`). Gateway `POLICY_SYNC` picked up
+bundle automatically (policy_count 45, version 1).
+
+## B-ENF (iteration 2 — fixed in main.py)
+
+`proxy_chat` input-scan block/redact path now calls `enforcement.resolve_enforcement()`:
+- Tier-2 `recommended_action` preferred over `verdict.action` (B-ENF core fix)
+- Org policy action from `check_resp` participates in precedence
+- Honesty check uses `redaction_possible=False` → block via resolver
+
+| Case | Contract | Status (iter 2) |
+|------|----------|-----------------|
+| 01 PII policy redact | `redact` | **GREEN** unit + live policy/check |
+| 02 PHI redact | `redact` | pending live chat path |
+| 03 Jailbreak block | `block` | pending live |
+| 04 Injection block | `block` | pending live |
+| 05 Secrets block | `block` | pending live |
+| 06 Benign allow | `allow` | pending live |
+| 07 Kill-switch reroute | `allow` | xfail (live gate) |
+| 08 Sensitivity routing | `allow` | xfail (live gate) |
+| 09 Output guard PII | `redact` | xfail (live gate) |
 
 ## Code anchors
 

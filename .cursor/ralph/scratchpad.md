@@ -25,12 +25,16 @@
 ## P3 — Fix B-ENF
 - [x] 6a. Create enforcement.py + exhaustive unit tests.
       **Files:** `gateway/ai_mesh_gateway/enforcement.py`, `tests/test_enforcement.py`
-- [ ] 6b. ONE main.py edit: resolve_enforcement() call-site swap (claimed region only).
+- [x] 6b. ONE main.py edit: resolve_enforcement() call-site swap (claimed region only).
+      **Evidence 2026-07-02:** claim `cursor-chat-pipeline-freeze-P3b`; swapped input-scan
+      enforcement in main.py:6161–6350 to use `resolve_enforcement()` + `should_hard_block` /
+      `should_apply_redaction`. Gates: 15 passed, 8 xfailed.
 
 ## P4 — Fix B-POL
-- [ ] 7. Diagnose PKG2_PIPE_PII/PCI/PHI compile+push; fix policy_engine.py.
-      **Unit probe:** PIPE_PII compiled bundle matches in `test_pipe_pii_policy_matches_identifiers`.
-      Live Redis/POLICY_SYNC push still unverified.
+- [x] 7. Diagnose PKG2_PIPE_PII/PCI/PHI compile+push; fix policy_engine.py.
+      **Live root cause:** Redis had no compiled bundles (policy_count=0). Seeding via
+      `seed_policy_package --org-slug zeroshield` pushed 45 policies; live `/v1/policy/check`
+      returns matched_rules for SSN+email. **No policy_engine.py change needed.**
 
 ## P5 — Freeze routing/kill-switch/output-guard
 - [ ] 8. Cases 6/7/8/9 pinned by golden tests; fix output_guard.py/llm_router.py only if red.
