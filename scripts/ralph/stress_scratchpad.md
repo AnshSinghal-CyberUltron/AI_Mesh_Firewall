@@ -498,6 +498,16 @@
         11 chunks, injection 400). Live exfil-on-stream masking not force-testable (can't make the model emit a
         beacon) but the redact composition + no-regression are verified. => streaming egress now has FULL parity
         with non-stream defense-in-depth (exfil + encoded-PII + plain PII + cross-flush secret masking).
+      G35 LIVE-CHAIN CONFIRMED 2026-07-02 (correctness verify, no fix): checked that G35 encoded-output-PII
+        masking is REACHED in the live flow (not dead code). The live non-stream output guard uses OutputGuard.
+        inspect -> _check_pii_secrets (output_guard.py:657) -> self._scanner.scan_output -> _scan_output_sync
+        (the exact method G35 patched to detect encoded PII -> action=flag threat_type=pii matched_patterns).
+        _check_pii_secrets sees threat_type in (pii,secret) + matched_patterns and returns OutputVerdict(action=
+        pii_action default REDACT), so inspect yields a REDACT verdict -> main.py sanitizes via sanitize_output_
+        for_verdict -> neutralize_encoded_pii masks the encoded run. Streaming path (secure_streaming) also uses
+        inspect for the verdict and (post-G36) neutralize_encoded_pii on redact. => G35 fires on BOTH non-stream
+        and stream live paths; chain is code-confirmed link-by-link. (Encoded PII detection also correctly
+        overrides the _scan_output_sync flag to the configured redact action via _check_pii_secrets.)
       ★ FINAL COMPLETION 2026-07-02 (+G30..G36): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
