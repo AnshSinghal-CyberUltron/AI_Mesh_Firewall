@@ -574,6 +574,19 @@
     SECRET_PATTERNS (detect_secrets+redact_all) + COMPLIANCE_TAG_MAP (SECRET). Telegram pattern allows the
     optional `bot` URL prefix so a token in api.telegram.org/bot<token>/ masks too. Near-zero FP. +18 tests.
     Gate: 18 + 1284 gateway passed, 0 failed. Evidence mcp-parallel/findings/backstop-p2-more-provider-secrets/.
+  - CHG-0073 (2026-07-02) — G2 item 20 / 1.4 (3rd adversarial sweep — IP-leakage surface), MEDIUM
+    (fail-OPEN under redact policy): IP_LEAKAGE_PATTERNS was IPv4-RFC1918-only, so a tool RESULT with
+    internal IPv6 (ULA fc00::/7, link-local fe80::/10), cloud-metadata/link-local IPv4 (169.254.169.254
+    IMDS → IAM creds; the SSRF target the dial guards CHG-0065/0067 block) or CGNAT (100.64.0.0/10)
+    egressed RAW. SUBTLE: `_redact_all_raw` masks infra via a HARDCODED key tuple (not the dict) — so
+    adding to the dict alone made detect_ip_leakage FLAG the leak while redact_all left it RAW =
+    report-redacted-while-forwarding-raw. FIX (patterns.py, ALL 4 points): added internal_ipv6 +
+    link_local_ipv4 to (1) IP_LEAKAGE_PATTERNS→detect, (2) the redact tuple→mask, (3) _INFRA_NETWORK_KEYS→
+    encoded-infra parity, (4) COMPLIANCE_TAG_MAP→["INFRA"]. IPv6 anchored on the internal first-hextet
+    (MAC/timestamp/hex-blob never match); loopback ::1/127.x intentionally NOT flagged. Linear-time, ~0 FP.
+    +21 tests. Gate: 21 + 1305 gateway passed, 0 failed. Independent oracle: aidefence_scan piiFound:false
+    on the IMDS URL (a generic scanner is BLIND to infra-leak). Evidence
+    mcp-parallel/findings/backstop-p20-internal-ipv6-metadata-leak/.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

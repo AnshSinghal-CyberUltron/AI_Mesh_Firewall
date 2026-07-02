@@ -182,6 +182,23 @@
       (detect_secrets+redact_all) + COMPLIANCE_TAG_MAP (SECRET); Telegram pattern allows the optional `bot`
       URL prefix. Near-zero FP. +18 tests. Gate: 18 + 1284 gateway passed, 0 failed. Evidence:
       mcp-parallel/findings/backstop-p2-more-provider-secrets/finding.md.
+      CHG-0073 (2026-07-02, MEDIUM — 3rd adversarial sweep, IP-LEAKAGE surface; closes a fail-OPEN): the
+      redact_all/detect_ip_leakage sweep found IP_LEAKAGE_PATTERNS was IPv4-RFC1918-ONLY, so a tool RESULT
+      with internal IPv6 (ULA fc00::/7, link-local fe80::/10), a cloud-metadata/link-local IPv4
+      (169.254.169.254 IMDS — hands out IAM creds; the exact SSRF target the dial guards CHG-0065/0067
+      block) or CGNAT (100.64.0.0/10) egressed RAW (redact_all no-op, detect empty). SUBTLE FAIL-OPEN:
+      _redact_all_raw masks infra via a HARDCODED key tuple ("internal_ipv4","internal_hostname",
+      "internal_url"), NOT by iterating the dict — so a dict-only add makes detect_ip_leakage FLAG the leak
+      (tier1 decides block/redact) while redact_all leaves it RAW → "report redacted while forwarding raw".
+      FIX (patterns.py, ALL 4 points so detect==redact==tag==encoded-parity): added internal_ipv6 (anchored
+      on the internal first hextet — a 2-hex MAC group / bare hex blob / HH:MM:SS timestamp never match;
+      loopback ::1/127.x intentionally NOT flagged) + link_local_ipv4 (169.254/16 incl. IMDS + 100.64/10
+      CGNAT) to (1) IP_LEAKAGE_PATTERNS→detect, (2) the redact tuple→mask, (3) _INFRA_NETWORK_KEYS→
+      encoded-infra parity, (4) COMPLIANCE_TAG_MAP→["INFRA"]. Linear-time (no ReDoS), ~0 FP; RFC1918 control
+      + goldens unchanged. +21 tests. Gate: 21 + 1305 gateway passed, 0 failed. Independent oracle:
+      aidefence_scan piiFound:false on the IMDS URL + ULA IPv6 (a generic scanner is BLIND to infra-leak →
+      the gap is real; purpose-built detect_ip_leakage required). Evidence:
+      mcp-parallel/findings/backstop-p20-internal-ipv6-metadata-leak/finding.md.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

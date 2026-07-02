@@ -878,6 +878,25 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   ASIA detect_pii-flagged + masked w/ AKIA regression; Telegram token in the API URL masked; benign no-FP)
   + 1284 gateway passed, 0 failed. Evidence: `mcp-parallel/findings/backstop-p2-more-provider-secrets/`.
 
+- **CHG-0073** (2026-07-02) — G2 item 20 / 1.4 (3rd adversarial `redact_all` sweep — the IP-leakage
+  surface), MEDIUM, **closes a fail-OPEN**: `IP_LEAKAGE_PATTERNS` was IPv4-RFC1918-only, so a tool RESULT
+  containing internal IPv6 (ULA `fc00::/7`, link-local `fe80::/10`), a cloud-metadata/link-local IPv4
+  (`169.254.169.254` IMDS → hands out IAM creds; the exact SSRF target the dial-time guards CHG-0065/0067
+  block) or CGNAT IPv4 (`100.64.0.0/10`) egressed RAW (redact_all no-op, detect_ip_leakage empty). SUBTLE
+  FAIL-OPEN: `_redact_all_raw` masks infra via a **hardcoded key tuple**, not by iterating the dict — so a
+  dict-only add makes `detect_ip_leakage` FLAG the leak (tier1 decides redact) while `redact_all` leaves
+  it RAW → "report redacted while forwarding raw". FIX (`patterns.py`, all FOUR points so
+  detect==redact==tag==encoded-parity): added `internal_ipv6`
+  (`\b(?:f[cd][0-9a-f]{2}|fe[89ab][0-9a-f])(?:(?:::?[0-9a-f]{1,4})+(?:::)?|::)`, anchored on the internal
+  first hextet so a 2-hex MAC group / bare hex blob / HH:MM:SS timestamp never match; loopback `::1` NOT
+  flagged) and `link_local_ipv4` (`169.254.0.0/16` incl. IMDS + `100.64.0.0/10` CGNAT) to (1)
+  IP_LEAKAGE_PATTERNS→detect, (2) the `_redact_all_raw` infra tuple→mask, (3) `_INFRA_NETWORK_KEYS`→
+  encoded-infra bypass parity, (4) COMPLIANCE_TAG_MAP→`["INFRA"]`. Linear-time (no ReDoS), ~0 FP; RFC1918
+  control + goldens unchanged. +21 tests. Gate: 21 + 1305 gateway passed, 0 failed. Independent oracle:
+  `aidefence_scan` reports `piiFound:false` on the IMDS URL + ULA IPv6 (a generic scanner is BLIND to
+  infra-leak → the gap is real; purpose-built `detect_ip_leakage` is required). Evidence:
+  `mcp-parallel/findings/backstop-p20-internal-ipv6-metadata-leak/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

@@ -128,11 +128,24 @@ def canonicalize_for_detection(text: str) -> str:
 # char classes on both sides -> linear (no ReDoS).
 _MD_EMPH_INTERLEAVE = re.compile(r"(?<=[\w@.\-])[*`]+(?=[\w@.\-])")
 
+# G51: markup a renderer DROPS (renders to nothing) — an attacker splits a value with it
+# to evade byte-level matching while it visually reassembles: HTML COMMENTS (<!-- … -->),
+# EMPTY paired tags (<span ...></span>), and self-closing/void tags (<br/>). Each subpattern
+# is bounded — ``.*?`` is closed by ``-->``, ``[^>]*`` is a negated class — so LINEAR (no
+# ReDoS). Detection-only (reveals the hidden value); never mutates the delivered egress.
+_RENDER_INVISIBLE_HTML = re.compile(
+    r"<!--.*?-->"                                 # HTML comment
+    r"|<([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>\s*</\1\s*>"  # <tag ...></tag>  (empty paired)
+    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]*/\s*>",         # <tag .../>       (self-closing)
+    re.DOTALL,
+)
+
 
 def strip_interleaved_emphasis(text: str) -> str:
-    """Remove inline markdown emphasis/code markers interleaved among word/PII chars,
-    exposing a PII value split to evade byte-level matching. Detection-only helper."""
-    return _MD_EMPH_INTERLEAVE.sub("", text)
+    """Remove markers interleaved among word/PII chars that a markdown/HTML renderer drops,
+    exposing a value split to evade byte-level matching: markdown emphasis (``*`` / `` ` ``)
+    AND render-invisible HTML (comments / empty tags — G51). Detection-only helper."""
+    return _RENDER_INVISIBLE_HTML.sub("", _MD_EMPH_INTERLEAVE.sub("", text))
 
 
 # --- bounded transport decode (G2): surface PII/secrets hidden in base64/hex ---
@@ -629,6 +642,29 @@ IP_LEAKAGE_PATTERNS: Dict[str, str] = {
         r"192\.168\.\d{1,3}\.\d{1,3})|"
         r"[a-z][a-z0-9-]+\.(?:internal|local|corp))[:/]"
     ),
+    # CHG-0073: internal IPv6 leakage. internal_ipv4 (above) was IPv4-only, so a
+    # ULA (fc00::/7 -> fc/fd first hextet) or link-local (fe80::/10 -> fe8..feb)
+    # address — which reveals internal network topology exactly like an RFC1918
+    # IPv4 — egressed RAW in a tool RESULT. Anchored on the distinctive internal
+    # first hextet (a FULL 4-hex hextet, so a 2-hex MAC group, a bare contiguous
+    # hex blob, and an HH:MM:SS timestamp never match) followed by >=1 ':'/'::'
+    # hextet group or a bare '::'. Loopback '::1' is intentionally NOT flagged (as
+    # benign as localhost). Every quantifier is fixed/bounded and each repeat
+    # consumes >=1 char => LINEAR-time (no ReDoS). Compiled re.IGNORECASE.
+    "internal_ipv6": (
+        r"\b(?:f[cd][0-9a-f]{2}|fe[89ab][0-9a-f])"
+        r"(?:(?:::?[0-9a-f]{1,4})+(?:::)?|::)"
+    ),
+    # CHG-0073: link-local / cloud-metadata (169.254.0.0/16 — INCLUDING the
+    # 169.254.169.254 IMDS endpoint that hands out cloud IAM creds) and CGNAT
+    # (100.64.0.0/10, 2nd octet 64-127) IPv4. internal_ipv4 covered only RFC1918,
+    # so an IMDS/CGNAT address egressed RAW in a tool RESULT (cloud-env / topology
+    # disclosure — and IMDS is the very SSRF target the dial-time guards block).
+    # Fixed quantifiers + \b => linear-time, near-zero FP (non-routable ranges).
+    "link_local_ipv4": (
+        r"\b(?:169\.254\.\d{1,3}\.\d{1,3}"
+        r"|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3})\b"
+    ),
 }
 
 CREDENTIAL_EXPOSURE_PATTERNS: Dict[str, str] = {
@@ -696,6 +732,8 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "us_bank_number": ["PCI-DSS"],
     "crypto_address": ["PCI-DSS"],
     "internal_ipv4": ["INFRA"],
+    "internal_ipv6": ["INFRA"],          # CHG-0073
+    "link_local_ipv4": ["INFRA"],        # CHG-0073 (incl. 169.254.169.254 IMDS)
     "internal_hostname": ["INFRA"],
     "file_path_unix": ["INFRA"],
     "file_path_windows": ["INFRA"],
@@ -1007,7 +1045,16 @@ def _redact_all_raw(text: str) -> str:
     # 192.168.0.1) are exempt so benign educational answers aren't degraded. File
     # paths are intentionally NOT masked here — they are far too false-positive-
     # prone (legitimate in code answers) and stay at the softer 'flag' tier.
-    for _infra_type in ("internal_ipv4", "internal_hostname", "internal_url"):
+    # CHG-0073: internal_ipv6 + link_local_ipv4 added so redact_all ACTUALLY masks
+    # them. This tuple is hardcoded (not `IP_LEAKAGE_PATTERNS.keys()`), so a new IP
+    # key detected by detect_ip_leakage but absent here would be FLAGGED-yet-
+    # FORWARDED-RAW under a redact policy — the "report redacted while egressing
+    # raw" fail-open. They carry no example-address exemption (169.254.169.254 /
+    # ULA / link-local IPv6 must always mask), so no branch is added below.
+    for _infra_type in (
+        "internal_ipv4", "internal_hostname", "internal_url",
+        "internal_ipv6", "link_local_ipv4",
+    ):
         _infra_pat = IP_LEAKAGE_PATTERNS.get(_infra_type)
         if not _infra_pat:
             continue
@@ -1039,7 +1086,10 @@ def _detect_all_spans(text: str):
 # pass — its decode checks only detect_pii/detect_secrets, NOT ip_leakage. Scope the
 # encoded-infra check to the NETWORK-address keys redact_all actually masks (internal
 # IP / hostname / URL); file-path leak types are excluded (flag-tier + FP-prone).
-_INFRA_NETWORK_KEYS = ("internal_ipv4", "internal_hostname", "internal_url")
+_INFRA_NETWORK_KEYS = (
+    "internal_ipv4", "internal_hostname", "internal_url",
+    "internal_ipv6", "link_local_ipv4",  # CHG-0073: encoded-infra parity
+)
 
 
 def _dec_has_infra(s: str) -> bool:
