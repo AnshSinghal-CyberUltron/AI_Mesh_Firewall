@@ -13,6 +13,20 @@
   DISPATCH _adapter_forward:1775 (stdio:1788 / ws:1809 / broad-except:1832 'Adapter error') OR backend-HTTP(:2324)
   →result-scan+redaction-floor→audit _record_gateway_event:425. stdio→send_jsonrpc(mcp_stdio_adapter.py:666)→
   broker(:602) vs in-process(:628) on _stdio_in_process(:678).
+- ⚠️ PRIOR-FIXES-PRESENT (item#4, docs/mcp/frontend-panel-flow.md): B1/B2/B4 are NOT greenfield — the frontend
+  already has substantial fixes (comments cite 'MCP OAuth bugs #1/#2', 'bug #3', 'FOCUS-LOSS ROOT FIX'; deleted
+  iter1-bug5-modal-focus-fixed.png). TREAT FIX ITEMS #13-18 AS VERIFICATION-FIRST, not blind re-implementation.
+  B1 form: MCPConnectorPanel.jsx oauth auth_type option filtered to streamable-http/sse only (:1483-1490) + transport
+  switch drops oauth->none (:1385-1392); cards render EXACTLY ONE Authorize (mutually-exclusive serverNeedsOAuth:711->
+  startOAuth:773 [gateway, stdio mcp-remote] vs serverUsesHttpOAuth:726->startControlOAuth:845 [control, http-oauth+url]);
+  serverUsesHttpOAuth requires !!srv.url so 'Server has no URL' unreachable from button. REMAINING B1(#13): backend
+  MCPServerOAuthStartView dup path (views.py:2513/2526/2582) + startControlOAuth caller still exist — spec wants them
+  deleted/unified to gateway path. B2: serverAwaitingAuth:741 renders 'authorization required' badge (:1095-1097),
+  syncBlockedForAuth:757 gates premature sync (:1211). REMAINING B2(#15): in-browser verify distinct pending UX + tools
+  populate after authorize+sync. B4: NO component-in-render (render helpers are fn CALLS renderServers()/renderTools()
+  @ :2203-2208, NOT <Comp/>); Dialog focus fix in ui/Dialog.jsx (onClose kept in ref :20-24, handleKey useCallback([]),
+  effect deps [open,handleKey] :69 -> effect runs only on open-toggle not per keystroke). REMAINING B4(#17/18): Playwright
+  confirm focus retained per keystroke (code-level root causes already addressed). Modal=Dialog(createPortal) @ :1347.
 - CONTROL FLOW (item#3, docs/mcp/control-plane-flow.md): register POST /api/mcp-connector/servers/ (MCPServerListCreateView.post
   views.py:764) -> serializer.validate (serializers.py:121, ALL guards incl B1@177) -> get_or_create(:784) -> auto-provision
   GatewayAPIKey(:821) -> 201 tools_count=0. NO tool sync, NO sandbox provision on register (B2/B3). post_save signal only
@@ -91,7 +105,14 @@
       checks url:2524->'Server has no URL':2526); oauth_authorized=models.py:178 property flips on _store_oauth_tokens:298/2697;
       tools appear ONLY via MCPServerToolListView.post:1889->_resync_server_tools:507->_discover_tools_via_gateway:407,
       NOT on register/callback/signal). All anchors verified.
-- [ ] 4. Map frontend MCPConnectorPanel register/authorize/list/execute + the 4 bug sites
+- [x] 4. Map frontend MCPConnectorPanel register/authorize/list/execute + the 4 bug sites
+      EVIDENCE: docs/mcp/frontend-panel-flow.md. CRITICAL: B1/B2/B4 all carry SUBSTANTIAL PRIOR FIXES already
+      in-code. B1 form: oauth option filtered to HTTP only (:1483-1490) + drops oauth on transport switch (:1385);
+      cards render mutually-exclusive single Authorize (serverNeedsOAuth:711->startOAuth:773 gateway vs
+      serverUsesHttpOAuth:726->startControlOAuth:845 control). B2: 'authorization required' pending badge renders
+      (serverAwaitingAuth:741 @ :1095). B4: no in-render component (render helpers are fn calls :2203-2208) + Dialog
+      focus-trap stabilized (ui/Dialog.jsx onClose-ref, deps [open,handleKey]). REMAINING: B1 delete backend dup
+      MCPServerOAuthStartView path; B2/B4 in-browser verify. All anchors verified.
 - [ ] 5. Write docs/mcp/ARCHITECTURE_AND_THREATS.md (isolation model + threat model + the 4 bugs)
 
 ## P1 — OSS exploration (GitHub MCP)

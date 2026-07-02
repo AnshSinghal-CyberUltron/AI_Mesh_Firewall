@@ -47,6 +47,24 @@
   is gated by an SSRF guard that requires DNS resolution to succeed → public hosts 400 from inside the
   control container. tool-call request body is `{name, arguments, server_slug}` (NOT `tool_name`).
 
+### MCP OAuth bug sites (B1/B2/B4) — current state (map: `docs/mcp/frontend-panel-flow.md`)
+These carry substantial PRIOR fixes — treat as verification-first, don't blind re-implement.
+- **B1 (oauth+stdio / one Authorize button / "Server has no URL"):** form filters the `oauth`
+  auth-type option to `streamable-http`/`sse` only (`:1483-1490`) and drops oauth→none on transport
+  switch (`:1385-1392`). Cards show exactly one Authorize via mutually-exclusive helpers:
+  `serverNeedsOAuth` (`:711`, stdio mcp-remote) → `startOAuth` (`:773`, **gateway** `oauth/start`) vs
+  `serverUsesHttpOAuth` (`:726`, http-oauth+url) → `startControlOAuth` (`:845`, **control**
+  `servers/{id}/oauth/authorize/`). `serverUsesHttpOAuth` requires `!!srv.url` so the button never
+  surfaces "Server has no URL". REMAINING: the control path (`startControlOAuth` → backend
+  `MCPServerOAuthStartView`, `views.py:2513/2526/2582`) is the dup/broken path B1 wants deleted.
+- **B2 (fresh oauth server 0-tools card):** `serverAwaitingAuth` (`:741`) renders the
+  `"authorization required"` badge (`:1095-1097`); `syncBlockedForAuth` (`:757`) disables sync until
+  authorized. Backend signal = `oauth_authorized` (`control models.py:178`). Verify UX reads as pending.
+- **B4 (modal focus loss):** ADDRESSED at code level — no component-defined-inside-render (render
+  helpers are function CALLS `{renderServers()}` `:2203-2208`, not `<Comp/>`); `ui/Dialog.jsx` keeps
+  `onClose` in a ref so the focus-trap effect (deps `[open, handleKey]`, `handleKey`=`useCallback([])`)
+  runs only on open-toggle, not per keystroke. Verify with Playwright: type a long string per field.
+
 ## Module-1 live simulators (D6) — verdict honesty
 - A gateway policy/CONTENT block is **HTTP 400 `code=content_filter`** on this gateway (OpenAI-compat
   content-block status is on), NOT 403. Any verdict mapping that keys "block" off 403-only mislabels it.
