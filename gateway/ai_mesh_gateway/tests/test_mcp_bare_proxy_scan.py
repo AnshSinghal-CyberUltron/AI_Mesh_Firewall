@@ -1064,3 +1064,43 @@ async def test_ext_proxy_audit_noop_without_org():
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 200  # still works, redaction still applied
     assert "john.doe@example.com" not in json.dumps(_decode(resp))
+
+
+# ── CHG-0070: complete the ext_mcp_proxy audit trail — CHG-0068 audited the JSON result
+# block/redact but MISSED the SSE result block, and no successful tool-call was audited.
+@pytest.mark.asyncio
+async def test_ext_proxy_audits_clean_tool_call_allow():
+    req = _ext_request_with_org(_BENIGN_CALL)  # tools/call name=fetch
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 20,
+                               "result": {"content": [{"type": "text", "text": "ok"}]}})  # clean
+    events = []
+
+    async def _cap(**kw):
+        events.append(kw)
+
+    with patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", new_callable=AsyncMock, return_value=None), \
+         patch.object(mcp_proxy, "_record_gateway_event", new=_cap), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 200
+    allows = [e for e in events if e.get("decision") == "allow"]
+    assert allows, f"no allow audit: {events}"
+    assert allows[0]["tool_name"] == "fetch"
+
+
+@pytest.mark.asyncio
+async def test_ext_proxy_audits_sse_result_block():
+    req = _ext_request_with_org({"jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                                 "params": {"name": "fetch", "arguments": _BENIGN_ARG}})
+    sse = _sse_resp({"jsonrpc": "2.0", "id": 9, "result": {"content": _PII_RESULT}})
+    events = []
+
+    async def _cap(**kw):
+        events.append(kw)
+
+    with patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", new_callable=AsyncMock, return_value=None), \
+         patch.object(mcp_proxy, "_mcp_security_scan", side_effect=_output_scan_raises()), \
+         patch.object(mcp_proxy, "_record_gateway_event", new=_cap), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(sse)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert any(e.get("decision") == "block" for e in events), f"SSE block not audited: {events}"

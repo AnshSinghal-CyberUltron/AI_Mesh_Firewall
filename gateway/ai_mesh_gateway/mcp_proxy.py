@@ -1615,6 +1615,10 @@ async def ext_mcp_proxy(path: str, request: Request):
                         "ext_mcp_proxy.sse_result_blocked host=%s tool=%s tags=%s",
                         hostname, _ext_tool_name or "?", _block_info.get("tags"),
                     )
+                    await _ext_audit(  # CHG-0070: SSE result block (missed by CHG-0068)
+                        "block", "pii_blocked_outbound",
+                        tool=_ext_tool_name, tags=_block_info.get("tags"),
+                    )
                     return JSONResponse(
                         content={
                             "jsonrpc": _block_info.get("jsonrpc", "2.0"),
@@ -1629,6 +1633,8 @@ async def ext_mcp_proxy(path: str, request: Request):
                         },
                         status_code=200,
                     )
+                if _ext_tool_name:  # CHG-0070: successful tool-call result (usage audit)
+                    await _ext_audit("allow", "ok", tool=_ext_tool_name)
                 from starlette.responses import Response as _SSEResponse
                 return _SSEResponse(
                     content=_reframed.encode("utf-8"),
@@ -1784,6 +1790,8 @@ async def ext_mcp_proxy(path: str, request: Request):
                     "redact", "pii_redacted_outbound",
                     tool=_ext_tool_name, tags=_out_tags, findings=_out_findings,
                 )
+            elif _ext_tool_name:  # CHG-0070: clean successful tool-call result (usage audit)
+                await _ext_audit("allow", "ok", tool=_ext_tool_name)
 
         # CHG-0043 (was CHG-0040; renumbered — id collided w/ P4.13 ws:// change):
         # a JSON-RPC error response (no result) can STILL leak a secret in

@@ -442,6 +442,19 @@
       gateway passed, 0 failed. Additive (no behaviour change). RESIDUAL: the allow path + infra-error
       withholds (non-200/non-JSON CHG-0061, response-too-large CHG-0064) not yet audited (follow-up).
       Evidence: mcp-parallel/findings/backstop-p9-ext-proxy-audit/finding.md.
+      CHG-0070 (2026-07-02, MEDIUM — completes CHG-0068 self-correction): CHG-0068 audited ext_mcp_proxy's
+      SSRF/credential/JSON-result block+redact but MISSED (1) the SSE result block (blocked SSE tool result
+      egressed no audit while the JSON block did — inconsistent) and (2) any successful tool-call (usage
+      unrecorded). FIX (mcp_proxy.py, reusing _ext_audit): audit the SSE result block, the SSE success
+      (allow), and the JSON success (allow, in the elif of the redact branch — each call records exactly
+      once: block XOR redact XOR allow). Allow gated on _ext_tool_name (no initialize/list flood). +2 tests.
+      Gate: 51 ext + 1256 gateway passed, 0 failed. RESIDUAL: infra-error withholds (non-200/non-JSON,
+      response-too-large) not yet audited. Evidence: mcp-parallel/findings/backstop-p9-ext-proxy-audit-complete/finding.md.
+      NOTE (this iter, verification-only, no change): CROSS-TENANT isolation SOLID — all MCP caches keyed
+      {org}/{server} (_server_config_cache, _enabled_tools_cache), OAuth tokens mcp:oauth:token:{org}|{url},
+      tool-call cap mcp:toolcalls:{key_id} (org-bound), rate-limit ratelimit:{org}-scoped, config_sync
+      _*_by_org; no non-org-scoped cache holds tenant data → no cross-tenant contamination vector. (Backs
+      the cross-tenant-canary requirement + item 19.)
 - [ ] 10. Resource limits CPU/mem/disk/timeout enforced + containment proven.
       LIVE VERIFIED (config) — CHG-0015 (2026-07-02): docker inspect of all 3 live org sandboxes shows
       CapDrop=[ALL], SecurityOpt=[no-new-privileges], Privileged=false, PidsLimit=256, Memory=2GiB,

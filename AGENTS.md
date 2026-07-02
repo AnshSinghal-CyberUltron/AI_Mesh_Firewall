@@ -547,6 +547,18 @@
     ≤250B, ≤3 chunks consumed). Gate: 15 passed (-k "not websocket"; ws tests hang pre-existingly). Contained
     by sandbox 2GiB limit. FOLLOW-UP: _read_json_response (~257-304) dead code has the same whole-body error
     reads. Evidence mcp-parallel/findings/backstop-p10-sandbox-error-body-cap/.
+  - CHG-0070 (2026-07-02) — G3 item 9 (audit), MEDIUM (completes CHG-0068): CHG-0068 audited ext_mcp_proxy's
+    SSRF/credential/JSON-result block+redact but MISSED (1) the SSE result block (blocked SSE tool result
+    egressed no audit while the JSON block did — inconsistent) and (2) any successful tool-call (usage
+    unrecorded). FIX (mcp_proxy.py, reusing the _ext_audit helper): audit the SSE result block
+    (block/pii_blocked_outbound), the SSE success (allow/ok), and the JSON success (allow/ok in the elif of
+    the redact branch — so each call records exactly once: block XOR redact XOR allow). Allow gated on
+    _ext_tool_name so protocol overhead (initialize/list) doesn't flood the audit. +2 tests. Gate: 51 ext +
+    1256 gateway passed, 0 failed. Additive. RESIDUAL: infra-error withholds (non-200/non-JSON, response-
+    too-large) still not audited. Evidence mcp-parallel/findings/backstop-p9-ext-proxy-audit-complete/.
+    NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
+    {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
+    no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

@@ -828,6 +828,22 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (~257-304) is dead code with the same whole-body error reads — remove in a future cleanup. Evidence:
   `mcp-parallel/findings/backstop-p10-sandbox-error-body-cap/`.
 
+- **CHG-0070** (2026-07-02) — G3 item 9 (gateway audit) / 1.4 `...→tag→AUDIT`, MEDIUM (completes CHG-0068):
+  CHG-0068 audited ext_mcp_proxy's SSRF block, credential block, and the JSON-branch result block/redact —
+  but MISSED (1) the SSE result block (`_scan_reframe_sse_tool_result` → `_block_info`), so a blocked SSE
+  tool result egressed NO audit event while the equivalent JSON block WAS audited (inconsistent); and (2)
+  any successful tool-call, so external tool USAGE was unrecorded (only blocks/redacts). FIX (`mcp_proxy.py`,
+  reusing the CHG-0068 `_ext_audit` helper — best-effort/fire-and-forget, no-op without org): audit the SSE
+  result block (block/pii_blocked_outbound w/ `_block_info` tags), the SSE result success (allow/ok), and the
+  JSON result success (allow/ok in the `elif` of the redact branch — so a call records exactly once: block
+  XOR redact XOR allow). Allow events gated on `_ext_tool_name` so protocol overhead (initialize/list) does
+  not flood the audit — only real tool invocations record usage. Files: mcp_proxy.py, test_mcp_bare_proxy_scan.py
+  (+2). Gate: 51 ext (clean tools/call → decision=allow w/ tool_name=fetch; SSE tools/call that blocks →
+  decision=block) + 1256 gateway passed, 0 failed. With CHG-0068 the ext-proxy now audits block XOR redact XOR
+  allow for every tool call on both the JSON and SSE paths. RESIDUAL: infra-error withholds (non-200/non-JSON
+  [CHG-0061], response-too-large [CHG-0064]) still not audited (transport errors already logged). Evidence:
+  `mcp-parallel/findings/backstop-p9-ext-proxy-audit-complete/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
