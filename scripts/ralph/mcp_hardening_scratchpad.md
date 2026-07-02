@@ -29,6 +29,13 @@
 
 ## G2 — 1.4 Context Assembly & MCP Guardrails (log every edit)
 - [ ] 2. Field-level redaction of MCP tool RESULTS (byte-verified, fail-closed).
+      PARTIAL — CHG-0003 (2026-07-02): fail-CLOSED result-scan error path done. `_scan_tool_result_floor`
+      (mcp_proxy.py ~690-780) now blocks (SCAN_ERROR + result_scan_failclosed) instead of forwarding RAW
+      on a scan exception — BOTH the primary output scan AND the redaction-floor re-scan. +2 byte-level
+      tests (scanner patched to raise → raw PII absent + blocked); test_mcp_bare_proxy_scan.py 10 passed,
+      broad sweep 323 passed. REMAINING before [x]: (a) SSE ext_mcp_proxy buffer-and-scan (still raw,
+      streaming_egress_unscanned); (b) non-streaming string/structuredContent result shapes unscanned;
+      (c) audit main org_mcp_jsonrpc inline result path (~2265/2451) for the same fail-open.
 - [ ] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
 - [ ] 4. Context minimization / least-privilege assembly.
 - [ ] 5. Compliance tagging: extend mcp_compliance_tags.py to PII/IP/regulated; tag inputs + results; enforce by tag; audit.

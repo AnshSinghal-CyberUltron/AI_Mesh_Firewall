@@ -288,6 +288,60 @@ async def test_ext_redacts_pii_in_result():
     assert "j***@e***.com" in blob
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# Fail-CLOSED on result-scan error (BACKSTOP CHG-0003, G2 item 2)
+# The inbound arg scan already fails closed (arg_scan_error -> block). Prove the
+# OUTBOUND result floor now does too: when the scanner errors, the RAW result is
+# WITHHELD (blocked), never forwarded. Only the output scan is made to raise so
+# the request reaches the result stage instead of being blocked at args.
+# ════════════════════════════════════════════════════════════════════════════
+
+
+def _output_scan_raises():
+    """Patch target: _mcp_security_scan that succeeds on input, raises on output."""
+    async def _side(payload, *, scan_direction, **_kw):
+        if scan_direction == "output":
+            raise RuntimeError("scanner unavailable")
+        return payload, False, [], [], {}  # input: benign, no block
+    return _side
+
+
+@pytest.mark.asyncio
+async def test_rest_result_scan_error_fails_closed():
+    req = _rest_request(_auth(), {"name": "fetch", "arguments": _BENIGN_ARG})
+    backend = _http_resp({"result": _PII_RESULT})
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "_mcp_security_scan", side_effect=_output_scan_raises()),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_fake_client([backend])),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    blob = json.dumps(_decode(resp))
+    # The un-inspectable result must be WITHHELD, never forwarded raw.
+    assert "john.doe@example.com" not in blob
+    data = _decode(resp)
+    assert data.get("blocked") is True
+    assert "SCAN_ERROR" in blob  # sentinel tag surfaces the fail-closed reason
+
+
+@pytest.mark.asyncio
+async def test_ext_result_scan_error_fails_closed():
+    req = _ext_request({"jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                        "params": {"name": "fetch", "arguments": _BENIGN_ARG}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 8,
+                               "result": {"content": _PII_RESULT}})
+    client = _ext_client(upstream)
+    with (
+        patch.object(mcp_proxy, "_mcp_security_scan", side_effect=_output_scan_raises()),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client),
+    ):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    blob = json.dumps(_decode(resp))
+    assert "john.doe@example.com" not in blob   # raw result withheld
+    assert "error" in _decode(resp)             # returned as a JSON-RPC block error
+
+
 @pytest.mark.asyncio
 async def test_ext_streaming_egress_unscanned_but_flagged(caplog):
     """SSE responses are NOT buffered/blocked (would break streaming) — instead

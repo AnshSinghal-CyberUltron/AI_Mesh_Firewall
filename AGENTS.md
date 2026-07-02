@@ -15,6 +15,9 @@
     G2 item 2 fail-closed byte-verified result redaction). Confirmed SSE egress unscanned, per-actor authz
     missing on stdio/ws, tags audit-only, gVisor/egress default fail-open, a dead cross-tenant oracle +
     15-sandbox ceiling overstating prior "scale validated" claims.
+  - CHG-0003 (2026-07-02) — G2 item 2 (partial): `_scan_tool_result_floor` now fails CLOSED on result-scan
+    error (was fail-OPEN, forwarding raw RESULTS). +2 byte-level tests; 323 passed. Remaining: SSE
+    buffer-and-scan, string/structuredContent shapes, main-path inline audit.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

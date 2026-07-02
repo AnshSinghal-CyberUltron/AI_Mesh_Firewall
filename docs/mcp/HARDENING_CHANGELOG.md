@@ -95,3 +95,32 @@ the prod compose/manifests is tracked under G3 item 12.
   (SSE `aiter_bytes` passthrough); `python3 -c "print(any(1 for fs in []))"` → False +
   `sed -n '129p' scripts/mcp_scale_matrix_live.py`; `grep -n 'ORGS = \[' -A5 scripts/mcp_scale_provision.py`
   (literal 3-tuple). Full doc: `docs/mcp/BACKSTOP_FINDINGS.md`. Ruflo: `memory_search CHG-0002 namespace mcp-hardening/changes`.
+
+### CHG-0003 — Fail-CLOSED result-scan error path (G2 item 2, partial)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 2 (field-level redaction of RESULTS, byte-verified, fail-closed) — PARTIAL.
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (`_scan_tool_result_floor`, ~690-780) ·
+  `gateway/ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py` (+2 tests).
+- **WHAT:** Made `_scan_tool_result_floor` fail **closed** on a scan exception, in BOTH the primary output
+  scan (was `return result_content, False, …, {"result_scan_error"}` → RAW) and the redaction-floor
+  re-scan (was `log + fall through` → RAW after PII was already detected). Both now return
+  `blocked=True` + `["SCAN_ERROR"]` tag + `result_scan_failclosed` meta.
+- **WHY (gap):** BACKSTOP_FINDINGS G2 item 2 — the outbound result floor was fail-OPEN while its inbound
+  twin `_scan_tool_args_block` fails closed (`arg_scan_error`). A scanner hiccup (or a masking-rescan
+  error after PII was detected) silently egressed the RAW tool RESULT — a data leak.
+- **NOW DOES:** All three bare routes (`org_mcp_tool_call`, `internal_tools_call`, `ext_mcp_proxy`
+  non-streaming) already map `blocked=True` → a graceful JSON-RPC/HTTP block error + `decision="block"`
+  audit event; the un-inspectable result is WITHHELD, never forwarded. Graceful block (not 500) — the
+  transport stays up; availability yields to confidentiality.
+- **Touched whose work:** extends the shared mcp_proxy scan chain (built across many prior sessions); no
+  other session's in-flight code altered.
+- **VERIFY:** `cd gateway && PYTHONPATH="$PWD/../shared:$PWD/ai_mesh_gateway" ./.venv/bin/python -m pytest
+  ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q` → 10 passed. The 2 new tests
+  (`test_rest_result_scan_error_fails_closed`, `test_ext_result_scan_error_fails_closed`) patch
+  `_mcp_security_scan` to raise ONLY on `scan_direction="output"` and byte-assert the raw PII is ABSENT +
+  `blocked` — an independent check that does NOT rely on the scanner under test. Broad sweep
+  (`-k "mcp or scan or redact or e12 or result or floor or bare or proxy"`) → 323 passed / 18 skipped.
+- **REMAINING for G2 item 2 (next iterations):** (1) SSE `ext_mcp_proxy` still passes tool RESULTS raw
+  (`streaming_egress_unscanned`) — needs buffer-and-scan like `internal_tools_call`; (2) non-streaming
+  result shapes other than dict `result.content` (plain string / `structuredContent`) are not scanned;
+  (3) audit the main `org_mcp_jsonrpc` inline result path (~2265/2451) for the same fail-open on scan error.

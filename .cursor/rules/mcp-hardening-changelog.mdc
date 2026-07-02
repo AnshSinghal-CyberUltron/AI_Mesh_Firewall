@@ -41,3 +41,10 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   gVisor/egress default fail-open; only stdio sandboxed; a **dead cross-tenant oracle** (`for fs in []`) and
   a **15-sandbox ceiling** (hardcoded 3 orgs) that overstate prior "scale/isolation validated" claims. Next
   priority = G2 item 2 (fail-closed byte-verified result redaction). Verify: `docs/mcp/BACKSTOP_FINDINGS.md`.
+- **CHG-0003** (2026-07-02) — G2 item 2 (PARTIAL): `_scan_tool_result_floor` (`gateway/ai_mesh_gateway/mcp_proxy.py`)
+  now fails **CLOSED** on a result-scan error (both the primary scan and the redaction-floor re-scan) —
+  was fail-OPEN, forwarding the RAW tool RESULT on any scanner hiccup while the inbound twin already
+  blocked. Returns `blocked=True`+`SCAN_ERROR`; all 3 bare routes withhold via their block shape. +2 tests
+  byte-assert raw PII absent with the scanner patched to raise. `pytest test_mcp_bare_proxy_scan.py` → 10
+  passed; broad sweep 323 passed. REMAINING: SSE buffer-and-scan; string/`structuredContent` shapes; main
+  `org_mcp_jsonrpc` inline path audit.

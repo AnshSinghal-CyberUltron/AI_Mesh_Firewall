@@ -712,9 +712,15 @@ async def _scan_tool_result_floor(
 
     A per-tool ``"monitor"`` action wins (no floor), exactly like the main path.
 
-    Fail-safe: if the scan helper errors, do NOT raise and do NOT block — return
-    the RAW result unscanned with ``result_scan_error`` in meta so the caller can
-    log/flag while preserving availability (results never 500 the request).
+    Fail-CLOSED: if the scan helper errors we cannot know whether the result
+    carries PII/secret, so we MUST NOT egress it raw. We return ``blocked=True``
+    (a sentinel ``SCAN_ERROR`` tag + ``result_scan_failclosed`` meta) so every
+    caller withholds the result via its normal block-response shape — mirroring
+    the inbound twin ``_scan_tool_args_block`` which blocks on ``arg_scan_error``.
+    This is a graceful JSON-RPC/HTTP block (never a 500): the transport stays up,
+    only the specific unscannable result is withheld. Availability yields to
+    confidentiality — the previous behavior forwarded the RAW result on any
+    scanner hiccup, a silent fail-OPEN leak (BACKSTOP_FINDINGS G2 item 2).
     """
     scan_action = _effective_scan_action(tool_name, enabled_info)
     try:
@@ -729,10 +735,14 @@ async def _scan_tool_result_floor(
         )
     except Exception as exc:  # pragma: no cover - defensive; scan never 500s
         LOG.warning(
-            "mcp_proxy.result_scan_failed org=%s server=%s tool=%s: %s (returning raw)",
+            "mcp_proxy.result_scan_failed org=%s server=%s tool=%s: %s (FAIL-CLOSED: blocking)",
             org_slug, server_slug, tool_name, exc,
         )
-        return result_content, False, [], [], {"result_scan_error": True}
+        # Fail closed: block rather than forward an un-inspected result.
+        return result_content, True, ["SCAN_ERROR"], [], {
+            "result_scan_error": True,
+            "result_scan_failclosed": True,
+        }
 
     if blocked:
         return scanned, True, tags, findings, meta
@@ -761,9 +771,17 @@ async def _scan_tool_result_floor(
                 meta = {**meta, "result_redaction_floor": True}
         except Exception as exc:  # pragma: no cover - defensive
             LOG.warning(
-                "mcp_proxy.result_floor_failed org=%s server=%s tool=%s: %s",
+                "mcp_proxy.result_floor_failed org=%s server=%s tool=%s: %s "
+                "(FAIL-CLOSED: blocking — PII/secret detected but masking errored)",
                 org_slug, server_slug, tool_name, exc,
             )
+            # We are in this branch only because PII/secret WAS detected and the
+            # resolved action did not already redact. The masking re-scan failed,
+            # so ``scanned`` is still the RAW result — blocking is the only safe
+            # exit (forwarding raw here would leak the detected sensitive data).
+            return result_content, True, (tags or ["SCAN_ERROR"]), findings, {
+                **meta, "result_scan_error": True, "result_scan_failclosed": True,
+            }
     return scanned, False, tags, findings, meta
 
 
