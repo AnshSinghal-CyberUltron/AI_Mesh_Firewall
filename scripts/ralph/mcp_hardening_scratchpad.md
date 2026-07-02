@@ -354,6 +354,16 @@
       fail-open / no-key). Gate: 5 cap-ttl + 37 existing-cap + 1105 gateway passed. Evidence:
       mcp-parallel/findings/backstop-p11-toolcall-cap-ttl-race/finding.md. (This is a CODE correctness fix;
       the live kill-Redis-mid-load DRILL for item 11 [x] still needs a dedicated host = item 18 chaos.)
+      CHG-0049 (2026-07-02, verification + regression guard): swept EVERY MCP Redis WRITE for the
+      CHG-0048-class TTL-race/non-atomic bug. ALL CLEAN: _flow_save setex(600)+delete-on-pop (used-once
+      CSRF/PKCE); _token_save setex with expiry-DERIVED ttl (max(expires_at-now+60,300), bumped to
+      _TOKEN_DEFAULT_TTL when refresh_token present); tool-call cap atomic since CHG-0048; mcp:scan_ver:*
+      read-only on the gateway. No new race. Pinned the untested OAuth token TTL-derivation with +4 tests
+      (recording-Redis stub asserts the exact setex TTL). Documented non-issue: in-process _oauth_tokens
+      fallback returning an expired record is BY DESIGN (get_stored_token re-checks expires_at;
+      has_stored_token reports existence), size bounded by config cardinality not request volume. No
+      production code change. Gate: 4 oauth-ttl + 1109 gateway passed. Evidence:
+      mcp-parallel/findings/backstop-p11-redis-write-audit/finding.md.
 - [ ] 12. gVisor + seccomp/no-new-privileges/cap_drop/egress-lockdown enforced.
       LIVE VERIFIED — CHG-0015 (2026-07-02): PRESENT live = cap_drop=ALL, no-new-privileges, per-org network
       (mcp_sandbox_net_<org> distinct per org — host-run shared-bridge fallback NOT active). GAPS:

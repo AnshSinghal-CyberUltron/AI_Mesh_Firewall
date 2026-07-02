@@ -453,6 +453,20 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   wholesale, so unaffected. Files: mcp_proxy.py, test_mcp_tool_call_cap_ttl.py (new, +5 — REAL fakeredis:
   atomic-set / fixed-window / TTL-heal / fail-open). Gate: 5 cap-ttl + 37 existing-cap + 1105 gateway
   passed. Evidence: `mcp-parallel/findings/backstop-p11-toolcall-cap-ttl-race/`.
+- **CHG-0049** (2026-07-02) — G3 item 11 (verification + regression guard, no production code change):
+  followed up CHG-0048 by sweeping EVERY Redis WRITE in the MCP surface for the same TTL-race / non-atomic
+  class of bug. Findings — all CLEAN: (1) `_flow_save` = atomic `setex(_FLOW_TTL=600)` + `delete` on pop
+  (used-once CSRF/PKCE state, no replay); (2) `_token_save` = atomic `setex` with a TTL DERIVED from the
+  access token's `expires_at` (`max(int(expires_at-now)+60, 300)`, bumped to `_TOKEN_DEFAULT_TTL` when a
+  `refresh_token` exists so it survives to rotate); (3) tool-call cap counter atomic since CHG-0048; (4)
+  `mcp:scan_ver:*` is READ-ONLY on the gateway (written by the control plane). No new race. Pinned the
+  previously-untested `_token_save` expiry-derived TTL with +4 tests — a refactor to a fixed TTL would
+  silently serve EXPIRED access tokens (TTL > token) or evict valid ones early (TTL < token). Documented as
+  a non-issue: the in-process `_oauth_tokens` fallback returning an expired record is BY DESIGN
+  (`get_stored_token` re-checks `expires_at`/refreshes; `has_stored_token` intentionally reports existence),
+  and its size is bounded by config cardinality (not request volume). Files: test_mcp_oauth_token_ttl.py
+  (new, +4). Gate: 4 oauth-ttl + 1109 gateway passed. Evidence:
+  `mcp-parallel/findings/backstop-p11-redis-write-audit/`.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 

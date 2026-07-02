@@ -307,6 +307,15 @@
     healed next call. Fail-open unchanged. +5 tests (real fakeredis: atomic set / fixed-window / TTL-heal /
     fail-open). Gate: 5 cap-ttl + 37 existing-cap + 1105 gateway passed. Evidence
     mcp-parallel/findings/backstop-p11-toolcall-cap-ttl-race/.
+  - CHG-0049 (2026-07-02) — G3 item 11 (verification + regression guard): swept EVERY MCP Redis WRITE for
+    the CHG-0048-class TTL race. Clean: _flow_save setex(600)+delete-on-pop (used-once CSRF/PKCE);
+    _token_save setex with expiry-DERIVED ttl (max(expires_at-now+60,300), bumped to _TOKEN_DEFAULT_TTL when
+    a refresh_token exists); tool-call cap atomic since CHG-0048; mcp:scan_ver:* read-only on the gateway.
+    No new race. Pinned the untested OAuth token TTL-derivation with +4 tests (a fixed TTL would serve
+    EXPIRED tokens or evict valid ones early). Documented: the in-process _oauth_tokens fallback returning an
+    expired record is BY DESIGN (get_stored_token re-checks expires_at; has_stored_token reports existence).
+    No production code change. Gate: 4 oauth-ttl + 1109 gateway passed. Evidence
+    mcp-parallel/findings/backstop-p11-redis-write-audit/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
