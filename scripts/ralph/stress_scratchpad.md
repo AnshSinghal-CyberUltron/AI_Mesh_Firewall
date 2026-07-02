@@ -508,6 +508,14 @@
         inspect for the verdict and (post-G36) neutralize_encoded_pii on redact. => G35 fires on BOTH non-stream
         and stream live paths; chain is code-confirmed link-by-link. (Encoded PII detection also correctly
         overrides the _scan_output_sync flag to the configured redact action via _check_pii_secrets.)
+      RIGOR-VERIFIED INFRA/CREDENTIAL LEAKAGE 2026-07-02 (output guard, no gap): probed detect_credential_
+        exposure + detect_ip_leakage (used by OutputGuard._check_credential_exposure/_check_ip_leakage).
+        DETECTED: bearer/JWT tokens, connection strings (postgres/mongodb with creds), internal IPv4
+        (10.0.x / 192.168.x), internal hostnames (*.internal), unix file paths (/etc/ssl/private/server.key).
+        ZERO FP on benign: public IP 8.8.8.8 NOT flagged (correctly distinguishes public vs internal ranges),
+        version "v10.0.3" NOT confused with an IP, public https URL NOT flagged. => output-side infrastructure/
+        credential leakage detection is robust; the output guard covers PII + secrets + exfil-channels +
+        encoded-PII + infra/credential leakage + IP leakage, on both non-stream and (G36) stream egress.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G36): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
