@@ -1355,3 +1355,35 @@ the prod compose/manifests is tracked under G3 item 12.
 ### 2026-07-02 — MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 ### 2026-07-02 — MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
+
+### 2026-07-02 — MCP-PAGE-CP03 | mcp_page_cp03_allfields_repro.mjs (new) + mcp_page_typesim.mjs (bounded click timeout) | WHAT: per-field type-sim record | WHY: CP03 record buggy fields | NOW DOES: args=SEP-DROP(0/3), env=SEP-DROP(0/1); name/url/description/command/bearer=clean; focus KEPT (not remount). Modal field map: Args ph "-y, @playwright/mcp@latest", Env ph "GITHUB_TOKEN=ghp_xxx", Command ph "npx". Two fields drop commas → common onChange (CP04 target) | touched: none (MCPConnectorPanel Args+Env onChange = CP05 fix) | VERIFY: node scripts/ralph/mcp_page_cp03_allfields_repro.mjs → buggyFields [args,env]
+
+### CHG-0042 — At-rest encryption for OAuth flow state + tokens; OAuth flow security verified (G3/1.4)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G3 item 11 (Redis correctness) + 1.4 credential protection. Also verifies the OAuth
+  flow's CSRF/PKCE/SSRF posture (part of "gateway auth/authz").
+- **Files:** `gateway/ai_mesh_gateway/mcp_oauth_proxy.py` (new `_oauth_cipher`/`_enc_dumps`/`_enc_loads`; the 4
+  Redis (de)serialization sites — `_flow_save`/`_flow_pop`/`_token_save`/`_token_load` — now use them);
+  `gateway/ai_mesh_gateway/tests/test_mcp_oauth_encryption.py` (new, +4).
+- **WHAT (two parts):**
+    1. **OAuth flow security — VERIFIED clean (no change):** the callback validates `state` (`_flow_pop(state)`
+       → reject on miss = CSRF guard), uses PKCE (`code_verifier` from the STORED flow, not the request),
+       runs `_assert_safe_url` on the attacker-metadata-derived token endpoint (SSRF), and dials with
+       `follow_redirects=False` (no redirect-SSRF). Sound.
+    2. **At-rest encryption added:** OAuth access/refresh tokens (and the flow record's `client_secret` +
+       `code_verifier`) were stored as PLAINTEXT `json.dumps` in Redis. Redis is internal, but a compromise
+       would expose every org's upstream MCP credentials. Added opt-in encryption gated by
+       `MCP_OAUTH_ENCRYPTION_KEY` (a urlsafe-base64 Fernet key): `_enc_dumps` encrypts on write when the key is
+       set, `_enc_loads` transparently reads encrypted values, cipher-absent plaintext, AND legacy plaintext
+       written before the key (Fernet ciphertext is prefix-detected as `gAAAAA`), so enabling the key never
+       orphans existing tokens. **Default OFF = plaintext, byte-unchanged** — zero risk to the live flow; an
+       invalid key logs a warning and falls back to plaintext (never breaks token storage).
+- **WHY:** credential-at-rest hardening — OAuth tokens are the keys to the external MCP servers; the mandate's
+  "prevent MCP data leakage" + "Redis correctness" both point at not storing them in the clear.
+- **NOW DOES:** with `MCP_OAUTH_ENCRYPTION_KEY` set (recommended prod config), OAuth flow state + tokens are
+  Fernet-encrypted in Redis; without it, behaviour is exactly as before.
+- **Touched whose work:** the gateway OAuth proxy (upstream-token author). Additive/opt-in.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_oauth_encryption.py
+  ai_mesh_gateway/tests/test_mcp_oauth_org_scope.py -q` → 8 passed (default-off plaintext; encrypted round-trip
+  hides access/refresh/client_secret; legacy plaintext still read; invalid key → plaintext fallback). Broad
+  sweep `ai_mesh_gateway/tests` → 1092 passed, 0 failed.

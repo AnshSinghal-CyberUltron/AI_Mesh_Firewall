@@ -103,9 +103,10 @@ async function keptFocus(page, locator) {
  */
 export async function typeSim(page, locator, text, opts = {}) {
   const delay = opts.delay ?? DEFAULT_DELAY;
-  await locator.click();
+  const clickTimeout = opts.clickTimeout ?? 6000; // fail fast on covered/absent fields
+  await locator.click({ timeout: clickTimeout });
   if (opts.clearFirst !== false) await clearByKeyboard(page, locator);
-  await locator.click(); // ensure focus after clear
+  await locator.click({ timeout: clickTimeout }); // ensure focus after clear
 
   const keystrokes = [];
   for (let i = 0; i < text.length; i++) {
