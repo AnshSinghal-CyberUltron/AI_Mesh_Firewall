@@ -100,6 +100,14 @@
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.
+      CODE CEILING REMOVED — CHG-0010 (2026-07-02): scale provisioner org count was a hardcoded 3-tuple
+      (→ 3×5=15-sandbox ceiling). Now build_orgs(NUM_ORGS) (default 3 backward-compat; extends via org-<i>),
+      so NUM_ORGS=50 SERVERS_PER_ORG=10 → 500 targets. New scripts/test_mcp_scale_provision.py: 4 pass
+      (incl. 50-org→500-sandbox). REMAINING before [x]: (1) PRE-CREATE the N orgs in control (bulk
+      org-creation mgmt command using org-<i> convention — provisioner logs in, doesn't create); (2) broker
+      per-org DISTINCT sandbox UID for a true per-tenant fork budget (NPROC_ROOT_CAUSE.md — shared host-UID
+      budget saturated ~244/256 at just 15 servers); (3) actually provision + prove 300-500 sandboxes
+      HEALTHY concurrently on the live stack.
 - [ ] 15. 5k–10k concurrent tool calls — routing correct, isolation holds, none dropped/mixed.
 - [ ] 16. Soak (hours) — no leaks/exhaustion/503 storms; reaper correct.
 - [ ] 17. Resource bombs (mem/fork/disk/timeout) — contained; neighbors + host safe.

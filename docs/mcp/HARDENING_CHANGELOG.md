@@ -310,3 +310,24 @@ the prod compose/manifests is tracked under G3 item 12.
   this corrected+gated oracle, and capture REAL sandbox egress bytes cross-checked with an independent
   `aidefence` oracle — tied to item 14 (true 300–500-sandbox scale, still a hardcoded-3-org ceiling). This
   entry removes the fabricated metric; the live-at-scale proof is separate.
+
+### CHG-0010 — Scale-provisioner org count is configurable (removes the 15-sandbox ceiling) — G5 item 14 code portion
+- **Date:** 2026-07-02
+- **Scratchpad item:** G5 item 14 (300-500 concurrent sandboxes) — the hardcoded ceiling is removed; LIVE
+  500-sandbox provisioning + proof remain.
+- **Files:** `scripts/mcp_scale_provision.py` · `scripts/test_mcp_scale_provision.py` (new).
+- **WHAT:** Replaced the hardcoded 3-element `ORGS` literal with a `build_orgs(num_orgs)` generator driven
+  by the `NUM_ORGS` env var (default 3). First three preserve `(zeroshield, org-a, org-b)` for backward
+  compat; additional orgs follow the deterministic `org-<i>` / `admin@org-<i>.io` convention. Docstring
+  updated with the 300-500 recipe.
+- **WHY (gap):** BACKSTOP_FINDINGS G5 item 14 (HIGH) — only `SERVERS_PER_ORG` was env-tunable; org count
+  was a hardcoded 3-tuple, capping the matrix at 3×5 = 15 sandboxes, so 300-500 was structurally unreachable.
+- **NOW DOES:** `NUM_ORGS=50 SERVERS_PER_ORG=10` targets 500 org×server sandboxes; default (3 orgs) unchanged.
+- **Touched whose work:** the scale provisioner (prior P8/P9 sessions).
+- **VERIFY:** `python3 scripts/test_mcp_scale_provision.py` → `ALL 4 PROVISION TESTS PASSED` (backward-compat
+  first 3, `org-<i>` extension, 50 unique orgs → `len×10 == 500`).
+- **REMAINING for G5 item 14:** (1) PRE-CREATE the N orgs in the control plane (the provisioner logs in, it
+  does not create orgs) — a bulk org-creation mgmt command using the `org-<i>` convention; (2) broker must
+  assign a DISTINCT sandbox UID per org for a true per-tenant fork budget (NPROC_ROOT_CAUSE.md — shared
+  host-UID fork budget saturated ~244/256 at just 15 servers); (3) actually provision + prove 300-500
+  sandboxes HEALTHY concurrently on the live stack. This entry removes the code ceiling only.

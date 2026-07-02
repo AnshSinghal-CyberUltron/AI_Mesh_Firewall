@@ -45,6 +45,10 @@
     with a real unit-tested `count_foreign_events`, added to the PASS gate, import-safe; new
     `scripts/test_mcp_scale_oracle.py` (5 pass). Remaining: run the canary matrix LIVE at 500-sandbox scale
     with real egress + aidefence cross-check (tied to item 14).
+  - CHG-0010 (2026-07-02) — G5 item 14 (code ceiling removed): scale provisioner org count was hardcoded
+    3-tuple (→15-sandbox ceiling); now `build_orgs(NUM_ORGS)` (default 3), so `NUM_ORGS=50 SERVERS_PER_ORG=10`
+    → 500 targets. New `scripts/test_mcp_scale_provision.py` (4 pass). Remaining: pre-create N orgs; broker
+    per-org distinct UID (fork budget); prove 300-500 healthy live.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

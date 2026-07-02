@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Provision the P8/P9 scale matrix: N orgs x M MCP servers (default 3x5 = 15).
+"""Provision the P8/P9 scale matrix: N orgs x M MCP servers.
+
+Org count is ``NUM_ORGS`` (default 3, backward compat) and servers-per-org is
+``SERVERS_PER_ORG`` (default 5). For the required 300-500 sandboxes:
+``NUM_ORGS=50 SERVERS_PER_ORG=10 python scripts/mcp_scale_provision.py`` (the 50
+orgs must be pre-created in the control plane first).
 
 Orgs are pre-created via `ensure_zeroshield_admin` (control mgmt command). For
 each org this: logs in, provisions the org gateway key, registers M deterministic
@@ -26,11 +31,36 @@ MANIFEST = os.environ.get(
     "SCALE_MANIFEST",
     os.path.join(os.path.dirname(__file__), "ralph", ".mcp_scale_manifest.json"),
 )
-ORGS = [
+_BASE_ORGS = [
     ("zeroshield", "admin@zeroshield.io"),
     ("org-a", "admin@org-a.io"),
     ("org-b", "admin@org-b.io"),
 ]
+
+
+def build_orgs(num_orgs: int) -> list[tuple[str, str]]:
+    """First ``num_orgs`` (slug, email) pairs for the scale matrix.
+
+    BACKSTOP CHG-0010 (item 14): org count was a hardcoded 3-tuple, capping the
+    matrix at 3 orgs x SERVERS_PER_ORG (=15 at default 5) — unreachable for the
+    required 300-500 sandboxes. It is now driven by ``NUM_ORGS``. The first three
+    preserve the historical (zeroshield, org-a, org-b) identities for backward
+    compat; additional orgs follow the ``org-<i>`` / ``admin@org-<i>.io``
+    convention (i from 3). Each org MUST be PRE-CREATED in the control plane
+    before this provisioner runs (it logs in, it does not create orgs) — the
+    fixed convention makes bulk pre-creation scriptable. For a true per-tenant
+    fork budget the broker must also assign a DISTINCT sandbox UID per org
+    (NPROC_ROOT_CAUSE.md); that is a broker-side concern, tracked separately.
+    """
+    n = max(num_orgs, 0)
+    if n <= len(_BASE_ORGS):
+        return list(_BASE_ORGS[:n])
+    extra = [(f"org-{i}", f"admin@org-{i}.io") for i in range(len(_BASE_ORGS), n)]
+    return list(_BASE_ORGS) + extra
+
+
+NUM_ORGS = int(os.environ.get("NUM_ORGS", str(len(_BASE_ORGS))))
+ORGS = build_orgs(NUM_ORGS)
 
 
 def _req(method: str, path: str, token: str | None = None, body: dict | None = None):

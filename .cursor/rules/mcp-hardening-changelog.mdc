@@ -89,3 +89,8 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `scripts/test_mcp_scale_oracle.py` (5 pass, incl. a case proving the old predicate missed a real leak).
   REMAINING: run the canary matrix LIVE at 500-sandbox scale under chaos with real egress bytes +
   aidefence cross-check (tied to item 14 scale).
+- **CHG-0010** (2026-07-02) — G5 item 14 (code ceiling removed): `scripts/mcp_scale_provision.py` org count
+  was a hardcoded 3-tuple (→ 15-sandbox ceiling). Now `build_orgs(NUM_ORGS)` (default 3, backward compat;
+  extends via `org-<i>`), so `NUM_ORGS=50 SERVERS_PER_ORG=10` → 500 targets. New
+  `scripts/test_mcp_scale_provision.py` (4 pass, incl. 50-org→500-sandbox). REMAINING: pre-create N orgs
+  (bulk mgmt command); broker per-org distinct sandbox UID (fork budget); prove 300-500 healthy live.
