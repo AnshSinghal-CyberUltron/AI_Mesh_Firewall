@@ -450,6 +450,19 @@
     mcp_proxy.py + 6 tests. Gate: 39 ext-proxy + 1220 gateway passed, 0 failed. ORG path unaffected
     (sandbox-routed via broker → parsed dict, same floor). Evidence
     mcp-parallel/findings/backstop-p2-ext-proxy-nonok-egress/.
+  - CHG-0062 (2026-07-02) — G3 item 9 (rate-limit) + item 11 (Redis correctness), MEDIUM: the per-org
+    burst/RPM limiter (rate_limit_enforcement.py enforce_org_burst_rpm) did INCR then a SEPARATE
+    `if current==1: EXPIRE` for both counters. On coroutine cancellation (client disconnect — routine
+    under load) or crash between INCR and EXPIRE, the key was created with NO TTL and orphaned forever
+    (time-bucketed keys → unbounded Redis memory leak under soak/chaos/5k-10k-concurrent). On the MCP
+    path via _mcp_org_rate_limit_raw (all 3 entry points). Inconsistent with the already-atomic tool-call
+    cap (mcp_proxy.py ~1066, CHG-0048, transaction=True + expire nx=True) and rate_limiter.py (Lua). FIX:
+    both counters now run INCR + EXPIRE NX in one MULTI/EXEC transaction — atomic + self-healing (EXPIRE
+    NX every request re-sets a missing TTL; NX means later same-bucket hits don't slide the window, count
+    still rises). Fail-open preserved. rate_limit_enforcement.py + 5 tests. Gate: 5 atomic-ttl + 14
+    mcp_rate_limit + 1228 gateway passed, 0 failed. SIBLING (documented, not changed — one item/iter):
+    leakage_detector.py:116-120 (sadd loop then separate expire) same class, milder. Evidence
+    mcp-parallel/findings/backstop-p11-ratelimit-atomic-ttl/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

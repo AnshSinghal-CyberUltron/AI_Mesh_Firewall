@@ -669,6 +669,25 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   unaffected (sandbox-routed via `broker_send_rpc` → parsed JSON-RPC dict scanned by the same floor).
   Evidence: `mcp-parallel/findings/backstop-p2-ext-proxy-nonok-egress/`.
 
+- **CHG-0062** (2026-07-02) — G3 item 9 (gateway rate-limit) + item 11 (Redis correctness), MEDIUM
+  (Redis resource-leak on the MCP path): `rate_limit_enforcement.py::enforce_org_burst_rpm` (per-org
+  burst req/s + RPM req/min) did `current = await redis.incr(key)` then `if current == 1: await
+  redis.expire(key, ttl)` — two separate commands, for BOTH counters. On coroutine CANCELLATION (client
+  disconnect — routine under load) or crash BETWEEN the INCR and EXPIRE, the key was created with NO TTL
+  and orphaned forever; the TTL was set only when `current == 1`, so a cancelled first request means the
+  key never gets a TTL. Time-bucketed keys (`burst:{sec}` / `{minute}`) → unbounded Redis memory leak
+  under the 5k-10k-concurrent / chaos stress scenario. On the MCP path via `_mcp_org_rate_limit_raw` (all
+  3 entry points; CHG-0031/0032). INCONSISTENT with the already-atomic tool-call cap (`mcp_proxy.py ~1066`,
+  CHG-0048, `pipeline(transaction=True)` + `expire(nx=True)`) and `rate_limiter.py` (Lua eval). FIX: both
+  counters now run `INCR` + `EXPIRE NX` in ONE MULTI/EXEC transaction (matching the CHG-0048 idiom) —
+  ATOMIC (no INCR↔EXPIRE window) + SELF-HEALING (`EXPIRE NX` on every request re-sets a missing TTL, so a
+  previously-orphaned key is repaired on its next increment; NX means later same-bucket hits don't slide
+  the window — the count still rises). Fail-OPEN preserved. Files: rate_limit_enforcement.py,
+  test_rate_limit_atomic_ttl.py (+5). Gate: 5 atomic-ttl + 14 mcp_rate_limit + 1228 gateway passed, 0
+  failed. SIBLING (documented, NOT changed — one item/iteration): `leakage_detector.py:116-120` (sadd loop
+  then separate expire) is the same class, milder (unconditional expire refreshes the window). Evidence:
+  `mcp-parallel/findings/backstop-p11-ratelimit-atomic-ttl/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

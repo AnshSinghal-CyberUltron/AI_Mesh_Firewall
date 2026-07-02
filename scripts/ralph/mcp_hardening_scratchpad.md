@@ -434,6 +434,18 @@
       redact=265). RESTART-SAFETY graceful by design (Redis-unreachable -> pure-TTL, no crash; PG recording
       best-effort/non-blocking). REMAINING before [x]: actual restart DRILL (kill Redis/PG mid-load, verify
       recovery + no leakage during recovery) = item 18 chaos (UNSAFE on shared stack; needs dedicated host).
+      CHG-0062 (2026-07-02, MEDIUM — Redis ATOMICITY bug found + fixed): the per-org burst/RPM limiter
+      (rate_limit_enforcement.py enforce_org_burst_rpm, on the MCP path via _mcp_org_rate_limit_raw) did
+      INCR then a SEPARATE `if current==1: EXPIRE` for both counters — non-atomic. On coroutine cancellation
+      (client disconnect, routine under load) or crash between INCR and EXPIRE, the key was orphaned with NO
+      TTL forever (time-bucketed → unbounded Redis memory leak under soak/chaos). Inconsistent with the
+      already-atomic tool-call cap (CHG-0048 transaction=True + expire nx=True) and rate_limiter.py (Lua).
+      FIX: both counters now INCR + EXPIRE NX in one MULTI/EXEC transaction — atomic + self-healing (EXPIRE
+      NX every request re-sets a missing TTL; NX doesn't slide the window). Fail-open preserved. +5 tests;
+      gate 5 atomic-ttl + 14 mcp_rate_limit + 1228 gateway passed, 0 failed. SIBLING (documented follow-up,
+      NOT changed): leakage_detector.py:116-120 (sadd loop then separate expire) same class, milder.
+      Evidence: mcp-parallel/findings/backstop-p11-ratelimit-atomic-ttl/finding.md. (Also advances item 9
+      rate-limit hardening.)
       Evidence: mcp-parallel/findings/backstop-p11-pg-redis/pg_redis_evidence.txt.
       CHG-0048 (2026-07-02, MEDIUM — Redis correctness bug found + fixed): the per-key tool-call cap counter
       (_incr_tool_call_count) did count=INCR(rk); if count==1: EXPIRE(rk,60) — the window TTL was set ONLY on
