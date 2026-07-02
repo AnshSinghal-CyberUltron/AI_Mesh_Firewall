@@ -87,6 +87,18 @@
   WS SSRF guard(mcp_ws_adapter.py:124), broker fail-closed key auth(auth.py:17-23)+per-org quota(routes.py:66),
   ext proxy egress allowlist(mcp_proxy.py:97/939), OAuth PKCE-S256(mcp_oauth.py:527)+SSRF re-guard on derived endpoints.
 
+- OAUTH SPEC COMPLIANCE (item#7, docs/mcp/oss-research-oauth-spec.md): MCP Authorization spec 2025-06-18 MANDATES the
+  B1 invariant — 'Implementations using an STDIO transport SHOULD NOT follow this specification, and instead retrieve
+  credentials from the environment'; HTTP transports SHOULD conform. OAuth discovery (RFC9728 PRM via 401 WWW-Authenticate
+  -> RFC8414 AS metadata) + RFC8707 resource param all require an HTTP(S) server URL, so oauth+pure-stdio is spec-invalid
+  (mcp-remote wraps a remote HTTP URL over stdio = the exception). Repo OAuth CLIENT is spec-compliant: control oauth.py
+  discover:169/register_client:237/generate_pkce:48 (S256 @:284)/canonical_resource:67; resource param on authorize
+  (:286) + exchange (:337) + refresh (:355) — RFC8707 MUST, all 3 verified; per-call SSRF re-guard on token_endpoint
+  (:309) + follow_redirects=False (:312). gateway self-AS mcp_oauth.py (PRM:99/AS:140/DCR:167/token:464 returns API key
+  as access_token:542/PKCE verify:527/redirect allowlist:80). TOKEN-PASSTHROUGH FORBIDDEN by spec -> repo uses a SEPARATE
+  per-org upstream token (_token_save org|server_url, injected via _maybe_inject_oauth_header:1759), never forwards the
+  inbound gateway token => confused-deputy safe (keep this). #31 must assert: no stdio ever does OAuth; http-oauth
+  discovery+DCR+PKCE+resource clean; refresh works; expired->needs_reauth. SSRF re-guard EXCEEDS spec — do not weaken.
 - OSS STDIO PATTERNS (item#6, docs/mcp/oss-research-stdio-patterns.md): official stdio MCP servers launch
   `npx -y @modelcontextprotocol/server-<name> [stdio]` (stdio default); handshake = initialize(protocolVersion
   "2024-11-05", capabilities) -> server result -> notifications/initialized. INVARIANT: stdout = JSON-RPC ONLY,
@@ -141,7 +153,13 @@
       initialize; cold-start latency=npx package fetch (B3 root). Everything echo{message}->"Echo: msg" (stable); sum
       tool RENAMED add->get-sum{a,b:number} (version-dependent!). Filesystem npx -y @mcp/server-filesystem <dir> (needs
       >=1 allowed dir) for P9 canary.
-- [ ] 7. Study MCP auth spec + OAuth 2.1 (PKCE, RFC 9728 protected-resource + RFC 8414 AS metadata discovery)
+- [x] 7. Study MCP auth spec + OAuth 2.1 (PKCE, RFC 9728 protected-resource + RFC 8414 AS metadata discovery)
+      EVIDENCE: docs/mcp/oss-research-oauth-spec.md (MCP Authorization spec 2025-06-18 fetched + RFCs). Spec MANDATES
+      B1: 'STDIO SHOULD NOT follow this spec — retrieve creds from environment'; OAuth is HTTP-transport only (PRM/AS
+      discovery + resource param need an HTTP URL). Repo OAuth client is SPEC-COMPLIANT: PRM discovery (oauth.py:169/
+      mcp_oauth_proxy:283), RFC8414 AS meta, DCR:237, PKCE S256:284, resource param on authorize:286+exchange:337+
+      refresh:355 (VERIFIED all 3, RFC8707 MUST), redirect allowlist mcp_oauth.py:80, SSRF re-guard+no-redirect:309.
+      Token-passthrough FORBIDDEN -> repo uses SEPARATE per-org upstream token (never forwards inbound) = confused-deputy safe.
 - [ ] 8. Study mcp-remote (how it wraps a remote HTTP MCP over stdio + does OAuth) — clarifies Linear's stdio+remote case
 - [ ] 9. Study Docker sandboxing hardening (seccomp/gVisor/read-only rootfs/no-new-privileges/limits) + multi-tenant patterns
 
