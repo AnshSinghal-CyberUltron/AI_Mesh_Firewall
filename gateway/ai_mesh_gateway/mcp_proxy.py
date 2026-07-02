@@ -463,6 +463,34 @@ def _is_tool_disabled(tool_name: str, enabled_info: dict | None) -> bool:
     return tool_name in (enabled_info.get("disabled") or set())
 
 
+def _filter_tools_by_key_allowlist(tools: list, auth) -> list:
+    """Drop tools NOT permitted by the caller's per-key ``mcp_allowed_tools``.
+
+    CHG-0038: least-privilege VISIBILITY parity with the call-time authz
+    (``_tool_allowed_by_key``, CHG-0006). tools/list previously filtered only by the
+    server-level ``disabled`` set, so a restricted key could SEE tools it would be
+    403'd on at call time (info disclosure + authz inconsistency). Empty/absent
+    allowlist = all tools visible (no filtering, mirroring ``_tool_allowed_by_key``);
+    non-dict / name-less entries pass through (same as ``_filter_tools_by_enabled``).
+    """
+    if not isinstance(tools, list) or auth is None:
+        return tools
+    allowed = list(getattr(auth, "mcp_allowed_tools", None) or [])
+    if not allowed:
+        return tools
+    allowed_set = set(allowed)
+    out = []
+    for t in tools:
+        if not isinstance(t, dict):
+            out.append(t)
+            continue
+        name = t.get("name") or t.get("tool_name") or ""
+        if name and name not in allowed_set:
+            continue
+        out.append(t)
+    return out
+
+
 async def _record_gateway_event(
     org_slug: str,
     server_slug: str,
@@ -2257,7 +2285,9 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
             if isinstance(payload, dict):
                 result = payload.get("result")
                 if isinstance(result, dict) and isinstance(result.get("tools"), list):
-                    result["tools"] = _filter_tools_by_enabled(result["tools"], enabled_info)
+                    result["tools"] = _filter_tools_by_key_allowlist(
+                        _filter_tools_by_enabled(result["tools"], enabled_info), _mcp_auth
+                    )
                     return JSONResponse(content=payload, status_code=200)
             return adapter_resp
 
@@ -2289,8 +2319,11 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         mcp_tool["inputSchema"] = schema
                     mcp_tools.append(mcp_tool)
 
-                # Drop tools explicitly marked disabled in backend.
-                mcp_tools = _filter_tools_by_enabled(mcp_tools, enabled_info)
+                # Drop tools explicitly marked disabled in backend, then drop tools
+                # this key's allowlist forbids (CHG-0038 visibility parity).
+                mcp_tools = _filter_tools_by_key_allowlist(
+                    _filter_tools_by_enabled(mcp_tools, enabled_info), _mcp_auth
+                )
 
                 return JSONResponse(
                     content={
@@ -3146,6 +3179,7 @@ async def org_mcp_tools_list(org_slug: str, server_slug: str, request: Request):
     if err:
         return err
 
+    _mcp_auth = _get_auth_context(request)
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         try:
             resp = await client.get(
@@ -3153,12 +3187,17 @@ async def org_mcp_tools_list(org_slug: str, server_slug: str, request: Request):
                 headers=_backend_proxy_headers(request, org_slug, server_slug),
             )
             data = resp.json()
-            # Filter disabled tools so REST clients see the same view as JSON-RPC.
+            # Filter disabled tools + per-key allowlist (CHG-0038) so REST clients see
+            # the same least-privilege view as JSON-RPC.
             enabled_info = await _get_enabled_tools(org_slug, server_slug)
-            if enabled_info and isinstance(data, list):
-                data = _filter_tools_by_enabled(data, enabled_info)
-            elif enabled_info and isinstance(data, dict) and isinstance(data.get("results"), list):
-                data["results"] = _filter_tools_by_enabled(data["results"], enabled_info)
+            if isinstance(data, list):
+                data = _filter_tools_by_key_allowlist(
+                    _filter_tools_by_enabled(data, enabled_info), _mcp_auth
+                )
+            elif isinstance(data, dict) and isinstance(data.get("results"), list):
+                data["results"] = _filter_tools_by_key_allowlist(
+                    _filter_tools_by_enabled(data["results"], enabled_info), _mcp_auth
+                )
             return JSONResponse(content=data, status_code=resp.status_code)
         except httpx.TimeoutException as exc:
             return JSONResponse(

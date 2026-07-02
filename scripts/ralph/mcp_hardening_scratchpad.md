@@ -57,6 +57,13 @@
       IS used for an access decision, one layer down); the mcp_proxy.py:301-307 cache-key TODO is a
       documented non-issue (tool enable/disable is server-scoped by design). Finding #4 was a FALSE
       POSITIVE (CHG-0007). Gate: 27 authz/scoping tests + 427 broad sweep pass.
+      CHG-0038 (2026-07-02): extended per-key authz from EXECUTION to VISIBILITY. mcp_allowed_tools was
+      enforced at tools/CALL (_tool_allowed_by_key -> 403, CHG-0006) but tools/LIST filtered ONLY by the
+      server disabled set — a restricted key SAW tools it would be 403'd on (info disclosure + least-privilege
+      gap). Added _filter_tools_by_key_allowlist (empty allowlist = all visible) layered after
+      _filter_tools_by_enabled at all 4 tools/list sites (org_mcp_jsonrpc adapter+backend branches + REST
+      org_mcp_tools_list, now resolving _get_auth_context). A key allowlisted to echo sees only echo. +2 tests;
+      test_mcp_bare_proxy_scan.py 22 passed, broad sweep 1083 passed.
 - [x] 3b. Per-policy FIELD-level redaction (redaction_fields) on the stdio/ws adapter path (split from #3).
       HTTP path (MCPToolCallView, control views.py:1113) masks specific NAMED result fields for matched
       actor-scoped policies via apply_field_redaction/redact_structured; the gateway policy engine/bundle

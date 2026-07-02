@@ -555,3 +555,46 @@ def test_ext_proxy_forward_headers_injects_only_upstream_oauth():
     # the injected Authorization is the UPSTREAM's token, never the caller's key
     assert out["Authorization"] == "Bearer upstream-oauth-token"
     assert "caller-gateway-key" not in out["Authorization"]
+
+
+# ── CHG-0038: tools/list VISIBILITY parity with call-time authz. A restricted key
+# must not even SEE tools it would be 403'd on at call time (_tool_allowed_by_key).
+
+
+def test_filter_tools_by_key_allowlist_pure():
+    from types import SimpleNamespace
+    tools = [{"name": "echo"}, {"name": "get-sum"}, {"name": "delete-all"}]
+    # empty allowlist -> all visible (mirrors _tool_allowed_by_key)
+    assert mcp_proxy._filter_tools_by_key_allowlist(tools, SimpleNamespace(mcp_allowed_tools=[])) == tools
+    # None auth -> unchanged
+    assert mcp_proxy._filter_tools_by_key_allowlist(tools, None) == tools
+    # restricted -> only allowed tools survive
+    out = mcp_proxy._filter_tools_by_key_allowlist(tools, SimpleNamespace(mcp_allowed_tools=["echo", "get-sum"]))
+    assert [t["name"] for t in out] == ["echo", "get-sum"]
+    # non-dict / name-less entries pass through (same as _filter_tools_by_enabled)
+    weird = [{"no_name": 1}, "raw", {"tool_name": "echo"}, {"tool_name": "nope"}]
+    out2 = mcp_proxy._filter_tools_by_key_allowlist(weird, SimpleNamespace(mcp_allowed_tools=["echo"]))
+    assert {"no_name": 1} in out2 and "raw" in out2 and {"tool_name": "echo"} in out2
+    assert {"tool_name": "nope"} not in out2
+
+
+@pytest.mark.asyncio
+async def test_org_mcp_tools_list_hides_tools_outside_key_allowlist():
+    from types import SimpleNamespace
+    req = SimpleNamespace(state=SimpleNamespace(
+        auth_context=SimpleNamespace(mcp_allowed_tools=["echo"], org_slug="demo")))
+    backend_resp = AsyncMock()
+    backend_resp.status_code = 200
+    backend_resp.json = lambda: [{"tool_name": "echo"}, {"tool_name": "get-sum"}]
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=backend_resp)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), \
+         patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)), \
+         patch.object(mcp_proxy, "_backend_proxy_headers", return_value={}), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.org_mcp_tools_list("demo", "srv", req)
+    data = json.loads(resp.body.decode())
+    names = [t.get("tool_name") or t.get("name") for t in data]
+    assert names == ["echo"]  # get-sum hidden by the key allowlist

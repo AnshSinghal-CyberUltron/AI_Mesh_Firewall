@@ -322,3 +322,18 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   dedicated host for the VERY-HARD stress suite (items 14–19, the completion gate), (b) infra (gVisor install,
   egress default-deny, OTEL tracing, PG/Redis backup, npm prod-enable), (c) owned/cross-plane (item-21 UI tag
   reflection via the control response, item-5 tag vocab). States plainly that completion is NOT met and why.
+- **CHG-0038** (2026-07-02) — G2 item 3 (tool-authz VISIBILITY parity + least-privilege): the per-key
+  `mcp_allowed_tools` allowlist was enforced at tools/CALL (`_tool_allowed_by_key` → 403, CHG-0006) but
+  tools/LIST was filtered ONLY by the server-level `disabled` set — so a restricted key could SEE every
+  server-enabled tool, including ones it would be 403'd on (info disclosure + authz inconsistency). Added
+  `_filter_tools_by_key_allowlist(tools, auth)` (empty/absent allowlist = all visible, mirroring
+  `_tool_allowed_by_key`; non-dict/name-less entries pass through) and layered it after
+  `_filter_tools_by_enabled` at ALL 4 tools/list sites — the org_mcp_jsonrpc adapter branch, the JSON-RPC
+  backend branch, and the REST `org_mcp_tools_list` (now also resolves `_get_auth_context`). A key allowlisted
+  to `echo` now sees only `echo` in tools/list (JSON-RPC + REST). Files: mcp_proxy.py,
+  test_mcp_bare_proxy_scan.py (+2). Gate: 22 bare-proxy + 1083 broad sweep passed.
+- **CHG-0039** (2026-07-02) — P4.13 Blocker 2: `MCPServerRegistration.url` URLField→CharField + migration
+  `0015` so `ws://` registers (serializer `is_safe_outbound_url` unchanged); `ws-everything.stub` added to
+  `MCP_ALLOW_INTERNAL_HOSTS`; ws stub echo `Echo: {message}` parity; P10 agent-pytest timeout 180→360s.
+  4/4 transports PASS ROUNDS=3; gateway ss :443 empty. Cross-seam control (iter39). Evidence:
+  `mcp-parallel/findings/p4-13/RECHECK_ITER39.md`.

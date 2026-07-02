@@ -213,6 +213,17 @@
     Bottom line: code-level 1.4/gateway/transport/isolation hardening is comprehensive + gated green (gateway
     1081 passed); remainder = dedicated-host stress (items 14-19, the completion gate) + infra (gVisor, egress,
     OTEL, backup, npm prod-enable) + owned/cross-plane (item-21 UI tags, item-5 vocab). Completion NOT met.
+  - CHG-0038 (2026-07-02) — G2 item 3 (tool-authz VISIBILITY parity): the per-key mcp_allowed_tools allowlist
+    was enforced at tools/CALL (403, CHG-0006) but tools/LIST filtered only by the server disabled set — so a
+    restricted key SAW tools it would be 403'd on (info disclosure + authz inconsistency). Added
+    _filter_tools_by_key_allowlist (empty allowlist = all visible) and layered it after _filter_tools_by_enabled
+    at all 4 tools/list sites (org_mcp_jsonrpc adapter+backend branches, REST org_mcp_tools_list which now
+    resolves _get_auth_context). Least-privilege: a key sees only tools it can call. Files mcp_proxy.py +
+    test_mcp_bare_proxy_scan.py (+2). Gate: 22 bare-proxy + 1083 broad sweep passed.
+  - CHG-0039 (2026-07-02) — P4.13 Blocker 2: MCPServerRegistration.url URLField→CharField + migration 0015
+    so ws:// registers (serializer SSRF guard unchanged); ws-everything.stub in MCP_ALLOW_INTERNAL_HOSTS;
+    ws stub echo prefix fixed. 4/4 transports PASS ROUNDS=3; gateway ss :443 empty. Cross-seam (control,
+    iter39). Evidence mcp-parallel/findings/p4-13/RECHECK_ITER39.md.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

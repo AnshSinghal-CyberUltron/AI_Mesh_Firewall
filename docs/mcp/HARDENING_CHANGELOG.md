@@ -1214,3 +1214,56 @@ the prod compose/manifests is tracked under G3 item 12.
 - **VERIFY:** read `docs/mcp/COMPLETION_READINESS.md`; each ✅ row cites a CHG whose VERIFY command is in this
   changelog; the gateway suite gate is `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`
   → 1081 passed.
+
+### CHG-0039 — Accept ws:// / wss:// on MCPServerRegistration.url (P4.13 Blocker 2)
+- **Date:** 2026-07-02
+- **Scratchpad item:** P4.13 / P6.18 / P6.19 — four-transport sandbox e2e. Cross-seam exception (Cursor-owned
+  iter39; user: don't wait for Claude after 2+ iters blocked on URLField).
+- **Files:** `control/ai_mesh_control/mcp_connector/models.py` (URLField→CharField);
+  `control/ai_mesh_control/mcp_connector/migrations/0015_mcpserverregistration_url_charfield.py`;
+  `control/ai_mesh_control/mcp_connector/tests/test_oauth_transport_guard.py` (+1 ws scheme test);
+  `scripts/mcp_enable_http_via_sandbox.sh` (+ws stub in `MCP_ALLOW_INTERNAL_HOSTS` default);
+  `scripts/mcp_ws_everything_stub.mjs` (echo `Echo: {message}` parity); `scripts/mcp_p10_recursive_gate.py`
+  (agent-pytest timeout 180→360s — suite takes ~250s).
+- **WHAT:** Django `URLField` on `MCPServerRegistration.url` rejected `ws://` at the model layer even though
+  `MCPServerCreateSerializer.validate` already allowed ws/wss via `is_safe_outbound_url`. Replaced with
+  `CharField(max_length=2048)`; serializer SSRF guard remains authoritative. Added `ws-everything.stub`
+  to the internal-host allowlist for in-cluster stub registration.
+- **WHY:** iter37/38 confirmed gateway ws routing LANDED (CHG-0026) but ws transport verify stayed 3/4 —
+  registration failed with `Enter a valid URL.` Blocking P4.13 `[x]` for 2+ iterations.
+- **NOW DOES:** `ws://ws-everything.stub:3003/mcp` registers; manifest gains `websocket` slug; gateway routes
+  ws via `broker_send_rpc` end-to-end. **4/4 transports PASS ROUNDS=3**; gateway `ss :443` empty.
+- **Touched whose work:** Claude-owned control seam (explicit cross-seam claim); complements CHG-0026 gateway
+  ws broker routing. Not a data-leak change — registration/isolation completeness.
+- **VERIFY:** `docker compose exec control python manage.py migrate mcp_connector`; `python3
+  scripts/mcp_register_transport_servers.py` → `websocket: ws-everything-stub (created)`; `ROUNDS=3
+  TRANSPORT_MANIFEST=... python3 scripts/mcp_sandbox_transport_verify.py` → `SANDBOX_TRANSPORT: PASS`;
+  broker 98 + agent 44 passed; Playwright B1/B2/B4 individual PASS. Evidence:
+  `mcp-parallel/findings/p4-13/RECHECK_ITER39.md`.
+
+### CHG-0038 — tools/list visibility parity with per-key authz (least-privilege, G2 item 3)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 3 (per-user/agent/role tool authorization) — extends it from EXECUTION to
+  VISIBILITY. + 1.4 least-privilege / context minimization.
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (new `_filter_tools_by_key_allowlist`; applied at all 4
+  tools/list filter sites in `org_mcp_jsonrpc` + `org_mcp_tools_list`);
+  `gateway/ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py` (+2).
+- **WHAT:** the per-key `mcp_allowed_tools` allowlist was enforced at tools/CALL time (`_tool_allowed_by_key`,
+  CHG-0006 — a forbidden tool → 403) but NOT on tools/LIST. tools/list was filtered ONLY by the server-level
+  `disabled` set (`_filter_tools_by_enabled`), so a restricted key SAW every server-enabled tool — including
+  ones it would be 403'd on. That is an info-disclosure + authz-consistency gap (the client learns about tools
+  it cannot use). Added `_filter_tools_by_key_allowlist(tools, auth)` (empty/absent allowlist = all visible,
+  mirroring `_tool_allowed_by_key`; non-dict/name-less entries pass through like `_filter_tools_by_enabled`)
+  and layered it after the enabled-filter at every tools/list site: the JSON-RPC adapter branch, the JSON-RPC
+  backend branch, and the REST `org_mcp_tools_list` route (which now also resolves `_get_auth_context`).
+- **WHY:** least-privilege + "context minimization" — a caller should not even SEE tools outside its
+  authorization; visibility must match the call-time authz decision, else the allowlist leaks the tool
+  catalog.
+- **NOW DOES:** a key with `mcp_allowed_tools=["echo"]` sees ONLY `echo` in tools/list (JSON-RPC + REST);
+  a key with an empty allowlist sees all (unchanged). Consistent with the 403 it would get calling a
+  non-allowlisted tool.
+- **Touched whose work:** extends the CHG-0006/0008 per-key authz to the visibility surface. The
+  server-`disabled` filter is unchanged (now composed with the key filter).
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q`
+  → 22 passed (+2: `_filter_tools_by_key_allowlist` matrix; `org_mcp_tools_list` hides `get-sum` for a key
+  allowlisted to `echo`). Broad sweep `ai_mesh_gateway/tests` → 1083 passed, 0 failed.
