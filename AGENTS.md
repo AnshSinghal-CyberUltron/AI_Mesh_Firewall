@@ -513,6 +513,20 @@
     Contained by the sandbox 2GiB mem limit (CHG-0015). FOLLOW-UPS: _read_json_response dead code (same
     pattern); error-body reads read-whole-then-slice; _validate_upstream has no resolved-IP SSRF check
     (sandbox analogue of CHG-0065). Evidence mcp-parallel/findings/backstop-p10-sandbox-response-cap/.
+  - CHG-0067 (2026-07-02) — G3 item 12 (egress-lockdown/SSRF), HIGH; sandbox-side analogue of CHG-0065,
+    closes the CHG-0066 follow-up: the per-tenant sandbox agent (services/mcp-broker/sandbox-image/agent/
+    upstream_manager.py) dials the registered upstream; _validate_upstream matched the host STRING against
+    allowed_hosts but NEVER resolved the IP — so an allowlisted host resolving to an internal addr (DNS
+    rebinding, or a tenant registering an internal-resolving hostname) was dialed from inside the sandbox
+    (internal=false/open-NAT → reaches 169.254.169.254 metadata creds, loopback, RFC-1918). PRIMARY path:
+    the gateway does NOT is_safe_outbound_url the sandbox-routed upstream (only ext-proxy CHG-0065 + internal
+    paths), so the sandbox allowlist-string check was the ONLY guard. FIX: new async _assert_upstream_not_ssrf()
+    resolves via the loop's non-blocking getaddrinfo + rejects -32002 if any resolved IP is metadata/private/
+    loopback/link-local/reserved; fail-closed; MCP_AGENT_ALLOW_INTERNAL_HOSTS dev bypass; called in
+    _get_session before any connection. +2 tests (localhost→127.0.0.1→-32002; public IP allowed) + hermeticity
+    env in the app-load fixture. Gate: 13 passed (-k "not websocket"; ws tests hang pre-existingly). RESIDUAL:
+    network egress-lockdown (sandbox internal=true/iptables) is the INFRA fix; a gateway-side guard on the
+    sandbox-routed upstream would add a 2nd layer. Evidence mcp-parallel/findings/backstop-p12-sandbox-ssrf/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

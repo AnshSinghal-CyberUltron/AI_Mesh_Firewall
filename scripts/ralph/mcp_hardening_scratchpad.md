@@ -530,6 +530,20 @@
       gateway passed, 0 failed. This is the GATEWAY-side egress control; the sandbox network-level
       egress-default-deny + gVisor-runsc residuals above remain INFRA (need the deploy host). Evidence:
       mcp-parallel/findings/backstop-p12-ext-proxy-ssrf/finding.md.
+      CHG-0067 (2026-07-02, HIGH — SANDBOX-side SSRF gap CLOSED in code; the primary sandbox-routed path):
+      the sandbox agent (services/mcp-broker/sandbox-image/agent/upstream_manager.py) _validate_upstream
+      matched the upstream host STRING against allowed_hosts but NEVER resolved the IP — so an allowlisted
+      host resolving to an internal addr (DNS rebinding, or a tenant registering an internal-resolving
+      hostname) was dialed from inside the sandbox (internal=false/open-NAT → 169.254.169.254 metadata
+      creds, loopback, RFC-1918). And the gateway does NOT is_safe_outbound_url the sandbox-routed upstream
+      (only ext-proxy CHG-0065 + internal paths), so the sandbox allowlist-string check was the ONLY guard.
+      FIX: new async _assert_upstream_not_ssrf() resolves via the loop's non-blocking getaddrinfo + rejects
+      -32002 if any resolved IP is metadata/private/loopback/link-local/reserved; fail-closed;
+      MCP_AGENT_ALLOW_INTERNAL_HOSTS dev bypass; called in _get_session before any connection. +2 tests
+      (localhost→127.0.0.1→-32002; public IP allowed). Gate: 13 passed (-k "not websocket"; ws tests hang
+      pre-existingly). RESIDUAL: network egress-lockdown (sandbox internal=true/iptables) is still the INFRA
+      fix for full default-deny; a gateway-side guard on the sandbox-routed upstream would add a 2nd layer.
+      Evidence: mcp-parallel/findings/backstop-p12-sandbox-ssrf/finding.md.
       CHG-0035 (2026-07-02, verification): CODE-level sandbox security audited CLEAN (the runc/egress gaps above
       are the only residuals, and both are INFRA). docker_manager: no-new-privileges + DEFAULT seccomp (code
       explicitly does NOT pass seccomp=unconfined) + cap_drop=ALL + read_only rootfs + memswap_limit=mem_limit

@@ -68,6 +68,54 @@ def _validate_upstream(upstream: dict[str, Any]) -> None:
             raise UpstreamError(-32002, f"egress denied: host {host!r} not in allowlist")
 
 
+# CHG-0067: cloud-metadata endpoints + the internal/reserved IP-range SSRF guard for the
+# sandbox agent's upstream dialer. The allowlist in _validate_upstream matches the host
+# STRING only; it does NOT catch an allowlisted host that RESOLVES to an internal /
+# loopback / link-local / cloud-metadata IP (DNS rebinding). While the per-org sandbox
+# network is internal=false (open NAT), that lets a tenant-registered upstream reach the
+# cloud-metadata endpoint (169.254.169.254 -> IAM creds) or internal services. This is the
+# sandbox-side analogue of the gateway's is_safe_outbound_url (CHG-0065).
+_METADATA_IPS = frozenset({"169.254.169.254", "fd00:ec2::254"})
+
+
+def _resolved_ip_blocked(ip_str: str) -> str | None:
+    """Return a reason string if a resolved IP is internal/metadata (block), else None."""
+    if ip_str in _METADATA_IPS:
+        return f"cloud metadata endpoint ({ip_str})"
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return f"unparseable address ({ip_str})"
+    if (
+        ip.is_private or ip.is_loopback or ip.is_link_local
+        or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+    ):
+        return f"internal/reserved address ({ip_str})"
+    return None
+
+
+async def _assert_upstream_not_ssrf(host: str) -> None:
+    """Resolve ``host`` and reject if it (or any resolved IP) is internal / loopback /
+    link-local / cloud-metadata — anti-SSRF / DNS-rebinding. Uses the event loop's async
+    getaddrinfo (non-blocking; OS-cached). FAIL-CLOSED on a resolution failure.
+    ``MCP_AGENT_ALLOW_INTERNAL_HOSTS`` bypasses (dev / self-hosted internal upstreams)."""
+    if not host or os.environ.get("MCP_AGENT_ALLOW_INTERNAL_HOSTS"):
+        return
+    try:
+        ipaddress.ip_address(host)
+        ips = [host]                       # host is a literal IP → check it directly
+    except ValueError:
+        try:
+            infos = await asyncio.get_running_loop().getaddrinfo(host, None)
+        except Exception as exc:           # DNS failure → fail closed
+            raise UpstreamError(-32002, f"egress denied: cannot resolve host {host!r} ({exc})")
+        ips = [info[4][0] for info in infos]
+    for ip_str in ips:
+        reason = _resolved_ip_blocked(ip_str)
+        if reason:
+            raise UpstreamError(-32002, f"egress denied: host {host!r} -> {reason}")
+
+
 @dataclass
 class UpstreamSession:
     server_slug: str
@@ -111,6 +159,9 @@ async def _get_session(
 ) -> UpstreamSession:
     _validate_upstream(upstream)
     url = upstream["url"].strip()
+    # CHG-0067: resolved-IP SSRF guard (DNS rebinding) — the allowlist above matches the
+    # host string only; reject a host that RESOLVES to an internal/metadata address.
+    await _assert_upstream_not_ssrf(urlparse(url).hostname or "")
     allowed_hosts = list(upstream.get("allowed_hosts") or [])
     headers = dict(upstream.get("headers") or {})
     if upstream.get("session_id"):

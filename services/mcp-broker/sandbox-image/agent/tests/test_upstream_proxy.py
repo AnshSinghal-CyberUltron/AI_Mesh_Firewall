@@ -19,6 +19,10 @@ STDIO_STUB = BROKER_ROOT / "tests" / "fixtures" / "stdio_mcp_stub.py"
 
 def _load_agent_app(monkeypatch):
     monkeypatch.setenv("ORG_SLUG", "test-org")
+    # CHG-0067: the SSRF guard in _get_session resolves the upstream host via getaddrinfo.
+    # These tests use mcp.example.com (NXDOMAIN here) and mock the socket, so bypass the
+    # DNS-resolve guard to stay hermetic; the dedicated SSRF test un-sets this to exercise it.
+    monkeypatch.setenv("MCP_AGENT_ALLOW_INTERNAL_HOSTS", "1")
     sandbox_image = str(SANDBOX_IMAGE)
     if sandbox_image not in sys.path:
         sys.path.insert(0, sandbox_image)
@@ -436,6 +440,38 @@ def test_streamable_http_json_response_under_cap_ok(agent_client):
     # the JSON branch still works normally with the incremental reader
     with patch("httpx.AsyncClient.stream",
                new=_fake_stream_json(result={"tools": [{"name": "echo"}]})), \
+         patch("httpx.AsyncClient.post", new=AsyncMock(return_value=httpx.Response(202))):
+        resp = agent_client.post("/rpc", json=_http_payload())
+    assert resp.status_code == 200
+    assert resp.json()["result"]["tools"][0]["name"] == "echo"
+
+
+# ── CHG-0067: sandbox-side SSRF / DNS-rebinding guard. _validate_upstream matches the
+# host STRING against allowed_hosts but never resolves it; an allowlisted host that
+# RESOLVES to an internal/loopback/link-local/cloud-metadata IP would be dialed from the
+# sandbox (which has open-NAT egress). _assert_upstream_not_ssrf resolves + blocks it.
+def test_streamable_http_ssrf_blocks_internal_resolving_host(agent_client, monkeypatch):
+    monkeypatch.delenv("MCP_AGENT_ALLOW_INTERNAL_HOSTS", raising=False)  # enable the guard
+    payload = _http_payload(upstream={
+        "url": "https://localhost/mcp",          # allowlisted host that resolves to 127.0.0.1
+        "allowed_hosts": ["localhost"],
+        "headers": {},
+        "oauth_client_role": "forbidden_in_sandbox",
+    })
+    # No httpx mock needed — the SSRF guard rejects BEFORE any connection is opened.
+    resp = agent_client.post("/rpc", json=payload)
+    body = resp.json()
+    assert body["error"]["code"] == -32002
+    msg = body["error"]["message"].lower()
+    assert "egress denied" in msg and ("loopback" in msg or "internal" in msg or "127.0.0.1" in msg)
+
+
+def test_streamable_http_ssrf_allows_public_resolved_host(agent_client, monkeypatch):
+    monkeypatch.delenv("MCP_AGENT_ALLOW_INTERNAL_HOSTS", raising=False)  # guard active
+    # resolve the allowlisted host to a PUBLIC IP so the guard permits it
+    monkeypatch.setattr("socket.getaddrinfo",
+                        lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
+    with patch("httpx.AsyncClient.stream", new=_fake_stream(result={"tools": [{"name": "echo"}]})), \
          patch("httpx.AsyncClient.post", new=AsyncMock(return_value=httpx.Response(202))):
         resp = agent_client.post("/rpc", json=_http_payload())
     assert resp.status_code == 200
