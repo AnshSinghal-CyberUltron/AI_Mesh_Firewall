@@ -1,0 +1,27 @@
+{
+  "case_id": "01_pii_policy_redact",
+  "contract_final": "redact",
+  "final_action": "redact",
+  "stages": [
+    {
+      "action": "redact",
+      "matched_policy_names": [
+        "PII Detection & Redaction"
+      ],
+      "matched_rules": [
+        "Redact US SSN",
+        "Redact email addresses"
+      ],
+      "stage": "policy"
+    },
+    {
+      "action": "redact",
+      "stage": "policy_redact"
+    },
+    {
+      "action": "allow",
+      "detection_tier": "tier_1",
+      "stage": "input_scan"
+    }
+  ]
+}

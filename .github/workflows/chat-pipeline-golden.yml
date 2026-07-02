@@ -1,0 +1,40 @@
+name: chat-pipeline-golden
+
+on:
+  pull_request:
+    paths:
+      - 'gateway/ai_mesh_gateway/enforcement.py'
+      - 'gateway/ai_mesh_gateway/policy_engine.py'
+      - 'gateway/ai_mesh_gateway/bedrock_scanner.py'
+      - 'gateway/ai_mesh_gateway/output_guard.py'
+      - 'gateway/ai_mesh_gateway/llm_router.py'
+      - 'gateway/ai_mesh_gateway/main.py'
+      - 'gateway/tests/golden/**'
+      - 'docs/pipeline/**'
+  push:
+    branches:
+      - cursor/chat-pipeline-freeze
+    paths:
+      - 'gateway/**'
+      - 'docs/pipeline/**'
+
+jobs:
+  golden-freeze:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test deps
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q pytest pytest-asyncio fakeredis httpx
+          .venv/bin/pip install -q -e ../shared
+      - name: Enforcement unit tests
+        run: .venv/bin/python -m pytest ai_mesh_gateway/tests/test_enforcement.py -q
+      - name: Chat pipeline golden freeze (no re-bless)
+        run: .venv/bin/python -m pytest tests/golden -q

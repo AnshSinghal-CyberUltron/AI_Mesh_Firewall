@@ -39,6 +39,7 @@ dev = ["pytest>=8", "pytest-asyncio>=0.24", "fakeredis>=2", "openai==2.38.0", "h
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+pythonpath = ["ai_mesh_gateway", "../shared"]
 markers = [
     "docker: integration tests requiring a local Docker daemon",
 ]
