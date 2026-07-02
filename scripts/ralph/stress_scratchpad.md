@@ -71,7 +71,15 @@
           injection vocab → fixed G3 (2 chunk-split/spaced injection). Vocab-curated → zero FP.
       REMAINING R4 hardening (NOT yet encoded as findings; lower priority than R5/R6 completion gates):
         G6 multi-turn session state (scanner.py), G10 semantic-redact typed-placeholder,
-        G12 ReDoS caps in context_guard/leakage_detector, G13 output markdown/link+tool-arg exfil (output_guard.py).
+        G13 output markdown/link+tool-arg exfil (output_guard.py).
+      G12 DONE 2026-07-02: context_guard ReDoS/DoS cap. _scan_single_document_sync ran the full
+        injection/hidden/toxicity catalogue + PII/secret detectors over the ENTIRE doc text (M-19
+        forbids pre-decision slicing) with NO budget -> cost linear+unbounded in attacker doc length;
+        measured a ~21MB RAG doc pinned a scan worker ~14s (pool=4 workers => DoS). Fixed with two
+        fail-closed bounds: _MAX_DOC_SCAN_LEN=1MB size ceiling + _DOC_SCAN_TIMEOUT_S=3.0s daemon-thread
+        wall-clock net (mirrors policy_engine._run_with_timeout); real scan moved to
+        _scan_single_document_impl. Neither truncates-then-allows => no evasion (unscannable doc BLOCKED).
+        21.6MB now blocked in 0.0001s. 3 golden cases frozen. Full gateway suite 1050 passed.
       G9 DONE 2026-07-02 (b5861eff): context_guard precedence inversion fixed — a RAG doc with toxicity +
         a live credential was only FLAGGED (credential stored at rest = leak); reordered so credential
         BLOCK checks precede toxicity/PII FLAG checks (block outranks flag). 5 cases frozen in golden suite.
