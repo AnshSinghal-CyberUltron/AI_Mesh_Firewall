@@ -172,14 +172,14 @@ function StepList({ steps }) {
     <ol className="space-y-4">
       {steps.map((step, idx) => (
         <li key={step.id} className="flex gap-4">
-          <div className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-teal-500/15 border border-teal-500/30 text-teal-400 text-sm font-bold">
+          <div className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-teal-500/15 border border-teal-500/30 text-teal-600 dark:text-teal-400 text-sm font-bold">
             {idx + 1}
           </div>
-          <div className="pt-0.5">
-            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-5">
+          <div className="min-w-0 pt-0.5">
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-5 break-words">
               {step.label}
             </div>
-            <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+            <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400 break-words">
               {step.text}
             </div>
           </div>
@@ -274,11 +274,11 @@ export function HowToUse({ moduleId, defaultOpen = false }) {
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between gap-4 px-7 py-5 text-left hover:bg-teal-50/40 dark:hover:bg-teal-900/10 transition-colors"
       >
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 min-w-0">
           <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-gradient-to-br from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/20 flex-shrink-0">
             <BookOpen className="h-5 w-5" strokeWidth={2.2} />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-400">
               Getting Started
             </div>
@@ -312,10 +312,13 @@ export function HowToUse({ moduleId, defaultOpen = false }) {
             {content.intro}
           </p>
 
-          {/* Steps + Code side-by-side on lg screens */}
-          <div className="grid gap-8 lg:grid-cols-[1fr,1.1fr]">
+          {/* Steps + Code side-by-side on lg screens. grid-cols-1 base = minmax(0,1fr)
+              and min-w-0 on each column so a long step line / code line cannot
+              blow the column out to max-content (grid items default to min-width:auto,
+              which the card's overflow-hidden then clips at narrow widths). */}
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
             {/* Left: numbered steps */}
-            <div>
+            <div className="min-w-0">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-400 mb-4">
                 Step-by-step
               </div>
@@ -324,7 +327,7 @@ export function HowToUse({ moduleId, defaultOpen = false }) {
 
             {/* Right: code tabs */}
             {content.codeTabs && content.codeTabs.length > 0 && (
-              <div>
+              <div className="min-w-0">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-400 mb-4">
                   Code examples
                 </div>

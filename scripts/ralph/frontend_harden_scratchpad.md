@@ -125,7 +125,21 @@
       both themes + 375 stacks clean. 500/401 cascades = F3 env (auth/me 500→downstream 401). Deferred-LOW:
       EngineCard "0F" flagged counter is structurally always-0 (flag folds into redacted bucket) — honest 0,
       logged not changed.
-- [x] 13. LogViewer/LogDetailPage - [x] 14. OWASPStatsPanel - [x] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
+- [x] 13. LogViewer/LogDetailPage - [x] 14. OWASPStatsPanel - [x] 15. Firewall12EnterprisePage - [x] 16. HowToUse
+      item16 DONE (HowToUse per-module getting-started card, on every firewall module page). Static docs
+      content (howToUseContent.js) is LEGITIMATELY static (instructional) — no fabricated backend data; returns
+      null when no content (honest). NO LEAK: example code uses placeholders throughout
+      (<your_gateway_api_key>, <jwt_token>, pcsk_...) — no real keys/secrets. THEME: StepList step-number badge
+      text-teal-400 → text-teal-600 dark:text-teal-400 (was weak on the light card); rest already clean (code
+      block intentionally dark both themes = terminal convention; NoteRow/header/tabs have proper dark
+      variants). RESPONSIVE — caught + fixed a real bug via visual check: step descriptions were CLIPPED at 375
+      (CSS-grid auto-min-width trap — the steps column sized to max-content 754px inside a 293px cell, clipped
+      by the card's overflow-hidden so overflow=0 masked it). Fixed: grid base grid-cols-1 (minmax(0,1fr)) +
+      lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)], min-w-0 on both grid columns + step content div, break-words
+      on step label/text (long URLs like aimeshgateway.zeroshield.ai/v1), header min-w-0. CONTROLS: expand/
+      collapse, CopyButton (clipboard try/catch), CodeTabs all work. GATE lint 42/42, build, detector 0. LIVE
+      both themes @1440/1024/768/375: overflow=0 all 8, stepTextOverflowPx=0 (measured), 0 console (F3
+      transient only); expanded steps+code+notes verified legible + wrapping both themes; teal badge legible.
       item15 DONE (Firewall12EnterprisePage, module 1.2). Claim check: cursor-ralph-iter2-P1.2 is a RELEASED
       MCP-http/oauth-repro claim (scope mcp-parallel/findings/p1-2/**, docs) — does NOT cover this file. CHART
       migration recharts→ECharts: "Event Trend" LineChart (trendData time/primary) → eventTrendOption line;
