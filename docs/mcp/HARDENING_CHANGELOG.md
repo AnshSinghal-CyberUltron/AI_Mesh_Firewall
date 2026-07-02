@@ -843,6 +843,13 @@ the prod compose/manifests is tracked under G3 item 12.
 - **Date:** 2026-07-02
 - **Scratchpad item:** G3 item 7 (all transports via the per-org sandbox; nothing dialed from the gateway).
   websocket was the last transport still connecting in-gateway. **Item 7 → [x]** for the default config.
+- **NOTE (concurrent co-commit):** a parallel mcp session landed the *identical* ws migration at the same
+  time as commit `d6ab1ae7` (also labelled CHG-0026) and — via the shared-index hazard — swept this backstop's
+  identical `mcp_proxy.py` + `test_mcp_http_via_sandbox.py` edits into it; this backstop's commit `cd973658`
+  then carried only the four-memory docs. Both converged on ONE clean migration in HEAD (verified: single
+  `("streamable-http","sse","websocket")` branch, `mcp_ws_adapter` forwarding import removed, 1064 gateway
+  tests pass). This entry is the sole CHG-0026 memory record; the duplicate id exists only in the two commit
+  *messages*.
 - **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (`_adapter_forward`: websocket now routes via
   `broker_send_rpc` alongside streamable-http/sse; the in-gateway `mcp_ws_adapter.send_jsonrpc` branch
   removed); `gateway/ai_mesh_gateway/tests/test_mcp_http_via_sandbox.py` (+1 test).
