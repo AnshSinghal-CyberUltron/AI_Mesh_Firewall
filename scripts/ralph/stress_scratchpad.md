@@ -162,6 +162,13 @@
         folded); detect_pii/detect_secrets/_redact_obfuscated transport loops also match the canonical decode
         so the OUTER blob is masked. Binary garbage still dropped; FP floor holds. 7 golden frozen. Full
         gateway 1077 passed; golden 144 passed/7 skipped 3x.
+      G28 DONE 2026-07-02: Tier-1 semantic-jailbreak/prompt-extraction coverage. Cross-checking my scanner vs
+        the independent aidefence_scan oracle found Tier-1 ALLOWED common semantic jailbreaks aidefence flags
+        high-conf context_manipulation (jailbroken+answer-without-filters, repeat-everything-above-this-line,
+        no-ethical-constraints-AI, translate/leak-your-system-prompt, safety-guidelines-do-not-apply). Added 7
+        bounded ReDoS-safe patterns to scanner ATTACK_PATTERNS.prompt_injection (Tier-2 is primary semantic
+        catch; these are Tier-1 defense-in-depth). ZERO FP on a tricky benign corpus + all frozen benign. 14
+        golden frozen. Full gateway 1087 passed; golden 161 passed/7 skipped 3x.
       R2 PROBE + INDEPENDENT-ORACLE VALIDATION 2026-07-02: probed base64url(-_)/tool-role/monospace/double-
         struck/fraktur — ALL handled (no new gap; English text base64url == base64, no -_; NFKC folds the math-
         alphanumeric variants). Cross-checked my redact_all egress with the INDEPENDENT aidefence_has_pii oracle
