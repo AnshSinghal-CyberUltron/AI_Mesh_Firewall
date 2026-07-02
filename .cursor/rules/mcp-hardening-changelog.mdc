@@ -688,6 +688,26 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   then separate expire) is the same class, milder (unconditional expire refreshes the window). Evidence:
   `mcp-parallel/findings/backstop-p11-ratelimit-atomic-ttl/`.
 
+- **CHG-0063** (2026-07-02) — G3 item 9 (gateway validation/DoS) + resource-limits (mem containment),
+  HIGH; closes CHG-0034's documented limitation: `_mcp_body_too_large` only pre-checks the Content-Length
+  HEADER, so a `Transfer-Encoding: chunked` / Content-Length-omitting request slips past it and
+  `await request.body()` / `request.json()` then buffer the ENTIRE stream into memory with NO ceiling
+  (gigabyte chunked body → gateway OOM). Affects the 3 tenant-facing MCP entry points (`ext_mcp_proxy`,
+  `org_mcp_jsonrpc`, `org_mcp_tool_call`). FIX (`mcp_proxy.py`): new `_MCPBodyTooLarge` +
+  `_mcp_read_body_capped(request)` reads `request.stream()` incrementally and raises the INSTANT the
+  running total crosses `_MCP_MAX_BODY_BYTES` (default 10MiB) — the gateway never holds more than the
+  ceiling in memory regardless of framing (proven: it stops after the crossing chunk, not after buffering
+  the whole stream). Capped bytes are cached on `request._body` so a downstream `request.json()`/`body()`
+  reuses the already-capped buffer. Wired at all 3 entry points (ext + bare-REST read via the helper →
+  bytes; org_mcp_jsonrpc caps+caches then keeps `request.json()` so `.json()`-mocking doubles are
+  unaffected), each returning the existing 413 `_mcp_body_too_large_response()`. The Content-Length
+  pre-check is retained (fast reject for a declared oversize). Files: mcp_proxy.py, test_mcp_body_cap.py
+  (+7). Gate: 7 body-cap + 1237 gateway passed, 0 failed (incl. an END-TO-END `org_mcp_tool_call`
+  oversized-chunked-stream → HTTP 413, and a "stops reading early / bounds memory" assertion). Scope: the
+  3 tenant-facing routes; backend-internal (X-Gateway-Internal-Key) paths still use plain `request.body()`
+  (lower risk; possible future defence-in-depth follow-up). Evidence:
+  `mcp-parallel/findings/backstop-p9-chunked-body-dos/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
@@ -769,3 +789,5 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
 - MCP-PAGE-CP41 (MCP Security Policies) | every control real effect | REAL EFFECT (mcp_page_cp41_policy.py): mcp-domain Policy + keyword Rule action=block → echo(matching keyword) 403 blocked-by-policy; echo(non-matching) 200; disable policy → matching 200 (unblocked). 4/4 cp41Pass. UI (mcp_page_cp41_ui.mjs): tab renders PolicyManagementPanel + Add policy + server filter. Same engine as CP22/23 | VERIFY: mcp_page_cp41_policy.py + mcp_page_cp41_ui.mjs
 
 - MCP-PAGE-CP42 (Observability tab + sweep) | tab controls + real data + both themes 1440/1024/768/375 + 0 console errors | mcp_page_cp42_observability.mjs cp42Pass: summary cards real data; time-range SegmentedControl "7d" re-fetches; Refresh re-fetches /events/+/events/summary/; 4 viewports × light+dark = no h-overflow; 0 console errors. SECTION K complete | VERIFY: mcp_page_cp42_observability.mjs
+
+- MCP-PAGE-CP43 (impeccable audit) | /impeccable init+audit firewall-1-4 → docs/mcp/IMPECCABLE_AUDIT_firewall-1-4.md | init: PRODUCT.md present. audit 16/20: A11y 3 (aria good; 32px touch targets + muted contrast gaps), Perf 3 (0 useMemo, 500-row list), Responsive 3, Theming 4 (0 hex, 111 dark:), Anti-patterns 3 (0 gradient/glass; 24 Cards heavy). Cross-cut: 2428-LOC file = split (CP44); data honesty already done by CP01-42 (preserve). Revamp = structural/visual not rewrite | VERIFY: docs/mcp/IMPECCABLE_AUDIT_firewall-1-4.md
