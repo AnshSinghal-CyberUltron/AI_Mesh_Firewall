@@ -1206,8 +1206,21 @@ class InputScanner:
             return False
         word_counts: dict[str, int] = {}
         for word in words:
+            # G31: single-character tokens (e.g. the individual digits of a
+            # space-separated SSN / phone / year list — "years 2 0 2 4 2 0 2 5",
+            # "call 5 5 5 1 2 3 4 5 6 7") are NOT a repetition-DoS vector: they are
+            # cheap to process and single digits legitimately repeat (only 0-9
+            # exist). A genuine repetition flood repeats MULTI-char words/phrases
+            # (still counted) or ships one oversized token (caught above), so
+            # excluding len<=1 tokens removes a class of false blocks on benign,
+            # non-PII digit sequences (independent aidefence oracle: hasPII=false)
+            # without weakening real DoS detection.
+            if len(word) <= 1:
+                continue
             lower = word.lower()
             word_counts[lower] = word_counts.get(lower, 0) + 1
+        if not word_counts:
+            return False
         max_count = max(word_counts.values())
         return (max_count / len(words)) > REPETITION_THRESHOLD
 

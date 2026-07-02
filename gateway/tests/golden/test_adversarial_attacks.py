@@ -382,6 +382,38 @@ def test_g30_real_encoded_attacks_never_downgraded(evidence, text):
     assert _t2_selfref(evidence, text) is False
 
 
+# ── G31: DoS repetition heuristic must not false-block spaced-digit sequences ──
+# The "excessive repetition" DoS check counted single-digit tokens, so a space-
+# separated SSN/phone/year list ("years 2 0 2 4 2 0 2 5 2 0 2 6", "call 5 5 5 1 2
+# 3 4 5 6 7") tripped it (>38% of "words" were the same digit). Independent
+# aidefence oracle: these are hasPII=false and benign -> the block was a pure FP.
+# Fix excludes len<=1 tokens from the frequency count; real repetition floods
+# (multi-char words/phrases) and oversized tokens still block.
+_G31_DOS_FP_FLOOR = [
+    "years 2 0 2 4 2 0 2 5 2 0 2 6",
+    "2 0 2 4 2 0 2 5 2 0 2 6",
+    "call 5 5 5 1 2 3 4 5 6 7",
+    "the code is 1 2 3 4 5 6 7 8 9 0 1 2",
+    "sequence 1 2 3 4 5",
+]
+_G31_DOS_MUST_BLOCK = [
+    "spam " * 50,
+    "buy now " * 20,
+    "hello " * 100,
+    "A" * 300,  # oversized single token
+]
+
+
+@pytest.mark.parametrize("payload", _G31_DOS_FP_FLOOR)
+def test_g31_spaced_digits_not_dos_blocked(payload):
+    assert _verdict(payload) == "allow", f"spaced-digit sequence wrongly DoS-blocked: {payload!r}"
+
+
+@pytest.mark.parametrize("payload", _G31_DOS_MUST_BLOCK)
+def test_g31_real_dos_still_blocks(payload):
+    assert _verdict(payload) == "block", f"real DoS repetition not blocked: {payload[:30]!r}"
+
+
 def test_g6_reassembly_is_noop_on_single_turn():
     """A single-turn prompt is not a multi-turn fold — reassembly returns None so
     single-turn scanning is untouched."""
