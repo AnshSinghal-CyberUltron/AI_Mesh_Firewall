@@ -190,6 +190,14 @@ ATTACK_PATTERNS: dict[str, list[str]] = {
         r"<\|im_(start|end)\|>",
         r"<<\s*sys\s*>>",
         r"(?:^|\n)\s*(system|developer)\s*:\s*you\s+(are|have|must|will)\b",
+        # G37: Gemma chat-template turn tokens. The gateway builds the template, so
+        # a user MESSAGE never legitimately contains <start_of_turn>/<end_of_turn> —
+        # their presence is a forged-turn (system/model) role-spoof smuggle. Literal
+        # control tokens => near-zero FP (no benign human text types them). The
+        # Claude "\n\nHuman:/Assistant:" delimiter is DELIBERATELY left to Tier-2:
+        # it legitimately appears when a user shares a conversation transcript, so a
+        # Tier-1 hard block would be a false positive.
+        r"<\s*(?:start|end)_of_turn\s*>",
     ],
     "jailbreak": [
         r"dan\s+mode",
