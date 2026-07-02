@@ -1168,6 +1168,25 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   on the MCP/rate-limit/breaker paths are now atomic (CHG-0062/0084/0086); `oauth_proxy`/`model_state` use
   `setex`/`set(ex=)` (atomic by construction). No remaining non-atomic TTL-setter found.
 
+- **CHG-0087** (2026-07-02) — ARCH item 13 (**Phase-3 monitoring/metrics**), MEDIUM: the gateway HAS a
+  Prometheus layer (`metrics.py`, `/metrics`, counters for requests/policy-blocks/rate-limit/kill-switch/
+  stream/chat) but there was **no MCP metric** and `mcp_proxy.py` imported/called `metrics` **nowhere**.
+  Every MCP scan/enforcement decision (block/redact/allow/monitor — tool-poisoning, credential force-blocks,
+  PII/IP redaction, tools/list metadata scans, org-scope violations) is written to the MCPEvent **audit**
+  trail but was never **metered**, so Prometheus dashboards + alerting could not see MCP block/redact rates,
+  volume, or compliance-tag distribution — the 1.4 guardrails were invisible to metrics-based monitoring.
+  FIX (`metrics.py` + `mcp_proxy.py`): two low-cardinality counters —
+  `amf_gateway_mcp_scan_decisions_total{org, decision}` (block/redact/allow/monitor) and
+  `amf_gateway_mcp_compliance_tags_total{org, tag}` (SECRET/PII/INFRA/HIPAA/PCI-DSS/SOC2/GDPR...) — plus
+  `record_mcp_scan_decision(org, decision, tags)` (fail-safe no-op without prometheus_client,
+  `_safe_label`-bounded), wired into `_record_gateway_event` (best-effort try/except so metrics NEVER break
+  the request path). Every audited MCP decision is now also metered + rendered in `/metrics`. +4 tests
+  (increments decision + per-tag counters; the audit sink moves the counter; empty-tags/empty-org safe;
+  no-op when prometheus_client absent). Gate: 4 + 1455 gateway passed, 0 failed; broker
+  `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p13-mcp-scan-metrics/`.
+  **RESIDUAL:** an MCP scan/call latency histogram + OpenTelemetry tracing for the per-call chain are
+  separate item-13 enhancements (the audit already carries `latency_ms`).
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

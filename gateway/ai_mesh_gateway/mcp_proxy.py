@@ -715,6 +715,14 @@ async def _record_gateway_event(
     if not org_slug:
         return
 
+    # CHG-0087: meter the decision + compliance tags so the 1.4 guardrails are visible
+    # in Prometheus (not only the MCPEvent audit trail). Fail-safe: never break the call.
+    try:
+        import metrics as _metrics
+        _metrics.record_mcp_scan_decision(org_slug, decision, compliance_tags)
+    except Exception:
+        pass
+
     if _GATEWAY_ASYNC_MCP_AUDIT:
         await enqueue_job(
             job_type="mcp_audit",

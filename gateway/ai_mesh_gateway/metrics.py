@@ -104,6 +104,23 @@ if _PROM_AVAILABLE:
         ["model", "action"],
         registry=REGISTRY,
     )
+    # CHG-0087: MCP tool-call scan decisions were AUDITED (MCPEvent) but not METERED,
+    # so the 1.4 guardrails (block/redact for tool-poisoning / credentials / PII / IP)
+    # were invisible to Prometheus dashboards + alerting. Low-cardinality: decision is
+    # block/redact/allow/monitor; tag is the bounded compliance set (SECRET/PII/INFRA/
+    # HIPAA/PCI-DSS/SOC2/GDPR...).
+    mcp_scan_decisions_total = Counter(
+        "amf_gateway_mcp_scan_decisions_total",
+        "MCP tool-call scan/enforcement decisions per org (block/redact/allow/monitor).",
+        ["org", "decision"],
+        registry=REGISTRY,
+    )
+    mcp_compliance_tags_total = Counter(
+        "amf_gateway_mcp_compliance_tags_total",
+        "MCP scan compliance-tag hits per org (PII/SECRET/INFRA/HIPAA/PCI-DSS/...).",
+        ["org", "tag"],
+        registry=REGISTRY,
+    )
     bedrock_embed_total = Counter(
         "amf_gateway_bedrock_embed_total",
         "Bedrock Titan embedding calls, labeled by result.",
@@ -236,6 +253,28 @@ def record_bedrock_embed(result: str) -> None:
     if not _PROM_AVAILABLE:
         return
     bedrock_embed_total.labels(result=_safe_label(result, "unknown")).inc()
+
+
+def record_mcp_scan_decision(org_slug: str, decision: str, compliance_tags=None) -> None:
+    """CHG-0087: meter an MCP tool-call scan/enforcement decision + its compliance tags.
+
+    Best-effort / fail-safe (no-op when prometheus_client is absent). Called from the
+    MCP audit sink (``mcp_proxy._record_gateway_event``) so every block/redact/allow/
+    monitor decision the 1.4 chain makes is visible to Prometheus, not just the MCPEvent
+    audit trail. Cardinality is bounded (org × {block,redact,allow,monitor}; org × the
+    fixed compliance-tag set)."""
+    if not _PROM_AVAILABLE:
+        return
+    org = _safe_label(org_slug, "anonymous")
+    try:
+        mcp_scan_decisions_total.labels(org=org, decision=_safe_label(decision, "unknown")).inc()
+    except Exception:  # pragma: no cover - metrics must never break the request path
+        return
+    for _tag in (compliance_tags or []):
+        try:
+            mcp_compliance_tags_total.labels(org=org, tag=_safe_label(str(_tag), "unknown")).inc()
+        except Exception:  # pragma: no cover
+            pass
 
 
 def record_stream_complete(

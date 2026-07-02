@@ -383,6 +383,18 @@
       NONE; no remaining non-atomic TTL-setter found. +1 test. Gate: 1 + 1454 gateway passed, 0 failed;
       broker -k "not websocket" 108 passed. Evidence:
       mcp-parallel/findings/backstop-p11-circuit-breaker-atomicity/finding.md.
+      CHG-0087 (2026-07-02, MEDIUM — ARCH item 13 Phase-3 monitoring/metrics): the gateway HAS a Prometheus
+      layer (metrics.py, /metrics, counters for requests/policy-blocks/rate-limit/kill-switch/stream/chat) but
+      there was NO MCP metric and mcp_proxy.py imported/called `metrics` NOWHERE. Every MCP scan decision
+      (block/redact/allow/monitor) was AUDITED (MCPEvent via _record_gateway_event) but never METERED, so the
+      1.4 guardrails (block/redact rates + compliance-tag distribution) were invisible to dashboards/alerting.
+      FIX (metrics.py + mcp_proxy.py): two low-cardinality counters amf_gateway_mcp_scan_decisions_total
+      {org,decision} + amf_gateway_mcp_compliance_tags_total{org,tag} + record_mcp_scan_decision() (fail-safe
+      no-op without prometheus_client, _safe_label-bounded), wired into _record_gateway_event (best-effort
+      try/except so metrics NEVER break the request path). Every audited MCP decision now metered + rendered
+      in /metrics. +4 tests. Gate: 4 + 1455 gateway passed, 0 failed; broker -k "not websocket" 108 passed.
+      Evidence: mcp-parallel/findings/backstop-p13-mcp-scan-metrics/finding.md. RESIDUAL: MCP latency
+      histogram + OTel tracing are future item-13 pieces.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

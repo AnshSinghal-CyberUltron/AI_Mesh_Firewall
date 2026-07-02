@@ -743,6 +743,16 @@
     trilogy (CHG-0062 rate-limit / CHG-0084 leakage-detector / CHG-0086 circuit-breaker); no remaining
     non-atomic TTL-setter found. +1 test. Gate: 1 + 1454 gateway passed, 0 failed; broker -k "not websocket"
     108 passed. Evidence mcp-parallel/findings/backstop-p11-circuit-breaker-atomicity/.
+  - CHG-0087 (2026-07-02) — ARCH item 13 (Phase-3 monitoring/metrics), MEDIUM: the gateway has a Prometheus
+    layer (metrics.py, /metrics) but there was NO MCP metric and mcp_proxy called `metrics` NOWHERE — every
+    MCP scan decision (block/redact/allow/monitor) was AUDITED (MCPEvent) but never METERED, so the 1.4
+    guardrails were invisible to dashboards/alerting. FIX (metrics.py + mcp_proxy.py): two low-cardinality
+    counters amf_gateway_mcp_scan_decisions_total{org,decision} + amf_gateway_mcp_compliance_tags_total
+    {org,tag} + record_mcp_scan_decision() (fail-safe, _safe_label-bounded), wired into _record_gateway_event
+    (best-effort try/except so metrics never break the request path). +4 tests. Gate: 4 + 1455 gateway
+    passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
+    mcp-parallel/findings/backstop-p13-mcp-scan-metrics/. RESIDUAL: MCP latency histogram + OTel tracing are
+    future item-13 pieces.
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)
