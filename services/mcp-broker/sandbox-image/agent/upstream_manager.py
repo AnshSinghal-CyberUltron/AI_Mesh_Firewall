@@ -10,7 +10,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 import httpx
 
@@ -81,6 +81,9 @@ class UpstreamSession:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     client: httpx.AsyncClient | None = None
     ws: Any | None = None
+    sse_task: asyncio.Task | None = None
+    sse_responses: asyncio.Queue | None = None
+    sse_ready: asyncio.Event | None = None
 
     def config_key(self) -> tuple[str, str, str, tuple[tuple[str, str], ...]]:
         return (
@@ -149,12 +152,25 @@ async def _close_session_unlocked(server_slug: str) -> None:
     sess = _sessions.pop(server_slug, None)
     if sess is None:
         return
+    from agent.sse_manager import stop_sse_reader
+
+    await stop_sse_reader(sess)
     if sess.client:
         await sess.client.aclose()
     if sess.ws:
         from agent.ws_manager import close_ws
 
         await close_ws(sess)
+
+
+async def _invalidate_upstream_session(session: UpstreamSession) -> None:
+    """Drop cached handshake state so the next RPC re-connects to the upstream."""
+    from agent.sse_manager import stop_sse_reader
+
+    session.initialized = False
+    session.session_id = None
+    session.sse_messages_url = None
+    await stop_sse_reader(session)
 
 
 async def shutdown_all() -> None:
@@ -291,53 +307,6 @@ async def _read_json_response(
     )
 
 
-async def _ensure_sse_endpoint(session: UpstreamSession, connect_timeout: float) -> str:
-    if session.sse_messages_url:
-        return session.sse_messages_url
-    assert session.client is not None
-    headers = {**session.headers, "Accept": "text/event-stream"}
-    try:
-        async with session.client.stream(
-            "GET",
-            session.url,
-            headers=headers,
-            timeout=connect_timeout,
-        ) as response:
-            if response.status_code == 401:
-                raise UpstreamError(-32001, "upstream SSE 401; re-authenticate", needs_reauth=True)
-            if response.status_code >= 400:
-                raise UpstreamError(-32000, f"upstream SSE HTTP {response.status_code}")
-            event_type = ""
-            data_lines: list[str] = []
-            base = f"{urlparse(session.url).scheme}://{urlparse(session.url).netloc}"
-            async for line in response.aiter_lines():
-                if line.startswith("event:"):
-                    event_type = line[6:].strip()
-                elif line.startswith("data:"):
-                    data_lines.append(line[5:].strip())
-                elif line == "" and data_lines:
-                    data = "\n".join(data_lines)
-                    data_lines = []
-                    if event_type == "endpoint" or "sessionId" in data or data.startswith("/"):
-                        path = data.split("sessionId=")[-1] if "sessionId=" in data else data
-                        if data.startswith("/") or data.startswith("http"):
-                            session.sse_messages_url = (
-                                data if data.startswith("http") else urljoin(base, data.split("\n")[0])
-                            )
-                        else:
-                            session.sse_messages_url = urljoin(
-                                base, f"/messages?sessionId={path}"
-                            )
-                        session.session_id = path if "sessionId=" in data else session.session_id
-                        return session.sse_messages_url
-                    event_type = ""
-            raise UpstreamError(-32000, "upstream SSE: no endpoint event received")
-    except httpx.TimeoutException as exc:
-        raise UpstreamError(-32003, "upstream SSE connect timeout") from exc
-    except httpx.HTTPError as exc:
-        raise UpstreamError(-32000, f"upstream SSE error: {exc}") from exc
-
-
 async def _post_streamable_http(
     session: UpstreamSession,
     message: dict[str, Any],
@@ -424,37 +393,6 @@ async def _post_streamable_http(
         raise UpstreamError(-32000, f"upstream HTTP error: {exc}") from exc
 
 
-async def _post_sse(
-    session: UpstreamSession,
-    message: dict[str, Any],
-    connect_timeout: float,
-    method_timeout: float,
-    msg_id: int | str | None,
-) -> dict[str, Any]:
-    messages_url = await _ensure_sse_endpoint(session, connect_timeout)
-    assert session.client is not None
-    headers = {**session.headers, "Content-Type": "application/json"}
-    started = time.time()
-    try:
-        response = await session.client.post(
-            messages_url,
-            json=message,
-            headers=headers,
-            timeout=method_timeout,
-        )
-    except httpx.TimeoutException as exc:
-        raise UpstreamError(-32003, "upstream SSE POST timeout") from exc
-    except httpx.HTTPError as exc:
-        raise UpstreamError(-32000, f"upstream SSE POST error: {exc}") from exc
-    return await _read_json_response(
-        response,
-        transport=session.transport,
-        msg_id=msg_id,
-        session=session,
-        started=started,
-    )
-
-
 async def _initialize_session(
     session: UpstreamSession, connect_timeout: float, init_timeout: float
 ) -> None:
@@ -475,7 +413,9 @@ async def _initialize_session(
     if session.transport == "streamable-http":
         await _post_streamable_http(session, init_msg, init_timeout, "_agent_init")
     elif session.transport == "sse":
-        await _post_sse(session, init_msg, connect_timeout, init_timeout, "_agent_init")
+        from agent.sse_manager import send_sse_jsonrpc
+
+        await send_sse_jsonrpc(session, init_msg, connect_timeout, init_timeout, "_agent_init")
     # Best-effort notifications/initialized (a notification — no response expected).
     try:
         notif = {"jsonrpc": "2.0", "method": "notifications/initialized"}
@@ -547,18 +487,23 @@ async def send_upstream_jsonrpc(
         message["params"] = params
 
     async def _dispatch() -> dict[str, Any]:
-        # Auto-handshake: initialize the upstream session on first real method
-        # (streamable-http/sse only; websocket manages its own handshake).
+        # Auto-handshake: initialize the upstream session on first real method.
+        # streamable-http ONLY — SSE establishes its session via the GET event-stream
+        # endpoint event in `_ensure_sse_endpoint`; websocket manages its own.
         if (
             not session.initialized
-            and transport in ("streamable-http", "sse")
+            and transport == "streamable-http"
             and method not in ("initialize", "notifications/initialized")
         ):
             await _initialize_session(session, connect_timeout, init_timeout)
         if transport == "streamable-http":
             r = await _post_streamable_http(session, message, method_timeout, msg_id)
         elif transport == "sse":
-            r = await _post_sse(session, message, connect_timeout, method_timeout, msg_id)
+            from agent.sse_manager import send_sse_jsonrpc
+
+            r = await send_sse_jsonrpc(
+                session, message, connect_timeout, method_timeout, msg_id
+            )
         else:
             from agent.ws_manager import send_ws_jsonrpc
 
@@ -581,8 +526,7 @@ async def send_upstream_jsonrpc(
                 and "session" in str(getattr(exc, "message", exc)).lower()
             ):
                 LOG.info("upstream session rejected (%s) — re-initializing and retrying", server_slug)
-                session.initialized = False
-                session.session_id = None
+                await _invalidate_upstream_session(session)
                 try:
                     return await _dispatch()
                 except UpstreamError as exc2:
