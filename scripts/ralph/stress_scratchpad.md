@@ -897,6 +897,26 @@
         REVISED TALLY: 7 confirmed-live leaks fixed (G40 streaming buffer-limit; G41-G43 exfil-URL family;
         G44-G46 md-split/semantic-span — all confirmed on live paths) + G48 defense-in-depth (aresponses
         method) + two documented design tradeoffs (tier-2 FP; G47 system-message).
+      EMBEDDINGS / RAG PII-PERSISTENCE AUDIT 2026-07-02 (highest-stakes lead: PII persisted to a vector
+      store) — VERIFIED ROBUST, no gap:
+        /v1/embeddings (proxy_embeddings): validates input shape (string OR list-of-strings; token-array
+        inputs rejected 400 as unscannable), normalizes BOTH forms to _emb_texts (line 9107), scans+redacts
+        each via _scan_redact_embedding_inputs (tier-1 scan_prompt + redact_pii + _redact_text_with_backstop,
+        with BYTE-VERIFY FAIL-CLOSED at 3221: PII detected but redaction no-op -> block), and WRITES THE
+        REDACTED TEXTS BACK to body["input"] (line 9144) before forwarding — so no raw PII reaches the
+        embedding provider. Unlike aresponses (G48) which had a str-only gap, this handles both forms.
+        RAG-ingest (line 10513): per-doc redact; unmaskable-PII docs SKIPPED (not embedded/stored);
+        doc_strings replaced with the REDACTED docs (10531); metadata VALUES redacted via
+        _scan_redact_metadata (10530) at the same input_scan_enabled gate; only the CLEANED docs are
+        embedded+upserted (10547). So the vector store persists ONLY redacted content+metadata.
+        EVIDENCE: existing E10/E11 hardening is well-tested — 53 green across test_e10_embeddings_scan,
+        test_e10_query_redaction, test_e11_retrieved_redaction, test_vector_upsert_scan_redact,
+        test_embedding_input_redaction, test_egress_wire_capture (incl. test_embedding_egress_wire_has_no_
+        raw_pii — byte-level egress assertion). No new leak; the persisted-PII class is well-defended.
+        AUDIT COVERAGE STATUS: leak surface now audited across output-exfil (G40-G43), output-PII-
+        obfuscation (G44-G46), streaming-parity (G45/G46, complete), multi-turn+system (G47 tradeoff),
+        Responses input+streaming (safe), embeddings+RAG persist (safe). 7 confirmed-live leaks fixed +
+        G48 defense-in-depth + 2 documented tradeoffs.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
