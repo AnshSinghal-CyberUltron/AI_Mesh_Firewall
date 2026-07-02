@@ -144,3 +144,8 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   in-gateway (`mcp_ws_adapter.py:135 websockets.client.connect`, not migrated to broker) — so the
   "4-transport isolation active" claim overstates (3/4; ws not sandboxed, but no ws servers live). REMAINING:
   migrate ws to broker or document ws as legacy; independent live http-via-sandbox drive.
+- **CHG-0019** (2026-07-02) — item 21 (frontend): fixed a BROKEN mojibake fix. PolicyManagementPanel.jsx:399
+  Actor Scope header had literal `·` in raw JSX text (renders the string `·`, not `·`). A fe-harden
+  session's mojibake fix was itself broken (JSX doesn't interpret escapes in text nodes). Changed to
+  `{'·'}` (JS expr → renders `·`, pure-ASCII source). `npm run build` ✓. Remaining item 21 (fe-harden):
+  redact badge/StatCard/Playwright coverage.

@@ -596,3 +596,22 @@ the prod compose/manifests is tracked under G3 item 12.
   `/{org}/rpc` route already handles ws) OR document ws as an unsupported/legacy transport; then the
   "4-transport in sandbox" claim is fully accurate. Also worth an independent LIVE http-via-sandbox drive
   (register a streamable-http server + assert 0 direct upstream dials) beyond the owning session's harness.
+
+### CHG-0019 — Fix a broken mojibake "fix": Actor Scope header rendered a literal `·` (G2 frontend, item 21)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G6 item 21 (MCP panels reflect 1.4) — the mojibake sub-finding; corrects a broken fix.
+- **Files:** `frontend/src/components/PolicyManagementPanel.jsx:399`.
+- **WHAT:** The per-actor "Actor Scope" section header separator was the six literal characters `·` in
+  RAW JSX text (`Advanced · Actor Scope (MCP only)`). JSX does NOT interpret unicode escapes in text
+  nodes, so it rendered the literal string `·`, not `·`. Changed to `{'·'}` — a JS expression whose
+  string value IS the middot, so it renders `·` (and is pure-ASCII in source, so it can't re-mojibake).
+- **WHY (mistake):** BACKSTOP_FINDINGS item 21 originally flagged a mojibake `Â·` (mis-decoded UTF-8) here.
+  A fe-harden session "fixed" it to `·` — but in JSX text that is itself broken (renders the escape
+  literally). This corrects the broken fix.
+- **NOW DOES:** the Actor Scope header renders `Advanced · Actor Scope (MCP only)`.
+- **Touched whose work:** corrects a fe-harden frontend edit (they own the panel); narrow single-line change.
+- **VERIFY:** `sed -n '399p' frontend/src/components/PolicyManagementPanel.jsx` → contains `{'·'}`;
+  `cd frontend && npm run build` → `✓ built` (3523 modules, no errors).
+- **REMAINING for item 21 (owned by fe-harden):** the larger 1.4 surfaces — explicit redact signal +
+  Redact badge/field list on execute, Redact StatCard under-count, Playwright gate covering tags/actor/
+  redaction (BACKSTOP_FINDINGS item 21 MEDIUM/OMISSION rows).

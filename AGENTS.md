@@ -84,6 +84,8 @@
     P4.13/P6.18 (gateway routes stdio + streamable-http/sse via sandbox `broker_send_rpc`, never dials
     upstream; MCP_HTTP_VIA_SANDBOX=true live). RESIDUAL: websocket still in-gateway (mcp_ws_adapter.py:135),
     so "4-transport" overstates (3/4; ws unused live). Remaining: migrate ws to broker or mark ws legacy.
+  - CHG-0019 (2026-07-02) — item 21 (frontend): fixed a BROKEN mojibake fix at PolicyManagementPanel.jsx:399
+    (literal `·` in raw JSX text rendered the string, not `·`); now `{'·'}`. npm run build ✓.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

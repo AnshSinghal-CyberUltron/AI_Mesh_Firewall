@@ -202,6 +202,12 @@
 
 ## G6 — Frontend (strictly; log edits to owned panels)
 - [ ] 21. MCP panels reflect 1.4 (tags, per-actor tool controls, redaction indicators), real data, no leak, both themes.
+      CHG-0019 (2026-07-02): fixed the mojibake sub-finding — PolicyManagementPanel.jsx:399 Actor Scope
+      header had literal `·` in raw JSX text (a fe-harden mojibake "fix" that was itself broken — JSX
+      doesn't interpret escapes in text nodes, so it rendered the literal string). Now `{'·'}` (JS expr
+      → renders `·`, pure-ASCII source). npm run build ✓. REMAINING (owned by fe-harden): explicit redact
+      signal from tools/call + Redact badge + redacted-field list on execute; fix Redact StatCard
+      under-count; extend Playwright gate to cover tags/actor/redaction; both themes.
 
 ## G7 — Recursive verification
 - [ ] 22. Re-run G2–G6 end-to-end 3×; adversarial pass; Ruflo consensus green. Only then <promise>COMPLETE</promise>.

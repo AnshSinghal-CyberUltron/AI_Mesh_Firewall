@@ -396,7 +396,7 @@ function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, erro
             return (
               <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
                 <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  Advanced \u00b7 Actor Scope (MCP only)
+                  Advanced {'\u00b7'} Actor Scope (MCP only)
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-2">
                   Restrict who this policy applies to. Leave empty to apply to everyone.
