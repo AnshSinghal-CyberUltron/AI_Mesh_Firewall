@@ -145,6 +145,14 @@
     run. Files scripts/mcp_live_matrix_harness.py + scripts/test_mcp_live_matrix_oracle.py (+3 oracle tests →
     8 passed). Backward-compat: unset DENY_TOOL_NAME → 5-agent redaction matrix unchanged. REMAINING: live
     peak run (5k-10k, item 15) with a real denied tool + tag-enforcement MCPEvent audit under load.
+  - CHG-0029 (2026-07-02) — G5 harness quality: hardened the mcp_pipeline_matrix_live.py oracle. It was
+    leak-blind (pii = _SSN in text — ONE hardcoded SSN in ONLY result.content[0].text, so a redact-but-forward
+    in a later content item / structuredContent / nested field / any non-SSN value passed as redacted) and
+    import-unsafe (KEY/argv/asyncio.run at module scope). Now find_pii_in_body() scans the FULL serialized
+    response for the case's ACTUAL sensitive values (case_sensitive_values: explicit case['pii'] or SSN
+    fallback); redacted = allow + no raw value anywhere + a marker (byte-truth); module import-safe. +8 unit
+    tests (scripts/test_mcp_pipeline_oracle.py); all 4 scripts oracle suites → 25 passed. Same class of fix as
+    CHG-0009 (dead oracle) + CHG-0012 (no byte-check).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

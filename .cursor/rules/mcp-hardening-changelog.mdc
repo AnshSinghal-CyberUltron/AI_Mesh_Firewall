@@ -234,3 +234,14 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   scripts/test_mcp_live_matrix_oracle.py (+3 → 8 oracle tests passed). Backward-compat: unset DENY_TOOL_NAME
   → the 5-agent redaction matrix runs unchanged. REMAINING for item 20: run the full matrix LIVE at true peak
   (5k-10k, item 15) with a real denied-but-existing tool + a tag-enforcement MCPEvent audit under load.
+- **CHG-0029** (2026-07-02) — G5 harness quality: hardened the `mcp_pipeline_matrix_live.py` oracle (the other
+  harness the mandate names). It was leak-blind — `pii = _SSN in text` checked ONE hardcoded SSN in ONLY
+  `result.content[0].text`, so a redact-but-forward in a later content item / `structuredContent` / nested
+  field / any non-SSN value passed as `redacted` or `allow` (a silent false-green) — and import-unsafe
+  (`KEY`/`argv`/`asyncio.run` at module scope, so the oracle couldn't be unit-tested). Now `find_pii_in_body`
+  substring-scans the FULL serialized response for the case's ACTUAL sensitive values (`case_sensitive_values`:
+  explicit `case['pii']` or SSN-in-args fallback); `redacted` = allowed + NO raw value anywhere + a redaction
+  marker (byte-truth, so a non-echoing tool isn't mistaken for a redaction); `pass_pii` = allowed + a raw value
+  present; the module is import-safe. Files: scripts/mcp_pipeline_matrix_live.py (rewritten),
+  scripts/test_mcp_pipeline_oracle.py (+8). Gate: 8 pipeline-oracle tests; all 4 scripts oracle suites → 25
+  passed. Same class of defect as CHG-0009 (dead cross-tenant oracle) + CHG-0012 (no response-byte check).

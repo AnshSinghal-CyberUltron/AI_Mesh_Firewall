@@ -295,6 +295,16 @@
       matrix LIVE at TRUE peak (5k-10k, item 15) with a real denied-but-existing tool as DENY_TOOL_NAME (needs
       a dedicated host + a per-key allowlist/disabled-tool setup, not safe to configure unilaterally on shared
       state); (b) tag-enforcement-under-load audit = query MCPEvents for compliance_tags at load (per CHG-0017).
+      CHG-0029 (2026-07-02): hardened the OTHER named harness — mcp_pipeline_matrix_live.py. It was leak-blind
+      (pii = _SSN in text: ONE hardcoded SSN in ONLY result.content[0].text, so a redact-but-forward in a later
+      content item / structuredContent / nested field / any non-SSN value passed as redacted — false-green
+      under load) and import-unsafe (KEY/argv/asyncio.run at module scope). Now find_pii_in_body() scans the
+      FULL serialized response for the case's ACTUAL sensitive values (case_sensitive_values: explicit
+      case['pii'] or SSN fallback); redacted = allow + no raw value anywhere + a marker (byte-truth);
+      import-safe. +8 unit tests (scripts/test_mcp_pipeline_oracle.py); all 4 scripts oracle suites -> 25
+      passed. Same class of fix as CHG-0009 (dead oracle) + CHG-0012 (no byte-check). The LIVE pipeline run at
+      scale (epochs × cases × REPEAT) still needs the dedicated-host stress env (items 14-18); this makes its
+      verdicts trustworthy.
 
 ## G6 — Frontend (strictly; log edits to owned panels)
 - [ ] 21. MCP panels reflect 1.4 (tags, per-actor tool controls, redaction indicators), real data, no leak, both themes.

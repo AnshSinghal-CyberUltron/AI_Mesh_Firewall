@@ -948,3 +948,36 @@ the prod compose/manifests is tracked under G3 item 12.
   item 15) with a real denied-but-existing tool as `DENY_TOOL_NAME`; add a tag-enforcement-under-load audit
   (query MCPEvents for compliance_tags at load, per CHG-0017) — both need a dedicated host / live policy
   setup.
+
+### CHG-0029 — Harden the mcp_pipeline_matrix_live oracle (leak-blind + import-unsafe → byte-truth + testable)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G5 stress harness quality (the mandate names `mcp_pipeline_matrix_live.py`). A harness
+  whose leak oracle can't see a leak gives false-green stress runs — the same class of defect corrected for
+  the other harnesses in CHG-0009 (dead cross-tenant oracle) and CHG-0012 (no response-byte check).
+- **Files:** `scripts/mcp_pipeline_matrix_live.py` (rewritten: byte-truth oracle + import-safe);
+  `scripts/test_mcp_pipeline_oracle.py` (new, +8 tests).
+- **WHAT:** the old oracle was narrow and leak-blind — `pii = _SSN in text` checked ONLY one hardcoded SSN in
+  ONLY `result.content[0].text`, so a redact-but-forward in a later content item, in `structuredContent`, in a
+  nested field, or with ANY non-SSN sensitive value passed as `redacted`/`allow` (a silent leak). It also read
+  `KEY = os.environ["GATEWAY_KEY"]` + `CASES = sys.argv[1]` + `asyncio.run()` at module scope, so the oracle
+  could not be imported/unit-tested. Now: (1) `find_pii_in_body(body, sensitive)` substring-scans the ENTIRE
+  serialized response (egress bytes = the only source of truth) for the case's ACTUAL sensitive values;
+  (2) `case_sensitive_values(case)` derives them from an explicit `case["pii"]` list (else falls back to the
+  canonical SSN in args, backward-compat); (3) `matches` treats `redacted` as byte-truth — allowed AND no raw
+  value anywhere AND a redaction marker present (so a non-echoing tool isn't mistaken for a redaction), and
+  `pass_pii` as allowed AND a raw value actually present; (4) the module is import-safe (env/argv/`asyncio.run`
+  moved under `main()`/`__main__`), and the driver threads `url`/`key`/`cases` as args.
+- **WHY:** a stress harness that classifies a leak as `redacted` produces false-green under-load evidence —
+  precisely what item 20 must NOT do; the oracle must be independent of the scanner's own verdict and inspect
+  the full egress.
+- **NOW DOES:** the pipeline matrix FAILS a case whenever the sent sensitive value survives ANYWHERE in the
+  response (not just the first content item), across all repeats/concurrency; the oracle is unit-tested.
+- **Touched whose work:** the stress-harness set (prior backstop CHG-0009/0012/0028). No gateway/app code.
+- **VERIFY:** `gateway/.venv/bin/python -m pytest scripts/test_mcp_pipeline_oracle.py -q` → 8 passed (incl.
+  `test_find_pii_in_body_scans_whole_response_not_just_first_content` — a leak in content[1]+structuredContent
+  is caught; `test_matches_redacted_is_byte_truth` — a redact-but-forward is NOT counted as redacted). All
+  scripts oracle suites: `pytest scripts/test_mcp_pipeline_oracle.py scripts/test_mcp_live_matrix_oracle.py
+  scripts/test_mcp_scale_oracle.py scripts/test_mcp_scale_provision.py -q` → 25 passed. `import
+  mcp_pipeline_matrix_live` succeeds with no GATEWAY_KEY/argv.
+- **REMAINING:** the LIVE pipeline run at scale (epochs × cases × REPEAT) is still gated on the dedicated-host
+  stress environment (items 14–18); this change makes its verdicts trustworthy when it does run.
