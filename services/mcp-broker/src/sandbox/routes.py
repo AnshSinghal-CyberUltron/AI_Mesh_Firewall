@@ -17,6 +17,15 @@ from sandbox.docker_health import cached_docker_ok
 from sandbox.docker_manager import DockerManager, SandboxContainerInfo
 
 _AGENT_TIMEOUT = float(os.environ.get("MCP_BROKER_AGENT_TIMEOUT", "130"))
+# Cold-start agent-readiness window. A freshly (re)started sandbox container
+# reports "running" as soon as its PID-1 process starts, but the in-container
+# HTTP agent takes a beat to bind its socket. Without tolerating that window the
+# very first RPC after a cold start raises a connection error -> broker 502 ->
+# gateway surfaces "MCP sandbox is temporarily unavailable" (bug #4). Retry the
+# agent POST with bounded backoff, re-ensuring between attempts.
+_AGENT_READY_RETRIES = int(os.environ.get("MCP_SANDBOX_AGENT_READY_RETRIES", "8"))
+_AGENT_READY_BASE_DELAY = float(os.environ.get("MCP_SANDBOX_AGENT_READY_BASE_DELAY", "0.4"))
+_AGENT_READY_MAX_DELAY = float(os.environ.get("MCP_SANDBOX_AGENT_READY_MAX_DELAY", "2.0"))
 
 
 class EnsureRequest(BaseModel):
@@ -101,19 +110,36 @@ async def _post_agent_rpc(
     payload: dict[str, Any],
     timeout: float,
 ) -> httpx.Response:
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            return await client.post(agent_url, json=payload)
-    except httpx.HTTPError as first_exc:
+    """POST one RPC to the sandbox agent, tolerating the cold-start boot window.
+
+    On a connection error (agent socket not yet bound after a fresh/idle
+    container start) we re-ensure the container — restarting it if it was reaped
+    — refresh the agent URL, back off, and retry, up to a bounded number of
+    attempts. Only transport errors are retried; a real HTTP response (any
+    status) is returned to the caller unchanged.
+    """
+    url = agent_url
+    last_exc: httpx.HTTPError | None = None
+    for attempt in range(1, _AGENT_READY_RETRIES + 1):
         try:
-            info = await asyncio.to_thread(docker_manager.ensure, org_slug)
-        except Exception:
-            raise first_exc from None
-        if info.status != "running" or not info.agent_url:
-            raise first_exc from None
-        refreshed = f"{info.agent_url.rstrip('/')}/rpc"
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            return await client.post(refreshed, json=payload)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                return await client.post(url, json=payload)
+        except httpx.HTTPError as exc:
+            last_exc = exc
+            if attempt >= _AGENT_READY_RETRIES:
+                break
+            # Re-ensure to (re)start a stopped/crashed container and refresh the
+            # agent URL, then wait for the agent to finish binding.
+            try:
+                info = await asyncio.to_thread(docker_manager.ensure, org_slug)
+                if info.status == "running" and info.agent_url:
+                    url = f"{info.agent_url.rstrip('/')}/rpc"
+            except Exception:
+                pass
+            delay = min(_AGENT_READY_BASE_DELAY * attempt, _AGENT_READY_MAX_DELAY)
+            await asyncio.sleep(delay)
+    assert last_exc is not None
+    raise last_exc
 
 
 def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:

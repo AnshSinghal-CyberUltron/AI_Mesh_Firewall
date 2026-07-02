@@ -167,22 +167,26 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 
+CONTROL_MANAGE_PY="/app/control/manage.py"
+
 echo "==> Control + migrations"
 "${COMPOSE[@]}" up -d --no-build control
 for _ in $(seq 1 45); do
   curl -sf "http://127.0.0.1:8100/api/health/" >/dev/null 2>&1 && break
   sleep 2
 done
-"${COMPOSE[@]}" exec -T control python manage.py migrate --noinput
+curl -sf "http://127.0.0.1:8100/api/health/" >/dev/null 2>&1 \
+  || die "control not healthy on :8100 — check: ${COMPOSE[*]} logs control --tail=80"
+"${COMPOSE[@]}" exec -T control python "${CONTROL_MANAGE_PY}" migrate --noinput
 
 if [[ "${SKIP_ADMIN:-}" != "1" ]]; then
-  "${COMPOSE[@]}" exec -T control python manage.py ensure_zeroshield_admin \
+  "${COMPOSE[@]}" exec -T control python "${CONTROL_MANAGE_PY}" ensure_zeroshield_admin \
     ${ZEROSHIELD_ADMIN_PASSWORD:+--password "$ZEROSHIELD_ADMIN_PASSWORD"} || true
 fi
 
 if [[ "${SKIP_PII_SEED:-}" != "1" ]] && [[ -n "${SEED_PII_POLICY_ORG_SLUG:-}" ]]; then
   echo "==> PII policy package (org slug=${SEED_PII_POLICY_ORG_SLUG})"
-  "${COMPOSE[@]}" exec -T control python manage.py seed_pii_policy_package \
+  "${COMPOSE[@]}" exec -T control python "${CONTROL_MANAGE_PY}" seed_pii_policy_package \
     --org-slug "${SEED_PII_POLICY_ORG_SLUG}" \
     ${RESET_PII_SEED:+--reset} || true
 fi

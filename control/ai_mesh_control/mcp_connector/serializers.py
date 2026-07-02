@@ -164,6 +164,29 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
         auth_type = (_val("auth_type", "none") or "none").strip().lower()
         attrs["auth_type"] = auth_type
 
+        # Transport-aware OAuth guard (fixes MCP OAuth bugs #1 dup-UI / #2
+        # "Server has no URL"). OAuth 2.1 authorization-code flow is HTTP-only:
+        # it runs RFC 9728/8414 discovery + token injection against an HTTP MCP
+        # endpoint URL. stdio servers (incl. Linear via `mcp-remote`) authorize
+        # upstream INSIDE the gateway sandbox — their auth_type stays "none" and
+        # the gateway-side device flow handles OAuth. Persisting auth_type="oauth"
+        # on a stdio/websocket (URL-less) row creates an "oauth" server the UI
+        # renders a SECOND, broken authorize button for, which 400s with
+        # "Server has no URL" when clicked. Reject it at the registration
+        # boundary so the invalid state can never exist.
+        if auth_type == "oauth" and transport not in ("streamable-http", "sse"):
+            raise serializers.ValidationError(
+                {
+                    "auth_type": (
+                        "OAuth 2.1 (authorize via provider) requires an HTTP MCP "
+                        "transport (streamable-http or sse) with a URL. For stdio "
+                        "servers such as Linear via mcp-remote, upstream OAuth is "
+                        "handled automatically by the gateway sandbox — leave the "
+                        "auth type as 'none'."
+                    )
+                }
+            )
+
         if auth_type == "bearer" and not attrs.get("auth_token"):
             raise serializers.ValidationError({"auth_token": "auth_token is required for bearer auth."})
         if auth_type == "basic" and (not attrs.get("auth_username") or not attrs.get("auth_password")):

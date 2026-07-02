@@ -73,17 +73,16 @@ services:
     build:
       context: .
       dockerfile: control/Dockerfile
-    # The image WORKDIR is /app/control, but the Django project (manage.py +
-    # main_app/) lives one level deeper at /app/control/ai_mesh_control. Pin
-    # working_dir there so the image Cmd `daphne main_app.asgi:application`
-    # (and `docker exec ... manage.py`) can import main_app. Without this the
-    # container exits with ModuleNotFoundError: No module named 'main_app'.
-    working_dir: /app/control/ai_mesh_control
+    # Image WORKDIR is /app/control; manage.py lives there. Django code (main_app/)
+    # is under ai_mesh_control/ and is on PYTHONPATH (set in control/Dockerfile).
+    working_dir: /app/control
     ports: ["8100:8000"]
     env_file:
       - .env
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
+      # .env may set gateway PYTHONPATH — override so gunicorn/daphne resolve main_app.
+      PYTHONPATH: /app/shared:/app/control/ai_mesh_control
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
       REDIS_URL: redis://redis:6379/0
       CHANNEL_LAYERS_REDIS_URL: redis://redis:6379/1

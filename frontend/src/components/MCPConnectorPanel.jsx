@@ -564,7 +564,23 @@ function MCPConnectorPanelInner() {
         throw new Error(body.detail || body.error || `HTTP ${res.status}`);
       }
       await loadServers();
-      toast(`Registered "${preset.name}"`, { tone: "success" });
+      // Bug #3: an OAuth-required preset must not look "done" on register — the
+      // operator has to authorize before it becomes usable. Direct them to the
+      // Authorize action instead of a plain "Registered" success.
+      const presetNeedsOAuth =
+        (preset.transport === "stdio" &&
+          (preset.args || []).some(
+            (a) => a === "mcp-remote" || (typeof a === "string" && a.endsWith("/mcp-remote"))
+          )) ||
+        preset.suggestedAuthType === "oauth";
+      if (presetNeedsOAuth) {
+        toast(`Registered "${preset.name}" — click Authorize to activate`, { tone: "success" });
+        setError(
+          `"${preset.name}" requires authorization. Click "Authorize" on its card to complete OAuth before syncing tools.`
+        );
+      } else {
+        toast(`Registered "${preset.name}"`, { tone: "success" });
+      }
     } catch (e) {
       setError(`Preset registration failed: ${e.message}`);
       toast(`Preset registration failed: ${e.message}`, { tone: "error" });
@@ -691,11 +707,54 @@ function MCPConnectorPanelInner() {
 
   /* ── Upstream OAuth helpers ── */
 
-  /** Check whether a server uses mcp-remote (needs OAuth authorization). */
+  /** Check whether a server uses mcp-remote (needs gateway-side OAuth authorization). */
   const serverNeedsOAuth = (srv) =>
     srv.transport === "stdio" &&
     Array.isArray(srv.args) &&
     srv.args.some((a) => a === "mcp-remote" || (typeof a === "string" && a.endsWith("/mcp-remote")));
+
+  /**
+   * Whether a server is eligible for the control-plane OAuth 2.1 flow
+   * (startControlOAuth). OAuth 2.1 authorization-code is HTTP-only — it needs an
+   * HTTP MCP endpoint URL for RFC 9728/8414 discovery. Guarding on transport+URL
+   * here (in addition to the backend serializer reject) is defense-in-depth:
+   * even a legacy/invalid stdio row with auth_type="oauth" must NEVER surface the
+   * control authorize button (which 400s "Server has no URL") — that dup/broken
+   * button is MCP OAuth bugs #1/#2. Mutually exclusive with serverNeedsOAuth,
+   * which only fires for stdio.
+   */
+  const serverUsesHttpOAuth = (srv) =>
+    srv.auth_type === "oauth" &&
+    !!srv.url &&
+    (srv.transport === "streamable-http" || srv.transport === "sse");
+
+  /**
+   * A server that requires OAuth but has not completed it yet — it must be
+   * AUTHORIZED before it is usable (fixes bug #3: freshly-registered OAuth
+   * servers showing up as a generic "0 tools / Unknown" card that misleads the
+   * operator into syncing before auth). Two tracked cases:
+   *  - HTTP OAuth 2.1 (auth_type="oauth"): control persists oauth_authorized.
+   *  - stdio mcp-remote (Linear): the token lives gateway-side, so the control
+   *    row has no oauth_authorized flag — treat "never synced, no tools, not
+   *    connected" as awaiting authorization.
+   */
+  const serverAwaitingAuth = (srv) => {
+    if (srv.auth_type === "oauth") return !srv.oauth_authorized;
+    if (serverNeedsOAuth(srv)) {
+      return (srv.tools_count ?? 0) === 0 && srv.connection_status !== "connected";
+    }
+    return false;
+  };
+
+  /**
+   * Whether the manual "Sync tools" action must be blocked pending auth. Only
+   * gated for the TRACKABLE http-oauth case (startControlOAuth auto-syncs on
+   * success, so a pre-auth manual sync is always a wasted, failing call). stdio
+   * mcp-remote is intentionally NOT gated — its tokens are gateway-side and a
+   * post-authorize sync is exactly how its tools get discovered, so gating it
+   * would deadlock (no control-row signal ever flips).
+   */
+  const syncBlockedForAuth = (srv) => srv.auth_type === "oauth" && !srv.oauth_authorized;
 
   /** Extract the MCP server URL from mcp-remote args. */
   const extractMcpRemoteUrl = (args) => {
@@ -1033,6 +1092,9 @@ function MCPConnectorPanelInner() {
                   <Badge variant={risk}>{srv.risk_level} risk</Badge>
                 )}
                 {srv.needs_reauth && <Badge variant="warning">needs re-auth</Badge>}
+                {!srv.needs_reauth && serverAwaitingAuth(srv) && (
+                  <Badge variant="warning">authorization required</Badge>
+                )}
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-all">{srv.url}</p>
               {srv.description && <p className="text-xs text-slate-400 mt-0.5">{srv.description}</p>}
@@ -1115,7 +1177,7 @@ function MCPConnectorPanelInner() {
                   </Button>
                 </Tooltip>
               )}
-              {srv.auth_type === "oauth" && (
+              {serverUsesHttpOAuth(srv) && (
                 <Tooltip
                   content={srv.oauth_authorized
                     ? "Re-authorize OAuth 2.1 — opens provider consent popup"
@@ -1133,14 +1195,20 @@ function MCPConnectorPanelInner() {
                   </Button>
                 </Tooltip>
               )}
-              <Tooltip content="Sync tools from server">
+              <Tooltip
+                content={
+                  syncBlockedForAuth(srv)
+                    ? "Authorize this server before syncing tools"
+                    : "Sync tools from server"
+                }
+              >
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
                   aria-label="Sync tools from server"
                   onClick={() => syncServerTools(srv.id)}
-                  disabled={syncingServer === srv.id}
+                  disabled={syncingServer === srv.id || syncBlockedForAuth(srv)}
                 >
                   {syncingServer === srv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 </Button>
@@ -1310,7 +1378,19 @@ function MCPConnectorPanelInner() {
               <label className="block text-sm font-medium mb-1">Transport</label>
               <Select
                 value={addForm.transport}
-                onChange={(e) => setAddForm({ ...addForm, transport: e.target.value })}
+                onChange={(e) => {
+                  const nextTransport = e.target.value;
+                  const httpOAuth =
+                    nextTransport === "streamable-http" || nextTransport === "sse";
+                  setAddForm((prev) => ({
+                    ...prev,
+                    transport: nextTransport,
+                    // OAuth 2.1 is HTTP-only (bugs #1/#2): drop it when switching
+                    // to a non-HTTP transport so we never build a stdio+oauth row.
+                    auth_type:
+                      prev.auth_type === "oauth" && !httpOAuth ? "none" : prev.auth_type,
+                  }));
+                }}
                 aria-label="Transport"
               >
                 {TRANSPORT_OPTIONS.map((t) => (
@@ -1400,7 +1480,12 @@ function MCPConnectorPanelInner() {
                 onChange={(e) => setAddForm({ ...addForm, auth_type: e.target.value })}
                 aria-label="Upstream authentication type"
               >
-                {AUTH_OPTIONS.map((opt) => (
+                {AUTH_OPTIONS.filter(
+                  (opt) =>
+                    opt.value !== "oauth" ||
+                    addForm.transport === "streamable-http" ||
+                    addForm.transport === "sse"
+                ).map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </Select>
