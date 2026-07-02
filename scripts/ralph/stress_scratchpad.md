@@ -112,6 +112,17 @@
         card doesn't mount); full R6 visual verification needs R5 live traffic. Login dev-default works when
         control is healthy. ModelConnectionPanel.jsx is 1140 lines w/ 61 interactive els / 22 aria attrs —
         broader a11y sweep is a candidate future R6 increment (large shared-design file, edit carefully).
+      G26 DONE 2026-07-02: compound obfuscation base64∘(zero-width|unicode-tags). A base64-wrapped payload
+        whose plaintext is zero-width-interspersed or fully tag-encoded decoded to a "not printable" (all/
+        mostly Cf) string, so the transport-decode printability gate DROPPED it before rescanning (b64(zw inj)
+        -> allow; b64(zw SSN)/b64(tag email) -> undetected). Fixed in scanner._nested_decode_variants +
+        patterns._decode_one: judge printability on the CANONICAL form (tags decoded, ZW stripped, homoglyph
+        folded); detect_pii/detect_secrets/_redact_obfuscated transport loops also match the canonical decode
+        so the OUTER blob is masked. Binary garbage still dropped; FP floor holds. 7 golden frozen. Full
+        gateway 1077 passed; golden 144 passed/7 skipped 3x.
+      R5 STATUS 2026-07-02: control auth is RATE-LIMITED (429) after repeated logins + the Playwright JWT
+        expired -> R5 (connect models + run corpus) transiently blocked this session. Retry when the auth
+        rate-limit clears (dev creds admin@zeroshield.io / Adm1n!Pass#2024; OpenRouter base https://openrouter.ai/api/v1).
       G25 DONE 2026-07-02: additional PII-type coverage. detect_pii missed MAC addresses (device IDs) and
         government/national IDs (passport/Aadhaar/UK NINO/driver's licence). Fixed in patterns.py PII_PATTERNS:
         mac_address (distinctive 6-hex-pair format, low FP) + cue-gated government_id (cue word + bounded
