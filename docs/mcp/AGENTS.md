@@ -34,6 +34,11 @@ subsystem map you need. Every anchor was read from the tree and spot-verified wh
   mcp-remote is the legit gateway-owned-OAuth exception. ≤1 Authorize button; fresh oauth = pending badge
   not 0-tools card. B1 remaining = delete/hard-gate the reachable control authorize path (views.py:2513
   "Server has no URL" + guard-bypass); recommend unifying HTTP-oauth onto the gateway path.
+- `oss-research-npm-untrusted-checklist.md` — the npm/Node **supply-chain** layer (N1–N7) for P7 #22–23:
+  `npx`/`uvx` runs postinstall RCE + fetches unpinned-latest before the server starts (Shai-Hulud vector).
+  Verified path asymmetry (gateway path has allowlist+pin default-OFF; broker path has neither; neither sets
+  `npm_config_ignore_scripts`/registry). Layer-A controls sit on top of item-#9's Layer-B container
+  containment. P7 acceptance = malicious-postinstall fixture proven inert via the #30 egress capture.
 - `oss-research-docker-hardening.md` — sourced Docker multi-tenant hardening checklist (OWASP/gVisor/
   Docker AI-sandbox/iron-proxy) mapped to `docker_manager.py:_run_kwargs`: H1–H15 controls each with the
   exact `docker-py` kwarg, present/absent-in-repo, and the P7 item (#22–25) that implements it. Priority
