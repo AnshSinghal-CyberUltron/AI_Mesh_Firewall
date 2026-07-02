@@ -844,7 +844,7 @@ export function AttackSimulatorPanel() {
             {(result.guard_summary?.guard_reason || result.zeroshield?.guard_reason) && (
               <div className="mb-3 rounded-xl border border-violet-200 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-950/40">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300 mb-1">
-                  {sanitizeGuardText(result.guard_summary?.guard_model || result.zeroshield?.guard_model) || "ZeroShield Guard Model"}
+                  {sanitizeGuardText(result.guard_summary?.guard_model || result.zeroshield?.guard_model) || ZEROSHIELD_GUARD_MODEL_LABEL}
                 </div>
                 <pre className="whitespace-pre-wrap text-xs leading-relaxed text-slate-800 dark:text-slate-100 font-sans">
                   {sanitizeGuardText(result.guard_summary?.guard_reason || result.zeroshield?.guard_reason)}
