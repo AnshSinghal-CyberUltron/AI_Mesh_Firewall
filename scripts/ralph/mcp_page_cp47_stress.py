@@ -56,9 +56,16 @@ MAX_SAMPLES = 25000  # per-worker reservoir cap on latency samples (bounds memor
 _mf = json.load(open(MANIFEST, encoding="utf-8"))
 GATEWAY = _mf.get("gateway", "http://127.0.0.1:8300").rstrip("/")
 ORGS = _mf["orgs"]
-# org slug → its unique cross-tenant canary secret (planted in that org's echoes)
+# org slug → its unique cross-tenant canary secret (planted in that org's echoes).
+# NOTE: the canary map ALWAYS spans every org so the cross-tenant leak oracle stays
+# meaningful even when load is filtered to a subset (CP48 single-server isolation).
 CANARY = {o["slug"]: f"CANARY-{o['slug']}-{uuid.uuid4().hex[:12]}" for o in ORGS}
-TARGETS = [(o["slug"], s, o["gateway_key"]) for o in ORGS for s in o["servers"]]
+# Optional load filters (CP48): restrict the DRIVEN targets to isolate a bottleneck.
+ORG_FILTER = [s for s in os.environ.get("ORG_FILTER", "").split(",") if s]
+SERVER_FILTER = [s for s in os.environ.get("SERVER_FILTER", "").split(",") if s]
+TARGETS = [(o["slug"], s, o["gateway_key"]) for o in ORGS for s in o["servers"]
+           if (not ORG_FILTER or o["slug"] in ORG_FILTER)
+           and (not SERVER_FILTER or s in SERVER_FILTER)]
 
 
 def _is_transient(status, err) -> bool:
