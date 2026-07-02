@@ -91,6 +91,15 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      G24 DONE 2026-07-02: modern secret-format coverage. detect_secrets missed Google API keys (AIza…),
+        npm tokens (npm_…), and aws_secret_access_key had a compliance tag but NO detection pattern -> bare
+        Google/npm creds egressed / stored raw at RAG ingest. Fixed in patterns.py SECRET_PATTERNS:
+        google_api_key + npm_token (prefix-anchored, low FP) + context-gated aws_secret_access_key (40 bare
+        base64 chars need a key-name cue). Detected+masked on input/output/RAG paths; flow through
+        canonicalization (tag/small-caps variants caught too, compounds G18/G21). FP floor verified. 8 golden
+        frozen. Full gateway 1064 passed; golden 124 passed/7 skipped 3x. NOTE: a truly BARE aws secret (40
+        base64, no cue) stays undetectable without heavy FP — inherent (no distinctive prefix); AKIA access
+        key IS covered, and the secret usually appears with a cue in practice.
       G23 DONE 2026-07-02: R2 false-positive sweep + regression freeze (test-only). Input-side injection
         detection is now SATURATED — all 14 structural variants (whitespace/tab/comma/punct/multi-space/
         markdown/code-block/html-comment/mixed-case/nbsp/emoji-separated) still block. Froze 8 FP-floor cases
