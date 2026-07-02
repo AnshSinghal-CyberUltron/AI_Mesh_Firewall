@@ -212,3 +212,14 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   Gate: 1064 gateway + 52 broker (ws/upstream/route/rpc/lifecycle) passed. Caveat: streamable-http/sse still
   honor MCP_HTTP_VIA_SANDBOX (default ON → sandbox); stdio + ws unconditional. mcp_ws_adapter is now legacy
   (its main.py reaper/shutdown hooks remain as benign no-ops over an empty ws session table).
+- **CHG-0027** (2026-07-02) — G4 item 13 (partial): gateway docker healthcheck + restart policy. The gateway
+  was the ONLY core service with neither a healthcheck nor (in the base compose) a restart policy — CHG-0020
+  found health=none → never auto-restarted, and peers could only gate on service_started. Added a healthcheck
+  probing the auth-exempt /health (`python -c urllib.request.urlopen('http://127.0.0.1:8300/health')`,
+  interval 15s/timeout 6s/retries 5/start_period 60s) to BOTH docker-compose.yml (base: + restart:
+  unless-stopped) and docker-compose.prod.yml (prod: restart already via anchor). /health returns 200 ok
+  normally, 503 on a fatal policy-signing misconfig, so a broken gateway now reads unhealthy. Config-only —
+  the running container was NOT recreated. VERIFY: `docker compose -f docker-compose.yml -f
+  docker-compose.override.yml config` shows gateway.healthcheck + restart=unless-stopped; base+prod merged
+  config also valid. Files: docker-compose.yml, docker-compose.prod.yml. Item 13 STILL OPEN: OTEL/Jaeger
+  tracing + PG/Redis backup remain (optional: upgrade gateway-dependent peers to service_healthy).

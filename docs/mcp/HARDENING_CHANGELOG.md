@@ -881,3 +881,34 @@ the prod compose/manifests is tracked under G3 item 12.
   hatch (default ON → sandbox; OFF → legacy direct-httpx) — so "nothing in the backend for ALL transports"
   holds for the DEFAULT config; stdio + websocket are unconditional. Optional: an independent LIVE drive
   (register a ws MCP server, assert 0 direct gateway upstream sockets) over the unit proof.
+
+### CHG-0027 — Gateway docker healthcheck + restart policy (G4 item 13 — Phase-3 auto-recovery sub-gap)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G4 item 13 (Phase-3 monitoring/metrics/tracing/backup/auto-recovery). Closes the
+  gateway-healthcheck sub-gap CHG-0020 flagged; item 13 stays open (tracing + backup remain).
+- **Files:** `docker-compose.yml` (base gateway: `healthcheck` + `restart: unless-stopped`);
+  `docker-compose.prod.yml` (prod gateway: `healthcheck`; restart already applied via the
+  `*restart_unless_stopped` anchor).
+- **WHAT:** the gateway was the ONLY core service with neither a docker healthcheck nor (in the base compose)
+  a restart policy — `docker inspect` health=none (CHG-0020), so it was never marked healthy/unhealthy and
+  peers could only gate on `service_started`. Added a healthcheck that probes the existing auth-exempt
+  `/health` endpoint (`python -c "urllib.request.urlopen('http://127.0.0.1:8300/health', timeout=5)"`,
+  interval 15s / timeout 6s / retries 5 / start_period 60s) on both the base and prod gateway services, plus
+  `restart: unless-stopped` on the base service (prod already had it via anchor).
+- **WHY:** Phase-3 auto-recovery gap (CHG-0020): a crashed base-compose gateway was not auto-restarted, and no
+  peer/monitor could observe gateway health. `/health` already returns 200 `{"status":"ok"}` normally and 503
+  `{"status":"degraded","reason":"policy_signing_key_missing"}` on a fatal signing misconfig — so the probe
+  correctly reads a broken gateway as unhealthy (urllib raises on the 503).
+- **NOW DOES:** the gateway container reports docker health (healthy/unhealthy) and auto-restarts on crash;
+  peers/monitoring can gate on / alert off `service_healthy`. Config-only — takes effect on the next
+  `docker compose up`; the running container was NOT recreated by this change.
+- **Touched whose work:** infra/compose (deploy topology). No application code changed. Complements CHG-0020's
+  observability findings (metrics/health endpoints already wired; this wires the container-level probe).
+- **VERIFY:** `docker compose -f docker-compose.yml -f docker-compose.override.yml config` →
+  `gateway.restart=unless-stopped`, `gateway.healthcheck.test=[…/health…]`, `start_period=1m0s`;
+  `docker compose -f docker-compose.yml -f docker-compose.prod.yml config` (with dummy required vars) → same
+  healthcheck on the prod gateway, deploy limits intact. Both merged configs parse cleanly.
+- **REMAINING for G4 item 13:** (1) distributed TRACING (OTEL/Jaeger) still not configured; (2) PG/Redis
+  BACKUP still not verified; (3) OPTIONAL: upgrade peers that `depends_on: gateway` from `service_started` to
+  `service_healthy` now that a healthcheck exists (a startup-ordering behavior change — left to the owning
+  session).

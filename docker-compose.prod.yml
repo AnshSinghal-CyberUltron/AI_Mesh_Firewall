@@ -140,6 +140,15 @@ services:
       GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
       METRICS_SCRAPER_KEY: ${METRICS_SCRAPER_KEY:-}
       METRICS_ALLOW_OPEN: ${METRICS_ALLOW_OPEN:-false}
+    # Phase-3 auto-recovery (BACKSTOP CHG-0027): the prod gateway restarts via the
+    # anchor but had NO healthcheck, so peers could only gate on service_started.
+    # /health is auth-exempt (200 ok / 503 on policy-signing misconfig).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8300/health', timeout=5)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 60s
     deploy:
       resources:
         limits:

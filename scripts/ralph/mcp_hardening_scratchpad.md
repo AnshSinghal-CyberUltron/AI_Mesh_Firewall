@@ -230,6 +230,14 @@
       configured (metrics/telemetry present, but no request-level tracing); (2) gateway container has NO
       docker healthcheck (health=none -> not auto-restarted); (3) backup (PG/Redis) NOT verified. Evidence:
       mcp-parallel/findings/backstop-p13-observability/observability_evidence.txt.
+      CHG-0027 (2026-07-02): gap (2) CLOSED. Added a docker healthcheck + restart to the gateway service (the
+      ONLY core service with neither). Probes the auth-exempt /health (200 ok / 503 on signing misconfig;
+      python urllib, interval 15s/timeout 6s/retries 5/start_period 60s) on BOTH docker-compose.yml (base:
+      healthcheck + restart: unless-stopped) and docker-compose.prod.yml (prod: healthcheck; restart via
+      anchor). Config-only — running container NOT recreated; takes effect next `docker compose up`. VERIFY:
+      `docker compose -f docker-compose.yml -f docker-compose.override.yml config` renders gateway.healthcheck
+      + restart=unless-stopped; base+prod merged config also valid. STILL OPEN (item stays [ ]): (1) OTEL/
+      Jaeger distributed tracing; (3) PG/Redis backup verification; optional peer service_healthy upgrade.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

@@ -130,6 +130,13 @@
     NOT dialed). Gate: 1064 gateway + 52 broker (ws/upstream/route/rpc/lifecycle) passed. Caveat: http/sse
     still honor MCP_HTTP_VIA_SANDBOX (default ON); stdio+ws unconditional. mcp_ws_adapter now legacy (benign
     main.py reaper/shutdown no-ops remain).
+  - CHG-0027 (2026-07-02) — G4 item 13 (partial): added a docker healthcheck + restart to the gateway service
+    (the ONLY core service with neither; CHG-0020 flagged health=none → never auto-restarted). Probes the
+    auth-exempt /health (200 ok / 503 on signing misconfig) on both docker-compose.yml (base: healthcheck +
+    restart: unless-stopped) and docker-compose.prod.yml (prod: healthcheck; restart via anchor). Config-only
+    (running container NOT recreated). VERIFY: `docker compose ... config` renders gateway.healthcheck +
+    restart=unless-stopped; both merged configs parse. Item 13 STILL OPEN: OTEL tracing + PG/Redis backup
+    remain; optional peer service_healthy upgrade.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

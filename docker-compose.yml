@@ -205,6 +205,18 @@ services:
     depends_on:
       control: { condition: service_healthy }
       redis: { condition: service_healthy }
+    # Phase-3 auto-recovery: the gateway was the only core service with neither a
+    # healthcheck nor a restart policy (BACKSTOP CHG-0020: health=none → never
+    # auto-restarted, and peers could not gate on service_healthy). /health is
+    # auth-exempt and returns 200 {"status":"ok"} normally, 503 on a fatal
+    # policy-signing misconfig — so an unhealthy gateway now reads unhealthy.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8300/health', timeout=5)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 60s
 
   guardrails:
     image: python:3.12-slim
