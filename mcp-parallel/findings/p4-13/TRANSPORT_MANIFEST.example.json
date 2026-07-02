@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy to TRANSPORT_MANIFEST=... when wiring lands. Register one server per transport in zeroshield, then fill slugs.",
+  "org": "zeroshield",
+  "gateway_key": "REPLACE_WITH_ORG_GATEWAY_KEY",
+  "servers": {
+    "stdio": "everything-1",
+    "streamable-http": "http-mcp-stub",
+    "sse": "sse-mcp-stub",
+    "websocket": "ws-mcp-stub"
+  }
+}

@@ -1,9 +1,17 @@
 ---
-iteration: 24
+iteration: 25
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter25 (2026-07-02) — P4.13/P6.18 recheck + transport verify prep
+- **P4.13/P6.18 RECHECK:** still BLOCKED — `broker_send_rpc` absent; `POST
+  :8311/v1/sandbox/zeroshield/rpc` → 404; `mcp_proxy.py` still direct httpx for
+  http/sse. Evidence: `mcp-parallel/findings/p4-13/RECHECK_ITER25.md`.
+- **Cursor prep:** `scripts/mcp_sandbox_transport_verify.py` (wiring gate + 4-transport
+  e2e when unblocked + tcpdump/ss network assertion guide); checklist §iter25 updated.
+- P4.13/P6.18/P6.19-P4 remain `[ ]` — no fake `[x]`.
 
 ## iter24 (2026-07-02) — P10.32 recursive verification + P4.13/P6.18 recheck
 - **P4.13/P6.18 RECHECK:** still BLOCKED — `broker_send_rpc` absent; `POST

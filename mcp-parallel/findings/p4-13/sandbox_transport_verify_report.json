@@ -1,0 +1,13 @@
+{
+  "verdict": "BLOCKED",
+  "wiring": {
+    "broker_send_rpc_present": false,
+    "broker_unified_rpc_route": false,
+    "broker_stdio_rpc_exists": true,
+    "broker_unified_rpc_http": 404,
+    "broker_stdio_rpc_http": 401,
+    "mcp_proxy_direct_httpx": true
+  },
+  "rounds": [],
+  "note": "Re-run after broker_send_rpc + POST /{org}/rpc + mcp_proxy sandbox routing."
+}

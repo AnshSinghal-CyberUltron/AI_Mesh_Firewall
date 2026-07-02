@@ -22,6 +22,27 @@
 | Contract tests | ✅ | `agent/tests/test_rpc_unified.py` + `test_upstream_proxy.py` |
 | Gateway wiring | ❌ Claude | this checklist |
 | Broker unified route | ❌ Claude | this checklist |
+| iter25 recheck (P4.13/P6.18) | ❌ **BLOCKED** | `mcp-parallel/findings/p4-13/RECHECK_ITER25.md` |
+| Cursor verify harness | ✅ prep | `scripts/mcp_sandbox_transport_verify.py` |
+
+### iter25 recheck (2026-07-02 — cursor-ralph-iter25)
+
+| Check | Result |
+|-------|--------|
+| `broker_send_rpc` in `mcp_sandbox_client.py` | **MISSING** (`broker_send_jsonrpc` only) |
+| `POST /v1/sandbox/{org}/rpc` live | **404** |
+| `POST /v1/sandbox/{org}/stdio/rpc` live | **401** (exists) |
+| `mcp_proxy.py` direct upstream httpx | **PRESENT** |
+
+**When Claude lands §1–3**, run:
+
+```bash
+# 1. Fill mcp-parallel/findings/p4-13/TRANSPORT_MANIFEST.example.json (one server per transport)
+TRANSPORT_MANIFEST=... ROUNDS=3 python scripts/mcp_sandbox_transport_verify.py
+# 2. Network assertion — tcpdump on gateway during harness (see script output / §5.2 below)
+# 3. Recursive gate
+python scripts/mcp_p10_recursive_gate.py
+```
 
 ---
 
@@ -212,10 +233,27 @@ Sandbox **never** runs OAuth client (P2.7 / contract §10).
 
 ### 5.2 Network assertion (harness)
 
-With tcpdump or test hook on gateway container during 15-MCP harness:
+With tcpdump or test hook on gateway container during 15-MCP harness **or**
+`scripts/mcp_sandbox_transport_verify.py`:
 
 - **ALLOW:** gateway → mcp-broker:8311, broker → sandbox-agent:9320
 - **DENY:** gateway → external MCP host:443 (e.g. `mcp.linear.app`, registered server URLs)
+
+**tcpdump (preferred):**
+
+```bash
+GW=$(docker ps --filter name=gateway -q | head -1)
+docker exec $GW tcpdump -i any -n 'tcp port 443' -w /tmp/gw-egress.pcap &
+ROUNDS=3 python scripts/mcp_sandbox_transport_verify.py
+docker exec $GW tcpdump -r /tmp/gw-egress.pcap -n | grep -v ':8311\|:8100\|:6379\|:5432'
+# Expect ZERO lines to registered upstream MCP hosts.
+```
+
+**ss snapshot (weaker):** `docker exec $GW ss -tnp | grep ':443'` before/during harness — new
+ESTAB from gateway to external :443 (excluding broker) = FAIL.
+
+**Future test hook:** `MCP_EGRESS_AUDIT=1` on gateway — increment metric / fail closed if any
+outbound httpx targets a registered MCP `server_config["url"]`.
 
 ### 5.3 Per-transport smoke
 
