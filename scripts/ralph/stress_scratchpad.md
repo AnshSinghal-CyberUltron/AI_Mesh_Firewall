@@ -91,6 +91,18 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      R6 INCREMENT 3 2026-07-02: impeccable detector CLEAN on both owned components. Ran
+        `node .claude/skills/impeccable/scripts/detect.mjs <files>`. ModelConnectionPanel.jsx: 0 findings.
+        OutputPipelineTimeline.jsx: 2 gray-on-color findings on the colors literal = FALSE POSITIVE (dot=teal
+        holds a WHITE icon; slate text is on the card bg, not teal — static heuristic pairs dot+text from one
+        object). Suppressed with the sanctioned inline `impeccable-disable-next-line gray-on-color` + reason.
+        Detector now 0 findings on both. Build ✓, unit 5/5. R6 detector gate satisfied for owned components.
+      COMPLETION STATUS 2026-07-02 (honest audit): 1)9 frozen ✅ 2)new regressions ✅ 3)golden 3x in-process
+        ✅(144/7skip) 4)live OpenRouter ✅(iter24) 5)frontend polish/Playwright: detector CLEAN ✅ + build ✅ +
+        a11y Playwright-verified ✅, BUT the FULL impeccable audit/critique/polish revamp across both themes ×
+        4 widths w/ screenshots is NOT done -> "polish complete" not unequivocal 6)no secret leakage ✅. So
+        COMPLETE withheld ONLY on the subjective "frontend polish complete". Path: full impeccable revamp
+        (audit->critique->polish->distill) of the 2 owned components w/ Playwright screenshots both themes/widths.
       R6 INCREMENT 2 2026-07-02: ModelConnectionPanel form-label a11y. Visible <label>s were not htmlFor/id-
         bound to their inputs (label click didn't focus; SR couldn't name the control, incl. the API-key
         password field). Added htmlFor/id for Provider/API Key/Model Name/Model ID/Base URL (+ aria-label &
