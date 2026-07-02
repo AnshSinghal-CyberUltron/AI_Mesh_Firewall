@@ -307,3 +307,13 @@ def test_refuses_docker_socket_mount():
 
     with pytest.raises(ValueError, match="docker.sock"):
         manager._assert_no_docker_socket_mount({"/var/run/docker.sock": {"bind": "/sock", "mode": "rw"}})
+
+
+def test_security_opts_includes_seccomp_when_profile_set(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("MCP_SANDBOX_SECCOMP_PROFILE", "/etc/docker/seccomp.json")
+    from sandbox.docker_manager import _security_opts
+
+    assert _security_opts() == [
+        "no-new-privileges:true",
+        "seccomp=/etc/docker/seccomp.json",
+    ]

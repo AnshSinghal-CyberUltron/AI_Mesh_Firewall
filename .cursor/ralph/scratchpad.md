@@ -61,7 +61,7 @@ status: ACTIVE
        add security_opt (seccomp, no-new-privileges), cap_drop=ALL, tmpfs-only writes, egress lockdown.
        **Done 2026-07-02:** `_run_kwargs` hardening (no-new-privileges, cap_drop ALL, user=sandbox,
        init, ulimits, memswap_limit); `MCP_SANDBOX_RUNTIME_REQUIRED` fail-closed probe; egress via
-       `MCP_SANDBOX_EGRESS_LOCKDOWN` / proxy env; 19 lifecycle tests green.
+       `MCP_SANDBOX_EGRESS_LOCKDOWN` / proxy env; 75 broker tests green.
 - [ ] 13. Verify (Playwright + harness): with the gateway pointed only at the sandbox, an http, an sse, a
        ws, and a stdio MCP all work end-to-end THROUGH the sandbox; confirm the gateway opens NO direct
        upstream connection (network assertion) — nothing runs in the main backend.

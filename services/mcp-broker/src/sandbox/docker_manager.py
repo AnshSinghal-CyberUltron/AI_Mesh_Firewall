@@ -34,6 +34,35 @@ def _env_truthy(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _sandbox_ulimits(pids_limit: int) -> list[Any]:
+    """FD + nproc caps for sandbox containers (dict fallback when docker SDK absent)."""
+    try:
+        from docker.types import Ulimit
+
+        return [
+            Ulimit(name="nofile", soft=1024, hard=2048),
+            Ulimit(name="nproc", soft=pids_limit, hard=pids_limit),
+        ]
+    except ImportError:
+        return [
+            {"Name": "nofile", "Soft": 1024, "Hard": 2048},
+            {"Name": "nproc", "Soft": pids_limit, "Hard": pids_limit},
+        ]
+
+
+def _security_opts() -> list[str]:
+    """Layered sandbox security_opt: no-new-privileges + optional custom seccomp profile.
+
+    When MCP_SANDBOX_SECCOMP_PROFILE is unset, Docker's built-in default seccomp profile
+    still applies (we do not pass seccomp=unconfined).
+    """
+    opts = ["no-new-privileges:true"]
+    profile = os.environ.get("MCP_SANDBOX_SECCOMP_PROFILE", "").strip()
+    if profile:
+        opts.append(f"seccomp={profile}")
+    return opts
+
+
 @dataclass(frozen=True)
 class SandboxDockerConfig:
     image: str = "ai-mesh/mcp-sandbox:latest"
@@ -355,16 +384,9 @@ class DockerManager:
             "pids_limit": self.config.pids_limit,
             "read_only": True,
             "user": self.config.sandbox_user,
-            "security_opt": ["no-new-privileges:true"],
+            "security_opt": _security_opts(),
             "cap_drop": ["ALL"],
-            "ulimits": [
-                {"name": "nofile", "soft": 1024, "hard": 2048},
-                {
-                    "name": "nproc",
-                    "soft": self.config.pids_limit,
-                    "hard": self.config.pids_limit,
-                },
-            ],
+            "ulimits": _sandbox_ulimits(self.config.pids_limit),
             "tmpfs": {
                 "/tmp": "rw,noexec,nosuid,size=512m",
                 "/var/npm-cache": "rw,exec,nosuid,size=1g,mode=1777",

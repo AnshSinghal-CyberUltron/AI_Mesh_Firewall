@@ -25,7 +25,9 @@ class MockClock:
 def _mock_client() -> MagicMock:
     client = MagicMock()
     client.ping.return_value = True
+    client.info.return_value = {"Runtimes": {"runc": {}, "runsc": {}}}
     client.containers.list.return_value = []
+    client.containers.get.side_effect = Exception("not found")
     client.networks.get.side_effect = Exception("not found")
     client.networks.create.return_value = MagicMock()
     client.volumes.get.side_effect = Exception("not found")
@@ -86,10 +88,19 @@ async def test_reaper_stops_idle_container(manager: DockerManager, registry: San
         "Created": "2026-06-29T12:00:00.000000000Z",
         "State": {"Status": "running"},
         "NetworkSettings": {
-            "Networks": {"mcp_sandbox_bridge": {"IPAddress": "172.28.0.42"}},
+            "Networks": {
+                "mcp_sandbox_net_acme": {"IPAddress": "172.28.0.42"},
+                "mcp_sandbox_bridge": {"IPAddress": "172.28.0.42"},
+            },
         },
     }
     manager.client.containers.list.return_value = [running]
+
+    def _reload_stopped() -> None:
+        running.status = "exited"
+        running.attrs["State"]["Status"] = "exited"
+
+    running.reload.side_effect = _reload_stopped
 
     registry.register(
         "acme",
@@ -127,8 +138,7 @@ async def test_reaper_keeps_active_container(manager: DockerManager, registry: S
     assert registry.get("acme") is not None
 
 
-@pytest.mark.asyncio
-async def test_ensure_registers_running_sandbox(manager: DockerManager, registry: SandboxRegistry):
+def test_ensure_registers_running_sandbox(manager: DockerManager, registry: SandboxRegistry):
     created = MagicMock()
     created.id = "new-id"
     created.name = "beta-mcp-sandbox"
@@ -137,10 +147,14 @@ async def test_ensure_registers_running_sandbox(manager: DockerManager, registry
         "Created": "2026-06-29T12:00:00.000000000Z",
         "State": {"Status": "running"},
         "NetworkSettings": {
-            "Networks": {"mcp_sandbox_bridge": {"IPAddress": "172.28.0.99"}},
+            "Networks": {
+                "mcp_sandbox_net_beta": {"IPAddress": "172.28.0.99"},
+                "mcp_sandbox_bridge": {"IPAddress": "172.28.0.99"},
+            },
         },
     }
     manager.client.containers.run.return_value = created
+    created.reload.side_effect = lambda: None
 
     info = manager.ensure("beta")
 

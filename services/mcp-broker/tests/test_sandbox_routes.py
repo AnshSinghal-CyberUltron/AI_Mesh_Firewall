@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from auth import BROKER_KEY_HEADER
+from sandbox.docker_health import bind_docker_manager, cached_docker_ok
 from sandbox.docker_manager import DockerManager, SandboxDockerConfig
 from sandbox.registry import SandboxRegistry
 from sandbox.routes import build_sandbox_router
@@ -45,6 +46,7 @@ def _mock_container(
 def _mock_client() -> MagicMock:
     client = MagicMock()
     client.ping.return_value = True
+    client.info.return_value = {"Runtimes": {"runc": {}, "runsc": {}}}
     client.containers.list.return_value = []
     client.containers.get.side_effect = Exception("not found")
     client.networks.get.side_effect = Exception("not found")
@@ -61,7 +63,10 @@ def registry() -> SandboxRegistry:
 @pytest.fixture
 def docker_manager(registry: SandboxRegistry) -> DockerManager:
     config = SandboxDockerConfig(memory_mb=2048, cpus=1.0)
-    return DockerManager(client=_mock_client(), config=config, registry=registry)
+    manager = DockerManager(client=_mock_client(), config=config, registry=registry)
+    bind_docker_manager(manager)
+    cached_docker_ok(force=True)
+    return manager
 
 
 @pytest.fixture
@@ -118,8 +123,12 @@ def test_ensure_returns_running_sandbox(broker_client: TestClient, docker_manage
 def test_ensure_503_when_docker_unavailable(
     broker_client: TestClient,
     docker_manager: DockerManager,
+    monkeypatch: pytest.MonkeyPatch,
 ):
-    docker_manager.client.ping.return_value = False
+    monkeypatch.setattr(
+        "sandbox.routes.cached_docker_ok",
+        lambda *args, **kwargs: False,
+    )
 
     resp = broker_client.post(
         f"/v1/sandbox/{ORG}/ensure",

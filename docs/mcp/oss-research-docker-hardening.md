@@ -122,26 +122,25 @@ _run_kwargs                  ← kwargs["runtime"] = config.runtime if set (:283
 - **Opt-in:** `MCP_SANDBOX_RUNTIME=runsc` passes `runtime='runsc'` to `containers.run`.
 - **Test coverage:** `test_config_from_env` asserts runtime passthrough (`test_sandbox_lifecycle.py:219`).
 
-### Fail-closed production pattern (P4 item #12 — design, not yet implemented)
+### Fail-closed production pattern (P4 item #12 — implemented 2026-07-02)
 
 Prod must **refuse to create sandboxes** if runsc is unavailable when hardening is required:
 
 ```text
 MCP_SANDBOX_RUNTIME=runsc                    # desired runtime
-MCP_SANDBOX_RUNTIME_REQUIRED=true            # NEW (proposed): fail closed in prod
+MCP_SANDBOX_RUNTIME_REQUIRED=true            # fail closed in prod
+MCP_SANDBOX_EGRESS_LOCKDOWN=true             # force HTTP(S)_PROXY env (default proxy host)
+MCP_SANDBOX_SECCOMP_PROFILE=/path/profile.json  # optional; Docker default seccomp when unset
 ```
 
-**Proposed broker startup / create_container guard:**
+**Broker create_container guard (`docker_manager.py`):**
 
-1. If `MCP_SANDBOX_RUNTIME_REQUIRED=true` and `MCP_SANDBOX_RUNTIME` is unset → log fatal, refuse create.
-2. Probe Docker: `docker info --format '{{json .Runtimes}}'` contains `runsc` (or `docker run --rm --runtime=runsc true`).
-3. On probe failure → return 503 `sandbox_runtime_unavailable` (not silent runc fallback).
+1. If `MCP_SANDBOX_RUNTIME_REQUIRED=true` and `MCP_SANDBOX_RUNTIME` is unset → `SandboxRuntimeUnavailableError`.
+2. Probe Docker: `client.info()["Runtimes"]` contains the configured runtime (e.g. `runsc`).
+3. On probe failure → raise `sandbox_runtime_unavailable` (no silent runc fallback).
 4. Dev override: `MCP_SANDBOX_RUNTIME_REQUIRED=false` (default) preserves macOS/local runc.
 
-This mirrors OpenSandbox's pattern: *"Configured Docker runtime 'runsc' is not available → error"*.
-
-**Compat validation before flip:** run `npx @modelcontextprotocol/server-everything stdio` initialize
-handshake under runsc inside the sandbox image; watch for `/proc`, `epoll`, and network-stack gaps.
+**`_run_kwargs` hardening now set:** `security_opt` (no-new-privileges + optional seccomp path), `cap_drop=['ALL']`, `read_only` + tmpfs-only writes, `init=True`, pinned `user`, ulimits, `memswap_limit`, egress proxy env when lockdown enabled.
 
 ## Egress default-deny proxy architecture (H13 — P2.6 design)
 
@@ -219,8 +218,8 @@ Anchor: `docker_manager.py:_run_kwargs` lines 247–285.
 | `tmpfs` | ✅ | `/tmp` noexec; `/var/npm-cache` exec; `/var/cache` | H4 ✅ |
 | `ports` | conditional | host-run broker only (`:280-282`) | dev-only branch |
 | `runtime` | conditional | only if `MCP_SANDBOX_RUNTIME` set | H10 — require in prod |
-| `security_opt` | ❌ | — | H1 ADD |
-| `cap_drop` | ❌ | — | H2 ADD |
+| `security_opt` | ✅ | `no-new-privileges:true` (+ optional `MCP_SANDBOX_SECCOMP_PROFILE`) | H1 ADD ✅ |
+| `cap_drop` | ✅ | `['ALL']` | H2 ADD ✅ |
 | `cap_add` | ❌ | — | H2 (keep empty) |
 | `user` | ❌ | image USER sandbox only | H5 ADD `4000:4000` |
 | `ulimits` | ❌ | — | H8 ADD |

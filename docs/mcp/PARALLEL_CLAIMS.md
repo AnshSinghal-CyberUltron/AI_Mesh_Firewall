@@ -27,7 +27,6 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 | cursor-ralph-iter7 | `docs/mcp/oss-research-oauth-sandbox-client.md`, `mcp-parallel/findings/p2-7/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P2.7 MCP OAuth sandbox research | 2026-07-02T12:00:00Z | released |
 | cursor-ralph-iter8 | `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md`, `mcp-parallel/findings/p3-8/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P3.8 sandbox transport contract | 2026-07-02T13:00:00Z | released |
 | cursor-ralph-iter12 | `services/mcp-broker/src/sandbox/docker_manager.py`, `services/mcp-broker/tests/test_sandbox_lifecycle.py`, `services/mcp-broker/tests/test_sandbox_routes.py`, `services/mcp-broker/tests/test_sandbox_reaper.py`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P4.12 gVisor + docker hardening | 2026-07-02T15:00:00Z | released |
-| cursor-ralph-iter12 | `services/mcp-broker/src/sandbox/docker_manager.py`, `services/mcp-broker/tests/test_sandbox_lifecycle.py`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P4.12 gVisor + docker hardening | 2026-07-02T14:00:00Z | released |
 | cursor-ralph-iter13 | `mcp-parallel/findings/p4-13/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md` | P4.13 blocked + P5.14 B1 verify | 2026-07-02T15:00:00Z | released |
 
 ## Claim protocol
