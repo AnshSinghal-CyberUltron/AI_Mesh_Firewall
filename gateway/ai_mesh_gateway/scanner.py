@@ -500,6 +500,54 @@ def _decode_transport_variants(text: str) -> list[str]:
         if len(token) > _TRANSPORT_DECODE_MAX_LEN:
             continue
         variants.extend(_nested_decode_variants(token, True, seen))
+    variants.extend(_decode_text_encoding_variants(text))
+    return variants
+
+
+# G32: common prompt-laundering TEXT encodings that base64/hex transport-decode
+# misses — HTML character references (&#NNN; / &#xHH;), percent/URL-encoding
+# (%XX), and source-style escapes (\uXXXX / \xHH). A downstream model (or a
+# "decode this and follow it" instruction) will interpret these, so an encoded
+# injection must be decoded for detection. All bounded single-pass regex subs
+# (linear, ReDoS-safe). Additive: decoded forms are rescanned, never replacing
+# the original — verified zero FP on benign HTML entities / URLs / code escapes
+# (percent-off entities, url query params, JSON/regex escapes, copyright and
+# em-dash entities all decode to harmless text, never to an injection phrase).
+_HTML_DEC_RE = re.compile(r"&#(\d{1,7});")
+_HTML_HEX_RE = re.compile(r"&#x([0-9a-fA-F]{1,6});")
+_PERCENT_RE = re.compile(r"%([0-9a-fA-F]{2})")
+_USTR_RE = re.compile(r"\\u([0-9a-fA-F]{4})")
+_XHEX_RE = re.compile(r"\\x([0-9a-fA-F]{2})")
+
+
+def _cp(n: int) -> str:
+    return chr(n) if 0 <= n < 0x110000 else ""
+
+
+def _decode_text_encoding_variants(text: str) -> list[str]:
+    if not text or len(text) > MAX_PROMPT_LENGTH:
+        return []
+    variants: list[str] = []
+    try:
+        html = _HTML_DEC_RE.sub(lambda m: _cp(int(m.group(1))) or m.group(0), text)
+        html = _HTML_HEX_RE.sub(lambda m: _cp(int(m.group(1), 16)) or m.group(0), html)
+        if html != text:
+            variants.append(html)
+    except Exception:  # noqa: BLE001 - decode helpers must never break the scan
+        pass
+    try:
+        url = _PERCENT_RE.sub(lambda m: _cp(int(m.group(1), 16)) or m.group(0), text)
+        if url != text:
+            variants.append(url)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        esc = _USTR_RE.sub(lambda m: _cp(int(m.group(1), 16)) or m.group(0), text)
+        esc = _XHEX_RE.sub(lambda m: _cp(int(m.group(1), 16)) or m.group(0), esc)
+        if esc != text:
+            variants.append(esc)
+    except Exception:  # noqa: BLE001
+        pass
     return variants
 
 
