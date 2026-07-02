@@ -385,11 +385,16 @@ export function ModelConnectionPanel({
       const resolvedModelName = useCustomModelName
         ? formData.custom_model_name
         : formData.model_name;
+      // For custom/OpenRouter providers there is no model dropdown to auto-populate
+      // Model ID from, so a client who fills only the model name would otherwise hit
+      // a backend 400 ("model_id may not be blank"). Default model_id to the model
+      // name when left blank; an explicit override is still respected.
+      const resolvedModelId = (formData.model_id || "").trim() || resolvedModelName;
 
       const payload = {
         provider: formData.provider,
         model_name: resolvedModelName,
-        model_id: formData.model_id,
+        model_id: resolvedModelId,
         is_active: editingModel ? formData.is_active : true,
         data_sensitivity_level: formData.data_sensitivity_level || "public",
         compliance_tags: formData.compliance_tags
@@ -961,7 +966,7 @@ export function ModelConnectionPanel({
                   placeholder="e.g. openai/gpt-4o"
                   className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">Auto-populated from model selection. Override if needed.</p>
+                <p className="text-[10px] text-slate-400 mt-1">Auto-populated from the model selection, or defaults to the model name for custom providers. Override if the provider expects a different id.</p>
               </div>
 
               {showBaseUrl && (
