@@ -47,18 +47,28 @@ _NESTED_QUANTIFIER_RE = re.compile(r"\([^()]*[+*]\s*\)\s*[+*{]")
 # quantified-alternation ((X|XY)+) ReDoS families, so a dangerous redaction_config
 # regex reached apply_redaction. Mirror the control-side shapes.
 _QUANTIFIED_WILDCARD_GROUP_RE = re.compile(r"\([^()]*\.[*+][^()]*\)\s*[+*{]")
-_QUANTIFIED_ALTERNATION_GROUP_RE = re.compile(r"\([^()]*\|[^()]*\)\s*[+*{]")
+_QUANTIFIED_ALTERNATION_GROUP_RE = re.compile(r"\([^()]*\|[^()]*\)[+*{]")
 _REGEX_MATCH_TIMEOUT_S = 1.0
 _MAX_MATCH_INPUT_LEN = 100_000
 
 
+def _strip_for_redos_probe(pattern: str) -> str:
+    """Neutralize escaped parens for group-boundary probing.
+
+    Do NOT strip ``\\s``, ``\\d``, ``\\w``, etc. — the old ``re.sub(r'\\\\.', ...)``
+    corrupted those shorthands (``\\s+`` → ``+``) and falsely flagged safe
+    catalog patterns like PIPE_PHI MRN matchers as ReDoS.
+    """
+    return pattern.replace(r"\(", "(").replace(r"\)", ")")
+
+
 def _has_redos_shape(pattern: str) -> bool:
     """True if ``pattern`` carries a nested unbounded-quantifier shape known to
-    cause catastrophic backtracking (e.g. ``(a+)+``). Backslashes are stripped
-    first so escaped parens/metacharacters can't spoof a group boundary."""
+    cause catastrophic backtracking (e.g. ``(a+)+``). Escaped literal parens are
+    neutralized first so they cannot spoof a group boundary."""
     if not isinstance(pattern, str):
         return False
-    stripped = re.sub(r"\\.", "", pattern)
+    stripped = _strip_for_redos_probe(pattern)
     return bool(
         _NESTED_QUANTIFIER_RE.search(stripped)
         or _QUANTIFIED_WILDCARD_GROUP_RE.search(stripped)

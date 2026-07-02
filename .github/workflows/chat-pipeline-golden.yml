@@ -34,7 +34,9 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -q pytest pytest-asyncio fakeredis httpx
           .venv/bin/pip install -q -e ../shared
-      - name: Enforcement unit tests
-        run: .venv/bin/python -m pytest ai_mesh_gateway/tests/test_enforcement.py -q
-      - name: Chat pipeline golden freeze (no re-bless)
+      - name: Enforcement + policy engine unit tests
+        run: .venv/bin/python -m pytest ai_mesh_gateway/tests/test_enforcement.py ai_mesh_gateway/tests/test_policy_engine_redos_guard.py -q
+      - name: Chat pipeline golden freeze (offline; live cases skipped)
+        env:
+          GATEWAY_LIVE: "0"
         run: .venv/bin/python -m pytest tests/golden -q
