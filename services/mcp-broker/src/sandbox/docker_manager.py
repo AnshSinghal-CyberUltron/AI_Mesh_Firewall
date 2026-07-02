@@ -189,6 +189,49 @@ class DockerManager:
         except Exception:
             return None
 
+    def list_sandbox_containers(self) -> list[tuple[str, Any]]:
+        """(org_slug, container) for every sandbox container (any org) by role label.
+
+        Used to reconcile the in-memory registry with live Docker state after a
+        broker restart (re-adopt orphans) — item #24 restart-safety.
+        """
+        out: list[tuple[str, Any]] = []
+        try:
+            containers = self.client.containers.list(
+                all=True, filters={"label": [f"{LABEL_ROLE}={ROLE_VALUE}"]}
+            )
+        except Exception:
+            return out
+        for c in containers:
+            labels = getattr(c, "labels", None)
+            if not isinstance(labels, dict):
+                labels = (getattr(c, "attrs", {}) or {}).get("Config", {}).get("Labels", {}) or {}
+            org = labels.get(LABEL_ORG_SLUG)
+            if org:
+                out.append((org, c))
+        return out
+
+    def reconcile_registry(self) -> int:
+        """Re-adopt live RUNNING sandbox containers into the in-memory registry.
+
+        Restart-safety (item #24): after a broker restart the registry is empty
+        while per-org containers keep running. Adopting them restores the
+        org→container mappings so the quota counts them and the reaper eventually
+        reaps idle ones — closing the orphan-leak gap where a restart-orphaned
+        container whose org never calls again would never be tracked or reaped.
+        """
+        if self._registry is None:
+            return 0
+        adopted = 0
+        for org, container in self.list_sandbox_containers():
+            if self._registry.get(org) is not None:
+                continue
+            info = self.to_info(org, container)
+            if info.status == "running" and info.agent_url:
+                self._registry.register(org, info.container_id, info.agent_url)
+                adopted += 1
+        return adopted
+
     def container_status(self, container: Any | None) -> str:
         if container is None:
             return "missing"
