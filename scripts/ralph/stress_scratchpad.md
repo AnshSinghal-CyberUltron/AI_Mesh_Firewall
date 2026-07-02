@@ -721,6 +721,28 @@
         frozen+adversarial 282 passed × 3 consecutive (21.0/27.3/22.3s; 272+10); streaming/output-guard
         suites green. commit 18b79c5c. REDEPLOYED gateway with G41 (rollback-pre-g41 tagged; build; up -d
         --no-deps; marker _HTML_BEACON_RES present; health 200) so the fix is LIVE, not just committed.
+      G42 — HTML EXFIL COVERAGE COMPLETED 2026-07-02 (broaden G41; more zero-click vectors leaked):
+        After G41 (src/svg-href/css-url), probe_more_exfil.py found G41 STILL missed several zero-click
+        auto-fetch/navigate vectors (arbitrary payload survived): <meta http-equiv=refresh content=url=…>
+        (auto-nav), <link href> preload/prefetch/dns-prefetch/stylesheet (auto-fetch), <base href>,
+        <form action>, AND — subtle — a MULTI-source srcset where G41's single-URL capture defanged only
+        the FIRST url and LEAKED the rest. (object/poster/track were already covered via src/data.)
+        FIX (output_guard.py): broadened to _HTML_ATTR_RE (src/poster/data/action/formaction/background/
+        cite), _HTML_HREF_RE (<link|image|use|base href> — one-click <a>/<area> deliberately EXCLUDED),
+        _HTML_META_URL_RE (meta refresh url=), _CSS_URL_RE, and a dedicated srcset pass (_HTML_SRCSET_RE
+        + _SRCSET_URL_RE) that defangs EVERY comma-separated source. DoS-bounded: a srcset value >4096
+        chars is defanged wholesale (pathological 400-url srcset 943ms -> 1.1ms). All gated by
+        _url_smuggles_data so benign media untouched.
+        VERIFY: all 10 vectors now arb_survives=False; srcset-multi defangs both urls; G41 still closed;
+        6 FP controls + 5 new benign (CDN css/preload, benign meta-refresh to trusted, benign form/srcset)
+        unchanged. ReDoS-safe (meta/link 120KB pad ~40ms). FROZEN: G42 (8 vectors + srcset-multi +
+        srcset-DoS + 5 FP) — 15 cases. Gate: frozen+adversarial 297 passed × 3 consecutive (27.9/21.7/
+        21.2s; 282+15); streaming/output-guard green. commit a2a74616. REDEPLOYED gateway with G42
+        (rollback-pre-g42; build; up -d --no-deps; markers present; health 200) — LIVE.
+        => output-side exfil-channel surface now covers: markdown image/link/bare (G13), encoded-PII in
+        url single+layered (G39), oversized-blob (G40), HTML/SVG/CSS zero-click (G41), and meta/link/base/
+        form/object/srcset (G42). THREE real leaks found+fixed total: G40 (streaming buffer-limit),
+        G41+G42 (HTML/CSS zero-click family).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
