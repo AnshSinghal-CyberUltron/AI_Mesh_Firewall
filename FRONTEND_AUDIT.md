@@ -103,7 +103,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ### Verify-only (item 17 — never edit)
 | # | Surface | Owner | State |
 |---|---|---|---|
-| 17a | MCPConnectorPanel | stress/never_edit | 👁 ⚠ — item22: MCP server cards 884px wide overflow `<main>` @768 (mainScroll 140) & @375 (521); fits @1024/1440. Stress session owns fix. |
+| 17a | MCPConnectorPanel | stress/never_edit | 👁 ⚠ — logged, stress-owned. ROOT CAUSE: the server-card container `L1516 <div className="grid gap-3">` is a **bare grid** (single implicit column, `min-width:auto`=max-content) → a card with a long server URL sizes to max-content (884px) → overflows `<main>` @768 (mainScroll 140) / @375 (521); fits @1024/1440. FIX (for the owning session): `grid grid-cols-1` on L1516 + `min-w-0` on the card + `break-all`/`truncate` on the URL line (same auto-min-width fix as items 16/22). Data-dependent (only when servers are registered). |
 | 17b | ModelConnectionPanel | stress | 👁 ✅ — verified clean (item 17): 0 inverted-slate / dark-on-dark / recharts / non-responsive-grid / leak; both themes @4 widths |
 | 17c | OutputPipelineTimeline (pipeline-trace cards) | stress | 👁 ✅ — code clean (item 17); renders inside expanded output-guard rows (0 events in dev env, so not exercised live) |
 
