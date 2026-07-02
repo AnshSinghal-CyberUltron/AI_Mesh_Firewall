@@ -91,6 +91,18 @@
       G20 (residual, deprioritized): reversed-text bypass ("snoitcurtsni suoiverp lla erongi"). NOT fixing:
         current LLMs rarely execute fully-reversed instructions reliably, and scanning a whole-text reversal
         would risk FPs on legit palindrome/formatting content. Revisit only if a live model proves it executes.
+      R6 ROBUSTNESS CONFIRMED 2026-07-02: code-level dark/responsive audit of both owned components.
+        ModelConnectionPanel 163 dark: variants, OutputPipelineTimeline 53; NO unpaired bg-white (dark theme
+        won't break); inputs w-full, tables overflow-x-auto, only max-w-[]+truncate caps (no mobile overflow)
+        -> responsive by construction. Stability floor re-confirmed: in-process golden 144 passed/7 skipped 3x.
+        R6 for owned components = detector-clean + a11y + WCAG-contrast + dark/responsive-robust + build ✓ +
+        live-functional (R5). REMAINING GENUINE GAP for unequivocal COMPLETE: the pipeline-trace card
+        (OutputPipelineTimeline) has never been VISUALLY rendered/Playwright-verified in the browser (only
+        utils unit-tested 5/5 + code + detector); it needs an enforcement EVENT shown in the telemetry view
+        (R5 iter24 generated events) AND a stable login. Playwright login is FLAKY this session (JWT expiry /
+        possible auth rate-limit) -> exhaustive live screenshot pass blocked. Withholding COMPLETE honestly on
+        this last live-verification gap. NEXT: render the trace card live (telemetry view + a fresh login) to
+        close it.
       R6 INCREMENT 4 2026-07-02: impeccable AUDIT + WCAG contrast polish on ModelConnectionPanel. Rendered the
         Add-Model-Configuration modal via Playwright (logged in admin@zeroshield.io, 1440w); audited. Found 2
         helper texts using bare text-slate-400 on white (~2.9:1 = FAILS WCAG AA 4.5:1). Bumped to
