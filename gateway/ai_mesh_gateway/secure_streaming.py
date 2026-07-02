@@ -357,7 +357,21 @@ class SecureStreamingResponse:
                 return
 
             if verdict.action == "redact":
-                redacted_text = self._scanner.redact_pii(full_text)
+                # G36: mirror the non-stream sanitize_output_for_verdict defense-in-
+                # depth on the streamed egress — neutralize output-side data-exfil
+                # channels (G13 markdown-image/link beacons) and encoded-PII runs
+                # (G35 HTML-entity/percent that decode to PII) BEFORE the PII
+                # redactor, so the beacon/encoded payload is seen unmasked and can be
+                # defanged. Streaming previously used redact_pii ALONE, so a streamed
+                # exfil beacon or encoded-PII rode out un-neutralized while the non-
+                # stream path defanged it. Lazy import avoids a circular dependency;
+                # only runs on redact verdicts (not the clean-release hot path).
+                from output_guard import (  # noqa: PLC0415
+                    neutralize_encoded_pii,
+                    neutralize_exfil_channels,
+                )
+                _pre = neutralize_encoded_pii(neutralize_exfil_channels(full_text))
+                redacted_text = self._scanner.redact_pii(_pre)
                 # Telemetry honesty (mirror of non-stream main.py:1566 / 7289):
                 # only claim action="redact" when the bytes actually changed. A
                 # tier-2 (semantic) verdict can target content the deterministic
