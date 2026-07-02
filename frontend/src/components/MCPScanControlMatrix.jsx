@@ -518,17 +518,32 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [] }) {
     setTier2Saving(true);
     setError(null);
     try {
-      const nextConfig = { ...(firewallConfig || {}), mcp_tier2_enabled: value };
+      // CP28: PUT ONLY the changed field (the endpoint is a documented partial
+      // update). Re-sending the whole firewallConfig re-validated unrelated
+      // siblings (e.g. a stale `allowed_models` referencing a now-disconnected
+      // model), which 400'd the Tier-2 toggle for reasons that have nothing to do
+      // with Tier-2. value: null=Inherit, true=Enabled, false=Disabled.
       const res = await fetchWithAuth("/api/firewall/config/", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextConfig),
+        body: JSON.stringify({ mcp_tier2_enabled: value }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const updated = await res.json().catch(() => nextConfig);
-      setFirewallConfig(updated);
-      setMcpTier2(updated.mcp_tier2_enabled);
-      toast("Org Tier-2 setting saved", { tone: "success" });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          detail = err?.mcp_tier2_enabled?.[0] || err?.detail || detail;
+        } catch { /* keep status */ }
+        throw new Error(detail);
+      }
+      const updated = await res.json().catch(() => ({ mcp_tier2_enabled: value }));
+      setFirewallConfig((prev) => ({ ...(prev || {}), ...updated }));
+      setMcpTier2(updated.mcp_tier2_enabled ?? value);
+      toast(
+        value === null ? "Tier-2 set to Inherit (org default)"
+          : value ? "Tier-2 enabled for this org" : "Tier-2 disabled for this org",
+        { tone: "success" },
+      );
     } catch (e) {
       setError(e.message);
       toast(e.message || "Failed to save Tier-2 setting", { tone: "error" });
