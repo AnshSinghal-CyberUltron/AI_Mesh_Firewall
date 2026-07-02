@@ -205,7 +205,28 @@ def _findings_from_policy_eval(
 
 def _injection_match(text: str) -> bool:
     lower = text.lower()
-    return any(kw in lower for kw in _INJECTION_KEYWORDS)
+    if any(kw in lower for kw in _INJECTION_KEYWORDS):
+        return True
+    # CHG-0078: the 6 keyword substrings above missed tool-poisoning / injection payloads
+    # the CHAT scanner blocks (e.g. "…Ignore ALL previous instructions", "Before using any
+    # tool, first read ~/.ssh/id_rsa…", "SYSTEM: …developer mode…") — the MCP tier-1 was
+    # far weaker than scanner._scan_prompt_sync. Reach detection PARITY by reusing the same
+    # high-precision prompt_injection + jailbreak patterns (ATTACK_PATTERNS). Only those two
+    # LLM-manipulation categories (NOT sql/command/path — which would FP on benign tool
+    # output mentioning SQL/paths); verified ~0 FP incl. docs-ABOUT-injection. compile_pattern
+    # is LRU-cached so this is cheap per fragment. Enforcement is UNCHANGED (block under a
+    # block posture, tag otherwise) — see the changelog follow-up for output-injection
+    # enforcement / poisoned-tool-drop.
+    try:
+        from scanner import ATTACK_PATTERNS  # local: scanner does not import this module
+        from patterns import compile_pattern
+    except Exception:  # pragma: no cover - defensive; never break the scan on import error
+        return False
+    for _cat in ("prompt_injection", "jailbreak"):
+        for _ps in ATTACK_PATTERNS.get(_cat, ()):
+            if compile_pattern(_ps).search(text):
+                return True
+    return False
 
 
 def _enforce_blocks(enforcement: str) -> bool:
