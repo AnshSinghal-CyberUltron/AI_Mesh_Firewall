@@ -267,6 +267,41 @@ class ContextGuard:
                     matched_patterns=[pattern_str],
                 )
 
+        # G9 PRECEDENCE FIX: all BLOCK-severity checks (live credentials/secrets) run
+        # BEFORE the FLAG-severity checks (toxicity, PII). Previously the toxicity `flag`
+        # short-circuited before the credential `block`, so a document carrying BOTH a
+        # toxicity pattern AND a live credential was only FLAGGED — the credential was
+        # then written to the vector store at rest (a leak). Block always outranks flag.
+        #
+        # RAG-C5 / C4-CRED-INGEST: BLOCK live credentials/secrets at ingest so they are
+        # never stored raw (the per-org typed redaction defaults OFF). Union
+        # detect_credential_exposure (CREDENTIAL_EXPOSURE_PATTERNS) + detect_secrets so
+        # the ingest and output credential sets are unified; also catch credentials that
+        # only detect_pii surfaces (api_key_openai / aws_access_key / aws_secret_access_key).
+        # Human PII (email/phone/ssn/card — legitimate in documents) stays a flag below.
+        cred_found = {**(detect_secrets(text) or {}), **(detect_credential_exposure(text) or {})}
+        if cred_found:
+            return ContextScanVerdict(
+                action="block",
+                threat_type="secret",
+                confidence=0.9,
+                detail=f"Secret/credential in document: {', '.join(cred_found.keys())}",
+                matched_patterns=list(cred_found.keys()),
+            )
+
+        pii_found = detect_pii(text)
+        _CRED_TOKENS = ("key", "token", "secret", "aws", "api", "credential", "password")
+        _cred = [k for k in (pii_found or {}) if any(t in k.lower() for t in _CRED_TOKENS)]
+        if _cred:
+            return ContextScanVerdict(
+                action="block",
+                threat_type="secret",
+                confidence=0.9,
+                detail=f"Secret/credential in document: {', '.join(_cred)}",
+                matched_patterns=_cred,
+            )
+
+        # FLAG-severity checks below (only reached when no credential BLOCK fired).
         for pattern_str in DOCUMENT_TOXICITY_PATTERNS:
             compiled = compile_pattern(pattern_str)
             match = compiled.search(text)
@@ -279,49 +314,7 @@ class ContextGuard:
                     matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
                 )
 
-        # RAG-C5: check secrets BEFORE PII. A credential-bearing doc often also trips
-        # the PII detector (long key strings), and the PII branch returns first — so
-        # ordering secrets first is required for the block to actually fire. BLOCK
-        # (not flag) live credentials/secrets at ingest so they are never written to
-        # the vector store at rest (the per-org typed redaction was the only at-ingest
-        # mitigation and defaults OFF, leaving raw API keys/AWS secrets in Pinecone).
-        # Mirrors the injection/hidden-instruction blocks above; PII (names/emails —
-        # legitimate in documents) stays a flag below.
-        # C4-CRED-INGEST-*: run the FULL credential inventory at ingest, not just
-        # detect_secrets()'s SECRET_PATTERNS subset. Iteration-4 found connection
-        # strings / Azure / Stripe / Twilio / GitHub-in-key-name all stored unblocked
-        # because the ingest inventory was a strict subset of the output guard's. Union
-        # detect_credential_exposure (CREDENTIAL_EXPOSURE_PATTERNS) + detect_secrets so
-        # the ingest and output credential sets are unified — any credential the
-        # platform can detect anywhere is BLOCKED at rest here.
-        cred_found = {**(detect_secrets(text) or {}), **(detect_credential_exposure(text) or {})}
-        if cred_found:
-            return ContextScanVerdict(
-                action="block",
-                threat_type="secret",
-                confidence=0.9,
-                detail=f"Secret/credential in document: {', '.join(cred_found.keys())}",
-                matched_patterns=list(cred_found.keys()),
-            )
-
-        pii_found = detect_pii(text)
         if pii_found:
-            # RAG-C5: detect_secrets misses live credentials (API keys, AWS keys/
-            # secrets) — detect_pii catches them under credential-ish category names
-            # (api_key_openai / aws_access_key / aws_secret_access_key). BLOCK those at
-            # ingest (fail-closed; never written to the vector store at rest). Human
-            # PII (email / phone_us / ssn / credit_card) stays a flag — legitimate in
-            # documents and filtered from results by the query-time output scan.
-            _CRED_TOKENS = ("key", "token", "secret", "aws", "api", "credential", "password")
-            _cred = [k for k in pii_found if any(t in k.lower() for t in _CRED_TOKENS)]
-            if _cred:
-                return ContextScanVerdict(
-                    action="block",
-                    threat_type="secret",
-                    confidence=0.9,
-                    detail=f"Secret/credential in document: {', '.join(_cred)}",
-                    matched_patterns=_cred,
-                )
             return ContextScanVerdict(
                 action="flag",
                 threat_type="pii",
