@@ -282,6 +282,34 @@
         - FULL-CORPUS-LIVE (in progress, background): running all ~120 unique golden payloads through the
           live gateway, asserting live-action == in-proc-action per payload (results file corpus_live_
           results.txt). This is the last airtight step before COMPLETE.
+      FULL-CORPUS-LIVE COMPLETE 2026-07-02 (commit e4b34da0, doc R5_FULL_CORPUS_LIVE.md): ran all 129 unique
+        golden payloads through the LIVE gateway, live-action vs in-proc-action. RESULT = PERFECT SECURITY
+        POSTURE: 41/41 block payloads block live; ZERO leaks; ZERO under-enforcement (no block->allow). The
+        only 11 mismatches are all SAFE-DIRECTION over-block: 6 redact->block (full-pipeline blocks exfil
+        wrappers tier-1 would only redact) + 4 allow->block (tier-2 Bedrock/Claude-Haiku semantic layer
+        blocks jailbreak-ADJACENT FP-floor phrasings: "forget your training", "get past the login screen",
+        "forget the above context", "translate the following paragraph"). 3/4 are defensible injection-
+        adjacent; the 4th ("Please translate the following paragraph into French") is a reproducible tier-2
+        FP (other translate/summarize phrasings all allow 200) — structurally it matches the "translate the
+        following <payload>" injection template, so tier-2's caution is arguably fail-safe, but blocking a
+        plain translate request is not unequivocally "justified".
+      HONEST COMPLETE DECISION 2026-07-02 — WITHHELD. 6 of 7 criteria unequivocally TRUE: (1) frozen-9 green
+        offline 183x3 + live 10/10 x3; (2) new-attack regressions green in-proc 180 + live 41/41 block;
+        (3) golden 3x in-process; (5) R6 frontend polish both owned components (detector-clean, Playwright);
+        (6) Playwright; (7) no secret leak (audited tracked files + all commits + caught my own key-fragment
+        in notes). Criterion (4) live-validation: no-PII ✓, redactions ✓ (oracle hasPII=false), attack-blocks
+        justified ✓ (41/41), routing ✓, kill-switch ✓ (503/scoped/recover), traces ✓, stock-openai-SDK ✓ —
+        BUT the tier-2 semantic LLM reproducibly OVER-blocks a clearly-benign phrasing ("translate the
+        following paragraph") as prompt_injection. That is a real (safe-direction) unjustified block, so
+        "blocks are justified" is not UNEQUIVOCALLY true => cannot honestly emit COMPLETE.
+        SCOPE NOTE: the tier-2 FP is the pre-existing Bedrock LLM's judgment (NOT my tier-1 G-series work,
+        which is complete+correct). It is fail-safe (over-block, never a leak/under-enforcement). Tuning it
+        (confidence-gate / category-remap in scanner.py) risks weakening real semantic detection and the
+        client response doesn't even expose the tier-2 confidence — so it is NOT safely fixable from the
+        owned tier-1 surface without risk. This is an inherent LLM-semantic-firewall FP/FN trade-off and a
+        product-calibration decision, not a defect in the stress-hardening deliverable. Documented as the
+        sole open item; my owned deliverable (tier-1 hardening + golden suite + frontend + live security
+        validation) is COMPLETE and the live firewall is SECURE (no leaks, no under-enforcement).
       COMPLETE STATUS after redeploy+case09 (2026-07-02): 1 frozen-9 green offline(183x3)+live(10/10 x3) ✓;
         2 new-attack regressions green in-proc+live(7/7 block) ✓; 3 golden 3x in-process ✓; 5 R6 frontend
         polish (both owned components) ✓; 6 Playwright ✓; 7 no secret leak ✓. REMAINING = criterion 4 R5
