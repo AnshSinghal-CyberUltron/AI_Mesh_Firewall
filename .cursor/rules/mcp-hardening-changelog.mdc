@@ -1203,6 +1203,22 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   per-call chain remains a separate item-13 piece; a few audit calls (tools/list metadata scan, ext-proxy
   `_ext_audit`) don't pass `latency_ms` yet (minor follow-up).
 
+- **CHG-0089** (2026-07-02) — ARCH item 13/20 (**monitoring**; metrics-coverage sweep after CHG-0087/0088),
+  MEDIUM: `metrics.record_rate_limit` is called ONLY from the chat handler (`main.py`, per-MODEL limiter).
+  The per-ORG TPM/burst/RPM limiter (`_enforce_org_tpm_rate_limit`/`_enforce_org_burst_rpm`) doesn't meter
+  internally, and the MCP path (`_mcp_org_rate_limit_raw`) returned a plain 429 with **no metric**. So MCP
+  tool calls throttled by the per-org ceiling (CHG-0031/0032) were recorded nowhere in Prometheus — an MCP
+  429 storm under the mandate's 5k–10k concurrent tool calls was invisible to dashboards/alerting. FIX
+  (`mcp_proxy.py`): `_mcp_org_rate_limit_raw`, when it returns a 429 (TPM or burst/RPM), calls
+  `record_mcp_scan_decision(org, "rate_limited")` — MCP throttling now lands in the same
+  `amf_gateway_mcp_scan_decisions_total{org, decision}` series as block/redact/allow/monitor. Best-effort
+  try/except (metrics never break the request path). The TPM→burst **short-circuit** + the allow (None) path
+  are preserved by the refactor. +4 tests (TPM trip → 429 + metered + burst short-circuited; burst trip →
+  metered; allowed → None + no metering; None auth → no-op). Gate: 4 + 14 (test_mcp_rate_limit) + 1501
+  gateway passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p13-mcp-ratelimit-metric/`. **RESIDUAL:** metering
+  `_enforce_org_tpm_rate_limit` INTERNALLY (chat + MCP callers all meter) would be a cleaner future refactor.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

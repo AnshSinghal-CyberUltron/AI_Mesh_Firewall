@@ -404,6 +404,16 @@
       fail-safe). +2 tests. Gate: 6 + 1461 gateway passed, 0 failed; broker -k "not websocket" 108 passed.
       Evidence: mcp-parallel/findings/backstop-p13-mcp-latency-histogram/finding.md. RESIDUAL: OTel tracing
       for the per-call chain remains a separate item-13 piece.
+      CHG-0089 (2026-07-02, MEDIUM — ARCH item 13/20 monitoring): metrics.record_rate_limit is called ONLY
+      from the chat handler (main.py, per-MODEL limiter). The per-ORG TPM/burst/RPM limiter
+      (_enforce_org_tpm_rate_limit/_enforce_org_burst_rpm) doesn't meter internally, and the MCP path
+      (_mcp_org_rate_limit_raw) returned a plain 429 with NO metric — so MCP throttling under load (5k–10k
+      concurrent calls) was invisible to Prometheus. FIX (mcp_proxy.py): _mcp_org_rate_limit_raw, on a 429
+      (TPM or burst/RPM), calls record_mcp_scan_decision(org, "rate_limited") → lands in
+      amf_gateway_mcp_scan_decisions_total; preserves the TPM→burst short-circuit + allow path; fail-safe. +4
+      tests. Gate: 4 + 14 rate-limit + 1501 gateway passed, 0 failed; broker -k "not websocket" 108 passed.
+      Evidence: mcp-parallel/findings/backstop-p13-mcp-ratelimit-metric/finding.md. RESIDUAL: metering
+      _enforce_org_tpm_rate_limit internally (chat + MCP) would be cleaner.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

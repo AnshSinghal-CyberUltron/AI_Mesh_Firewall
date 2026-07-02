@@ -2488,15 +2488,28 @@ async def _mcp_org_rate_limit_raw(auth_ctx) -> JSONResponse | None:
         project_id=project_id,
         estimated_tokens=20,
     )
-    if rl_resp is not None:
-        return rl_resp
+    if rl_resp is None:
+        rl_resp = await gateway_main._enforce_org_burst_rpm(
+            auth_ctx,
+            event_type="mcp_blocked",
+            user_id=user_id,
+            project_id=project_id,
+        )
 
-    return await gateway_main._enforce_org_burst_rpm(
-        auth_ctx,
-        event_type="mcp_blocked",
-        user_id=user_id,
-        project_id=project_id,
-    )
+    # CHG-0089: meter MCP throttling (per-org TPM/burst/RPM 429) so backpressure is
+    # visible in Prometheus — the chat per-model limiter was metered (main.py) but the
+    # MCP per-org limiter was not, so MCP 429 storms under load were invisible to
+    # dashboards/alerting (item 13/20). Recorded as a `rate_limited` MCP decision, in the
+    # same amf_gateway_mcp_scan_decisions_total metric as block/redact/allow/monitor.
+    if rl_resp is not None:
+        try:
+            import metrics as _metrics
+            _metrics.record_mcp_scan_decision(
+                str(getattr(auth_ctx, "org_slug", "") or ""), "rate_limited")
+        except Exception:
+            pass
+
+    return rl_resp
 
 
 async def _enforce_mcp_org_rate_limits(
