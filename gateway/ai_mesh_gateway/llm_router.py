@@ -326,6 +326,18 @@ def _redact_fn_call_arguments(fn, redactor):
     return fn
 
 
+def _name_carries_pii(name: str) -> bool:
+    """G60: True if a participant ``name`` carries real PII/secret/credential (an SSN/phone/
+    CC fits the OpenAI name charset). Uses the DETECTORS (obfuscation-aware) rather than the
+    digit-backstop redactor, so a benign identifier with a digit run ("session-2024-001") is
+    NOT flagged while a name that IS an SSN/token is. Detector-import is lazy (package-safe)."""
+    try:
+        from patterns import detect_pii, detect_secrets, detect_credential_exposure
+    except ImportError:  # pragma: no cover - packaging fallback
+        from .patterns import detect_pii, detect_secrets, detect_credential_exposure
+    return bool(detect_pii(name) or detect_secrets(name) or detect_credential_exposure(name))
+
+
 def _redact_message_tool_calls(m, redactor):
     """Return ``m`` with every ``tool_calls[].function.arguments`` and a legacy
     ``function_call.arguments`` redacted (G59). No-op when the message carries neither."""
@@ -746,6 +758,16 @@ class LLMRouter:
             # a conversation-history turn's tool-call arguments are folded into the scanned
             # prompt (G7) so PII there triggers the verdict, but were forwarded RAW.
             nm = _redact_message_tool_calls(nm, _redact_msg_text)
+            # G60: a participant `name` can carry digit-PII (SSN/phone/CC fit the OpenAI
+            # name charset). DROP a name that carries REAL PII/secret/credential: a redacted
+            # name ("[SSN_REDACTED]"/"***-**-…") is charset-INVALID (provider 400), and
+            # `name` is optional so dropping removes the channel without breaking the call.
+            # Decide with the DETECTORS (not the digit-backstop redactor, which over-fires on
+            # any 7+ digit run) so a benign identifier like "session-2024-001" is preserved
+            # even on a request that redacts PII elsewhere (no over-redaction).
+            _nm_name = nm.get("name")
+            if isinstance(_nm_name, str) and _nm_name and _name_carries_pii(_nm_name):
+                nm = {k: v for k, v in nm.items() if k != "name"}
             new_messages.append(nm)
         result = {**body, "messages": new_messages}
 

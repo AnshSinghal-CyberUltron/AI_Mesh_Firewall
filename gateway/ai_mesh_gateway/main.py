@@ -1221,7 +1221,15 @@ def _extract_prompt_from_messages(messages):
         # their OWN message content — keeps its bare (unbracketed) "system:" colon
         # and is still caught. Without the bracket, every "You are …" system prompt
         # (the single most common system prompt) was blocked as prompt_injection.
-        parts.append(f"[{role}]: {content}")
+        # G60: fold the participant ``name`` into the scanned label. A ``name`` reaches
+        # the model and CAN carry digit-PII — an SSN/phone/CC ("123-45-6789") fits the
+        # OpenAI name charset [a-zA-Z0-9_-], so it egressed UNscanned (only content +
+        # tool_calls were folded). Folding it here is injection-FP-safe (a short
+        # identifier is never an imperative injection phrase); a name that IS an SSN is a
+        # true positive. Enforcement drops a PII-bearing name (llm_router._apply_redaction).
+        _name = m.get("name")
+        _label = f"{role}/{_name}" if isinstance(_name, str) and _name else role
+        parts.append(f"[{_label}]: {content}")
         # G7: fold an assistant message's tool_calls (function name + arguments)
         # into the scannable text. Injection / PII / credentials hidden inside
         # tool_calls[].function.arguments previously bypassed Tier-1/Tier-2

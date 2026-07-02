@@ -321,6 +321,43 @@ async def test_chat_egress_tool_calls_untouched_without_redaction_signal(capture
     assert sent["arguments"] == args and sent["name"] == "search"
 
 
+# ── PARTICIPANT NAME: a message `name` reaches the model and can carry digit-PII
+#    (SSN/phone/CC fit the OpenAI name charset [a-zA-Z0-9_-]). It was NOT folded into
+#    the scan NOR redacted, so PII there bypassed the firewall entirely (G60). ──
+
+
+@pytest.mark.asyncio
+async def test_chat_egress_drops_pii_bearing_participant_name(capture_chat):
+    from main import _extract_prompt_from_messages
+    _ssn = "123-45-6789"
+    # detection: the name is now folded into the scanned prompt.
+    assert _ssn in _extract_prompt_from_messages([{"role": "user", "name": _ssn, "content": "hi"}])
+    router = _router()
+    body = {"model": "gpt-4o-mini",
+            "messages": [{"role": "user", "name": _ssn, "content": "look me up"}]}
+    status, _ = await router.acompletion(body, redacted_content="look me up")
+    assert status == 200
+    wire = _wire(capture_chat["kwargs"])
+    assert _ssn not in wire, f"PII participant name reached the wire: {wire!r}"
+    assert "name" not in capture_chat["kwargs"]["messages"][0], "PII name not dropped"
+
+
+@pytest.mark.asyncio
+async def test_chat_egress_preserves_benign_participant_name(capture_chat):
+    """A benign identifier name (even with a digit run) is PRESERVED even when the
+    request redacts PII elsewhere — the drop is detector-precise, not digit-greedy."""
+    router = _router()
+    body = {"model": "gpt-4o-mini", "messages": [
+        {"role": "user", "name": "session-2024-001", "content": f"call {_PHONE}"},
+    ]}
+    status, _ = await router.acompletion(body, redacted_content=f"call ***-***-4991")
+    assert status == 200
+    assert capture_chat["kwargs"]["messages"][0].get("name") == "session-2024-001", (
+        "benign digit-name was wrongly dropped (over-redaction)"
+    )
+    assert _PHONE not in _wire(capture_chat["kwargs"]), "content phone still leaked"
+
+
 @pytest.mark.asyncio
 async def test_chat_egress_tools_untouched_without_redaction_signal(capture_chat):
     """No redaction signal → tools are forwarded verbatim (no over-redaction)."""
