@@ -550,6 +550,23 @@
         is ***-**-****" with no raw PII). => both owned frontend components (ModelConnectionPanel live 11-model
         consistency + a11y; OutputPipelineTimeline detector/unit/isolation-mount) are R6-verified; the only
         un-force-able bit is a LIVE output-guard event card, gated on model-emitted PII (external).
+      R2 CONFUSABLE/ZW/BIDI PII RE-PROBE 2026-07-02 (rigorous-verification round; fresh evidence):
+        Fired 9 obfuscated-PII evasions at the REAL detect_pii + cross-checked each against the
+        INDEPENDENT aidefence oracle. 8/9 CAUGHT via canonicalize_for_detection folds:
+        fullwidth-digit SSN (１２３-４５-６７８９), fullwidth email (ｊｏｈｎ@ｅｘａｍｐｌｅ.ｃｏｍ),
+        MATHEMATICAL-BOLD-digit SSN (U+1D7E3..), ZWJ-joined SSN, ZWSP-split email, NBSP-hyphen
+        SSN (U+2011), RLO/PDI bidi-wrapped email, CIRCLED-digit SSN (①②③-④⑤-⑥⑦⑧⑨) — all
+        fold to ASCII and HIT. The 1 MISS is "1 2 3 - 4 5 - 6 7 8 9" (space-separated digits):
+        oracle CONFIRMS not-PII (aidefence_has_pii=false, aidefence_scan piiFound=false/safe=true),
+        while the SAME oracle flags the compact "123-45-6789" as hasPII=true (so it's not blind).
+        => the MISS is the CORRECT, evidence-backed behaviour, NOT a gap: collapsing all inter-digit
+        whitespace before SSN matching would be a false-positive hazard (dictated phone numbers,
+        counting, order IDs) and the independent oracle agrees the spaced run carries no PII.
+        Consistent with the earlier "spaced-secret defensibly allowed, oracle-confirmed" finding.
+        NO new fix needed; the confusable/zero-width/bidi PII surface is robust. (probe:
+        scratchpad probe_confusable_pii.py, not committed — throwaway.) Golden+adversarial suite
+        re-run THIS round: 260 passed × 3 consecutive in-process (23.9s / 70.4s / 102.5s — timing
+        variance is concurrent-session load; count deterministic).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
