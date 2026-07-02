@@ -86,7 +86,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 | # | Surface | Owner | Dark | Light | 1440 | 1024 | 768 | 375 | Impec | State |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 3 | GatewayKeyPanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
-| 4 | ModelGovernancePanel (+Fields) | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 4 | ModelGovernancePanel (+Fields) | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
 | 5 | RoutingGovernancePanel / RoutingAuditPanel / PolicyDomainSwitcher | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 6 | KillSwitchPanel / KillSwitchModelCombobox / ModelStatePanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 7 | MCPManagerPanel / MCPScannerPanel / MCPScanControlMatrix | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -146,6 +146,13 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ---
 
 ## Per-surface finding log (append-only)
+
+**Item 4 — ModelGovernancePanel (+Fields) DONE (iter4 resumed loop, 2026-07-02):** live-verified both themes @1440/1024/768/375 with real data (11 connected models); console 0 errors; no overflow.
+- **No-leak PROVEN:** allowlist shows model names + provider + model_id (non-secret) and only key *status* (`api_key_set`→"", else "Env-var key"/"API key missing") — never a key value. Panel already strips the ZeroShield guard model via `filterUserManagedModels` so its raw upstream id never surfaces.
+- **Controls verified (reflect state):** Save disabled when clean → toggling a model enables Save → Discard/Reset disables it again. `select all connected`/`clear`, isolation checkbox, default-model select all functional. Empty ("No models connected"), stale-model (blue), and error (`role=alert`) states intentional; good 44px touch targets + aria.
+- **F-MG1 FIXED (theme contrast):** two helper `<p>` lines used `dark:text-slate-500` (~2.4:1, dim on dark). → `dark:text-slate-400` (verified computed color slate-500 L0.554 → slate-400 L0.704).
+- lint 37/37, build green, detector clean. Evidence: `mcp-parallel/findings/frontend-harden/model-governance/`.
+
 
 **Item 3 — GatewayKeyPanel DONE (iter3 resumed loop, 2026-07-02):** live-verified (real data: 7 keys) both themes @1440/1024/768/375; console 0 errors; modal form validates (HTML5 required blocks empty submit); no page overflow (table uses internal `overflow-x-auto`).
 - **No-leak PROVEN:** list endpoint `/api/gateways/keys/` returns **no raw-key field** (only 8-char `prefix`); DOM scan found no long-token leak; full key shown once on creation with "will not be shown again" (correct). Attack-Simulator's gateway-key field is masked (dots).

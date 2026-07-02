@@ -26,7 +26,10 @@
       Remaining 8 uPlot candidates migrate under per-surface items (12/13/15). recharts removal = item 24.
 
 ## Per-surface sweep (ONE panel per iteration → verify (both themes, 4 widths) → fix → re-verify → commit)
-- [x] 3. GatewayKeyPanel     - [ ] 4. ModelGovernancePanel   - [ ] 5. RoutingGovernance/Audit
+- [x] 3. GatewayKeyPanel     - [x] 4. ModelGovernancePanel   - [ ] 5. RoutingGovernance/Audit
+      item4 iter4: DONE. Live both themes @4 widths (11 real models), console clean, no overflow, no-leak
+      PROVEN (key STATUS only, guard model stripped). Controls verified: clean→save-disabled, toggle→
+      enabled, reset→disabled. Fixed F-MG1 (helper text dark:slate-500→slate-400). lint 37/37.
       iter3: DONE. Live-verified both themes @4 widths (7 real keys), console clean, modal validates, no
       overflow, no-leak PROVEN (list has no raw key; prefix only). Fixed F-GK1 (fetch error→error state,
       not false-empty), F-GK2 (badge dark: text variants), F-GK3 (create error text hardened). lint 37/37.

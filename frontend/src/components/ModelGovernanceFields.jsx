@@ -139,7 +139,7 @@ export function ModelGovernanceFields({
             </button>
           </div>
         </div>
-        <p className="text-[11px] text-slate-600 dark:text-slate-500 mb-2">
+        <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2">
           Only models from Model Connection appear here. When isolation is on, requests must use an
           allowed model name.
         </p>
@@ -208,7 +208,7 @@ export function ModelGovernanceFields({
             </option>
           ))}
         </select>
-        <p className="mt-1.5 text-[10px] text-slate-600 dark:text-slate-500">
+        <p className="mt-1.5 text-[10px] text-slate-600 dark:text-slate-400">
           Used when no model is specified, when routing is disabled, or as last-resort fallback.
         </p>
       </div>
