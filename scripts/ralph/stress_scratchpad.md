@@ -26,11 +26,25 @@
       payloads, PII/secret exfil, guardrail bypass, RAG/tool poisoning, ReDoS/DoS. → docs/stress/ATTACK_LANDSCAPE.md.
 
 ## R2 — Edge-case stress against the FROZEN pipeline (in-process)
-- [ ] 2. Build docs/stress/ADVERSARIAL_CORPUS.py from R1: inputs that try to (a) sneak PII past as
+- [x] 2. Build docs/stress/ADVERSARIAL_CORPUS.py from R1: inputs that try to (a) sneak PII past as
       allow (LEAK), (b) force wrong block (false positive), (c) hang/crash (ReDoS, huge input, deep
       nesting), (d) corrupt the trace/cards. Drive the real pipeline; record every failure to
       mcp-parallel/findings with the stages[] trace.
-- [ ] 3. Encode each confirmed failure as a NEW golden case (xfail until fixed). Never weaken the 9.
+- [x] 3. Encode each confirmed failure as a NEW golden case (xfail until fixed). Never weaken the 9.
+      DONE 2026-07-02: corpus `gateway/tests/golden/adversarial_corpus.py` (synthetic secrets + obfuscation
+      transforms + test-only canon_probe leak oracle); suite `gateway/tests/golden/test_adversarial_attacks.py`.
+      Drove REAL patterns.redact_all/detect_pii/detect_secrets + scanner._scan_prompt_sync in-process.
+      Gate `pytest tests/golden -q` = 15 passed / 7 skipped / 9 xfailed / 0 failed (9 frozen stay green).
+      9 CONFIRMED gaps encoded as xfail(strict) → R4 fix flips to XPASS forcing un-xfail:
+        G1 (5, P0 LEAK): SSN U+2011, SSN fullwidth, email fullwidth @, email zw, key zw.
+        G2 (2, P0 LEAK): base64(SSN), base64(key) pass through un-decoded.
+        G3 (2, P1 MISS): chunk-split "ig no re", spaced "ign ore" injection → allow.
+      12 already-correct behaviours FROZEN as passing regression guards (plain PII redact, plain/homoglyph/
+      leet injection block, 3 benign FP-guards). Findings: mcp-parallel/findings/stress-r2/FINDINGS.md.
+      Oracle: aidefence catches plain SSN+email but NOT obfuscated forms → confirms leak + need to normalize.
+      NEXT (R4): add canonicalize_for_detection() in owned scanner/patterns (NFKC + Cf-strip + fold unicode
+      dashes/spaces + NFKD/Mn + confusable fold); run raw AND canonical through detect/redact; ReDoS-safe.
+      Canonical gate cmd: `cd gateway && GATEWAY_LIVE=0 PYTHONPATH=. .venv/bin/python -m pytest tests/golden -q`.
 
 ## R3 — OSS research (GitHub MCP + browser) — REFERENCE ONLY
 - [ ] 4. Study how mature guardrail/LLM-firewall OSS handle these attacks (detection, normalization,
