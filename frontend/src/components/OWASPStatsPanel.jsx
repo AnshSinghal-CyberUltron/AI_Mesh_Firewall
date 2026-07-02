@@ -1,18 +1,47 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  Loader2, RefreshCw, Shield, AlertTriangle, ChevronDown, ChevronRight,
+  Loader2, RefreshCw, Shield, ChevronDown, ChevronRight,
 } from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-} from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
 
+// ── ECharts option builders (replace recharts; the zs-light/zs-dark theme drives
+// axis/grid/tooltip/legend colors — fixes the old hardcoded #94a3b8/#f1f5f9 axes
+// and white recharts tooltip that were unreadable on the dark card).
+function coverageBarOption(rows) {
+  return {
+    grid: { top: 26, right: 12, bottom: 22, left: 36 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    legend: { top: 0, itemHeight: 8, itemWidth: 12, textStyle: { fontSize: 10 } },
+    xAxis: { type: "category", data: rows.map((r) => r.name), axisLabel: { fontSize: 10 } },
+    yAxis: { type: "value", minInterval: 1, axisLabel: { fontSize: 10 } },
+    series: [
+      { name: "Blocked", type: "bar", stack: "a", itemStyle: { color: "#ef4444" }, data: rows.map((r) => r.blocked) },
+      { name: "Allowed", type: "bar", stack: "a", itemStyle: { color: "#94a3b8", borderRadius: [4, 4, 0, 0] }, data: rows.map((r) => r.allowed) },
+    ],
+  };
+}
+
+function threatRadarOption(rows) {
+  const max = Math.max(1, ...rows.map((r) => r.detected));
+  return {
+    tooltip: {},
+    legend: { top: 0, itemHeight: 8, itemWidth: 12, textStyle: { fontSize: 10 } },
+    radar: { indicator: rows.map((r) => ({ name: r.vector, max })), radius: "62%", center: ["50%", "56%"], axisName: { fontSize: 10 } },
+    series: [{
+      type: "radar",
+      data: [
+        { name: "Detected", value: rows.map((r) => r.detected), symbolSize: 3, areaStyle: { color: "rgba(20,184,166,0.20)" }, lineStyle: { color: "#14b8a6" }, itemStyle: { color: "#14b8a6" } },
+        { name: "Blocked", value: rows.map((r) => r.blocked), symbolSize: 3, areaStyle: { color: "rgba(239,68,68,0.15)" }, lineStyle: { color: "#ef4444" }, itemStyle: { color: "#ef4444" } },
+      ],
+    }],
+  };
+}
+
 const FAMILY_CONFIG = {
-  llm: { label: "LLM (OWASP Top 10)", color: "#14b8a6", bg: "bg-teal-50 dark:bg-teal-900/20", border: "border-teal-200 dark:border-teal-800", text: "text-teal-700" },
-  mcp: { label: "MCP / Tool Security", color: "#8b5cf6", bg: "bg-purple-50 dark:bg-purple-900/20", border: "border-purple-200 dark:border-purple-800", text: "text-purple-700" },
-  agentic: { label: "Agentic AI", color: "#f59e0b", bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700" },
+  llm: { label: "LLM (OWASP Top 10)", color: "#14b8a6", bg: "bg-teal-50 dark:bg-teal-900/20", border: "border-teal-200 dark:border-teal-800", text: "text-teal-700 dark:text-teal-300" },
+  mcp: { label: "MCP / Tool Security", color: "#8b5cf6", bg: "bg-purple-50 dark:bg-purple-900/20", border: "border-purple-200 dark:border-purple-800", text: "text-purple-700 dark:text-purple-300" },
+  agentic: { label: "Agentic AI", color: "#f59e0b", bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" },
 };
 
 const HOURS_OPTIONS = [
@@ -24,10 +53,10 @@ const HOURS_OPTIONS = [
 ];
 
 function CoverageBadge({ coverage }) {
-  if (coverage >= 95) return <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 text-[10px] font-semibold rounded-full">EXCELLENT</span>;
-  if (coverage >= 80) return <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800/30 text-blue-700 text-[10px] font-semibold rounded-full">GOOD</span>;
-  if (coverage >= 50) return <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-800/30 text-amber-700 text-[10px] font-semibold rounded-full">MODERATE</span>;
-  return <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-800/30 text-red-700 text-[10px] font-semibold rounded-full">LOW</span>;
+  if (coverage >= 95) return <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold rounded-full">EXCELLENT</span>;
+  if (coverage >= 80) return <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800/30 text-blue-700 dark:text-blue-300 text-[10px] font-semibold rounded-full">GOOD</span>;
+  if (coverage >= 50) return <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-800/30 text-amber-700 dark:text-amber-300 text-[10px] font-semibold rounded-full">MODERATE</span>;
+  return <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300 text-[10px] font-semibold rounded-full">LOW</span>;
 }
 
 function FamilySection({ familyKey, vectors, expanded, onToggle }) {
@@ -50,7 +79,7 @@ function FamilySection({ familyKey, vectors, expanded, onToggle }) {
     <div className={`border ${cfg.border} rounded-lg overflow-hidden`}>
       <button
         onClick={onToggle}
-        className={`w-full flex items-center justify-between px-4 py-3 ${cfg.bg} hover:opacity-90 transition-colors`}
+        className={`w-full flex flex-wrap items-center justify-between gap-2 px-4 py-3 ${cfg.bg} hover:opacity-90 transition-colors`}
       >
         <div className="flex items-center gap-3">
           <Shield className={`w-4 h-4 ${cfg.text}`} />
@@ -60,7 +89,7 @@ function FamilySection({ familyKey, vectors, expanded, onToggle }) {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-xs">
             <span className="text-slate-600 dark:text-slate-400">Detected: <span className="font-semibold text-slate-800 dark:text-slate-200">{totalDetected}</span></span>
-            <span className="text-slate-600 dark:text-slate-400">Blocked: <span className="font-semibold text-red-600">{totalBlocked}</span></span>
+            <span className="text-slate-600 dark:text-slate-400">Blocked: <span className="font-semibold text-red-600 dark:text-red-400">{totalBlocked}</span></span>
             <CoverageBadge coverage={avgCoverage} />
           </div>
           {expanded ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
@@ -70,18 +99,9 @@ function FamilySection({ familyKey, vectors, expanded, onToggle }) {
       {expanded && (
         <div className="p-4 space-y-4 bg-white dark:bg-slate-800">
           {chartData.length > 0 ? (
-            <SafeResponsiveChart className="h-[200px]">
-              <BarChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0", borderRadius: "8px" }} />
-                <Bar dataKey="blocked" stackId="a" fill="#ef4444" name="Blocked" />
-                <Bar dataKey="allowed" stackId="a" fill="#94a3b8" name="Allowed" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </SafeResponsiveChart>
+            <SafeResponsiveChart className="h-[200px]" option={coverageBarOption(chartData)} />
           ) : (
-            <div className="text-center py-6 text-xs text-slate-400">No detections in this period</div>
+            <div className="text-center py-6 text-xs text-slate-500 dark:text-slate-400">No detections in this period</div>
           )}
 
           <div className="overflow-x-auto">
@@ -100,7 +120,7 @@ function FamilySection({ familyKey, vectors, expanded, onToggle }) {
                   <tr key={v.code} className="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                     <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200">{v.vector}</td>
                     <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-300">{v.detected}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-red-600">{v.blocked}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-red-600 dark:text-red-400">{v.blocked}</td>
                     <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-300">{v.coverage}%</td>
                     <td className="px-3 py-2 text-right"><CoverageBadge coverage={v.coverage} /></td>
                   </tr>
@@ -181,17 +201,17 @@ export function OWASPStatsPanel() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">
           <div className="text-lg font-bold text-slate-900 dark:text-slate-100">{data ? totalDetected.toLocaleString() : "--"}</div>
           <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-medium">Total Detected</div>
         </div>
         <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">
-          <div className="text-lg font-bold text-red-600">{data ? totalBlocked.toLocaleString() : "--"}</div>
+          <div className="text-lg font-bold text-red-600 dark:text-red-400">{data ? totalBlocked.toLocaleString() : "--"}</div>
           <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-medium">Total Blocked</div>
         </div>
         <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">
-          <div className="text-lg font-bold text-teal-600">{data ? `${overallCoverage}%` : "--"}</div>
+          <div className="text-lg font-bold text-teal-600 dark:text-teal-400">{data ? `${overallCoverage}%` : "--"}</div>
           <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-medium">Coverage Rate</div>
         </div>
         <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">
@@ -211,16 +231,7 @@ export function OWASPStatsPanel() {
           {radarData.length > 2 && (
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 mb-4">
               <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase">Threat Radar (Top Active Vectors)</h4>
-              <SafeResponsiveChart className="h-[250px] w-full">
-                <RadarChart data={radarData}>
-                  <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
-                  <PolarAngleAxis dataKey="vector" tick={{ fontSize: 10, fill: "#64748b" }} />
-                  <PolarRadiusAxis tick={{ fontSize: 9 }} />
-                  <Radar name="Detected" dataKey="detected" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.2} />
-                  <Radar name="Blocked" dataKey="blocked" stroke="#ef4444" fill="#ef4444" fillOpacity={0.15} />
-                  <Tooltip contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0", borderRadius: "8px" }} />
-                </RadarChart>
-              </SafeResponsiveChart>
+              <SafeResponsiveChart className="h-[250px] w-full" option={threatRadarOption(radarData)} />
             </div>
           )}
 

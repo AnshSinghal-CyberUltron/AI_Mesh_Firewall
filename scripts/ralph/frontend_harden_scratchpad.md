@@ -125,7 +125,18 @@
       both themes + 375 stacks clean. 500/401 cascades = F3 env (auth/me 500→downstream 401). Deferred-LOW:
       EngineCard "0F" flagged counter is structurally always-0 (flag folds into redacted bucket) — honest 0,
       logged not changed.
-- [x] 13. LogViewer/LogDetailPage - [ ] 14. OWASPStatsPanel - [ ] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
+- [x] 13. LogViewer/LogDetailPage - [x] 14. OWASPStatsPanel - [ ] 15. Firewall12EnterprisePage - [ ] 16. HowToUse
+      item14 DONE (OWASPStatsPanel, Overview): CHART migration recharts→ECharts — stacked coverage BarChart
+      (Blocked/Allowed per vector) + threat RadarChart (Detected/Blocked top-active vectors) → SafeResponsiveChart
+      `option` (coverageBarOption/threatRadarOption), theme-aware zs-light/zs-dark (fixes old hardcoded
+      #94a3b8/#f1f5f9 axes + white recharts tooltip on dark card); recharts import removed. THEME: CoverageBadge
+      (EXCELLENT/GOOD/MODERATE/LOW) + FAMILY_CONFIG (llm/mcp/agentic label+icon) + Blocked-count red-600 all
+      were text-*-700/red-600 dark-on-dark → dark:*-300/dark:red-400; empty-state slate. RESPONSIVE: summary
+      grid-cols-4→grid-cols-2 sm:grid-cols-4; FamilySection header flex-wrap. DATA-INTEGRITY clean (real
+      /api/security/owasp-stats, honest "--"/"No detections" empty states). Removed unused AlertTriangle import.
+      GATE lint 42/42, build, detector 0. LIVE both themes @1440/1024/768/375: overflow=0 all 8, 0 console/net;
+      radar + stacked-bar visually verified data-identical + theme-aware (dark AND light), badges legible, 375
+      summary 2-col + header wrap confirmed.
       item13 DONE (3-agent workflow inventoried 21 charts). LogViewerPanel = ORPHANED dead code (mounted
       nowhere, confirmed; item-7 precedent → logged, not edited). LogDetailPage (part1, commit 0a805a91):
       DATA-INTEGRITY — timestamp defaulted to now() → honest fmtTimestamp "—"; Method/Endpoint placeholders
