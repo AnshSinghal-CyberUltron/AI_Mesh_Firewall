@@ -546,37 +546,44 @@ def _reassemble_split_words(tokens: list[str]) -> list[str]:
 
 # G6 (multi-turn / crescendo split injection): main._extract_prompt_from_messages
 # folds the OpenAI messages array into one string as ``[role]: content`` lines. A
-# prompt-injection phrase can be fragmented across successive USER turns, with the
-# intervening ``[assistant]: …`` turns breaking contiguity so neither any single
-# turn NOR the full concatenation matches a signature. Reassembling the USER turns
-# only (dropping non-user turns and the role markers) makes the phrase contiguous
-# again for detection. User turns are the untrusted, attacker-driven channel.
+# prompt-injection phrase can be fragmented across successive client-controlled
+# instruction turns, with the intervening ``[assistant]: …`` turns breaking contiguity
+# so neither any single turn NOR the full concatenation matches a signature.
+# Reassembling those instruction turns (dropping the assistant/tool filler + role
+# markers) makes the phrase contiguous again for detection.
+# G27: the OpenAI ``developer`` role is ALSO client-controlled and instruction-bearing,
+# so an injection split across developer turns bypassed the user-only reassembly.
+# Reassemble user AND developer turns (the untrusted, attacker-driven channels).
+# (``system`` is intentionally excluded: legitimate system prompts are usually app-
+# controlled and may quote injection phrases for defensive instruction, which would
+# false-positive; the explanatory-mention carve-out covers the single-turn case.)
 _ROLE_LINE_RE = re.compile(r"^\[(user|assistant|system|developer|tool)\]:\s?(.*)$")
+_INSTRUCTION_ROLES = ("user", "developer")
 
 
 def _reassemble_user_turns(text: str) -> str | None:
-    """Return the USER-turn-only reassembly of a folded multi-turn conversation, or
-    ``None`` when ``text`` is not a multi-turn fold (so single-turn scans are
-    unaffected). Continuation lines of a multi-line user message are kept with that
-    user turn; non-user turns are dropped."""
-    if "[user]:" not in text or "\n" not in text:
+    """Return the instruction-turn-only reassembly (user + developer) of a folded
+    multi-turn conversation, or ``None`` when ``text`` is not a multi-turn fold (so
+    single-turn scans are unaffected). Continuation lines of a multi-line instruction
+    message are kept with that turn; assistant/tool/system turns are dropped."""
+    if "\n" not in text or not any(f"[{r}]:" in text for r in _INSTRUCTION_ROLES):
         return None
     role_lines = 0
-    user_parts: list[str] = []
+    parts: list[str] = []
     cur_role: str | None = None
     for ln in text.split("\n"):
         m = _ROLE_LINE_RE.match(ln)
         if m:
             role_lines += 1
             cur_role = m.group(1)
-            if cur_role == "user":
-                user_parts.append(m.group(2))
-        elif cur_role == "user":
-            user_parts.append(ln)  # continuation of a multi-line user message
-    # Require a real multi-turn fold: >=2 role-labelled turns and >=2 user segments.
-    if role_lines < 2 or len(user_parts) < 2:
+            if cur_role in _INSTRUCTION_ROLES:
+                parts.append(m.group(2))
+        elif cur_role in _INSTRUCTION_ROLES:
+            parts.append(ln)  # continuation of a multi-line instruction message
+    # Require a real multi-turn fold: >=2 role-labelled turns and >=2 instruction segments.
+    if role_lines < 2 or len(parts) < 2:
         return None
-    reassembled = " ".join(p for p in user_parts if p).strip()
+    reassembled = " ".join(p for p in parts if p).strip()
     return reassembled or None
 
 
