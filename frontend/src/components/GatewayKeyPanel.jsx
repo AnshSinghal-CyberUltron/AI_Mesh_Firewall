@@ -26,6 +26,7 @@ export function GatewayKeyPanel() {
   const [actionLoading, setActionLoading] = useState(null);
   const [copied, setCopied] = useState(false);
   const [formError, setFormError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const fetchKeys = useCallback(async () => {
     setLoading(true);
@@ -34,9 +35,14 @@ export function GatewayKeyPanel() {
       if (res.ok) {
         const data = await res.json();
         setKeys(Array.isArray(data) ? data : data.results || []);
+        setLoadError("");
+      } else {
+        // A failed fetch must NOT collapse into the benign "No API keys" empty
+        // state — that hides an outage behind a normal-looking screen.
+        setLoadError(`Failed to load API keys (HTTP ${res.status}).`);
       }
-    } catch {
-      setKeys([]);
+    } catch (err) {
+      setLoadError(err?.message ? `Failed to load API keys: ${err.message}` : "Failed to load API keys.");
     } finally {
       setLoading(false);
     }
@@ -88,7 +94,15 @@ export function GatewayKeyPanel() {
         await fetchKeys();
       } else {
         const errorText = await res.text();
-        setFormError(errorText || `Failed to create key (${res.status})`);
+        let msg = `Failed to create key (HTTP ${res.status}).`;
+        try {
+          const j = JSON.parse(errorText);
+          msg = j.detail || j.error || (j && typeof j === "object" ? Object.values(j).flat().join(" ") : msg);
+        } catch {
+          // Only surface short, non-markup bodies; never dump an HTML/500 page.
+          if (errorText && errorText.length < 200 && !/[<>]/.test(errorText)) msg = errorText;
+        }
+        setFormError(msg);
       }
     } catch (error) {
       setFormError(error.message || "Failed to create key.");
@@ -156,12 +170,32 @@ export function GatewayKeyPanel() {
           <Loader2 className="w-5 h-5 text-teal-500 animate-spin" />
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading API keys...</span>
         </div>
+      ) : loadError && keys.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <div>{loadError}</div>
+          </div>
+          <button
+            onClick={fetchKeys}
+            className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Retry
+          </button>
+        </div>
       ) : keys.length === 0 ? (
         <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
           No API keys created. Create one to authenticate gateway requests.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-[24px] border border-slate-200/80 dark:border-slate-700">
+        <>
+          {loadError && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>{loadError}</span>
+            </div>
+          )}
+          <div className="overflow-x-auto rounded-[24px] border border-slate-200/80 dark:border-slate-700">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
@@ -208,11 +242,11 @@ export function GatewayKeyPanel() {
                   </td>
                   <td className="px-3 py-2.5">
                     {k.is_active ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 dark:text-emerald-300">
                         <CheckCircle className="w-3 h-3" /> Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-800/30 text-red-700">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300">
                         <AlertTriangle className="w-3 h-3" /> Revoked
                       </span>
                     )}
@@ -240,7 +274,8 @@ export function GatewayKeyPanel() {
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
 
       {/* Create Modal */}

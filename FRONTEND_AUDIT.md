@@ -85,7 +85,7 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ### Panels (items 3–16)
 | # | Surface | Owner | Dark | Light | 1440 | 1024 | 768 | 375 | Impec | State |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 3 | GatewayKeyPanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 3 | GatewayKeyPanel | me | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ done |
 | 4 | ModelGovernancePanel (+Fields) | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 5 | RoutingGovernancePanel / RoutingAuditPanel / PolicyDomainSwitcher | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 6 | KillSwitchPanel / KillSwitchModelCombobox / ModelStatePanel | me | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -146,6 +146,14 @@ Legend: ⬜ pending · 🔎 verifying · 🔧 fixed+re-verified · ✅ verified-
 ---
 
 ## Per-surface finding log (append-only)
+
+**Item 3 — GatewayKeyPanel DONE (iter3 resumed loop, 2026-07-02):** live-verified (real data: 7 keys) both themes @1440/1024/768/375; console 0 errors; modal form validates (HTML5 required blocks empty submit); no page overflow (table uses internal `overflow-x-auto`).
+- **No-leak PROVEN:** list endpoint `/api/gateways/keys/` returns **no raw-key field** (only 8-char `prefix`); DOM scan found no long-token leak; full key shown once on creation with "will not be shown again" (correct). Attack-Simulator's gateway-key field is masked (dots).
+- **F-GK1 FIXED (data-integrity):** list fetch error/non-ok used to `setKeys([])` → the benign "No API keys created" empty state hid outages. Added a `loadError` state → distinct error UI + Retry when empty, and an inline banner when a refresh fails with keys present. Verified via route-intercepted 500: shows error+Retry, NOT false-empty.
+- **F-GK2 FIXED (theme contrast):** status badges `text-emerald-700`/`text-red-700` had no `dark:` variant (~2.9:1 on dark). Added `dark:text-emerald-300`/`dark:text-red-300` → verified light badge text (was oklch L0.505) now L0.808 in dark; visibly readable.
+- **F-GK3 FIXED (no-leak/polish):** create error dumped raw `res.text()` (could surface an HTML/500 page). Now parses JSON detail/error and only surfaces short non-markup bodies, else a generic "Failed to create key (HTTP n)".
+- lint 37/37, build green, detector clean. Evidence: `mcp-parallel/findings/frontend-harden/gateway-key-panel/`.
+
 
 _Setup (2026-07-02): PRODUCT.md + DESIGN.md written; audit scaffold created;
 claims pre-flight + VERIFY-ONLY set recorded; baseline green; risks R1–R4 logged._

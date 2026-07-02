@@ -26,7 +26,10 @@
       Remaining 8 uPlot candidates migrate under per-surface items (12/13/15). recharts removal = item 24.
 
 ## Per-surface sweep (ONE panel per iteration → verify (both themes, 4 widths) → fix → re-verify → commit)
-- [ ] 3. GatewayKeyPanel     - [ ] 4. ModelGovernancePanel   - [ ] 5. RoutingGovernance/Audit
+- [x] 3. GatewayKeyPanel     - [ ] 4. ModelGovernancePanel   - [ ] 5. RoutingGovernance/Audit
+      iter3: DONE. Live-verified both themes @4 widths (7 real keys), console clean, modal validates, no
+      overflow, no-leak PROVEN (list has no raw key; prefix only). Fixed F-GK1 (fetch error→error state,
+      not false-empty), F-GK2 (badge dark: text variants), F-GK3 (create error text hardened). lint 37/37.
 - [ ] 6. KillSwitch/ModelState - [ ] 7. MCPManager/Scanner/ScanControlMatrix
 - [ ] 8. DatabaseConnection/VectorPolicy - [ ] 9. RAGFeatureTest/RAGAttackTrust/PipelineTelemetry
 - [ ] 10. OutputGuardrailControls/Charts - [ ] 11. AttackSimulatorPanel - [ ] 12. PolicyManagement/Analytics
