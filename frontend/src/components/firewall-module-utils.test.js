@@ -143,3 +143,25 @@ test("module 1.1 prefers request-scoped soc-kpis (distinct count, includes block
   assert.equal(byLabel["Allowed through gateway"], "7");
   assert.equal(byLabel["Rate-limited or blocked"], "8");
 });
+
+test("module 1.5 headline uses the uncapped routing count, not the limit=500 page", () => {
+  // The feed is fetched source=routing with limit=500, so `threatFeed` caps at the
+  // page size while the server reports the true total via `count` (threatFeedCount).
+  // filterEventsForModule("1.5") matches every routing row via the `sources` clause,
+  // so "Routing decisions" must reflect the uncapped total — same override as 1.4.
+  const feed = Array.from({ length: 3 }, (_, index) => ({
+    id: `route-${index}`,
+    action: "allow",
+    metadata: { source: "routing", event_type: "model_routed" },
+    timestamp: new Date().toISOString(),
+  }));
+
+  const withCount = buildModulePageData("1.5", feed, { threatFeedCount: 529 });
+  const byLabel = Object.fromEntries(withCount.summaryCards.map((card) => [card.label, card.value]));
+  assert.equal(byLabel["Routing decisions"], "529"); // uncapped server count, not the 3 loaded rows
+
+  // Without the server count, it honestly falls back to the loaded-page size.
+  const noCount = buildModulePageData("1.5", feed, {});
+  const fallback = Object.fromEntries(noCount.summaryCards.map((card) => [card.label, card.value]));
+  assert.equal(fallback["Routing decisions"], "3");
+});
