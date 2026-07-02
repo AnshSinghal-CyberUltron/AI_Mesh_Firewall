@@ -50,6 +50,8 @@ Cross-seam work must follow `docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md` and be rati
 
 | claude-ralph-stress | `gateway/ai_mesh_gateway/{policy_engine,output_guard,bedrock_scanner,scanner,patterns,typed_placeholder_redactor,context_guard}.py`, `gateway/tests/golden/**`, `frontend/src/components/{ModelConnectionPanel,OutputPipelineTimeline}.jsx`, `scripts/ralph/stress_scratchpad.md`, `scripts/ralph/precommit-secret-scan.sh`, `docs/stress/**` | R0–R7 chat-pipeline adversarial stress + client E2E + trace-card polish | 2026-07-02T09:30:43Z | active |
 
+| cursor-ralph-iter23 | `scripts/mcp_oauth_transport_live.py`, `mcp-parallel/findings/p9-31/**`, `docs/mcp/PARALLEL_CLAIMS.md`, `.cursor/ralph/scratchpad.md`, `scripts/ralph/mcp_progress.md` | P9.31 OAuth/transport correctness under load | 2026-07-02T10:50:00Z | released |
+
 > **New program — chat-pipeline adversarial stress (`claude-ralph-stress`).** Separate from the MCP-hardening work above. Owns gateway **chat** modules (a Claude-Code-owned area), the golden suite, and a **narrow** frontend carve-out of only `ModelConnectionPanel.jsx` + `OutputPipelineTimeline.jsx` (Cursor's broad `frontend/**` is otherwise respected). Never touches `MCPConnectorPanel.jsx`, `mcp_*` gateway files, or `services/mcp-broker/**`. A pre-commit secret-scan guard (`scripts/ralph/precommit-secret-scan.sh`, installed at `.git/hooks/pre-commit`) blocks any commit containing the runtime OpenRouter key (one-way fingerprint) or a real-shape `sk-or-` token outside vetted redaction fixtures — this protects **all** sessions.
 
 ## Hive

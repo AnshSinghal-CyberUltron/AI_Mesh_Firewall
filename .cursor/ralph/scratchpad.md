@@ -1,9 +1,21 @@
 ---
-iteration: 22
+iteration: 23
 max_iterations: 100
 completion_promise: COMPLETE
 status: ACTIVE
 ---
+
+## iter23 (2026-07-02) — P9.31 OAuth/transport correctness under load
+- Item #31 DONE: `scripts/mcp_oauth_transport_live.py` hardened login (429 honor-wait,
+  15 attempts, inter-org gap). **GREEN 3× (67/67 checks each):** every stdio server
+  across 3 orgs stays `auth_type=none`; control oauth-start on stdio returns 400 with
+  transport error (B1 guard LIVE — not "Server has no URL"); never flipped to oauth;
+  under 4× concurrent 15-wide echo load **oauth-signal responses=0**. HTTP-oauth:
+  `linear-manual-oauth` authorized clean (47 tools, needs_reauth=false); `stub-oauth`
+  valid pending (0 tools). Playwright B1 8/8 PASS. Findings:
+  `mcp-parallel/findings/p9-31/OAUTH_TRANSPORT.md`.
+- iter23 gateway-wiring recheck (P4.13/P6.18): still BLOCKED — broker `/{org}/rpc` 404,
+  `broker_send_rpc` absent from gateway (stdio-only path).
 
 ## iter22 (2026-07-02) — P9.29 sustained load: Cursor 2nd-oracle pooling/reuse/cgroup corroboration
 - Item #29 was already marked [x] by the parallel Claude session (`scripts/mcp_load_live.py`, host-cgroup
