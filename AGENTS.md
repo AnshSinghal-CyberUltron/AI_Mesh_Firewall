@@ -234,6 +234,13 @@
     (redact-only), fail CLOSED (withhold) on scan error; notifications pass through. Files mcp_proxy.py +
     test_mcp_bare_proxy_scan.py (+2). Gate: 26 bare-proxy + 1087 broad sweep passed. ext-proxy egress fully
     scanned (result all shapes/methods + error, streaming + non-streaming).
+  - CHG-0041 (2026-07-02) — G2 item 2 (inbound + logging): (1) audited gateway MCP logging = CLEAN (only
+    target_url/exception messages/token-count metrics; no raw args/result/PII; audit raw-store off by default).
+    (2) extended the ext-proxy inbound credential block from tools/call-only to prompts/get (same
+    params.arguments shape; _EXT_ARG_SCAN_METHODS) — an accidental credential in prompt args no longer egresses
+    raw; resources/read excluded (auth-in-URI would false-block). Removed the dead _ext_is_tools_call flag
+    (CHG-0039 left it unread). Files mcp_proxy.py + test_mcp_bare_proxy_scan.py (+1). Gate: 27 bare-proxy + 1088
+    broad sweep passed.
   - CHG-0040 (2026-07-02) — P4.13 Blocker 2: MCPServerRegistration.url URLField→CharField + migration 0015
     so ws:// registers (serializer SSRF guard unchanged); ws-everything.stub in MCP_ALLOW_INTERNAL_HOSTS;
     ws stub echo prefix fixed. 4/4 transports PASS ROUNDS=3; gateway ss :443 empty. Cross-seam (control,
@@ -257,3 +264,5 @@
   form (localStorage-token injection alone does NOT establish a session — the AuthContext guard bounces to
   /login). Module-1.1 is telemetry-heavy: keep panel/login waits ≥60s so a slow-but-correct render is not a
   false failure; never lower an assertion to make a flaky gate pass.
+
+<!-- mcp-page-ralph --> MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true

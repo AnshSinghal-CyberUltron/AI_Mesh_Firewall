@@ -352,8 +352,20 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   through. Files: mcp_proxy.py, test_mcp_bare_proxy_scan.py (+2). Gate: 26 bare-proxy + 1087 broad sweep
   passed. ext-proxy egress now fully scanned (result across all shapes + methods, AND error, streaming +
   non-streaming).
+- **CHG-0041** (2026-07-02) — G2 item 2 (inbound credential guard + logging audit): (1) audited the gateway
+  MCP path for a PII/secret-to-logs leak → CLEAN: `mcp_proxy` logs only `target_url` (allowlisted host, no
+  userinfo), the scan orchestrator logs only exception messages, `metrics.record_bedrock_call` logs
+  method/model/token-counts (no content), and the audit record's raw prompt/response store is off by default —
+  no raw-payload logging. (2) Extended the ext-proxy inbound credential block from `tools/call`-only to
+  `prompts/get` (identical `params.arguments` shape; new `_EXT_ARG_SCAN_METHODS`) so an accidental credential
+  in prompt-template args no longer egresses raw to the external server; `resources/read` is EXCLUDED (its
+  param is a URI — blocking a legit `https://user:token@host` would break authed reads). Removed the dead
+  `_ext_is_tools_call` flag (CHG-0039 left it set-but-never-read). Files: mcp_proxy.py,
+  test_mcp_bare_proxy_scan.py (+1). Gate: 27 bare-proxy + 1088 broad sweep passed.
 - **CHG-0040** (2026-07-02) — P4.13 Blocker 2: `MCPServerRegistration.url` URLField→CharField + migration
   `0015` so `ws://` registers (serializer `is_safe_outbound_url` unchanged); `ws-everything.stub` added to
   `MCP_ALLOW_INTERNAL_HOSTS`; ws stub echo `Echo: {message}` parity; P10 agent-pytest timeout 180→360s.
   4/4 transports PASS ROUNDS=3; gateway ss :443 empty. Cross-seam control (iter39). Evidence:
   `mcp-parallel/findings/p4-13/RECHECK_ITER39.md`.
+
+- MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true

@@ -1,0 +1,80 @@
+# Claude Code Ralph — MCP Page Fix + Revamp + Stress. ≥50 iters. Do ONE per iteration. Log every change to 4 memories.
+# COMPLETE only when ALL 50 are [x] AND the final stress+verify pass is green 3×.
+
+## A. Modal typing bug — reproduce with TYPE-SIMULATION, then fix (issues 1)
+- [x] 01. Build a Playwright type-sim harness (keyboard.type delay:40 / pressSequentially — NEVER fill). DONE: scripts/ralph/mcp_page_typesim.mjs (reusable — exports typeSim/login/openRegisterDialog/clearByKeyboard; clears via Ctrl+A→Delete, never fill; per-keystroke focus + comma-preservation tracking). CP01 smoke green: login→modal→type "a,b,c" into name via keyboard.type(delay:40)→value correct, commas 2/2, focusKeptAll=true (mcp-parallel/findings/mcp-page/cp01/report.json). ENV: control(daphne) wedges under the parallel loop's 4 concurrent harnesses (→ /api/auth/token/ HTTP 000; pg 19/400 healthy = daphne thread-serialization, not DB); restart control to clear backlog then run. Four-memory log written.
+- [ ] 02. Reproduce: type "a,b,c --flag,x" char-by-char into Arguments (comma-separated) → capture comma-drop / focus-loss.
+- [ ] 03. Reproduce the same on name/URL/command/headers fields; record which remount.
+- [ ] 04. Root-cause the remount (MCPConnectorPanelInner input identity: nested-in-render / changing key / portal children recreated).
+- [ ] 05. Fix so controlled inputs keep focus per keystroke and commas enter normally.
+- [ ] 06. Verify: type long comma-containing strings char-by-char in EVERY field; final values correct, focus never drops.
+
+## B. Register flow — connect-first, error-inline, close-after-tools (issue 2)
+- [ ] 07. On Register: attempt the MCP connection INLINE (don't close the modal yet).
+- [ ] 08. On failure: show a clear error ON THE SAME modal; keep it open; let the user fix + retry.
+- [ ] 09. On success: discover tools, THEN close the modal and add to the server list.
+- [ ] 10. Verify (type-sim): success path lists with real tools; failure path stays open with inline error; a server NEVER lists with 0 tools.
+
+## C. All transports in the per-org gVisor sandbox (issue 3)
+- [ ] 11. Confirm current: http/sse/ws run in the backend, only stdio in the sandbox (frontend shows sandbox only for stdio).
+- [ ] 12. Move http/sse MCP execution INTO the per-org sandbox agent (egress allow-listed to the registered upstream).
+- [ ] 13. Move websocket MCP execution INTO the sandbox agent.
+- [ ] 14. Gateway talks ONLY to the sandbox for every transport; assert the gateway opens NO direct upstream connection.
+- [ ] 15. Frontend shows "sandboxed" for ALL transports (fix the stdio-only display); verify per transport.
+
+## D. Clean client errors + developer debuggability (issues 5, 6, 7)
+- [ ] 16. Sanitize the MCP error path (mcp_proxy.py:1838 + mcp_stdio_adapter.py:306-308): clean, branded, NON-revealing message (no "sandbox-agent logs", no exit codes, no host-dep hints).
+- [ ] 17. Map internal failures (e.g., exit -9 = OOM, start-timeout, image-missing) → clean client messages + a stable client-facing error code + correlation id.
+- [ ] 18. Add a DEVELOPER diagnostic channel: structured logs keyed by correlation id + a dev-only debug view/endpoint that shows the real cause (code, stderr, sandbox, resource) — never exposed to clients.
+- [ ] 19. Verify: same failure shows a beautiful clean error to the client AND a full trace to the developer via the correlation id.
+
+## E. Fix Ruflo MCP OOM (issues 4, 5)
+- [ ] 20. Diagnose Ruflo's exit -9 (SIGKILL/OOM vs 2048MB sandbox limit + node heap); raise the limit for heavy servers OR add swap/heap tuning; handle OOM gracefully.
+- [ ] 21. Verify Ruflo MCP connects and lists real tools (no 0-tools/infinite-loading); if genuinely unsupported, show the clean error (D), not a raw crash.
+
+## F. Enforcement stats + errors anomaly (issues 8)
+- [ ] 22. Diagnose 52473 events / 0 BLOCK / 225 redact / 422 error: is block wired for MCP events? why never triggered? what are the 422 errors?
+- [ ] 23. Fix enforcement so blocks occur where policy/guard dictates on the MCP path; eliminate/justify the 422 errors.
+- [ ] 24. Verify the event counters (allow/block/redact/monitor/error) reflect real enforced reality on live traffic.
+
+## G. Observability 500 (issue 9)
+- [ ] 25. Reproduce + root-cause the MCP Observability tab 500.
+- [ ] 26. Fix; verify the Observability view loads with correct, real data.
+
+## H. Tier-2 enable 400 (issue 10)
+- [ ] 27. Reproduce + root-cause enabling Tier-2 → HTTP 400 ("0 Tier-2 rows active across all scopes"); trace the enablement/inherit endpoint + scope rows.
+- [ ] 28. Fix the enablement path (create/activate the scope row on enable); verify Inherit/Enabled/Disabled all work and rows activate.
+
+## I. Context-assembly (1.4) telemetry (issue 13)
+- [ ] 29. Reproduce "Context Fields 500 assembled / PII Redaction 0 sanitized / Size Check 0 denied / Final Context 0 approved": is 500 a hardcoded cap? are the stages recording at all?
+- [ ] 30. Root-cause: context-assembly pipeline stages not instrumented / counters not wired / display cap.
+- [ ] 31. Fix so assembled/sanitized/denied/approved all record REAL numbers from the running 1.4 pipeline.
+- [ ] 32. Verify with live traffic that carries PII/oversized context — sanitized/denied/approved move correctly.
+
+## J. 50-MCP connect + tool discovery + execution (issue 4)
+- [ ] 33. Connect all 50 catalog MCPs via the UI (client flow, type-sim); the 10 priority first.
+- [ ] 34. Tool discovery for all 50 — each shows its real tool list (0 only if the server truly has none).
+- [ ] 35. Tool execution for the free/local ones (Everything/Filesystem/Fetch/Memory/Time/Git/SQLite) — real results.
+- [ ] 36. Triage every MCP that fails (per-server root cause: transport, auth, OOM, timeout, image) → fix → re-test. None left broken (or clean-errored if unsupported).
+
+## K. Every button/click on ?tab=firewall-1-4 (issue 11)
+- [ ] 37. MCP Servers list (19+): each per-server action (connect/authorize/disable/scan/delete/details) works + reflects state.
+- [ ] 38. Tool Discovery tab — every control; real data.
+- [ ] 39. Tool Execution tab — every control; real execution.
+- [ ] 40. Scan Controls + Scan Control Matrix — every toggle; real effect.
+- [ ] 41. MCP Security Policies — every control; real effect.
+- [ ] 42. Observability tab — every control (post-G fix); real data. All in BOTH themes at 1440/1024/768/375; zero console errors.
+
+## L. Impeccable full revamp of the MCP page (issue 12 — no restrictions)
+- [ ] 43. /impeccable init + audit the whole firewall-1-4 page.
+- [ ] 44. Revamp the MCP page from scratch with Impeccable — modal, server cards, tabs, tool views, observability — no restrictions.
+- [ ] 45. Wire the revamp to REAL data (no static/mock/wrong values); honest empty/loading/error states; no data leakage (no raw keys/PII/backend).
+- [ ] 46. Verify the revamp end-to-end (type-sim + both themes + responsive + impeccable detector clean).
+
+## M. 100k-RPS stress (issue 7)
+- [ ] 47. Build/extend a load harness (Ruflo workers across your cores) to drive 100k concurrent tool calls / 100k RPS across many orgs × sandboxes.
+- [ ] 48. Run at 100k RPS: measure failure rate, p50/p99 latency, sandbox saturation, 503s, OOMs; capture bottlenecks.
+- [ ] 49. Fix bottlenecks (pooling, sandbox warm-pool, broker concurrency, Redis/PG limits, backpressure) until it serves the target with ~0 failures; re-run.
+
+## N. Final
+- [ ] 50. Full re-verify: A–M green; 100k-RPS 3× consecutive with ~0 failures; cross-tenant leakage never observed under load; all 4 memories logged; changelog complete → <promise>COMPLETE</promise>.

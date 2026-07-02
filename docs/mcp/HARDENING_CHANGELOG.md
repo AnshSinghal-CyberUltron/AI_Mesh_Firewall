@@ -1320,3 +1320,36 @@ the prod compose/manifests is tracked under G3 item 12.
 - **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q`
   → 26 passed (+2: a connection-string secret in a non-streaming error message AND in an SSE error frame is
   masked — `s3cr3tPass` absent). Broad sweep `ai_mesh_gateway/tests` → 1087 passed, 0 failed.
+
+### CHG-0041 — Extend the ext-proxy inbound credential block to prompts/get; verify logging is PII-clean (G2 item 2)
+- **Date:** 2026-07-02
+- **Scratchpad item:** G2 item 2 / 1.4 — inbound credential egress prevention (the client→server side, twin of
+  the outbound result/error scan).
+- **Files:** `gateway/ai_mesh_gateway/mcp_proxy.py` (`_EXT_ARG_SCAN_METHODS`; the ext_mcp_proxy inbound
+  credential block now runs for `prompts/get` too; removed the now-dead `_ext_is_tools_call` flag);
+  `gateway/ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py` (+1).
+- **WHAT (two parts):**
+    1. **Logging audit — CLEAN (no change):** audited the gateway MCP path for a PII/secret-to-logs leak.
+       `mcp_proxy` logs only `target_url` (allowlisted host, no userinfo); the scan orchestrator logs only
+       exception messages, not the scanned text; `metrics.record_bedrock_call` logs method/model/token-counts
+       only (no prompt/content); the audit record (`POLICY_AUDIT_STORE_PROMPT_RESPONSE`, default off) does not
+       store raw prompt/response. No raw-payload logging.
+    2. **Inbound credential block extended:** `ext_mcp_proxy` credential-scanned tool ARGS only for
+       `tools/call`, so an accidental credential in a `prompts/get` `arguments` object (identical
+       `params.arguments` shape) would egress raw to the external server. Now the block runs for
+       `_EXT_ARG_SCAN_METHODS = {tools/call, prompts/get}`. `resources/read` is deliberately EXCLUDED — its
+       param is a URI, and blocking a legitimate `https://user:token@host` auth-in-URL would break authed
+       reads. Also removed the `_ext_is_tools_call` flag, which CHG-0039 left dead (set, never read).
+- **WHY:** symmetry with the outbound egress hardening (CHG-0039/0040) — the credential-egress guard should
+  cover every method carrying a `params.arguments` object, not just tools/call; and the logging audit confirms
+  the guardrails don't themselves leak the data to logs.
+- **NOW DOES:** a credential in `prompts/get` arguments is blocked before it egresses to the external server
+  (parity with tools/call); logging carries no raw MCP payload.
+- **Touched whose work:** completes the ext-proxy inbound credential guard (CHG-0033 header hygiene + the
+  tools/call arg block). Result/error scan unchanged.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_bare_proxy_scan.py -q`
+  → 27 passed (+1: a credential in `prompts/get` args is blocked, upstream NOT contacted). Broad sweep
+  `ai_mesh_gateway/tests` → 1088 passed, 0 failed. `grep -c _ext_is_tools_call mcp_proxy.py` → 0 (dead flag
+  removed).
+
+### 2026-07-02 — MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
