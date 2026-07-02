@@ -120,9 +120,17 @@
         folded); detect_pii/detect_secrets/_redact_obfuscated transport loops also match the canonical decode
         so the OUTER blob is masked. Binary garbage still dropped; FP floor holds. 7 golden frozen. Full
         gateway 1077 passed; golden 144 passed/7 skipped 3x.
-      R5 STATUS 2026-07-02: control auth is RATE-LIMITED (429) after repeated logins + the Playwright JWT
-        expired -> R5 (connect models + run corpus) transiently blocked this session. Retry when the auth
-        rate-limit clears (dev creds admin@zeroshield.io / Adm1n!Pass#2024; OpenRouter base https://openrouter.ai/api/v1).
+      R5 LIVE VALIDATION PASS 2026-07-02 (see mcp-parallel/findings/stress-r2/R5_LIVE_VALIDATION.md): auth
+        rate-limit cleared; 10 free OpenRouter models (:free) already connected. Drove the corpus through the
+        REAL pipeline (POST /v1/chat/completions, model=google/gemma-4-31b-it:free). ALL enforcement correct
+        LIVE: plain/homoglyph/small-caps(G19)/TAG(G17)/base64/COMPOUND-b64∘zw(G26)/spaced(G3)/disregard(G15)
+        injections all -> 400 BLOCK; benign -> 200 allow. PII (SSN+card) -> zeroshield.action=redact
+        ("before forwarding to the LLM"), policy stage=redact, SSN+card ABSENT from response payload = NO PII
+        reaches model. Routing reroute observed; traces correct per-stage. Every obfuscation fix from this
+        session confirmed to block END-TO-END live. kill-switch NOT re-toggled (org-global -> concurrent-session
+        hazard; verified earlier). No OpenRouter key touched (models pre-connected, key encrypted at rest).
+        REMAINING for COMPLETE: R6 "polish complete" + impeccable-detector gate not fully run; live-golden 09
+        (co-maintained, not a stated criterion) still model-flaky.
       G25 DONE 2026-07-02: additional PII-type coverage. detect_pii missed MAC addresses (device IDs) and
         government/national IDs (passport/Aadhaar/UK NINO/driver's licence). Fixed in patterns.py PII_PATTERNS:
         mac_address (distinctive 6-hex-pair format, low FP) + cue-gated government_id (cue word + bounded
