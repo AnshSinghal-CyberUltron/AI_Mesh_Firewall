@@ -204,10 +204,21 @@ def test_stdio_rpc_forwards_to_agent_and_touches_activity(
     assert entry.last_activity == 1_719_660_000.0
 
 
-def test_stdio_rpc_502_on_agent_unreachable(
+def test_stdio_rpc_503_provisioning_on_agent_unreachable(
     broker_client: TestClient,
     docker_manager: DockerManager,
+    monkeypatch,
 ):
+    # B3 #20: when the agent socket never binds within the cold-start retries the
+    # broker reports a RETRYABLE 503 provisioning state (not a hard 502) so the
+    # gateway client backs off + retries instead of surfacing "temporarily
+    # unavailable".
+    import sandbox.routes as routes
+
+    monkeypatch.setattr(routes, "_AGENT_READY_RETRIES", 2)
+    monkeypatch.setattr(routes, "_AGENT_READY_BASE_DELAY", 0.0)
+    monkeypatch.setattr(routes, "_AGENT_READY_MAX_DELAY", 0.0)
+
     running = _mock_container()
     docker_manager.client.containers.list.return_value = [running]
 
@@ -228,7 +239,8 @@ def test_stdio_rpc_502_on_agent_unreachable(
             headers=_auth_headers(),
         )
 
-    assert resp.status_code == 502
+    assert resp.status_code == 503
+    assert "provisioning" in resp.json()["detail"].lower()
 
 
 def test_status_running_sandbox(broker_client: TestClient, docker_manager: DockerManager):

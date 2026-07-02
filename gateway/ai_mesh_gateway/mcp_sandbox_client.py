@@ -27,6 +27,9 @@ _METHOD_TIMEOUT = float(os.environ.get("MCP_STDIO_METHOD_TIMEOUT", "60"))
 _RETRY_MAX = int(os.environ.get("MCP_SANDBOX_RETRY_MAX", "5"))
 _RETRY_BASE = float(os.environ.get("MCP_SANDBOX_RETRY_BASE_DELAY", "0.5"))
 _RETRY_MAX_DELAY = float(os.environ.get("MCP_SANDBOX_RETRY_MAX_DELAY", "8.0"))
+# B3 #20: how many times to re-poll ensure while the broker still reports the
+# sandbox as `provisioning` (agent not yet ready), before giving up the warm.
+_ENSURE_READY_MAX = int(os.environ.get("MCP_SANDBOX_ENSURE_READY_MAX", "6"))
 
 
 def _broker_key() -> str:
@@ -120,17 +123,28 @@ async def _request_with_503_retry(
 
 
 async def ensure_sandbox(org_slug: str) -> dict[str, Any]:
-    """Ensure the broker has a running sandbox container for *org_slug*."""
+    """Ensure the broker has a running, READY sandbox container for *org_slug*.
+
+    The broker's warm ensure blocks (bounded) for the in-container agent to bind
+    and returns a ``provisioning`` flag (True = still starting). For a slow cold
+    start (e.g. first-time ``npx`` fetch) one warm window may not be enough, so we
+    re-poll ensure with bounded jittered backoff until the agent is ready or the
+    attempt budget is spent — a client-side readiness poll (B3 #19/#20). This is
+    best-effort warming; the actual RPC path still retries independently.
+    """
     url = f"{_BROKER_URL}/v1/sandbox/{org_slug}/ensure"
+    result: dict[str, Any] = {}
     async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await _request_with_503_retry(
-            client,
-            "POST",
-            url,
-            json={"warm": True},
-        )
-    _raise_for_broker_error(response)
-    return response.json()
+        for attempt in range(1, _ENSURE_READY_MAX + 1):
+            response = await _request_with_503_retry(client, "POST", url, json={"warm": True})
+            _raise_for_broker_error(response)
+            result = response.json()
+            if not result.get("provisioning"):
+                return result  # agent ready (or broker doesn't report provisioning)
+            if attempt >= _ENSURE_READY_MAX:
+                break
+            await _sleep_backoff(attempt)
+    return result
 
 
 async def broker_send_jsonrpc(

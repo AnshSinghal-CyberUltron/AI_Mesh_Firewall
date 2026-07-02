@@ -233,9 +233,15 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
                 docker_manager, org_slug, agent_url, payload, timeout
             )
         except httpx.HTTPError as exc:
+            # B3 #20: the agent socket is still not bound after the cold-start
+            # retries — the sandbox is (most likely) still PROVISIONING (e.g. a
+            # slow first-time npx fetch), not hard-broken. Report a RETRYABLE 503
+            # provisioning state so the gateway client backs off + retries, rather
+            # than the hard 502 the client maps to "MCP sandbox is temporarily
+            # unavailable". A bound agent returning 5xx/4xx is still a 502 below.
             raise HTTPException(
-                status_code=502,
-                detail=f"Sandbox agent unreachable: {exc}",
+                status_code=503,
+                detail=f"Sandbox provisioning: agent not ready yet ({exc})",
             ) from exc
 
         if response.status_code >= 500:

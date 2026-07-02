@@ -96,6 +96,33 @@ async def test_ensure_sandbox_retries_503_then_succeeds():
 
 
 @pytest.mark.asyncio
+async def test_ensure_sandbox_polls_while_provisioning():
+    # B3 #20: ensure re-polls while the broker reports provisioning=True, then
+    # returns the ready result once the agent has bound.
+    provisioning = _response(
+        200,
+        json_body={"org_slug": ORG, "status": "running", "provisioning": True, "agent_ready": False},
+        url=f"http://broker.test:8311/v1/sandbox/{ORG}/ensure",
+    )
+    ready = _response(
+        200,
+        json_body={"org_slug": ORG, "status": "running", "provisioning": False, "agent_ready": True},
+        url=f"http://broker.test:8311/v1/sandbox/{ORG}/ensure",
+    )
+    mock_http = AsyncMock()
+    mock_http.request.side_effect = [provisioning, ready]
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with patch.object(client.httpx, "AsyncClient", return_value=mock_http):
+        result = await client.ensure_sandbox(ORG)
+
+    assert result["agent_ready"] is True
+    assert result["provisioning"] is False
+    assert mock_http.request.call_count == 2  # polled once while provisioning, then ready
+
+
+@pytest.mark.asyncio
 async def test_broker_send_jsonrpc_success():
     rpc_result = {"jsonrpc": "2.0", "id": 42, "result": {"tools": []}}
     mock_http = AsyncMock()
