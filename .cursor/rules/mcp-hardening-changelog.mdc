@@ -315,3 +315,10 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   frontend (chip render + Playwright + enrich the live branch) — neither safely gate-able from this session
   (no control venv/test DB; no dev server; fe-harden owns item 21). Evidence:
   mcp-parallel/findings/backstop-p21-frontend-tag-reflection/finding.md.
+- **CHG-0037** (2026-07-02, doc — no code change) — completion-readiness matrix `docs/mcp/COMPLETION_READINESS.md`:
+  maps every 1.4 + architecture + stress mandate requirement to CODE-HARDENED (✅) / VERIFIED (🔎) / OPEN (⛔
+  with blocker), citing the CHG evidence per row. Bottom line: the code-level 1.4 / gateway / transport /
+  isolation hardening is comprehensive and gated green (gateway suite 1081 passed); what remains is (a) a
+  dedicated host for the VERY-HARD stress suite (items 14–19, the completion gate), (b) infra (gVisor install,
+  egress default-deny, OTEL tracing, PG/Redis backup, npm prod-enable), (c) owned/cross-plane (item-21 UI tag
+  reflection via the control response, item-5 tag vocab). States plainly that completion is NOT met and why.

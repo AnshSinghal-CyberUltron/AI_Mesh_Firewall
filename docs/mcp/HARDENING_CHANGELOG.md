@@ -1194,3 +1194,23 @@ the prod compose/manifests is tracked under G3 item 12.
   npm build + Playwright (chips render for a PII payload, both themes).
 - **VERIFY:** `grep -n compliance_tags frontend/src/components/simulator/MCPGuardrailSimulator.jsx` → none;
   `grep -n compliance_tags control/ai_mesh_control/policy/evaluation_views.py` → import only, not in payload.
+
+### CHG-0037 — Completion-readiness matrix (source of truth for what's left + why)
+- **Date:** 2026-07-02
+- **Type:** consolidation doc (no code change).
+- **Scratchpad item:** G7 item 22 (recursive verification / completion assessment) — provides the honest
+  requirement→status map the completion gate needs.
+- **Files:** `docs/mcp/COMPLETION_READINESS.md` (new).
+- **WHAT:** a single matrix mapping every 1.4 + architecture + stress mandate requirement to CODE-HARDENED /
+  VERIFIED / OPEN with the specific evidence (CHG id) or blocker. Consolidates the 36 prior entries into an
+  actionable finish-line view for the parallel sessions + any future completion check.
+- **WHY:** after ~13 backstop entries the per-change log is long; a requirement-indexed status view makes it
+  obvious that the CODE-level 1.4/gateway/transport/isolation hardening is comprehensive and gated green,
+  while the remainder is (a) dedicated-host stress (items 14–19, the completion gate), (b) infra (gVisor,
+  egress default-deny, OTEL tracing, PG/Redis backup, npm prod-enable), and (c) owned/cross-plane (item-21 UI
+  tag reflection, item-5 vocab). It also states plainly that completion is NOT met and why.
+- **NOW DOES:** documents the finish line; nothing functional changed.
+- **Touched whose work:** none (new doc). Cross-references every prior CHG + the parallel sessions' domains.
+- **VERIFY:** read `docs/mcp/COMPLETION_READINESS.md`; each ✅ row cites a CHG whose VERIFY command is in this
+  changelog; the gateway suite gate is `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`
+  → 1081 passed.

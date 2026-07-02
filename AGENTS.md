@@ -208,6 +208,11 @@
     frontend (chip render + Playwright) — neither safely gate-able here (no control venv; no dev server; owned
     by fe-harden). Evidence mcp-parallel/findings/backstop-p21-frontend-tag-reflection/finding.md. No code
     changed.
+  - CHG-0037 (2026-07-02, doc) — completion-readiness matrix docs/mcp/COMPLETION_READINESS.md: maps every 1.4 +
+    architecture + stress requirement to CODE-HARDENED / VERIFIED / OPEN(blocker) with the CHG evidence.
+    Bottom line: code-level 1.4/gateway/transport/isolation hardening is comprehensive + gated green (gateway
+    1081 passed); remainder = dedicated-host stress (items 14-19, the completion gate) + infra (gVisor, egress,
+    OTEL, backup, npm prod-enable) + owned/cross-plane (item-21 UI tags, item-5 vocab). Completion NOT met.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

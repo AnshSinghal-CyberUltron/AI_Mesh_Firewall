@@ -384,3 +384,12 @@
 
 ## G7 — Recursive verification
 - [ ] 22. Re-run G2–G6 end-to-end 3×; adversarial pass; Ruflo consensus green. Only then <promise>COMPLETE</promise>.
+      CHG-0037 (2026-07-02): wrote the completion-readiness matrix docs/mcp/COMPLETION_READINESS.md — every 1.4
+      + architecture + stress requirement mapped to CODE-HARDENED / VERIFIED / OPEN(blocker) with CHG evidence.
+      Code-level G2/G3/G4 hardening is comprehensive + gated green (gateway suite 1081 passed; broker 52;
+      scripts oracle 25). The G5 stress suite (items 14-19) is the completion gate and is ENTIRELY OPEN,
+      blocked on a DEDICATED non-shared host (300-500 sandboxes / 5k-10k calls / soak / bombs / chaos are
+      destructive or exceed the shared host's fork budget). The 3×-consecutive stress pass has NOT run at that
+      magnitude → item 22 NOT satisfiable from this shared-stack backstop session; the <promise> stays
+      unspoken. Remaining non-stress gaps are infra (gVisor/egress/OTEL/backup/npm-prod) or owned/cross-plane
+      (item-21 UI tags via control response, item-5 vocab).
