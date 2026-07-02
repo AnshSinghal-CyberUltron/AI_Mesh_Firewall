@@ -85,10 +85,32 @@ _BARE_URL_RE = re.compile(r"(?<![\]\(\[])https?://[^\s)<>\[\]]+", re.IGNORECASE)
 # SVG <image|use href>, and CSS url(...). Each captures the URL as group(1). Every
 # quantifier is a bounded/greedy negated char class ([^"'>\s]+) or a bounded {0,200} —
 # no nested/ambiguous repetition, so they are LINEAR-time (ReDoS-safe).
-_HTML_SRC_RE = re.compile(r'\b(?:src|srcset|poster|data)\s*=\s*["\']?\s*(https?://[^"\'>\s]+)', re.IGNORECASE)
-_HTML_SVG_HREF_RE = re.compile(r'<\s*(?:image|use)\b[^>]{0,200}?\bhref\s*=\s*["\']?\s*(https?://[^"\'>\s]+)', re.IGNORECASE)
+# Single-URL zero-click media attributes (auto-fetch): src on img/iframe/video/audio/
+# source/embed/track, <object data>, <video poster>, plus <form action|formaction> and
+# the deprecated background=/cite=. Each captures the URL as group(1).
+_HTML_ATTR_RE = re.compile(
+    r'\b(?:src|poster|data|action|formaction|background|cite)\s*=\s*["\']?\s*(https?://[^"\'>\s]+)',
+    re.IGNORECASE,
+)
+# G42: href that AUTO-fetches or hijacks resolution — <link href> (preload/prefetch/
+# dns-prefetch/stylesheet/preconnect), SVG <image|use href>, <base href>. One-click
+# <a>/<area href> are deliberately NOT matched (handled as links, not zero-click).
+_HTML_HREF_RE = re.compile(
+    r'<\s*(?:link|image|use|base)\b[^>]{0,300}?\bhref\s*=\s*["\']?\s*(https?://[^"\'>\s]+)',
+    re.IGNORECASE,
+)
+# G42: <meta http-equiv="refresh" content="0;url=..."> zero-click auto-navigation.
+_HTML_META_URL_RE = re.compile(
+    r'<\s*meta\b[^>]{0,300}?\burl\s*=\s*["\']?\s*(https?://[^"\'>\s]+)', re.IGNORECASE,
+)
 _CSS_URL_RE = re.compile(r'url\(\s*["\']?\s*(https?://[^"\')\s]+)', re.IGNORECASE)
-_HTML_BEACON_RES = (_HTML_SRC_RE, _HTML_SVG_HREF_RE, _CSS_URL_RE)
+# G42: srcset carries MULTIPLE comma-separated "URL [descriptor]" candidates — G41's
+# single-URL capture defanged only the first, leaking the rest. Handle the whole value.
+_HTML_SRCSET_RE = re.compile(r'\bsrcset\s*=\s*["\']([^"\']*)["\']', re.IGNORECASE)
+_SRCSET_URL_RE = re.compile(r'https?://[^\s,]+')
+# A real responsive srcset is short; beyond this a value is pathological -> fail closed.
+_SRCSET_MAX_LEN = 4096
+_HTML_BEACON_RES = (_HTML_ATTR_RE, _HTML_HREF_RE, _HTML_META_URL_RE, _CSS_URL_RE)
 # Cap the number of URLs inspected per output so a pathological response with
 # thousands of links cannot make neutralization super-linear.
 _MAX_EXFIL_URLS = 256
@@ -197,8 +219,19 @@ def _scan_exfil_channels(text: str):
     # match for bare.
     passes = (
         ("image", _MD_IMAGE_RE), ("link", _MD_LINK_RE), ("bare", _BARE_URL_RE),
-        ("html", _HTML_SRC_RE), ("html", _HTML_SVG_HREF_RE), ("html", _CSS_URL_RE),
+        ("html", _HTML_ATTR_RE), ("html", _HTML_HREF_RE), ("html", _HTML_META_URL_RE),
+        ("html", _CSS_URL_RE),
     )
+    # G42: srcset can carry several comma-separated source URLs — yield each smuggling one.
+    for sm in _HTML_SRCSET_RE.finditer(text):
+        for um in _SRCSET_URL_RE.finditer(sm.group(1)):
+            if budget <= 0:
+                return
+            budget -= 1
+            u = um.group(0).strip().rstrip(").,'\"")
+            if _url_smuggles_data(u) and ("html", u) not in seen:
+                seen.add(("html", u))
+                yield "html", u, _url_smuggles_data(u)
     for kind, regex in passes:
         for m in regex.finditer(text):
             if budget <= 0:
@@ -261,10 +294,26 @@ def neutralize_exfil_channels(text: str) -> str:
             return m.group(0).replace(m.group(1), "[exfil-redacted]", 1)
         return m.group(0)
 
-    # G41: neutralize HTML/SVG/CSS zero-click beacons FIRST so the URL is gone before the
-    # bare-URL pass (which would otherwise only strip a PII payload and leave the tag's
+    def _srcset_sub(m: "re.Match[str]") -> str:
+        # G42: defang EVERY smuggling URL inside a (possibly multi-source) srcset value.
+        value = m.group(1)
+        # DoS bound: a legit responsive srcset is short (a handful of sizes). A
+        # pathologically long value (hundreds of URLs) would make the per-URL
+        # _url_smuggles_data scan slow, so fail closed and defang it wholesale.
+        if len(value) > _SRCSET_MAX_LEN and ("http://" in value or "https://" in value):
+            return m.group(0).replace(value, "[exfil-redacted]", 1)
+
+        def _one(um: "re.Match[str]") -> str:
+            u = um.group(0).strip().rstrip(").,'\"")
+            return "[exfil-redacted]" if _url_smuggles_data(u) else um.group(0)
+
+        neutralized = _SRCSET_URL_RE.sub(_one, value)
+        return m.group(0).replace(value, neutralized, 1) if neutralized != value else m.group(0)
+
+    # G41/G42: neutralize HTML/SVG/CSS zero-click beacons FIRST so the URL is gone before
+    # the bare-URL pass (which would otherwise only strip a PII payload and leave the tag's
     # auto-render intact). Strict no-op on benign media (gated by _url_smuggles_data).
-    out = text
+    out = _HTML_SRCSET_RE.sub(_srcset_sub, text)
     for _re in _HTML_BEACON_RES:
         out = _re.sub(_html_sub, out)
     out = _MD_IMAGE_RE.sub(_img_sub, out)
