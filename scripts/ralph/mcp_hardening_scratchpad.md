@@ -1100,6 +1100,21 @@
       item 19) oracle is SOUND: byte-level canary cross-target detection + JSON-RPC id round-trip + fail-closed
       negative matrix (any non-401/403 on a cross-tenant call = breach). Evidence:
       mcp-parallel/findings/backstop-p12b-sandbox-egress-hygiene/audit.md.
+      CHG-0143 (2026-07-03, LOW-MEDIUM — makes the documented runc silent-degradation LOUD): docker_manager
+      _resolve_runtime only validates/raises when MCP_SANDBOX_RUNTIME_REQUIRED=true; in the default
+      (not-required) path it returned the runtime as-is with NO signal — unset → None → Docker default runc
+      (shared host kernel, no gVisor); set to runsc-but-not-installed → returned "runsc" anyway. An operator
+      who mis-set the env and believes they have gVisor got zero signal (BACKSTOP_FINDINGS.md: "silently
+      degrading instead of failing closed"). Defaulting required=true would break dev/CI (no gVisor) + is a
+      deployment-config change. FIX: warn ONCE per manager (self._runtime_degraded_warned, set in __init__)
+      in the not-required branch — unset → warn "WITHOUT a kernel-isolation runtime … set
+      MCP_SANDBOX_RUNTIME=runsc + …_REQUIRED=true"; configured-but-unavailable → warn "NOT available … set
+      …_REQUIRED=true to fail closed"; healthy case quiet. Never raises; returned runtime identical = ZERO
+      behavior change; required=true path untouched. +3 tests. Gate: test_sandbox_lifecycle.py -k runtime 7
+      passed; full lifecycle 49 passed; broker -k "not websocket" 170 passed 0 failed. STILL BLOCKING item 12
+      [x]: install gVisor + set MCP_SANDBOX_RUNTIME=runsc + _REQUIRED=true on the broker in BOTH compose files
+      (+ define the broker in prod compose), prove Runtime=runsc live; network egress default-deny — all need
+      the deploy host. Evidence: mcp-parallel/findings/backstop-p12-runtime-degraded-warning/finding.md.
 
 ## G4 — Production hardening (Phase 3)
 - [ ] 13. Monitoring + metrics + tracing wired; backup; auto-recovery (sandbox/broker/Redis/PG self-heal).

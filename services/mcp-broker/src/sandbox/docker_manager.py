@@ -141,6 +141,9 @@ class DockerManager:
         self._client = client
         self.config = config or SandboxDockerConfig.from_env()
         self._registry = registry
+        # CHG-0143: warn only once about a degraded (non-gVisor) runtime posture, so the
+        # signal is loud at startup without spamming a line per sandbox create.
+        self._runtime_degraded_warned = False
 
     def ping(self) -> bool:
         try:
@@ -409,6 +412,30 @@ class DockerManager:
     def _resolve_runtime(self) -> str | None:
         runtime = self.config.runtime
         if not self.config.runtime_required:
+            # CHG-0143: not required (dev default) — NEVER raise, but make a degraded
+            # (non-gVisor) posture LOUD instead of silent. The default host runtime (runc)
+            # shares the kernel with untrusted tenant workloads; an operator who *thinks*
+            # they deployed with gVisor but mis-set the env would otherwise get runc with
+            # no signal (docs/mcp/BACKSTOP_FINDINGS.md: "silently degrading instead of
+            # failing closed"). Warn ONCE (per manager) to avoid a line per create.
+            if not self._runtime_degraded_warned:
+                if not runtime:
+                    logger.warning(
+                        "MCP sandboxes are starting WITHOUT a kernel-isolation runtime: "
+                        "MCP_SANDBOX_RUNTIME is unset, so Docker uses the default 'runc' "
+                        "(shared host kernel). Set MCP_SANDBOX_RUNTIME=runsc and "
+                        "MCP_SANDBOX_RUNTIME_REQUIRED=true for gVisor isolation in production."
+                    )
+                    self._runtime_degraded_warned = True
+                elif not self.runtime_available(runtime):
+                    logger.warning(
+                        "Configured MCP_SANDBOX_RUNTIME=%r is NOT available in this Docker "
+                        "daemon; sandbox creation will error or fall back to the default "
+                        "runtime. Install the runtime, or set MCP_SANDBOX_RUNTIME_REQUIRED="
+                        "true to fail closed instead of degrading.",
+                        runtime,
+                    )
+                    self._runtime_degraded_warned = True
             return runtime
         if not runtime:
             logger.error(

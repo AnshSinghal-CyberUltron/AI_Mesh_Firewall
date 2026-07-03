@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -341,6 +342,51 @@ def test_runtime_required_succeeds_when_runsc_available():
 
     run_kwargs = manager.client.containers.run.call_args.kwargs
     assert run_kwargs["runtime"] == "runsc"
+
+
+def test_resolve_runtime_warns_once_when_unset_and_not_required(caplog):
+    """CHG-0143: the dev default (MCP_SANDBOX_RUNTIME unset, not required) must NOT raise,
+    but MUST loudly warn that sandboxes run without a kernel-isolation runtime — and only
+    ONCE per manager (not a line per sandbox create)."""
+    config = SandboxDockerConfig()  # runtime=None, runtime_required=False
+    manager = DockerManager(client=_mock_client(), config=config)
+    with caplog.at_level(logging.WARNING, logger="sandbox.docker_manager"):
+        assert manager._resolve_runtime() is None
+        assert manager._resolve_runtime() is None  # second call: no duplicate warning
+    warnings = [
+        r for r in caplog.records
+        if r.levelno == logging.WARNING and "kernel-isolation runtime" in r.getMessage()
+    ]
+    assert len(warnings) == 1, "degraded-posture warning must fire exactly once"
+
+
+def test_resolve_runtime_warns_when_configured_but_unavailable(caplog):
+    """CHG-0143: an operator who set MCP_SANDBOX_RUNTIME=runsc but did not require it, on a
+    daemon where runsc is missing, is degrading silently today. Warn (do not raise — respect
+    the not-required contract) and still return the configured runtime."""
+    client = _mock_client()
+    client.info.return_value = {"Runtimes": {"runc": {}}}  # runsc NOT available
+    config = SandboxDockerConfig(runtime="runsc", runtime_required=False)
+    manager = DockerManager(client=client, config=config)
+    with caplog.at_level(logging.WARNING, logger="sandbox.docker_manager"):
+        assert manager._resolve_runtime() == "runsc"  # returned as-is, no raise
+    assert any(
+        r.levelno == logging.WARNING and "NOT available" in r.getMessage()
+        for r in caplog.records
+    ), "must warn when a configured runtime is unavailable"
+
+
+def test_resolve_runtime_no_warn_when_available_and_not_required(caplog):
+    """CHG-0143: the healthy case (runtime configured AND available) must stay quiet."""
+    config = SandboxDockerConfig(runtime="runsc", runtime_required=False)
+    manager = DockerManager(client=_mock_client(), config=config)  # runsc available
+    with caplog.at_level(logging.WARNING, logger="sandbox.docker_manager"):
+        assert manager._resolve_runtime() == "runsc"
+    assert not [
+        r for r in caplog.records
+        if r.levelno == logging.WARNING
+        and ("kernel-isolation runtime" in r.getMessage() or "NOT available" in r.getMessage())
+    ], "no degraded-posture warning when the runtime is available"
 
 
 def test_run_kwargs_propagate_npm_supply_chain_controls(monkeypatch: pytest.MonkeyPatch):
