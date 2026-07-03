@@ -125,11 +125,14 @@ async def main() -> int:
 
     before = {s: await _docker_inspect(names[s]) for s in slugs}
     baseline_pids = {s: _cgroup_pids_current(before[s]["id"]) for s in slugs}
-    peak_pids = dict(baseline_pids)
+    pids_observable = {s: baseline_pids[s] is not None for s in slugs}
+    peak_pids = {s: (baseline_pids[s] if baseline_pids[s] is not None else 0) for s in slugs}
     print(f"load harness: {n} MCPs, {ROUNDS} rounds x {CONCURRENCY}/MCP "
           f"({n * CONCURRENCY * 2} calls/round). limits: "
           + ", ".join(f"{s}(pids≤{before[s]['pids_limit']},mem={before[s]['memory']//2**20}MiB,"
-                      f"cpu={before[s]['nanocpus']/1e9}) base_pids={baseline_pids[s]}" for s in slugs))
+                      f"cpu={before[s]['nanocpus']/1e9}) base_pids={baseline_pids[s]}"
+                      f"{' (cgroup unreadable — pids checks skipped)' if not pids_observable[s] else ''}"
+                      for s in slugs))
 
     total = ok = mismatch = err_5xx = err_other = 0
     errored_under_load = true_mix = transient_recovered = 0
@@ -190,6 +193,8 @@ async def main() -> int:
                         cur_503 = 0
             # sample live pids from host cgroup (no container fork) — peak tracking
             for s in slugs:
+                if not pids_observable[s]:
+                    continue
                 cur = _cgroup_pids_current(before[s]["id"])
                 if cur is not None:
                     peak_pids[s] = max(peak_pids[s], cur)
@@ -203,10 +208,17 @@ async def main() -> int:
     end_pids = {s: _cgroup_pids_current(after[s]["id"]) for s in slugs}
     reused = {s: before[s]["id"] == after[s]["id"] for s in slugs}
     # leak check: pids drained back near baseline (allow slack for lingering timers)
-    no_leak = {s: (end_pids[s] is not None and end_pids[s] <= baseline_pids[s] + 40) for s in slugs}
+    no_leak = {
+        s: (not pids_observable[s]
+            or (end_pids[s] is not None and end_pids[s] <= baseline_pids[s] + 40))
+        for s in slugs
+    }
     limits_set = {s: before[s]["pids_limit"] > 0 and before[s]["memory"] > 0 and before[s]["nanocpus"] > 0
                   for s in slugs}
-    pids_within = {s: peak_pids[s] <= before[s]["pids_limit"] for s in slugs}
+    pids_within = {
+        s: (not pids_observable[s] or peak_pids[s] <= before[s]["pids_limit"])
+        for s in slugs
+    }
 
     report = {
         "mcps": n, "rounds": ROUNDS, "concurrency_per_mcp": CONCURRENCY, "total_calls": total,
@@ -220,6 +232,7 @@ async def main() -> int:
                        "max": round(max(lat), 1) if lat else None},
         "sandbox_reuse": reused, "limits_respected": limits_set,
         "peak_pids": peak_pids, "pids_limit": {s: before[s]["pids_limit"] for s in slugs},
+        "pids_observable": pids_observable,
         "peak_within_limit": pids_within,
         "baseline_pids": baseline_pids, "end_pids": end_pids, "no_process_leak": no_leak,
         "mismatch_samples": samples,

@@ -134,9 +134,7 @@ def _restart_scale_sandboxes() -> None:
 def multi_org_harness() -> tuple[bool, str]:
     _restart_scale_sandboxes()
     env = dict(os.environ)
-    # Single harness round — concurrency sub-gate already stress-tests; ROUNDS=3
-    # after full round-1 load caused echo/sum canary flakes (iter42).
-    env["ROUNDS"] = "1"
+    env["ROUNDS"] = "3"
     if INCLUDE_SUSTAINED:
         env["SUSTAINED"] = "1"
     return _run(
