@@ -10117,8 +10117,11 @@ async def rag_query(request: Request):
                 if not isinstance(_doc, dict):
                     _kept_after_injection.append(_doc)
                     continue
-                _scan_text = _doc.get("content")
-                if isinstance(_scan_text, str) and _scan_text:
+                # G67: coerce a non-str (list of content-parts / dict) content to text so a
+                # poisoned document whose content is list/dict-shaped can't SKIP the egress
+                # indirect-injection backstop (the str-only gate served it unscanned).
+                _scan_text = _content_to_text(_doc.get("content"))
+                if _scan_text:
                     try:
                         _inj_verdict = await asyncio.to_thread(
                             CONTEXT_GUARD._scan_single_document_sync, _scan_text
@@ -10157,6 +10160,16 @@ async def rag_query(request: Request):
                 _content = _doc.get("content")
                 if isinstance(_content, str) and _content:
                     _doc["content"] = _egress_redact_pii(_content)
+                elif isinstance(_content, (list, dict)):
+                    # G67: a non-str content bypassed the str-only PII backstop -> PII/secret
+                    # served RAW to the client. Flatten to text and redact; replace the content
+                    # ONLY when PII was actually masked, so a benign list/dict doc keeps its
+                    # original structure (no over-mutation of clean documents).
+                    _flat = _content_to_text(_content)
+                    if _flat:
+                        _redacted_flat = _egress_redact_pii(_flat)
+                        if _redacted_flat != _flat:
+                            _doc["content"] = _redacted_flat
                 # E11 fail-open fix: also mask PII in metadata VALUES (not just the
                 # ranker's declared sensitive_fields) before client egress — PII in
                 # an undeclared metadata field otherwise returns raw to the client.
