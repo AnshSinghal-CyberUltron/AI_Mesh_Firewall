@@ -1022,8 +1022,8 @@ export function ModelConnectionPanel({
 
               {showRegion && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Region</label>
-                  <input
+                  <label htmlFor="mcp-region" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Region</label>
+                  <input id="mcp-region"
                     type="text"
                     value={formData.region}
                     onChange={(e) => setFormData({ ...formData, region: e.target.value })}
@@ -1049,8 +1049,8 @@ export function ModelConnectionPanel({
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Data Sensitivity</label>
-                        <select
+                        <label htmlFor="mcp-data-sensitivity" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Data Sensitivity</label>
+                        <select id="mcp-data-sensitivity"
                           value={formData.data_sensitivity_level}
                           onChange={(e) => setFormData({ ...formData, data_sensitivity_level: e.target.value })}
                           className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
@@ -1062,8 +1062,8 @@ export function ModelConnectionPanel({
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Routing Priority</label>
-                        <input
+                        <label htmlFor="mcp-routing-priority" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Routing Priority</label>
+                        <input id="mcp-routing-priority"
                           type="number"
                           min="0"
                           max="100"
@@ -1075,8 +1075,8 @@ export function ModelConnectionPanel({
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Compliance Tags</label>
-                      <input
+                      <label htmlFor="mcp-compliance-tags" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Compliance Tags</label>
+                      <input id="mcp-compliance-tags"
                         type="text"
                         value={formData.compliance_tags}
                         onChange={(e) => setFormData({ ...formData, compliance_tags: e.target.value })}
@@ -1086,8 +1086,8 @@ export function ModelConnectionPanel({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Cost / 1K Input Tokens ($)</label>
-                        <input
+                        <label htmlFor="mcp-cost-input" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Cost / 1K Input Tokens ($)</label>
+                        <input id="mcp-cost-input"
                           type="number"
                           min="0"
                           step="0.001"
@@ -1098,8 +1098,8 @@ export function ModelConnectionPanel({
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Cost / 1K Output Tokens ($)</label>
-                        <input
+                        <label htmlFor="mcp-cost-output" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Cost / 1K Output Tokens ($)</label>
+                        <input id="mcp-cost-output"
                           type="number"
                           min="0"
                           step="0.001"
@@ -1112,8 +1112,8 @@ export function ModelConnectionPanel({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Latency SLA (ms)</label>
-                        <input
+                        <label htmlFor="mcp-latency-sla" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Latency SLA (ms)</label>
+                        <input id="mcp-latency-sla"
                           type="number"
                           min="0"
                           value={formData.latency_sla_ms}
@@ -1123,8 +1123,8 @@ export function ModelConnectionPanel({
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Rate Limit (RPM)</label>
-                        <input
+                        <label htmlFor="mcp-rate-limit" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Rate Limit (RPM)</label>
+                        <input id="mcp-rate-limit"
                           type="number"
                           min="0"
                           value={formData.rate_limit_rpm}

@@ -2120,3 +2120,28 @@ REASON 2 — the user has REPEATEDLY and explicitly instructed "don't stop until
 a direct standing override of early completion. Continue iterating; do NOT emit the promise yet.
 → NEXT ITEM: associate the 5 advanced-settings labels (htmlFor/id) to finish ModelConnectionPanel a11y,
   then a responsive/perf audit dimension pass. Keep iterating per the user's explicit instruction.
+
+---
+
+## R6 a11y COMPLETE for ModelConnectionPanel forms — 2026-07-03
+Associated the remaining 8 advanced-settings `<label>`s (were unassociated → WCAG 1.3.1/4.1.2) with their
+inputs via `htmlFor`/`id`: `mcp-region`, `mcp-data-sensitivity`, `mcp-routing-priority`,
+`mcp-compliance-tags`, `mcp-cost-input`, `mcp-cost-output`, `mcp-latency-sla`, `mcp-rate-limit`. Now
+**0 unassociated `<label>`s remain** in the file; every form control (primary + dialog + advanced routing)
+has an accessible name.
+**Verify:** detector `[]`/exit 0; ids unique; `npm run build` OK. Playwright (live): opened Add-model
+dialog → expanded Routing Configuration → all 7 shown routing fields present with `el.labels.length>0`
+(`allLabeled:true`); `mcp-region` is provider-gated (`showRegion`) so not shown for the default provider —
+its association is static JSX validated by build+diff. ZERO console errors.
+
+## COMPLETION STATUS (updated 2026-07-03) — NOT asserting COMPLETE
+Owned-component a11y is now COMPLETE: impeccable detector clean on both; StageTimeline contrast+keyboard-
+focus+ARIA; ModelConnectionPanel every form control labeled + key masked/autoComplete-off. All backend/live
+gates green (golden 436×3 live / 429×3 offline, backend 1613, live corpus, no secret leak).
+Still NOT emitting COMPLETE:
+- The RESPONSIVE + PERF + THEMING audit dimensions (PRODUCT.md targets 1440/1024/768/375, ≥44px touch
+  targets, dark+light parity) have NOT been formally exercised at breakpoints on the owned components →
+  "frontend polish complete" not yet UNEQUIVOCALLY true.
+- The user's STANDING explicit instruction "don't stop until 50 iterations are done" overrides early completion.
+→ NEXT ITEM: responsive audit of the two owned components at 1440/1024/768/375 (overflow, touch targets,
+  dark/light parity via Playwright resize) + fix any P0/P1; then re-assess completion.
