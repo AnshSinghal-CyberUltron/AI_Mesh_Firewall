@@ -964,6 +964,24 @@
       tool-call cap mcp:toolcalls:{key_id} (org-bound), rate-limit ratelimit:{org}-scoped, config_sync
       _*_by_org; no non-org-scoped cache holds tenant data → no cross-tenant contamination vector. (Backs
       the cross-tenant-canary requirement + item 19.)
+      CHG-0144 (2026-07-03, LOW-MEDIUM — timing side-channel on the admin-RBAC bypass): main.py
+      _require_admin_role lets the control plane bypass admin-RBAC on /v1/admin/* by presenting
+      GATEWAY_INTERNAL_API_KEY in X-Gateway-Internal-Key, but compared it with `header_key == internal_key`
+      — str.__eq__ short-circuits on the first differing byte → comparison time correlates with the
+      matching-prefix length (secret-comparison timing oracle → byte-by-byte key recovery). Every other
+      gateway secret check already uses constant-time compare (mcp_proxy._valid_internal_key hmac.compare_digest,
+      middleware:301, metrics_auth secrets.compare_digest, policy_signing); this shim was the lone plain-==
+      omission. FIX: `if header_key and hmac.compare_digest(header_key, internal_key): return None` (+import
+      hmac); behaviour identical (correct key bypasses; wrong key → require_admin reject). +4 tests
+      (test_admin_internal_key_constant_time.py: correct→None; one-byte-off→401/403; missing header→401/403;
+      source guard). Gate: 4 passed. NOTE: full gateway suite has 6-7 PRE-EXISTING failures in an unrelated
+      zero-width-unicode/scan subsystem (another session's active edit) — proven NOT mine by reverting main.py
+      to HEAD and reproducing the same failures on a clean tree (those tests never touch _require_admin_role).
+      Evidence: mcp-parallel/findings/backstop-p9-admin-key-constant-time/finding.md. NON-SHIP THIS ITER
+      (reverted): a stderr-flood self-hang in sandbox agent _log_stderr is a real LOW gap but the fix is
+      Python-version-dependent (asyncio StreamReader LimitOverrunError consumes on 3.14 vs leaves on 3.12; the
+      sandbox image is 3.12 but the test venv is 3.14) so it can't be verified against the prod runtime here —
+      documented as a residual + saved to auto-memory instead of shipping unverified code.
 - [ ] 10. Resource limits CPU/mem/disk/timeout enforced + containment proven.
       LIVE VERIFIED (config) — CHG-0015 (2026-07-02): docker inspect of all 3 live org sandboxes shows
       CapDrop=[ALL], SecurityOpt=[no-new-privileges], Privileged=false, PidsLimit=256, Memory=2GiB,

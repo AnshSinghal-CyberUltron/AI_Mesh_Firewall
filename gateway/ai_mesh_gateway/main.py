@@ -6,6 +6,7 @@ registers as gateway agent and reports stats for SOC.
 """
 import asyncio
 import base64
+import hmac
 import json
 import logging
 import os
@@ -4036,7 +4037,13 @@ def _require_admin_role(request) -> JSONResponse | None:
     internal_key = os.environ.get("GATEWAY_INTERNAL_API_KEY", "").strip()
     if internal_key:
         header_key = (request.headers.get("x-gateway-internal-key") or "").strip()
-        if header_key and header_key == internal_key:
+        # CHG-0144: constant-time compare of the shared admin-bypass secret. A plain
+        # ``==`` short-circuits on the first differing byte, leaking the secret's length
+        # and prefix via response timing — an attacker probing this admin-RBAC bypass
+        # could recover the key byte-by-byte. Every other secret check in the gateway
+        # already uses hmac.compare_digest (mcp_proxy._valid_internal_key, middleware,
+        # metrics_auth, policy_signing); this shim was the lone plain-== omission.
+        if header_key and hmac.compare_digest(header_key, internal_key):
             return None
 
     auth_ctx = getattr(request.state, "auth_context", None)
