@@ -198,7 +198,27 @@ class MCPServerRegistration(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.server_slug:
-            self.server_slug = slugify(self.name)
+            # Derive a UNIQUE slug from the name. The slug drives the export URL
+            # (gateway_endpoint = /gateway/<org>/mcp/<slug>), which must never collide.
+            # A distinctly-named server whose name merely slugifies to a taken slug
+            # (e.g. "Playwright!!!" -> "playwright") is auto-suffixed to "playwright-2"
+            # so it registers cleanly with its own export URL, instead of failing with
+            # a misleading "name already exists". Same-NAME duplicates are still
+            # rejected upstream by the (organization, name) unique constraint.
+            base = slugify(self.name) or "mcp-server"
+            slug = base
+            if self.organization_id:
+                taken = set(
+                    type(self).objects
+                    .filter(organization_id=self.organization_id)
+                    .exclude(pk=self.pk)
+                    .values_list("server_slug", flat=True)
+                )
+                n = 2
+                while slug in taken:
+                    slug = f"{base}-{n}"
+                    n += 1
+            self.server_slug = slug
         super().save(*args, **kwargs)
 
     @property
