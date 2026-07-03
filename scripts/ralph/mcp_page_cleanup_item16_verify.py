@@ -23,6 +23,7 @@ exactly as the API scopes it) and asserts the live API collapse action_counts EQ
 import json
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -49,11 +50,18 @@ def _req(method, path, headers, body=None, timeout=60):
 
 
 def login():
-    st, b = _req("POST", "/api/auth/token/", {"Content-Type": "application/json"},
-                 {"email": EMAIL, "password": PASS})
-    if st != 200:
+    # login view is throttled (login_user: 5/min per email); honor a 429 by
+    # backing off and retrying rather than failing the gate.
+    for _ in range(6):
+        st, b = _req("POST", "/api/auth/token/", {"Content-Type": "application/json"},
+                     {"email": EMAIL, "password": PASS})
+        if st == 200:
+            return b["access"]
+        if st == 429:
+            time.sleep(20)
+            continue
         raise SystemExit(f"login failed {st}: {b}")
-    return b["access"]
+    raise SystemExit("login failed: still throttled (429) after retries")
 
 
 def feed(tok, collapse):

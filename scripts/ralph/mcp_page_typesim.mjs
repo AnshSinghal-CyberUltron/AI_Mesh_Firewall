@@ -49,12 +49,28 @@ export async function login(page) {
   await page.goto(`${BASE}/login`, { waitUntil: "networkidle", timeout: 120000 });
   await page.locator("#email").fill(EMAIL); // login is not under test — fill is fine here
   await page.locator("#password").fill(PASS);
-  const [res] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/auth/token/") && r.request().method() === "POST"),
-    page.getByRole("button", { name: /^sign in$/i }).click(),
-  ]);
-  if (!res.ok()) throw new Error(`Login failed: ${res.status()}`);
-  await page.waitForFunction(() => !location.pathname.startsWith("/login"), { timeout: 30000 });
+  // The login view is throttled (login_user: 5/min per email); back-to-back
+  // verifier runs (which all sign in as the same admin) can trip HTTP 429.
+  // Honor the throttle: on 429 wait Retry-After (or a sane default) and retry —
+  // this is production-correct client behavior, not a test hack.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const [res] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/api/auth/token/") && r.request().method() === "POST"),
+      page.getByRole("button", { name: /^sign in$/i }).click(),
+    ]);
+    if (res.ok()) {
+      await page.waitForFunction(() => !location.pathname.startsWith("/login"), { timeout: 30000 });
+      return;
+    }
+    if (res.status() === 429) {
+      let wait = parseInt((await res.headerValue("retry-after").catch(() => null)) || "", 10);
+      if (!Number.isFinite(wait) || wait <= 0) wait = 15;
+      await page.waitForTimeout(Math.min(wait + 2, 65) * 1000);
+      continue;
+    }
+    throw new Error(`Login failed: ${res.status()}`);
+  }
+  throw new Error("Login failed: still throttled (429) after retries");
 }
 
 export async function openRegisterDialog(page) {
