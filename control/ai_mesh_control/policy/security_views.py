@@ -9,6 +9,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
+from django.db.models.fields.json import KeyTextTransform
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers as drf_serializers
@@ -1151,8 +1152,6 @@ class SocKpisView(APIView):
         # critical-count loop and the latency loop each re-fetched all metadata),
         # making this view CPU/IO-heavy on every poll. Mirrors ModuleKpisView.
         from collections import Counter
-
-        from django.db.models.fields.json import KeyTextTransform
 
         # perf item 19: pull ONLY the 3 metadata fields the metrics need
         # (security_risk_score / latency_ms / request_id) via SQL KeyTextTransform,
@@ -2373,9 +2372,13 @@ class UserBlockageKpisView(APIView):
         avg_block_rate = round(blocked / total_events * 100, 1) if total_events else 0
 
         high_risk_ids = set()
-        for ev in events.values("user_id", "agent_id", "metadata"):
-            meta = ev.get("metadata") or {}
-            score = meta.get("security_risk_score")
+        # perf item 21: this 30-90d window only needs security_risk_score — extract
+        # it in SQL instead of hauling the full metadata JSON per row (same
+        # anti-pattern soc-kpis had). Output identical; verified.
+        for ev in events.annotate(
+            _risk=KeyTextTransform("security_risk_score", "metadata")
+        ).values("user_id", "agent_id", "_risk"):
+            score = ev.get("_risk")
             try:
                 s = float(score) if score is not None else 0.0
             except (TypeError, ValueError):
@@ -2536,12 +2539,16 @@ class AgentTypeStatsView(APIView):
         }
 
         by_type = defaultdict(lambda: {"total": 0, "blocked": 0, "risk_scores": []})
-        for ev in events.values("agent_id", "action", "metadata"):
+        # perf item 21: only security_risk_score is needed — extract it in SQL rather
+        # than hauling the full metadata JSON (30-90d window). Output identical.
+        for ev in events.annotate(
+            _risk=KeyTextTransform("security_risk_score", "metadata")
+        ).values("agent_id", "action", "_risk"):
             atype = agents_by_id.get(ev["agent_id"], "Unknown") if ev.get("agent_id") else "Unknown"
             by_type[atype]["total"] += 1
             if ev["action"] == ACTION_BLOCK:
                 by_type[atype]["blocked"] += 1
-            rs = (ev.get("metadata") or {}).get("security_risk_score")
+            rs = ev.get("_risk")
             if rs is not None:
                 with contextlib.suppress(TypeError, ValueError):
                     by_type[atype]["risk_scores"].append(float(rs))
@@ -2738,7 +2745,16 @@ class RAGPipelineStageKpisView(APIView):
         qs = _enforcement_events_for_request(request)
         qs = qs.filter(created_at__gte=since)
 
-        events = list(qs.values("action", "metadata"))
+        # perf item 21: extract only the 3 fields this view reads (event_type,
+        # pipeline_stage, latency_ms) in SQL instead of hauling the full metadata
+        # JSON per row (same anti-pattern as soc-kpis). Output identical; verified.
+        events = list(
+            qs.annotate(
+                _etype=KeyTextTransform("event_type", "metadata"),
+                _stage=KeyTextTransform("pipeline_stage", "metadata"),
+                _lat=KeyTextTransform("latency_ms", "metadata"),
+            ).values("action", "_etype", "_stage", "_lat")
+        )
 
         stages = {
             s: {"total": 0, "blocked": 0, "flagged": 0, "rewritten": 0, "allowed": 0, "avg_latency_ms": 0, "_latencies": []}
@@ -2746,11 +2762,10 @@ class RAGPipelineStageKpisView(APIView):
         }
 
         for ev in events:
-            meta = ev.get("metadata") or {}
-            event_type = meta.get("event_type", "")
+            event_type = ev.get("_etype") or ""
             if event_type != "rag_pipeline":
                 continue
-            stage = meta.get("pipeline_stage", "")
+            stage = ev.get("_stage") or ""
             if stage not in stages:
                 continue
             stages[stage]["total"] += 1
@@ -2763,9 +2778,10 @@ class RAGPipelineStageKpisView(APIView):
                 stages[stage]["rewritten"] += 1
             else:
                 stages[stage]["allowed"] += 1
-            lat = meta.get("latency_ms", 0)
+            _lat_raw = ev.get("_lat")
+            lat = float(_lat_raw) if _lat_raw not in (None, "") else 0.0
             if lat:
-                stages[stage]["_latencies"].append(float(lat))
+                stages[stage]["_latencies"].append(lat)
 
         for stage_data in stages.values():
             lats = stage_data.pop("_latencies")

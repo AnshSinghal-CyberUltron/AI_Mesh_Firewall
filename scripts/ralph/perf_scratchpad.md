@@ -113,7 +113,12 @@
       subquery → filter(organization=org). Safe: 0/288k NULL-org rows (drain sets it); row sets IDENTICAL (org2: 109417==109417).
       VERIFIED <1s: full org-scoped soc-kpis compute 0.768s (from 24-30s). PERF-0010 → 4 memories. soc-kpis END-TO-END 24-30s→<1s
       via PERF-0008(BRIN)+0009(JSON haul 14.9x)+0010(direct-FK). check clean, no dead imports.
-- [ ] 21. Fix other endpoints with the same scan+JSON pattern.
+- [x] 21. Fix other endpoints with the same scan+JSON pattern.
+      → surveyed ALL .values(...,"metadata") full-haul views. 3 more used only bounded scalars → extract in SQL
+      (KeyTextTransform, module-level import): UserSecurityKpis(high_risk_users)+agent-risk = security_risk_score;
+      RagPipelineStages = event_type/pipeline_stage/latency_ms. All verified IDENTICAL; 30d fetch 13.24s→0.67s (19.7×).
+      Other ~10 full-haul views pass whole metadata to classifiers/taggers/serializers → genuinely need JSON (documented,
+      not extraction-fixable; get PERF-0010 org filter). [:N]/scan_cap views already bounded. PERF-0011 → 4 memories. P6 DONE.
 
 ## P7 — Prove dynamic scaling
 - [ ] 22. Constrain --cpus=6 --memory=16g: detector down-scales; runs healthy; no OOM.

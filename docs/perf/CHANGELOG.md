@@ -7,6 +7,28 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0011 — Apply the metadata-extraction fix to 3 more full-haul endpoints
+- **Date:** 2026-07-03
+- **Files:** `control/ai_mesh_control/policy/security_views.py` (module-level
+  `KeyTextTransform` import; 3 views).
+- **What (item 21):** Surveyed every `.values(..., "metadata")` full-window haul.
+  Three more used ONLY bounded scalar fields (same anti-pattern as soc-kpis) and now
+  extract them in SQL instead of hauling the whole JSON:
+  - UserSecurityKpis (`high_risk_users`, 30–90d) — only `security_risk_score`.
+  - Agent-risk breakdown (30–90d) — only `security_risk_score`.
+  - RagPipelineStages — only `event_type` / `pipeline_stage` / `latency_ms`.
+  The remaining ~10 full-haul views genuinely need the full metadata — they pass the
+  whole dict to classifiers/taggers/serializers (`specialty_modules_for_event`,
+  `_tag_event`, `_violation_tag_event`, `metadata_rule_names`, `_get_owasp_codes`,
+  `_sanitized_meta_for_client`, nested `extra`) — so the 3-field trick doesn't apply;
+  they still benefit from the direct-FK org filter (PERF-0010). The `[:50]`/`[:scan_cap]`
+  views are already row-bounded.
+- **AFFECTS:** `ai_mesh_firewall-control` image (behavior identical, just faster).
+- **ACTION FOR OTHERS:** `docker compose build control`; output identical, no restart.
+- **PROOF:** all 3 verified `IDENTICAL: True` (high_risk_users / by_type / stages)
+  old-vs-new on live data; 30d-window fetch **13.24s → 0.67s (19.7×)**;
+  `manage.py check` clean.
+
 ## PERF-0010 — soc-kpis: direct-FK org filter (drop legacy OR-with-joins) → <1s
 - **Date:** 2026-07-03
 - **Files:** `control/ai_mesh_control/policy/security_views.py`

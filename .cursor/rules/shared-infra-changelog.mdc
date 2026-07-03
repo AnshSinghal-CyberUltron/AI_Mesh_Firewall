@@ -13,6 +13,15 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0011 — metadata-extraction fix applied to 3 more endpoints (2026-07-03)
+- Item 21. Surveyed all `.values(...,"metadata")` full-haul views. 3 more used only
+  bounded scalars → extract in SQL (KeyTextTransform): UserSecurityKpis + agent-risk
+  (security_risk_score), RagPipelineStages (event_type/pipeline_stage/latency_ms). All
+  verified IDENTICAL; 30d fetch 13.24s→0.67s (19.7×). The other ~10 full-haul views
+  pass full metadata to classifiers/taggers/serializers → genuinely need the JSON (not
+  fixable via extraction; they benefit from PERF-0010 org filter). AFFECTS: control
+  image. ACTION: `docker compose build control`; identical output, no restart.
+
 ## PERF-0010 — soc-kpis: direct-FK org filter, drop legacy OR-with-joins (2026-07-03)
 - Item 20. `_enforcement_events_for_request` (shared by ~31 SOC views) simplified from
   `Q(organization=org) | (organization IS NULL & endpoint/agent/policy joins)` + a
