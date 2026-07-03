@@ -2879,3 +2879,11 @@ that keep drifting (this is the 2nd such divergence). A future refactor should m
 patterns map (single source of truth) — noted here, not done this iteration (higher regression risk;
 out of one-item scope).
 Session ledger: NINETEEN confirmed leaks/gaps (G74..G95) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+
+### G95 DEPLOY + LIVE-VERIFY — 2026-07-03
+Rebuilt+redeployed the baked gateway image (tag rollback-g95 → `docker compose build gateway` →
+`up -d --no-deps gateway` → healthy after ~4s). LIVE-verified through the deployed real
+/v1/chat/completions pipeline (3/3): greek-homoglyph injection → **block**; epsilon-only injection →
+**block**; benign Greek prose ("error term ε and efficiency η") → **allow**. G95 validated end-to-end
+(in-process 574×3 + backend 1794 + live deployed). Injection blocks fire pre-forward so they're not
+rate-limited.
