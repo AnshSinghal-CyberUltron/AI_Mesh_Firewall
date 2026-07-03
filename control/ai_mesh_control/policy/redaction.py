@@ -136,7 +136,12 @@ def apply_field_redaction(
     fields: Iterable[str],
     *,
     placeholder: str = _FIELD_REDACT_PLACEHOLDER,
-    max_depth: int = 10,
+    # CHG-0148: was 10, but a name-based redaction target nested at depth 11..N (N up to
+    # the gateway's _MCP_MAX_RESULT_DEPTH=500 result-depth guard) evaded masking and
+    # egressed RAW — opaque name-redacted fields are NOT caught by the content/pattern
+    # scan, so this was the only layer protecting them. Raised to 500; the walk below is
+    # now ITERATIVE so a deep structure can't blow the recursion limit.
+    max_depth: int = 500,
     max_nodes: int = 100_000,
 ) -> Any:
     """Return a deep-copied version of ``obj`` with matching keys redacted.
@@ -166,30 +171,32 @@ def apply_field_redaction(
     result = copy.deepcopy(obj)
     node_count = 0
 
-    def _walk(node: Any, depth: int) -> None:
-        nonlocal node_count
+    # CHG-0148: ITERATIVE walk (explicit stack) so max_depth can safely be 500 without a
+    # RecursionError (which would propagate to the caller and fail-OPEN, un-redacted).
+    stack: list = [(result, 0)]
+    while stack:
+        node, depth = stack.pop()
         if depth > max_depth or node_count > max_nodes:
-            return
+            continue
         if isinstance(node, dict):
             for k in list(node.keys()):
                 node_count += 1
                 if node_count > max_nodes:
-                    return
+                    break
                 if _normalize_key(k) in targets:
                     node[k] = placeholder
                 else:
                     v = node[k]
                     if isinstance(v, (dict, list)):
-                        _walk(v, depth + 1)
+                        stack.append((v, depth + 1))
         elif isinstance(node, list):
             for item in node:
                 node_count += 1
                 if node_count > max_nodes:
-                    return
+                    break
                 if isinstance(item, (dict, list)):
-                    _walk(item, depth + 1)
+                    stack.append((item, depth + 1))
 
-    _walk(result, 0)
     return result
 
 

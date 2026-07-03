@@ -670,6 +670,27 @@
       result/error (scan whole body). 200-without-result/error untouched (no behaviour change). +6 tests.
       Gate: 39 ext-proxy + 1220 gateway passed, 0 failed. ORG path unaffected (sandbox-routed via broker →
       parsed dict, same floor). Evidence: mcp-parallel/findings/backstop-p2-ext-proxy-nonok-egress/finding.md.
+      CHG-0148 (2026-07-03, MEDIUM — name-based field redaction bypassable by DEEP NESTING): both
+      apply_field_redaction impls (gateway/ai_mesh_gateway/policy_engine.py + control/ai_mesh_control/policy/
+      redaction.py) walked the tool result with max_depth=10 and returned the PARTIALLY-redacted result on
+      overflow (fail-OPEN). But the gateway only rejects results deeper than _MCP_MAX_RESULT_DEPTH (500)
+      BEFORE redaction → a policy's redaction_fields target nested at depth 11..500 was NEVER visited and
+      egressed RAW. Empirically confirmed (pure import): ssn wrapped 40 deep survived masking. Opaque
+      name-redacted fields (session_token/internal_id) are NOT caught by the content/pattern scan, so field
+      redaction is their ONLY protection — this was a real 1.4 leak. FIX: max_depth 10→500 (covers the depth
+      guard) + convert the recursive _walk to an ITERATIVE explicit-stack walk (a 500-deep recursion would
+      blow Python's recursion limit → raise → caller fail-open, RE-INTRODUCING the leak; iterative has no
+      recursion exposure, identical masking semantics, masked/identity-on-noop preserved, work still bounded
+      by max_nodes). Applied to BOTH impls so the chat (control HTTP) and stdio/ws adapter paths mask
+      identically. +1 test. Gate: test_mcp_scan_orchestrator.py -k field_redaction 8 passed (new deep-nesting
+      lock; homoglyph/non-mutating/identity still pass); full gateway 2010 passed 0 failed; control variant
+      verified via a standalone pure-import repro (depth-40 ssn now redacted). RESIDUALS (documented, not
+      closed): (1) node-count overflow (max_nodes=100k) still fail-open on a huge-but-shallow result whose
+      target field is beyond node 100k — needs a fail-CLOSED block (reverses a deliberate availability
+      choice + needs caller changes); (2) stdlib copy.deepcopy is recursive and RecursionErrors at ~250 depth
+      → the ~250..500 window crashes deepcopy → caller fail-open (PRE-EXISTING, independent of this change;
+      recommend lowering _MCP_MAX_RESULT_DEPTH below the deepcopy limit, or failing closed on the
+      RecursionError). Evidence: mcp-parallel/findings/backstop-p2-field-redaction-deep-nesting-bypass/finding.md.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER

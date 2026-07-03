@@ -958,7 +958,12 @@ def apply_field_redaction(
     fields: Any,
     *,
     placeholder: str = FIELD_REDACT_PLACEHOLDER,
-    max_depth: int = 10,
+    # CHG-0148: max_depth was 10, but the gateway only rejects results deeper than
+    # _MCP_MAX_RESULT_DEPTH (500) BEFORE redaction — so a name-based redaction target
+    # nested at depth 11..500 evaded masking and egressed RAW. Raised to 500 to cover
+    # everything that can reach here; the walk is now ITERATIVE (below) so a 500-deep
+    # structure cannot blow the recursion limit (which would raise -> caller fail-open).
+    max_depth: int = 500,
     max_nodes: int = 100_000,
 ) -> Any:
     """Return a deep-copied ``obj`` with values under matching keys replaced.
@@ -987,31 +992,33 @@ def apply_field_redaction(
     node_count = 0
     masked = False
 
-    def _walk(node: Any, depth: int) -> None:
-        nonlocal node_count, masked
+    # CHG-0148: ITERATIVE walk (explicit stack) — the old recursion could not safely
+    # descend to max_depth=500 (RecursionError -> fail-open leak), which is exactly why
+    # max_depth was pinned at a shallow 10 that a nested field could hide beneath.
+    stack: list = [(result, 0)]
+    while stack:
+        node, depth = stack.pop()
         if depth > max_depth or node_count > max_nodes:
-            return
+            continue
         if isinstance(node, dict):
             for k in list(node.keys()):
                 node_count += 1
                 if node_count > max_nodes:
-                    return
+                    break
                 if _normalize_field_key(k) in targets:
                     node[k] = placeholder
                     masked = True
                 else:
                     v = node[k]
                     if isinstance(v, (dict, list)):
-                        _walk(v, depth + 1)
+                        stack.append((v, depth + 1))
         elif isinstance(node, list):
             for item in node:
                 node_count += 1
                 if node_count > max_nodes:
-                    return
+                    break
                 if isinstance(item, (dict, list)):
-                    _walk(item, depth + 1)
-
-    _walk(result, 0)
+                    stack.append((item, depth + 1))
     # Identity on a true no-op: when none of the declared fields were present the
     # caller must be able to tell nothing changed (``masked_out is payload``) so a
     # field-projection scan does not mislabel an unchanged result as "redacted".

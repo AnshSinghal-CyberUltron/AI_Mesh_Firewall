@@ -655,6 +655,35 @@ def test_apply_field_redaction_identity_on_noop():
     assert masked == {"ssn": "[REDACTED]", "other": "y"}        # match -> new copy
 
 
+def test_apply_field_redaction_deep_nesting_not_a_bypass():
+    """CHG-0148: a name-based redaction target nested BELOW the old max_depth=10 must
+    still be masked. The gateway only rejects results deeper than _MCP_MAX_RESULT_DEPTH
+    (500) before redaction, so a field at depth 11..500 used to evade masking and egress
+    RAW (opaque name-redacted fields are NOT caught by the content/pattern scan). max_depth
+    is now 500 and the walk is iterative (no recursion-limit blow-up)."""
+    import json
+
+    from policy_engine import apply_field_redaction
+
+    # 'ssn' wrapped 40 levels deep (well past the old limit of 10).
+    node = {"ssn": "SECRET-DEEP"}
+    for _ in range(40):
+        node = {"wrap": node}
+    out = apply_field_redaction(node, ["ssn"])
+    assert "SECRET-DEEP" not in json.dumps(out), "deep field must be redacted, not egressed"
+
+    # Reach in and confirm the exact leaf was masked.
+    cur = out
+    for _ in range(40):
+        cur = cur["wrap"]
+    assert cur["ssn"] == "[REDACTED]"
+
+    # A moderately-wide-and-deep mix is still fully covered.
+    mixed = {"a": [{"b": {"ssn": "X"}}, {"c": {"deep": {"ssn": "Y"}}}]}
+    out2 = apply_field_redaction(mixed, ["ssn"])
+    assert "X" not in json.dumps(out2) and "Y" not in json.dumps(out2)
+
+
 # ── 3b cross-stage: extra_redaction_fields projects INPUT-stage policy fields out
 # of the RESPONSE (control HTTP-path parity for "role X never sees field F", where
 # the rule fires on the CALL not the response). The caller threads an input scan's
