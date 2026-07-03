@@ -263,6 +263,44 @@ def _resolve_tier_action(ctrl: dict[str, Any] | None, fallback: str) -> str:
     return a
 
 
+def _neutralize_exfil_deep(text: str) -> str:
+    """CHG-0097: exfil-beacon neutralization that is robust to JSON serialization.
+
+    The MCP tier-1 scan target is usually the WHOLE result payload JSON-serialized
+    (``target_mode="entire"``), so HTML attribute quotes are escaped (``src=\\"...\\"``)
+    and ``neutralize_exfil_channels``'s HTML/srcset regexes (which expect real quotes)
+    miss them — the CHG-0096 residual (markdown/bare-URL beacons defanged, HTML not). If
+    ``text`` is a JSON structure, parse it and neutralize each UNESCAPED string leaf, then
+    re-serialize — so HTML/SVG/CSS beacons are defanged too. Non-JSON text (a plain-string
+    result) is neutralized directly. Returns the ORIGINAL text unchanged when nothing was
+    defanged (no reformatting churn, so a benign result stays byte-identical)."""
+    from output_guard import neutralize_exfil_channels  # local: avoid import cycle
+    stripped = text.lstrip()
+    if stripped[:1] not in ("{", "["):
+        return neutralize_exfil_channels(text)
+    import json as _json
+    try:
+        obj = _json.loads(text)
+    except Exception:
+        return neutralize_exfil_channels(text)
+    changed = [False]
+
+    def _walk(o):
+        if isinstance(o, str):
+            n = neutralize_exfil_channels(o)
+            if n != o:
+                changed[0] = True
+            return n
+        if isinstance(o, list):
+            return [_walk(x) for x in o]
+        if isinstance(o, dict):
+            return {k: _walk(v) for k, v in o.items()}
+        return o
+
+    obj = _walk(obj)
+    return _json.dumps(obj) if changed[0] else text
+
+
 async def _scan_text_tier1(
     text: str,
     *,
@@ -494,14 +532,15 @@ async def _scan_text_tier1(
     # composes on top of any PII/secret redaction above; a 'monitor' posture stays
     # observe-only (matches the encoded-exfil block's gate).
     if not blocked and enforcement != "monitor":
-        from output_guard import neutralize_exfil_channels  # local: avoid import cycle
         # Run on the RAW text (not the already-redacted ``mutated``): the beacon's
         # smuggled payload must be VISIBLE for ``_url_smuggles_data`` to trip — if
         # redact_all masked the URL's PII first, the neutralizer would see a masked tail
         # and leave the auto-render intact. If a beacon is defanged, RE-APPLY the
         # PII/secret redaction over the defanged text (when any was detected) so both the
-        # beacon AND any other sensitive value are masked.
-        _neu = neutralize_exfil_channels(text)
+        # beacon AND any other sensitive value are masked. CHG-0097: ``_neutralize_exfil_deep``
+        # is JSON-aware so HTML/SVG/CSS/srcset beacons nested in a JSON payload (whose
+        # attribute quotes are escaped) are defanged too, not just markdown/bare-URL.
+        _neu = _neutralize_exfil_deep(text)
         if _neu != text:
             findings.append(
                 McpFinding(

