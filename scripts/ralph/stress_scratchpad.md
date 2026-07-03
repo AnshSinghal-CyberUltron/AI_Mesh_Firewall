@@ -1383,6 +1383,24 @@
         (redact_all masks both), injection-only->block, PII-only->redact. block>redact>flag>allow holds.
         TWENTY-THREE confirmed-live leaks (G40-G46, G49-G61, G66-G68) + G62 DiD + 3 DoS + G48 + 2 tradeoffs.
         Credential detection now SYMMETRIC: chat input (G68) + output guard (G54) + MCP (CHG-0075).
+    - 🔴 G69 PII/secret/credential split MID-TOKEN across conversation turns bypassed detection (2026-07-03):
+        Multi-turn / token-smuggling (R1). G6 reassembles user turns for INJECTION but SPACE-joins them
+        (_reassemble_user_turns line 699 " ".join). A VALUE split mid-token across turns ('my ssn is 123-' |
+        '45-6789' -> folded '[user]: my ssn is 123-\\n[user]: 45-6789') survives BOTH the label-prefixed fold
+        (\\n[user]: breaks it) AND the space-joined reassembly ('123- 45-6789', space breaks the SSN pattern),
+        so detect_pii/secret/credential missed it -> the value reached the model reassembled from the turns.
+        PROBED: ssn/stripe/phone/connstring split across 2 turns -> ALLOW. FIX (owned scanner.py): parameterize
+        _reassemble_user_turns(sep) and in _scan_prompt_sync re-check a NO-SEPARATOR reassembly with ONLY the
+        VALUE detectors (a no-sep injection re-scan would FP on run-together words). Reaching that point means
+        the original had no contiguous value (early returns), so a hit is a genuine cross-turn split -> redact
+        verdict; the value is NOT contiguous in any single message so it can't be masked in place -> the chat
+        handler's B1 egress-truth fail-closed converts the no-op redaction to a hard BLOCK (reused, no new
+        enforcement). VERIFY: ssn/stripe/phone/connstr split (2-3 turns w/ assistant acks) now redact; FP floor
+        clean (weather chat, 'order 42'/'order 99', code chat -> allow); single-turn + G6/G27 injection
+        unaffected (40 multi-turn tests pass). FROZEN G69 golden (5 split + 3 benign). GATE: golden 424×3 (was
+        416; +8); gateway suite 1547 pass. commit 27b45a07. REDEPLOYING (rollback pre-g69).
+        TWENTY-FOUR confirmed-live leaks (G40-G46, G49-G61, G66-G69) + G62 DiD + 3 DoS (G63-G65) + G48 + 2
+        tradeoffs. Split-across-turns now covered for BOTH injection (G6/G27 space-join) AND values (G69 no-sep).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
