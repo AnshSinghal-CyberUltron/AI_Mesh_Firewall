@@ -1943,3 +1943,39 @@ test_enforcement 13 passed. No secret persisted (env-only). → **live OpenRoute
 (ModelConnectionPanel + trace cards) — now meaningful since live traces render real model responses;
 (2) startup-registration availability follow-up (documented above); (3) the 7 GATEWAY_LIVE golden cases
 still need a `GATEWAY_LIVE=1` in-process run to flip from skip→pass.
+
+---
+
+## R6 PLAYWRIGHT VERIFICATION — 2026-07-03 — owned frontend components verified LIVE (post-G72)
+Now meaningful because live traces render REAL model responses (pre-G72 everything hung). Gates first:
+owned trace-helper unit tests `node --test src/utils/pipelineTrace.test.js` = 8/8; `npm run build` = OK
+(only a non-blocking chunk-size warning; there is NO `npm run lint` script — do not call it). Browser via
+Playwright MCP (logged in as the dev-default admin; session persisted).
+
+**Owned card 1 — pipeline-trace card (`simulator/StageTimeline.jsx`)** verified in the 1.1 gateway
+simulator (AttackSimulatorPanel, status "connected"). Set model → free `google/gemma-4-31b-it:free`, loaded
+the "Sensitive Data Leakage" (PII) scenario, Run Pipeline. The card rendered the REAL per-stage trace with
+its OWN action per stage + real latencies — NO global smear:
+  Auth ALLOW · Rate Limit ALLOW · **Policy REDACT** · Input Scan ALLOW · Kill Switch ALLOW ·
+  **Model Routing REROUTE** · Model Input ALLOW · Model Output ALLOW (real inference latency) ·
+  **Output Guardrail REDACT**
+Only the acting stages are badged (Policy/Output-Guard = redacted, Routing = rerouted); allow stages are
+not highlighted — matches `buildHonestTraceStages` (`highlight: a!=="allow"`). Zero console errors.
+
+**Owned card 2 — `ModelConnectionPanel.jsx`** verified at `?tab=firewall-1-5` (Multi-Model Governance →
+"LLM Model Connections"): 10 models connected (9 `*:free` + `gpt-5.2`), 12 "Active" pills, "Add model"
+connect control. SECRET CHECK: raw OpenRouter key (`sk-or-…`) does NOT appear anywhere in the DOM
+(RAW_OPENROUTER_KEY_LEAK=false); the stored key is shown MASKED (`•••6c11`). Zero console errors.
+
+**Secret handling this iteration:** the Playwright snapshot `.yml` files captured the GATEWAY org key
+(`dXsk…`) plaintext from the AttackSimulatorPanel key field (a NON-owned component; pre-existing behavior —
+that field is not type=password/in-a-form, hence a browser "[DOM] Password field not in a form" verbose
+note, NOT an error). `.playwright-mcp/` is gitignored (`.gitignore:45`) and I `rm -rf`'d it after (8 files
+had the gateway key). Verified the OpenRouter key lives ONLY in untracked ralph-loop `*.local.md` state
+files, and the pre-commit guard (`scripts/ralph/precommit-secret-scan.sh`, wired to `.git/hooks/pre-commit`)
+was FUNCTIONALLY re-proven to ABORT a staged file containing the OpenRouter key. No `.gitignore` change made
+(active hook + narrow-staging discipline suffice; avoid shared-file churn).
+
+**→ Playwright verification = DONE; frontend renders correct + honest, zero console errors.**
+Completion still NOT asserted — remaining: (a) startup-registration availability follow-up; (b) the 7
+`GATEWAY_LIVE=1` golden cases (skip→pass) to fully satisfy "complete golden suite" under live mode.
