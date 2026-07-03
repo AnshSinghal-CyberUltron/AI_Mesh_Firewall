@@ -674,11 +674,15 @@ _ROLE_LINE_RE = re.compile(r"^\[(user|assistant|system|developer|tool)\]:\s?(.*)
 _INSTRUCTION_ROLES = ("user", "developer")
 
 
-def _reassemble_user_turns(text: str) -> str | None:
+def _reassemble_user_turns(text: str, sep: str = " ") -> str | None:
     """Return the instruction-turn-only reassembly (user + developer) of a folded
     multi-turn conversation, or ``None`` when ``text`` is not a multi-turn fold (so
     single-turn scans are unaffected). Continuation lines of a multi-line instruction
-    message are kept with that turn; assistant/tool/system turns are dropped."""
+    message are kept with that turn; assistant/tool/system turns are dropped.
+
+    ``sep`` joins the turn segments — a SPACE (default) for the injection re-scan (words
+    are space-separated), or EMPTY for the G69 PII/secret/credential check (a value split
+    MID-TOKEN across turns, ``123-`` | ``45-6789``, must concatenate with no gap to match)."""
     if "\n" not in text or not any(f"[{r}]:" in text for r in _INSTRUCTION_ROLES):
         return None
     role_lines = 0
@@ -696,7 +700,7 @@ def _reassemble_user_turns(text: str) -> str | None:
     # Require a real multi-turn fold: >=2 role-labelled turns and >=2 instruction segments.
     if role_lines < 2 or len(parts) < 2:
         return None
-    reassembled = " ".join(p for p in parts if p).strip()
+    reassembled = sep.join(p for p in parts if p).strip()
     return reassembled or None
 
 
@@ -1257,6 +1261,30 @@ class InputScanner:
                             f"user turns: {mt.detail}"
                         ),
                         matched_patterns=mt.matched_patterns,
+                        tier="tier_1_multiturn",
+                    )
+
+            # G69: a PII/secret/credential value split MID-TOKEN across turns
+            # ("my ssn is 123-" | "45-6789", "key sk_live_abcd" | "1234efgh5678ij")
+            # survives the SPACE-joined injection reassembly above — the space breaks the
+            # contiguous pattern — and the label-prefixed folded text likewise splits it.
+            # Re-check a NO-SEPARATOR reassembly with ONLY the value detectors (a no-sep
+            # injection re-scan would false-positive on words run together). Reaching here
+            # means the original text carried no contiguous PII/secret/credential (those
+            # return early above), so any hit here is genuinely a cross-turn split.
+            _joined = _reassemble_user_turns(text, sep="")
+            if _joined and _joined != text:
+                _j_pii = detect_pii(_joined)
+                _j_secret = detect_secrets(_joined)
+                _j_cred = detect_credential_exposure(_joined)
+                if _j_pii or _j_secret or _j_cred:
+                    _jk = list(_j_pii.keys()) + list(_j_secret.keys()) + list(_j_cred.keys())
+                    return ScanVerdict(
+                        action="redact",
+                        threat_type="pii" if _j_pii else "secret",
+                        confidence=0.85,
+                        detail=f"PII/secret/credential split across turns: {', '.join(_jk)}",
+                        matched_patterns=_jk,
                         tier="tier_1_multiturn",
                     )
 
