@@ -165,3 +165,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** no server surfaces a raw-leak error; the whole §1.4 panel is exercised clean in both themes at all widths.
 - **AFFECTS:** verification only — no product code change (item 21 self-healed stale DB errors via re-sync; item 22 was all-green).
 - **VERIFY:** item21_verify.py PASS (12 connected all-with-tools, 10 failed all-clean, ruflo_ok); item22_ui.mjs PASS (48/48 combos clicked+rendered, no overflow, per-server refresh+sync fire, 0 console errors). Section G (21-22) COMPLETE.
+
+## MCP-PAGE-CLEANUP-23 — FREEZE gate: A–G re-verified 3× + login-throttle-hardened harness
+- **files:** scripts/ralph/mcp_page_cleanup_item23_freeze.sh (orchestrator); scripts/ralph/mcp_page_typesim.mjs + mcp_page_cleanup_item16_verify.py + item21_verify.py (login retry-on-429)
+- **WHAT:** the Playwright snapshot gate + all section gates (A clean-errors, B stuck-state, C alignment/responsive snapshot, D redactions API+UI, E banner, F simulator, G every-tab) run 3× back-to-back and must all be green — a regression freeze so the fixed §1.4 page can't silently regress.
+- **WHY (harness fix):** the first freeze run tripped the control login throttle (`login_user: 5/min` per email — auth/throttling.py) because every gate signs in as the same admin and E alone opens 3 contexts; a 6th login got HTTP 429, cascading FAILs. That was a HARNESS artifact, not a product regression (the stack was healthy; gates passed individually). FIX: the shared login helpers now honor 429 (wait Retry-After / backoff, retry) — production-correct client behavior — and the orchestrator spaces gates (14s) + rounds (45s) to stay under the rate.
+- **NOW DOES:** `ROUNDS=3 bash scripts/ralph/mcp_page_cleanup_item23_freeze.sh` → FREEZE MATRIX. Result: **24/24 gates PASS across 3 rounds** (A–G green ×3).
+- **AFFECTS:** verification harness only (no product code). The gate is reusable to guard §1.4 against future regressions.
+- **VERIFY:** ITEM-23-FREEZE: PASS — A–G green 3× (R1/R2/R3 all PASS for A_cleanerr, B_stuckstate, C_snapshot, D1_redact_api, D2_redact_ui, E_banner, F_simulator, G_everytab). Section H (freeze, item 23) COMPLETE — the §1.4 Context Assembly & MCP page cleanup (items 00-23) is DONE.
