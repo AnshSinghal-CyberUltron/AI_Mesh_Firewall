@@ -1521,3 +1521,11 @@
 - **Fix:** pass max_size=_MAX_RESPONSE_BYTES to websockets.connect() -> library enforces the agent cap (parity with http/sse/stdio) BEFORE buffering the whole frame (real pre-buffer OOM guard). Explicit length check kept as belt-and-suspenders.
 - **Gate:** test_ws_connect_enforces_response_cap_via_max_size (asserts connect called with max_size==_MAX_RESPONSE_BYTES) + existing ws tests pass; full agent suite green. websockets 16.0 default confirmed 1048576.
 - **Evidence:** mcp-parallel/findings/backstop-p-ws-max-size-cap-mismatch/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked).
+
+---
+## CHG-0132 (2026-07-03) — proxy_chat rate-limit orphaned no-TTL Redis keys (CHG-0062 missed the chat hot path, item 9/11)
+
+- **Gap:** gateway/ai_mesh_gateway/main.py proxy_chat (chat-completions HOT path) kept an INLINE burst/RPM counter using the old non-atomic `current = await REDIS_CLIENT.incr(k); if current == 1: await REDIS_CLIENT.expire(k, TTL)`. On coroutine cancellation (client disconnect — routine under load) or crash BETWEEN the INCR and the EXPIRE, the key is orphaned with NO TTL forever. burst_key=ratelimit:{org}:burst:{second} is a NEW key every second → orphans accumulate ~1/sec → unbounded Redis memory growth under soak/stress -> eventual OOM breaks rate limiting for all orgs. CHG-0062 fixed this exact bug in rate_limit_enforcement.py + the _enforce_org_burst_rpm shim (embeddings/RAG endpoints) but NOT the inline proxy_chat copy. Found auditing Redis key TTLs (parity check of the two rate-limit paths).
+- **Fix:** both proxy_chat counters now use `async with REDIS_CLIENT.pipeline(transaction=True) as pipe: pipe.incr(k); pipe.expire(k, TTL, nx=True); current=(await pipe.execute())[0]` — atomic, self-healing EXPIRE NX, single await (no cancellation window). Behavior-preserving (same keys/limits/telemetry/fail-open).
+- **Gate:** test_proxy_chat_ratelimit_atomic_ttl.py (2 source-level guards: non-atomic idiom gone + EXPIRE NX present) + test_rate_limit_atomic_ttl.py (5, runtime proof of the identical pattern) = 7 passed; full gateway suite 1824 passed.
+- **Follow-up (deferred):** dedup — make proxy_chat call _enforce_org_burst_rpm (root-cause; deferred, changes inline telemetry). Evidence mcp-parallel/findings/backstop-p-proxy-chat-ratelimit-orphan-ttl/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked).

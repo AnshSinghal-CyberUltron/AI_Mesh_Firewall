@@ -5707,9 +5707,18 @@ async def proxy_chat(
                 burst_limit = org_config.get("burst_limit", CONFIG.get("burst_limit", 150))
                 second_bucket = now_ts
                 burst_key = f"ratelimit:{rl_scope}:burst:{second_bucket}"
-                current_burst = await REDIS_CLIENT.incr(burst_key)
-                if current_burst == 1:
-                    await REDIS_CLIENT.expire(burst_key, 2)
+                # CHG-0132: atomic INCR + EXPIRE NX (MULTI/EXEC) — parity with CHG-0062
+                # in rate_limit_enforcement.py. The old separate INCR then
+                # `if current == 1: EXPIRE` left the key with NO TTL whenever the coroutine
+                # was cancelled (client disconnect — routine under load) or crashed between
+                # the two commands, orphaning a no-TTL key forever. The burst key is a NEW
+                # key every second, so orphans accumulated one per second → unbounded Redis
+                # growth under soak/stress. EXPIRE NX on every request self-heals a missing
+                # TTL. (This proxy_chat path was the duplicate CHG-0062 missed.)
+                async with REDIS_CLIENT.pipeline(transaction=True) as pipe:
+                    pipe.incr(burst_key)
+                    pipe.expire(burst_key, 2, nx=True)
+                    current_burst = (await pipe.execute())[0]
                 if current_burst > burst_limit:
                     if enforcement_mode == "block":
                         METRICS["blocked"] += 1
@@ -5746,9 +5755,12 @@ async def proxy_chat(
             minute_bucket = now_ts // 60
             rpm_key = f"ratelimit:{rl_scope}:{minute_bucket}"
             try:
-                current_rpm = await REDIS_CLIENT.incr(rpm_key)
-                if current_rpm == 1:
-                    await REDIS_CLIENT.expire(rpm_key, 120)
+                # CHG-0132: atomic INCR + EXPIRE NX (see burst above) — no orphaned
+                # no-TTL keys on cancellation/crash; self-healing TTL every request.
+                async with REDIS_CLIENT.pipeline(transaction=True) as pipe:
+                    pipe.incr(rpm_key)
+                    pipe.expire(rpm_key, 120, nx=True)
+                    current_rpm = (await pipe.execute())[0]
                 if current_rpm > rpm_limit:
                     if enforcement_mode == "block":
                         METRICS["blocked"] += 1
