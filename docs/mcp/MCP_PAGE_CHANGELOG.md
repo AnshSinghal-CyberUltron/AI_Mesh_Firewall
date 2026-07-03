@@ -110,3 +110,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** h-7 w-7 → h-9 w-9 (gateway-key reveal/copy, copy-URL, dismiss-error). Harness sweeps servers + observability tabs; excludes the decorative hero-glow + global nav + inline text links (WCAG exempt).
 - **AFFECTS:** the 1.4 page icon buttons; responsiveness verification.
 - **VERIFY:** build green; LIVE Playwright cleanup12Pass:true (noOverflow, noBleed on both tabs all 8 combos, touchOk 24px WCAG 2.5.8 AA, 0 console errors). Evidence list = reflowing cards, stacks at 375.
+
+## MCP-PAGE-CLEANUP-13 — impeccable state confirmed + (unnamed) tool polish
+- **files:** frontend/src/components/MCPConnectorPanel.jsx
+- **WHAT:** confirmed the 1.4 page is impeccable (detector clean, both themes) after items 10-12; fixed a blank-name row in Top Tools.
+- **WHY:** the page is already aligned+responsive (CP43/44 + 10-12) — a from-scratch revamp would regress verified behavior (CP44 discipline). The one blemish: a tool with an empty name rendered as a blank row with a floating count.
+- **NOW DOES:** Top Tools empty name → "(unnamed)" (italic muted) + stable key + tabular-nums; detector stays clean.
+- **AFFECTS:** the Observability Top Tools list.
+- **VERIFY:** build green; detect.mjs exit 0 (0 anti-patterns), 0 hard-coded hex + 111 dark: variants; LIVE Playwright regression cleanup12Pass:true; read observability PNG → "(unnamed) 125" (was blank).

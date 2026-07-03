@@ -2214,10 +2214,15 @@ function MCPConnectorPanelInner() {
                     <Wrench className="w-4 h-4 text-teal-500" /> Top Tools
                   </h4>
                   <div className="space-y-2">
-                    {eventSummary.top_tools.map((t) => (
-                      <div key={t.tool_name} className="flex items-center justify-between text-xs">
-                        <span className="font-mono text-slate-700 dark:text-slate-300 truncate">{t.tool_name}</span>
-                        <span className="text-slate-500 font-medium shrink-0 ml-2">{t.count}</span>
+                    {eventSummary.top_tools.map((t, idx) => (
+                      // CLEANUP-13: a tool with an empty name rendered as a blank row
+                      // (just a count) — label it "(unnamed)" and give it a stable key
+                      // so the list reads intentionally, never a floating number.
+                      <div key={t.tool_name || `__unnamed-${idx}`} className="flex items-center justify-between text-xs">
+                        <span className={`font-mono truncate ${t.tool_name ? "text-slate-700 dark:text-slate-300" : "italic text-slate-400 dark:text-slate-500"}`}>
+                          {t.tool_name || "(unnamed)"}
+                        </span>
+                        <span className="text-slate-500 font-medium shrink-0 ml-2 tabular-nums">{t.count}</span>
                       </div>
                     ))}
                   </div>
