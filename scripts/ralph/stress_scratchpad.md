@@ -3168,3 +3168,9 @@ broad a85 alphabet caused NO regression thanks to the gate. Added `ascii85()` co
 · Ascii85/a85(G100) — all decoded+rescanned on both the injection and PII/secret paths.
 Session ledger: TWENTY-TWO leaks (G74..G95, G97, G98, G100) + ONE false-block (G99) fixed; G96 freezes
 6 defended vectors; G77/G78/G80 frozen.
+
+### G100 DEPLOY + LIVE-VERIFY — 2026-07-03
+Rebuilt+redeployed the baked gateway (tag rollback-g100 → build → up -d --no-deps → healthy ~4s).
+LIVE-verified: Ascii85 bare injection → **block**; Ascii85 Adobe <~...~> injection → **block**. G100
+validated end-to-end (in-process 620×3 + backend 1827 + live deployed). Encoding-laundering coverage
+(base64/hex/rot13/base32/b85/a85) now complete on both injection and PII/secret paths.
