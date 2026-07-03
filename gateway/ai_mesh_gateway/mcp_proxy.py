@@ -2424,6 +2424,23 @@ async def _scan_internal_tools_list(
     (matches the org tools/list scan)."""
     if not isinstance(payload, dict):
         return JSONResponse(content=payload, status_code=200)
+    # Some stdio adapters hand back ``result`` as a JSON-ENCODED STRING (a
+    # double-encoded tools/list) rather than a nested object. Normalize it to a dict
+    # so the TOOLS-SHAPED scan branch below runs. Otherwise a string result falls
+    # through to the error-envelope result-floor scan, which can FALSE-POSITIVE-redact
+    # a numeric schema field (e.g. a large ``"maximum": <n>``) as a credit card
+    # (``****-****-****-NNNN``) — corrupting the JSON and breaking tool discovery
+    # (root cause of Playwright discovery failing as MCP_UNAVAILABLE / "'str' object
+    # has no attribute 'get'"). The genuine tool-poisoning scan on descriptions/names
+    # still runs on the parsed dict.
+    _raw_result = payload.get("result")
+    if isinstance(_raw_result, str):
+        try:
+            _parsed_result = json.loads(_raw_result)
+        except (ValueError, TypeError):
+            _parsed_result = None
+        if isinstance(_parsed_result, dict):
+            payload = {**payload, "result": _parsed_result}
     if isinstance(payload.get("result"), dict):
         return await _scanned_tools_list_response(
             payload, jsonrpc=jsonrpc, msg_id=msg_id, enabled_info=enabled_info,
