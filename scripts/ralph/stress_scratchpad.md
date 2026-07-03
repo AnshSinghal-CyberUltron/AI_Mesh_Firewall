@@ -3359,3 +3359,12 @@ policy block-downgrade change (`194dde95 PIPELINE-0009`), so main.py is clean ag
 now contains only my G105 fix + the retained G104 latent-comment relabel.
 Session ledger: TWENTY-SIX leaks (G74..G95, G97, G98, G100, G101, G102, G103, G105) + ONE false-block
 (G99) fixed; G104 was a FALSE finding (dead code); G96 freezes 6 defended vectors; G77/G78/G80 frozen.
+
+### G105 DEPLOY + LIVE-VERIFY — 2026-07-03
+Rebuilt+redeployed the baked gateway (tag rollback-g105 → build → up -d --no-deps → healthy ~4s; the
+other session's PIPELINE-0009 policy fix is now committed upstream, so deploying is safe). LIVE-verified
+through **/v1/responses**: a FLAT `tools[].description` injection → **HTTP 400 "Request blocked due to
+security policy"** (before G105 it was HTTP 502 upstream — the firewall had forwarded it unscanned); a
+benign flat tool → HTTP 502 upstream (NOT a firewall block — the free model errors on the tools shape,
+unrelated). G105 validated end-to-end (in-process 642×3 + backend 1926 + live block). Applied the G104
+lesson: traced call-sites + live-tested to confirm a REAL live gap before claiming/fixing.
