@@ -201,5 +201,62 @@ async def test_sse_result_secret_still_masked():
     assert "AKIAIOSFODNN7EXAMPLE" not in body   # the returned result is still floor-scanned
 
 
+# ── CHG-0124: end-to-end regression-lock (no production code change) for the CHAT-PATH
+# tool authorization invariant. internal_tools_call blocks an org-DISABLED tool near the
+# top of the handler (`_is_tool_disabled` -> -32000) BEFORE any upstream forward. There was
+# NO end-to-end test proving the block SHORT-CIRCUITS execution — only unit coverage of
+# `_is_tool_disabled`/the enabled-tools cache. With many parallel sessions churning
+# mcp_proxy.py, this locks in "a disabled tool never executes on EITHER forward path
+# (sandbox `_adapter_forward` OR legacy httpx), so nothing egresses to the chat pipeline".
+
+
+async def _drive_disabled(*, disabled=("fetch",), sandbox_routed=True):
+    """Drive internal_tools_call with the (hardcoded `fetch`) tool. Spies BOTH forward
+    mechanisms: `_adapter_forward` (sandbox/broker path) and the httpx client.post
+    (legacy path). Returns (resp, httpx_post_spy, adapter_forward_spy)."""
+    client = _fake_client([_http_resp(
+        {"jsonrpc": "2.0", "id": 1, "result": {"content": [{"type": "text", "text": "ok"}]}})])
+    fwd = AsyncMock(return_value=_http_resp(
+        {"jsonrpc": "2.0", "id": 1, "result": {"content": [{"type": "text", "text": "ok"}]}}))
+    with (
+        patch.object(mcp_proxy, "_valid_internal_key", return_value=True),
+        patch.object(mcp_proxy, "_is_sandbox_routed", return_value=sandbox_routed),
+        patch.object(mcp_proxy, "_get_enabled_tools",
+                     AsyncMock(return_value={"disabled": set(disabled), "known": {"fetch"}})),
+        patch.object(mcp_proxy, "_get_server_config",
+                     AsyncMock(return_value={"transport": "streamable-http",
+                                             "url": "https://safe.example.com/mcp"})),
+        patch.object(mcp_proxy, "_adapter_forward", fwd),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "is_safe_outbound_url", return_value=(True, "")),
+        patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client),
+    ):
+        resp = await mcp_proxy.internal_tools_call(_internal_req())
+    return resp, client.post, fwd
+
+
+@pytest.mark.asyncio
+async def test_internal_disabled_tool_blocked_and_not_forwarded():
+    # default routing (sandbox) — the disabled block precedes the routing decision.
+    resp, httpx_post, adapter_forward = await _drive_disabled(disabled=("fetch",))
+    body = json.loads(resp.body.decode("utf-8"))
+    # (1) returns the JSON-RPC disabled error (policy visible to the caller)
+    assert body.get("error", {}).get("code") == -32000
+    assert "is disabled for this server" in body["error"]["message"]
+    # (2) SECURITY INVARIANT: the tool never executed on EITHER forward path -> no egress.
+    assert adapter_forward.call_count == 0   # sandbox/broker forward never happened
+    assert httpx_post.call_count == 0        # legacy httpx forward never happened
+
+
+@pytest.mark.asyncio
+async def test_internal_enabled_tool_is_forwarded_control():
+    """Positive control (legacy path): with NO tool disabled, the SAME harness DOES forward
+    upstream (httpx client.post fires) — proving the no-forward assertion above is not
+    vacuous (the harness can actually observe a forward)."""
+    resp, httpx_post, _fwd = await _drive_disabled(disabled=(), sandbox_routed=False)
+    assert httpx_post.call_count >= 1   # init/notify/call reached the upstream client
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

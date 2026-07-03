@@ -1456,3 +1456,12 @@
 - **Gate:** `test_mcp_internal_http_result_scan.py` → 8 passed (3 new). Staged blob (HEAD + only this hunk, no CLEANUP-06) py_compiles. The 2 `test_mcp_bare_proxy_scan` ssrf failures in a full run are the mcp-page session's IN-FLIGHT CLEANUP-06 (pass on clean HEAD; independent — `ext_mcp_proxy`).
 - **SHARED-WORKTREE (KEY):** the mcp-page session (MCP-PAGE-CLEANUP-06) had DEFERRED its mcp_proxy.py+tests commit because `git add -p` is blocked and my SSE hunk was intermixed (their own AGENTS.md note). Solved with `git apply --cached` of the isolated CHG-0123 hunk → committed ONLY my hunk; their CLEANUP-06 SSRF hunks + test edits stay uncommitted in the working tree (neither committed nor destroyed). This UN-BLOCKS their deferred commit — the file "settles".
 - **Evidence:** `mcp-parallel/findings/backstop-p-internal-sse-event-reassembly/finding.md`. Parity: org CHG-0093, ext CHG-0122. Promise still WITHHELD (G5 stress items 14-19 host-blocked; item-21 UI owned cross-plane).
+
+---
+## CHG-0124 (2026-07-03) — chat-path disabled-tool authz regression-lock (rigorous-verification of actor-keyed authz)
+
+- **Item:** HARDEN 1.4 per-user/agent/role tool authorization — rigorous re-verification of the chat-pipeline surface + lock in the invariant. Test-only, no code change.
+- **Verified sound:** direct-MCP path enforces per-API-key mcp_allowed_tools (_tool_allowed_by_key L3743/L4506) + tools/list visibility filter + cap; chat path (internal_tools_call L2658, called by control MCPToolCallView -> /v1/mcp/internal/tools-call, views.py L834) has NO end-user API key so per-key allowlist doesn't apply BY DESIGN — instead it blocks the org-DISABLED set (_is_tool_disabled -> -32000 L2701) BEFORE any forward + runs full 1.4 chain (inbound scan/block, outbound scan/redact, tag, audit). Read handler + control caller payload (no actor allowlist) -> NO live bypass.
+- **Gap closed:** disabled-block was only UNIT-covered (test_mcp_enabled_tools_cache). Added e2e proof that internal_tools_call short-circuits EXECUTION for a disabled tool — never forwards on sandbox (_adapter_forward) OR legacy httpx -> no egress. Guards the invariant against the many parallel sessions editing mcp_proxy.py.
+- **Gate:** test_mcp_internal_http_result_scan.py -> 10 passed; full gateway suite 1787 passed 0 failed.
+- **Evidence:** mcp-parallel/findings/backstop-p-chat-path-disabled-tool-authz-lock/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked; item-21 UI cross-plane).
