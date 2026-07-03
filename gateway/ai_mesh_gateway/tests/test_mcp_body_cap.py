@@ -156,3 +156,50 @@ async def test_response_under_ceiling_returns_joined():
     with patch.object(mcp_proxy, "_MCP_MAX_RESPONSE_BYTES", 100):
         out = await mcp_proxy._read_response_capped(_RespStream([b"hi ", b"there"]))
         assert out == b"hi there"
+
+
+# ── CHG-0140: the two internal (chat-pipeline) routes must APPLY the body cap, not just
+# _mcp_read_body_capped in isolation — they read request.json() and previously had no cap.
+
+import json as _json
+
+
+class _RouteReq:
+    """Request double for a route: headers dict + async stream() + async json()."""
+
+    def __init__(self, headers, chunks=None, body_json=None):
+        self.headers = headers
+        self._chunks = list(chunks or [])
+        self._body_json = body_json or {}
+
+    async def stream(self):
+        for c in self._chunks:
+            yield c
+
+    async def json(self):
+        return self._body_json
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", ["internal_tools_call", "internal_discover_tools"])
+async def test_internal_route_rejects_oversized_content_length(route):
+    huge = str(mcp_proxy._MCP_MAX_BODY_BYTES + 1)
+    req = _RouteReq({"X-Gateway-Internal-Key": "ok", "content-length": huge})
+    with patch.object(mcp_proxy, "_valid_internal_key", return_value=True):
+        resp = await getattr(mcp_proxy, route)(req)
+    assert resp.status_code == 413
+    assert _json.loads(resp.body)["code"] == "mcp_body_too_large"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", ["internal_tools_call", "internal_discover_tools"])
+async def test_internal_route_rejects_chunked_oversized_body(route):
+    # No Content-Length header -> the streaming cap must catch it.
+    req = _RouteReq({"X-Gateway-Internal-Key": "ok"}, chunks=[b"z" * 80, b"z" * 80])
+    with (
+        patch.object(mcp_proxy, "_MCP_MAX_BODY_BYTES", 100),
+        patch.object(mcp_proxy, "_valid_internal_key", return_value=True),
+    ):
+        resp = await getattr(mcp_proxy, route)(req)
+    assert resp.status_code == 413
+    assert _json.loads(resp.body)["code"] == "mcp_body_too_large"

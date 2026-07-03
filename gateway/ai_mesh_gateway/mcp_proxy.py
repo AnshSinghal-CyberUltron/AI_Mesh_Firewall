@@ -2475,6 +2475,15 @@ async def internal_discover_tools(request: Request):
     if not _valid_internal_key(internal_key):
         return JSONResponse(content={"error": "Unauthorized"}, status_code=401)
 
+    # CHG-0140: cap the inbound body (DoS guard) — parity with the other MCP routes
+    # (the two internal chat-pipeline routes had omitted the CHG-0034/0063 cap).
+    if _mcp_body_too_large(request):
+        return _mcp_body_too_large_response()
+    try:
+        await _mcp_read_body_capped(request)
+    except _MCPBodyTooLarge:
+        return _mcp_body_too_large_response()
+
     try:
         body = await request.json()
     except Exception:
@@ -2660,6 +2669,19 @@ async def internal_tools_call(request: Request):
     internal_key = (request.headers.get("X-Gateway-Internal-Key") or "").strip()
     if not _valid_internal_key(internal_key):
         return JSONResponse(content={"error": "Unauthorized"}, status_code=401)
+
+    # CHG-0140: cap the inbound body (DoS guard) — parity with org_mcp_jsonrpc /
+    # org_mcp_tool_call / ext_mcp_proxy, which the CHG-0034/0063 comment claims "every MCP"
+    # route applies but the two internal (chat-pipeline) routes had omitted. The chat
+    # user's tool ARGUMENTS flow through this route via the backend, so a huge body must
+    # not buffer unbounded into the gateway. _mcp_read_body_capped caches the capped bytes
+    # into request._body, so the request.json() below reuses them.
+    if _mcp_body_too_large(request):
+        return _mcp_body_too_large_response()
+    try:
+        await _mcp_read_body_capped(request)
+    except _MCPBodyTooLarge:
+        return _mcp_body_too_large_response()
 
     try:
         body = await request.json()
