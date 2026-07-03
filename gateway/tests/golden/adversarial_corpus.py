@@ -74,6 +74,20 @@ def ascii85(s: str, adobe: bool = False) -> str:
     return base64.a85encode(s.encode(), adobe=adobe).decode()
 
 
+def parenthesized(s: str) -> str:
+    """G101: decorated single-alnum whose NFKC is MULTI-char and so was skipped by the 1->1
+    fold guard: letters ⒜..⒵ (U+249C) and digits ⑴..⑼ (U+2474). NFKC -> '(a)' / '(1)'."""
+    out = []
+    for c in s.lower():
+        if "a" <= c <= "z":
+            out.append(chr(0x249C + ord(c) - 97))
+        elif "1" <= c <= "9":
+            out.append(chr(0x2474 + int(c) - 1))       # (1)..(9); 0 has no parenthesized form
+        else:
+            out.append(c)
+    return "".join(out)
+
+
 # G96: Mathematical Alphanumeric Symbols (U+1D400+) — "fancy" unicode a jailbreak is often
 # pasted in (𝓲𝓰𝓷𝓸𝓻𝓮 / 𝕚𝕘𝕟𝕠𝕣𝕖 / 𝚒𝚐𝚗𝚘𝚛𝚎 …). NFKC compat-folds these to ASCII, so the firewall
 # must still block. Lowercase bases; a few styles place letters as letterlike symbols OUTSIDE

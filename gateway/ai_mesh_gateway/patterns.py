@@ -127,7 +127,19 @@ def _canonicalize_with_map(text: str):
         if cat == "Cc" and ch not in "\t\n\r":         # control chars -> drop (keep whitespace)
             continue
         nc = unicodedata.normalize("NFKC", ch)
-        ch2 = nc if len(nc) == 1 else ch               # keep 1->1 compat folds (fullwidth/math/circled)
+        if len(nc) == 1:
+            ch2 = nc                                   # keep 1->1 compat folds (fullwidth/math/circled)
+        else:
+            # G101: a DECORATED single alphanumeric has a MULTI-char NFKC that the 1->1 guard
+            # skipped — parenthesized letter ⒤ -> "(i)", parenthesized digit ⑵ -> "(2)", full-stop
+            # digit ⒈ -> "1." — so it evaded detect_pii/detect_secrets (a parenthesized-digit SSN
+            # went UNdetected; the scanner's richer deobfuscation caught the injection side, but the
+            # PII/secret path relies on this canon). Fold to the lone alnum char (still 1->1, so the
+            # index map still masks back onto the original char). Ligatures / fractions / "No."-type
+            # symbols (>1 alnum: ﬁ->"fi", ½->"1⁄2", №->"No") are LEFT untouched. FP-safe: fires only
+            # when the canonical form is a real PII/secret/injection pattern.
+            _alnums = [c for c in nc if c.isalnum()]
+            ch2 = _alnums[0] if len(_alnums) == 1 else ch
         if ch2 in _DASH_CHARS:
             ch2 = "-"
         elif unicodedata.category(ch2) == "Zs":

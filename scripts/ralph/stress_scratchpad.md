@@ -3174,3 +3174,29 @@ Rebuilt+redeployed the baked gateway (tag rollback-g100 → build → up -d --no
 LIVE-verified: Ascii85 bare injection → **block**; Ascii85 Adobe <~...~> injection → **block**. G100
 validated end-to-end (in-process 620×3 + backend 1827 + live deployed). Encoding-laundering coverage
 (base64/hex/rot13/base32/b85/a85) now complete on both injection and PII/secret paths.
+
+---
+
+## G101 (CONFIRMED leak — fixed) — 2026-07-03 — decorated single-alphanumeric canonicalization gap
+R2 Unicode-canonicalization completeness sweep (post-encoding-family). Probed obfuscations whose NFKC
+decomposition is MULTI-char (the 1->1 canon guard `ch2 = nc if len(nc)==1 else ch` skips them). Found:
+parenthesized letters (⒜..⒵ → NFKC "(a)"), parenthesized digits (⑴..⑼ → "(2)"), full-stop digits (⒈ →
+"1.") were NOT folded → a **parenthesized-digit SSN/card went UNDETECTED** by detect_pii/detect_secrets.
+Asymmetry: the SCANNER (injection) caught parenthesized letters via its richer deobfuscation, but the
+PII/secret path relies on `canonicalize_for_detection` (the 1->1 canon), so the PII side leaked.
+**FIX (owned patterns.py `_canonicalize_with_map`):** when NFKC(ch) is multi-char, if it holds EXACTLY
+ONE alnum, fold to that alnum (still 1->1 — the index map still masks back onto the original char).
+Ligatures/fractions/№-style (>1 alnum: ﬁ→"fi", ½→"1⁄2", №→"No") are LEFT untouched.
+**Verify:** parenthesized-digit SSN + card → detected + masked (canon "123-45-6789"); parenthesized-letter
+injection → now folds to "ignore all previous instructions" and blocks via canon too (was caught only by
+the scanner path). FP-clean: ﬁle/½/№ NOT folded; benign circled/parenthesized numbers fold but are not
+flagged (① ② ③ steps → allow). In-process golden **624 ×3** (was 620; +4 G101); backend
+`ai_mesh_gateway/tests` **1846 passed / 0 failed** (excl. other session's untracked WIP). Added
+`parenthesized()` corpus helper. Also VERIFIED DEFENDED (no fix needed): circled letters/digits (1-char
+NFKC → fold), fullwidth controls, zalgo/combining marks (Mn dropped), variation selectors (dropped).
+**Frozen:** golden `test_g101_*`.
+**Follow-up flagged:** Armenian (and likely Cherokee/Coptic) homoglyph injection still bypasses — the
+`_CONFUSABLE_MAP` covers Cyrillic + Greek but not Armenian; a genuine Armenian confusable ("օ"~o, "ս"~u)
+folds neither. NEXT item (extend confusable map to the real Armenian/Cherokee Latin-lookalikes).
+Session ledger: TWENTY-THREE leaks (G74..G95, G97, G98, G100, G101) + ONE false-block (G99) fixed; G96
+freezes 6 defended vectors; G77/G78/G80 frozen.
