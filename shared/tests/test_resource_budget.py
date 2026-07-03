@@ -249,6 +249,14 @@ def test_gateway_pools_floor_on_tiny_box():
     assert (b1.scanner_pool, b1.bedrock_pool, b1.vault_pool) == (4, 8, 2)
 
 
+def test_redis_pool_scales_and_clamps():
+    # redis_pool = clamp(asgi_threads*4, 64, 256); asgi_threads = clamp(round(cpu*2),8,32)
+    assert rb.compute_sizing(6.0, 16 * GIB).redis_pool == 64    # clamp(12*4=48,64,256)=64 floor
+    assert rb.compute_sizing(12.0, 60 * GIB).redis_pool == 96   # clamp(24*4=96,64,256)=96
+    assert rb.compute_sizing(16.0, 60 * GIB).redis_pool == 128  # clamp(32*4=128,64,256)=128
+    assert rb.compute_sizing(1.0, 2 * GIB).redis_pool == 64     # clamp(8*4=32,64,256)=64 floor
+
+
 def test_gateway_pools_via_detect_and_cli(tmp_path):
     kw = _make_v2_mount(tmp_path, cpu_max="1200000 100000", memory_max=str(60 * GIB))
     b = rb.detect(affinity=lambda: 64, **kw)

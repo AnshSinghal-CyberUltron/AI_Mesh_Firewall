@@ -86,7 +86,11 @@
       derives stack rec from detector: 6c→107, 12c→185, 16c→257 — all < deployed 400 (live 16/400). CONN_MAX_AGE=60 sane.
       400 CONFIRMED SUFFICIENT ≤~24c → NO Postgres restart (evidence wins). 32c→449 = raise/pgbouncer threshold.
       PERF-0006 logged to 4 memories (informational; no stack change). No disruptive restart of the shared DB.
-- [ ] 16. Scale Redis/cache + Vault pools to worker count.
+- [x] 16. Scale Redis/cache + Vault pools to worker count.
+      → detector gains redis_pool=clamp(asgi_threads*4,64,256) (6c=64,12c=96,16c=128, 20 tests green). gateway/entrypoint.sh
+      exports GATEWAY_REDIS_MAX_CONNECTIONS (middleware pool, was 300); control exports DJANGO_CACHE_MAX_CONNECTIONS (was 200).
+      Generous per-worker lazy ceilings, scale w/ cores, never bottleneck (Redis live 49/10000). Gateway hot-path REDIS_CLIENT
+      left unbounded (safe). Vault done in PERF-0005. PERF-0007 → 4 memories. PROVEN --cpus=6: PID1 both=64, control health 200.
 - [ ] 17. Verify no connection starvation at peak.
 
 ## P6 — Fix hot endpoints

@@ -41,6 +41,13 @@ if [ -z "${ASGI_THREADS:-}" ]; then
 fi
 export ASGI_THREADS
 
+# Size the Django cache Redis pool per worker from the detector (was fixed 200)
+# unless pinned. Generous, scales with cores, never a bottleneck (P5 item 16).
+if [ -z "${DJANGO_CACHE_MAX_CONNECTIONS:-}" ]; then
+    DJANGO_CACHE_MAX_CONNECTIONS="$(python -m ai_mesh_shared.resource_budget --value redis_pool 2>/dev/null || true)"
+    [ -n "$DJANGO_CACHE_MAX_CONNECTIONS" ] && export DJANGO_CACHE_MAX_CONNECTIONS
+fi
+
 echo "[control-entrypoint] CONTROL workers=$WORKERS (source=$WSRC)" >&2
 python -m ai_mesh_shared.resource_budget --json 2>/dev/null \
     | sed 's/^/[control-entrypoint]   /' >&2 || true

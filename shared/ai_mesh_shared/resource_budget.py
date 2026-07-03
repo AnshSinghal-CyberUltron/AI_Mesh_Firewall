@@ -242,6 +242,7 @@ class ResourceBudget:
     scanner_pool: int           # Tier-1 CPU scan pool  (~cpu, bounded)
     bedrock_pool: int           # Tier-2 Bedrock network-I/O pool (== asgi_threads)
     vault_pool: int             # embedding-vault DB conn pool max (kept small — feeds pg)
+    redis_pool: int             # per-worker Redis/cache pool ceiling (generous, scaled)
     headroom: float
 
     @property
@@ -303,6 +304,11 @@ def compute_sizing(
     scanner_pool = _clamp(round(cpu_budget), 4, 16)
     bedrock_pool = asgi_threads
     vault_pool = _clamp(round(cpu_budget / 2), 2, 8)
+    # Per-worker Redis/cache pool ceiling. Redis ops are sub-ms so the actual
+    # concurrent-op count per worker is tiny; this is a generous lazy ceiling that
+    # scales with the per-worker thread budget (never a bottleneck). Total Redis
+    # connections = workers * redis_pool, which scales with the worker count.
+    redis_pool = _clamp(asgi_threads * 4, 64, 256)
 
     return ResourceBudget(
         cpu_budget=cpu_budget,
@@ -317,6 +323,7 @@ def compute_sizing(
         scanner_pool=scanner_pool,
         bedrock_pool=bedrock_pool,
         vault_pool=vault_pool,
+        redis_pool=redis_pool,
         headroom=headroom,
     )
 
@@ -421,6 +428,7 @@ _VALUE_FIELDS = {
     "scanner_pool": lambda b: b.scanner_pool,
     "bedrock_pool": lambda b: b.bedrock_pool,
     "vault_pool": lambda b: b.vault_pool,
+    "redis_pool": lambda b: b.redis_pool,
     "cpu_budget": lambda b: round(b.cpu_budget, 3),
     "ram_gib": lambda b: round(b.ram_gib, 2),
 }
@@ -447,6 +455,8 @@ def _main(argv: Optional[list] = None) -> int:
         print(f"GATEWAY_SCANNER_THREAD_POOL_SIZE={budget.scanner_pool}")
         print(f"GATEWAY_BEDROCK_THREAD_POOL_SIZE={budget.bedrock_pool}")
         print(f"GATEWAY_VAULT_POOL_MAX={budget.vault_pool}")
+        print(f"GATEWAY_REDIS_MAX_CONNECTIONS={budget.redis_pool}")
+        print(f"DJANGO_CACHE_MAX_CONNECTIONS={budget.redis_pool}")
         print(f"CPU_BUDGET={round(budget.cpu_budget, 3)}")
     else:  # default and --json
         print(json.dumps(budget.as_dict(), indent=2))

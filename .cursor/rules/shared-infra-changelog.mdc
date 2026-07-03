@@ -13,6 +13,15 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0007 — Redis/cache pools sized from the detector (2026-07-03)
+- Detector gains `redis_pool = clamp(asgi_threads*4, 64, 256)` (6c=64, 12c=96, 16c=128).
+  `gateway/entrypoint.sh` exports `GATEWAY_REDIS_MAX_CONNECTIONS` (middleware pool, was
+  300); `control/server-entrypoint.sh` exports `DJANGO_CACHE_MAX_CONNECTIONS` (was 200).
+  Generous per-worker lazy ceilings, scale with cores, never bottleneck (Redis 49/10000).
+  Gateway hot-path REDIS_CLIENT left unbounded (safe). Vault done in PERF-0005. Explicit
+  env overrides. AFFECTS: gateway+control images. ACTION: `docker compose build gateway
+  control`; running containers not recreated. PROOF: --cpus=6 → both =64; 20 tests green.
+
 ## PERF-0006 — Postgres max_connections=400 confirmed sufficient, NO restart (2026-07-03)
 - Item 15. Measured: control ~2.5 DB conns/worker (sync-view serialization), not the
   detector worst-case. `scripts/perf/pg_budget.py` derives the stack recommendation:

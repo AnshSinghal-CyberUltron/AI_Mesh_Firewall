@@ -47,6 +47,8 @@ _set_default GATEWAY_SCANNER_THREAD_POOL_SIZE scanner_pool
 _set_default GATEWAY_SCAN_THREAD_POOL_SIZE scanner_pool
 _set_default GATEWAY_BEDROCK_THREAD_POOL_SIZE bedrock_pool
 _set_default GATEWAY_VAULT_POOL_MAX vault_pool
+# Per-worker Redis pool ceiling for the middleware rate-limit pool (was fixed 300).
+_set_default GATEWAY_REDIS_MAX_CONNECTIONS redis_pool
 
 echo "[gateway-entrypoint] WEB_CONCURRENCY=$WORKERS (source=$WSRC)" >&2
 python -m ai_mesh_shared.resource_budget --json 2>/dev/null \

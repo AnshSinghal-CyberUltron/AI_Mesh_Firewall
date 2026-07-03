@@ -7,6 +7,29 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0007 — Redis/cache pools sized from the detector (vault already done)
+- **Date:** 2026-07-03
+- **Files:** `shared/ai_mesh_shared/resource_budget.py` (+`redis_pool` field/CLI,
+  additive), `shared/tests/test_resource_budget.py`, `gateway/entrypoint.sh`,
+  `control/server-entrypoint.sh`.
+- **What:** Two per-worker Redis pools were fixed statics: gateway middleware
+  rate-limit pool `GATEWAY_REDIS_MAX_CONNECTIONS`=300, control Django cache
+  `DJANGO_CACHE_MAX_CONNECTIONS`=200. The detector now derives
+  `redis_pool = clamp(asgi_threads*4, 64, 256)` (6c=64, 12c=96, 16c=128) and the
+  entrypoints export both env vars from it (explicit env overrides). Redis ops are
+  sub-ms, so the real per-worker concurrent-connection count is tiny — this is a
+  generous lazy ceiling that scales with cores and never bottlenecks. The gateway
+  **hot-path** `REDIS_CLIENT` is intentionally left unbounded (self-scaling, safe —
+  capping the hot path would risk errors). Vault pool was already detector-sized
+  (PERF-0005). Live Redis is at 49/10000 clients — enormous headroom.
+- **AFFECTS:** `ai_mesh_firewall-gateway` + `ai_mesh_firewall-control` images
+  (rebuilt); resource_budget.py additive.
+- **ACTION FOR OTHERS:** `docker compose build gateway control` to adopt. Running
+  containers not recreated. On the shared host these values only take effect on a
+  recreate; they are lower than the old 300/200 but far above real per-worker usage.
+- **PROOF:** `--cpus=6` PID1 env: `GATEWAY_REDIS_MAX_CONNECTIONS=64`,
+  `DJANGO_CACHE_MAX_CONNECTIONS=64`; control `/api/health/` 200; 20 detector tests green.
+
 ## PERF-0006 — Postgres max_connections budget: 400 confirmed sufficient (no restart)
 - **Date:** 2026-07-03
 - **Files:** `scripts/perf/pg_budget.py` (new helper). **No docker-compose / Postgres
