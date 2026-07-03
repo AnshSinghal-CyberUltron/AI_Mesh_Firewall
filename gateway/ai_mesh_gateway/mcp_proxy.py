@@ -1911,6 +1911,62 @@ async def ext_mcp_proxy(path: str, request: Request):
                             tool=_ext_tool_name, tags=_in_tags, findings=_in_findings,
                         )
 
+        # CHG-0119: credential/PII-scan the completion/complete CLIENT INPUT before it
+        # egresses to the untrusted external server. Its input is params.argument.value
+        # (the partial value the user is typing) + params.context.arguments — a DIFFERENT
+        # shape than params.arguments, so the _EXT_ARG_SCAN_METHODS logic above misses it.
+        # A credential/secret in that input would otherwise leak to a third-party server —
+        # the input-side twin of CHG-0118 (which scans the completion RESULT). Block on a
+        # credential; write back any inbound redaction.
+        if isinstance(_ext_req, dict) and str(_ext_req.get("method") or "") == "completion/complete":
+            _cparams = _ext_req.get("params") or {}
+            if isinstance(_cparams, dict):
+                _carg = _cparams.get("argument")
+                _cctx = _cparams.get("context")
+                _cin: dict = {}
+                if isinstance(_carg, dict) and _carg.get("value") is not None:
+                    _cin["argument_value"] = _carg.get("value")
+                if isinstance(_cctx, dict) and isinstance(_cctx.get("arguments"), dict):
+                    _cin["context_arguments"] = _cctx.get("arguments")
+                if _cin:
+                    _cs, _cblk, _ctags, _cfind, _cmeta = await _scan_tool_args_block(
+                        _cin, tool_name="completion/complete", enabled_info=None,
+                        org_slug="", server_slug="", actor=None,
+                    )
+                    if _cblk:
+                        LOG.warning(
+                            "ext_mcp_proxy.completion_input_blocked host=%s tags=%s",
+                            hostname, _ctags,
+                        )
+                        await _ext_audit(
+                            "block", "credential_blocked_inbound",
+                            tool="completion/complete", tags=_ctags, findings=_cfind,
+                        )
+                        return JSONResponse(
+                            content={
+                                "jsonrpc": _ext_req.get("jsonrpc", "2.0"),
+                                "id": _ext_req.get("id"),
+                                "error": {
+                                    "code": -32000,
+                                    "message": (
+                                        "completion input matched compliance tags: "
+                                        f"{', '.join(_ctags) or 'credential/PII'}."
+                                    ),
+                                },
+                            },
+                            status_code=200,
+                        )
+                    if _cs is not _cin and isinstance(_cs, dict):
+                        if "argument_value" in _cs and isinstance(_carg, dict):
+                            _carg["value"] = _cs["argument_value"]
+                        if "context_arguments" in _cs and isinstance(_cctx, dict):
+                            _cctx["arguments"] = _cs["context_arguments"]
+                        body = json.dumps(_ext_req).encode()
+                        await _ext_audit(
+                            "redact", "pii_redacted_inbound",
+                            tool="completion/complete", tags=_ctags, findings=_cfind,
+                        )
+
     client = httpx.AsyncClient(timeout=httpx.Timeout(max(_TIMEOUT, 120)), verify=True)
     try:
         resp = await client.send(

@@ -1171,6 +1171,18 @@
     gateway passed 0 failed; broker unaffected. Byte-level: completion.values [key AKIA****MPLE, contact
     b***@c***.example]; template desc AKIA****MPLE host [INTERNAL_IPV4_REDACTED]. Oracle (aidefence): has_pii true raw
     / false masked. Extends CHG-0077/0080. Evidence mcp-parallel/findings/backstop-p-ext-completion-templates-scan/.
+  - CHG-0119 (2026-07-03) — MEDIUM 1.4 credential-egress: ext-proxy did not credential-scan completion/complete CLIENT
+    INPUT before egress (input-side twin of CHG-0118). CHG-0118 scanned the completion RESULT, but its input was
+    forwarded raw: the ext inbound credential-scan (_EXT_ARG_SCAN_METHODS = tools/call, prompts/get) only inspects
+    params.arguments, and completion/complete's input has a DIFFERENT shape -> params.argument.value (user's partial
+    typed value) + params.context.arguments -> never scanned. A credential in that input egressed to the untrusted
+    external server. FIX (mcp_proxy.py): extract argument.value + context.arguments into a synthetic dict + run through
+    _scan_tool_args_block (E12 credential force-block) BEFORE egress -> credential BLOCKED (never sent, client.send not
+    awaited, audited credential_blocked_inbound); inbound redaction written back + audited; benign forwarded. Input +
+    output of completion/complete now both scanned (parity with tools/call). +2 tests. Gate: 4 completion + 1720
+    gateway passed 0 failed; broker unaffected. Byte-level: argument.value 'my key AKIAIOSFODNN7EXAMPLE' -> blocked,
+    secret never reaches client.send. Oracle N/A (aidefence blind to AWS-key class; send-not-awaited authoritative).
+    Extends CHG-0041/0109; input-side twin of CHG-0118. Evidence mcp-parallel/findings/backstop-p-ext-completion-input-scan/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

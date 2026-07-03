@@ -508,10 +508,46 @@ async def test_ext_benign_completion_preserved():
                                    "argument": {"name": "a", "value": "get"}}})
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 22, "result": {
         "completion": {"values": ["get_weather", "get_time"], "total": 2}}})
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+    client = _ext_client(upstream)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     blob = json.dumps(_decode(resp))
     assert "get_weather" in blob and "get_time" in blob  # benign suggestions untouched
+    client.send.assert_awaited()  # benign input WAS forwarded to the upstream
+
+
+# ── CHG-0119: input-side twin of CHG-0118 — credential/PII scan the completion/complete
+# CLIENT INPUT (params.argument.value + params.context.arguments) before egress to the
+# untrusted external server. A credential in the completion input is BLOCKED, never sent.
+
+
+@pytest.mark.asyncio
+async def test_ext_completion_input_credential_blocked_before_egress():
+    req = _ext_request({"jsonrpc": "2.0", "id": 23, "method": "completion/complete",
+                        "params": {"ref": {"type": "ref/prompt", "name": "x"},
+                                   "argument": {"name": "a", "value": "my key AKIAIOSFODNN7EXAMPLE"}}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 23, "result": {"completion": {"values": []}}})
+    client = _ext_client(upstream)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    blob = json.dumps(_decode(resp))
+    assert "AKIAIOSFODNN7EXAMPLE" not in blob      # secret not echoed
+    assert "compliance tags" in blob               # blocked with a compliance error
+    client.send.assert_not_awaited()               # never egressed to the external server
+
+
+@pytest.mark.asyncio
+async def test_ext_completion_context_arguments_credential_blocked():
+    req = _ext_request({"jsonrpc": "2.0", "id": 24, "method": "completion/complete",
+                        "params": {"ref": {"type": "ref/prompt", "name": "x"},
+                                   "argument": {"name": "a", "value": "hi"},
+                                   "context": {"arguments": {"prev": "token AKIAIOSFODNN7EXAMPLE"}}}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 24, "result": {"completion": {"values": []}}})
+    client = _ext_client(upstream)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert "AKIAIOSFODNN7EXAMPLE" not in json.dumps(_decode(resp))
+    client.send.assert_not_awaited()
 
 
 def _sse_resp(json_body, *, status=200):
