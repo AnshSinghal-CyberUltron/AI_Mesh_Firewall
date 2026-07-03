@@ -1256,6 +1256,39 @@ def _redact_obfuscated(original: str, result: str) -> str:
                                        or _dec_has_infra(dcanon)
                                        or _detect_credential_exposure_core(dcanon)))):
             masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
+    # G84: the raw transport loop above scans ``original`` directly, so a base64/hex blob whose
+    # chars are interleaved with zero-width/bidi/format (Cf) OR split by ASCII whitespace does NOT
+    # match a contiguous token and egressed UN-MASKED — even though DETECTION flags it (it decodes
+    # over the Cf-stripped canonical AND whitespace-collapsed views via _iter_transport_decodes_canon,
+    # G75/G76). That masker/detector asymmetry let a redact verdict fail OPEN (the egress path emits
+    # the still-decodable blob under a "flag" relabel). Mirror the detection normalization here: decode
+    # over a transport-normalized view (canonical Cf-stripped form with ASCII whitespace collapsed) and
+    # map each secret-bearing token's span BACK onto the ORIGINAL bytes (WITH the interleaved chars) via
+    # the ``idx`` map, exactly like the canonical-PII masking above — so the whole obfuscated blob is
+    # removed. Decode-gated (only masks when the decode carries PII/secret/infra/credential), so a benign
+    # whitespace-separated base64-charset run is untouched.
+    if canon:
+        _tnorm_chars: List[str] = []
+        _tnorm_idx: List[int] = []
+        for _k, _ch in enumerate(canon):
+            if _ch in " \t\n\r\f\v":
+                continue
+            _tnorm_chars.append(_ch)
+            _tnorm_idx.append(idx[_k])
+        _tnorm = "".join(_tnorm_chars)
+        if _tnorm and _tnorm != original:
+            for tok, dec in _iter_transport_decodes(_tnorm):
+                dcanon = canonicalize_for_detection(dec)
+                if (_detect_pii_core(dec) or _detect_secrets_core(dec) or _dec_has_infra(dec)
+                        or _detect_credential_exposure_core(dec)
+                        or (dcanon != dec and (_detect_pii_core(dcanon) or _detect_secrets_core(dcanon)
+                                               or _dec_has_infra(dcanon)
+                                               or _detect_credential_exposure_core(dcanon)))):
+                    _pos = _tnorm.find(tok)
+                    if 0 <= _pos and _pos + len(tok) - 1 < len(_tnorm_idx):
+                        _orig_sub = original[_tnorm_idx[_pos]: _tnorm_idx[_pos + len(tok) - 1] + 1]
+                        if _orig_sub:
+                            masks.append((_orig_sub, "[ENCODED_SECRET_REDACTED]"))
     # CHG-0058: short base64 tokens (8..11 chars) below the main gate carrying a bare
     # internal network address (e.g. base64("10.1.2.3")). Network-key-only, bounded.
     for tok, _dec in _iter_short_b64_infra(original):

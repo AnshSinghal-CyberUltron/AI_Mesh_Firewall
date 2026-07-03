@@ -2396,3 +2396,37 @@ Responses-unwrapped `response_format`.
 `ai_mesh_gateway/tests` **1662 passed**; golden 462×3; ruff clean.
 **Frozen:** extended `test_response_format_injection.py` (now 13): +unwrapped-shape + full-responses-flow + FP.
 Session ledger: SEVEN confirmed leaks (G74/G75/G76/G81/G82/G83) + soft DoS (G79) fixed+deployed.
+
+---
+
+## G84 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — Output-egress transport-decode masker/detector asymmetry
+Fresh angle: the OUTPUT/egress side (symmetric to the input hardening G74-G83). A manipulated /
+prompt-injected model exfiltrates a secret in its RESPONSE by transport-encoding it (base64/hex)
+AND breaking the blob with zero-width/bidi/format (Cf: U+200B/U+200D/U+FEFF/U+061C ALM/U+202E RLO)
+chars OR ASCII whitespace (space/newline). The output guard DETECTS it (its detectors decode over the
+Cf-stripped + whitespace-collapsed canonical view via `_iter_transport_decodes_canon`, G75/G76) and
+yields **action=redact** — but the deterministic redactor `patterns._redact_obfuscated` only scanned
+`_iter_transport_decodes(original)` (RAW text), so masking was a **NO-OP** on the obfuscated blob.
+INPUT is covered by B1 (redact no-op -> block). The OUTPUT path FAILS OPEN: a no-op redact is
+relabeled "flag" and the still-decodable blob is EGRESSED to the client
+(main.py:7714-7717 / secure_streaming.py:443-464 both `yield redacted_text == full_text`). A client
+strips the invisibles/whitespace + base64/hex-decodes -> recovers the plaintext. **CONFIRMED via
+`OutputGuard.inspect -> sanitize_output_for_verdict` fuzz: 24/24 (SSN/AWS/email x 8 obfuscations)
+egressed client-recoverable.**
+ROOT CAUSE: masker/detector asymmetry — detection got the Cf-strip + whitespace-collapse transport
+upgrades (G75/G76), the MASKER did not.
+**FIX (owned patterns.py, ~28 lines in `_redact_obfuscated`):** mirror detection — decode over a
+transport-normalized view (canonical Cf-stripped form with ASCII whitespace collapsed, reusing
+`_canonicalize_with_map`'s idx) and map each secret-bearing token's span BACK onto the ORIGINAL bytes
+(WITH the interleaved chars), exactly like the canonical-PII masking already above it. Decode-gated
+(only masks when the decode carries PII/secret/infra/credential), so benign base64/whitespace content
+is untouched. Surgical (masks the blob, preserves surrounding prose).
+**Verify:** egress fuzz **0 leaks / 69 cases** (was 24); redact_all FP-clean on data-uri/JWT/git-sha/
+prose/word-runs; mask surgical (prose kept, secret not recoverable). Golden **472** (+13 G84,
+3 consecutive 482-full runs green); backend `ai_mesh_gateway/tests` **1681 passed** (+8 new).
+**Frozen:** golden `test_g84_*` (9 egress-mask + 4 FP) in test_adversarial_attacks.py via
+`_residual_secret` (redact_all -> canon_probe -> transport-decoding detect); + integration
+`tests/test_output_transport_egress.py` (8) driving the real OutputGuard->sanitize path asserting the
+EGRESS BYTES carry no client-recoverable secret (tier-1-forced for determinism). Updated the now-stale
+G75/G76 "redact_all is a no-op -> B1 covers it" comments (input-only rationale that masked this leak).
+Session ledger: EIGHT confirmed leaks (G74/G75/G76/G81/G82/G83/G84) + soft DoS (G79) fixed; G77/G78/G80 frozen.

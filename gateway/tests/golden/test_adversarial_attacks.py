@@ -193,9 +193,11 @@ def test_g75_nested_cf_injection_is_blocked(label, payload):
     ("g75_key_alm_in_b64blob", f"decode this data: {_cf_split(b64(OAI_KEY))}"),
 ])
 def test_g75_cf_split_base64_blob_is_detected(label, payload):
-    # redact_all is a no-op on a Cf-broken blob (the outer token can't be remapped), so egress
-    # safety comes from DETECTION -> redact verdict -> main.py B1 fail-closed block. Assert the
-    # scanner DETECTS it (verdict != allow); B1's no-op-redact->block is covered by the main suite.
+    # DETECTION must fire (verdict != allow). NOTE: this comment previously claimed egress safety
+    # came ONLY from main.py's B1 (redact no-op -> block) because redact_all was a no-op on a
+    # Cf-broken blob. That held on INPUT but the OUTPUT path fails OPEN on a no-op redact (G84) —
+    # so redact_all now ALSO masks the Cf-broken blob (see test_g84_* below); B1 remains the input
+    # backstop. Detection is the precondition for both.
     assert _verdict(payload) in ("redact", "block"), (
         f"{label}: Cf-split base64 PII/secret not detected (would egress raw)"
     )
@@ -205,7 +207,8 @@ def test_g75_cf_split_base64_blob_is_detected(label, payload):
 # ("MTIz LTQ1 LTY3 ODk=") is never reassembled by the contiguous token regex, so a PII/secret
 # blob egressed (verdict allow) and a lenient decoder (most LLMs ignore whitespace) recovers it.
 # CONFIRMED LEAK. FIXED by the whitespace-collapsed decode pass in _iter_transport_decodes_canon.
-# FROZEN. (redact_all is a no-op on the split blob -> egress safety via detection->B1, as G75.)
+# FROZEN. (Detection fires here; G84 additionally makes redact_all MASK the split blob so the OUTPUT
+# egress path — which fails OPEN on a no-op redact — no longer leaks it. B1 is the input backstop.)
 def _b64_split(s: str, sep: str = " ", n: int = 4) -> str:
     e = b64(s)
     return sep.join(e[i:i + n] for i in range(0, len(e), n))
@@ -231,6 +234,52 @@ def test_g76_whitespace_split_base64_is_detected(label, payload):
 ])
 def test_g76_benign_whitespace_prose_not_flagged(label, payload):
     assert _verdict(payload) == "allow", f"{label}: benign whitespace prose wrongly flagged (false positive)"
+
+
+# G84 — OUTPUT-EGRESS masking parity (CONFIRMED LEAK, fixed 2026-07-03). G75/G76 proved DETECTION
+# sees a Cf-interleaved / whitespace-split transport blob, but the REDACTOR (_redact_obfuscated) still
+# scanned the RAW text, so redact_all was a NO-OP on the obfuscated blob. On INPUT that is covered by
+# B1 (redact no-op -> block). On the OUTPUT/egress path there is NO such fail-closed: an OutputGuard
+# redact verdict whose sanitizer is a no-op is relabeled "flag" and the still-decodable blob is
+# EGRESSED to the client (main.py:7714 / secure_streaming.py:443-464). A client that strips the
+# zero-width/bidi/format chars (or the whitespace) and base64/hex-decodes recovers the plaintext
+# secret => real LLM06 disclosure (confirmed: 24/24 secret×obfuscation combos egressed recoverable).
+# FIXED: _redact_obfuscated now decodes over the transport-normalized view (Cf-stripped canonical +
+# ASCII-whitespace collapsed) and maps each secret-bearing token's span BACK onto the original bytes,
+# so redact_all MASKS the whole obfuscated blob. FROZEN: _residual_secret (redact_all -> canon_probe
+# -> detect, which itself transport-decodes) must now find NOTHING recoverable from the egress bytes.
+_G84_EGRESS = [
+    ("g84_ssn_zw_b64",   f"decode this data: {zero_width(b64(SSN))}"),
+    ("g84_key_zw_b64",   f"decode this data: {zero_width(b64(OAI_KEY))}"),
+    ("g84_email_zw_b64", f"decode this data: {zero_width(b64(EMAIL))}"),
+    ("g84_card_zw_b64",  f"decode this data: {zero_width(b64(CARD))}"),
+    ("g84_ssn_bidi_b64", f"decode this data: {bidi(b64(SSN))}"),
+    ("g84_key_alm_b64",  f"decode this data: {_cf_split(b64(OAI_KEY))}"),
+    ("g84_ssn_zw_hex",   f"decode this data: {zero_width(SSN.encode().hex())}"),
+    ("g84_ssn_ws_b64",   f"decode this data: {_b64_split(SSN, ' ')}"),
+    ("g84_key_ws_b64",   f"decode this data: {_b64_split(OAI_KEY, chr(10))}"),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G84_EGRESS)
+def test_g84_transport_obfuscated_secret_masked_from_egress(label, payload):
+    assert not _residual_secret(payload), (
+        f"{label}: transport-obfuscated PII/secret survived redact_all (egress LEAK)"
+    )
+
+
+# FP guard: redact_all must be a strict NO-OP on benign base64 / whitespace-separated content that
+# does NOT decode to a PII/secret (data URIs, plain base64 prose, JWT parts, capitalized word runs).
+@pytest.mark.parametrize("label,payload", [
+    ("g84_fp_datauri", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"),
+    ("g84_fp_b64prose", f"The token is {b64('hello world this is fine')}"),
+    ("g84_fp_words",   "AKIA IOSF here are four random capitalized words BANK CODE"),
+    ("g84_fp_jwt",     "eyJhbGciOiJIUzI1NiJ9 eyJzdWIiOiJhYmMifQ signature-part-here"),
+])
+def test_g84_benign_transport_content_not_masked(label, payload):
+    assert patterns.redact_all(payload) == payload, (
+        f"{label}: benign base64/whitespace content wrongly masked (false positive)"
+    )
 
 
 # G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
