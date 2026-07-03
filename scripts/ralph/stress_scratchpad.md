@@ -2716,3 +2716,32 @@ In-process golden **544 ×3 consecutive clean** (GATEWAY_LIVE=0); backend `ai_me
 **Frozen:** golden `test_g92_*` (4 flag + 5 FP via `_url_smuggles_data`) + integration
 `test_output_transport_egress.py::test_g92_*` (full defang, md/html/srcset + 2 FP).
 Session ledger: SIXTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90/G91/G92) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+
+---
+
+## G93 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — incomplete credential prefix sets (GitHub / Stripe)
+Systematic secret-format sweep (fake realistic tokens): most 2026 formats ARE covered (Slack xoxb/xoxp,
+OpenAI sk-/sk-proj-, Anthropic sk-ant-, Google AIza, SendGrid SG., npm npm_, Twilio SK, AWS AKIA, JWT,
+PEM, BTC, ETH, GitHub ghp_ classic + github_pat_ fine-grained, Stripe sk_live_). THREE MISSED — real
+credential leaks:
+  * **GitHub OAuth / app tokens** `gho_` (OAuth), `ghu_` (app user-to-server), `ghs_` (app server-to-server),
+    `ghr_` (refresh) — the `github_token` pattern matched ONLY `ghp_`, though ALL share the `gh?_`+36-base62
+    format. So a gho_/ghu_/ghs_/ghr_ token egressed UNDETECTED.
+  * **Stripe RESTRICTED keys** `rk_live_` / `rk_test_` — the `stripe_key` pattern matched ONLY `sk_`; a
+    restricted key is equally a live credential and egressed undetected.
+**FIX (owned patterns.py):** `github_token` `\bghp_…` → `\bgh[pousr]_[a-zA-Z0-9]{36}\b`; `stripe_key`
+`\bsk_…` → `\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}\b`; `_mask_github_token` now preserves the actual 4-char
+prefix (`{s[:4]}****{s[-4:]}`) instead of a hardcoded `ghp_****`.
+**Verify:** gho_/ghu_/ghs_/ghr_ + rk_live_/rk_test_ → detected (via detect_pii — github_token is categorised
+there like AWS keys) + masked; ghp_/sk_live_/github_pat_ still work; input redact, output redact(credential);
+FP-clean on ghz_-invalid-prefix / intra-word `my_ghp_config` (\b guard) / short-rk / wrong-length / prose.
+In-process golden **558 ×3 consecutive clean** (GATEWAY_LIVE=0); backend `ai_mesh_gateway/tests` **1787 passed
+(deterministic order, `-p no:randomly`)**.
+**Frozen:** golden `test_g93_*` (6 new-token detect+mask, 3 existing-token regression, 5 FP).
+### COORDINATION NOTE (not my code): MCP-test random-order isolation flake
+`test_mcp_internal_http_result_scan.py` intermittently fails 2 tests (`test_internal_disabled_tool_blocked…`,
+`test_internal_enabled_tool_is_forwarded_control` — assert on mock `call_count`) under `pytest-randomly`
+random ordering (shared-mock state leaks across tests). PROVEN independent of G93: a regex change cannot
+affect mock call_count; with `-p no:randomly` the file + full backend pass 10/10 and 1787/1787. Flagged for
+the MCP-suite owner to add per-test mock isolation.
+Session ledger: SEVENTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90/G91/G92/G93) + soft DoS (G79) fixed; G77/G78/G80 frozen.

@@ -640,6 +640,55 @@ def test_g92_benign_host_not_flagged(label, url):
     assert not _og._url_smuggles_data(url), f"{label}: benign host wrongly flagged as data-exfil (false positive)"
 
 
+# G93 — credential-format completeness (CONFIRMED LEAK, fixed 2026-07-03). The github_token pattern matched
+# only ``ghp_`` (classic PAT), but ALL GitHub token classes share the ``gh?_``+36-base62 format — gho_
+# (OAuth), ghu_ (app user-to-server), ghs_ (app server-to-server), ghr_ (refresh) — and egressed UNDETECTED.
+# Likewise the stripe_key pattern matched only ``sk_`` while RESTRICTED keys (rk_live_/rk_test_) are equally a
+# live credential. FIXED: gh[pousr]_ and [sr]k_. FROZEN with FP guards. (Verified DET on Slack/OpenAI/
+# Anthropic/Google/SendGrid/npm/Twilio/AWS/JWT/PEM/BTC/ETH — those were already covered.)
+def _tok(prefix: str, n: int, ch: str = "a") -> str:
+    return prefix + ch * n
+
+
+def _g93_detected(t: str) -> bool:
+    # github_token is categorised into the detect_pii scan (like the AWS key), so check all three.
+    return bool(patterns.detect_pii(t) or patterns.detect_secrets(t) or patterns.detect_credential_exposure(t))
+
+
+@pytest.mark.parametrize("label,token", [
+    ("g93_gho",     _tok("gho_", 36)),
+    ("g93_ghu",     _tok("ghu_", 36, "b")),
+    ("g93_ghs",     _tok("ghs_", 36, "c")),
+    ("g93_ghr",     _tok("ghr_", 36, "d")),
+    ("g93_rk_live", _tok("rk_live_", 24, "E")),
+    ("g93_rk_test", _tok("rk_test_", 24, "F")),
+])
+def test_g93_token_detected_and_masked(label, token):
+    assert _g93_detected(token), f"{label}: credential format not detected (would egress)"
+    assert token not in patterns.redact_all("token " + token), f"{label}: detected but not masked from egress"
+
+
+@pytest.mark.parametrize("label,token", [
+    ("g93_ghp",     _tok("ghp_", 36)),
+    ("g93_sk_live", _tok("sk_live_", 24, "E")),
+    ("g93_pat",     "github_pat_" + "A" * 22 + "_" + "b" * 59),
+])
+def test_g93_existing_tokens_still_detected(label, token):
+    assert _g93_detected(token), f"{label}: previously-covered credential regressed"
+    assert token not in patterns.redact_all("token " + token), f"{label}: previously-covered credential not masked"
+
+
+@pytest.mark.parametrize("label,text", [
+    ("g93_fp_invalid_prefix", _tok("ghz_", 36)),           # not a real gh token prefix
+    ("g93_fp_snake",          "my_ghp_config_variable_name_here_ok"),  # intra-word, no boundary
+    ("g93_fp_short_rk",       "rk_live_short"),             # too short
+    ("g93_fp_wrong_len",      _tok("ghp_", 20)),            # 20 != 36 chars
+    ("g93_fp_prose",          "the abbreviation gho stands for something else"),
+])
+def test_g93_benign_lookalike_not_flagged(label, text):
+    assert not _g93_detected(text), f"{label}: benign lookalike wrongly flagged as a credential (false positive)"
+
+
 # G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
 # PII/secret placed PAST patterns._CANON_MAX_LEN escapes the canonical pass (a fullwidth SSN at
 # offset 21k -> detect_pii False, since canonicalize_for_detection only folds text[:_CANON_MAX_LEN];

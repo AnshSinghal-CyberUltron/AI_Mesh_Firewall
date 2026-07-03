@@ -515,7 +515,10 @@ PII_PATTERNS: Dict[str, str] = {
     # avoid false positives on arbitrary base64/hash blobs. Without this the
     # output guard masked only the AKIA id and egressed the secret in cleartext.
     "aws_secret_access_key": r"(?i)\baws[_-]?secret[_-]?access[_-]?key\b\s*[:=]\s*[\"']?[A-Za-z0-9/+=]{16,}",
-    "github_token": r"\bghp_[a-zA-Z0-9]{36}\b",
+    # G93: ALL GitHub token classes share the ``gh?_`` + 36 base62 format — ghp_ (classic PAT),
+    # gho_ (OAuth), ghu_ (app user-to-server), ghs_ (app server-to-server), ghr_ (refresh). The
+    # pattern previously matched only ghp_, so gho_/ghu_/ghs_/ghr_ tokens egressed undetected.
+    "github_token": r"\bgh[pousr]_[a-zA-Z0-9]{36}\b",
     # CHG-0054: match the ENTIRE PEM block (BEGIN header + base64 BODY + END footer),
     # not just the BEGIN line — else redact_all masked only the header and the key
     # MATERIAL (the actual secret) egressed intact. Generic key-type prefix covers
@@ -746,7 +749,9 @@ CREDENTIAL_EXPOSURE_PATTERNS: Dict[str, str] = {
     # above miss. Folded into the MASTER inventory so the RAG-ingest path (which now
     # runs detect_credential_exposure) and the output guard share one credential set.
     "github_fine_grained_pat": r"\bgithub_pat_[A-Za-z0-9_]{22,}\b",
-    "stripe_key": r"\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b",
+    # G93: Stripe RESTRICTED keys (rk_live_/rk_test_) share the sk_ secret-key format and are a
+    # live credential — include the rk_ prefix so a restricted key is not egressed undetected.
+    "stripe_key": r"\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}\b",
     "azure_storage_key": r"AccountKey=[A-Za-z0-9+/=]{40,}",
     "twilio_api_key": r"\bSK[0-9a-fA-F]{32}\b",
     "gcp_service_account_key": r'"private_key"\s*:\s*"-----BEGIN PRIVATE KEY-----',
@@ -1009,9 +1014,9 @@ def _mask_aws_secret(m: re.Match) -> str:
 
 
 def _mask_github_token(m: re.Match) -> str:
-    """ghp_abc...xyz → ghp_****xyz"""
+    """gh?_abc...xyz → gh?_****xyz (G93: preserve the actual 4-char prefix, not a hardcoded ghp_)"""
     s = m.group(0)
-    return f"ghp_****{s[-4:]}"
+    return f"{s[:4]}****{s[-4:]}"
 
 
 def _mask_secret_assignment(m: re.Match) -> str:

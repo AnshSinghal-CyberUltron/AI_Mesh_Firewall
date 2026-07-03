@@ -86,3 +86,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** syncing→"Syncing" (amber, pulsing), connecting→"Connecting"; the state reads unknown→Syncing→Connected/Failed. Live page shows all servers resolved.
 - **AFFECTS:** the connection-status badge on every MCP surface using connectionInfo.
 - **VERIFY:** node connectionInfo("syncing")==="Syncing"; frontend build green; LIVE Playwright (both themes @1440+375) → cleanup09Pass:true (Connected=12 Failed=9 Unknown=0; hasNeverSynced=false; 0 console errors; no overflow).
+
+## MCP-PAGE-CLEANUP-10 — impeccable audit of the 1.4 page layout
+- **files:** docs/mcp/IMPECCABLE_AUDIT_cleanup_1-4.md (new)
+- **WHAT:** /impeccable audit of the 1.4 page (stat-card grid, server list, simulator, traffic-path, evidence table) → health 14/16.
+- **WHY:** Section C requires an audit before the alignment/responsiveness fixes.
+- **NOW DOES:** documents the layout state — detector clean (0 anti-patterns), responsive (no overflow at 4 widths/2 themes, cards stack at 375), cards equal-height + aligned. Finding: stat-card secondary labels truncate mid-word at 1440; minor spacing variance.
+- **AFFECTS:** documentation only. Backlog feeds items 11–14.
+- **VERIFY:** detect.mjs exit 0; item-09 Playwright sweep noOverflow:true; read rendered PNGs (light-1440, dark-375). Report: docs/mcp/IMPECCABLE_AUDIT_cleanup_1-4.md.

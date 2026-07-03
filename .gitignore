@@ -6,6 +6,7 @@ node_modules/
 dist/
 *.egg-info/
 .pytest_cache/
+gateway/tests/golden/.live_session.json
 .coverage
 postgres_data/
 *.log
