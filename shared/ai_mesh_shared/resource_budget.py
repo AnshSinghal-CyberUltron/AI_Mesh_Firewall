@@ -238,6 +238,10 @@ class ResourceBudget:
     asgi_threads: int           # sync-offload thread pool size per worker
     db_threads: int             # DB-touching threads per worker (for pg sizing)
     pg_max_conns: int           # recommended Postgres max_connections for this svc
+    # gateway per-worker offload pools (each multiplies by `workers`, so clamped)
+    scanner_pool: int           # Tier-1 CPU scan pool  (~cpu, bounded)
+    bedrock_pool: int           # Tier-2 Bedrock network-I/O pool (== asgi_threads)
+    vault_pool: int             # embedding-vault DB conn pool max (kept small — feeds pg)
     headroom: float
 
     @property
@@ -291,6 +295,15 @@ def compute_sizing(
         db_threads = asgi_threads
     pg_max_conns = max(100, workers * (db_threads + 1) + pg_margin)
 
+    # Gateway per-worker offload pools. These multiply by `workers`, so each is
+    # clamped to keep total threads/connections bounded (perf_scratchpad item 11):
+    #   scanner (CPU-bound Tier-1) ~ one lane per core, capped at 16;
+    #   bedrock (network-I/O Tier-2) == asgi_threads (threads mostly wait on the API);
+    #   vault (Postgres conn pool) kept small — workers*vault_pool feeds pg_max_conns.
+    scanner_pool = _clamp(round(cpu_budget), 4, 16)
+    bedrock_pool = asgi_threads
+    vault_pool = _clamp(round(cpu_budget / 2), 2, 8)
+
     return ResourceBudget(
         cpu_budget=cpu_budget,
         ram_bytes=ram_bytes,
@@ -301,6 +314,9 @@ def compute_sizing(
         asgi_threads=asgi_threads,
         db_threads=db_threads,
         pg_max_conns=pg_max_conns,
+        scanner_pool=scanner_pool,
+        bedrock_pool=bedrock_pool,
+        vault_pool=vault_pool,
         headroom=headroom,
     )
 
@@ -402,6 +418,9 @@ _VALUE_FIELDS = {
     "asgi_threads": lambda b: b.asgi_threads,
     "db_threads": lambda b: b.db_threads,
     "pg_max_conns": lambda b: b.pg_max_conns,
+    "scanner_pool": lambda b: b.scanner_pool,
+    "bedrock_pool": lambda b: b.bedrock_pool,
+    "vault_pool": lambda b: b.vault_pool,
     "cpu_budget": lambda b: round(b.cpu_budget, 3),
     "ram_gib": lambda b: round(b.ram_gib, 2),
 }
@@ -425,6 +444,9 @@ def _main(argv: Optional[list] = None) -> int:
         print(f"WEB_CONCURRENCY={budget.workers}")
         print(f"ASGI_THREADS={budget.asgi_threads}")
         print(f"PG_MAX_CONNS={budget.pg_max_conns}")
+        print(f"GATEWAY_SCANNER_THREAD_POOL_SIZE={budget.scanner_pool}")
+        print(f"GATEWAY_BEDROCK_THREAD_POOL_SIZE={budget.bedrock_pool}")
+        print(f"GATEWAY_VAULT_POOL_MAX={budget.vault_pool}")
         print(f"CPU_BUDGET={round(budget.cpu_budget, 3)}")
     else:  # default and --json
         print(json.dumps(budget.as_dict(), indent=2))

@@ -228,3 +228,31 @@ def test_compute_sizing_direct():
 def test_compute_sizing_zero_rss_guard():
     b = rb.compute_sizing(4.0, 8 * GIB, per_worker_rss=0)
     assert b.workers == 4  # no div-by-zero; RAM bound disabled
+
+
+# --------------------------------------------------------------------------
+# Gateway per-worker offload pools (item 10) — clamped to bound N-worker total
+# --------------------------------------------------------------------------
+
+def test_gateway_pools_scale_and_clamp():
+    # scanner=clamp(round(cpu),4,16); bedrock==asgi_threads; vault=clamp(round(cpu/2),2,8)
+    b6 = rb.compute_sizing(6.0, 16 * GIB)
+    assert (b6.scanner_pool, b6.bedrock_pool, b6.vault_pool) == (6, 12, 3)
+    b12 = rb.compute_sizing(12.0, 60 * GIB)
+    assert (b12.scanner_pool, b12.bedrock_pool, b12.vault_pool) == (12, 24, 6)
+    b16 = rb.compute_sizing(16.0, 60 * GIB)         # clamps bite: scanner 16, bedrock 32, vault 8
+    assert (b16.scanner_pool, b16.bedrock_pool, b16.vault_pool) == (16, 32, 8)
+
+
+def test_gateway_pools_floor_on_tiny_box():
+    b1 = rb.compute_sizing(1.0, 2 * GIB)            # floors: scanner 4, bedrock 8, vault 2
+    assert (b1.scanner_pool, b1.bedrock_pool, b1.vault_pool) == (4, 8, 2)
+
+
+def test_gateway_pools_via_detect_and_cli(tmp_path):
+    kw = _make_v2_mount(tmp_path, cpu_max="1200000 100000", memory_max=str(60 * GIB))
+    b = rb.detect(affinity=lambda: 64, **kw)
+    assert b.scanner_pool == 12 and b.bedrock_pool == 24 and b.vault_pool == 6
+    # CLI --value surfaces them for the entrypoint export.
+    assert rb._VALUE_FIELDS["scanner_pool"](b) == 12
+    assert rb._VALUE_FIELDS["vault_pool"](b) == 6

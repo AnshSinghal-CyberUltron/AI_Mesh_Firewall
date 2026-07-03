@@ -1095,6 +1095,24 @@
     label filter. Org LABEL is now the tenant key; name is only an optimization. +4 tests; the 2 broker mocks made
     realistic (real containers always carry these labels). Gate: 4 + 150 broker passed; gateway unaffected. Oracle
     N/A (routing/isolation fix). Evidence mcp-parallel/findings/backstop-p-broker-name-label-verify/.
+  - CHG-0113 (2026-07-03) — LOW-MED cross-tenant residual (completes CHG-0112 for volumes): broker destroy removed
+    the org VOLUME by name without label verification. CHG-0112 label-verified the CONTAINER (find_container), but
+    destroy still removed the auth volume (/data/mcp-auth) purely by volume_name(slug) (lossy-sanitized) with NO
+    label check; the volume was auto-created UNLABELED. A legacy/reused volume owning the canonical name but
+    belonging to a DIFFERENT org (pre-CHG-0111 colliding slug) would be DESTROYED for the wrong org. FIX
+    (services/mcp-broker/src/sandbox/docker_manager.py): (1) _ensure_volume explicitly creates the volume WITH
+    labels(org_slug) before the container run (idempotent, best-effort); (2) destroy reads _volume_labels and
+    REFUSES to remove a volume whose LABEL_ORG_SLUG differs from the requested org (fail-closed); unlabeled-legacy
+    or same-org volumes still removed. Org LABEL is now the tenant key for the volume too. +5 tests. Gate: 8 volume
+    + 155 broker passed; gateway unaffected. Oracle N/A. Evidence mcp-parallel/findings/backstop-p-broker-volume-
+    label-verify/.
+    AUDIT (verification-only, no code change): re-probed the other tenant-selector surfaces, all ALREADY hardened —
+    gateway OAuth token store (org-prefixed clean-slug key; flow/callback/status org-scoped, one-time state, PKCE,
+    token from trusted flow record, callback XSS-escaped); control-plane _request_org (tenant from authed profile OR
+    secret-validated gateway-internal X-Org-Slug, client org NOT honored; MCPEvent sanitizes all channels); tool-call
+    cap per-key. FLAGGED (not fixed — control-plane test env unavailable here: no venv, django/fakeredis not
+    importable; and not reachable today): _gateway_request_org honors X-Org-Slug relying on the view permission gate
+    rather than self-verifying the internal secret — defense-in-depth self-verify deferred to a gated iteration.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
@@ -1158,6 +1176,7 @@
 Dynamic full-hardware concurrency lane (perf). Mirrored in `docs/perf/CHANGELOG.md`,
 `.cursor/rules/shared-infra-changelog.mdc`, Ruflo `shared/infra-changes`. Newest first.
 
+<!-- perf-ralph --> PERF-0005 (2026-07-03) | Gateway scanner/bedrock/vault pools sized from the detector: `shared/.../resource_budget.py` gains `scanner_pool`=clamp(round(cpu),4,16), `bedrock_pool`=asgi_threads, `vault_pool`=clamp(round(cpu/2),2,8) (additive fields+CLI); `gateway/entrypoint.sh` exports `GATEWAY_SCANNER_THREAD_POOL_SIZE`/`GATEWAY_SCAN_THREAD_POOL_SIZE`=scanner, `GATEWAY_BEDROCK_THREAD_POOL_SIZE`=bedrock, `GATEWAY_VAULT_POOL_MAX`=vault (were fixed 8/4/16/8). Clamped because each ×workers (item 11); vault=Postgres conn pool feeds pg sizing (item 15). Explicit env overrides. | AFFECTS: gateway image (rebuilt); resource_budget.py additive (control/workers unaffected). | ACTION: `docker compose build gateway`; running container not recreated. | PROOF: --cpus=6 PID1 env scanner/scan=6 bedrock=12 vault=3; InputScanner logs thread_pool_size=6; override→3 honored; 19 detector tests green.
 <!-- perf-ralph --> PERF-0004 (2026-07-03) | Control ASGI sync-offload thread pool sized from the detector: `control/main_app/asgi.py` sets the event-loop default ThreadPoolExecutor per worker from `ASGI_THREADS` (entrypoint exports it from the detector: `clamp(cpu*2,8,32)` → 6c=12, 12c=24), replacing Python's non-cgroup-aware `min(32, os.cpu_count()+4)` (host-16 → 20 threads even in a 6c container). Thread-SENSITIVE Django views/ORM untouched (asgiref single-thread; that's P4). `ASGI_THREADS` env overrides. | AFFECTS: control image (rebuilt). | ACTION: `docker compose build control`; running container not recreated. | PROOF: --cpus=6 → each worker logs "ASGI default thread-pool executor sized to 12"; /api/health/ 200.
 <!-- perf-ralph --> PERF-0003 (2026-07-03) | Harden gateway+control entrypoints: `export WEB_CONCURRENCY="$WORKERS"` before exec'ing gunicorn — gunicorn reads WEB_CONCURRENCY at config-import time and crashes on an empty string (`int('')` ValueError) before `--workers` is parsed. Found proving item 08. | AFFECTS: gateway+control images (rebuilt). | ACTION: `docker compose build gateway control`; no behavior change for valid configs, prevents a boot crash when `WEB_CONCURRENCY=` empty; running containers not recreated.
 <!-- perf-ralph --> PERF-0002 (2026-07-03) | Control plane: single Daphne → gunicorn + N `uvicorn.workers.UvicornWorker` (`--workers N` from the detector, `--forwarded-allow-ips *`) via new `control/server-entrypoint.sh`; replaces single Daphne (dev) / hardcoded `--workers 5` (prod). `CONTROL_WEB_CONCURRENCY` env overrides; fallback 2. Multiproc-safe: telemetry drain is per-hostname single-runner-locked (atomic Lua dequeue + SET NX), resync/seed idempotent. Boot-verified: 4 workers serve `/api/health/` 200. | AFFECTS: `ai_mesh_firewall-control` image (rebuilt). | ACTION FOR OTHERS: `docker compose build control` to adopt; running container NOT recreated (shared host still single Daphne, unchanged). ⚠️ Before recreating on the 16-core host PIN `CONTROL_WEB_CONCURRENCY` (e.g. 6) in `.env` — unpinned = 16 workers, can pressure Postgres `max_connections=400` (sized in a later item). Recreate: `docker compose up -d --force-recreate control`. | PROOF: in-container detector → `--cpus=6`→6w, `--cpus=12`→12w, `CONTROL_WEB_CONCURRENCY=3`→3w; live boot 4w/health-200.

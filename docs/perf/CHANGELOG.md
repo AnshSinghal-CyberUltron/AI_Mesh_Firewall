@@ -7,6 +7,30 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0005 — Gateway scanner/bedrock/vault pools sized from the detector
+- **Date:** 2026-07-03
+- **Files:** `shared/ai_mesh_shared/resource_budget.py` (+`scanner_pool`/`bedrock_pool`
+  /`vault_pool` derived fields + CLI, additive), `shared/tests/test_resource_budget.py`,
+  `gateway/entrypoint.sh`.
+- **What:** The gateway's per-worker offload pools defaulted to fixed sizes
+  (`GATEWAY_SCANNER_THREAD_POOL_SIZE`=8, `GATEWAY_SCAN_THREAD_POOL_SIZE`=4,
+  `GATEWAY_BEDROCK_THREAD_POOL_SIZE`=16, `GATEWAY_VAULT_POOL_MAX`=8). The entrypoint
+  now exports each from the detector unless the operator pinned it:
+  `scanner=clamp(round(cpu),4,16)`, `bedrock=asgi_threads=clamp(round(cpu*2),8,32)`,
+  `vault=clamp(round(cpu/2),2,8)`. Each pool multiplies by `workers`, so all three
+  are **clamped** in the detector to keep `workers*pool` bounded (item 11). vault is
+  a Postgres conn pool kept deliberately small (feeds pg sizing, item 15). Explicit
+  env still overrides.
+- **AFFECTS:** the `ai_mesh_firewall-gateway` image (rebuilt). `resource_budget.py`
+  change is additive (new fields only — control/workers unaffected).
+- **ACTION FOR OTHERS:** `docker compose build gateway`. On the shared 16-core host a
+  rebuild+recreate would raise the scan/scanner pool from 4/8 → 16 and vault max
+  8→8 (unchanged); running container NOT recreated by this change. Note vault max ×
+  workers adds Postgres connections — accounted for in item 15.
+- **PROOF:** `--cpus=6` PID1 env = scanner/scan=6, bedrock=12, vault=3; InputScanner
+  logs `thread_pool_size=6`; `GATEWAY_SCANNER_THREAD_POOL_SIZE=3` override honored.
+  19 detector unit tests green.
+
 ## PERF-0004 — Control ASGI sync-offload thread pool sized from the detector
 - **Date:** 2026-07-03
 - **Files:** `control/ai_mesh_control/main_app/asgi.py`, `control/server-entrypoint.sh`.

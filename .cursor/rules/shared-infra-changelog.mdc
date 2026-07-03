@@ -13,6 +13,16 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0005 — Gateway scanner/bedrock/vault pools sized from detector (2026-07-03)
+- Detector gains scanner_pool/bedrock_pool/vault_pool (clamped: scanner clamp(cpu,4,16),
+  bedrock=asgi_threads, vault clamp(cpu/2,2,8)). `gateway/entrypoint.sh` exports
+  GATEWAY_SCANNER/SCAN_THREAD_POOL_SIZE, GATEWAY_BEDROCK_THREAD_POOL_SIZE,
+  GATEWAY_VAULT_POOL_MAX from the detector (was fixed 8/4/16/8). Explicit env overrides.
+  Pools clamped because each ×workers (item 11); vault feeds pg (item 15).
+- AFFECTS: gateway image (resource_budget.py change is additive). ACTION: `docker compose
+  build gateway`. Running container not recreated. PROOF: --cpus=6 → scanner=6, bedrock=12,
+  vault=3; scanner logs thread_pool_size=6; override honored; 19 detector tests green.
+
 ## PERF-0004 — Control ASGI sync-offload thread pool sized from detector (2026-07-03)
 - `control/main_app/asgi.py` sizes the event-loop default thread pool per worker from
   `ASGI_THREADS` (entrypoint exports it from the detector: 6c=12, 12c=24), replacing

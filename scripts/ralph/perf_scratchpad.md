@@ -49,7 +49,11 @@
       entrypoint exports ASGI_THREADS from detector (6c=12, 12c=24) unless pinned. Replaces Python's non-cgroup
       min(32,os.cpu_count()+4)=20-in-6c-container. Thread-SENSITIVE Django views untouched (asgiref 1-thread; P4).
       PERF-0004 logged to 4 memories. PROVEN: --cpus=6 → each worker logs "executor sized to 12"; /api/health/ 200.
-- [ ] 10. Size gateway scanner/bedrock/vault pools from cpu_budget (not fixed 4/8).
+- [x] 10. Size gateway scanner/bedrock/vault pools from cpu_budget (not fixed 4/8).
+      → detector gains scanner_pool=clamp(round(cpu),4,16), bedrock_pool=asgi_threads, vault_pool=clamp(round(cpu/2),2,8)
+      (additive fields+CLI, 19 tests green); gateway/entrypoint.sh exports GATEWAY_SCANNER/SCAN_THREAD_POOL_SIZE,
+      GATEWAY_BEDROCK_THREAD_POOL_SIZE, GATEWAY_VAULT_POOL_MAX (was fixed 8/4/16/8). Clamped since ×workers (item 11);
+      vault feeds pg (item 15). PERF-0005 → 4 memories. PROVEN --cpus=6: PID1 env scanner=6/bedrock=12/vault=3, InputScanner thread_pool_size=6, override→3.
 - [ ] 11. Verify total threads = workers × pool (no explosion).
 
 ## P4 — De-block async handlers (the #1 latency cause)

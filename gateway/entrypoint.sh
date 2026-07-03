@@ -32,6 +32,22 @@ fi
 # matches our --workers and can never be "" — regardless of how the env arrived.
 export WEB_CONCURRENCY="$WORKERS"
 
+# Size the per-worker offload pools from the detector unless the operator pinned
+# them (scanner=CPU Tier-1, bedrock=network Tier-2, vault=Postgres conn pool).
+# These default to fixed 8/16/8 in code; derive from cores instead. Each is
+# clamped in the detector to keep workers*pool bounded (item 11).
+_set_default() {  # _set_default VAR field
+    eval "_cur=\${$1:-}"
+    if [ -z "$_cur" ]; then
+        _val="$(python -m ai_mesh_shared.resource_budget --value "$2" 2>/dev/null || true)"
+        [ -n "$_val" ] && export "$1=$_val"
+    fi
+}
+_set_default GATEWAY_SCANNER_THREAD_POOL_SIZE scanner_pool
+_set_default GATEWAY_SCAN_THREAD_POOL_SIZE scanner_pool
+_set_default GATEWAY_BEDROCK_THREAD_POOL_SIZE bedrock_pool
+_set_default GATEWAY_VAULT_POOL_MAX vault_pool
+
 echo "[gateway-entrypoint] WEB_CONCURRENCY=$WORKERS (source=$WSRC)" >&2
 python -m ai_mesh_shared.resource_budget --json 2>/dev/null \
     | sed 's/^/[gateway-entrypoint]   /' >&2 || true
