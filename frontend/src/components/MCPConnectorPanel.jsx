@@ -869,7 +869,17 @@ function MCPConnectorPanelInner() {
   const serverAwaitingAuth = (srv) => {
     if (srv.auth_type === "oauth") return !srv.oauth_authorized;
     if (serverNeedsOAuth(srv)) {
-      return (srv.tools_count ?? 0) === 0 && srv.connection_status !== "connected";
+      // "Awaiting authorization" = genuinely not yet resolved (never synced /
+      // unknown / syncing), NOT a server that was attempted and definitively
+      // FAILED for a concrete non-auth reason (storage limit, crash, DNS, …).
+      // A failed server must show its real "Failed" status + branded error so the
+      // operator acts on the actual cause — a "Pending authorization / Authorize"
+      // affordance is a dead end that can't fix a storage failure. (A true auth
+      // failure surfaces via needs_reauth, which the caller already excludes and
+      // which renders its own "needs re-auth" badge.)
+      return (srv.tools_count ?? 0) === 0
+        && srv.connection_status !== "connected"
+        && srv.connection_status !== "failed";
     }
     return false;
   };
