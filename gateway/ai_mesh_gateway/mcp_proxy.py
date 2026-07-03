@@ -2375,6 +2375,7 @@ async def _scan_internal_tools_list(
     org_slug: str,
     server_slug: str,
     transport: str,
+    request_id: str = "",  # CHG-0120: correlation id for the discovery audit trail
 ):
     """CHG-0108: scan a DISCOVERED tools/list payload before returning it to the
     backend tool-sync / chat pipeline.
@@ -2398,7 +2399,7 @@ async def _scan_internal_tools_list(
     if isinstance(payload.get("result"), dict):
         return await _scanned_tools_list_response(
             payload, jsonrpc=jsonrpc, msg_id=msg_id, enabled_info=enabled_info,
-            org_slug=org_slug, server_slug=server_slug, actor=None,
+            org_slug=org_slug, server_slug=server_slug, actor=None, request_id=request_id,
         )
     # Non-tools-shaped (bare error envelope / malformed result): scan the whole payload
     # so a secret/PII/internal-IP in an error message is masked or fail-closed blocked.
@@ -2410,6 +2411,7 @@ async def _scan_internal_tools_list(
         await _record_gateway_event(
             org_slug=org_slug, server_slug=server_slug, tool_name="tools/list",
             decision="block" if _blk else "redact", reason="tools_list_error_scan",
+            request_id=request_id,
             metadata={"transport": transport, "enforced_at": "gateway_internal_discover",
                       "scan_pipeline": "two_tier"},
             compliance_tags=list(_tags), scan_findings=_find,
@@ -2464,9 +2466,12 @@ async def internal_discover_tools(request: Request):
         return JSONResponse(content={"error": "Server not found"}, status_code=404)
 
     transport = config.get("transport", "streamable-http")
+    # CHG-0120: propagate the X-Request-ID correlation id into the discovery audit trail
+    # + the broker (adapter) hop, so a tool-sync is traceable gateway → broker → sandbox.
+    _disc_req_id = _mcp_request_correlation_id(request, 1)
     LOG.info(
-        "Internal discover-tools: org=%s server=%s transport=%s",
-        org_slug, server_slug, transport,
+        "Internal discover-tools: org=%s server=%s transport=%s request_id=%s",
+        org_slug, server_slug, transport, _disc_req_id or "-",
     )
 
     # CHG-0108: metadata scan needs the server's scan action (respects a monitor override).
@@ -2484,7 +2489,7 @@ async def internal_discover_tools(request: Request):
         # it to the backend tool-sync — was returned RAW (tool-poisoning / metadata-leak).
         _adapter_resp = await _adapter_forward(
             transport, config, org_slug, server_slug,
-            tools_list_body, "2.0", 1,
+            tools_list_body, "2.0", 1, correlation_id=_disc_req_id,  # CHG-0120
         )
         try:
             _payload = json.loads(_adapter_resp.body.decode("utf-8")) if _adapter_resp.body else None
@@ -2495,6 +2500,7 @@ async def internal_discover_tools(request: Request):
         return await _scan_internal_tools_list(
             _payload, jsonrpc="2.0", msg_id=1, enabled_info=enabled_info,
             org_slug=org_slug, server_slug=server_slug, transport=transport,
+            request_id=_disc_req_id,
         )
 
     # For streamable-http / sse: call the upstream MCP server directly
@@ -2579,6 +2585,7 @@ async def internal_discover_tools(request: Request):
                             return await _scan_internal_tools_list(
                                 _payload, jsonrpc="2.0", msg_id=1, enabled_info=enabled_info,
                                 org_slug=org_slug, server_slug=server_slug, transport=transport,
+                                request_id=_disc_req_id,  # CHG-0120
                             )
                 return JSONResponse(
                     content={"jsonrpc": "2.0", "id": 1, "result": {"tools": []}},
@@ -2589,6 +2596,7 @@ async def internal_discover_tools(request: Request):
                 return await _scan_internal_tools_list(
                     tools_resp.json(), jsonrpc="2.0", msg_id=1, enabled_info=enabled_info,
                     org_slug=org_slug, server_slug=server_slug, transport=transport,
+                    request_id=_disc_req_id,  # CHG-0120
                 )
     except Exception as exc:
         LOG.error("Internal discover-tools upstream error: %s", exc)
@@ -2633,9 +2641,14 @@ async def internal_tools_call(request: Request):
         return JSONResponse(content={"error": "Server not found"}, status_code=404)
 
     transport = config.get("transport", "streamable-http")
+    # CHG-0120: propagate the X-Request-ID correlation id into every audit event + the
+    # broker (adapter) hop, so a chat-pipeline tool call is traceable gateway → broker →
+    # sandbox (the internal route previously recorded events with NO request_id — the trace
+    # ended at the internal boundary, unlike org_mcp_jsonrpc / the bare REST route CHG-0050).
+    _int_req_id = _mcp_request_correlation_id(request, 1)
     LOG.info(
-        "Internal tools-call: org=%s server=%s transport=%s tool=%s",
-        org_slug, server_slug, transport, tool_name,
+        "Internal tools-call: org=%s server=%s transport=%s tool=%s request_id=%s",
+        org_slug, server_slug, transport, tool_name, _int_req_id or "-",
     )
 
     enabled_info = await _get_enabled_tools(org_slug, server_slug)
@@ -2668,6 +2681,7 @@ async def internal_tools_call(request: Request):
             tool_name=tool_name,
             decision="block",
             reason="pii_blocked_inbound",
+            request_id=_int_req_id,  # CHG-0120
             latency_ms=int((time.time() - _internal_call_t0) * 1000),
             metadata={"transport": "internal", "enforced_at": "gateway", **_scan_meta_in},
             compliance_tags=list(_in_tags),
@@ -2702,6 +2716,7 @@ async def internal_tools_call(request: Request):
             tool_name=tool_name,
             decision="redact",
             reason="pii_redacted_inbound",
+            request_id=_int_req_id,  # CHG-0120
             latency_ms=int((time.time() - _internal_call_t0) * 1000),
             metadata={"transport": "internal", "enforced_at": "gateway", **_scan_meta_in},
             compliance_tags=list(_in_tags),
@@ -2725,6 +2740,7 @@ async def internal_tools_call(request: Request):
         # block-count cap all included); masks/blocks + audits, parity with the org path.
         _adapter_resp = await _adapter_forward(
             transport, config, org_slug, server_slug, call_body, "2.0", 1,
+            correlation_id=_int_req_id,  # CHG-0120
         )
         try:
             _adapter_obj = json.loads(_adapter_resp.body.decode("utf-8")) if _adapter_resp.body else None
@@ -2741,6 +2757,7 @@ async def internal_tools_call(request: Request):
             await _record_gateway_event(
                 org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
                 decision="block", reason="pii_blocked_outbound",
+                request_id=_int_req_id,  # CHG-0120
                 latency_ms=int((time.time() - _internal_call_t0) * 1000),
                 metadata={"transport": "internal_sandbox", "enforced_at": "gateway", **_mt},
                 compliance_tags=list(_tg), scan_findings=list(_fn),
@@ -2766,6 +2783,7 @@ async def internal_tools_call(request: Request):
             await _record_gateway_event(
                 org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
                 decision="redact", reason="pii_redacted_outbound",
+                request_id=_int_req_id,  # CHG-0120
                 latency_ms=int((time.time() - _internal_call_t0) * 1000),
                 metadata={"transport": "internal_sandbox", "enforced_at": "gateway", **_mt},
                 compliance_tags=list(_tg), scan_findings=list(_fn),
@@ -2842,6 +2860,7 @@ async def internal_tools_call(request: Request):
                 tool_name=tool_name,
                 decision="block",
                 reason="pii_blocked_outbound",
+                request_id=_int_req_id,  # CHG-0120
                 latency_ms=int((time.time() - _internal_call_t0) * 1000),
                 metadata={"transport": "internal", "enforced_at": "gateway", **scan_meta_out},
                 compliance_tags=list(out_tags),
@@ -2872,6 +2891,7 @@ async def internal_tools_call(request: Request):
                 tool_name=tool_name,
                 decision="redact",
                 reason="pii_redacted_outbound",
+                request_id=_int_req_id,  # CHG-0120
                 latency_ms=int((time.time() - _internal_call_t0) * 1000),
                 metadata={"transport": "internal", "enforced_at": "gateway", **scan_meta_out},
                 compliance_tags=list(out_tags),

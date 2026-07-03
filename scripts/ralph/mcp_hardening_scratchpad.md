@@ -1315,6 +1315,17 @@
       completion + 1720 gateway passed 0 failed; broker unaffected. Byte-level: argument.value 'my key
       AKIAIOSFODNN7EXAMPLE' -> blocked, secret never reaches client.send. Oracle N/A (aidefence blind to AWS-key
       class). Extends CHG-0041/0109. Evidence mcp-parallel/findings/backstop-p-ext-completion-input-scan/finding.md.
+      CHG-0120 (2026-07-03, LOW tracing completeness — completes CHG-0050/0051/0052 for the internal routes): internal
+      (chat-pipeline) routes dropped the X-Request-ID correlation id. CHG-0050/0051 propagate X-Request-ID into every
+      MCPEvent + the broker adapter hop on org_mcp_jsonrpc + bare REST, but internal_tools_call + internal_discover_tools
+      recorded ALL audit events with NO request_id and called _adapter_forward with NO correlation_id -> a chat tool
+      call / tool-sync trace ENDED at the internal boundary. FIX (mcp_proxy.py): both routes compute
+      _mcp_request_correlation_id(request,1) once at entry + thread request_id into ALL _record_gateway_event calls
+      (incl. the _scan_internal_result closure + _scan_internal_tools_list helper which gained a request_id param) +
+      pass correlation_id to _adapter_forward (propagates to broker via broker_send_rpc CHG-0051 -> broker log CHG-0052).
+      Trace now continuous gateway->broker->sandbox on the chat path. NEW TEST test_mcp_internal_correlation_id.py (3) +
+      fixed a CHG-0109 test mock signature. Gate: 3 + 1756 gateway passed 0 failed; broker 155. Oracle N/A (tracing).
+      Evidence mcp-parallel/findings/backstop-p-internal-correlation-id/finding.md.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

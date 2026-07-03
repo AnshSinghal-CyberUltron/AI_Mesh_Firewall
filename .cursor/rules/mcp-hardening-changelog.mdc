@@ -1755,6 +1755,21 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   class (send-not-awaited assertion authoritative). touched: `ext_mcp_proxy` inbound scan (input-side twin of
   CHG-0118; extends CHG-0041 / CHG-0109). Evidence `mcp-parallel/findings/backstop-p-ext-completion-input-scan/`.
 
+- **CHG-0120** (2026-07-03) — **LOW tracing completeness: internal (chat-pipeline) routes dropped the X-Request-ID
+  correlation id (broken trace chain)**. CHG-0050/0051 propagate the inbound `X-Request-ID` into every MCPEvent AND
+  the broker `_adapter_forward` hop on `org_mcp_jsonrpc` + the bare REST route, but `internal_tools_call` +
+  `internal_discover_tools` recorded ALL audit events with NO `request_id` and called `_adapter_forward` with NO
+  `correlation_id` — so a chat-pipeline tool call / tool-sync trace ENDED at the internal gateway boundary (the noted
+  CHG-0050 residual). **FIX (`mcp_proxy.py`):** both routes compute `_mcp_request_correlation_id(request, 1)` once at
+  entry (prefers X-Request-ID, bounded; falls back to the JSON-RPC id), thread it as `request_id=` into ALL their
+  `_record_gateway_event` calls (incl. the nested `_scan_internal_result` closure + the `_scan_internal_tools_list`
+  helper, which gained a `request_id` param), and pass it as `correlation_id=` to `_adapter_forward` (which already
+  forwards it to the broker via `broker_send_rpc` CHG-0051 → broker log CHG-0052). Trace continuous gateway → broker →
+  sandbox on the chat path. NEW TEST `test_mcp_internal_correlation_id.py` (3) + fixed a CHG-0109 test mock signature.
+  Gate: 3 + 1756 gateway passed, 0 failed; broker 155. Oracle N/A — tracing-completeness fix, no PII-text egress delta.
+  Byte-level: with `X-Request-ID: trace-corr-99`, all internal audit `request_id` == it and `_adapter_forward(correlation_id=)`
+  == it. touched: internal routes; completes CHG-0050/0051/0052. Evidence `mcp-parallel/findings/backstop-p-internal-correlation-id/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
