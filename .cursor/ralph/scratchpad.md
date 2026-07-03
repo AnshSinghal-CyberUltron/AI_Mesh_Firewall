@@ -1847,3 +1847,12 @@
       pipeline_p25_full_history_verify.mjs pipelineP25Pass:true (block 16.2ms / redact
       13607.1ms / allow 1065.1ms; 9 stages each; 0 console errors). Evidence
       mcp-parallel/findings/pipeline-p25/.
+
+## P7 — Policy catalog (Cursor Ralph pipeline lane)
+
+- [x] 26. Design 100-rule CISO package across OWASP LLM Top-10, GDPR-PII, PCI-DSS, PHI,
+      secrets, IP exfil, jailbreak, toxicity, unauthorized advice, brand, sector packs.
+      PIPELINE-0026 (2026-07-03): docs/policies/CISO_100.md — exactly 100 rules
+      (CISO-001..100) with action/severity/priority/detection/fixtures; CISO-020 negative
+      fixture = PIPELINE-0012 smart-mask redact-not-block. Design-only (seed = item 27).
+      VERIFY: grep -c '^| CISO-' docs/policies/CISO_100.md → 100.

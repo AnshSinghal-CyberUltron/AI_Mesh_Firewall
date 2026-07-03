@@ -169,3 +169,9 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   full pipeline stages, latency parity (±0.1ms), routing card (allow), withheld banner (block),
   redact stage reason + output (redact). Optional Attack Simulator trigger when feed lacks samples.
   pipelineP25Pass:true; 0 console errors. Evidence mcp-parallel/findings/pipeline-p25/.
+- PIPELINE-0026 (2026-07-03) — CISO 100-RULE PACKAGE DESIGN (P7-26): docs/policies/CISO_100.md
+  exactly 100 rules (CISO-001..100) table: id/name/category/action/severity/priority/detection/
+  positive+negative fixtures. OWASP LLM01-10, GDPR-PII, PCI-DSS, HIPAA-PHI, secrets, IP exfil,
+  jailbreak, toxicity, unauthorized advice, brand, finance/healthcare/legal sector packs. CISO-020
+  negative fixture = PIPELINE-0012 smart-mask redact-not-block. Design-only (seed = item 27).
+  VERIFY: grep -c '^| CISO-' docs/policies/CISO_100.md → 100.

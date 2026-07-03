@@ -2,6 +2,30 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0026 (2026-07-03)
+
+**CISO 100-rule policy package design (P7 item 26).**
+
+Root Cause:
+- No canonical enterprise guardrail catalog mapped action + severity + priority +
+  detection approach across OWASP LLM Top-10, regulated data classes, secrets,
+  exfil, jailbreak, toxicity, unauthorized advice, brand, and sector packs.
+
+Fix:
+- `docs/policies/CISO_100.md`: exactly **100 rules** (CISO-001 – CISO-100) in a
+  single table with id, name, category, action (block/redact/monitor), severity,
+  priority, detection approach (regex/keyword/semantic), positive fixture,
+  negative fixture.
+- Coverage: OWASP LLM01–LLM10, GDPR-PII, PCI-DSS, HIPAA-PHI, secrets, IP/code
+  exfil, jailbreak, toxicity/hate/NSFW/self-harm, unauthorized advice, brand/
+  off-topic, finance/healthcare/legal sector packs.
+- Rule **CISO-020** negative fixture references PIPELINE-0012 smart-mask PII
+  (`j***@a***.com`, `***-**-6789` → redact not block as obfuscated_pii).
+
+Verification:
+- `grep -c '^| CISO-' docs/policies/CISO_100.md` → **100**.
+- Design-only; seed implementation deferred to item 27.
+
 ## PIPELINE-0025 (2026-07-03)
 
 **Full scan-history browser gate (P6 item 25).**

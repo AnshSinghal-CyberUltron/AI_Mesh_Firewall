@@ -136,6 +136,11 @@
   Picks best threat-feed samples (3+ stages, positive latency); optional Attack Simulator trigger
   for missing kinds. pipelineP25Pass:true (block 16.2ms / redact 13607.1ms / allow 1065.1ms;
   0 console errors). Evidence mcp-parallel/findings/pipeline-p25/.
+- PIPELINE-0026 (2026-07-03) — CISO 100-RULE PACKAGE DESIGN (P7-26): docs/policies/CISO_100.md
+  exactly 100 rules (CISO-001..100) with action/severity/priority/detection/fixtures covering
+  OWASP LLM01-10, GDPR-PII, PCI-DSS, HIPAA-PHI, secrets, IP exfil, jailbreak, toxicity,
+  unauthorized advice, brand, finance/healthcare/legal sector packs; CISO-020 negative fixture =
+  PIPELINE-0012 smart-mask redact-not-block. Design-only (seed item 27). VERIFY: 100 table rows.
 - PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
  (dominant stage/share, by_stage, hints[]) via build_latency_breakdown+attach_latency_breakdown;
  stream frame recomputes after total reconcile. FE LogDetailPage breakdown table + "How to reduce
