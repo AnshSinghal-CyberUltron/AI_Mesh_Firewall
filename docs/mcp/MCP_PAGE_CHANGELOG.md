@@ -118,3 +118,10 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** Top Tools empty name → "(unnamed)" (italic muted) + stable key + tabular-nums; detector stays clean.
 - **AFFECTS:** the Observability Top Tools list.
 - **VERIFY:** build green; detect.mjs exit 0 (0 anti-patterns), 0 hard-coded hex + 111 dark: variants; LIVE Playwright regression cleanup12Pass:true; read observability PNG → "(unnamed) 125" (was blank).
+
+## MCP-PAGE-CLEANUP-14 — Section-C snapshot gate + before/after (Playwright)
+- **files:** scripts/ralph/mcp_page_cleanup_item12_verify.mjs (the reusable gate)
+- **WHAT:** formalized the alignment+responsiveness Playwright snapshot gate + before/after evidence.
+- **NOW DOES:** the gate sweeps Servers + Observability tabs at 1440/1024/768/375 × light/dark, asserting no overflow, no content bleed, touch≥24px (WCAG AA), 0 console errors (16 screenshots/run). Before: cleanup09 (truncated "Servers connec…"); After: cleanup11/cleanup14-after (wraps, equal heights, "(unnamed)" label).
+- **AFFECTS:** verification only — the gate guards against alignment/responsive regressions.
+- **VERIFY:** cleanup12Pass:true (all 8 combos clean, 0 console errors). Section C (10–14) complete.
