@@ -1001,3 +1001,43 @@ async def test_chg0057_normal_pii_redacts_not_blocked():
     assert findings
     assert blocked is False
     assert "john.doe@example.com" not in mutated
+
+
+@pytest.mark.asyncio
+async def test_tier2_bedrock_exception_fails_closed_under_strict():
+    """CHG-0134 regression-lock: when the Tier-2 (Bedrock) scanner RAISES, strict
+    mode MUST block (fail-closed) and fail_open MUST forward. Tier-1 allows a benign
+    text so Tier-2 actually runs; the scanner's scan_prompt_with_tier2 raises."""
+    from policy_engine import EvaluationResult
+
+    def _eff(t2_strict):
+        return {
+            "scan_controls_configured": True,
+            "tier1_input": {"enabled": True, "target_mode": "entire", "key_path": "",
+                            "strict_mode": "fail_open", "control_id": "t1"},
+            "tier2_input": {"enabled": True, "target_mode": "entire", "key_path": "",
+                            "strict_mode": t2_strict, "control_id": "t2"},
+        }
+
+    async def _run(t2_strict):
+        scanner = MagicMock()
+        scanner.scan_prompt_with_tier2 = AsyncMock(side_effect=RuntimeError("bedrock unavailable"))
+        with (
+            patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+            patch("mcp_scan_orchestrator.evaluate_mcp_policies",
+                  return_value=EvaluationResult(action="allow")),
+            patch("mcp_scan_orchestrator._get_input_scanner", return_value=scanner),
+        ):
+            _payload, result = await scan_mcp_payload(
+                {"text": "hello world benign"},
+                scan_direction="input", enforcement="block",
+                effective_controls=_eff(t2_strict),
+                enabled_info={"mcp_tier2_enabled": True, "tier2_strict": (t2_strict == "strict")},
+                org_slug="demo", server_slug="stub", tool_name="echo",
+            )
+        return result
+
+    strict = await _run("strict")
+    assert strict.blocked is True, "tier-2 Bedrock error under strict MUST fail CLOSED (block)"
+    lenient = await _run("fail_open")
+    assert lenient.blocked is False, "tier-2 Bedrock error under fail_open forwards (tier-1 already ran)"

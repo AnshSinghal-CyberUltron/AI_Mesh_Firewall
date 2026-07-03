@@ -1537,3 +1537,12 @@
 - **Fix:** _start_or_recreate now removes + recreates on ANY start() failure (the whole point of "or_recreate"). Safe: the per-org auth volume (/data/mcp-auth) persists (no data loss); a genuine daemon-down still surfaces from create_container (retry loop) so recreating can't make it worse; a transient start failure now self-heals.
 - **Gate:** test_sandbox_lifecycle.py 44 passed (2 new: generic-start-failure -> remove+recreate; successful-start -> no recreate); full broker tests -k "not websocket" 162 passed.
 - **Evidence:** mcp-parallel/findings/backstop-p-sandbox-start-recreate-narrow/finding.md. Promise WITHHELD (G5 live chaos/soak items 14-19 host-blocked).
+
+---
+## CHG-0134 (2026-07-03) — regression-lock: Tier-2 (Bedrock) error fails CLOSED under strict (1.4 no-leak-during-degradation, item 18)
+
+- **Item:** rigorous-verification + lock of a critical fail-closed invariant. Test-only, no code change.
+- **Verified sound:** on a Tier-2 exception (scan_prompt_with_tier2 raises during a Bedrock outage/throttle), _scan_text_tier2 returns block under strict_mode (defaults to 'strict' via tier2_ctrl.get('strict_mode') or 'strict') and forwards under fail_open (safe — Tier-1 field redaction already ran). The scanner-is-None early-return fails open even under strict, but INTENTIONALLY (a non-Bedrock deployment mustn't be bricked into blocking everything; the '"strict" in fallback' block-gate distinguishes runtime tier2_error_strict from scanner_unavailable). No live bypass.
+- **Gap closed:** the suite had extensive strict/fail_open coverage over Tier-2 ACTION verdicts but NO test forcing a Tier-2 EXCEPTION -> a refactor dropping the `if strict_mode=='strict'` branch would silently forward results unscanned-by-Tier-2 during a Bedrock outage (1.4 degradation leak) with a green suite. Added test_tier2_bedrock_exception_fails_closed_under_strict (drives real scan_mcp_payload; scanner raises; asserts strict->blocked True, fail_open->blocked False).
+- **Gate:** test_mcp_scan_orchestrator.py 38 passed.
+- **Evidence:** mcp-parallel/findings/backstop-p-tier2-error-failclosed-lock/finding.md. Promise WITHHELD (G5 live stress items 14-19 host-blocked; item-21 UI cross-plane).
