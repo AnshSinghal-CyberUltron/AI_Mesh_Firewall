@@ -624,10 +624,19 @@ class DockerManager:
             container.start()
             return container
         except Exception as exc:
-            if not self._is_container_name_conflict(exc) and "marked for removal" not in str(
-                exc
-            ).lower():
-                raise
+            # CHG-0133: a container that won't start must be RECREATED — that is the whole
+            # point of "or_recreate" (auto-recovery / chaos self-heal, item 18). The old
+            # code recreated ONLY for a name-conflict or "marked for removal" error and
+            # RE-RAISED every other start failure — so a sandbox left in a dead / OOM-killed
+            # / corrupted state after a chaos kill (whose start() error is a generic OCI /
+            # APIError, NOT a removal-race) was never recreated: the org's sandbox stayed
+            # broken, failing every request until manual intervention. Now ANY start failure
+            # triggers remove+recreate. Safe: the per-org volume persists (no data loss), and
+            # a genuine daemon-down error still surfaces from create_container after its
+            # retries (recreating can't make daemon-down worse — it fails there anyway).
+            logger.warning(
+                "sandbox start failed for %s (%s); removing + recreating", org_slug, exc
+            )
             return self._recover_broken_container(org_slug, container)
 
     def ensure(self, org_slug: str) -> SandboxContainerInfo:

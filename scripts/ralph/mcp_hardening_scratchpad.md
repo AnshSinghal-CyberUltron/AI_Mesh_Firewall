@@ -1529,3 +1529,11 @@
 - **Fix:** both proxy_chat counters now use `async with REDIS_CLIENT.pipeline(transaction=True) as pipe: pipe.incr(k); pipe.expire(k, TTL, nx=True); current=(await pipe.execute())[0]` — atomic, self-healing EXPIRE NX, single await (no cancellation window). Behavior-preserving (same keys/limits/telemetry/fail-open).
 - **Gate:** test_proxy_chat_ratelimit_atomic_ttl.py (2 source-level guards: non-atomic idiom gone + EXPIRE NX present) + test_rate_limit_atomic_ttl.py (5, runtime proof of the identical pattern) = 7 passed; full gateway suite 1824 passed.
 - **Follow-up (deferred):** dedup — make proxy_chat call _enforce_org_burst_rpm (root-cause; deferred, changes inline telemetry). Evidence mcp-parallel/findings/backstop-p-proxy-chat-ratelimit-orphan-ttl/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked).
+
+---
+## CHG-0133 (2026-07-03) — sandbox auto-recovery: recreate a container that fails to start (item 13/18 chaos self-heal)
+
+- **Gap:** services/mcp-broker/src/sandbox/docker_manager.py _start_or_recreate (called by ensure()/start()) recreated ONLY when the start error was a name-conflict (409) or "marked for removal" (removal-race) and RE-RAISED every other start failure. A sandbox left dead/OOM-killed/corrupted after a chaos kill fails start() with a GENERIC OCI/APIError -> re-raised, not recreated -> ensure propagates, the next request hits the same broken container, start() fails again -> the org's sandbox is stuck broken with NO self-heal (the exact chaos-recovery scenario). The start-recovery path had NO tests. Found auditing the broker's auto-recovery (items 13/18).
+- **Fix:** _start_or_recreate now removes + recreates on ANY start() failure (the whole point of "or_recreate"). Safe: the per-org auth volume (/data/mcp-auth) persists (no data loss); a genuine daemon-down still surfaces from create_container (retry loop) so recreating can't make it worse; a transient start failure now self-heals.
+- **Gate:** test_sandbox_lifecycle.py 44 passed (2 new: generic-start-failure -> remove+recreate; successful-start -> no recreate); full broker tests -k "not websocket" 162 passed.
+- **Evidence:** mcp-parallel/findings/backstop-p-sandbox-start-recreate-narrow/finding.md. Promise WITHHELD (G5 live chaos/soak items 14-19 host-blocked).

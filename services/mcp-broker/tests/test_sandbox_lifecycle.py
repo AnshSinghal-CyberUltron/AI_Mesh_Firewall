@@ -585,3 +585,38 @@ def test_destroy_refuses_foreign_labeled_volume(manager: DockerManager):
     manager.client.volumes.get.return_value = vol
     manager.destroy("acme")
     vol.remove.assert_not_called()  # fail-closed: no cross-tenant volume destruction
+
+
+# ── CHG-0133: _start_or_recreate must recreate a container that won't start on ANY
+# start failure (dead/OOM-killed/corrupted after a chaos kill), not only on a
+# name-conflict / "marked for removal" removal-race. Auto-recovery / chaos self-heal.
+
+def test_ensure_recreates_container_on_generic_start_failure(manager):
+    dead = _mock_container(status="exited", container_id="dead1")
+    dead.start.side_effect = RuntimeError("OCI runtime error: container is dead")
+    fresh = _mock_container(status="running", container_id="fresh1")
+    fresh.reload.side_effect = lambda: None
+    manager.find_container = MagicMock(return_value=dead)
+    manager.client.containers.run.return_value = fresh
+
+    info = manager.ensure("acme")
+
+    dead.start.assert_called_once()                    # attempted start
+    dead.remove.assert_called_once_with(force=True)    # CHG-0133: removed the broken one
+    manager.client.containers.run.assert_called_once()  # recreated
+    assert info.container_id == "fresh1"
+    assert info.status == "running"
+
+
+def test_ensure_does_not_recreate_when_start_succeeds(manager):
+    stopped = _mock_container(status="exited", container_id="keep1")
+    stopped.start.side_effect = None  # start succeeds
+    stopped.reload.side_effect = lambda: None
+    manager.find_container = MagicMock(return_value=stopped)
+
+    info = manager.ensure("acme")
+
+    stopped.start.assert_called_once()
+    stopped.remove.assert_not_called()                 # NOT recreated on a good start
+    manager.client.containers.run.assert_not_called()
+    assert info.container_id == "keep1"
