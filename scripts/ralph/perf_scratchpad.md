@@ -91,7 +91,11 @@
       exports GATEWAY_REDIS_MAX_CONNECTIONS (middleware pool, was 300); control exports DJANGO_CACHE_MAX_CONNECTIONS (was 200).
       Generous per-worker lazy ceilings, scale w/ cores, never bottleneck (Redis live 49/10000). Gateway hot-path REDIS_CLIENT
       left unbounded (safe). Vault done in PERF-0005. PERF-0007 → 4 memories. PROVEN --cpus=6: PID1 both=64, control health 200.
-- [ ] 17. Verify no connection starvation at peak.
+- [x] 17. Verify no connection starvation at peak.
+      → control --cpus=12 (12 workers, detector pools cache=96), 120 concurrent /api/health/ 20s: rps=3060, p99=154ms,
+      0 errors/65591 (all 200), PEAK pg=29/400 (7%, 0 "too many clients"), redis=123/10000 (1.2%). NO starvation.
+      BONUS: control uses 10.37/12 cores under load — vs the 1.16-core/346-rps single-daphne baseline = ~8.8x throughput.
+      P5 COMPLETE (15 pg, 16 redis, 17 verify). Verification only, no code/stack change.
 
 ## P6 — Fix hot endpoints
 - [ ] 18. soc-kpis: standalone BRIN/btree index on EnforcementEvent.created_at (migration) so the window seeks.
