@@ -995,7 +995,22 @@
     Byte-level: alice.jones@corp.example / 123-45-6789 -> a***@c***.example / ***-**-6789. Independent oracle
     (aidefence): has_pii false fixed / true raw. Evidence mcp-parallel/findings/backstop-p-internal-sandbox-
     result-unscanned/. RESIDUAL: the internal streamable-http _scan_internal_result scans only result.content
-    (not a bare error frame / structuredContent) — narrower than the sandbox complete-skip; follow-up.
+    (not a bare error frame / structuredContent) — narrower than the sandbox complete-skip; follow-up -> CHG-0106.
+  - CHG-0106 (2026-07-03) — MEDIUM fail-open 1.4 leak (legacy fallback): closes the CHG-0105 residual. The
+    internal route's LEGACY direct-httpx path (_scan_internal_result, reached only when MCP_HTTP_VIA_SANDBOX=0;
+    default routes ALL transports through the sandbox = CHG-0105) scanned only result.content. If result.content
+    was None it returned the reply UNSCANNED -> a secret/PII/internal-IP in an upstream JSON-RPC error frame
+    (error.message) or a structuredContent-only result egressed RAW to the chat pipeline -> LLM. Byte-verified
+    pre-fix: error frame AKIAIOSFODNN7EXAMPLE + 10.1.2.3 + bob.jones@corp.example egressed all three raw;
+    structuredContent-only AWS key + SSN egressed both. It also silently swapped masked content with NO audit.
+    FIX (mcp_proxy.py): error-envelope aware WHOLE-result scan (mirrors sandbox CHG-0105 + org CHG-0091) — scans
+    resp["result"] when present (content AND structuredContent AND bare string/list) else the bare error envelope
+    via _scan_tool_result_floor; masks/blocks + AUDITS the redact (decision=redact, transport=internal), closing
+    the audit omission. NEW TEST test_mcp_internal_http_result_scan.py (5). Gate: 5 + 1649 gateway passed 0
+    failed; broker 108. Byte-level (MCP_HTTP_VIA_SANDBOX=0): error frame -> key=AKIA****MPLE host
+    [INTERNAL_IPV4_REDACTED] user b***@c***.example; structuredContent -> "secret":"***","ssn":"***-**-6789".
+    Independent oracle (aidefence): has_pii true raw / false fixed. Evidence mcp-parallel/findings/backstop-p-
+    internal-http-result-scan/. Result-egress redaction now at full parity across org / sandbox / legacy-httpx.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

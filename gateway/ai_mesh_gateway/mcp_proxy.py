@@ -2525,20 +2525,26 @@ async def internal_tools_call(request: Request):
         """Outbound result scan + redaction floor on an upstream JSON-RPC reply.
 
         Mirrors org_mcp_jsonrpc's outbound enforcement for this internal route.
-        Scans ``result.content`` (the MCP tool-output carrier); on an output
-        block returns a JSON-RPC error, otherwise swaps in masked content. Never
-        raises (fail-safe inside the scan helper) so the response still flows.
+        CHG-0106: error-envelope aware WHOLE-result scan (parity with the sandbox
+        branch CHG-0105 + org path CHG-0091). Scans the whole ``result`` when
+        present — so ``content`` AND ``structuredContent`` AND a bare string/list
+        result are ALL covered — else the bare error envelope. Previously this
+        legacy ``MCP_HTTP_VIA_SANDBOX=0`` direct-httpx path scanned only
+        ``result.content``, so a secret / PII / internal-IP in an upstream ERROR
+        FRAME (``error.message``) or a ``structuredContent``-only result egressed
+        RAW to the chat pipeline / LLM — a weaker leak posture than the default
+        sandbox path. On an output block returns a JSON-RPC error; otherwise swaps
+        in the masked payload (and AUDITS the redact, closing a prior audit
+        omission). Never raises (fail-safe inside the scan helper) so the response
+        still flows.
         """
         if not isinstance(resp_obj, dict):
             return JSONResponse(content=resp_obj, status_code=200)
-        result_obj = resp_obj.get("result")
-        result_content = result_obj.get("content") if isinstance(result_obj, dict) else None
-        if result_content is None:
-            return JSONResponse(content=resp_obj, status_code=200)
+        scan_target = resp_obj.get("result") if "result" in resp_obj else resp_obj
         (
-            scanned_content, out_blocked, out_tags, out_findings, scan_meta_out
+            scanned, out_blocked, out_tags, out_findings, scan_meta_out
         ) = await _scan_tool_result_floor(
-            result_content,
+            scan_target,
             tool_name=tool_name,
             enabled_info=enabled_info,
             org_slug=org_slug,
@@ -2571,8 +2577,22 @@ async def internal_tools_call(request: Request):
                 },
                 status_code=200,
             )
-        if scanned_content is not result_content and isinstance(result_obj, dict):
-            result_obj["content"] = scanned_content
+        if scanned is not scan_target:
+            if "result" in resp_obj:
+                resp_obj["result"] = scanned
+            elif isinstance(scanned, dict):
+                resp_obj = scanned
+            await _record_gateway_event(
+                org_slug=org_slug,
+                server_slug=server_slug,
+                tool_name=tool_name,
+                decision="redact",
+                reason="pii_redacted_outbound",
+                latency_ms=int((time.time() - _internal_call_t0) * 1000),
+                metadata={"transport": "internal", "enforced_at": "gateway", **scan_meta_out},
+                compliance_tags=list(out_tags),
+                scan_findings=list(out_findings),
+            )
         return JSONResponse(content=resp_obj, status_code=200)
 
     try:

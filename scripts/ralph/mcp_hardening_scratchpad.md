@@ -639,7 +639,25 @@
       (aidefence): has_pii false fixed / true raw. Evidence mcp-parallel/findings/backstop-p-internal-sandbox-
       result-unscanned/finding.md. RESIDUAL: the internal streamable-http _scan_internal_result scans only
       result.content (not a bare error frame / structuredContent) — narrower than the sandbox complete-skip;
-      follow-up to bring the HTTP path to the same error-envelope-aware whole-result scan.
+      follow-up to bring the HTTP path to the same error-envelope-aware whole-result scan. -> CLOSED by CHG-0106.
+      CHG-0106 (2026-07-03, MEDIUM fail-open 1.4 leak, legacy fallback — CLOSES the CHG-0105 residual):
+      _scan_internal_result, the outbound result scanner on internal_tools_call's LEGACY direct-httpx path
+      (reached ONLY when MCP_HTTP_VIA_SANDBOX=0; the DEFAULT routes ALL transports through the per-org sandbox =
+      CHG-0105), scanned only result_obj.get('content'). If result.content was None it returned the reply
+      UNSCANNED -> a secret/PII/internal-IP in an upstream JSON-RPC error frame (error.message) or a
+      structuredContent-only result egressed RAW to the chat pipeline -> LLM. It also silently swapped masked
+      content with NO audit on the redact. Byte-verified pre-fix (legacy path): error frame AKIAIOSFODNN7EXAMPLE +
+      10.1.2.3 + bob.jones@corp.example egressed all three raw; structuredContent-only AWS key + SSN egressed both.
+      FIX (mcp_proxy.py): error-envelope aware WHOLE-result scan (mirrors sandbox CHG-0105 + org CHG-0091) —
+      scan_target = resp['result'] if 'result' in resp else resp; via _scan_tool_result_floor (content AND
+      structuredContent AND bare string/list AND bare error envelope all covered); masks/blocks + AUDITS the redact
+      (decision=redact, transport=internal), closing the audit omission. NEW TEST test_mcp_internal_http_result_
+      scan.py (5: error-frame secret+IP+PII masked; structuredContent-only masked + redact audited; content
+      control masked; redact audited; benign preserved). Gate: 5 + 1649 gateway passed 0 failed; broker 108.
+      Byte-level (MCP_HTTP_VIA_SANDBOX=0): error frame -> key=AKIA****MPLE host [INTERNAL_IPV4_REDACTED] user
+      b***@c***.example; structuredContent -> "secret":"***","ssn":"***-**-6789". Independent oracle (aidefence):
+      has_pii true raw / false fixed. Evidence mcp-parallel/findings/backstop-p-internal-http-result-scan/
+      finding.md. Result-egress redaction now at FULL PARITY across org / sandbox / legacy-httpx internal paths.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;
