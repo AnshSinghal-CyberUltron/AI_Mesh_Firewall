@@ -2,8 +2,11 @@
 # ONE item per iteration. Never fake green. Goal: use all cores, RAM-bounded + headroom, dynamic, no static caps.
 
 ## C0 — Coordination (every iteration)
-- [ ] 00. Join the Ruflo hive; read AGENTS.md + .cursor/rules + docs/perf/CHANGELOG.md. Before any shared-infra
+- [x] 00. Join the Ruflo hive; read AGENTS.md + .cursor/rules + docs/perf/CHANGELOG.md. Before any shared-infra
       or shared-file change, post a FILE-CONFLICT/STACK-CHANGE entry to all four memories (§1). Rebase from main.
+      → performed EVERY iteration: read AGENTS.md/.cursor/rules each turn, posted PERF-0001..0012 to all four memories
+      (Ruflo memory_store+hooks_notify, AGENTS.md, .cursor/rules, docs/perf/CHANGELOG.md) before each shared change,
+      staged narrowly + committed immediately (shared-index hazard), and handled AGENTS.md cross-session sweeps benignly.
 
 ## P0 — Measure
 - [x] 01. Baseline load test (control + gateway): RPS, p50/p99, per-core utilization (prove ~2 cores used) → docs/perf/BASELINE.md.
