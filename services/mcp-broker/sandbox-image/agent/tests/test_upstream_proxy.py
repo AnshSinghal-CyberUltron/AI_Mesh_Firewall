@@ -364,6 +364,24 @@ def test_websocket_tools_list(agent_client):
     assert body["_meta"]["transport"] == "websocket"
 
 
+@pytest.mark.asyncio
+async def test_ws_connect_enforces_response_cap_via_max_size():
+    # CHG-0131: the ws library-level frame cap must match the agent's configured
+    # _MAX_RESPONSE_BYTES — else websockets' 1 MiB default silently overrides it
+    # (ignoring a raised cap; under-enforcing a lowered one) on the ws transport only.
+    from agent import ws_manager
+    from agent.upstream_manager import UpstreamSession, _MAX_RESPONSE_BYTES
+
+    connect_mock = AsyncMock(return_value=_FakeWebSocket("{}"))
+    sess = UpstreamSession(
+        server_slug="srv", transport="websocket", url="wss://up.example/ws",
+        allowed_hosts=[], headers={},
+    )
+    with patch("websockets.connect", new=connect_mock):
+        await ws_manager.ensure_ws_connected(sess, connect_timeout=1.0)
+    assert connect_mock.call_args.kwargs.get("max_size") == _MAX_RESPONSE_BYTES
+
+
 def test_websocket_handshake_401_needs_reauth(agent_client):
     from websockets.exceptions import InvalidStatus
 

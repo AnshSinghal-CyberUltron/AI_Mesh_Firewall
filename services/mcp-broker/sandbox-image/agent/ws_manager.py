@@ -52,6 +52,16 @@ async def ensure_ws_connected(session: UpstreamSession, connect_timeout: float) 
                 session.url,
                 additional_headers=extra_headers,
                 open_timeout=connect_timeout,
+                # CHG-0131: enforce the agent's configured response cap at the LIBRARY
+                # level. Without max_size, websockets defaults to 1 MiB — silently
+                # OVERRIDING _MAX_RESPONSE_BYTES (8 MiB default) on the ws transport only:
+                # a raised MCP_AGENT_MAX_RESPONSE_BYTES was ignored (legit 1-8 MiB ws
+                # responses failed as a connection error), and a LOWERED cap was
+                # under-enforced (ws still allowed up to 1 MiB). The library also rejects
+                # an over-cap frame BEFORE buffering it whole (real pre-buffer OOM guard),
+                # unlike the post-recv len() check below. Parity with the http/sse/stdio
+                # _MAX_RESPONSE_BYTES caps.
+                max_size=_MAX_RESPONSE_BYTES,
             ),
             timeout=connect_timeout,
         )

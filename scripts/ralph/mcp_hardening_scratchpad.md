@@ -1513,3 +1513,11 @@
 - **Fix:** shared _aiter_sse_lines_bounded(response, max_line_bytes) in upstream_manager reads raw bytes via aiter_bytes(), splits on \n (strips trailing \r), yields lines, and RAISES UpstreamError "upstream SSE line too large" once an UNTERMINATED buffer would exceed _MAX_RESPONSE_BYTES (8MB) -> buffer bounded to ~one line's cap. Both paths use it (reader task ends -> next RPC restarts; streamable-http surfaces the error). Well-formed single/multi-line events parse as before.
 - **Gate:** test_sse_reader_bounds.py 6 passed (new huge-line test); test_upstream_proxy.py 18 passed (both SSE paths green with fakes migrated to aiter_bytes); full agent suite green.
 - **Triad complete:** CHG-0128 (per-event data) + CHG-0129 (response queue) + CHG-0130 (per-line) = the untrusted-SSE buffering surface is now bounded. Evidence mcp-parallel/findings/backstop-p-agent-sse-unbounded-line/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked).
+
+---
+## CHG-0131 (2026-07-03) — ws transport honors _MAX_RESPONSE_BYTES (was silently 1 MiB library default)
+
+- **Gap:** ws_manager.ensure_ws_connected called websockets.connect() with NO max_size -> websockets 16.0 default max_size=1 MiB silently overrode the agent's _MAX_RESPONSE_BYTES (8 MiB, MCP_AGENT_MAX_RESPONSE_BYTES) on the ws transport ONLY. (1) ws 1-8 MiB responses rejected by the library though policy allowed them; (2) the post-recv `len(raw) > _MAX_RESPONSE_BYTES` check was DEAD CODE; (3) a LOWERED operator cap (<1 MiB) was under-enforced on ws. Found auditing ws_manager.py (untrusted ws upstream).
+- **Fix:** pass max_size=_MAX_RESPONSE_BYTES to websockets.connect() -> library enforces the agent cap (parity with http/sse/stdio) BEFORE buffering the whole frame (real pre-buffer OOM guard). Explicit length check kept as belt-and-suspenders.
+- **Gate:** test_ws_connect_enforces_response_cap_via_max_size (asserts connect called with max_size==_MAX_RESPONSE_BYTES) + existing ws tests pass; full agent suite green. websockets 16.0 default confirmed 1048576.
+- **Evidence:** mcp-parallel/findings/backstop-p-ws-max-size-cap-mismatch/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked).
