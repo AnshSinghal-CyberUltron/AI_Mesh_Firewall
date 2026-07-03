@@ -1453,6 +1453,24 @@
         installed (manual polish). ModelConnectionPanel connect-flow was Playwright-verified end-to-end in a
         prior window (item 9). Remaining completion gaps: R5 live-OpenRouter (needs key typed in UI this
         session) + a full R6 Playwright interaction pass.
+    - R5 LIVE VALIDATION (focused) 2026-07-03: PREREQS verified — OpenRouter REACHABLE from the gateway
+        container (urllib 200); control healthy; frontend dev-default login WORKS (admin@zeroshield.io /
+        Adm1n!Pass#2024 — repo dev default from control ensure_zeroshield_admin.py, NOT a secret). LOGGED IN via
+        Playwright -> dashboard -> Multi-Model Governance (?tab=firewall-1-5). DISCOVERY: ~10 FREE OpenRouter
+        models ALREADY CONNECTED (prior window's R5) — cohere/north-mini-code:free, google/gemma-4-31b-it:free
+        + 26b, liquid/lfm-2.5-1.2b-instruct:free, 3x nvidia-nemotron:free, openrouter/free, 2x poolside:free —
+        all Active, encrypted key ••••6c11 (matches the provided OpenRouter key). LIVE ENFORCEMENT VALIDATED via
+        the stock SDK path (httpx -> gateway /v1/chat/completions, org gateway key + a free model): injection
+        -> BLOCK (400); credential(G68 sk_live_) -> BLOCK (400, no raw to model); NO raw PII/credential in ANY
+        response; prompt_out (what reaches the model) CLEAN for every case (raw_ssn_to_model=False). ⚠ ALLOWED/
+        redact requests (benign, pii-redact) currently TIME OUT at the UPSTREAM model call (free OpenRouter
+        models Degraded/rate-limited — the UI itself shows 'Degraded') — an ENVIRONMENTAL model-availability
+        issue AFTER the firewall did its job, NOT a firewall leak. The redact-and-FORWARD round-trip completed
+        in a PRIOR window (R5.4: '0 leaks, 0 under-enforcement, all 41 block payloads block'). So R5's SECURITY
+        assertions are validated live (blocks + no-raw-egress); the full allowed round-trip is model-degraded
+        this session. KEY HANDLING: OpenRouter key never persisted (models were pre-connected; I typed nothing
+        new); gateway org-key used ONLY inline at runtime (env), never written to a file/commit. NOT emitting
+        COMPLETE: allowed round-trip is model-degraded + full-corpus not re-run this session.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
