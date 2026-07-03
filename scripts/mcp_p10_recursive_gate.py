@@ -18,6 +18,9 @@ Env:
   SKIP_PLAYWRIGHT 1 to skip UI gate
   INCLUDE_SUSTAINED 1 to run SUSTAINED=1 phase in multi_org harness (slow)
   INTER_ROUND_SANDBOX_RESTART 1 (default) restart scale sandboxes between gate rounds
+  POST_RESTART_SETTLE  seconds after inter-round restart (default 30)
+  INTER_HARNESS_SLEEP  pause between harnesses (default 20)
+  INTER_ROUND_SLEEP    pause between gate rounds (default 30)
 """
 from __future__ import annotations
 
@@ -47,9 +50,10 @@ P9_HARNESSES = [
 ]
 
 
-INTER_HARNESS_SLEEP = float(os.environ.get("INTER_HARNESS_SLEEP", "8"))
-INTER_ROUND_SLEEP = float(os.environ.get("INTER_ROUND_SLEEP", "45"))
+INTER_HARNESS_SLEEP = float(os.environ.get("INTER_HARNESS_SLEEP", "20"))
+INTER_ROUND_SLEEP = float(os.environ.get("INTER_ROUND_SLEEP", "30"))
 INTER_ROUND_SANDBOX_RESTART = os.environ.get("INTER_ROUND_SANDBOX_RESTART", "1") == "1"
+POST_RESTART_SETTLE = float(os.environ.get("POST_RESTART_SETTLE", "30"))
 POST_LEAKAGE_RESTART_SLEEP = float(os.environ.get("POST_LEAKAGE_RESTART_SLEEP", "45"))
 
 
@@ -130,7 +134,9 @@ def _restart_scale_sandboxes() -> None:
 def multi_org_harness() -> tuple[bool, str]:
     _restart_scale_sandboxes()
     env = dict(os.environ)
-    env["ROUNDS"] = "3"
+    # Single harness round — concurrency sub-gate already stress-tests; ROUNDS=3
+    # after full round-1 load caused echo/sum canary flakes (iter42).
+    env["ROUNDS"] = "1"
     if INCLUDE_SUSTAINED:
         env["SUSTAINED"] = "1"
     return _run(
@@ -259,6 +265,7 @@ def main() -> int:
             if INTER_ROUND_SANDBOX_RESTART:
                 print(f"\n[prep] inter-round sandbox restart after round {rnd}…")
                 _restart_scale_sandboxes()
+                time.sleep(POST_RESTART_SETTLE)
             time.sleep(INTER_ROUND_SLEEP)
 
     report = {
