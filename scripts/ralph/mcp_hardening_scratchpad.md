@@ -1124,6 +1124,26 @@
       effective==base unclamped); broker -k "not websocket" 172 passed 0 failed. STILL host-blocked for item
       10 [x]: the live fork/mem/disk/timeout bomb drill + neighbor-safety proof at scale need a dedicated host.
       Evidence: mcp-parallel/findings/backstop-p10-agent-rpc-timeout-clamp/finding.md.
+      CHG-0151 (2026-07-03, MEDIUM cross-tenant availability / resource-bomb — CLOSES the broker-response-cap
+      residual deferred across CHG-0146/0147): the broker buffered the sandbox agent's RPC response UNBOUNDED.
+      services/mcp-broker/src/sandbox/routes.py _post_agent_rpc forwarded each RPC via `await client.post(...)`
+      and _forward_sandbox_rpc read the reply with response.json()/.text — httpx.post() buffers the ENTIRE body
+      unbounded. The sandbox agent runs untrusted tenant MCP servers (gVisor + X-Sandbox-Agent-Key are the
+      isolation), but the broker TRUSTED the agent's reply size — and the broker is ONE shared process routing
+      every org's sandbox, so a buggy/compromised agent returning a huge body OOMs it = cross-tenant availability
+      breach. The agent's 8MiB self-cap (CHG-0066) is INSIDE the untrusted boundary, not a control the broker can
+      rely on. FIX: _AGENT_MAX_RESPONSE_BYTES (16MiB = 2× the agent self-cap; env
+      MCP_BROKER_AGENT_MAX_RESPONSE_BYTES) + _read_agent_response_capped (client.stream + aiter_bytes, raises
+      HTTP 502 the instant the running total crosses the ceiling; never holds > ceiling in memory; rebuilds a
+      fully-read httpx.Response used .json()/.text unchanged); _post_agent_rpc calls it instead of .post(). A
+      cold-start transport error still raises httpx.HTTPError (retry loop unchanged); a too-large reply raises
+      HTTPException(502) → fails fast, no retry. This is why the residual was deferred: it required migrating 2
+      broker test files' agent-RPC mocks from post→stream (shared _agent_stream_mock helper). Migration is
+      mechanical; all 25 affected tests pass. +2 cap tests. Gate: test_sandbox_routes.py + test_agent_ready_retry.py
+      25 passed (over-cap 2KiB reply / 1KiB cap → 502; under-cap ok); broker -k "not websocket" 174 passed 0
+      failed. Parity with the gateway upstream cap (CHG-0064) + agent upstream cap (CHG-0066). REMAINING for
+      item 10 [x]: the live fork/mem/disk/timeout bomb drill + neighbor-safety at 300-500-sandbox scale (needs a
+      dedicated host). Evidence: mcp-parallel/findings/backstop-p10-broker-agent-response-cap/finding.md.
 - [ ] 11. PostgreSQL + Redis schemas/usage/restart-safety verified.
       LIVE VERIFIED (usage/schema) — CHG-0023 (2026-07-02): REDIS usage correct — mcp:scan_ver:* 72 keys
       (M-15 scan-config version cache-invalidation, string counters e.g. "99"); ratelimit:* 2 keys (S12

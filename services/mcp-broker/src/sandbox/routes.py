@@ -59,6 +59,17 @@ _AGENT_TIMEOUT_MAX = max(
     _AGENT_TIMEOUT,
     float(os.environ.get("MCP_BROKER_AGENT_TIMEOUT_MAX", "900")),
 )
+# CHG-0151: hard CEILING on the bytes the broker will buffer from a sandbox agent's RPC
+# response. The broker reads the agent reply (``response.json()``/``.text``) with no size
+# bound, so a buggy — or COMPROMISED (the sandbox runs untrusted tenant code; gVisor +
+# per-org auth are the containment, but the broker must not TRUST the agent) — per-org agent
+# returning a huge body would OOM the SHARED broker: a cross-tenant availability breach
+# (every org's sandbox routes through this one broker). 16 MiB = 2× the agent's own upstream
+# self-cap (MCP_AGENT_MAX_RESPONSE_BYTES, 8 MiB) so a legitimate max-size reply is never
+# clipped; env-tunable.
+_AGENT_MAX_RESPONSE_BYTES = int(
+    os.environ.get("MCP_BROKER_AGENT_MAX_RESPONSE_BYTES", str(16 * 1024 * 1024))
+)
 # Cold-start agent-readiness window. A freshly (re)started sandbox container
 # reports "running" as soon as its PID-1 process starts, but the in-container
 # HTTP agent takes a beat to bind its socket. Without tolerating that window the
@@ -217,6 +228,40 @@ async def _resolve_running_sandbox(
     return await asyncio.to_thread(docker_manager.ensure, org_slug)
 
 
+async def _read_agent_response_capped(
+    client: "httpx.AsyncClient",
+    url: str,
+    payload: dict[str, Any],
+    headers: dict[str, str] | None,
+) -> httpx.Response:
+    """POST to the sandbox agent and STREAM the reply with a hard byte cap (CHG-0151).
+
+    The broker is SHARED across all orgs; the sandbox agent runs untrusted tenant code, so
+    the broker must bound what it buffers rather than call ``client.post()`` (which reads the
+    whole body into memory unbounded). Reads incrementally, aborts with HTTP 502 the instant
+    the running total crosses ``_AGENT_MAX_RESPONSE_BYTES``, then rebuilds a fully-read
+    ``httpx.Response`` the caller can ``.json()``/``.status_code``/``.text`` unchanged. A
+    transport error while opening the stream (agent not bound yet on a cold start) still
+    raises ``httpx.HTTPError`` so ``_post_agent_rpc``'s retry loop sees it exactly as before.
+    """
+    async with client.stream("POST", url, json=payload, headers=headers) as resp:
+        status, hdrs, req = resp.status_code, resp.headers, resp.request
+        buf = bytearray()
+        async for chunk in resp.aiter_bytes():
+            buf += chunk
+            if len(buf) > _AGENT_MAX_RESPONSE_BYTES:
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        f"Sandbox agent response exceeded the "
+                        f"{_AGENT_MAX_RESPONSE_BYTES}-byte ceiling"
+                    ),
+                )
+    return httpx.Response(
+        status_code=status, headers=hdrs, content=bytes(buf), request=req
+    )
+
+
 async def _post_agent_rpc(
     docker_manager: DockerManager,
     org_slug: str,
@@ -252,7 +297,9 @@ async def _post_agent_rpc(
     for attempt in range(1, _AGENT_READY_RETRIES + 1):
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                return await client.post(url, json=payload, headers=_headers or None)
+                return await _read_agent_response_capped(
+                    client, url, payload, _headers or None
+                )
         except httpx.HTTPError as exc:
             last_exc = exc
             if attempt >= _AGENT_READY_RETRIES:

@@ -16,16 +16,43 @@ import pytest
 import sandbox.routes as routes
 
 
-class _FakeResp:
+class _FakeStreamResp:
+    """A streaming response body the CHG-0151 capped reader consumes via aiter_bytes()."""
+
     def __init__(self, status_code: int = 200):
         self.status_code = status_code
+        self.headers = {}
+        self.request = httpx.Request("POST", "http://sandbox:8790/rpc")
 
-    def json(self):
-        return {"ok": True}
+    async def aiter_bytes(self):
+        yield b'{"ok": true}'
+
+
+class _FakeStreamCtx:
+    def __init__(self, client, headers):
+        self._client = client
+        self._headers = headers
+
+    async def __aenter__(self):
+        cls = type(self._client)
+        cls.calls += 1
+        cls.last_headers = self._headers
+        # Cold-start: the agent socket isn't bound yet -> ConnectError on stream open,
+        # exactly the transport error _post_agent_rpc retries on.
+        if cls.calls <= cls.fail_until:
+            raise httpx.ConnectError("agent socket not ready")
+        return _FakeStreamResp(200)
+
+    async def __aexit__(self, *_a):
+        return False
 
 
 class _FakeClient:
-    """Fails its POST `fail_until` times (agent booting), then returns 200."""
+    """Fails its stream-open `fail_until` times (agent booting), then returns 200.
+
+    CHG-0151: _post_agent_rpc now STREAMS the reply (client.stream) with a byte cap instead
+    of client.post, so the fake exposes stream() (an async CM) rather than post().
+    """
 
     calls = 0
     fail_until = 0
@@ -40,12 +67,8 @@ class _FakeClient:
     async def __aexit__(self, *_a):
         return False
 
-    async def post(self, _url, json=None, headers=None):  # noqa: A002 - matches httpx signature
-        type(self).calls += 1
-        type(self).last_headers = headers
-        if type(self).calls <= type(self).fail_until:
-            raise httpx.ConnectError("agent socket not ready")
-        return _FakeResp(200)
+    def stream(self, _method, _url, json=None, headers=None):  # noqa: A002 - matches httpx
+        return _FakeStreamCtx(self, headers)
 
 
 class _FakeInfo:
