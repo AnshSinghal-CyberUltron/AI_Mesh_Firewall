@@ -686,6 +686,22 @@
       _filter_tools_by_enabled at all 4 tools/list sites (org_mcp_jsonrpc adapter+backend branches + REST
       org_mcp_tools_list, now resolving _get_auth_context). A key allowlisted to echo sees only echo. +2 tests;
       test_mcp_bare_proxy_scan.py 22 passed, broad sweep 1083 passed.
+      CHG-0145 (2026-07-03, LOW test-only regression-lock, NO code change): the actor identity forwarded to the
+      backend policy engine (X-Gateway-Roles/User-Id/Key-Prefix/Project-Id) must be NON-SPOOFABLE from
+      client-supplied inbound headers — else a client spoofing X-Gateway-Roles: admin escalates roles and
+      bypasses per-actor tool authz. Verified sound: _control_request_headers builds a FRESH dict copying no
+      inbound header; _backend_proxy_headers sets those headers from _get_auth_context(request)
+      (request.state.auth_context, server-derived from the key's Redis payload; AuthContext.roles from
+      owner.profile.roles). The gateway never reads X-Gateway-Roles/User-Id inbound (grep 0 hits); no live path
+      forwards inbound headers wholesale (only forwarder _proxy is DEAD code). GAP: no test asserted it → a
+      future merge of request.headers / revived _proxy / a route trusting inbound X-Gateway-Roles would open
+      role escalation with a green suite. FIX (test only, test_mcp_bare_proxy_scan.py): inbound headers spoofing
+      X-Gateway-Roles: admin,superuser / X-Gateway-User-Id: 999999 → assert backend headers carry the
+      auth-context values (viewer/42/…) and NONE of the spoofed values appear; empty roles → no X-Gateway-Roles
+      header. Gate: 60 passed (2 new); full gateway 2002 passed 0 failed. DECLINED (documented): ingress
+      stripping of client X-Gateway-* headers — no live path forwards/trusts them and stripping risks breaking
+      a header-propagation path not integration-testable here; the lock guards the real invariant instead.
+      Evidence: mcp-parallel/findings/backstop-p3-actor-header-nonspoof-lock/finding.md.
 - [x] 3b. Per-policy FIELD-level redaction (redaction_fields) on the stdio/ws adapter path (split from #3).
       HTTP path (MCPToolCallView, control views.py:1113) masks specific NAMED result fields for matched
       actor-scoped policies via apply_field_redaction/redact_structured; the gateway policy engine/bundle

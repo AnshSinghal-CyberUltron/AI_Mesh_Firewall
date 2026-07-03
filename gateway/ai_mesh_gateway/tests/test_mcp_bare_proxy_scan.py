@@ -1269,3 +1269,63 @@ async def test_ext_proxy_audits_sse_result_block():
          patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(sse)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert any(e.get("decision") == "block" for e in events), f"SSE block not audited: {events}"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# CHG-0145 — actor-authz headers forwarded to the backend policy engine
+# (X-Gateway-Roles / User-Id / Key-Prefix / Project-Id) must be derived ONLY
+# from the SERVER-SIDE auth context, NEVER from client-supplied inbound headers.
+# A client able to spoof X-Gateway-Roles would escalate to arbitrary roles and
+# bypass per-user/agent/role tool authorization (a 1.4 control). Locks the
+# invariant: _backend_proxy_headers builds a fresh header set from the auth
+# context and ignores the inbound request headers entirely.
+# ════════════════════════════════════════════════════════════════════════════
+
+
+def _spoofed_request(auth):
+    """A request whose INBOUND headers try to spoof the trusted actor headers."""
+    return SimpleNamespace(
+        state=SimpleNamespace(auth_context=auth),
+        headers={
+            "X-Gateway-Roles": "admin,superuser",
+            "X-Gateway-User-Id": "999999",
+            "X-Gateway-Key-Prefix": "spoofed-prefix",
+            "X-Gateway-Project-Id": "spoofed-project",
+        },
+    )
+
+
+def test_backend_actor_headers_come_from_auth_not_inbound_spoof():
+    auth = AuthContext(
+        key_hash="h" * 64,
+        payload={
+            "user_id": 42,
+            "prefix": "ak_live_real",
+            "project_id": "proj-real",
+            "org_slug": "demo",
+            "roles": ["viewer"],
+        },
+    )
+    out = mcp_proxy._backend_proxy_headers(_spoofed_request(auth), "demo", "srv1")
+
+    # Actor identity forwarded to the backend policy engine == the SERVER-SIDE auth
+    # context, not the client's spoofed inbound headers.
+    assert out["X-Gateway-User-Id"] == "42"
+    assert out["X-Gateway-Key-Prefix"] == "ak_live_real"
+    assert out["X-Gateway-Project-Id"] == "proj-real"
+    assert out["X-Gateway-Roles"] == "viewer"  # url-quoted single role, from auth
+
+    # The spoofed values must appear NOWHERE in the backend-bound headers.
+    blob = "\n".join(f"{k}: {v}" for k, v in out.items())
+    for spoof in ("admin", "superuser", "999999", "spoofed-prefix", "spoofed-project"):
+        assert spoof not in blob, f"spoofed value {spoof!r} leaked into backend headers"
+
+
+def test_backend_headers_omit_roles_when_auth_has_none():
+    # Empty roles -> no X-Gateway-Roles header (locks the `if roles:` guard so an
+    # empty allowlist can't be misread as a header), and still not spoofable.
+    auth = AuthContext(key_hash="h" * 64,
+                       payload={"user_id": 7, "org_slug": "demo", "roles": []})
+    out = mcp_proxy._backend_proxy_headers(_spoofed_request(auth), "demo", "srv1")
+    assert "X-Gateway-Roles" not in out
+    assert "admin" not in "\n".join(out.values())
