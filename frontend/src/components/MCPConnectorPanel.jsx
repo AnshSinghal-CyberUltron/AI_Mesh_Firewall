@@ -205,6 +205,19 @@ const getToolSchema = (tool) => tool?.inputSchema || tool?.input_schema || null;
 
 const makeExecuteToolKey = (tool) => `${tool?.server_slug || ""}::${tool?.name || ""}`;
 
+/**
+ * True when an arg refers to the `mcp-remote` package in any npm form — bare
+ * (`mcp-remote`), version-pinned (`mcp-remote@0.1.17`, `mcp-remote@latest`),
+ * scoped (`@scope/mcp-remote`), or a path. The old checks matched only the bare /
+ * path forms, so a version-pinned "Linear Remote" (`mcp-remote@0.1.17`) was not
+ * recognized as OAuth-needing → no Authorize button + URL-extraction returned null.
+ */
+const isMcpRemoteArg = (a) => {
+  if (typeof a !== "string") return false;
+  const bare = a.replace(/@[^@/]+$/, ""); // strip a trailing @version, keep an @scope
+  return bare === "mcp-remote" || bare.endsWith("/mcp-remote");
+};
+
 const buildExampleFromSchema = (schema, depth = 0) => {
   if (!schema || depth > 3) return {};
 
@@ -697,9 +710,7 @@ function MCPConnectorPanelInner() {
       // Authorize action instead of a plain "Registered" success.
       const presetNeedsOAuth =
         (preset.transport === "stdio" &&
-          (preset.args || []).some(
-            (a) => a === "mcp-remote" || (typeof a === "string" && a.endsWith("/mcp-remote"))
-          )) ||
+          (preset.args || []).some(isMcpRemoteArg)) ||
         preset.suggestedAuthType === "oauth";
       if (presetNeedsOAuth) {
         toast(`Registered "${preset.name}" — click Authorize to activate`, { tone: "success" });
@@ -839,7 +850,7 @@ function MCPConnectorPanelInner() {
   const serverNeedsOAuth = (srv) =>
     srv.transport === "stdio" &&
     Array.isArray(srv.args) &&
-    srv.args.some((a) => a === "mcp-remote" || (typeof a === "string" && a.endsWith("/mcp-remote")));
+    srv.args.some(isMcpRemoteArg);
 
   /**
    * Whether a server is eligible for the control-plane OAuth 2.1 flow
@@ -898,7 +909,7 @@ function MCPConnectorPanelInner() {
   const extractMcpRemoteUrl = (args) => {
     if (!Array.isArray(args)) return null;
     for (let i = 0; i < args.length; i++) {
-      if (args[i] === "mcp-remote" || (typeof args[i] === "string" && args[i].endsWith("/mcp-remote"))) {
+      if (isMcpRemoteArg(args[i])) {
         for (let j = i + 1; j < args.length; j++) {
           if (!args[j].startsWith("-")) return args[j];
         }
