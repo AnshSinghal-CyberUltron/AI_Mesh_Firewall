@@ -2014,3 +2014,40 @@ lifespan makes multiple blocking control calls with the 5×30s budget → gatewa
 restart while control is down. Documented above; unfixed (needs a coordinated control-down verify window).
 → Because [~] frontend-polish is not unequivocally satisfiable via the prescribed tooling AND a known
 availability defect remains, the COMPLETE promise is NOT emitted (must be unequivocally true; never false).
+
+---
+
+## G73 (RESILIENCE / availability) — 2026-07-03 — startup-registration nested-retry stall FIXED
+The OPEN DEFECT above is now RESOLVED. Root cause (evidence: this session's G72 redeploy stall):
+`startup()` did `_check_version()` (inner 5×~30s budget) then an OUTER loop of 5 `_register()` attempts,
+and `_register()` ITSELF used `_http_request_with_retry`'s inner 5-attempt×~30s budget → ~25 registration
+attempts × up to 30s + the version check → when control was unhealthy at boot the lifespan blocked ~12–15
+MINUTES with every gunicorn worker at "Waiting for application startup" (gateway UNAVAILABLE though Redis
+had the policies). Registration is best-effort coordination, NOT enforcement (Redis `POLICY_SYNC` is
+authoritative), and `_background_register_loop` already retries forever with backoff once serving.
+
+**Fix (main.py, minimal + claimed):** new `STARTUP_CONTROL_CALL_TIMEOUT_SECONDS = 5.0`; `_check_version`
+and `_register` each now make a SINGLE ~5s attempt (`max_attempts=1, timeout=…`) — the caller owns
+retry/backoff, so the inner nested budget is never used; outer `max_register_attempts` 5→3. Worst-case
+boot stall when control is down: ~3×(5s)+delays ≈ ≤24s instead of ~15 min.
+**Test:** `ai_mesh_gateway/tests/test_startup_registration_failfast.py` (4): bounded timeout constant;
+`_check_version` single bounded attempt no-backoff; `_register` single attempt (no nested-retry storm);
+`_background_register_loop` still exists (the safety net).
+**Gates:** full backend suite `ai_mesh_gateway/tests` = 1613 passed / 18 skipped; golden 429 (offline).
+**LIVE PROOF (rebuilt+redeployed; rollback `ai_mesh_firewall-gateway:rollback-pre-startupfix`):**
+- control HEALTHY boot → gateway healthy in **~3s**, all workers "Registered gateway agent_id=…" (no regression).
+- control DOWN boot (stopped control, restarted gateway) → gateway healthy in **21s** (was ~15 min);
+  logs: "Gateway not registered after 3 startup attempts; starting background re-registration loop";
+  and it ENFORCES from Redis while control is down (injection POST → **HTTP 400**).
+- control restarted → **"Background re-registration succeeded: agent_id=…"** within seconds → AGENT_ID /
+  telemetry / deep-scan auto-restore. Full lifecycle proven.
+
+## COMPLETION STATUS (updated 2026-07-03, post-G73) — 6.5/7; still NOT asserting COMPLETE
+The startup-availability OPEN DEFECT is now CLOSED. The ONLY remaining gap is:
+[~] frontend polish complete — owned components revamped (R6a/R6b) + Playwright-verified honest/clean/zero
+    console errors, but the prescribed `impeccable init/audit/critique/polish` flow was never run (skill/
+    plugin not installed; OSS policy forbids installing it). Substance done; a dedicated manual design
+    critique+polish pass on ModelConnectionPanel + trace cards has NOT been performed this program.
+→ NEXT ITEM (to legitimately close [~]): do a MANUAL polish/critique pass on the two owned components
+  (impeccable unavailable → do it by hand), make targeted design improvements, re-verify via `npm run build`
+  + Playwright. Only after that is every condition unequivocally true may COMPLETE be emitted.

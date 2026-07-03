@@ -481,6 +481,18 @@ STARTUP_RETRY_MAX_ATTEMPTS = 5
 STARTUP_RETRY_BASE_DELAY_SECONDS = 2.0
 STARTUP_RETRY_MAX_DELAY_SECONDS = 30.0
 
+# Boot-time control-plane calls (version check + gateway registration) must FAIL FAST.
+# They are best-effort coordination, NOT enforcement: the gateway enforces from the Redis
+# policy cache (POLICY_SYNC) with no control plane, and a `_background_register_loop`
+# already retries registration forever with backoff once the app is serving. Previously
+# these reused the STARTUP retry budget (5 attempts x ~30s timeout) AND registration nested
+# that inside a 5-attempt outer loop (~25 attempts x 30s ≈ 12+ min), so when control was
+# unhealthy at boot the lifespan `startup()` blocked for MANY MINUTES and every worker sat
+# at "Waiting for application startup" — the gateway was unavailable even though Redis had
+# the policies. A single short-timeout attempt per call bounds boot; the background loop
+# (and enforcement) are unaffected.
+STARTUP_CONTROL_CALL_TIMEOUT_SECONDS = 5.0
+
 
 def _http_request_with_retry(
     method: str,
@@ -858,7 +870,11 @@ def _check_version():
     if not cfg or not cfg.get("backend_url"):
         return
     url = f"{cfg['backend_url']}/api/agents/version/"
-    code, body = _http_request_with_retry("GET", url, api_key=cfg.get("api_key"))
+    # Best-effort informational call — bound it so an unhealthy control plane can't stall boot.
+    code, body = _http_request_with_retry(
+        "GET", url, api_key=cfg.get("api_key"),
+        max_attempts=1, timeout=STARTUP_CONTROL_CALL_TIMEOUT_SECONDS,
+    )
     if code != 200 or not isinstance(body, dict):
         return
     min_ver = body.get("min_version") or "0"
@@ -916,7 +932,13 @@ def _register():
         or platform.node()
         or "gateway",
     }
-    code, body = _http_request_with_retry("POST", url, data=payload, api_key=cfg.get("api_key"))
+    # Single fast attempt: the caller (startup outer loop OR _background_register_loop)
+    # owns retry/backoff, so NEVER nest the inner 5x30s budget here (that was the ~12min
+    # boot stall when control was unhealthy).
+    code, body = _http_request_with_retry(
+        "POST", url, data=payload, api_key=cfg.get("api_key"),
+        max_attempts=1, timeout=STARTUP_CONTROL_CALL_TIMEOUT_SECONDS,
+    )
     if code in (200, 201) and body.get("agent_id"):
         AGENT_ID = body["agent_id"]
         LOG.info("Registered gateway agent_id=%s", AGENT_ID)
@@ -4226,7 +4248,12 @@ async def startup():
         )
         return
     await asyncio.to_thread(_check_version)
-    max_register_attempts = 5
+    # Bounded synchronous registration: each _register() is now a single ~5s attempt, and
+    # _background_register_loop() keeps retrying forever after the app is already serving.
+    # So cap the inline attempts low — worst-case boot stall when control is unhealthy is
+    # ~3x(5s+2s) instead of the old 5x5x30s nested-retry storm. Enforcement (Redis policy
+    # cache) and app readiness never wait on control-plane registration.
+    max_register_attempts = 3
     register_delay_sec = 2
     for attempt in range(1, max_register_attempts + 1):
         if await asyncio.to_thread(_register):
