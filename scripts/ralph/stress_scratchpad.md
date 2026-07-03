@@ -1401,6 +1401,25 @@
         416; +8); gateway suite 1547 pass. commit 27b45a07. REDEPLOYING (rollback pre-g69).
         TWENTY-FOUR confirmed-live leaks (G40-G46, G49-G61, G66-G69) + G62 DiD + 3 DoS (G63-G65) + G48 + 2
         tradeoffs. Split-across-turns now covered for BOTH injection (G6/G27 space-join) AND values (G69 no-sep).
+    - 🔴 G70 value split MID-TOKEN across CONTENT-PARTS in one message bypassed detection (2026-07-03):
+        The within-MESSAGE analog of G69 (which was across-TURNS). _extract_prompt_from_messages joined a
+        message's text content-parts with a SPACE (line 1215 " ".join), but the model receives text parts
+        CONCATENATED (the OpenAI API inserts NO separator between text content-parts). A value split mid-token
+        across parts (content=[{'text':'my ssn is 123-'},{'text':'45-6789'}]) is contiguous to the MODEL
+        (123-45-6789) but the firewall scanned the space-joined '123- 45-6789' -> pattern broke -> value
+        egressed UNscanned. Single message, so G69's turn-reassembly (>=2 turns) didn't fire. PROBED: ssn/
+        stripe/phone split across parts -> ALLOW. FIX (owned main.py): when a multi-part message's NO-SEPARATOR
+        text-part concatenation REVEALS a value the space-join hid (new _parts_reveal_value guard using detect_
+        pii/secret/credential), APPEND it so the scan sees what the model sees. Guarded (reveals-value AND
+        space-join didn't), so benign multi-part is UNCHANGED (folded prompt = space-join only) and the
+        injection space-join (needs word spaces) is preserved. VERIFY: ssn/stripe/phone/email split across
+        parts -> redact; benign multi-part (describe image, code, order 42/99) -> allow + folded prompt
+        unchanged; injection across parts -> still block. FROZEN a G70 test in test_bare_phone_redaction.py
+        (golden/ can't import main). GATE: golden 424×3; gateway suite 1552 pass; multimodal 250 pass. commit
+        6e9b12e2. REDEPLOYING (rollback pre-g70).
+        TWENTY-FIVE confirmed-live leaks (G40-G46, G49-G61, G66-G70) + G62 DiD + 3 DoS (G63-G65) + G48 + 2
+        tradeoffs. Value-split evasion now covered on ALL axes: across turns (G69), across content-parts (G70),
+        streaming output chunks (E14 lookahead) — the firewall's scan view matches the model's concatenated view.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
