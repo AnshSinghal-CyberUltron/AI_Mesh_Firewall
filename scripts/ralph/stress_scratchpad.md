@@ -3433,3 +3433,12 @@ evidence de-dup). Two GENUINE low-risk craft gaps found + fixed:
 `npm run build` (vite) **built in 4.67s**. Copy+CSS-only change — zero behavior/logic change (the
 normalizeStages guard, a11y aria-labels, popover positioning, and XSS-safe rendering are untouched).
 Owned file only: `frontend/src/components/simulator/StageTimeline.jsx`. Playwright render-verify follows.
+
+### R6 POLISH — Playwright render-verify — 2026-07-03
+Client-perspective verified the polished pipeline-trace card LIVE (Vite HMR, authenticated session,
+firewall-1-1 → Run Pipeline on an injection): StageTimeline rendered **9 stages** (a11y intact — first
+aria-label "Pipeline stage auth: allow, <1ms latency. Activate to pin details."); the polished copy is
+live ("View details" ✓, "Hover or tap a stage…" ✓) and the old mouse-only "Hover for details" is GONE.
+Screenshot captured + reviewed, then deleted with the rest of the Playwright artifacts (grep-scanned for
+JWT/secrets → none; the injected session token lived only in localStorage). R6 polish complete for the
+trace card: impeccable detector clean, lint 78/78, build OK, Playwright verified.
