@@ -1307,6 +1307,24 @@
         over-limit request). GATE: golden 406×3; gateway suite 1528 pass. commit 257fac73. REDEPLOYING
         (rollback gateway-rollback-pre-g64). DoS surface now fully bounded across EVERY inference/scan batch
         endpoint: chat, embeddings, moderations (G63), completions (G64).
+    - 🟠 G65 uncapped tools array = recursive-redaction CPU DoS (LLM04, 2026-07-03):
+        Continued the DoS vein into the CHAT request body. Only the messages array was count-capped
+        (MAX_MESSAGES=200); the `tools` array was UNCAPPED. Every tool def's free-text name/description is
+        folded into the scan AND, on a redact verdict, RECURSIVELY masked (_redact_tool_descriptions).
+        MEASURED: ~5.2s CPU for 100k tools (~1s for 20k, ~57ms for 1k). An attacker trivially triggers the
+        redact path (one PII value in the prompt) + a huge tools array -> seconds of CPU/request — an
+        amplification MAX_PROMPT_LENGTH does NOT bound (it caps the scanned STRING, not the per-tool redaction
+        RECURSION over the original array). FIX (owned main.py chat surface, in the same validation block as
+        the messages cap): MAX_TOOLS=256 (generous vs OpenAI ~128 practical); reject an over-limit tools array
+        with 400 too_many_tools up front. SCOPED to `tools` — the legacy `functions` alias is NOT folded/
+        redacted by the gateway (only _extract_tool_definitions_text(body['tools']) + _apply_redaction's tools
+        pass touch tools), so it's not this DoS (initially capped functions too, but the test proved it 200s —
+        removed it; don't cap what isn't processed). tool_calls-per-message redact is secondary (430ms@20k,
+        bounded by MAX_MESSAGES). VERIFY (real /v1/chat/completions via ASGI): 257-tool array -> 400
+        too_many_tools; 1-tool request -> 200. FROZEN a c4 adversarial cap test. GATE: golden 406×3; gateway
+        suite 1534 pass. commit 8381e432. REDEPLOYING (rollback gateway-rollback-pre-g65).
+        DoS surface bounded across ALL model-controlled arrays: messages (MAX_MESSAGES), tools (G65 MAX_TOOLS),
+        embeddings/moderations/completions batches (G63/G64), exfil-URL flood (G49), decode depth, ReDoS caps.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
