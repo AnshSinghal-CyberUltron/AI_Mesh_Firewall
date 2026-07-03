@@ -245,6 +245,13 @@ _MCP_MAX_RESPONSE_BYTES = int(os.environ.get("MCP_MAX_RESPONSE_BYTES", str(10 * 
 # exceeds this without a boundary is withheld (fail-closed), so an untrusted upstream
 # cannot force unbounded buffering by never closing an event.
 _MCP_SSE_EVENT_MAX_BYTES = int(os.environ.get("MCP_SSE_EVENT_MAX_BYTES", str(1 * 1024 * 1024)))
+# CHG-0104: cap the NUMBER of content blocks in a tool result. The 10MB byte cap does NOT
+# stop a many-tiny-block resource bomb (50k × ~200B = ~3-10MB, UNDER the byte cap) that
+# amplifies cost across every per-block loop (scan, JSON serialize, filter) — a real
+# CPU/mem resource limit missing alongside the byte limit. A result with more blocks is
+# withheld (fail-closed). Generous default (10k ≫ any realistic legit result, which has a
+# handful of blocks); env-tunable.
+_MCP_MAX_CONTENT_BLOCKS = int(os.environ.get("MCP_MAX_CONTENT_BLOCKS", "10000"))
 
 
 def _mcp_body_too_large(request) -> bool:
@@ -1147,6 +1154,20 @@ async def _scan_tool_result_floor(
     scanner hiccup, a silent fail-OPEN leak (BACKSTOP_FINDINGS G2 item 2).
     """
     scan_action = _effective_scan_action(tool_name, enabled_info)
+    # CHG-0104: fail CLOSED on a many-block resource bomb. The byte cap (10MB) does not
+    # stop ~50k tiny blocks (~3-10MB, under the byte cap) that amplify per-block loop cost
+    # (scan / JSON serialize / filter) and stall the event loop. A per-tool "monitor" is
+    # observe-only and does not block. Cheap O(1) length check before the expensive scan.
+    if scan_action != "monitor" and isinstance(result_content, (dict, list)):
+        _blocks = result_content.get("content") if isinstance(result_content, dict) else result_content
+        if isinstance(_blocks, list) and len(_blocks) > _MCP_MAX_CONTENT_BLOCKS:
+            LOG.warning(
+                "mcp_proxy.result_too_many_content_blocks org=%s server=%s tool=%s count=%s (FAIL-CLOSED)",
+                org_slug, server_slug, tool_name, len(_blocks),
+            )
+            return result_content, True, ["RESOURCE_LIMIT"], [], {
+                "result_too_many_content_blocks": True, "content_block_count": len(_blocks),
+            }
     try:
         scanned, blocked, tags, findings, meta = await _mcp_security_scan(
             result_content,

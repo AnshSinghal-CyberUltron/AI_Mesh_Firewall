@@ -968,6 +968,18 @@
     Gate: 4 + 1609 gateway passed 0 failed; broker 108. Pre-existing gap (chat scanner already offloads via
     run_in_executor; MCP tier1 did not). Evidence mcp-parallel/findings/backstop-p16-tier1-event-loop-block/.
     RESIDUAL: total CPU cost of a 9MB scan (~10s) unchanged — no longer blocks the loop; capping is separate.
+  - CHG-0104 (2026-07-03) — MEDIUM resource-bomb (item 16): content-block-count limit missing. The 10MB byte
+    cap does NOT stop a many-tiny-block bomb (~50k blocks x ~200B = ~3-10MB, UNDER the byte cap) that amplifies
+    per-block loop cost (JSON serialize, scan-target extraction, tool filtering) and stalled the loop ~0.8s
+    (the residual after CHG-0103; not the detect scan (offloaded) nor the split-check (a warm A/B showed
+    offloading it made no difference), but the inline many-object JSON/loop overhead). FIX (mcp_proxy.py):
+    _scan_tool_result_floor fails CLOSED when a result has > _MCP_MAX_CONTENT_BLOCKS (default 10000, env
+    MCP_MAX_CONTENT_BLOCKS) blocks — O(1) len() check BEFORE the expensive scan, so a bomb costs nothing.
+    monitor observe-only; handles {"content":[…]} + bare list. +7 tests. Behavior: 50k-block bomb -> blocked
+    dt=0.000s, loop gap 0.000s (was ~0.8s). Gate: 7 + 1620 gateway passed 0 failed; broker 108. Evidence
+    mcp-parallel/findings/backstop-p16-content-block-count-cap/. HONESTY: first tried offloading the split-check
+    (like CHG-0103) but a warm A/B showed no benefit (0.80 inline vs 0.84 offloaded) -> REVERTED, landed on the
+    block-count cap. No content leak -> no aidefence oracle.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

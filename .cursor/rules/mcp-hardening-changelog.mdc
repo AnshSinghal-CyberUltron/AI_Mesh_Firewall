@@ -1470,6 +1470,21 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `mcp-parallel/findings/backstop-p16-tier1-event-loop-block/`. RESIDUAL: total CPU cost of a 9 MB scan (~10 s)
   unchanged — it just no longer blocks the loop; capping is a separate product-level trade-off.
 
+- **CHG-0104** (2026-07-03) — **MEDIUM resource-bomb (item 16): content-block-count limit missing**. The 10 MB
+  response byte cap does NOT stop a many-tiny-block bomb — ~50k blocks × ~200 B is ~3–10 MB (UNDER the byte
+  cap) — which reaches the scan and amplifies cost across every per-block loop (JSON serialize, scan-target
+  extraction, tool filtering), stalling the event loop ~0.8 s (the residual after CHG-0103; NOT the detect
+  scan (offloaded) nor the split-check (a warm A/B showed offloading it made no difference), but the inline
+  many-object JSON/loop overhead). **FIX (`mcp_proxy.py`):** `_scan_tool_result_floor` fails CLOSED when a
+  result has more than `_MCP_MAX_CONTENT_BLOCKS` (default 10000, env `MCP_MAX_CONTENT_BLOCKS`) content blocks —
+  an O(1) `len()` check BEFORE the expensive scan, so a bomb costs nothing and never reaches the per-block
+  loops. `monitor` observe-only; handles `{"content":[…]}` + bare list. +7 tests. Behavior: a 50k-block bomb →
+  blocked in dt=0.000 s, MAX loop gap 0.000 s (was ~0.8 s). Gate: 7 + 1620 gateway passed, 0 failed; broker
+  108. touched: owning-session MCP scan core (complements CHG-0103). Evidence
+  `mcp-parallel/findings/backstop-p16-content-block-count-cap/`. HONESTY: first tried offloading the split-check
+  to a thread (like CHG-0103) but a warm A/B showed no benefit (0.80 s inline vs 0.84 s offloaded) → REVERTED
+  and landed on the block-count cap, which addresses the actual cost at O(1). No content leak → no aidefence oracle.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

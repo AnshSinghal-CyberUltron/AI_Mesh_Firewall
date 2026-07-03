@@ -610,6 +610,20 @@
       offloads via run_in_executor lines 962/973; MCP tier1 did not). Evidence mcp-parallel/findings/backstop-
       p16-tier1-event-loop-block/finding.md. RESIDUAL: total CPU of a 9MB scan (~10s) unchanged — no longer
       blocks the loop; capping/reducing is a separate product-level trade-off.
+      CHG-0104 (2026-07-03, MEDIUM resource-bomb — item 16 content-block-count limit missing): the 10MB byte
+      cap does NOT stop a many-tiny-block bomb (~50k blocks x ~200B = ~3-10MB UNDER the byte cap) that
+      amplifies per-block loop cost (JSON serialize, scan-target extraction, tool filtering) and stalled the
+      loop ~0.8s (the residual after CHG-0103). Investigation: a heartbeat probe showed the 0.8s stall was NOT
+      the detect scan (offloaded by CHG-0103) nor the cross-block split-check — a WARM A/B (disable/enable the
+      split-check offload) showed 0.80s inline vs 0.84s offloaded = NO benefit (the 4.81s isolation number was
+      cold-start pattern compilation) — so I REVERTED an attempted split-check offload and landed on the
+      block-count cap, which addresses the actual cost (many-object JSON/loop overhead) at O(1). FIX
+      (mcp_proxy.py): _scan_tool_result_floor fails CLOSED when a result has > _MCP_MAX_CONTENT_BLOCKS (default
+      10000, env MCP_MAX_CONTENT_BLOCKS) blocks — O(1) len() check BEFORE the expensive scan. monitor
+      observe-only; handles {"content":[…]} + bare list. +7 tests. Behavior: 50k-block bomb -> blocked
+      dt=0.000s, loop gap 0.000s (was ~0.8s). Gate: 7 + 1620 gateway passed 0 failed; broker 108. Evidence
+      mcp-parallel/findings/backstop-p16-content-block-count-cap/finding.md. No content leak -> no aidefence
+      oracle. RESIDUAL: a single ~9MB block still costs ~10s CPU (off the loop via CHG-0103).
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;
