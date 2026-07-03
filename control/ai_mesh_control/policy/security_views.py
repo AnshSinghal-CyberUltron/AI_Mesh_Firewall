@@ -500,39 +500,42 @@ class ThreatFeedView(APIView):
                         deduped[deduped.index(cur)] = ev
                         canon[rid] = ev
             deduped.sort(key=lambda e: e.created_at, reverse=True)
-            total_count = len(deduped)
             page_qs = deduped[offset : offset + limit]
             items = self._serialize_threat_feed_page(request, page_qs)
-            # Per-action aggregate over the FULL counted (deduped, distinct-request)
-            # set, so summary KPIs (§1.4 context-assembly stages) reflect every event,
-            # not just the limit-capped results page. A request is classified by its
-            # STRONGEST outcome across all its collapsed events (block > redact >
-            # canonical), so a redaction is not hidden when a request/monitor event is
-            # the canonical feed row — otherwise "sanitized" always read 0. Each
-            # request is counted exactly once → sum(action_counts) == count. (CP31)
-            _blocked_rids: set = set()
-            _redacted_rids: set = set()
-            for ev in scanned:
-                md = ev.metadata if isinstance(ev.metadata, dict) else {}
-                rid = md.get("request_id")
-                if not isinstance(rid, str):
-                    continue
-                a = str(getattr(ev, "action", "") or "").lower()
-                if a == "block":
-                    _blocked_rids.add(rid)
-                elif a == "redact":
-                    _redacted_rids.add(rid)
-            action_counts: dict = {}
-            for ev in deduped:
-                md = ev.metadata if isinstance(ev.metadata, dict) else {}
-                rid = md.get("request_id")
-                if isinstance(rid, str) and rid in _blocked_rids:
-                    a = "block"
-                elif isinstance(rid, str) and rid in _redacted_rids:
-                    a = "redact"
-                else:
-                    a = str(getattr(ev, "action", "") or "").lower()
-                action_counts[a] = action_counts.get(a, 0) + 1
+            # CLEANUP-16: the per-request KPI counts (§1.4 context-assembly stages)
+            # must reflect EVERY event — not just the recent _THREAT_FEED_DEDUP_SCAN_CAP
+            # window that pages the feed. Under heavy monitor traffic the older
+            # redact/block events fall OUTSIDE that window, so building the rid-sets
+            # (and total) from `scanned`/`deduped` made "sanitized" (redact) read 0 even
+            # though redactions occurred (CLEANUP-15: 244 redacts existed but the recent
+            # 4000-event window held none). Compute the block/redact request-id sets AND
+            # the distinct-request total from FULL DB queries: block+redact are few rows;
+            # the distinct total is one aggregate. A request is classified by its
+            # STRONGEST outcome (block > redact > monitor/allow), counted once, so
+            # block + redact + monitor == total_count. The feed `items` page still comes
+            # from the recent scanned window (that is just what the operator scrolls).
+            _blocked_rids = set(
+                ordered.filter(action="block")
+                .exclude(metadata__request_id__isnull=True)
+                .values_list("metadata__request_id", flat=True)
+            )
+            _redacted_rids = set(
+                ordered.filter(action="redact")
+                .exclude(metadata__request_id__isnull=True)
+                .values_list("metadata__request_id", flat=True)
+            )
+            _redacted_only = _redacted_rids - _blocked_rids
+            _distinct_rids = (
+                ordered.exclude(metadata__request_id__isnull=True)
+                .values("metadata__request_id").distinct().count()
+            )
+            _standalone = ordered.filter(metadata__request_id__isnull=True).count()
+            total_count = _distinct_rids + _standalone
+            action_counts = {
+                "block": len(_blocked_rids),
+                "redact": len(_redacted_only),
+                "monitor": max(0, total_count - len(_blocked_rids) - len(_redacted_only)),
+            }
             return Response({
                 "count": total_count,
                 "results": items,

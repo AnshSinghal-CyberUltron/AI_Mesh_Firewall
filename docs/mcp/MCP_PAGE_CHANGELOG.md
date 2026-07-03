@@ -133,3 +133,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** documents the exact cause; fix is item 16 (compute block/redact/total from full DB queries, not the 4000-capped scan).
 - **AFFECTS:** diagnosis only.
 - **VERIFY:** DB counts (MCPEvent/EnforcementEvent) + threat-feed collapse vs collapse=false action_counts.
+
+## MCP-PAGE-CLEANUP-16 — fix context-assembly "redactions = 0" (full-DB collapse counts)
+- **files:** control/ai_mesh_control/policy/security_views.py (ThreatFeedView.get collapse branch, ~503-538)
+- **WHAT:** the collapse=true threat-feed action_counts (block/redact) + total are now computed from FULL DB queries, not the recent `_THREAT_FEED_DEDUP_SCAN_CAP=4000` scan window.
+- **WHY:** under ~108k monitor events the 244 older redacts fell OUTSIDE the 4000-event window, so the §1.4-default collapse view reported redact=0 ("0 sanitized"). CLEANUP-15 root cause.
+- **NOW DOES:** distinct-request partition by STRONGEST outcome (block > redact > monitor) from full-DB rid-sets; `_redacted_only = redact_rids − block_rids`; `total = distinct request_ids + standalone(no-rid)`; `block + redact + monitor == count`. The feed `items` page still comes from the recent scanned window (that is just what the operator scrolls). Verified NO block/redact event has a NULL request_id, so nothing leaks into the monitor bucket.
+- **AFFECTS:** GET /api/security/threat-feed/?source=mcp_scan (collapse=true default); §1.4 "PII Redaction … sanitized" + "Context Fields … assembled" flow-nodes (firewall-module-utils.js:286 → firewall-submodules.jsx:137). NO frontend change — it already reads action_counts.redact.
+- **VERIFY:** item16_verify.py 11/11 — live API collapse == independent DB oracle {block:16, redact:230, monitor:107907, count:108153}; null-request_id count 0 for block+redact. item16_ui.mjs: §1.4 "PII Redaction" = 230 sanitized in BOTH themes (was 0). Django module_16 telemetry suite 9/9 OK. Section D (15-16) COMPLETE.
