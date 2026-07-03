@@ -15,11 +15,14 @@ from typing import Any
 # Resolved once at import time via the same dual-import idiom used elsewhere.
 try:  # pragma: no cover - import shim (script vs package execution)
     from patterns import redact_all as _redact_all  # type: ignore
+    from patterns import contains_smart_redaction_markers as _has_smart_masks  # type: ignore
 except ImportError:  # pragma: no cover
     try:
         from .patterns import redact_all as _redact_all  # type: ignore
+        from .patterns import contains_smart_redaction_markers as _has_smart_masks  # type: ignore
     except Exception:  # pragma: no cover
         _redact_all = None  # type: ignore
+        _has_smart_masks = lambda _t: False  # type: ignore
 
 GUARD_MODEL_LABEL = "ZeroShield Model"
 PATTERN_ENGINE_LABEL = "ZeroShield Pattern Engine"
@@ -420,6 +423,8 @@ def build_pipeline_trace(
         scan_action = "block"
     elif not is_blocked and scan_action == "block":
         scan_action = "allow"
+    is_output_only = zs.get("detection_tier") == "output_guard"
+    has_input_threat = bool(matched_patterns) or bool(threat_type)
     # Reflect INPUT-stage enforcement on the input_scan badge even when the request
     # still proceeds (redact/rewrite/flag ≠ block). Neither the scan verdict's own
     # .action nor the global final_action is reliable here: redaction is
@@ -431,15 +436,21 @@ def build_pipeline_trace(
     # (detection_tier == output_guard) leave the input untouched → must NOT colour
     # the input stage.
     if not is_blocked and scan_action in ("allow", "flag"):
-        is_output_only = zs.get("detection_tier") == "output_guard"
         # Tier-2 redacted only if the FORWARDED prompt differs from what Tier-2
         # actually received (the post-policy text) — NOT from the raw prompt. If
         # the policy stage already masked everything, forwarded == scan_input and
         # input_scan stays clean (no double-attribution of the same redaction).
         input_modified = bool(forwarded_prompt) and forwarded_prompt != scan_input_prompt
-        has_input_threat = bool(matched_patterns) or bool(threat_type)
         if input_modified and has_input_threat and not is_output_only:
             scan_action = "rewrite" if final_action == "rewrite" else "redact"
+        elif (
+            final_action == "redact"
+            and has_input_threat
+            and not is_output_only
+            and _has_smart_masks(scan_input_prompt or "")
+            and forwarded_prompt == scan_input_prompt
+        ):
+            scan_action = "redact"
         elif final_action == "flag" and has_input_threat and not is_output_only:
             scan_action = "flag"
     elif (
@@ -451,7 +462,13 @@ def build_pipeline_trace(
         # Tier-2's nominal action was redact/rewrite but it did NOT change the
         # text — the policy stage had already masked everything. Show input_scan
         # as clean instead of claiming a redaction it didn't perform.
-        scan_action = "allow"
+        # PIPELINE-0012: smart partial masks are unchanged by design — still show
+        # input_scan as redact when a threat was detected on masked shapes.
+        if not (
+            has_input_threat
+            and _has_smart_masks(scan_input_prompt or "")
+        ):
+            scan_action = "allow"
 
     def _latency(name: str, explicit: float | None = None) -> float:
         if explicit is not None:

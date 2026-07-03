@@ -2,6 +2,41 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0012 (2026-07-03)
+
+**Pre-masked smart-mask PII must REDACT-forward, not BLOCK at input_scan.**
+
+Root Cause:
+- User prompt carried policy-style partial masks (`j***@a***.com`, `***-**-6789`,
+  `***-***-5309`, `****-****-****-1111`). Policy stage ALLOW (no rules matched).
+  Input scan blocked with `obfuscated_pii` / later `pii` + B1 unmaskable.
+- **G53 false positive (PIPELINE-0011 insufficient):** `_MD_EMPH_INTERLEAVE` stripped
+  3+ asterisk smart-mask runs as markdown emphasis (`j***@a***.com` → `j@a.com`).
+  G53 then saw email in stripped text absent from raw → `obfuscated_pii` BLOCK.
+- **B1 honesty false positive:** Scanner correctly returned `redact`, but
+  `redact_all` is a no-op on already-masked bytes → `_redaction_noop` fail-closed
+  BLOCK as "unmaskable".
+- **Enforcement downgrade:** When org `scan_block_on_pii=false`, `resolve_and_enforce`
+  downgraded scanner `redact` → `allow` even though smart-mask shapes were present.
+
+Fix:
+- `patterns.py`: smart-mask PII patterns (`email_smart_masked`, `ssn_smart_masked`,
+  `phone_smart_masked`, `card_smart_masked`) with identity maskers; cap emphasis strip
+  to `{1,2}` markers; `contains_smart_redaction_markers()` +
+  `smart_mask_redaction_noop_is_expected()`.
+- `scanner.py`: G53 skips obfuscated block when smart masks present and raw has no PII.
+- `main.py`: B1 noop guard exempts smart-mask prompts; force PII redact eligibility
+  when smart-mask shapes present.
+- `pipeline_trace.py`: input_scan stage shows `redact` when final_action=redact on
+  smart-mask no-op (bytes unchanged by design).
+
+Verification:
+- 7 new tests (`test_pipeline_obfuscation_fp.py` + `test_pipeline_pre_masked_redact.py`).
+- LIVE curl: `input_scan` enforcement REDACT, masked prompt forwarded to model (not 403).
+- Gate: 2009 gateway tests passed.
+
+Evidence: `mcp-parallel/findings/pipeline-p12-live-proof.json`
+
 ## PIPELINE-0011 (2026-07-03)
 
 **Tier-1 false positive fixed (L3): plain-text PII no longer classified as

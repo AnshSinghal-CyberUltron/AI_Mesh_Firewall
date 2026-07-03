@@ -78,6 +78,12 @@
  interleaved credential wrongly filtered OUT. FIX: use _*_core variants (no canon) for the
  plain-text filter in scanner.py (G33+G53) + mcp_scan_orchestrator.py (G76). 17 new tests
  in test_pipeline_obfuscation_fp.py. Gate: 17 targeted + 2000 full suite passed.
+ - PIPELINE-0012 (2026-07-03) — PRE-MASKED SMART-MASK PII REDACTS (not block): G53 stripped `***`
+ from partial masks (j***@a***.com→j@a.com) → false obfuscated_pii BLOCK; B1 noop guard blocked
+ already-masked bytes; scan_block_on_pii=false downgraded redact→allow. FIX: smart-mask PII
+ patterns, {1,2} emphasis cap, G53 skip, B1 noop exemption, redact eligibility + pipeline_trace
+ input_scan=redact on intentional noop. LIVE input_scan REDACT + masked prompt forwarded. 7 new
+ tests. Gate: 2009 full suite. Evidence: mcp-parallel/findings/pipeline-p12-live-proof.json.
 
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is

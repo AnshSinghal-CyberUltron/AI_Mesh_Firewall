@@ -6646,6 +6646,16 @@ async def proxy_chat(
             if check_resp.get("matched_rules") or check_resp.get("matched_policy_names") or check_resp.get("matched_policies"):
                 _org_policy_action = check_resp.get("action") or None
 
+            try:
+                from patterns import contains_smart_redaction_markers as _has_smart_masks
+            except ImportError:
+                from .patterns import contains_smart_redaction_markers as _has_smart_masks
+            _pii_detection_enabled = bool(org_config.get("scan_block_on_pii", True))
+            # PIPELINE-0012: smart partial masks are already redacted bytes — still
+            # attribute input-stage REDACT (never allow/downgrade to block).
+            if _has_smart_masks(scan_text):
+                _pii_detection_enabled = True
+
             _input_decision = _resolve_and_enforce(
                 scanner_recommendation=_guard_rec,
                 scanner_action=verdict.action,
@@ -6661,7 +6671,7 @@ async def proxy_chat(
                 tier2_degraded=_is_tier2_degraded_verdict(verdict),
                 tier1_pii_detected=_degraded_pii_detected,
                 redaction_possible=True,
-                pii_detection_enabled=bool(org_config.get("scan_block_on_pii", True)),
+                pii_detection_enabled=_pii_detection_enabled,
                 scan_block_on_injection=org_config.get("scan_block_on_injection", True),
                 injection_threshold=org_config.get("prompt_injection_threshold", 0.80),
             )
@@ -6738,7 +6748,7 @@ async def proxy_chat(
 
             # The canonical decision already evaluated pii_detection_enabled;
             # _input_decision.is_redact is True iff the threat is redactable.
-            pii_detection_enabled = bool(org_config.get("scan_block_on_pii", True))
+            pii_detection_enabled = _pii_detection_enabled
             _redact_threat = (
                 verdict.threat_type == "secret"
                 or (pii_detection_enabled and _is_redactable_pii_threat(verdict.threat_type))
@@ -6801,6 +6811,12 @@ async def proxy_chat(
                 except ImportError:  # pragma: no cover - packaging fallback
                     from .llm_router import _redact_text_with_backstop as _egress_backstop
                 _redaction_noop = _egress_backstop(prompt, effective_prompt) == prompt
+                try:
+                    from patterns import smart_mask_redaction_noop_is_expected as _smart_noop_ok
+                except ImportError:
+                    from .patterns import smart_mask_redaction_noop_is_expected as _smart_noop_ok
+                if _redaction_noop and _smart_noop_ok(prompt, verdict.matched_patterns):
+                    _redaction_noop = False
                 _noop_decision = _resolve_and_enforce(
                     scanner_recommendation=_guard_rec,
                     scanner_action=verdict.action,

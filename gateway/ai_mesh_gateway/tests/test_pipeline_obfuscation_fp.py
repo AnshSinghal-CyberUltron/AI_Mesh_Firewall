@@ -180,3 +180,29 @@ _BENIGN_NO_PII = [
 @pytest.mark.parametrize("payload", _BENIGN_NO_PII)
 def test_benign_markdown_still_allowed(payload):
     assert _verdict(payload) == "allow", f"benign markdown wrongly actioned: {payload[:40]!r}"
+
+
+# ── C: ALREADY smart-masked PII → redact, NOT obfuscated-block (PIPELINE-0012) ──
+
+_PRE_MASKED_USER_RECORD = (
+    "Please process this user record: SSN ***-**-6789, email j***@a***.com, "
+    "phone ***-***-5309, credit card ****-****-****-1111."
+)
+
+
+def test_pre_masked_user_record_is_redacted_not_blocked():
+    """Smart-mask shapes must redact (already masked), never obfuscated_pii block."""
+    action = _verdict(_PRE_MASKED_USER_RECORD)
+    assert action == "redact", f"expected redact for pre-masked record, got {action!r}"
+
+
+def test_pre_masked_user_record_not_obfuscated_threat():
+    tt = _threat(_PRE_MASKED_USER_RECORD)
+    assert tt == "pii", f"expected threat_type='pii', got {tt!r}"
+
+
+def test_strip_emphasis_does_not_reconstruct_smart_mask_email():
+    raw = "email j***@a***.com here"
+    stripped = patterns.strip_interleaved_emphasis(raw)
+    assert stripped == raw, "smart-mask email must survive emphasis strip unchanged"
+    assert detect_pii(raw), "smart-mask email must be detectable as PII"

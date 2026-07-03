@@ -1415,6 +1415,15 @@ class InputScanner:
                     _s_cred = {k: v for k, v in _s_cred.items() if k not in _raw_crd}
                     if not (_s_pii or _s_secret or _s_cred):
                         continue
+                    # PIPELINE-0012: smart partial masks (j***@a***.com, ***-**-6789)
+                    # use 3+ asterisks as masking, not markdown emphasis. Even with the
+                    # {1,2}-marker cap, a residual strip can reconstruct a weak email
+                    # from mask bytes — never block already-redacted smart-mask shapes.
+                    from patterns import contains_smart_redaction_markers
+                    if contains_smart_redaction_markers(_msrc) and not (
+                        _raw_pii or _raw_sec or _raw_crd
+                    ):
+                        continue
                     _skinds = list(_s_pii.keys()) + list(_s_secret.keys()) + list(_s_cred.keys())
                     return ScanVerdict(
                         action="block",
