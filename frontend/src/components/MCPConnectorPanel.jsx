@@ -291,8 +291,11 @@ function StatCard({ icon: Icon, label, value, sub, tone = "slate" }) {
     blue: "text-blue-600 dark:text-blue-400",
   };
   return (
-    <Card className="shadow-none">
-      <CardContent className="flex items-center gap-3 p-4">
+    // CLEANUP-11: h-full so every stat card fills its grid cell → equal heights;
+    // items-start top-aligns the value/label across cards so the big numbers line up
+    // regardless of label length.
+    <Card className="shadow-none h-full">
+      <CardContent className="flex items-start gap-3 p-4">
         {Icon ? (
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700/60 ${toneStyles[tone]}`}>
             <Icon className="h-5 w-5" aria-hidden="true" />
@@ -300,8 +303,10 @@ function StatCard({ icon: Icon, label, value, sub, tone = "slate" }) {
         ) : null}
         <div className="min-w-0">
           <p className="text-lg font-semibold leading-tight text-slate-900 dark:text-white tabular-nums">{value}</p>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{label}</p>
-          {sub ? <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{sub}</p> : null}
+          {/* CLEANUP-11: wrap (leading-tight) instead of truncate — a label like
+              "Servers connected" must never clip mid-word ("Servers connec…"). */}
+          <p className="text-[11px] leading-tight text-slate-500 dark:text-slate-400">{label}</p>
+          {sub ? <p className="text-[10px] leading-tight text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p> : null}
         </div>
       </CardContent>
     </Card>

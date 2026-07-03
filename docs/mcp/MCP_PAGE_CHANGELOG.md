@@ -94,3 +94,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** documents the layout state — detector clean (0 anti-patterns), responsive (no overflow at 4 widths/2 themes, cards stack at 375), cards equal-height + aligned. Finding: stat-card secondary labels truncate mid-word at 1440; minor spacing variance.
 - **AFFECTS:** documentation only. Backlog feeds items 11–14.
 - **VERIFY:** detect.mjs exit 0; item-09 Playwright sweep noOverflow:true; read rendered PNGs (light-1440, dark-375). Report: docs/mcp/IMPECCABLE_AUDIT_cleanup_1-4.md.
+
+## MCP-PAGE-CLEANUP-11 — stat-card truncation + equal-height alignment fix
+- **files:** frontend/src/components/MCPConnectorPanel.jsx (StatCard)
+- **WHAT:** stat-card labels no longer clip mid-word; cards are equal-height with values top-aligned.
+- **WHY:** the audit (item 10) found "Servers connected"→"Servers connec…" and "244 redact · 0 monitor"→"…0 m…" clipping (truncate); items-center misaligned values across cards of different label lengths.
+- **NOW DOES:** label/sub use leading-tight (wrap, no clip); CardContent items-start (values line up across cards); Card h-full → fills the stretch grid cell → equal heights.
+- **AFFECTS:** the 6-card stat grid at the top of the 1.4 page.
+- **VERIFY:** build green; LIVE Playwright (both themes @1440+375) 0 console errors / no overflow; read light-1440 PNG → labels wrap (no clip), 6 cards equal-height, values top-aligned.
