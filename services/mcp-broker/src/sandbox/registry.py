@@ -73,3 +73,20 @@ class SandboxRegistry:
                 for entry in self._entries.values()
                 if current - entry.last_activity > idle_timeout
             ]
+
+    def is_idle(self, org_slug: str, idle_timeout: float, *, now: float | None = None) -> bool:
+        """True iff the entry still exists AND remains idle > ``idle_timeout`` at ``now``.
+
+        CHG-0127: the reaper RE-CHECKS this (locked) immediately before stopping each
+        sandbox. ``idle_entries`` snapshots the idle set once, then the reaper stops
+        entries one-by-one, each ``await``ing — during those awaits a concurrent
+        request can ``touch()`` a sandbox (reactivating it). Without this re-check the
+        reaper would stop the now-active sandbox based on the stale snapshot and drop
+        its in-flight call. Passing ``now=None`` reads a FRESH clock at re-check time so
+        a touch that landed after the snapshot is seen."""
+        current = self._clock() if now is None else now
+        with self._lock:
+            entry = self._entries.get(org_slug)
+            if entry is None:
+                return False
+            return current - entry.last_activity > idle_timeout

@@ -43,6 +43,15 @@ async def reap_idle_sandboxes(
         # abort the whole sweep (or kill the reaper) — item #24. Keep the entry so
         # the next sweep retries it.
         try:
+            # CHG-0127: RE-CHECK idleness right before stopping. idle_entries snapshots
+            # the set once; each per-entry stop below awaits, so a request that arrives
+            # mid-sweep and touch()es this sandbox would otherwise be killed on a stale
+            # snapshot (dropping its in-flight call). Skip any sandbox reactivated since.
+            if not registry.is_idle(entry.org_slug, cfg.idle_timeout, now=now):
+                LOG.info(
+                    "Reaper skip: org=%s reactivated since sweep snapshot", entry.org_slug
+                )
+                continue
             LOG.info("Reaping idle sandbox for org=%s", entry.org_slug)
             await asyncio.to_thread(docker_manager.stop, entry.org_slug)
             registry.remove(entry.org_slug)

@@ -1481,3 +1481,11 @@
 - **Fix:** `_extract_package_specs` (plural) handles `--flag value` + `--flag=value` for --from/--with/--package/-p + multiple flags; bare positional taken as package ONLY when no package flag supplied one (else it's the command npx runs). Enforcement loops over EVERY spec; thin `_extract_package_spec` wrapper preserves the helper API. Applied to BOTH adapters for parity.
 - **Gate:** agent test_stdio_manager_packages 41 passed / full agent suite 75 passed; gateway test_mcp_stdio_adapter_package_gating 7 passed / full gateway 1794 passed 0 failed.
 - **Evidence:** mcp-parallel/findings/backstop-p-stdio-package-allowlist-bypass/finding.md. Controls OFF by default (opt-in). Promise WITHHELD (G5 stress items 14-19 host-blocked).
+
+---
+## CHG-0127 (2026-07-03) — reaper TOCTOU: idle sandbox reactivated mid-sweep was still reaped (item 10/16 reaper correctness)
+
+- **Gap:** reap_idle_sandboxes (services/mcp-broker/src/sandbox/reaper.py) snapshotted idle_entries once, then stopped entries one-by-one with `await asyncio.to_thread(docker_manager.stop, ...)`. Each await yields; a concurrent request via _forward_sandbox_rpc touch_activity->registry.touch reactivates a sandbox mid-sweep, but the reaper stopped it on the STALE snapshot + removed it -> in-flight call forwarded to a stopping container -> dropped call + re-provision. Real intermittent failure under soak/peak concurrency (stress items 15/16/18).
+- **Fix:** new locked SandboxRegistry.is_idle(org, idle_timeout, now=None); reaper RE-CHECKS is_idle right before stopping each entry, SKIPS any reactivated since the snapshot (now=None reads a fresh clock so a post-snapshot touch is seen). Collapses the race window from whole-sweep to a single stop.
+- **Gate:** broker test_sandbox_reaper.py 12 passed (test_reaper_skips_sandbox_reactivated_mid_sweep drives the real race + is_idle unit); full broker -k "not websocket" 160 passed.
+- **Honesty:** residual micro-window between the re-check and the stop call remains (rarer; would need a reaping-state flag + re-provision-on-conflict). Evidence mcp-parallel/findings/backstop-p-reaper-toctou-reactivated-sandbox/finding.md. Promise WITHHELD (G5 live stress items 14-19 host-blocked).

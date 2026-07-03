@@ -78,6 +78,15 @@ def test_registry_idle_entries(clock: MockClock, registry: SandboxRegistry):
     assert [entry.org_slug for entry in idle] == ["stale"]
 
 
+def test_registry_is_idle_recheck(clock: MockClock, registry: SandboxRegistry):
+    # CHG-0127: the reaper's re-check primitive.
+    registry.register("stale", "c1", "http://1:9320", last_activity=clock() - 700)
+    assert registry.is_idle("stale", 600, now=clock()) is True
+    registry.touch("stale", last_activity=clock())          # reactivated
+    assert registry.is_idle("stale", 600, now=clock()) is False
+    assert registry.is_idle("nonexistent", 600, now=clock()) is False  # gone → not idle
+
+
 @pytest.mark.asyncio
 async def test_reaper_stops_idle_container(manager: DockerManager, registry: SandboxRegistry, clock: MockClock):
     running = MagicMock()
@@ -215,6 +224,37 @@ async def test_reaper_survives_stop_error(
 
     assert stopped == []  # stop failed → not counted
     assert registry.get("acme") is not None  # entry kept for the next sweep
+
+
+@pytest.mark.asyncio
+async def test_reaper_skips_sandbox_reactivated_mid_sweep(
+    manager: DockerManager, registry: SandboxRegistry, clock: MockClock
+):
+    # CHG-0127: idle_entries snapshots [a, b] as idle; while the reaper is stopping
+    # "a" (an await), a concurrent request touch()es "b" (reactivating it). The reaper
+    # must RE-CHECK and NOT reap "b" — reaping it would drop b's in-flight tool call.
+    registry.register("a", "cid-a", "http://1:9320", last_activity=clock() - 700)
+    registry.register("b", "cid-b", "http://2:9320", last_activity=clock() - 700)
+
+    def _stop(org: str) -> None:
+        if org == "a":
+            # a request for "b" arrives during a's stop await → b is now active.
+            registry.touch("b", last_activity=clock())
+
+    manager.stop = MagicMock(side_effect=_stop)
+
+    stopped = await reap_idle_sandboxes(
+        registry,
+        manager,
+        config=ReaperConfig(idle_timeout=600, interval_seconds=1),
+        now=clock(),
+    )
+
+    assert stopped == ["a"]                         # a reaped
+    assert registry.get("a") is None
+    assert registry.get("b") is not None            # b NOT reaped (reactivated)
+    # stop() was invoked for "a" only — never for the reactivated "b".
+    assert [c.args[0] for c in manager.stop.call_args_list] == ["a"]
 
 
 def test_reaper_config_from_env(monkeypatch: pytest.MonkeyPatch):
