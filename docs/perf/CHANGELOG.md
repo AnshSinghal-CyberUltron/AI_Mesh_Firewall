@@ -7,6 +7,34 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0006 — Postgres max_connections budget: 400 confirmed sufficient (no restart)
+- **Date:** 2026-07-03
+- **Files:** `scripts/perf/pg_budget.py` (new helper). **No docker-compose / Postgres
+  change — max_connections stays 400, no restart.**
+- **What:** Item 15 = "max_connections = workers × db-threads + margin (raise OR
+  pgbouncer)". **Measured** the real connection model instead of the detector's
+  worst-case: control's Django sync views serialize on the thread-sensitive
+  executor, so a worker holds **~2.5 DB connections** (15 conns for 6 workers), not
+  the `asgi_threads`-based ceiling. `pg_budget.py` derives the stack recommendation
+  from the detector (`workers*(control_per_worker + vault_pool) + celery + ops`):
+  | profile | recommended | vs current 400 |
+  |---------|-------------|----------------|
+  | 6c/16G  | 107 | ✓ headroom 293 |
+  | 12c/60G | 185 | ✓ headroom 215 |
+  | 16c host | 257 | ✓ headroom 143 |
+  | 32c/120G | 449 | ✗ (raise / add pgbouncer) |
+  Live Postgres is at **16/400** in use. `CONN_MAX_AGE=60` (env `POSTGRES_CONN_MAX_AGE`)
+  is sane.
+- **AFFECTS:** nothing running — this is an analysis + a derivable helper. The
+  earlier worker-count changes (PERF-0001/0002) do **not** risk Postgres exhaustion
+  on any target profile.
+- **ACTION FOR OTHERS:** none required — `max_connections=400` is confirmed
+  sufficient through ~24 cores. For a bigger box, set
+  `POSTGRES_MAX_CONNECTIONS=$(python3 scripts/perf/pg_budget.py | jq
+  .recommended_max_connections)` before `docker compose up` (that DOES restart
+  Postgres), or add pgbouncer. Do **not** raise it speculatively — every connection
+  costs ~10 MB RAM.
+
 ## PERF-0005 — Gateway scanner/bedrock/vault pools sized from the detector
 - **Date:** 2026-07-03
 - **Files:** `shared/ai_mesh_shared/resource_budget.py` (+`scanner_pool`/`bedrock_pool`

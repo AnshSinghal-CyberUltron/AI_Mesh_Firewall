@@ -81,7 +81,11 @@
       ~975x difference. Proves the gateway's offload keeps the loop free. P4 COMPLETE. Test tool only, no stack change.
 
 ## P5 — Scale the data layer  [STACK-CHANGE → log to 4 memories]
-- [ ] 15. Postgres max_connections = workers × db-threads + margin (raise OR add pgbouncer); sane CONN_MAX_AGE.
+- [x] 15. Postgres max_connections = workers × db-threads + margin (raise OR add pgbouncer); sane CONN_MAX_AGE.
+      → MEASURED control ~2.5 DB conns/worker (sync-view serialization, not asgi_threads worst-case). scripts/perf/pg_budget.py
+      derives stack rec from detector: 6c→107, 12c→185, 16c→257 — all < deployed 400 (live 16/400). CONN_MAX_AGE=60 sane.
+      400 CONFIRMED SUFFICIENT ≤~24c → NO Postgres restart (evidence wins). 32c→449 = raise/pgbouncer threshold.
+      PERF-0006 logged to 4 memories (informational; no stack change). No disruptive restart of the shared DB.
 - [ ] 16. Scale Redis/cache + Vault pools to worker count.
 - [ ] 17. Verify no connection starvation at peak.
 
