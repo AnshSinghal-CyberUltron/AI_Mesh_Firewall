@@ -369,3 +369,67 @@ export function resolveRoutingDecision(sources = {}) {
     guard_reason: stage?.guard_reason || "",
   };
 }
+
+/** PIPELINE-0022: trace-root redacted-safe input/output for operator Input/Output panels. */
+export function resolvePipelineInputOutput(sources = {}) {
+  const meta = sources.meta || {};
+  const extra = meta.extra || {};
+  const trace = resolvePipelineTrace({ ...sources, meta, extra });
+  const finalAction = String(
+    trace?.final_action || extractFinalAction(sources, sources.fallbackAction || "allow"),
+  ).toLowerCase();
+
+  const inputText = trace?.input_text
+    || trace?.prompt_preview
+    || meta?.input_text
+    || extra?.input_text
+    || meta?.prompt_submitted
+    || meta?.prompt_snippet
+    || extra?.prompt_submitted
+    || extra?.prompt_snippet
+    || sources.promptText
+    || "";
+
+  const promptSubmitted = trace?.prompt_submitted
+    || meta?.prompt_submitted
+    || extra?.prompt_submitted
+    || inputText;
+
+  const outputWithheld = Boolean(trace?.output_withheld)
+    || (finalAction === "block" && !(trace?.output_text || trace?.final_response));
+
+  const outputWithheldReason = trace?.output_withheld_reason
+    || (outputWithheld ? "[Response blocked — not delivered to client]" : "");
+
+  const outputText = outputWithheld
+    ? outputWithheldReason
+    : (trace?.output_text
+      ?? trace?.final_response
+      ?? meta?.output_text
+      ?? extra?.output_text
+      ?? meta?.sanitized_output
+      ?? meta?.response_snippet
+      ?? extra?.sanitized_output
+      ?? extra?.response_snippet
+      ?? sources.responseText
+      ?? "");
+
+  const inputWasRedacted = Boolean(trace?.input_was_redacted)
+    || (promptSubmitted && inputText && promptSubmitted !== inputText);
+
+  const inputBefore = trace?.input_text_before || (inputWasRedacted ? inputText : "");
+  const inputAfter = trace?.input_text_after || (inputWasRedacted ? promptSubmitted : "");
+
+  return {
+    inputText,
+    promptSubmitted,
+    outputText,
+    outputWithheld,
+    outputWithheldReason,
+    inputWasRedacted,
+    inputBefore,
+    inputAfter,
+    finalAction,
+    fromTrace: Boolean(trace?.input_text || trace?.output_text != null),
+  };
+}

@@ -1345,12 +1345,48 @@ def build_pipeline_trace(
     elif is_blocked and blocked_stage == "output_guardrail":
         guard_summary = output_guard
 
+    fa = str(final_action or "allow").lower()
+    out_raw = zs.get("redacted_response") or zs.get("rewritten_response") or response_text or ""
+    output_withheld = False
+    output_withheld_reason = ""
+    if _model_skipped or (is_blocked and blocked_stage in _UPSTREAM_OF_MODEL):
+        _bl = (blocked_stage or "policy").replace("_", " ")
+        output_withheld = True
+        output_withheld_reason = f"Response withheld — request blocked at {_bl}"
+        output_text = ""
+    elif is_blocked and blocked_stage == "output_guardrail":
+        output_withheld = True
+        output_withheld_reason = "Response withheld — output guard blocked delivery to client"
+        output_text = ""
+    else:
+        output_text = _truncate(out_raw, 2000) if out_raw else ""
+
+    input_was_redacted = bool(
+        policy_redacted
+        or (
+            forwarded_preview
+            and prompt_preview
+            and forwarded_preview != prompt_preview
+        )
+    )
+
     trace_out: dict[str, Any] = {
         "stages": stages,
         "total_latency_ms": total,
         "stage_latency_sum_ms": stage_sum,
         "overhead_ms": overhead,
+        "final_action": fa,
         "prompt_preview": prompt_preview,
+        # PIPELINE-0022: trace-root redacted-safe I/O for operator Input/Output panels.
+        "input_text": prompt_preview,
+        "prompt_submitted": forwarded_preview,
+        "output_text": output_text,
+        "final_response": output_text,
+        "output_withheld": output_withheld,
+        "output_withheld_reason": output_withheld_reason if output_withheld else "",
+        "input_was_redacted": input_was_redacted,
+        "input_text_before": prompt_preview if input_was_redacted else "",
+        "input_text_after": forwarded_preview if input_was_redacted else "",
         "guard_summary": guard_summary,
         "requested_model": requested,
         "routed_model": selected,

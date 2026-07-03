@@ -9039,16 +9039,34 @@ async def proxy_chat(
         if _prompt_snippet:
             _tel_md["prompt_snippet"] = _prompt_snippet[:2000]
             if isinstance(_pt_for_tel, dict):
+                _tel_md["input_text"] = (
+                    _pt_for_tel.get("input_text")
+                    or _pt_for_tel.get("prompt_preview")
+                    or _prompt_snippet[:2000]
+                )
                 _tel_md["prompt_submitted"] = (
                     _pt_for_tel.get("prompt_submitted")
                     or _pt_for_tel.get("forwarded_prompt")
                     or _prompt_snippet[:2000]
                 )
             else:
+                _tel_md["input_text"] = _prompt_snippet[:2000]
                 _tel_md["prompt_submitted"] = _prompt_snippet[:2000]
-        if response_text:
+        if isinstance(_pt_for_tel, dict):
+            _out_tel = _pt_for_tel.get("output_text") or _pt_for_tel.get("final_response")
+            if _out_tel is not None:
+                _tel_md["output_text"] = _out_tel
+                _tel_md["sanitized_output"] = _out_tel
+                _tel_md["response_snippet"] = _out_tel
+            elif _pt_for_tel.get("output_withheld"):
+                _reason = _pt_for_tel.get("output_withheld_reason") or "[BLOCKED]"
+                _tel_md["output_text"] = ""
+                _tel_md["sanitized_output"] = _reason
+                _tel_md["response_snippet"] = _reason
+        if response_text and "sanitized_output" not in _tel_md:
             _tel_md["response_snippet"] = (response_text or "")[:2000]
             _tel_md["sanitized_output"] = (response_text or "")[:2000]
+            _tel_md["output_text"] = (response_text or "")[:2000]
         _emit_telemetry(
             event_type="request",
             model=body.get("model", ""),

@@ -2,6 +2,30 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0022 (2026-07-03)
+
+**Trace-root input/output transparency (P6 item 22).**
+
+Root Cause:
+- Per-stage `prompt_in`/`prompt_out` existed (PIPELINE-0020) but operators had no
+  trace-level view of what entered vs what exited; LogDetailPage Input/Output read
+  only metadata snippets, not `pipeline_trace` root fields.
+- Blocked events showed no explicit withheld-output reason; redact events did not
+  surface before/after input at the trace root.
+
+Fix:
+- `pipeline_trace.py`: trace root adds `final_action`, `input_text`, `prompt_submitted`,
+  `output_text`/`final_response`, `output_withheld` + `output_withheld_reason`,
+  `input_was_redacted`, `input_text_before`/`input_text_after` (all redacted-safe via
+  `_truncate`/`redact_all`).
+- `main.py`: telemetry threads `input_text`/`output_text` from trace into metadata.
+- Frontend: `resolvePipelineInputOutput()` + LogDetailPage dedicated Input/Output panels
+  (blocked → withheld banner; redact → before/after panels).
+
+Verification:
+- `test_pipeline_trace_input_output.py` (+4), `pipelineTrace.test.js` (+2);
+  `pipeline_p22_input_output_verify.mjs` on blocked + redact events; gateway + lint/build green.
+
 ## PIPELINE-0021 (2026-07-03)
 
 **Routing decision transparency on pipeline trace (P6 item 21).**

@@ -14,6 +14,7 @@ import {
   formatRouteDestination,
   resolveLatencyBreakdown,
   resolveRoutingDecision,
+  resolvePipelineInputOutput,
   resolveTotalLatencyMs,
   resolveTtftMs,
 } from "../utils/pipelineTrace";
@@ -203,6 +204,17 @@ export function LogDetailPage({ logData, onBack }) {
   const routingDecision = useMemo(
     () => resolveRoutingDecision({ pipelineTrace, meta: normalized.meta }),
     [pipelineTrace, normalized.meta],
+  );
+  const pipelineIO = useMemo(
+    () => resolvePipelineInputOutput({
+      pipelineTrace,
+      meta: normalized.meta,
+      extra: normalized.meta?.extra,
+      promptText,
+      responseText,
+      fallbackAction: action,
+    }),
+    [pipelineTrace, normalized.meta, promptText, responseText, action],
   );
 
   const handleCopy = async (text, field) => {
@@ -479,17 +491,55 @@ export function LogDetailPage({ logData, onBack }) {
           )}
         </CollapsibleSection>
 
-        {/* Input / Output content. */}
+        {/* Input / Output content — PIPELINE-0022 trace-root redacted-safe I/O. */}
         <CollapsibleSection
           title="Input / Output"
           icon={Server}
           isExpanded={expandedSections.content}
           onToggle={() => toggleSection("content")}
         >
-          {(promptText || responseText) ? (
+          {(pipelineIO.inputText || pipelineIO.outputText || pipelineIO.outputWithheld) ? (
             <div className="space-y-4">
-              <ContentBlock label="Input (prompt)" text={promptText} onCopy={() => handleCopy(promptText, "Prompt")} copied={copiedField === "Prompt"} />
-              <ContentBlock label="Output (response)" text={responseText} onCopy={() => handleCopy(responseText, "Response")} copied={copiedField === "Response"} />
+              {pipelineIO.inputWasRedacted ? (
+                <>
+                  <ContentBlock
+                    label="Input (before redaction)"
+                    text={pipelineIO.inputBefore}
+                    onCopy={() => handleCopy(pipelineIO.inputBefore, "InputBefore")}
+                    copied={copiedField === "InputBefore"}
+                  />
+                  <ContentBlock
+                    label="Input (forwarded to model)"
+                    text={pipelineIO.inputAfter}
+                    onCopy={() => handleCopy(pipelineIO.inputAfter, "InputAfter")}
+                    copied={copiedField === "InputAfter"}
+                  />
+                </>
+              ) : (
+                <ContentBlock
+                  label="Input (prompt)"
+                  text={pipelineIO.inputText}
+                  onCopy={() => handleCopy(pipelineIO.inputText, "Prompt")}
+                  copied={copiedField === "Prompt"}
+                />
+              )}
+              {pipelineIO.outputWithheld ? (
+                <div>
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                    Output (response)
+                  </span>
+                  <p className="mt-1 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-800 dark:text-red-200">
+                    {pipelineIO.outputWithheldReason || "[Response withheld — not delivered to client]"}
+                  </p>
+                </div>
+              ) : (
+                <ContentBlock
+                  label="Output (response)"
+                  text={pipelineIO.outputText}
+                  onCopy={() => handleCopy(pipelineIO.outputText, "Response")}
+                  copied={copiedField === "Response"}
+                />
+              )}
             </div>
           ) : (
             <p className="text-sm text-slate-500 dark:text-slate-400">

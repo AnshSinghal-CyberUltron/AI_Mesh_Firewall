@@ -16,6 +16,7 @@ import {
   resolveLatencyHints,
   formatDominantStageLabel,
   resolveRoutingDecision,
+  resolvePipelineInputOutput,
 } from "./pipelineTrace.js";
 
 // Robustness: the trace card (StageTimeline) renders `stage.action` per element, so a
@@ -258,4 +259,41 @@ test("resolveRoutingDecision merges trace root and model_routing stage (PIPELINE
   assert.deepEqual(routing.weights, { latency: 0.4 });
   assert.equal(routing.routing_score, 0.9);
   assert.equal(routing.candidate_count, 2);
+});
+
+test("resolvePipelineInputOutput blocked shows withheld output (PIPELINE-0022)", () => {
+  const io = resolvePipelineInputOutput({
+    pipelineTrace: {
+      final_action: "block",
+      input_text: "my ssn ***-**-6789",
+      prompt_submitted: "my ssn ***-**-6789",
+      output_text: "",
+      output_withheld: true,
+      output_withheld_reason: "Response withheld — request blocked at input scan",
+    },
+  });
+  assert.equal(io.inputText, "my ssn ***-**-6789");
+  assert.equal(io.outputWithheld, true);
+  assert.match(io.outputText, /withheld/i);
+  assert.equal(io.inputWasRedacted, false);
+});
+
+test("resolvePipelineInputOutput redact shows before/after (PIPELINE-0022)", () => {
+  const io = resolvePipelineInputOutput({
+    pipelineTrace: {
+      final_action: "redact",
+      input_text: "email user@example.com",
+      prompt_submitted: "email u***@example.com",
+      input_was_redacted: true,
+      input_text_before: "email user@example.com",
+      input_text_after: "email u***@example.com",
+      output_text: "ok",
+      output_withheld: false,
+    },
+  });
+  assert.equal(io.inputWasRedacted, true);
+  assert.equal(io.inputBefore, "email user@example.com");
+  assert.equal(io.inputAfter, "email u***@example.com");
+  assert.equal(io.outputText, "ok");
+  assert.equal(io.outputWithheld, false);
 });

@@ -109,6 +109,12 @@
   candidate_count; adjudicator metadata wired from main.py; LogDetailPage RoutingDecisionCard +
   StageTimeline routing fields; resolveRoutingDecision FE helper. +3 GW + 1 FE tests. Gate: 2067
   GW + lint/build green.
+ - PIPELINE-0022 (2026-07-03) — TRACE-ROOT INPUT/OUTPUT (P6-22): pipeline_trace root adds
+  final_action, input_text, prompt_submitted, output_text/final_response, output_withheld +
+  output_withheld_reason, input_was_redacted + input_text_before/after (redacted-safe);
+  main.py telemetry threads input_text/output_text; LogDetailPage Input/Output panels via
+  resolvePipelineInputOutput (blocked withheld banner; redact before/after). +4 GW + 2 FE tests;
+  pipeline_p22_input_output_verify.mjs. Gate: gateway + lint/build green.
 - PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
  (dominant stage/share, by_stage, hints[]) via build_latency_breakdown+attach_latency_breakdown;
  stream frame recomputes after total reconcile. FE LogDetailPage breakdown table + "How to reduce
