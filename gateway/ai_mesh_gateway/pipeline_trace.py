@@ -316,6 +316,30 @@ STAGE_TRANSPARENCY_KEYS: tuple[str, ...] = (
     "prompt_out",
 )
 
+# PIPELINE-0021: model_routing stage exposes explicit destination + adjudicator WHY.
+ROUTING_STAGE_KEYS: tuple[str, ...] = (
+    "requested_model",
+    "selected_model",
+    "routed_model",
+    "route_destination",
+    "route_destination_label",
+    "routing_reason",
+    "policy_summary",
+    "decision_factors",
+    "weights",
+    "routing_score",
+    "candidate_count",
+    "fallback_chain",
+    "evaluator_model",
+)
+
+ROUTE_DESTINATION_LABELS: dict[str, str] = {
+    "llm": "LLM inference",
+    "rag": "RAG retrieval",
+    "vector_db": "Vector DB",
+    "mcp": "MCP tool",
+}
+
 
 def _empty_stage_why_fields() -> dict[str, Any]:
     return {
@@ -371,6 +395,88 @@ def _policy_guard_reason(
     return "\n".join(lines)
 
 
+def _resolve_route_destination(routing: dict[str, Any]) -> tuple[str, str]:
+    """Where the request was routed (LLM / RAG / Vector DB / MCP). Chat → llm."""
+    raw = str(routing.get("route_destination") or routing.get("routing_target") or "").strip().lower()
+    if not raw:
+        raw = "llm"
+    label = ROUTE_DESTINATION_LABELS.get(raw, raw.replace("_", " ").title())
+    return raw, label
+
+
+def _build_routing_guard_reason(
+    *,
+    routing_reason: str,
+    decision_factors: list[Any],
+    weights: dict[str, Any],
+    routing_score: Any = None,
+    candidate_count: Any = None,
+    route_destination_label: str = "",
+) -> str:
+    lines: list[str] = []
+    if routing_reason:
+        lines.append(str(routing_reason).strip())
+    if route_destination_label:
+        lines.append(f"Destination: {route_destination_label}")
+    factors = [str(f).strip() for f in (decision_factors or []) if str(f).strip()]
+    if factors:
+        lines.append(f"Factors: {', '.join(factors)}")
+    if weights:
+        parts = []
+        for key, val in weights.items():
+            try:
+                pct = f"{round(float(val) * 100)}%"
+            except (TypeError, ValueError):
+                pct = str(val)
+            parts.append(f"{key}={pct}")
+        if parts:
+            lines.append(f"Weights: {', '.join(parts)}")
+    try:
+        score = float(routing_score)
+        if score > 0:
+            lines.append(f"Score: {round(score, 3)}")
+    except (TypeError, ValueError):
+        pass
+    try:
+        count = int(candidate_count)
+        if count > 0:
+            lines.append(f"Candidates: {count}")
+    except (TypeError, ValueError):
+        pass
+    return "\n".join(lines) if lines else ""
+
+
+def normalize_routing_stage_fields(stage: dict[str, Any]) -> dict[str, Any]:
+    """Ensure model_routing exposes the PIPELINE-0021 routing contract."""
+    if not isinstance(stage, dict) or stage.get("name") != "model_routing":
+        return stage
+    for key in ROUTING_STAGE_KEYS:
+        if key not in stage:
+            if key in ("decision_factors", "fallback_chain"):
+                stage[key] = []
+            elif key == "weights":
+                stage[key] = {}
+            elif key in ("routing_score", "candidate_count"):
+                stage[key] = 0
+            else:
+                stage[key] = ""
+    if not stage.get("route_destination"):
+        stage["route_destination"] = "llm"
+    if not stage.get("route_destination_label"):
+        _, label = _resolve_route_destination(stage)
+        stage["route_destination_label"] = label
+    if not stage.get("guard_reason"):
+        stage["guard_reason"] = _build_routing_guard_reason(
+            routing_reason=str(stage.get("routing_reason") or ""),
+            decision_factors=stage.get("decision_factors") or [],
+            weights=stage.get("weights") or {},
+            routing_score=stage.get("routing_score"),
+            candidate_count=stage.get("candidate_count"),
+            route_destination_label=str(stage.get("route_destination_label") or ""),
+        )
+    return stage
+
+
 def normalize_stage_transparency(stage: dict[str, Any]) -> dict[str, Any]:
     """Ensure every stage dict exposes the PIPELINE-0020 field contract."""
     if not isinstance(stage, dict):
@@ -387,7 +493,7 @@ def normalize_stage_transparency(stage: dict[str, Any]) -> dict[str, Any]:
                 stage[key] = ""
     if stage.get("decision_source") and not stage.get("decision_source_label"):
         stage["decision_source_label"] = _format_decision_source(str(stage["decision_source"]))
-    return stage
+    return normalize_routing_stage_fields(stage)
 
 
 def _sanitize_routing_reason(text: str) -> str:
@@ -888,6 +994,11 @@ def build_pipeline_trace(
     policy_summary = routing.get("policy_summary") or zs.get("policy_summary") or ""
     decision_factors = routing.get("decision_factors") or zs.get("decision_factors") or []
     weights = routing.get("weights") or zs.get("weights") or {}
+    route_destination, route_destination_label = _resolve_route_destination(routing)
+    routing_score = routing.get("routing_score") or zs.get("routing_score") or 0
+    candidate_count = routing.get("candidate_count") or zs.get("candidate_count") or 0
+    fallback_chain = routing.get("fallback_chain") or zs.get("fallback_chain") or []
+    evaluator_model = routing.get("evaluator_model") or zs.get("evaluator_model") or ""
 
     # Where did the request-level enforcement (block/redact/...) actually happen?
     # The output guard forces detection_tier="output_guard" on its zs copy below,
@@ -944,6 +1055,14 @@ def build_pipeline_trace(
     routing_detail = routing_reason or (
         f"Routed to {selected}" if selected else "Model routing evaluated"
     )
+    routing_guard_reason = _build_routing_guard_reason(
+        routing_reason=routing_reason,
+        decision_factors=decision_factors,
+        weights=weights,
+        routing_score=routing_score,
+        candidate_count=candidate_count,
+        route_destination_label=route_destination_label,
+    ) or routing_detail
 
     policy_action = (
         "block" if blocked_stage == "policy"
@@ -1070,13 +1189,18 @@ def build_pipeline_trace(
             "requested_model": requested,
             "selected_model": selected,
             "routed_model": selected,
+            "route_destination": route_destination,
+            "route_destination_label": route_destination_label,
             "routing_reason": routing_reason,
-            "decision_source": decision_source,
-            "decision_source_label": decision_source_label,
+            **_decision_source_fields(decision_source),
             "policy_summary": policy_summary,
             "decision_factors": decision_factors,
             "weights": weights,
-            "guard_reason": routing_detail,
+            "routing_score": routing_score,
+            "candidate_count": candidate_count,
+            "fallback_chain": fallback_chain,
+            "evaluator_model": evaluator_model,
+            "guard_reason": routing_guard_reason,
             "tier": "",
             "confidence": 0,
             "matched_policies": [],
@@ -1228,6 +1352,26 @@ def build_pipeline_trace(
         "overhead_ms": overhead,
         "prompt_preview": prompt_preview,
         "guard_summary": guard_summary,
+        "requested_model": requested,
+        "routed_model": selected,
+        "routing_reason": routing_reason,
+        "routing": {
+            "requested_model": requested,
+            "selected_model": selected,
+            "routed_model": selected,
+            "route_destination": route_destination,
+            "route_destination_label": route_destination_label,
+            "routing_reason": routing_reason,
+            "decision_source": decision_source,
+            "decision_source_label": decision_source_label,
+            "policy_summary": policy_summary,
+            "decision_factors": decision_factors,
+            "weights": weights,
+            "routing_score": routing_score,
+            "candidate_count": candidate_count,
+            "fallback_chain": fallback_chain,
+            "evaluator_model": evaluator_model,
+        },
     }
     attach_latency_breakdown(trace_out)
     return trace_out

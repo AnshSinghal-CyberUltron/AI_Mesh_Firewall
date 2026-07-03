@@ -166,3 +166,27 @@ def test_normalize_stage_transparency_fills_missing_keys():
     stage = normalize_stage_transparency({"name": "auth", "action": "allow"})
     for key in STAGE_TRANSPARENCY_KEYS:
         assert key in stage
+
+
+def test_model_routing_stage_carries_routing_transparency(base_metrics):
+    from ai_mesh_gateway.pipeline_trace import ROUTING_STAGE_KEYS
+
+    trace = build_pipeline_trace(
+        route_metadata={
+            "original_model": "gpt-5.2",
+            "selected_model": "Haiku",
+            "routing_reason": "Adjudicator pick",
+            "decision_source": "policy_adjudicator",
+            "decision_factors": ["latency"],
+            "weights": {"latency": 0.5},
+        },
+        requested_model="gpt-5.2",
+        stage_metrics=base_metrics,
+    )
+    routing = _stage_map(trace)["model_routing"]
+    _assert_stage_contract(routing)
+    for key in ROUTING_STAGE_KEYS:
+        assert key in routing, f"missing {key}"
+    assert routing["decision_source"] == "policy_adjudicator"
+    assert routing["guard_reason"]
+    assert routing["route_destination"] == "llm"

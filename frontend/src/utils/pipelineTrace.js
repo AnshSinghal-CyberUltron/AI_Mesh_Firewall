@@ -315,3 +315,57 @@ export function formatDominantStageLabel(stage) {
   if (!stage) return "";
   return STAGE_LABELS[stage] || String(stage).replace(/_/g, " ");
 }
+
+export const ROUTE_DESTINATION_LABELS = {
+  llm: "LLM inference",
+  rag: "RAG retrieval",
+  vector_db: "Vector DB",
+  mcp: "MCP tool",
+};
+
+export function formatRouteDestination(dest) {
+  const key = String(dest || "llm").trim().toLowerCase();
+  return ROUTE_DESTINATION_LABELS[key] || key.replace(/_/g, " ");
+}
+
+/** PIPELINE-0021: resolve routing decision from trace root or model_routing stage. */
+export function resolveRoutingDecision(sources = {}) {
+  const trace = resolvePipelineTrace(sources);
+  if (!trace) return null;
+
+  const root = trace.routing && typeof trace.routing === "object" ? trace.routing : {};
+  const stage = Array.isArray(trace.stages)
+    ? trace.stages.find((s) => s?.name === "model_routing")
+    : null;
+  const pick = (key) => (
+    root[key]
+    ?? stage?.[key]
+    ?? trace[key]
+    ?? null
+  );
+
+  const requested = pick("requested_model") || pick("original_model") || "";
+  const routed = pick("routed_model") || pick("selected_model") || "";
+  const destination = pick("route_destination") || "llm";
+
+  if (!requested && !routed && !pick("routing_reason")) return null;
+
+  return {
+    requested_model: requested,
+    selected_model: pick("selected_model") || routed,
+    routed_model: routed,
+    route_destination: destination,
+    route_destination_label: pick("route_destination_label") || formatRouteDestination(destination),
+    routing_reason: pick("routing_reason") || "",
+    decision_source: pick("decision_source") || "",
+    decision_source_label: pick("decision_source_label") || "",
+    policy_summary: pick("policy_summary") || "",
+    decision_factors: Array.isArray(pick("decision_factors")) ? pick("decision_factors") : [],
+    weights: pick("weights") && typeof pick("weights") === "object" ? pick("weights") : {},
+    routing_score: pick("routing_score") ?? 0,
+    candidate_count: pick("candidate_count") ?? 0,
+    fallback_chain: Array.isArray(pick("fallback_chain")) ? pick("fallback_chain") : [],
+    evaluator_model: pick("evaluator_model") || "",
+    guard_reason: stage?.guard_reason || "",
+  };
+}

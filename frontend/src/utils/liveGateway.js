@@ -9,7 +9,7 @@ import {
   formatRoutingReason,
   isRoutingReroute,
 } from "../constants/zeroshieldBrand.js";
-import { resolveTotalLatencyMs, resolveTtftMs } from "./pipelineTrace.js";
+import { resolveTotalLatencyMs, resolveTtftMs, formatRouteDestination } from "./pipelineTrace.js";
 
 export function chatCompletionBody({
   prompt,
@@ -875,12 +875,18 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       requested_model: reqModel,
       selected_model: selModel,
       routed_model: routing.routed_model || routing.selected_model || "",
+      route_destination: routing.route_destination || "llm",
+      route_destination_label: routing.route_destination_label || formatRouteDestination(routing.route_destination || "llm"),
       routing_reason: formattedReason,
       decision_source: rawDecisionSource,
       decision_source_label: formatDecisionSource(rawDecisionSource),
       policy_summary: routing.policy_summary || zs.policy_summary || context.routingHeaders?.policy_summary || "",
       decision_factors: routing.decision_factors || zs.decision_factors || [],
       weights: routing.weights || zs.weights || {},
+      routing_score: routing.routing_score || zs.routing_score || 0,
+      candidate_count: routing.candidate_count || zs.candidate_count || 0,
+      fallback_chain: routing.fallback_chain || zs.fallback_chain || [],
+      evaluator_model: routing.evaluator_model || zs.evaluator_model || "",
       latency_ms: latencyForStage("model_routing", stageMetrics, zs, context),
     });
   }

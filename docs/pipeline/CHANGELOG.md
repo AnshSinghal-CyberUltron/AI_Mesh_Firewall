@@ -2,6 +2,31 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0021 (2026-07-03)
+
+**Routing decision transparency on pipeline trace (P6 item 21).**
+
+Root Cause:
+- `model_routing` stage carried basic model names but operators could not see WHERE the
+  request was routed (LLM vs RAG/Vector DB/MCP) or WHY (adjudicator factors/weights/score).
+- LogDetailPage showed only a 3-line routing summary; factors/weights/policy_summary were
+  buried or absent from the trace root.
+
+Fix:
+- `pipeline_trace.py`: `ROUTING_STAGE_KEYS` + `normalize_routing_stage_fields()`;
+  `route_destination`/`route_destination_label`; adjudicator `_build_routing_guard_reason()`
+  composes factors/weights/score; trace root adds `routing{}` summary +
+  `requested_model`/`routed_model`/`routing_reason`.
+- `main.py`: `_build_routing_metadata()` + isolation/no-routing paths set
+  `route_destination=llm`, `evaluator_model`, `decision_factors`; streaming zeroshield.routing
+  enriched.
+- Frontend: `resolveRoutingDecision()` + `RoutingDecisionCard` on LogDetailPage;
+  StageTimeline shows destination/score/candidates/guard_reason; liveGateway parity.
+
+Verification:
+- `test_pipeline_trace_routing.py` (+3), `test_pipeline_stage_transparency.py` (+1),
+  `pipelineTrace.test.js` (+1); gateway 2067 passed; frontend lint + build green.
+
 ## PIPELINE-0020 (2026-07-03)
 
 **Per-stage WHY transparency on pipeline trace (P6 item 20).**

@@ -15,6 +15,7 @@ import {
   resolveLatencyBreakdown,
   resolveLatencyHints,
   formatDominantStageLabel,
+  resolveRoutingDecision,
 } from "./pipelineTrace.js";
 
 // Robustness: the trace card (StageTimeline) renders `stage.action` per element, so a
@@ -224,4 +225,37 @@ test("resolveLatencyBreakdown works for legacy traces without stage_latency_sum_
   assert.equal(bd.hints.length, 1);
   assert.equal(bd.hints[0].stage, "model_output");
   assert.ok(bd.by_stage.length >= 2);
+});
+
+test("resolveRoutingDecision merges trace root and model_routing stage (PIPELINE-0021)", () => {
+  const routing = resolveRoutingDecision({
+    pipelineTrace: {
+      requested_model: "auto",
+      routed_model: "Haiku",
+      routing: {
+        route_destination: "llm",
+        routing_reason: "Adjudicator pick",
+        decision_source: "policy_adjudicator",
+        weights: { latency: 0.4 },
+      },
+      stages: [
+        {
+          name: "model_routing",
+          action: "allow",
+          decision_factors: ["compliance=GDPR"],
+          routing_score: 0.9,
+          candidate_count: 2,
+        },
+      ],
+    },
+  });
+  assert.ok(routing);
+  assert.equal(routing.requested_model, "auto");
+  assert.equal(routing.routed_model, "Haiku");
+  assert.equal(routing.route_destination, "llm");
+  assert.equal(routing.route_destination_label, "LLM inference");
+  assert.deepEqual(routing.decision_factors, ["compliance=GDPR"]);
+  assert.deepEqual(routing.weights, { latency: 0.4 });
+  assert.equal(routing.routing_score, 0.9);
+  assert.equal(routing.candidate_count, 2);
 });

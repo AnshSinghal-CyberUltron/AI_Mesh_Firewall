@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Clock, Shield, AlertTriangle, XCircle, CheckCircle, Pin, X, ArrowRightLeft } from "lucide-react";
-import { normalizeStages } from "../../utils/pipelineTrace";
+import { normalizeStages, formatRouteDestination } from "../../utils/pipelineTrace";
 import {
   formatDecisionSource,
   formatDetectionTier,
@@ -430,6 +430,14 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="font-mono text-slate-700 dark:text-slate-200">{stage.requested_model}</span>
           </div>
         )}
+        {(stage.route_destination || stage.route_destination_label) && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Destination:</span>{" "}
+            <span className="font-semibold text-indigo-700 dark:text-indigo-300">
+              {stage.route_destination_label || formatRouteDestination(stage.route_destination)}
+            </span>
+          </div>
+        )}
         {stage.selected_model && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Selected model:</span>{" "}
@@ -476,6 +484,24 @@ function StageDetailCard({ stage, onClose, isPinned }) {
                 })
                 .join(", ")}
             </span>
+          </div>
+        )}
+        {Number(stage.routing_score) > 0 && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Routing score:</span>{" "}
+            <span className="text-slate-700 dark:text-slate-200">{Number(stage.routing_score).toFixed(3)}</span>
+          </div>
+        )}
+        {Number(stage.candidate_count) > 0 && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Candidates:</span>{" "}
+            <span className="text-slate-700 dark:text-slate-200">{stage.candidate_count}</span>
+          </div>
+        )}
+        {stage.guard_reason && stage.name === "model_routing" && (
+          <div className="col-span-2">
+            <span className="text-slate-500 dark:text-slate-400">Why:</span>{" "}
+            <span className="whitespace-pre-wrap text-slate-700 dark:text-slate-200">{stage.guard_reason}</span>
           </div>
         )}
         {stage.tier && stage.name !== "input_scan" && (

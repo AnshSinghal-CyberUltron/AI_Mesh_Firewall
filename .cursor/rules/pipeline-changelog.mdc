@@ -140,3 +140,9 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   (redacted-safe) on every stage via STAGE_TRANSPARENCY_KEYS + normalize_stage_transparency;
   policy/auth/rate_limit/model stages enriched; StageTimeline renders policy WHY block. +5 tests.
   Gate: 2064 GW + lint/build green.
+- PIPELINE-0021 (2026-07-03) — ROUTING DECISION TRANSPARENCY (P6-21): model_routing stage +
+  trace root expose requested/selected/routed model, route_destination (LLM/RAG/Vector DB/MCP),
+  routing_reason, decision_source, decision_factors[], weights{}, policy_summary, score,
+  candidate_count, fallback_chain, evaluator_model; adjudicator guard_reason composes factors/
+  weights; LogDetailPage RoutingDecisionCard + StageTimeline routing fields; resolveRoutingDecision
+  FE helper. +3 GW routing tests + 1 transparency + 1 FE test. Gate: 2067 GW + lint/build green.

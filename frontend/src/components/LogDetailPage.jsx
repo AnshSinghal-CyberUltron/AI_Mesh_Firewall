@@ -11,10 +11,13 @@ import { useAuth } from "../context/AuthContext";
 import {
   formatPipelineDurationMs,
   formatDominantStageLabel,
+  formatRouteDestination,
   resolveLatencyBreakdown,
+  resolveRoutingDecision,
   resolveTotalLatencyMs,
   resolveTtftMs,
 } from "../utils/pipelineTrace";
+import { formatDecisionSource, formatRoutingReason } from "../constants/zeroshieldBrand";
 
 function normalizeLogDetail(logData) {
   const raw = logData?.raw || logData || {};
@@ -197,6 +200,10 @@ export function LogDetailPage({ logData, onBack }) {
   const responseText = normalized.responseText;
   const pipelineStages = normalized.pipelineStages;
   const pipelineTrace = normalized.pipelineTrace;
+  const routingDecision = useMemo(
+    () => resolveRoutingDecision({ pipelineTrace, meta: normalized.meta }),
+    [pipelineTrace, normalized.meta],
+  );
 
   const handleCopy = async (text, field) => {
     await copyToClipboard(text);
@@ -459,18 +466,8 @@ export function LogDetailPage({ logData, onBack }) {
         >
           {pipelineStages.length > 0 ? (
             <>
-              {(pipelineTrace?.routing || pipelineTrace?.requested_model) && (
-                <div className="mb-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3 text-xs text-slate-700 dark:text-slate-300">
-                  {pipelineTrace.requested_model && (
-                    <div><strong>Requested model:</strong> {pipelineTrace.requested_model}</div>
-                  )}
-                  {pipelineTrace.routed_model && (
-                    <div><strong>Routed model:</strong> {pipelineTrace.routed_model}</div>
-                  )}
-                  {pipelineTrace.routing_reason && (
-                    <div><strong>Routing:</strong> {pipelineTrace.routing_reason}</div>
-                  )}
-                </div>
+              {routingDecision && (
+                <RoutingDecisionCard routing={routingDecision} />
               )}
               <StageTimeline stages={pipelineStages} />
             </>
@@ -666,6 +663,87 @@ function MetricCard({ icon: Icon, label, value, color }) {
       </div>
       <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">{value}</div>
       <div className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</div>
+    </div>
+  );
+}
+
+function RoutingDecisionCard({ routing }) {
+  const factors = Array.isArray(routing.decision_factors) ? routing.decision_factors : [];
+  const weights = routing.weights && typeof routing.weights === "object" ? routing.weights : {};
+  const weightEntries = Object.entries(weights);
+  const formattedReason = routing.routing_reason
+    ? formatRoutingReason(routing.routing_reason, { decisionSource: routing.decision_source })
+    : "";
+  const sourceLabel = routing.decision_source_label
+    || formatDecisionSource(routing.decision_source);
+
+  return (
+    <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-500/30 dark:bg-indigo-500/10">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+          Routing decision
+        </span>
+        {routing.route_destination_label && (
+          <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-200">
+            {routing.route_destination_label || formatRouteDestination(routing.route_destination)}
+          </span>
+        )}
+      </div>
+      <div className="grid gap-2 text-xs text-slate-700 dark:text-slate-300 sm:grid-cols-2">
+        {routing.requested_model && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Requested:</span>{" "}
+            <span className="font-mono">{routing.requested_model}</span>
+          </div>
+        )}
+        {routing.routed_model && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Routed to:</span>{" "}
+            <span className="font-mono font-semibold text-indigo-800 dark:text-indigo-200">{routing.routed_model}</span>
+          </div>
+        )}
+        {sourceLabel && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Decision source:</span>{" "}
+            <span>{sourceLabel}</span>
+          </div>
+        )}
+        {Number(routing.routing_score) > 0 && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Score:</span>{" "}
+            <span>{Number(routing.routing_score).toFixed(3)}</span>
+          </div>
+        )}
+        {Number(routing.candidate_count) > 0 && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Candidates:</span>{" "}
+            <span>{routing.candidate_count}</span>
+          </div>
+        )}
+      </div>
+      {formattedReason && (
+        <p className="mt-3 text-xs leading-relaxed text-slate-700 dark:text-slate-200">{formattedReason}</p>
+      )}
+      {routing.policy_summary && (
+        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+          <span className="font-medium text-slate-500 dark:text-slate-400">Policy:</span> {routing.policy_summary}
+        </p>
+      )}
+      {factors.length > 0 && (
+        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+          <span className="font-medium text-slate-500 dark:text-slate-400">Factors:</span> {factors.join(", ")}
+        </p>
+      )}
+      {weightEntries.length > 0 && (
+        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+          <span className="font-medium text-slate-500 dark:text-slate-400">Weights:</span>{" "}
+          {weightEntries.map(([k, v]) => {
+            const raw = Number(v);
+            const pct = Number.isFinite(raw) ? `${Math.round(raw * 100)}%` : String(v);
+            return `${k}=${pct}`;
+          }).join(", ")}
+        </p>
+      )}
     </div>
   );
 }
