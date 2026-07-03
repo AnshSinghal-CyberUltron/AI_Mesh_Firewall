@@ -2614,3 +2614,30 @@ NOTE: percent-encoded ARBITRARY (non-PII) data is DELIBERATELY not flagged — p
 is normal in URLs (paths/params) so it is FP-prohibitive; base64/entity in URLs are unusual so flaggable.
 Session ledger: FOURTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90) + soft DoS (G79) fixed; G77/G78/G80 frozen.
 (policy_count:0 deployed live-golden issue still flagged for the control-plane session — unchanged.)
+
+---
+
+## G91 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — layered markdown ∘ HTML-entity laundering
+RIGOR NOTE: my first probe mis-constructed the payload as `'*'.join(char)` = `&*#*4*9*;`, which BREAKS the
+entities (a browser renders `&<em>#</em>4<em>9</em>;` as literal "&#49;", NOT the char) — that was a FALSE
+oracle positive. The REAL attack joins INTACT entity TOKENS with `*`: `&#49;*&#50;*&#51;*...`. A markdown
+renderer strips the `*` emphasis and the HTML parser then decodes the intact entities -> shows the value.
+CONFIRMED real: output `&#49;*&#50;*...` → verdict **allow**, render_recoverable=True (input **allow** too).
+Root cause: the single-layer checks miss the combination — G35 entity-decode yields `1*2*3*...` (still has
+`*`, so detect fails); G44 markdown-strip can't strip the `*` because it sits between entity boundaries
+(`;`/`&`), not word chars (strip_interleaved_emphasis requires word chars on both sides). The correct
+deobfuscation ORDER is entity-decode THEN emphasis-strip.
+**FIX (owned scanner.py + output_guard.py):**
+  * DETECTION: `_scan_output_sync` G35 + `_scan_prompt_sync` G33 now strip emphasis from EACH decoded
+    variant (entity-then-markdown); also kept the reverse order in G44 (markdown-then-entity) as
+    belt-and-suspenders. → output redact / input block.
+  * MASKING: `_EMPH_HTML_TOKEN_RE`'s value class now includes numeric entities (`(?:[\w@.\-]|&#..;)`) so
+    `neutralize_markdown_split_pii` SPANS `&#49;*&#50;*` as one run, strips `*`, decodes entities, masks.
+    The entity branch starts with `&` (disjoint from the `[*`<]` separator starts) so the G79
+    possessive/disjoint ReDoS property holds.
+**Verify:** output md∘ent SSN/KEY → **redact**, render_recoverable=**False**; input → **block**; FP-clean on
+`**bold**` / `©&#169;` / `2*3*4` math / plain; ReDoS stress 200KB ≤606ms linear. In-process golden **535 ×3
+consecutive clean** (GATEWAY_LIVE=0); backend `ai_mesh_gateway/tests` **1776 passed**.
+**Frozen:** golden `test_g91_*` (2 input-block + 2 output-mask via renderer-recovery oracle + 3 FP).
+Session ledger: FIFTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90/G91) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+(policy_count:0 deployed live-golden issue still flagged for the control-plane session — unchanged.)

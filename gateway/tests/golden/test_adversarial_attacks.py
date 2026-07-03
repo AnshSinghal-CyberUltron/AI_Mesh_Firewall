@@ -557,6 +557,50 @@ def test_g90_benign_entity_url_not_flagged(label, url):
     assert not _og._url_smuggles_data(url), f"{label}: benign URL wrongly flagged as data-exfil (false positive)"
 
 
+# G91 — LAYERED (markdown ∘ HTML-entity) laundering (CONFIRMED LEAK, fixed 2026-07-03). A value that is
+# BOTH entity-encoded AND markdown-emphasis-split — intact entity tokens joined by ``*``: ``&#49;*&#50;*
+# &#51;*...`` — renders to the plaintext (a markdown renderer strips the emphasis, the HTML parser then
+# decodes the intact entities -> "123"). The single-layer checks miss it: G35 entity-decode yields
+# ``1*2*3*...`` (still has ``*``); G44 markdown-strip cannot strip the ``*`` because it sits between the
+# entity boundaries ``;``/``&`` (not word chars). FIXED: the input/output scans strip emphasis from EACH
+# decoded variant (entity-then-markdown), AND _EMPH_HTML_TOKEN_RE's value class now includes numeric
+# entities so the neutralizer spans + masks the run. FROZEN. (NB the mis-constructed per-char split
+# ``&*#*4*9*;`` BREAKS the entities and is NOT browser-renderable — the real attack joins intact entity
+# TOKENS with ``*``.)
+def _md_ent(s: str) -> str:
+    return "*".join(f"&#{ord(c)};" for c in s)
+
+
+@pytest.mark.parametrize("label,payload", [
+    ("g91_in_ssn", "data " + _md_ent(SSN)),
+    ("g91_in_key", "key " + _md_ent(OAI_KEY)),
+])
+def test_g91_input_markdown_entity_blocked(label, payload):
+    assert _verdict(payload) == "block", (
+        f"{label}: markdown∘entity-encoded PII/secret on input not blocked (would reach the model)"
+    )
+
+
+@pytest.mark.parametrize("label,payload,core", [
+    ("g91_out_ssn", "output: " + _md_ent(SSN), SSN),
+    ("g91_out_key", "output: " + _md_ent(OAI_KEY), OAI_KEY),
+])
+def test_g91_output_markdown_entity_masked(label, payload, core):
+    _action, egress = _output_egress(payload)
+    rec = re.sub(r"[*`]", "", egress)  # markdown renderer strips emphasis...
+    rec = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), rec)  # ...then HTML parser decodes entities
+    assert core not in rec, f"{label}: markdown∘entity-encoded secret recoverable from output egress (LEAK)"
+
+
+@pytest.mark.parametrize("label,payload", [
+    ("g91_fp_bold",      "This is **important** text with emphasis"),
+    ("g91_fp_copyright", "© &#169; 2026 ACME with **bold** notes"),
+    ("g91_fp_math",      "the product 2*3*4 equals 24 exactly"),
+])
+def test_g91_benign_markdown_entity_not_flagged(label, payload):
+    assert _verdict(payload) == "allow", f"{label}: benign markdown/entity wrongly flagged (false positive)"
+
+
 # G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
 # PII/secret placed PAST patterns._CANON_MAX_LEN escapes the canonical pass (a fullwidth SSN at
 # offset 21k -> detect_pii False, since canonicalize_for_detection only folds text[:_CANON_MAX_LEN];

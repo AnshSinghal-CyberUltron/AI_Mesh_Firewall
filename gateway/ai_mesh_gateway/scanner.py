@@ -1221,21 +1221,30 @@ class InputScanner:
         _enc_sources_in = (text,) if _canon_in == text else (text, _canon_in)
         for _esrc in _enc_sources_in:
             for _variant in _decode_text_encoding_variants(_esrc):
-                _v_pii = detect_pii(_variant)
-                _v_secret = detect_secrets(_variant)
-                if _v_pii or _v_secret:
-                    _kinds = list(_v_pii.keys()) + list(_v_secret.keys())
-                    return ScanVerdict(
-                        action="block",
-                        threat_type="obfuscated_pii" if _v_pii else "obfuscated_secret",
-                        confidence=0.9,
-                        detail=(
-                            "Encoded PII/secret exfil attempt via text-encoding: "
-                            + ", ".join(_kinds)
-                        ),
-                        matched_patterns=_kinds,
-                        tier="tier_1",
-                    )
+                # G91: the decoded value may ALSO be markdown-emphasis-split (entity-decode of
+                # ``&#49;*&#50;*...`` yields ``1*2*3*...``), so also strip emphasis from the decoded
+                # variant -> catches the layered (encoding ∘ markdown) laundering on INPUT too (parity
+                # with the OUTPUT-side G91 fix in _scan_output_sync).
+                _in_cands = [_variant]
+                _ivs = strip_interleaved_emphasis(_variant)
+                if _ivs != _variant:
+                    _in_cands.append(_ivs)
+                for _cv in _in_cands:
+                    _v_pii = detect_pii(_cv)
+                    _v_secret = detect_secrets(_cv)
+                    if _v_pii or _v_secret:
+                        _kinds = list(_v_pii.keys()) + list(_v_secret.keys())
+                        return ScanVerdict(
+                            action="block",
+                            threat_type="obfuscated_pii" if _v_pii else "obfuscated_secret",
+                            confidence=0.9,
+                            detail=(
+                                "Encoded PII/secret exfil attempt via text-encoding: "
+                                + ", ".join(_kinds)
+                            ),
+                            matched_patterns=_kinds,
+                            tier="tier_1",
+                        )
 
         # G53: obfuscated PII/secret hidden by INLINE markdown emphasis / render-invisible
         # HTML (``1**2**3-45-6789`` / ``12<!-- -->3-45-6789``) — the raw bytes dodge the
@@ -1378,28 +1387,39 @@ class InputScanner:
         # form has PII/secret the plaintext lacked (benign encoded output unaffected).
         for _src in _enc_sources:
             for _variant in _decode_text_encoding_variants(_src):
-                _v_pii = detect_pii(_variant)
-                _v_secret = detect_secrets(_variant)
-                # G88: also the CREDENTIAL + internal-IP detectors. An entity/percent-encoded
-                # credential (bearer / connection-string / stripe key — NOT in the PII/SECRET
-                # pattern sets) or internal IP evaded this check: detect_credential_exposure /
-                # detect_ip_leakage do not decode entities/percent, and this loop only ran
-                # detect_pii/detect_secrets on the decoded variant, so the encoded credential
-                # egressed raw (verdict allow). Mirror the G44 markdown check below. Labelled
-                # 'secret' so the guard elevates to redact and redact_all's G85 entity/percent
-                # pass masks the encoded run (its _reveals_secret covers cred + infra).
-                _v_cred = detect_credential_exposure(_variant)
-                _v_ip = detect_ip_leakage(_variant)
-                if _v_pii or _v_secret or _v_cred or _v_ip:
-                    _k = (list(_v_pii.keys()) + list(_v_secret.keys())
-                          + list(_v_cred.keys()) + list(_v_ip.keys()))
-                    return ScanVerdict(
-                        action="flag",
-                        threat_type="pii" if _v_pii else "secret",
-                        confidence=0.85,
-                        detail=f"Encoded PII/secret/credential/IP in output: {', '.join(_k)}",
-                        matched_patterns=_k,
-                    )
+                # G91: the entity/percent-DECODED value may ALSO be markdown-emphasis-split
+                # (``&#49;*&#50;*&#51;...`` decodes to ``1*2*3*...``, which a markdown renderer then
+                # collapses to the value). strip_interleaved_emphasis alone misses the raw form (the
+                # ``*`` sits between entity boundaries ``;``/``&``, not word chars), so ALSO strip
+                # emphasis from the DECODED variant -> catches the layered (encoding ∘ markdown)
+                # laundering. Only fires when it reveals a value the plaintext lacked (no benign FP).
+                _cands = [_variant]
+                _vs = strip_interleaved_emphasis(_variant)
+                if _vs != _variant:
+                    _cands.append(_vs)
+                for _cv in _cands:
+                    _v_pii = detect_pii(_cv)
+                    _v_secret = detect_secrets(_cv)
+                    # G88: also the CREDENTIAL + internal-IP detectors. An entity/percent-encoded
+                    # credential (bearer / connection-string / stripe key — NOT in the PII/SECRET
+                    # pattern sets) or internal IP evaded this check: detect_credential_exposure /
+                    # detect_ip_leakage do not decode entities/percent, and this loop only ran
+                    # detect_pii/detect_secrets on the decoded variant, so the encoded credential
+                    # egressed raw (verdict allow). Mirror the G44 markdown check below. Labelled
+                    # 'secret' so the guard elevates to redact and redact_all's G85 entity/percent
+                    # pass masks the encoded run (its _reveals_secret covers cred + infra).
+                    _v_cred = detect_credential_exposure(_cv)
+                    _v_ip = detect_ip_leakage(_cv)
+                    if _v_pii or _v_secret or _v_cred or _v_ip:
+                        _k = (list(_v_pii.keys()) + list(_v_secret.keys())
+                              + list(_v_cred.keys()) + list(_v_ip.keys()))
+                        return ScanVerdict(
+                            action="flag",
+                            threat_type="pii" if _v_pii else "secret",
+                            confidence=0.85,
+                            detail=f"Encoded PII/secret/credential/IP in output: {', '.join(_k)}",
+                            matched_patterns=_k,
+                        )
 
         # G44: PII/secret hidden by INLINE markdown emphasis interleaved among its chars
         # (``1**2**3-45-6789`` -> SSN, ``john`@`example.com`` -> email). The raw bytes
@@ -1410,23 +1430,31 @@ class InputScanner:
         for _src in _enc_sources:
             _md_stripped = strip_interleaved_emphasis(_src)
             if _md_stripped != _src:
-                _m_pii = detect_pii(_md_stripped)
-                _m_secret = detect_secrets(_md_stripped)
-                # G50: also the credential + internal-IP detectors (obfuscated bearer/api
-                # key or ``10.**0**.0.5`` internal IP). Flagged as pii/secret so the guard
-                # elevates to redact and neutralize_markdown_split_pii masks the run.
-                _m_cred = detect_credential_exposure(_md_stripped)
-                _m_ip = detect_ip_leakage(_md_stripped)
-                if _m_pii or _m_secret or _m_cred or _m_ip:
-                    _mk = (list(_m_pii.keys()) + list(_m_secret.keys())
-                           + list(_m_cred.keys()) + list(_m_ip.keys()))
-                    return ScanVerdict(
-                        action="flag",
-                        threat_type="pii" if _m_pii else "secret",
-                        confidence=0.85,
-                        detail=f"Markdown-split PII/secret/credential/IP in output: {', '.join(_mk)}",
-                        matched_patterns=_mk,
-                    )
+                # G91: a value can be BOTH markdown-emphasis-split AND entity/percent/escape-encoded
+                # (``&#49;*&#50;*&#51;...`` — a markdown renderer strips the emphasis and the HTML parser
+                # then decodes the entities -> shows the value). The single-layer checks miss it (G44
+                # strips '*' but leaves the entities; G35 decodes entities but the '*' remains). Detect on
+                # the emphasis-stripped form AND its text-encoding-decoded variants so the LAYERED
+                # (markdown ∘ encoding) laundering is caught. Only fires when the decoded form reveals a
+                # value the plaintext lacked, so benign markdown is unaffected.
+                for _md_c in (_md_stripped, *_decode_text_encoding_variants(_md_stripped)):
+                    _m_pii = detect_pii(_md_c)
+                    _m_secret = detect_secrets(_md_c)
+                    # G50: also the credential + internal-IP detectors (obfuscated bearer/api
+                    # key or ``10.**0**.0.5`` internal IP). Flagged as pii/secret so the guard
+                    # elevates to redact and neutralize_markdown_split_pii masks the run.
+                    _m_cred = detect_credential_exposure(_md_c)
+                    _m_ip = detect_ip_leakage(_md_c)
+                    if _m_pii or _m_secret or _m_cred or _m_ip:
+                        _mk = (list(_m_pii.keys()) + list(_m_secret.keys())
+                               + list(_m_cred.keys()) + list(_m_ip.keys()))
+                        return ScanVerdict(
+                            action="flag",
+                            threat_type="pii" if _m_pii else "secret",
+                            confidence=0.85,
+                            detail=f"Markdown-split PII/secret/credential/IP in output: {', '.join(_mk)}",
+                            matched_patterns=_mk,
+                        )
 
         return ScanVerdict()
 
