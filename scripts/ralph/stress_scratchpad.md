@@ -2529,3 +2529,28 @@ control-plane/policy-seed state (org policies empty in the control plane or the 
 fetch returned 0), owned by the control-plane/infra session — flagging here so that session can re-seed /
 reload the org policy cache. In-process golden (GATEWAY_LIVE=0) is fully green (505 ×3).
 Session ledger: ELEVEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+
+---
+
+## G88 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — entity/percent-encoded CREDENTIAL output leak
+The output G35 encoded-check in `_scan_output_sync` decodes HTML-entity/percent/escape variants of the
+model output and ran `detect_pii`/`detect_secrets` on them — but NOT `detect_credential_exposure` /
+`detect_ip_leakage`. And `detect_credential_exposure` itself does NOT decode entities/percent (it decodes
+base64/hex only). So an entity/percent-encoded CREDENTIAL — a bearer token, DB connection-string
+(`postgres://admin:S3cretPass@…`), or stripe `sk_live_…` key, none of which are in the PII/SECRET pattern
+sets — egressed RAW (verdict **allow**, contiguous AND Cf-interleaved). A browser/markdown renderer decodes
+the entities and the credential is exposed. CONFIRMED via `OutputGuard.inspect`: `conn entity`/`entity Cf`/
+`percent Cf`/`stripe entity Cf` → allow (was), now redact. (INPUT was already safe — blocks entity creds
+via the decoded-secret path.) Gap is the OUTPUT G35 check omitting the credential+IP detectors (the G44
+markdown check already included them — this was an inconsistency).
+**FIX (owned scanner.py, `_scan_output_sync` G35):** also run `detect_credential_exposure` +
+`detect_ip_leakage` on each decoded variant (parity with the G44 markdown check), labelled 'secret' so the
+guard elevates flag→redact and redact_all's G85 entity/percent pass masks the run (its `_reveals_secret`
+already covers credential + infra).
+**Verify:** entity/percent/ALM-encoded connection-string + stripe key → **redact** (tt=secret),
+renderer-recoverable=**False**; FP-clean on color-entities / url-percent / plain-prose. In-process golden
+**512 ×3 consecutive clean** (GATEWAY_LIVE=0); backend `ai_mesh_gateway/tests` **1713 passed**.
+**Frozen:** golden `test_g88_*` (4 mask via renderer-recovery oracle + 3 FP) + integration
+`test_output_transport_egress.py::test_g88_encoded_credential_never_egresses` (full inspect→sanitize path).
+Session ledger: TWELVE confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+(policy_count:0 deployed-gateway live-golden issue from G87 still flagged for the control-plane session — unchanged.)

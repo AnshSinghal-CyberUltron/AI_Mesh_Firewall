@@ -181,6 +181,38 @@ def test_g85_benign_encoded_output_not_altered(benign):
     assert _egress(benign) == benign, f"benign encoded/markdown output wrongly altered: {benign!r}"
 
 
+# G88: an entity/percent-encoded CREDENTIAL (bearer / DB connection-string / stripe key — not in the
+# PII/SECRET pattern sets) in model output evaded detection because the output G35 encoded-check only ran
+# detect_pii/detect_secrets on the decoded variant, and detect_credential_exposure does not decode
+# entities/percent -> verdict allow -> raw egress -> a renderer decodes the entities and the credential is
+# exposed. Now G35 also runs the credential + IP detectors on the decoded variant -> redact -> masked.
+_G88_CRED = "postgres://admin:S3cretPass@db.internal:5432/prod"
+
+
+def _entc(s: str) -> str:
+    return "".join(f"&#{ord(c)};" for c in s)
+
+
+def _renderer_recovers_cred(egress: str, plain: str) -> bool:
+    s = "".join(c for c in egress if unicodedata.category(c) not in ("Cf", "Mn", "Me"))
+    s = re.sub(r"&#x([0-9a-fA-F]+);", lambda m: chr(int(m.group(1), 16)), s)
+    s = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), s)
+    s = re.sub(r"%([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), s)
+    return plain in s
+
+
+def test_g88_encoded_credential_never_egresses():
+    for oname, blob in [
+        ("entity",    _entc(_G88_CRED)),
+        ("entity_cf", _interleave(_entc(_G88_CRED), _ZW)),
+        ("entity_alm", "".join(c + _ALM for c in _entc(_G88_CRED))),
+    ]:
+        egress = _egress(f"here is the connection {blob} use it")
+        assert not _renderer_recovers_cred(egress, _G88_CRED), (
+            f"{oname}: encoded credential recoverable from egress: {egress!r}"
+        )
+
+
 # G86: an auto-render markdown-image / <img> / srcset beacon whose URL carries a base64/hex blob of
 # ARBITRARY (non-PII) data — system prompt / conversation — with Cf (zero-width/bidi) interleaved evaded
 # the exfil detector's RAW transport decode (verdict allow -> raw egress). The attacker's server strips

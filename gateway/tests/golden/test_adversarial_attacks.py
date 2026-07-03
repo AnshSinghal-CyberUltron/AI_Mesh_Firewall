@@ -439,6 +439,50 @@ def test_g87_benign_b64_not_ip_flagged():
     )
 
 
+# G88 — entity/percent-encoded CREDENTIAL in OUTPUT (CONFIRMED LEAK, fixed 2026-07-03). detect_credential_
+# exposure does NOT decode entities/percent, and the output G35 encoded-check (_scan_output_sync) only ran
+# detect_pii/detect_secrets on the decoded variant — NOT detect_credential_exposure / detect_ip_leakage.
+# So an entity/percent-encoded bearer token / DB connection-string / stripe key (none of which are in the
+# PII/SECRET pattern sets) egressed RAW (verdict allow); a browser/markdown renderer decodes the entities
+# and the credential is exposed. FIXED: G35 now also runs the credential + IP detectors on the decoded
+# variant (parity with the G44 markdown check) -> redact -> redact_all's G85 entity/percent pass masks it.
+_G88_CRED = "postgres://admin:S3cretPass@db.internal:5432/prod"
+_G88_STRIPE = "sk_live_51HxAbCdEfGhIjKlMnOpQrStUv"
+
+
+def _entc(s: str) -> str:
+    return "".join(f"&#{ord(c)};" for c in s)
+
+
+def _pctc(s: str) -> str:
+    return "".join(f"%{ord(c):02X}" for c in s)
+
+
+@pytest.mark.parametrize("label,plain,payload", [
+    ("g88_conn_entity",      _G88_CRED,   "connection " + _entc(_G88_CRED)),
+    ("g88_conn_entity_cf",   _G88_CRED,   "connection " + zero_width(_entc(_G88_CRED))),
+    ("g88_conn_percent_cf",  _G88_CRED,   "connection " + zero_width(_pctc(_G88_CRED))),
+    ("g88_stripe_entity_cf", _G88_STRIPE, "the key is " + zero_width(_entc(_G88_STRIPE))),
+])
+def test_g88_encoded_credential_output_masked(label, plain, payload):
+    _action, egress = _output_egress(payload)
+    rec = canon_probe(egress)  # renderer: strip Cf, then decode entities/percent
+    rec = re.sub(r"&#x([0-9a-fA-F]+);", lambda m: chr(int(m.group(1), 16)), rec)
+    rec = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), rec)
+    rec = re.sub(r"%([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), rec)
+    assert plain not in rec, f"{label}: encoded credential recoverable from output egress (LEAK)"
+
+
+@pytest.mark.parametrize("label,payload", [
+    ("g88_fp_color",  "color &#35;&#70;&#70;&#48;&#48;&#48;&#48; hex"),
+    ("g88_fp_percent", "see https://x.com/a%2Fb%2Fc%2Fd path"),
+    ("g88_fp_prose",  "The database connection to the reporting server succeeded."),
+])
+def test_g88_benign_encoded_output_preserved(label, payload):
+    action, egress = _output_egress(payload)
+    assert egress == payload and action == "allow", f"{label}: benign encoded output altered (false positive)"
+
+
 # G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
 # PII/secret placed PAST patterns._CANON_MAX_LEN escapes the canonical pass (a fullwidth SSN at
 # offset 21k -> detect_pii False, since canonicalize_for_detection only folds text[:_CANON_MAX_LEN];

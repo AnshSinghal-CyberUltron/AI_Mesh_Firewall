@@ -1380,13 +1380,24 @@ class InputScanner:
             for _variant in _decode_text_encoding_variants(_src):
                 _v_pii = detect_pii(_variant)
                 _v_secret = detect_secrets(_variant)
-                if _v_pii or _v_secret:
-                    _k = list(_v_pii.keys()) + list(_v_secret.keys())
+                # G88: also the CREDENTIAL + internal-IP detectors. An entity/percent-encoded
+                # credential (bearer / connection-string / stripe key — NOT in the PII/SECRET
+                # pattern sets) or internal IP evaded this check: detect_credential_exposure /
+                # detect_ip_leakage do not decode entities/percent, and this loop only ran
+                # detect_pii/detect_secrets on the decoded variant, so the encoded credential
+                # egressed raw (verdict allow). Mirror the G44 markdown check below. Labelled
+                # 'secret' so the guard elevates to redact and redact_all's G85 entity/percent
+                # pass masks the encoded run (its _reveals_secret covers cred + infra).
+                _v_cred = detect_credential_exposure(_variant)
+                _v_ip = detect_ip_leakage(_variant)
+                if _v_pii or _v_secret or _v_cred or _v_ip:
+                    _k = (list(_v_pii.keys()) + list(_v_secret.keys())
+                          + list(_v_cred.keys()) + list(_v_ip.keys()))
                     return ScanVerdict(
                         action="flag",
                         threat_type="pii" if _v_pii else "secret",
                         confidence=0.85,
-                        detail=f"Encoded PII/secret in output: {', '.join(_k)}",
+                        detail=f"Encoded PII/secret/credential/IP in output: {', '.join(_k)}",
                         matched_patterns=_k,
                     )
 
