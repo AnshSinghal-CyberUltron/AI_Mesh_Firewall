@@ -1856,3 +1856,10 @@
       (CISO-001..100) with action/severity/priority/detection/fixtures; CISO-020 negative
       fixture = PIPELINE-0012 smart-mask redact-not-block. Design-only (seed = item 27).
       VERIFY: grep -c '^| CISO-' docs/policies/CISO_100.md → 100.
+
+- [x] 27. Implement CISO package as seed_policy_package-style seed with regex/keyword rules;
+      compile + push POLICY_SYNC. PIPELINE-0027 (2026-07-03): ciso_rules_data.py +
+      ciso_policy_catalog.py + ciso_seed.py + seed_ciso_policy_package command +
+      scripts/seed_ciso_policy_package.sh + test_ciso_policy_package.py (7 passed). LIVE
+      zeroshield: 100 rules seeded (CISO_PKG_2), Redis policies:compiled:zeroshield v310,
+      264 rules in compiled bundle. VERIFY: seed idempotent on re-run (+0 new).

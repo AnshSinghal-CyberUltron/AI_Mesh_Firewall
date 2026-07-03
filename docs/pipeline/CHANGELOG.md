@@ -2,6 +2,30 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0027 (2026-07-03)
+
+**CISO 100-rule policy package seed (P7 item 27).**
+
+Root Cause:
+- P7-26 produced a design-only catalog (`docs/policies/CISO_100.md`) with no
+  enforceable control-plane rules or POLICY_SYNC bundle.
+
+Fix:
+- `control/ai_mesh_control/policy/ciso_rules_data.py`: canonical 100-rule
+  definitions (CISO-001..100).
+- `ciso_policy_catalog.py` + `ciso_seed.py` + `seed_ciso_policy_package`
+  management command: one org-scoped policy `CISO_PKG_<org_id>` with 100
+  regex/keyword rules (semantic design entries → keyword phrases from positive
+  fixtures); idempotent via `ciso_rule_id` in condition.
+- `scripts/seed_ciso_policy_package.sh`: docker exec helper.
+- `policy/tests/test_ciso_policy_package.py`: catalog validation, seed
+  idempotency, compile bundle includes 100 CISO rules.
+
+Verification:
+- `manage.py test policy.tests.test_ciso_policy_package --keepdb` → 7 passed.
+- `manage.py seed_ciso_policy_package --org-slug zeroshield` → 100 rules seeded,
+  compiled bundle pushed to Redis `policies:compiled:zeroshield` (POLICY_SYNC).
+
 ## PIPELINE-0026 (2026-07-03)
 
 **CISO 100-rule policy package design (P7 item 26).**

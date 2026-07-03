@@ -141,6 +141,11 @@
   OWASP LLM01-10, GDPR-PII, PCI-DSS, HIPAA-PHI, secrets, IP exfil, jailbreak, toxicity,
   unauthorized advice, brand, finance/healthcare/legal sector packs; CISO-020 negative fixture =
   PIPELINE-0012 smart-mask redact-not-block. Design-only (seed item 27). VERIFY: 100 table rows.
+ - PIPELINE-0027 (2026-07-03) — CISO 100-RULE PACKAGE SEED (P7-27): ciso_rules_data.py +
+  ciso_policy_catalog.py + ciso_seed.py + seed_ciso_policy_package command + tests. One policy
+  CISO_PKG_<org> with 100 regex/keyword rules (semantic design → keyword phrases); idempotent
+  ciso_rule_id; compile+push POLICY_SYNC. LIVE zeroshield: 100 seeded, Redis v310, 264 rules in
+  bundle. VERIFY: test_ciso_policy_package 7 passed; seed_ciso_policy_package --org-slug zeroshield.
 - PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
  (dominant stage/share, by_stage, hints[]) via build_latency_breakdown+attach_latency_breakdown;
  stream frame recomputes after total reconcile. FE LogDetailPage breakdown table + "How to reduce
