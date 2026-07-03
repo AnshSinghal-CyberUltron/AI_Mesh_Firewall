@@ -169,6 +169,11 @@ _REDACTABLE_PII_THREAT_TYPES: Final[frozenset[str]] = frozenset(
     {"pii", "phi", "pci", "secret"}
 )
 
+# Output-guard categories that are surgically maskable (includes credential).
+_REDACTABLE_OUTPUT_THREAT_TYPES: Final[frozenset[str]] = frozenset(
+    {"pii", "phi", "pci", "secret", "credential"}
+)
+
 _INJECTION_THREAT_TYPES: Final[frozenset[str]] = frozenset(
     {"prompt_injection", "jailbreak", "goal_hijacking"}
 )
@@ -347,6 +352,8 @@ def enforce_output(
     enforcement_mode: str = "block",
     is_streaming: bool = False,
     exception: Exception | None = None,
+    redaction_possible: bool = True,
+    pii_detection_enabled: bool = True,
 ) -> PipelineDecision:
     """
     Single entry point for **output-side** enforcement resolution (Stage 6).
@@ -354,12 +361,15 @@ def enforce_output(
     Called by:
       - ``_apply_output_guard_nonstream`` (Paths B/D)
       - ``SecureStreamingResponse._flush_buffer`` (Paths A/C)
+      - connected sync ``proxy_chat`` output-guard block
 
     **Fail-closed contract:**
     - ``exception`` (guard crash/timeout) → ``block`` (fixes D-05)
     - ``scan_degraded`` → ``redact`` (not raw pass-through)
     - ``rewrite`` + streaming → coerced to ``block``
     - ``flag`` + ``enforcement_mode=="block"`` → ``block`` (harmonizes D-18)
+    - maskable PII/secret ``block`` verdict → ``redact`` (mirror input path)
+    - ``redact`` + ``redaction_possible=False`` → ``block`` (noop scrub fail-closed)
     """
     t0 = time.perf_counter()
     try:
@@ -385,11 +395,27 @@ def enforce_output(
             )
 
         act = normalize_action(verdict_action)
+        threat = str(verdict_threat_type or "").lower()
+        _redactable = threat in _REDACTABLE_OUTPUT_THREAT_TYPES
+
+        # Mirror input resolve_and_enforce: maskable categories redact, not block.
+        if act == "block" and _redactable:
+            act = "redact"
 
         if act == "rewrite" and is_streaming:
             act = "block"
         elif act == "flag" and str(enforcement_mode or "").strip().lower() == "block":
             act = "block"
+
+        if act == "redact" and not redaction_possible:
+            act = "block"
+        elif (
+            act == "redact"
+            and threat in _REDACTABLE_PII_THREAT_TYPES
+            and threat != "secret"
+            and not pii_detection_enabled
+        ):
+            act = "allow"
 
         blocked_by = "output_guard" if act == "block" else None
 

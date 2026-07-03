@@ -97,6 +97,11 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   plain-text filter in scanner.py (G33+G53) + mcp_scan_orchestrator.py (G76). 17 new tests.
   Gate: 17 targeted + 2000 full suite passed.
 
+- PIPELINE-0014 (2026-07-03) — OUTPUT REDACT BYTE-VERIFIED (P4 item 14): enforce_output() gains
+  redaction_possible + pii_detection_enabled; maskable block→redact; noop→block fail-closed.
+  Connected sync output block + _apply_output_guard_nonstream wired through enforce_output();
+  byte-check after sanitize blocks when bytes unchanged. 15 new tests. Gate: 2029 passed.
+  Evidence: pipeline-p14-output-redact/.
 - PIPELINE-0013 (2026-07-03) — OUTPUT GUARD MODEL-ONLY (L6/L7): whitespace-only completion
   treated as empty (normalize_output_scan_text + _model_output_scan_text); inspect() allow
   on empty; sync_pre_llm runs guard before pipeline_trace + threads output_scan_verdict;

@@ -78,6 +78,9 @@
  interleaved credential wrongly filtered OUT. FIX: use _*_core variants (no canon) for the
  plain-text filter in scanner.py (G33+G53) + mcp_scan_orchestrator.py (G76). 17 new tests
  in test_pipeline_obfuscation_fp.py. Gate: 17 targeted + 2000 full suite passed.
+ - PIPELINE-0014 (2026-07-03) — OUTPUT REDACT BYTE-VERIFIED (P4-14): enforce_output() maskable
+ block→redact + redaction_possible noop→block; connected sync Path D + _apply_output_guard_nonstream
+ wired through enforce_output(); sanitize byte-check fail-closed. 15 new tests. Gate: 2029 passed.
  - PIPELINE-0013 (2026-07-03) — OUTPUT GUARD MODEL-ONLY (L6/L7): normalize_output_scan_text +
  _model_output_scan_text treat whitespace-only as empty; inspect() allow on empty; sync_pre_llm
  guard-before-trace + output_scan_verdict; pipeline_trace output detail no input-echo fallback;

@@ -2,6 +2,34 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0014 (2026-07-03)
+
+**Output guard REDACTS maskable PII (not block); byte-verified; noop scrub fail-closed (P4 item 14).**
+
+Root Cause:
+- Connected sync Path D output-guard block (~L7858+) branched on raw
+  `output_verdict.action` instead of canonical `enforce_output()` — PII could
+  hard-block when org posture is redact; noop scrub downgraded to `flag` and
+  delivered raw bytes.
+- `enforce_output()` lacked input-path parity: maskable `block` verdict not
+  downgraded to `redact`; no `redaction_possible` → block fail-closed contract.
+- `_apply_output_guard_nonstream` computed `_out_decision` but still gated block/
+  redact on raw `verdict.action`.
+
+Fix:
+- `enforcement.py`: `enforce_output()` gains `redaction_possible` +
+  `pii_detection_enabled`; maskable PII/secret/credential `block` → `redact`;
+  `redact` + `redaction_possible=False` → `block` (noop fail-closed).
+- `main.py`: connected sync output block wired through `enforce_output()`;
+  redact path byte-checks sanitize → blocks on noop; defensive `redact_all` when
+  `scan_degraded`; `_apply_output_guard_nonstream` uses `_out_decision` throughout.
+
+Verification:
+- 13 new tests (`test_pipeline_output_redact.py`) + 2 enforce_output contract updates.
+- Gate: 2029 gateway tests passed (4 pre-existing MCP internal-route failures unrelated).
+
+Evidence: `mcp-parallel/findings/pipeline-p14-output-redact/`
+
 ## PIPELINE-0013 (2026-07-03)
 
 **Output guard scans model-generated text only; empty output is not PII (L6/L7).**

@@ -197,14 +197,28 @@ class EnforceOutputTests(unittest.TestCase):
         d = enforce_output(verdict_action="allow")
         self.assertEqual(d.action, "allow")
 
-    def test_block_verdict(self):
-        d = enforce_output(verdict_action="block", verdict_threat_type="pii")
+    def test_block_verdict_non_redactable(self):
+        d = enforce_output(verdict_action="block", verdict_threat_type="prompt_injection")
         self.assertTrue(d.is_terminal_block)
         self.assertEqual(d.blocked_by, "output_guard")
 
     def test_redact_verdict(self):
         d = enforce_output(verdict_action="redact")
         self.assertEqual(d.action, "redact")
+
+    def test_pii_block_becomes_redact_d14(self):
+        """PIPELINE-0014: maskable PII block verdict → redact on output path."""
+        d = enforce_output(verdict_action="block", verdict_threat_type="pii")
+        self.assertEqual(d.action, "redact")
+        self.assertFalse(d.is_terminal_block)
+
+    def test_redact_noop_fails_closed(self):
+        d = enforce_output(
+            verdict_action="redact",
+            verdict_threat_type="pii",
+            redaction_possible=False,
+        )
+        self.assertTrue(d.is_terminal_block)
 
     def test_exception_fails_closed_d05(self):
         """D-05 fix: guard exception → block, never allow raw pass-through."""

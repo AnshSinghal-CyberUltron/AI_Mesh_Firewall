@@ -23,7 +23,7 @@
 
 ## P4 — Fix the output guard
 - [x] 13. Output guard evaluates the ACTUAL model output, never the input echo; an empty output does not "contain PII". (Fix L6, L7.) DONE: normalize_output_scan_text + _model_output_scan_text (whitespace-only→empty); inspect() allow on empty; sync_pre_llm guard-before-trace + output_scan_verdict; pipeline_trace output detail no input zs.reason fallback; streaming normalize before inspect. 12 new tests. PIPELINE-0013.
-- [ ] 14. Redaction (not block) where output carries PII and can be masked; byte-verified (bytes changed). Verify on a real completion.
+- [x] 14. Redaction (not block) where output carries PII and can be masked; byte-verified (bytes changed). Verify on a real completion. DONE: enforce_output maskable block→redact + noop fail-closed; connected sync + sync_pre_llm wired; 15 tests. PIPELINE-0014.
 
 ## P5 — Latency: correct, coherent, reducible
 - [ ] 15. Instrument per-stage latency accurately; total_latency == sum(stages) + overhead, reconciled. (Fix L8; use Context7 for FastAPI/ASGI timing best practices.)

@@ -1804,6 +1804,10 @@ async def _apply_output_guard_nonstream(
         resp["_pipeline_output_scan_verdict"] = verdict
 
     _enforcement_mode = org_config.get("enforcement_mode", "block")
+    _pii_out_enabled = org_config.get(
+        "pii_detection_enabled",
+        CONFIG.get("pii_detection_enabled", True),
+    )
     _out_decision = _enforce_output(
         verdict_action=verdict.action if verdict else None,
         verdict_threat_type=verdict.threat_type if verdict else None,
@@ -1815,6 +1819,7 @@ async def _apply_output_guard_nonstream(
         enforcement_mode=_enforcement_mode,
         is_streaming=False,
         exception=_guard_exc,
+        pii_detection_enabled=_pii_out_enabled,
     )
 
     if _out_decision.action == "allow":
@@ -1858,7 +1863,7 @@ async def _apply_output_guard_nonstream(
             requested_model=body.get("model", ""),
         )
 
-    if verdict is None or verdict.action == "allow":
+    if verdict is None:
         return None
 
     raw_output = response_text[:500]
@@ -1886,7 +1891,7 @@ async def _apply_output_guard_nonstream(
             **_telemetry_owasp_metadata(verdict.threat_type),
         }
 
-    if verdict.action == "block":
+    if _out_decision.is_terminal_block:
         METRICS["blocked"] = METRICS.get("blocked", 0) + 1
         _emit_telemetry(
             status_code=403,
@@ -1918,7 +1923,7 @@ async def _apply_output_guard_nonstream(
             output_scan_verdict=verdict,
         )
 
-    if verdict.action == "rewrite":
+    if _out_decision.action == "rewrite":
         # FIX-1.7c: 'rewrite' is NOT redaction. The sync_pre_llm path previously
         # routed rewrite through _sanitize_output_for_verdict (the redact codepath),
         # so the rewrite action silently degraded to a static/redacted string here
@@ -1945,28 +1950,60 @@ async def _apply_output_guard_nonstream(
             )
         return None
 
-    if verdict.action == "redact":
+    if _out_decision.action == "redact":
         sanitized = _sanitize_output_for_verdict(response_text, verdict)
+        _post_redact = _enforce_output(
+            verdict_action="redact",
+            verdict_threat_type=verdict.threat_type,
+            enforcement_mode=_enforcement_mode,
+            redaction_possible=(sanitized != response_text),
+            pii_detection_enabled=_pii_out_enabled,
+        )
+        if _post_redact.is_terminal_block:
+            METRICS["blocked"] = METRICS.get("blocked", 0) + 1
+            _emit_telemetry(
+                status_code=403,
+                event_type="output_guard",
+                action="block",
+                risk_score=getattr(verdict, "confidence", 0.9),
+                latency_ms=(time.perf_counter() - start) * 1000,
+                metadata={**_meta("[BLOCKED]"), "redact_noop": True},
+                **common,
+            )
+            return _build_block_response(
+                403,
+                "output_blocked",
+                _build_zeroshield_metadata(
+                    action="block",
+                    reason="Output guard redaction was a no-op; blocked fail-closed.",
+                    detection_tier="output_guard",
+                    threat_type=verdict.threat_type,
+                    confidence=getattr(verdict, "confidence", 0.9),
+                    matched_patterns=getattr(verdict, "matched_patterns", []),
+                    compliance_tags=getattr(verdict, "compliance_tags", []),
+                    original_prompt=prompt,
+                    detail=verdict.detail,
+                    processing_time_ms=(time.perf_counter() - start) * 1000,
+                    security_incident=True,
+                ),
+                prompt=prompt,
+                requested_model=body.get("model", ""),
+                output_scan_verdict=verdict,
+            )
         _set_completion_response_text(resp, sanitized)
-        # Telemetry honesty: only claim action="redact" when bytes actually
-        # changed. A semantic (tier-2) verdict can target content the regex
-        # redactor has no pattern for, leaving the output verbatim — that is a
-        # "flag", not a redaction, so the 1.7 dashboard must not record a
-        # phantom redaction for a response delivered unchanged.
-        _redact_action = "redact" if sanitized != response_text else "flag"
         if incident_logging:
             _emit_telemetry(
                 status_code=200,
                 event_type="output_guard",
-                action=_redact_action,
+                action="redact",
                 risk_score=getattr(verdict, "confidence", 0.7),
                 latency_ms=(time.perf_counter() - start) * 1000,
-                metadata={**_meta(sanitized[:500] if sanitized else ""), "redact_noop": sanitized == response_text},
+                metadata=_meta(sanitized[:500] if sanitized else ""),
                 **common,
             )
         return None
 
-    if verdict.action == "flag":
+    if _out_decision.action == "flag":
         if incident_logging:
             _emit_telemetry(
                 status_code=200,
@@ -7855,7 +7892,32 @@ async def proxy_chat(
                 if _output_incident_logging:
                     _audit_fire_and_forget(**_audit_kwargs)
 
-            if output_verdict.action == "block":
+            try:
+                from .enforcement import enforce_output as _enforce_output, normalize_action
+            except ImportError:
+                from enforcement import enforce_output as _enforce_output, normalize_action
+
+            _og_enforcement_mode = org_config.get("enforcement_mode", "block")
+            _og_pii_enabled = org_config.get(
+                "pii_detection_enabled",
+                CONFIG.get("pii_detection_enabled", True),
+            )
+            _out_decision = _enforce_output(
+                verdict_action=getattr(output_verdict, "action", None),
+                verdict_threat_type=getattr(output_verdict, "threat_type", None),
+                verdict_confidence=getattr(output_verdict, "confidence", None),
+                verdict_detail=getattr(output_verdict, "detail", None),
+                verdict_matched_patterns=getattr(output_verdict, "matched_patterns", None),
+                verdict_compliance_tags=getattr(output_verdict, "compliance_tags", None),
+                scan_degraded=_output_scan_degraded,
+                enforcement_mode=_og_enforcement_mode,
+                is_streaming=False,
+                pii_detection_enabled=_og_pii_enabled,
+            )
+            if isinstance(llm_resp, dict):
+                llm_resp["_pipeline_output_scan_verdict"] = output_verdict
+
+            if _out_decision.is_terminal_block:
                 METRICS["blocked"] += 1
                 # Record risk event for output guard block
                 if REDIS_CLIENT is not None:
@@ -7931,27 +7993,94 @@ async def proxy_chat(
                     scan_verdict=scan_verdict,
                     output_scan_verdict=output_verdict,
                 )
-            if output_verdict.action == "redact":
+            if _out_decision.action == "redact":
                 LOG.info("Output redaction triggered (type=%s, user=%s)", output_verdict.threat_type, user_id)
-                redacted_response = _sanitize_output_for_verdict(response_text, output_verdict)
-                # Telemetry/enforcement honesty: if the regex redactor produced no
-                # change (a semantic tier-2 verdict with no matching static
-                # pattern), the output is delivered verbatim — report "flag", not
-                # a phantom "redact", on both the client enforcement envelope and
-                # the 1.7 telemetry stream.
+                if _output_scan_degraded and normalize_action(getattr(output_verdict, "action", "allow")) == "allow":
+                    try:
+                        from patterns import redact_all as _defensive_redact_all
+                    except ImportError:
+                        from .patterns import redact_all as _defensive_redact_all
+                    redacted_response = _defensive_redact_all(response_text)
+                else:
+                    redacted_response = _sanitize_output_for_verdict(response_text, output_verdict)
                 _redact_changed = redacted_response != response_text
-                _oact = "redact" if _redact_changed else "flag"
+                _post_redact = _enforce_output(
+                    verdict_action="redact",
+                    verdict_threat_type=output_verdict.threat_type,
+                    enforcement_mode=_og_enforcement_mode,
+                    redaction_possible=_redact_changed,
+                    pii_detection_enabled=_og_pii_enabled,
+                )
+                if _post_redact.is_terminal_block:
+                    METRICS["blocked"] += 1
+                    elapsed_ms = (time.perf_counter() - start) * 1000
+                    _emit_telemetry(
+                        status_code=403,
+                        event_type="output_guard",
+                        model=body.get("model", ""),
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        action="block",
+                        risk_score=getattr(output_verdict, "confidence", 0.90),
+                        threat_type=output_verdict.threat_type,
+                        compliance_tags=output_verdict.compliance_tags,
+                        pipeline_stage="generator",
+                        latency_ms=elapsed_ms,
+                        metadata={
+                            "detail": "Output guard redaction was a no-op; blocked fail-closed.",
+                            "response_snippet": _raw_model_output,
+                            "raw_output": _raw_model_output,
+                            "sanitized_output": "[BLOCKED]",
+                            "redact_noop": True,
+                            "matched_patterns": getattr(output_verdict, "matched_patterns", []),
+                            **_telemetry_owasp_metadata(output_verdict.threat_type),
+                        },
+                        prompt_snippet=_prompt_snippet,
+                        endpoint_id=endpoint_id,
+                    )
+                    _audit_fire_and_forget(
+                        org_slug=org_slug or "",
+                        decision="block",
+                        rule_code=f"output_guard_{output_verdict.threat_type}_unmaskable",
+                        metadata={
+                            "input_bytes": len((response_text or "").encode("utf-8")),
+                            "model_id": body.get("model", ""),
+                            "score": getattr(output_verdict, "confidence", 0.9),
+                            "reason": "redaction no-op on flagged PII/secret",
+                        },
+                    )
+                    return _build_block_response(
+                        403,
+                        "output_blocked",
+                        _build_zeroshield_metadata(
+                            action="block",
+                            reason="Output guard redaction was a no-op; blocked fail-closed.",
+                            detection_tier="output_guard",
+                            threat_type=output_verdict.threat_type,
+                            confidence=getattr(output_verdict, "confidence", 0.9),
+                            matched_patterns=getattr(output_verdict, "matched_patterns", []),
+                            compliance_tags=getattr(output_verdict, "compliance_tags", []),
+                            original_prompt=prompt,
+                            detail=output_verdict.detail,
+                            processing_time_ms=elapsed_ms,
+                            security_incident=True,
+                        ),
+                        stage_metrics=stage_metrics,
+                        prompt=prompt,
+                        route_metadata=route_metadata,
+                        requested_model=body.get("model", ""),
+                        scan_verdict=scan_verdict,
+                        output_scan_verdict=output_verdict,
+                    )
+                _oact = "redact"
                 _set_completion_response_text(llm_resp, redacted_response)
                 response_text = redacted_response
                 output_enforcement = _merge_output_enforcement_state(
                     output_enforcement,
                     {
                         "action": _oact,
-                        "reason": (
-                            f"Output guard redacted {output_verdict.threat_type or 'unsafe'} content before delivery."
-                            if _redact_changed
-                            else f"Output guard flagged {output_verdict.threat_type or 'unsafe'} content (no maskable pattern matched; delivered unchanged)."
-                        ),
+                        "reason": f"Output guard redacted {output_verdict.threat_type or 'unsafe'} content before delivery.",
                         "detail": output_verdict.detail,
                         "detection_tier": "output_guard",
                         "threat_type": output_verdict.threat_type,
@@ -7987,12 +8116,6 @@ async def proxy_chat(
                 )
                 _audit_output_incident(
                     org_slug=org_slug or "",
-                    # H-01 FIX: the executed action on this path is redact (or flag
-                    # when nothing maskable matched, per _oact) — NOT rewrite. The
-                    # decision was hardcoded "rewrite", mislabeling every output-guard
-                    # redact in the audit trail and contradicting both the telemetry
-                    # action (_oact) and the rule_code (..._redact_...). Use the honest
-                    # executed action.
                     decision=_oact,
                     rule_code=f"output_guard_redact_{output_verdict.threat_type}",
                     metadata={
@@ -8002,7 +8125,7 @@ async def proxy_chat(
                         "matched_patterns": getattr(output_verdict, "matched_patterns", []),
                     },
                 )
-            if output_verdict.action == "rewrite":
+            if _out_decision.action == "rewrite":
                 LOG.info("Output rewrite triggered (type=%s, user=%s)", output_verdict.threat_type, user_id)
                 rewritten_response, _rw_reinferred = await _rewrite_output_response_text_via_router(
                     output_verdict.threat_type, output_verdict.detail, response_text, body
@@ -8099,7 +8222,7 @@ async def proxy_chat(
                         "matched_patterns": getattr(output_verdict, "matched_patterns", []),
                     },
                 )
-            if output_verdict.action == "flag":
+            if _out_decision.action == "flag":
                 if output_verdict.threat_type == "hallucination":
                     hallucination_flagged = True
                 output_enforcement = _merge_output_enforcement_state(
