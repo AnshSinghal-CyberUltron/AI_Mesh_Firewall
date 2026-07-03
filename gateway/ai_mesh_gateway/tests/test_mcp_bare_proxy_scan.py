@@ -1114,8 +1114,12 @@ async def test_ext_proxy_ssrf_guard_blocks_when_url_unsafe():
                       lambda *_a, **_k: (False, "cloud metadata endpoint (169.254.169.254)")):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 400
-    err = _decode(resp)["error"]
-    assert "SSRF guard" in err and "metadata" in err
+    # CLEANUP-06: the block still returns 400, but the SSRF reason (incl. the internal
+    # cloud-metadata IP) is NO LONGER echoed — the client sees only a clean branded code.
+    data = _decode(resp)
+    assert data.get("code")
+    blob = json.dumps(data)
+    assert "169.254.169.254" not in blob and "metadata" not in blob and "SSRF guard" not in blob
 
 
 @pytest.mark.asyncio
@@ -1130,7 +1134,11 @@ async def test_ext_proxy_ssrf_guard_real_resolution_blocks_localhost(monkeypatch
          patch.object(mcp_proxy, "is_safe_outbound_url", _real):
         resp = await mcp_proxy.ext_mcp_proxy("localhost/mcp", req)
     assert resp.status_code == 400
-    assert "SSRF guard" in _decode(resp)["error"]
+    # CLEANUP-06: block preserved, but the resolved-loopback reason is not echoed.
+    data = _decode(resp)
+    assert data.get("code")
+    blob = json.dumps(data)
+    assert "127.0.0.1" not in blob and "SSRF guard" not in blob and "localhost" not in blob
 
 
 @pytest.mark.asyncio

@@ -1837,10 +1837,9 @@ async def ext_mcp_proxy(path: str, request: Request):
             "ext_mcp_proxy.ssrf_blocked host=%s: %s", hostname, _ssrf_reason,
         )
         await _ext_audit("block", "ssrf_blocked")  # CHG-0068
-        return JSONResponse(
-            content={"error": f"Upstream URL rejected by SSRF guard: {_ssrf_reason}"},
-            status_code=400,
-        )
+        # CLEANUP-06: never echo the SSRF reason (raw errno / resolved internal IP).
+        clean = await sanitize_mcp_error(raw=_ssrf_reason, server_slug=f"ext:{hostname}")
+        return JSONResponse(content=clean, status_code=400)
 
     # CHG-0033: strip the caller's gateway credentials before forwarding to the
     # third-party external server (least-privilege / no credential leak). Inject
@@ -2548,10 +2547,10 @@ async def internal_discover_tools(request: Request):
             "Blocked discover-tools to unsafe upstream URL (org=%s server=%s): %s",
             org_slug, server_slug, _reason,
         )
-        return JSONResponse(
-            content={"error": f"Upstream URL rejected by SSRF guard: {_reason}"},
-            status_code=400,
-        )
+        # CLEANUP-06: the SSRF reason can carry a raw DNS errno OR a resolved internal
+        # IP — classify it into a clean message; the raw reason → log + diag by ref.
+        clean = await sanitize_mcp_error(raw=_reason, org_slug=org_slug, server_slug=server_slug)
+        return _discovery_error_response(clean)
 
     # Build auth headers from the request body (backend passes auth info)
     upstream_auth_headers = {}
@@ -2847,10 +2846,10 @@ async def internal_tools_call(request: Request):
             "Blocked tools-call to unsafe upstream URL (org=%s server=%s): %s",
             org_slug, server_slug, _reason,
         )
-        return JSONResponse(
-            content={"error": f"Upstream URL rejected by SSRF guard: {_reason}"},
-            status_code=400,
-        )
+        # CLEANUP-06: classify the SSRF reason (raw errno / resolved internal IP) into
+        # a clean message; the raw reason → log + diag by ref.
+        clean = await sanitize_mcp_error(raw=_reason, org_slug=org_slug, server_slug=server_slug)
+        return _discovery_error_response(clean)
 
     upstream_auth_headers = {}
     req_auth_type = body.get("auth_type", "none")

@@ -135,3 +135,27 @@ async def test_connection_refused_returns_clean_message():
     assert body.get("code") == "MCP_CONNECTION_REFUSED"
     blob = json.dumps(body)
     assert "10.1.2.3" not in blob and "Errno" not in blob
+
+
+@pytest.mark.asyncio
+async def test_ssrf_reject_dns_reason_is_clean():
+    # CLEANUP-06: the SSRF guard rejects before any fetch; its reason can carry a raw
+    # DNS errno or a resolved internal IP — the client must see only a clean message.
+    ssrf_reason = ("DNS resolution failed for 'secret-host.internal': "
+                   "[Errno -2] Name or service not known")
+    with (
+        patch.object(mcp_proxy, "_valid_internal_key", return_value=True),
+        patch.object(mcp_proxy, "_is_sandbox_routed", return_value=False),
+        patch.object(mcp_proxy, "_get_server_config",
+                     AsyncMock(return_value={"transport": "streamable-http",
+                                             "url": "https://secret-host.internal/mcp"})),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "is_safe_outbound_url", return_value=(False, ssrf_reason)),
+    ):
+        resp = await mcp_proxy.internal_discover_tools(_req())
+    body = json.loads(resp.body.decode("utf-8"))
+    assert body.get("code") == "MCP_DNS_FAILURE"
+    blob = json.dumps(body)
+    for tok in ("secret-host.internal", "Errno", "Name or service", "SSRF"):
+        assert tok not in blob, f"leak: {tok!r}"
