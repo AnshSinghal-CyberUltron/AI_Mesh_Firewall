@@ -2283,3 +2283,22 @@ Probed decoy-padding / truncation-boundary evasion (+ fancy-digit PII). Findings
 (`test_g77_oversized_obfuscated_pii_prompt_is_blocked`), so raising the prompt cap without raising the canon
 cap fails HERE instead of silently opening an obfuscated-PII-past-the-cap evasion. golden **452 passed × 3**
 (was 450; +2). Honest outcome: this angle was already defended; froze the defense against config drift.
+
+---
+
+## G78 (3 angles DEFENDED — froze indirect-injection) — 2026-07-03
+Probed three fresh angles; ALL already defended (no new leak — the firewall is robust here):
+- **Output-side symmetry:** the OutputGuard (`_check_pii_secrets` / `_check_credential_exposure`) catches
+  bidi/ALM/whitespace-split-base64 obfuscated secrets IN MODEL OUTPUT (redact/block) — it delegates to the
+  shared G74-G76-fixed patterns detectors, so the input-side fixes propagate to egress automatically.
+- **base64url:** a url-safe (`-_`) base64 blob of a connection-string/credential that DIFFERS from standard
+  base64 is still decoded + redacted. Handled.
+- **Indirect prompt injection via NON-user roles (OWASP LLM01):** `main._extract_prompt_from_messages`
+  flattens EVERY role's content into the scanned prompt, so injection via a tool result (RAG/retrieved),
+  a forged system/developer turn, a fake assistant turn, an obfuscated (bidi) tool result, list-shaped
+  content, and even split across multiple tool turns (RAG-poisoning) → all **block**. Legit system prompt
+  ("You are a helpful assistant") + tool JSON → allow (the gateway brackets its own role labels → FP-safe).
+**Froze (owned regression):** `ai_mesh_gateway/tests/test_indirect_injection_roles.py` (8): 6 indirect-
+injection-blocked + 2 legit-role FP guards — LLM01-indirect is a top OWASP class; a future change to the
+role-flattening now fails here. Test-only (no prod change); 8 passed; golden 452 unchanged.
+Session ledger: G74/G75/G76 = 4 real leaks fixed+deployed; G77/G78 = angles verified defended + frozen.
