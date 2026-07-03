@@ -555,6 +555,20 @@
       (client-concat-dependent) — future item. NOTE (verification-only): leakage_detector.track_cross_request
       is DEAD CODE (defined+tested+made-atomic in CHG-0084 but never wired into any request flow); it's a crude
       per-key fragment heuristic that would FP on legit list-returning tools — inactivity is defensible.
+      -> content-array-split residual CLOSED by CHG-0100.
+      CHG-0100 (2026-07-03, MEDIUM-HIGH fail-open 1.4 leak, client-concat-dependent — secret SPLIT ACROSS
+      content-array items evaded the tool-result scan): a malicious upstream splits a secret so each half is a
+      benign sub-pattern in adjacent content blocks (…AKIAIOSFOD / NN7EXAMPLE…); the whole-payload scan sees the
+      halves separated by JSON structure so the value is never contiguous (tags=[]), yet a client that
+      CONCATENATES the text blocks reconstructs it. FIX (mcp_proxy.py): _scan_tool_result_floor runs a
+      cross-block check (unless per-tool monitor wins) — _result_has_split_secret concatenates all content-block
+      text + scans for HIGH-CONFIDENCE secrets/credentials (detect_secrets + detect_credential_exposure +
+      SECRET-tagged detect_pii); a kind in the concatenation but NOT wholly inside any single block was
+      reconstructed only by the join -> fail CLOSED (block). Scoped to secrets/credentials (not generic PII) ->
+      negligible FP; contiguous secret in one block left to the normal floor (no over-block). +8 tests. Gate:
+      8 + 1602 gateway passed 0 failed; broker 108. BLOCK decision (aidefence-as-oracle N/A). Evidence
+      mcp-parallel/findings/backstop-p-result-cross-block-split/finding.md. Completes the split-evasion family
+      (SSE CHG-0093, markdown CHG-0099, content-array CHG-0100).
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

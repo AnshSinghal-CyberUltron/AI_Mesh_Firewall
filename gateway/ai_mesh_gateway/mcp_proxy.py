@@ -1038,6 +1038,57 @@ async def _scan_tool_args_block(
     return scanned, blocked, tags, findings, meta
 
 
+def _result_content_texts(result_content) -> list[str]:
+    """CHG-0100: the ``text`` of each content block in a tool result (for cross-block
+    split-secret detection). Handles a ``{"content":[…]}`` dict or a bare block list."""
+    blocks = None
+    if isinstance(result_content, dict):
+        blocks = result_content.get("content")
+    elif isinstance(result_content, list):
+        blocks = result_content
+    if not isinstance(blocks, list):
+        return []
+    return [b["text"] for b in blocks
+            if isinstance(b, dict) and isinstance(b.get("text"), str)]
+
+
+def _result_has_split_secret(result_content) -> tuple[bool, list[str]]:
+    """CHG-0100: detect a HIGH-CONFIDENCE secret SPLIT across content-array items.
+
+    A malicious upstream can split a secret so each half is a benign sub-pattern
+    (``…AKIAIOSFOD`` / ``NN7EXAMPLE…``) in adjacent content blocks. The whole-payload
+    scan never sees the value contiguous (the blocks are separated by JSON structure),
+    yet a client that CONCATENATES the text blocks reconstructs it. This scans the
+    block-text concatenation for secrets/credentials and returns the kinds that appear
+    there but NOT wholly inside any single block (i.e. reconstructed only by the join).
+    Scoped to secrets/credentials (not generic PII) so the ``""``-join can't false-fire on
+    two adjacent benign blocks — a real AWS key / token forming across a boundary from
+    legit text is astronomically unlikely."""
+    texts = _result_content_texts(result_content)
+    if len(texts) < 2:
+        return False, []  # need >=2 blocks to split a value across
+    from patterns import (
+        detect_credential_exposure,
+        detect_pii,
+        detect_secrets,
+        get_compliance_tags,
+    )
+    concat = "".join(texts)
+    found: dict[str, str] = {}
+    found.update(detect_secrets(concat))
+    found.update(detect_credential_exposure(concat))
+    # credentials misfiled in PII_PATTERNS (aws_access_key etc.) — SECRET-tagged only.
+    found.update({
+        k: v for k, v in detect_pii(concat).items()
+        if "SECRET" in get_compliance_tags([k])
+    })
+    split_kinds = [
+        kind for kind, value in found.items()
+        if value and not any(str(value) in t for t in texts)
+    ]
+    return bool(split_kinds), split_kinds
+
+
 async def _scan_tool_result_floor(
     result_content,
     *,
@@ -1097,6 +1148,22 @@ async def _scan_tool_result_floor(
 
     if blocked:
         return scanned, True, tags, findings, meta
+
+    # CHG-0100: a HIGH-CONFIDENCE secret SPLIT ACROSS content-array items (each half a
+    # benign sub-pattern) evades the scan above — the items are separated by JSON
+    # structure so the value is never contiguous — but a client that concatenates the
+    # text blocks reconstructs it. Fail CLOSED (a cross-block split cannot be masked in
+    # place). A per-tool "monitor" still wins (observe-only), like the redaction floor.
+    if scan_action != "monitor":
+        _split, _split_kinds = _result_has_split_secret(result_content)
+        if _split:
+            LOG.warning(
+                "mcp_proxy.cross_block_split_secret org=%s server=%s tool=%s kinds=%s (FAIL-CLOSED)",
+                org_slug, server_slug, tool_name, _split_kinds,
+            )
+            return result_content, True, list(dict.fromkeys(list(tags) + ["SECRET"])), findings, {
+                **meta, "cross_block_split_secret": True,
+            }
 
     # E12 result-REDACTION floor: detected secret/PII but the resolved action did
     # not redact, so the result would egress RAW. Re-scan with a "redact" floor.

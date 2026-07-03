@@ -1403,6 +1403,24 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   touched: owning-session orchestrator (extends CHG-0096/0097); reuses chat guard neutralizers. Evidence
   `mcp-parallel/findings/backstop-p-result-markdown-split-pii/`. The MCP result egress now has FULL chat-guard
   render-leak parity. RESIDUAL: secret SPLIT ACROSS content-array items (client-concat-dependent) — future item.
+  → **CLOSED by CHG-0100.**
+
+- **CHG-0100** (2026-07-03) — **MEDIUM–HIGH fail-open 1.4 leak (client-concat-dependent): secret SPLIT ACROSS
+  content-array items evaded the tool-result scan**. A malicious upstream splits a secret so each half is a
+  benign sub-pattern in adjacent content blocks (`…AKIAIOSFOD` / `NN7EXAMPLE…`); the whole-payload scan sees
+  the halves separated by JSON structure so the value is never contiguous (`tags=[]`), yet a client that
+  CONCATENATES the text blocks reconstructs it. **FIX (`mcp_proxy.py`):** `_scan_tool_result_floor` runs a
+  cross-block check (unless per-tool `monitor` wins) — `_result_has_split_secret` concatenates all
+  content-block text + scans for HIGH-CONFIDENCE secrets/credentials (`detect_secrets` +
+  `detect_credential_exposure` + SECRET-tagged `detect_pii`); a kind in the concatenation but NOT wholly
+  inside any single block was reconstructed only by the join → fail CLOSED (block). Scoped to
+  secrets/credentials (not generic PII) → negligible FP; a contiguous secret in one block is left to the
+  normal redaction floor (no over-block). +8 tests (split-2/3 blocked; contiguous redacted-not-blocked; benign
+  multi-block passes; single block; monitor observe-only; 2 helper units). Gate: 8 + 1602 gateway passed, 0
+  failed; broker 108. BLOCK decision (aidefence-as-oracle N/A, also blind to AWS-key-class); behavior test
+  authoritative. touched: owning-session MCP scan core (completes CHG-0093/0099). Evidence
+  `mcp-parallel/findings/backstop-p-result-cross-block-split/`. Completes the split-evasion family (SSE
+  multi-line CHG-0093, markdown-split CHG-0099, content-array-split CHG-0100).
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 

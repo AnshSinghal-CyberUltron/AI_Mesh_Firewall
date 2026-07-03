@@ -916,6 +916,21 @@
     (aidefence on RENDERED view): has_pii true rendered-raw / false rendered-fixed. Evidence mcp-parallel/
     findings/backstop-p-result-markdown-split-pii/. The MCP result egress now has FULL chat-guard render-leak
     parity. RESIDUAL: secret SPLIT ACROSS content-array items (client-concat-dependent) — future item.
+    -> CLOSED by CHG-0100.
+  - CHG-0100 (2026-07-03) — MEDIUM-HIGH fail-open 1.4 leak (client-concat-dependent): secret SPLIT ACROSS
+    content-array items evaded the tool-result scan. A malicious upstream splits a secret so each half is a
+    benign sub-pattern in adjacent content blocks (…AKIAIOSFOD / NN7EXAMPLE…); the whole-payload scan sees the
+    halves separated by JSON structure so the value is never contiguous (tags=[]), yet a client that
+    CONCATENATES the text blocks reconstructs it. FIX (mcp_proxy.py): _scan_tool_result_floor runs a cross-block
+    check (unless per-tool monitor wins) — _result_has_split_secret concatenates all content-block text + scans
+    for HIGH-CONFIDENCE secrets/credentials (detect_secrets + detect_credential_exposure + SECRET-tagged
+    detect_pii); a kind in the concatenation but NOT wholly inside any single block was reconstructed only by
+    the join -> fail CLOSED (block). Scoped to secrets/credentials (not generic PII) -> negligible FP;
+    contiguous secret in one block left to the normal floor (no over-block). +8 tests (split-2/3 blocked;
+    contiguous redacted-not-blocked; benign multi-block passes; single block; monitor observe-only; 2 helpers).
+    Gate: 8 + 1602 gateway passed 0 failed; broker 108. BLOCK decision (aidefence-as-oracle N/A). Evidence
+    mcp-parallel/findings/backstop-p-result-cross-block-split/. Completes the split-evasion family (SSE CHG-0093,
+    markdown CHG-0099, content-array CHG-0100).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
