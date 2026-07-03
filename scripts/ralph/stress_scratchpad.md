@@ -1840,3 +1840,64 @@
   event.action. The HONEST per-stage consumer is `frontend/src/components/simulator/StageTimeline.jsx`.
   TRACE_UI_CONTRACT.md now exists at docs/pipeline/TRACE_UI_CONTRACT.md (integrated). R6 must reconcile both.
 - `impeccable` skill/plugin is NOT installed → do R6 polish manually.
+
+---
+
+## G72 (RESILIENCE / availability) — 2026-07-03 — MAJOR MIS-DIAGNOSIS CORRECTION + root-cause fix
+**Prior windows were WRONG about "free OpenRouter model degradation."** The R5 allowed/redact
+round-trip has been "timing out" for DAYS and I attributed it to degraded free models. That was a
+symptom, not the cause. Hard evidence (gateway logs, container `ai_mesh_firewall-gateway-1`, ~01:34Z):
+```
+01:34:08  Chat routing selected model cohere/north-mini-code:free
+01:34:10  litellm.acompletion(cohere/north-mini-code:free) 200 OK   ← model ANSWERED in ~2.3s
+01:34:11  ERROR HTTP request failed → TimeoutError connecting http://control:8000/api/security/scan/
+01:34:11  WARNING Backend unreachable (attempt 3/5). Retrying in 8.4s... [.../api/security/scan/]
+```
+**Root cause:** the chat handler AWAITS the org "deep scan" task (`main.py` ~7840) which calls
+`_security_scan` → `_http_request_with_retry`. That reused the STARTUP retry budget
+(`STARTUP_RETRY_MAX_ATTEMPTS=5`, base 2s→max 30s backoff, **and** a 30s/attempt connect timeout).
+Control is chronically `unhealthy` (hangs under multi-session load), so the connect times out each
+attempt → ~40s retry storm → **every ALLOWED chat request timed out**, even though the model itself
+answered in ~2s. The BLOCK path returns in 0.0s because it never forwards / never awaits the scan.
+The advisory scan is BEST-EFFORT: it can only ADD a high-certainty block (`main.py` ~5896/~7841), it
+NEVER gates an `allow`, and on non-200 it already falls through — the LOCAL policy engine +
+Tier-1/Tier-2 scanners are authoritative. So bounding it is safe (no fail-open, no enforcement change).
+
+**Fix (main.py, minimal + claimed):** threaded a `timeout` param through `_http_request` /
+`_http_request_with_retry` (default 30 → byte-for-byte identical for every existing caller), and made
+`_security_scan` FAIL FAST — `max_attempts=1`, `timeout=4.0s`, both CONFIG-overridable
+(`security_scan_max_attempts` / `security_scan_timeout_seconds`). Worst-case added latency on an
+unhealthy control plane: ~4s instead of ~40s. STARTUP registration retry budget left UNCHANGED (correct
+for boot-time registration).
+**Test:** `gateway/ai_mesh_gateway/tests/test_security_scan_failfast.py` (4): bounded constants;
+single-attempt-no-backoff when control down; CONFIG override honored; timeout threads to `_http_request`.
+**Verify:** golden `tests/golden` = 429 passed / 7 skipped × 3 consecutive; regression slice
+(test_config + test_circuit_breaker + test_egress_wire_capture + failfast) = 105 passed. Rebuilt +
+redeployed the baked gateway image (rollback tag `ai_mesh_firewall-gateway:rollback-prefailfast`).
+**LIVE (control healthy again):** benign → allow, **4.8s**, model replied `"Paris"` (was timing out
+40s+); `gpt-5.2` → **7.5s** (also previously "timed out" — same retry-storm cause, NOT the model);
+pii_ssn → redact (200, no raw SSN in envelope OR gateway logs — B1 egress-truth ⇒ a redact returning
+200-not-fail-closed means the bytes WERE masked; also hermetic `test_egress_wire_capture` proves the
+egress payload carries no raw PII); credential(sk_live_) → redact; injection → block 0.0s.
+Empty model replies on the PII cases = output-guard safe-side over-redaction, NOT a leak.
+
+**Ops facts proven this iteration (durable):**
+- Gateway loads compiled policies from **Redis** (`policies:compiled:{org}` — zeroshield v39, 45 policies),
+  NOT from control's HTTP API. → Restarting the gateway is SAFE even while control is unhealthy: it comes
+  up fully ENFORCING from Redis (`POLICY_SYNC.is_loaded`), fail-closes only if Redis lacks the bundle.
+- Redeploy of the baked gateway: `docker tag ...:latest ...:rollback-<x>` → `docker compose build gateway`
+  → `docker compose up -d --no-deps gateway` → poll `/health`. Foreground `sleep`-loops can hit the 2m
+  tool cap → poll health in a `run_in_background` bash loop.
+- When a gateway redeploy shows `unhealthy`, `docker compose restart control` fixed it (control healthy
+  in ~12s), which unblocked the gateway's pending startup registration.
+
+## DISCOVERED FOLLOW-UP (candidate NEXT item — NOT fixed this iteration, one-item discipline)
+**Startup-registration availability defect:** the lifespan `startup()` performs MULTIPLE sequential
+BLOCKING control calls (`/api/agents/version/`, `/api/gateways/instances/register/`, …) each via
+`_http_request_with_retry` with the 5-attempt × up-to-30s-connect-timeout budget. When control is
+unhealthy at boot, each call burns minutes before giving up ("Gateway starting without registration"),
+so the gateway is UNAVAILABLE (`/health` hangs, workers stuck at "Waiting for application startup") for
+MANY minutes on every restart while control is down. Registration is non-fatal (it gives up and serves),
+so the fix is to make these boot-time control calls non-blocking / short-timeout / backgrounded so the
+gateway serves from its Redis policy cache immediately and registers opportunistically. Different code
+path from G72 (startup vs per-request) → separate scoped item.

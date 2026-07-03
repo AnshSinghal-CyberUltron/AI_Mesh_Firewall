@@ -452,7 +452,7 @@ METRICS = {
 }
 
 
-def _http_request(method, url, data=None, api_key=None):
+def _http_request(method, url, data=None, api_key=None, timeout=30):
     import urllib.request
     import urllib.error
 
@@ -464,7 +464,7 @@ def _http_request(method, url, data=None, api_key=None):
         req.add_header("Authorization", f"Bearer {api_key}")
         req.add_header("X-Agent-Key", api_key)
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.getcode(), json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
         body = e.read().decode()
@@ -490,6 +490,7 @@ def _http_request_with_retry(
     max_attempts: int = STARTUP_RETRY_MAX_ATTEMPTS,
     base_delay: float = STARTUP_RETRY_BASE_DELAY_SECONDS,
     max_delay: float = STARTUP_RETRY_MAX_DELAY_SECONDS,
+    timeout: float = 30.0,
 ) -> tuple:
     import random
 
@@ -497,7 +498,7 @@ def _http_request_with_retry(
     last_body = None
 
     for attempt in range(1, max_attempts + 1):
-        code, body = _http_request(method, url, data=data, api_key=api_key)
+        code, body = _http_request(method, url, data=data, api_key=api_key, timeout=timeout)
         if code is not None:
             return code, body
         last_code = code
@@ -1085,11 +1086,35 @@ def _policy_check_cached(
     return 200, response
 
 
+# The advisory backend security scan (org deep_scan / call_security_scan) is
+# BEST-EFFORT: its result can only ADD a high-certainty block (main.py ~5896 and
+# ~7841) — it NEVER gates an allow, and the local policy engine + Tier-1/Tier-2
+# scanners are the authoritative enforcement. It therefore must FAIL FAST so a slow
+# or unhealthy control plane can never stall the inline request path.
+#
+# Root cause it fixes: this call previously reused _http_request_with_retry's
+# STARTUP-grade defaults (5 attempts x up to ~30s backoff + 30s/attempt timeout).
+# The chat handler AWAITS the deep-scan task before returning the response
+# (main.py ~7840), so when control was unhealthy every ALLOWED chat request hung
+# ~40s and timed out — even though the model itself answered in ~2s. A single
+# short-timeout attempt bounds the added latency; on failure the response is
+# delivered on the strength of the local scanners (no fail-open, no regression).
+SECURITY_SCAN_MAX_ATTEMPTS = 1
+SECURITY_SCAN_TIMEOUT_SECONDS = 4.0
+
+
 def _security_scan(prompt, response_text=""):
     cfg = CONFIG
     url = f"{cfg['backend_url']}/api/security/scan/"
     payload = {"prompt": prompt, "response": response_text or ""}
-    return _http_request_with_retry("POST", url, data=payload, api_key=cfg.get("api_key"))
+    return _http_request_with_retry(
+        "POST",
+        url,
+        data=payload,
+        api_key=cfg.get("api_key"),
+        max_attempts=int(cfg.get("security_scan_max_attempts", SECURITY_SCAN_MAX_ATTEMPTS)),
+        timeout=float(cfg.get("security_scan_timeout_seconds", SECURITY_SCAN_TIMEOUT_SECONDS)),
+    )
 
 
 def _org_ns_project_id(auth_ctx) -> str:
