@@ -6,8 +6,12 @@
       or shared-file change, post a FILE-CONFLICT/STACK-CHANGE entry to all four memories (§1). Rebase from main.
 
 ## P0 — Measure
-- [ ] 01. Baseline load test (control + gateway): RPS, p50/p99, per-core utilization (prove ~2 cores used) → docs/perf/BASELINE.md.
-- [ ] 02. Measure per-worker RSS (control + gateway) under load → feeds the RAM cap.
+- [x] 01. Baseline load test (control + gateway): RPS, p50/p99, per-core utilization (prove ~2 cores used) → docs/perf/BASELINE.md.
+      → scripts/perf/loadtest.py (stdlib, reusable for P7). CONTROL single-daphne: 346 rps, p99 384ms, 1.16 cores.
+      GATEWAY 6 workers: 3146 rps, p99 108ms, 4.33 cores. Combined ~5.5/16 cores (~66% idle) — the throttling proven.
+- [x] 02. Measure per-worker RSS (control + gateway) under load → feeds the RAM cap.
+      → gateway ~300MiB/worker (incremental ~0.22-0.30GiB), control ~1GiB single daphne. Detector default 512MiB is
+      conservative (RAM-bound stays > core count on both 6c/16G and 12c/60G → CPU-bound, safe). See docs/perf/BASELINE.md.
 
 ## P1 — Container-aware detector
 - [x] 03. resource_budget.py: read cgroup v2 (cpu.max, memory.max) + v1 (cfs_quota/period, limit_in_bytes); fall back to sched_getaffinity / /proc/meminfo.
