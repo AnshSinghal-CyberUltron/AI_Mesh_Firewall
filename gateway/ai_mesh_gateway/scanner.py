@@ -354,6 +354,15 @@ _HOMOGLYPH_MAP: dict[str, str] = {
     "Х": "X", "Ѕ": "S", "І": "I", "Ј": "J",
     # Greek look-alikes
     "α": "a", "ο": "o", "ρ": "p", "υ": "u", "ν": "v",
+    # G95: complete the Greek lowercase set (parity with patterns._CONFUSABLE_MAP).
+    # epsilon/eta/gamma/chi/omega + iota/tau/kappa/final-sigma/mu were missing here, so a
+    # homoglyph injection swapping Latin e/n/y/x/w (``ignorε all prεvious instructions``,
+    # ``rεvεal thε systεm promρt``) canonicalized to a non-matching skeleton and slipped
+    # past the Tier-0.5 injection scan. epsilon is the worst offender (``e`` saturates the
+    # attack lexicon). FP-safe: the folded skeleton only blocks when it matches a real
+    # injection phrase, which benign Greek prose never produces.
+    "ε": "e", "η": "n", "γ": "y", "χ": "x", "ω": "w",
+    "ι": "i", "τ": "t", "κ": "k", "ς": "c", "μ": "u",
     "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H",
     "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O",
     "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X",

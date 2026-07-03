@@ -47,6 +47,18 @@ def homoglyph(s: str) -> str:
     return "".join(_HOMO.get(c, c) for c in s.lower())
 
 
+# G95: Greek lowercase look-alikes. epsilon(e)/eta(n)/gamma(y) were the missing folds
+# that let a Greek-homoglyph injection ("ignorε all prεvious instructions") bypass BOTH
+# the Tier-0.5 injection scan and detect_pii/detect_secrets. NFKC leaves these as-is.
+_GREEK_HOMO = {"a": "α", "e": "ε", "o": "ο", "i": "ι", "p": "ρ", "n": "η",
+               "y": "γ", "v": "ν", "u": "υ", "x": "χ", "t": "τ", "k": "κ"}
+
+
+def greek_homoglyph(s: str) -> str:
+    """Substitute Latin letters with Greek confusables (epsilon/eta/gamma/… — NFKC-identity)."""
+    return "".join(_GREEK_HOMO.get(c, c) for c in s.lower())
+
+
 _BIDI_CTRLS = ("‮", "⁧", "‏", "؜", "⁩", "‭", "⁦")
 # RLO, RLI, RLM, ALM, PDI, LRO, LRI — all category Cf.
 

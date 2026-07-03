@@ -69,6 +69,15 @@ _CONFUSABLE_MAP = {
     # (what the lunate sigma ϲ folds to) imitates a Latin c; mu imitates u (micro-sign µ
     # NFKC-folds to μ first, so this covers both).
     "ρ": "p", "κ": "k", "τ": "t", "ς": "c", "μ": "u",
+    # G95: the original Greek lowercase set omitted epsilon/eta/gamma/upsilon/chi/omega,
+    # so a homoglyph injection that swaps Latin e/n/y/u/x/w for their Greek lookalikes
+    # (``ignorε all prεvious instructions``, ``rεvεal thε systεm promρt``) canonicalized
+    # to a NON-matching skeleton and slipped past BOTH the injection scan and
+    # detect_pii/detect_secrets. epsilon is the worst offender — ``e`` saturates the
+    # attack lexicon. Lunate epsilon ϵ (U+03F5) NFKC-folds to ε first, so this covers it
+    # too. FP-safe: a match only fires when the CANONICAL form is a real pattern, and no
+    # benign Greek prose canonicalizes to an English attack phrase / PII / secret.
+    "ε": "e", "η": "n", "γ": "y", "υ": "u", "χ": "x", "ω": "w",
     # Cyrillic UPPERCASE — visually identical to Latin capitals (classic homoglyph set)
     "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O",
     "Р": "P", "С": "C", "Т": "T", "У": "Y", "Х": "X", "Ѕ": "S", "Ј": "J",
