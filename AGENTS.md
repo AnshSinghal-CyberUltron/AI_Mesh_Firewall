@@ -772,6 +772,17 @@
     tests. Gate: 4 + 14 rate-limit + 1501 gateway passed, 0 failed; broker -k "not websocket" 108 passed.
     Evidence mcp-parallel/findings/backstop-p13-mcp-ratelimit-metric/. RESIDUAL: metering
     _enforce_org_tpm_rate_limit internally (chat + MCP) would be cleaner.
+  - CHG-0090 (2026-07-02) — 1.4 / item-20 concurrency dimension (verification + regression-lock, ZERO
+    defects): the 300–500-sandbox stress SCALE is host-blocked, but the 1.4 guardrails' concurrency-SAFETY is
+    provable here — the scan/redact chain (_scan_tool_result_floor → orchestrator → redact_all) runs against
+    MODULE-LEVEL state (compiled-pattern LRU, enabled-tools/server-config caches); a race could
+    cross-contaminate concurrent scans (one request's secret leaking into another's result). NEW TEST
+    (test_mcp_scan_concurrency_safety.py): 300 concurrent scans each w/ a UNIQUE canary secret+PII+IP across
+    10 orgs → 0 own-canary leaks + 0 cross-contamination; + 100 benign concurrent unchanged. Durable
+    regression backstop against a future edit adding shared mutable state to the hot scan path. Gate: 2 +
+    1527 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence
+    mcp-parallel/findings/backstop-p20-1.4-concurrency-safety/. HONESTY: proves concurrency-safety, NOT the
+    full 300–500-sandbox live stress (host-blocked, owned by CP47-50).
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)

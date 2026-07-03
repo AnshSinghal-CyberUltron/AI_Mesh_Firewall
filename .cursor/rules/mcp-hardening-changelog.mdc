@@ -1219,6 +1219,25 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `mcp-parallel/findings/backstop-p13-mcp-ratelimit-metric/`. **RESIDUAL:** metering
   `_enforce_org_tpm_rate_limit` INTERNALLY (chat + MCP callers all meter) would be a cleaner future refactor.
 
+- **CHG-0090** (2026-07-02) — 1.4 / **item-20 concurrency dimension** (verification + regression-lock, ZERO
+  defects found): item 20 requires the 1.4 guardrails to hold under peak load. The 300–500-sandbox ×
+  5k–10k-concurrent-call SCALE is host-blocked here, but the guardrails' concurrency-SAFETY is provable —
+  the MCP scan/redact chain (`_scan_tool_result_floor` → mcp_scan_orchestrator → `redact_all`) runs against
+  MODULE-LEVEL state (compiled-pattern LRU cache, enabled-tools / server-config caches); if any were mutated
+  per-scan or shared across coroutines without isolation, a race could CROSS-CONTAMINATE concurrent scans —
+  one request's secret/PII leaking into another's redacted result. A single-call unit test can't catch it.
+  NEW TEST (`test_mcp_scan_concurrency_safety.py`): fires 300 concurrent `_scan_tool_result_floor` calls
+  (`asyncio.gather`), each with a UNIQUE canary secret (`sk-ant-CANARY####…`) + PII (`user####@…`) +
+  internal IP across 10 orgs, and asserts (a) every call's OWN canary is masked (0 own-canary leaks) and (b)
+  NO call's result contains ANY OTHER call's canary (0 cross-contamination); + a 100-way benign concurrent
+  run that must pass through unchanged. RESULT: **0 leaks, 0 cross-contamination** → the chain is
+  effectively stateless/isolation-safe under concurrency. Durable regression backstop: a future edit
+  introducing shared mutable state into the hot scan path flips this red. Gate: 2 + 1527 gateway passed,
+  0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p20-1.4-concurrency-safety/`. **HONESTY NOTE:** proves concurrency-SAFETY
+  of the guardrails, NOT the full 300–500-sandbox / 5k–10k live stress (items 14–20) — still host-blocked,
+  owned by the live load harnesses (CP47–50).
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
