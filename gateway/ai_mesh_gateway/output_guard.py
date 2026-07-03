@@ -33,6 +33,7 @@ try:
         is_safety_refusal_output,
         redact_all,
         _iter_transport_decodes,
+        canonicalize_for_detection,
     )
 except ImportError:
     from patterns import (
@@ -45,6 +46,7 @@ except ImportError:
         is_safety_refusal_output,
         redact_all,
         _iter_transport_decodes,
+        canonicalize_for_detection,
     )
 
 LOG = logging.getLogger("gateway.output_guard")
@@ -202,7 +204,24 @@ def _url_smuggles_data(url: str) -> str:
     # use standard-base64 '/' which the split would otherwise break.)
     segmented = re.sub(r"[/?&=#;,.\s]+", " ", tail)
     decoded_parts: list[str] = []
-    for src in (tail, segmented):
+    # G86: an exfil beacon can interleave zero-width/bidi/format (Cf) chars THROUGH the
+    # base64/hex blob in the URL (``?d=W​W​9​1…``). The RAW _iter_transport_decodes token
+    # regex breaks on the Cf, so the encoded_payload signal never fired and the auto-render
+    # beacon egressed raw — yet the attacker's server strips the (percent-encoded) Cf and
+    # decodes the exfiltrated data. Decode over the Cf-stripped + whitespace-collapsed views
+    # too (parity with detection's _iter_transport_decodes_canon, G75/G76). detect_* below is
+    # already Cf-aware (canonicalizes), so sensitive_payload was covered; only encoded_payload
+    # (arbitrary non-PII data: system prompt / conversation) was Cf-blind. Keep the outer-token
+    # >=24 gate (low-FP), so use _iter_transport_decodes over each derived source.
+    _sources = [tail, segmented]
+    for _b in (tail, segmented):
+        _c = canonicalize_for_detection(_b)
+        if _c != _b and _c not in _sources:
+            _sources.append(_c)
+        _w = re.sub(r"\s+", "", _b)
+        if _w != _b and _w not in _sources:
+            _sources.append(_w)
+    for src in _sources:
         for tok, dec in _iter_transport_decodes(src):
             if len(tok) >= 24 and len(dec) >= 8:
                 decoded_parts.append(dec)
@@ -213,8 +232,12 @@ def _url_smuggles_data(url: str) -> str:
         return "encoded_payload"
     # G40: fallback for an oversized opaque blob the decode-byte cap skipped. Scan
     # BOTH the raw tail (query blobs) AND the delimiter-split view (so a PATH-segment
-    # blob fused with surrounding '/' and '.' is isolated and base64-aligned).
-    if _tail_has_oversized_encoded_blob(tail) or _tail_has_oversized_encoded_blob(segmented):
+    # blob fused with surrounding '/' and '.' is isolated and base64-aligned). G86: also
+    # the Cf-stripped canonical views so an oversized Cf-interleaved blob is not missed.
+    _c_tail, _c_seg = canonicalize_for_detection(tail), canonicalize_for_detection(segmented)
+    if (_tail_has_oversized_encoded_blob(tail) or _tail_has_oversized_encoded_blob(segmented)
+            or (_c_tail != tail and _tail_has_oversized_encoded_blob(_c_tail))
+            or (_c_seg != segmented and _tail_has_oversized_encoded_blob(_c_seg))):
         return "encoded_payload"
     return ""
 
