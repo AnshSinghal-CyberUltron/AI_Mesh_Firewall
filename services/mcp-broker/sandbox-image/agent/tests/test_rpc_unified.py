@@ -289,3 +289,38 @@ def test_unexpected_exception_returns_jsonrpc_error_not_500(agent_client):
     assert body["error"]["code"] == -32000
     assert body["error"]["message"] == "internal sandbox agent error"
     assert "SECRET_INTERNAL_DETAIL" not in body["error"]["message"]  # no detail leak
+
+
+def test_agent_rpc_requires_key_when_configured(agent_client):
+    # CHG-0136: opt-in broker->agent auth. When MCP_AGENT_INTERNAL_KEY is configured,
+    # /rpc requires a matching X-Sandbox-Agent-Key; missing/wrong -> -32001, correct ->
+    # dispatches. Unset -> allowed (backward-compat). send_jsonrpc is mocked for speed.
+    from unittest.mock import AsyncMock, patch
+    from agent import main as agent_main
+
+    payload = {
+        "server_slug": "u-stub", "transport": "stdio",
+        "stdio": {"command": "npx", "args": ["-y", "x"], "env": {}},
+        "method": "tools/list", "jsonrpc_id": 5,
+    }
+    ok = {"jsonrpc": "2.0", "id": 5, "result": {"tools": []}}
+
+    with (
+        patch.object(agent_main, "_AGENT_INTERNAL_KEY", "topsecret"),
+        patch.object(agent_main, "send_jsonrpc", new=AsyncMock(return_value=ok)),
+    ):
+        # missing key -> rejected
+        assert agent_client.post("/rpc", json=payload).json()["error"]["code"] == -32001
+        # wrong key -> rejected
+        r_wrong = agent_client.post("/rpc", json=payload, headers={"X-Sandbox-Agent-Key": "nope"})
+        assert r_wrong.json()["error"]["code"] == -32001
+        # correct key -> dispatches
+        r_ok = agent_client.post("/rpc", json=payload, headers={"X-Sandbox-Agent-Key": "topsecret"})
+        assert r_ok.json() == ok
+
+    # unset -> allowed with no header (backward-compatible)
+    with (
+        patch.object(agent_main, "_AGENT_INTERNAL_KEY", ""),
+        patch.object(agent_main, "send_jsonrpc", new=AsyncMock(return_value=ok)),
+    ):
+        assert agent_client.post("/rpc", json=payload).json() == ok

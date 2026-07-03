@@ -6,6 +6,7 @@ SANDBOX_TRANSPORT_CONTRACT.md.
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -24,6 +25,16 @@ from agent.upstream_manager import (
 
 LOG = logging.getLogger("sandbox_agent")
 ORG_SLUG = os.environ.get("ORG_SLUG", "default")
+# CHG-0136: OPT-IN broker→agent authentication. When set (provisioned into the
+# sandbox env by the broker's docker_manager, matching the broker's own key), the
+# /rpc handler requires a matching X-Sandbox-Agent-Key header — a SECOND layer of
+# cross-tenant isolation independent of Docker network isolation. Even if a sibling
+# sandbox reached this agent's port (e.g. a shared-bridge/host-run topology or a
+# network misconfig), it cannot call /rpc without the key — and the clean
+# child-env (_build_child_env allowlist + denylist) keeps the key out of every
+# spawned MCP server, so a malicious server can't read it. Unset ⇒ allow
+# (backward-compatible; the network isolation remains the primary control).
+_AGENT_INTERNAL_KEY = os.environ.get("MCP_AGENT_INTERNAL_KEY", "").strip()
 
 TransportKind = Literal["stdio", "streamable-http", "sse", "websocket"]
 
@@ -98,8 +109,16 @@ async def health() -> dict[str, Any]:
 async def rpc(
     body: SandboxRpcRequest,
     x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
+    x_sandbox_agent_key: str | None = Header(default=None, alias="X-Sandbox-Agent-Key"),
 ) -> dict[str, Any]:
     """Transport-agnostic JSON-RPC forward (stdio, streamable-http, sse, websocket)."""
+    # CHG-0136: opt-in broker→agent auth (defense-in-depth for cross-tenant isolation).
+    # Enforced only when MCP_AGENT_INTERNAL_KEY is configured; constant-time compare.
+    if _AGENT_INTERNAL_KEY and not hmac.compare_digest(
+        x_sandbox_agent_key or "", _AGENT_INTERNAL_KEY
+    ):
+        LOG.warning("agent rpc rejected: missing/invalid X-Sandbox-Agent-Key org=%s", ORG_SLUG)
+        return _jsonrpc_error(body.jsonrpc_id, -32001, "unauthorized: invalid sandbox agent key")
     # CHG-0121: log the propagated correlation id (last trace hop) with SAFE metadata
     # ONLY — never params/args/env/upstream, which can carry PII/secrets (mirrors the
     # broker CHG-0052 log). Makes the trace continuous gateway → broker → sandbox agent.

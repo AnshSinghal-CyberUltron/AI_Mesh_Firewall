@@ -225,12 +225,21 @@ async def _post_agent_rpc(
     gateway -> broker -> sandbox agent.
     """
     url = agent_url
-    _headers = {"X-Request-ID": request_id} if request_id else None
+    # CHG-0121: propagate the trace id. CHG-0136: attach the opt-in broker→agent key
+    # (X-Sandbox-Agent-Key) when configured — a second cross-tenant isolation layer the
+    # agent verifies (docker_manager provisions the SAME key into the sandbox env). Unset
+    # ⇒ no header (backward-compatible; the agent then does not require it).
+    _headers: dict[str, str] = {}
+    if request_id:
+        _headers["X-Request-ID"] = request_id
+    _agent_key = os.environ.get("MCP_AGENT_INTERNAL_KEY", "").strip()
+    if _agent_key:
+        _headers["X-Sandbox-Agent-Key"] = _agent_key
     last_exc: httpx.HTTPError | None = None
     for attempt in range(1, _AGENT_READY_RETRIES + 1):
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                return await client.post(url, json=payload, headers=_headers)
+                return await client.post(url, json=payload, headers=_headers or None)
         except httpx.HTTPError as exc:
             last_exc = exc
             if attempt >= _AGENT_READY_RETRIES:

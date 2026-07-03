@@ -620,3 +620,17 @@ def test_ensure_does_not_recreate_when_start_succeeds(manager):
     stopped.remove.assert_not_called()                 # NOT recreated on a good start
     manager.client.containers.run.assert_not_called()
     assert info.container_id == "keep1"
+
+
+# ── CHG-0136: broker→agent key provisioning (opt-in defense-in-depth) ────────
+
+def test_run_kwargs_provisions_agent_key_when_broker_has_it(manager, monkeypatch):
+    monkeypatch.setenv("MCP_AGENT_INTERNAL_KEY", "broker-key-123")
+    env = manager._run_kwargs("acme")["environment"]
+    assert env.get("MCP_AGENT_INTERNAL_KEY") == "broker-key-123"
+
+
+def test_run_kwargs_omits_agent_key_when_broker_lacks_it(manager, monkeypatch):
+    monkeypatch.delenv("MCP_AGENT_INTERNAL_KEY", raising=False)
+    env = manager._run_kwargs("acme")["environment"]
+    assert "MCP_AGENT_INTERNAL_KEY" not in env

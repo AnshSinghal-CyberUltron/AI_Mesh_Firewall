@@ -20,6 +20,7 @@ LOG = logging.getLogger("ai_mesh_shared.mcp_stdio_common")
 _SECRET_ENV_DENYLIST = {
     "GATEWAY_INTERNAL_API_KEY",
     "MCP_BROKER_INTERNAL_KEY",
+    "MCP_AGENT_INTERNAL_KEY",  # CHG-0136: broker→agent key; must never reach a spawned server
     "MCP_BROKER_URL",
     "AGENT_API_KEY",
     "BACKEND_URL",

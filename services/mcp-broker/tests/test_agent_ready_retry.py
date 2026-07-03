@@ -118,3 +118,31 @@ async def test_no_request_id_sends_no_header(monkeypatch):
         _FakeDockerManager(), "org", "http://sandbox:8790/rpc", {"m": 1}, 5.0,
     )
     assert _FakeClient.last_headers is None  # no spurious empty header
+
+
+# ── CHG-0136: opt-in broker→agent key (X-Sandbox-Agent-Key) — second cross-tenant
+# isolation layer the agent verifies; attached only when MCP_AGENT_INTERNAL_KEY is set.
+
+
+@pytest.mark.asyncio
+async def test_sends_agent_key_header_when_configured(monkeypatch):
+    monkeypatch.setenv("MCP_AGENT_INTERNAL_KEY", "broker-key-xyz")
+    _install(monkeypatch, fail_until=0)
+    await routes._post_agent_rpc(
+        _FakeDockerManager(), "org", "http://sandbox:8790/rpc", {"m": 1}, 5.0,
+        request_id="trace-9",
+    )
+    assert _FakeClient.last_headers == {
+        "X-Request-ID": "trace-9",
+        "X-Sandbox-Agent-Key": "broker-key-xyz",
+    }
+
+
+@pytest.mark.asyncio
+async def test_no_agent_key_header_when_unset(monkeypatch):
+    monkeypatch.delenv("MCP_AGENT_INTERNAL_KEY", raising=False)
+    _install(monkeypatch, fail_until=0)
+    await routes._post_agent_rpc(
+        _FakeDockerManager(), "org", "http://sandbox:8790/rpc", {"m": 1}, 5.0,
+    )
+    assert _FakeClient.last_headers is None  # unset + no request_id -> no headers at all

@@ -535,6 +535,15 @@ class DockerManager:
             "UV_TOOL_BIN_DIR": "/var/cache/uv/bin",
         }
         environment.update(self._egress_proxy_env())
+        # CHG-0136: provision the OPT-IN broker→agent key into the sandbox so the agent
+        # can verify the X-Sandbox-Agent-Key header the broker sends (a second
+        # cross-tenant isolation layer, independent of network isolation). Same value the
+        # broker uses in _post_agent_rpc. Unset ⇒ not provisioned ⇒ the agent doesn't
+        # require it (backward-compatible). It is NOT in _SAFE_ENV_PASSTHROUGH and IS in
+        # _SECRET_ENV_DENYLIST, so it never reaches a spawned MCP server's env.
+        _agent_key = os.environ.get("MCP_AGENT_INTERNAL_KEY", "").strip()
+        if _agent_key:
+            environment["MCP_AGENT_INTERNAL_KEY"] = _agent_key
         kwargs: dict[str, Any] = {
             "image": self.config.image,
             "name": self.container_name(org_slug),
