@@ -1420,6 +1420,22 @@
         TWENTY-FIVE confirmed-live leaks (G40-G46, G49-G61, G66-G70) + G62 DiD + 3 DoS (G63-G65) + G48 + 2
         tradeoffs. Value-split evasion now covered on ALL axes: across turns (G69), across content-parts (G70),
         streaming output chunks (E14 lookahead) — the firewall's scan view matches the model's concatenated view.
+    - 🔴 G71 value split across a TOOL result + user turn bypassed detection (agentic, 2026-07-03):
+        BROAD SWEEP confirmed everything realistic covered (base64∘homoglyph, hex, input_text-part splits, long
+        credential splits) — one gap: a value split with one half in a `tool` result and the other in a user
+        turn -> ALLOW. ROOT: G69's cross-turn value reassembly (_reassemble_user_turns) folds ONLY the user/
+        developer instruction channel (drops tool/assistant/system), so a value split across a tool result
+        (client/tool-provided data — an AGENTIC-POISONING surface) + a user turn wasn't reassembled. FIX (owned
+        scanner.py): parameterized _reassemble_user_turns(roles=...) and use _VALUE_ROLES=(user,developer,tool)
+        for the no-sep value check. assistant EXCLUDED on purpose: its content is prior model OUTPUT already
+        output-scanned when produced, AND folding it would INSERT an ack ('ok') between two user-turn halves,
+        breaking a real user+ack+user split — INITIAL fix included assistant and broke the g69_ssn_ack golden;
+        caught it, removed assistant. VERIFY: tool+user / tool+tool splits redact; user+ack+user (G69) still
+        redacts; benign multi-role (tool 'order 42 shipped', assistant weather ack) allow; injection reassembly
+        UNCHANGED (instruction-only, still blocks). FROZEN G71 golden (3 split + 2 benign). GATE: golden 429×3
+        (was 424; +5); gateway suite 1558 pass. commit 9e50122b. REDEPLOYING (rollback pre-g71).
+        TWENTY-SIX confirmed-live leaks (G40-G46, G49-G61, G66-G71) + G62 DiD + 3 DoS (G63-G65) + G48 + 2
+        tradeoffs. Cross-turn value reassembly is now ROLE-COMPLETE for the data channel (user/developer/tool).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
