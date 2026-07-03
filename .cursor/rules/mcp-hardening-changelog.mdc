@@ -1785,6 +1785,21 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `npx`/args). Oracle N/A — tracing-completeness fix, no PII delta. touched: broker `_post_agent_rpc` + in-container
   agent `/rpc`; completes CHG-0050/0051/0052/0120. Evidence `mcp-parallel/findings/backstop-p-agent-correlation-id/`.
 
+- **CHG-0122** (2026-07-03) — **MEDIUM 1.4 leak: finite SSE branch didn't scan interleaved server-pushed
+  notifications**. The ext-proxy FINITE SSE branch (tools/call / resources/* / prompts/*, buffered CHG-0039/0064)
+  called `_scan_reframe_sse_tool_result` with the DEFAULT `scan_notifications=False`. A finite MCP call's SSE response
+  can INTERLEAVE server-pushed notification frames (`notifications/progress`, `notifications/message`) BEFORE the final
+  result; with `scan_notifications=False` those frames are re-emitted VERBATIM (only the result/error event is scanned)
+  → a secret/PII in a mid-call notification egressed raw to the client/LLM, while the NON-finite stream (`stream_gen`)
+  already scanned notification params (CHG-0098). A finite-vs-non-finite asymmetry. Byte-verified: a
+  `notifications/message` frame carrying `AKIAIOSFODNN7EXAMPLE` + `bob@corp.example` interleaved before a benign
+  tools/call result egressed both raw. **FIX (`mcp_proxy.py`):** the finite branch now passes `scan_notifications=True`
+  → interleaved notification `params` are scanned (masked / fail-closed withheld) via the same result floor as the
+  final result; the result frame is still delivered, benign notifications pass through. +1 test. Gate: 12 sse + 1777
+  gateway passed, 0 failed; broker unaffected (gateway-only). Byte-level: the notification secret + email are absent
+  from the re-emitted SSE. Independent oracle (aidefence): `has_pii` true raw / false masked. touched: `ext_mcp_proxy`
+  finite SSE branch (parity with CHG-0098; extends CHG-0039/0064). Evidence `mcp-parallel/findings/backstop-p-finite-sse-notification-scan/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

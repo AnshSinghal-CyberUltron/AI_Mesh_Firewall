@@ -1205,6 +1205,18 @@
     continuous gateway->broker->sandbox agent. +2 broker tests + 1 agent test. Gate: 5 ready-retry + 157 broker + 7
     agent passed; gateway unaffected. Oracle N/A (tracing). Completes CHG-0050/0051/0052/0120. Item-13 tracing residual
     now only OTEL/Jaeger + PG/Redis backup (INFRA/host-blocked). Evidence mcp-parallel/findings/backstop-p-agent-correlation-id/.
+  - CHG-0122 (2026-07-03) — MEDIUM 1.4 leak: finite SSE branch didn't scan interleaved server-pushed notifications. The
+    ext-proxy FINITE SSE branch (tools/call/resources/*/prompts/*, buffered CHG-0039/0064) called
+    _scan_reframe_sse_tool_result with the default scan_notifications=False -> a finite call's SSE can INTERLEAVE
+    server-pushed notification frames (notifications/progress, notifications/message) BEFORE the result, and those were
+    re-emitted VERBATIM (only result/error events scanned). A secret/PII in a mid-call notification egressed raw, while
+    the NON-finite stream (CHG-0098) already scans notification params. Byte-verified: a notifications/message frame
+    with AKIAIOSFODNN7EXAMPLE + bob@corp.example interleaved before a benign tools/call result egressed both raw. FIX
+    (mcp_proxy.py): finite branch now passes scan_notifications=True -> interleaved notification params scanned
+    (masked / fail-closed) via the result floor; result frame still delivered. +1 test. Gate: 12 sse + 1777 gateway
+    passed 0 failed; broker unaffected. Byte-level: notification secret+email absent from re-emitted SSE. Oracle
+    (aidefence): has_pii true raw / false masked. Parity with CHG-0098; extends CHG-0039/0064. Evidence mcp-parallel/
+    findings/backstop-p-finite-sse-notification-scan/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
@@ -1289,3 +1301,5 @@ Dynamic full-hardware concurrency lane (perf). Mirrored in `docs/perf/CHANGELOG.
 <!-- mcp-page-cleanup --> MCP-PAGE-CLEANUP-02 (discovery clean errors) | gateway/ai_mesh_gateway/mcp_proxy.py | internal_discover_tools routes failures through sanitize_mcp_error + _discovery_error_response (JSON-RPC msg + top-level code + ref). Fixed: outer except dumped `Upstream discovery failed: {exc}` (raw exc/HTML); non-SSE else called tools_resp.json() (raises on HTML). NOW: status>=400 → "HTTP 405 — check the endpoint URL"; exc → DNS/refused/timeout branded msg; raw → log+diag by ref only. | GOTCHA: ext_mcp_proxy (lines ~2352 hostname-leak / ~2357 str(exc)) is the EXTERNAL passthrough = item 04, not discovery. | VERIFY: pytest test_mcp_discovery_clean_errors.py 3 passed; full suite 1773 passed.
 
 <!-- mcp-page-cleanup --> MCP-PAGE-CLEANUP-04 (transport + 401 clean) | gateway/ai_mesh_gateway/mcp_proxy.py | ext_mcp_proxy + control-proxy transport `except httpx.RequestError` → sanitize_mcp_error(exc) (was leaking `{hostname}` + str(exc)); NEW upstream 401/403 intercept in ext_mcp_proxy → sanitize_mcp_error(status=401) 'needs re-authentication'. Raw host/exc/upstream-body → log+diag by ref only. Clean-errors ROUTING now complete at discovery(02)+stdio(03)+transport/401(04). | VERIFY: pytest test_mcp_ext_transport_clean_errors.py 3 passed; ext regression 57; full suite 1776 passed. Next: 05 dev diagnostic endpoint (read mcp:diag:<ref>), 06 live cross-server verify + deploy.
+
+<!-- mcp-page-cleanup --> MCP-PAGE-CLEANUP-05 (dev diagnostic) | control/.../mcp_connector/views.py | staff-only MCPDiagnosticDetailView (GET /api/mcp-connector/diagnostics/<ref>/, IsAdminUser) now resolves BOTH control- and gateway-originated diags: cache.get(_diag_cache_key(ref)) OR _read_gateway_diagnostic(ref) (raw Redis mcp:diag:<ref>). GOTCHA: gateway writes RAW mcp:diag:<ref> (JSON) but django_redis prefixes keys cache:1:... (pickled) → cache.get can't see gateway diags; the raw-read fallback bridges it (shared redis:6379/0). Always-on: sanitize_mcp_error structured-logs ref→full cause. | VERIFY: gateway pytest 34 passed (write side); LIVE docker-exec control shell (read side: raw OK, cache miss). Live on next control restart (item 06).

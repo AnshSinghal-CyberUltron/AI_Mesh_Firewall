@@ -2034,6 +2034,13 @@ async def ext_mcp_proxy(path: str, request: Request):
                     server_slug="",
                     enabled_info=None,
                     actor=None,
+                    # CHG-0122: a finite tools/call (or resources/* / prompts/*) SSE can
+                    # INTERLEAVE server-pushed notification frames (notifications/progress,
+                    # notifications/message) BEFORE the final result. Those params are
+                    # server-controlled and were forwarded RAW here (scan_notifications
+                    # defaulted False) — a secret/PII in a mid-call notification leaked,
+                    # while the NON-finite stream (CHG-0098) already scans them. Scan them.
+                    scan_notifications=True,
                 )
                 _sse_headers = {
                     k: v for k, v in resp.headers.items()

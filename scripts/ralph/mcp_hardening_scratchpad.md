@@ -1337,6 +1337,17 @@
       gateway->broker->sandbox agent. +2 broker tests + 1 agent test. Gate: 5 ready-retry + 157 broker + 7 agent passed;
       gateway unaffected. Oracle N/A (tracing). Completes CHG-0050/0051/0052/0120. Item-13 tracing residual now ONLY
       OTEL/Jaeger + PG/Redis backup (INFRA/host-blocked). Evidence mcp-parallel/findings/backstop-p-agent-correlation-id/finding.md.
+      CHG-0122 (2026-07-03, MEDIUM 1.4 leak): finite SSE branch didn't scan interleaved server-pushed notifications. The
+      ext-proxy FINITE SSE branch (tools/call/resources/*/prompts/*, buffered CHG-0039/0064) called
+      _scan_reframe_sse_tool_result with the default scan_notifications=False -> a finite call's SSE can INTERLEAVE
+      server-pushed notification frames (notifications/progress, notifications/message) BEFORE the result, re-emitted
+      VERBATIM (only result/error events scanned). A secret/PII in a mid-call notification egressed raw, while the
+      NON-finite stream (CHG-0098) already scans notification params. Byte-verified: notifications/message with
+      AKIAIOSFODNN7EXAMPLE + bob@corp.example interleaved before a benign tools/call result egressed both raw. FIX
+      (mcp_proxy.py): finite branch now passes scan_notifications=True -> interleaved notification params scanned
+      (masked/fail-closed) via the result floor; result frame still delivered. +1 test. Gate: 12 sse + 1777 gateway
+      passed 0 failed; broker unaffected. Oracle (aidefence): has_pii true raw / false masked. Parity with CHG-0098;
+      extends CHG-0039/0064. Evidence mcp-parallel/findings/backstop-p-finite-sse-notification-scan/finding.md.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

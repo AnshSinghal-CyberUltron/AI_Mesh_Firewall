@@ -579,6 +579,32 @@ async def test_ext_sse_tool_result_redacted():
 
 
 @pytest.mark.asyncio
+async def test_ext_finite_sse_scans_interleaved_notification():
+    """CHG-0122: a server-pushed notification frame (notifications/message /
+    progress) carrying a secret, INTERLEAVED before the final result in a finite
+    tools/call SSE, must be scanned — it was forwarded RAW (scan_notifications
+    defaulted False on the finite branch, while the non-finite stream already
+    scanned notifications, CHG-0098)."""
+    req = _ext_request({"jsonrpc": "2.0", "id": 30, "method": "tools/call",
+                        "params": {"name": "fetch", "arguments": _BENIGN_ARG}})
+    frames = (
+        'data: {"jsonrpc":"2.0","method":"notifications/message",'
+        '"params":{"data":"key AKIAIOSFODNN7EXAMPLE email bob@corp.example"}}\n\n'
+        'data: {"jsonrpc":"2.0","id":30,"result":{"content":[{"type":"text","text":"ok"}]}}\n\n'
+    ).encode()
+    sse = _ext_send_resp({}, content_type="text/event-stream")
+    sse.aread = AsyncMock(return_value=frames)
+    sse.aiter_bytes = _aiter_bytes_of(frames)
+    client = _ext_client(sse)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    body = bytes(resp.body).decode()
+    assert "AKIAIOSFODNN7EXAMPLE" not in body   # interleaved notification secret masked
+    assert "bob@corp.example" not in body
+    assert "ok" in body                          # the actual result frame still delivered
+
+
+@pytest.mark.asyncio
 async def test_ext_sse_result_scan_error_fails_closed():
     """A scanner error on a tools/call SSE result WITHHOLDS it (fail-closed),
     never forwarding the raw frame."""
