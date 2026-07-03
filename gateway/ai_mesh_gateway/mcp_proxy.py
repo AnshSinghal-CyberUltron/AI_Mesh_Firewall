@@ -30,9 +30,31 @@ try:  # package vs top-level import (mirrors mcp_oauth_proxy import style)
 except ImportError:  # pragma: no cover - flat-module deployment
     from _url_guard import is_safe_outbound_url
 
+try:  # CLEANUP-01: the gateway failure classifier (clean client errors, dev-only cause)
+    from .mcp_error_classifier import sanitize_mcp_error
+except ImportError:  # pragma: no cover - flat-module deployment
+    from mcp_error_classifier import sanitize_mcp_error
+
 LOG = logging.getLogger("gateway.mcp_proxy")
 
 router = APIRouter(prefix="/v1/mcp", tags=["MCP Proxy"])
+
+
+def _discovery_error_response(clean: dict, *, jsonrpc: str = "2.0", msg_id=1):
+    """CLEANUP-02: a clean JSON-RPC discovery error envelope. The message is the
+    sanitized, non-revealing summary; the stable client ``code`` + correlation ``ref``
+    ride alongside so the backend/frontend can surface them and a dev can retrieve the
+    real cause by ref. NEVER carries a raw exc / upstream body / hostname."""
+    return JSONResponse(
+        content={
+            "jsonrpc": jsonrpc,
+            "id": msg_id,
+            "error": {"code": -32000, "message": clean["error"]},
+            "code": clean["code"],
+            "ref": clean["ref"],
+        },
+        status_code=200,
+    )
 
 # Org-scoped external gateway router — auth IS enforced on this router.
 org_gateway_router = APIRouter(prefix="/gateway", tags=["MCP Org Gateway"])
@@ -2592,22 +2614,35 @@ async def internal_discover_tools(request: Request):
                     status_code=200,
                 )
             else:
+                # CLEANUP-02: an upstream that returns a non-2xx OR a non-JSON body
+                # (e.g. a 405 HTML error page) must be classified by STATUS and
+                # returned CLEAN — never dump the raw body/exc. Guard tools_resp.json().
+                if tools_resp.status_code >= 400:
+                    clean = await sanitize_mcp_error(
+                        status=tools_resp.status_code,
+                        org_slug=org_slug, server_slug=server_slug)
+                    return _discovery_error_response(clean)
+                try:
+                    _tools_payload = tools_resp.json()
+                except Exception:
+                    clean = await sanitize_mcp_error(
+                        status=tools_resp.status_code,
+                        raw="upstream returned a non-JSON response (likely an HTML error page)",
+                        org_slug=org_slug, server_slug=server_slug)
+                    return _discovery_error_response(clean)
                 # CHG-0108: scan upstream tool metadata before returning.
                 return await _scan_internal_tools_list(
-                    tools_resp.json(), jsonrpc="2.0", msg_id=1, enabled_info=enabled_info,
+                    _tools_payload, jsonrpc="2.0", msg_id=1, enabled_info=enabled_info,
                     org_slug=org_slug, server_slug=server_slug, transport=transport,
                     request_id=_disc_req_id,  # CHG-0120
                 )
     except Exception as exc:
-        LOG.error("Internal discover-tools upstream error: %s", exc)
-        return JSONResponse(
-            content={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "error": {"code": -32000, "message": f"Upstream discovery failed: {exc}"},
-            },
-            status_code=200,
-        )
+        # CLEANUP-02: classify the failure (DNS / conn-refused / timeout / etc.) into a
+        # clean, non-revealing message — the raw exc (which can carry an internal
+        # hostname or an upstream HTML snippet) goes ONLY to the log + dev diagnostic.
+        LOG.error("Internal discover-tools upstream error [%s]: %s", type(exc).__name__, exc)
+        clean = await sanitize_mcp_error(exc=exc, org_slug=org_slug, server_slug=server_slug)
+        return _discovery_error_response(clean)
 
 
 @router.post(
