@@ -88,8 +88,14 @@ _PACKAGE_ALLOWLIST = {
 _REQUIRE_PINNED_PACKAGES = os.environ.get(
     "MCP_STDIO_REQUIRE_PINNED_PACKAGES", "false"
 ).lower() in ("1", "true", "yes")
-# Dev default true (in-gateway spawn); compose/prod sets MCP_STDIO_IN_PROCESS=false.
-_STDIO_IN_PROCESS_DEFAULT = "true"
+# CHG-0141: default FALSE = route stdio through the per-org sandbox (no unknown npm on
+# the gateway host; ALL transports in the sandbox — a core 1.4/architecture invariant).
+# The old default was "true" (spawn npm/uvx IN the gateway process), so a prod deployment
+# that FORGOT to set MCP_STDIO_IN_PROCESS=false silently ran untrusted stdio servers on
+# the host with cross-tenant process/fs sharing — a fail-OPEN default on a security-
+# critical toggle. Now secure-by-default; set MCP_STDIO_IN_PROCESS=true to opt INTO the
+# in-gateway spawn (dev only / single-tenant, when no broker is running).
+_STDIO_IN_PROCESS_DEFAULT = "false"
 
 
 def _stdio_in_process() -> bool:

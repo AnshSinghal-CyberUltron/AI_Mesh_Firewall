@@ -231,3 +231,22 @@ def test_adapter_uses_shared_safe_args_for_log():
     # benign spawn args unchanged
     assert _safe_args_for_log(["-y", "@playwright/mcp@latest"]) == \
         ["-y", "@playwright/mcp@latest"]
+
+
+@pytest.mark.asyncio
+async def test_stdio_default_is_sandbox_secure(monkeypatch: pytest.MonkeyPatch):
+    # CHG-0141: SECURE BY DEFAULT — with MCP_STDIO_IN_PROCESS unset, stdio routes through
+    # the per-org sandbox (no unknown npm on the gateway host), NOT the legacy in-gateway
+    # spawn. Guards against a regression back to the fail-open (host-spawn) default.
+    import mcp_stdio_adapter as adapter
+    monkeypatch.delenv("MCP_STDIO_IN_PROCESS", raising=False)
+    assert adapter._STDIO_IN_PROCESS_DEFAULT == "false"
+    assert adapter._stdio_in_process() is False  # unset -> sandbox, not in-process
+
+
+@pytest.mark.asyncio
+async def test_stdio_in_process_still_opt_in(monkeypatch: pytest.MonkeyPatch):
+    # The in-gateway spawn is still available when explicitly opted in (dev/single-tenant).
+    import mcp_stdio_adapter as adapter
+    monkeypatch.setenv("MCP_STDIO_IN_PROCESS", "true")
+    assert adapter._stdio_in_process() is True
