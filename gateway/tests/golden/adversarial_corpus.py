@@ -59,6 +59,39 @@ def greek_homoglyph(s: str) -> str:
     return "".join(_GREEK_HOMO.get(c, c) for c in s.lower())
 
 
+# G96: Mathematical Alphanumeric Symbols (U+1D400+) — "fancy" unicode a jailbreak is often
+# pasted in (𝓲𝓰𝓷𝓸𝓻𝓮 / 𝕚𝕘𝕟𝕠𝕣𝕖 / 𝚒𝚐𝚗𝚘𝚛𝚎 …). NFKC compat-folds these to ASCII, so the firewall
+# must still block. Lowercase bases; a few styles place letters as letterlike symbols OUTSIDE
+# the block (holes) which we substitute so the string uses only ASSIGNED codepoints (an LLM
+# reads those; the unassigned hole positions it would not).
+_MATH_STYLE_BASE = {
+    "bold": 0x1D41A, "italic": 0x1D44E, "bold_italic": 0x1D482, "script": 0x1D4B6,
+    "bold_script": 0x1D4EA, "fraktur": 0x1D51E, "double_struck": 0x1D552,
+    "bold_fraktur": 0x1D586, "sans": 0x1D5BA, "sans_bold": 0x1D5EE,
+    "sans_italic": 0x1D622, "sans_bold_italic": 0x1D656, "monospace": 0x1D68A,
+}
+_MATH_STYLE_HOLES = {
+    "italic": {"h": "ℎ"},
+    "script": {"e": "ℯ", "g": "ℊ", "o": "ℴ"},
+}
+
+
+def math_styled(s: str, style: str) -> str:
+    """Render ASCII letters in a Mathematical-Alphanumeric style (NFKC folds back to ASCII)."""
+    base = _MATH_STYLE_BASE[style]
+    holes = _MATH_STYLE_HOLES.get(style, {})
+    out = []
+    for c in s:
+        cl = c.lower()
+        if cl in holes:
+            out.append(holes[cl])
+        elif "a" <= cl <= "z":
+            out.append(chr(base + ord(cl) - 97))
+        else:
+            out.append(c)
+    return "".join(out)
+
+
 _BIDI_CTRLS = ("‮", "⁧", "‏", "؜", "⁩", "‭", "⁦")
 # RLO, RLI, RLM, ALM, PDI, LRO, LRI — all category Cf.
 

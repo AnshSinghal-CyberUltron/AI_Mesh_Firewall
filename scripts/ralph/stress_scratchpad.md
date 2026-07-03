@@ -2887,3 +2887,34 @@ Rebuilt+redeployed the baked gateway image (tag rollback-g95 → `docker compose
 **block**; benign Greek prose ("error term ε and efficiency η") → **allow**. G95 validated end-to-end
 (in-process 574×3 + backend 1794 + live deployed). Injection blocks fire pre-forward so they're not
 rate-limited.
+
+---
+
+## G96 (R2 sweep — 6 vectors VERIFIED DEFENDED, styled-Unicode FROZEN) — 2026-07-03
+Ran a broad R2 obfuscation sweep against the frozen pipeline in-process. Found NO new leak — the
+input/output detection is mature across these vectors. Verified DEFENDED (evidence, not assumption):
+1. **Styled-Unicode (Mathematical Alphanumeric Symbols)** injection — bold/italic/bold-italic/script/
+   bold-script/fraktur/double-struck/bold-fraktur/sans/sans-bold/sans-italic/sans-bold-italic/monospace
+   (13 styles) → **block**. NFKC compat-folds them to ASCII in `_canonicalize_with_map` (len(nc)==1
+   branch). (My first probe "leaked" on math-script, but that was a PROBE ARTIFACT: base+offset for
+   script e/g/o lands on UNASSIGNED holes U+1D4BA/BC/C4 (cat Cn); the REAL script style uses letterlike
+   symbols ℯℊℴ which are Ll and DO fold → block. An LLM can't read the unassigned holes anyway.)
+2. **Separator-split** injection (i.g.n.o.r.e / i_g_n_o_r_e / i-g-n / i/g/n / i*g*n / spaced) → block.
+3. **Leetspeak** (full + partial, 1gn0r3 4ll…) → block.
+4. **Non-ASCII-digit PII** (SSN/card/phone in Arabic-Indic ٠-٩, Persian ۰-۹, Devanagari ०-९, Bengali,
+   fullwidth, math-bold digits) → detected AND masked (`\d` matches Unicode digits; index-map masks the
+   original bytes).
+5. **Multi-turn / crescendo split** injection (phrase fragmented across 2+ user turns, across
+   user↔assistant turns, even MID-WORD "instru"|"ctions") → block. Scanner already has a
+   "Multi-turn split … detected across user turns" reassembly defense (G6/G27).
+6. **Output-side egress-truth** for Greek-homoglyph AND styled-Unicode secrets (SSN/email/openai-key/
+   aws-key) → detected + masked + UNRECOVERABLE from egress (also re-confirms G95 on the output side).
+**FROZEN (G96, +17 golden):** styled-Unicode injection across all 13 styles must block; styled-Unicode
+PII/secret on output must be masked out of egress; benign styled prose must NOT block (FP floor). Added
+`math_styled(s, style)` corpus helper (handles the letterlike-symbol holes → only assigned codepoints).
+Multi-turn/leet/fullwidth were ALREADY frozen (G6/G27/G1) so not re-added. In-process golden **591 ×3
+consecutive** (was 574); frozen chat-pipeline golden 3 pass. Test-only iteration (owned golden suite;
+adversarial_corpus.py + test_adversarial_attacks.py) — NO source/behavior change, so no gateway rebuild
+and the backend suite is unaffected.
+Session ledger: NINETEEN confirmed leaks/gaps (G74..G95) fixed + G96 freezes 6 verified-defended vectors;
+soft DoS (G79); G77/G78/G80 frozen.
