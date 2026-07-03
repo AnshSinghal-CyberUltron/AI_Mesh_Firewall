@@ -1230,6 +1230,23 @@
       key; name is only an optimization. +4 tests; 2 broker mocks made realistic (real containers always carry these
       labels). Gate: 4 + 150 broker passed; gateway unaffected. Oracle N/A (routing/isolation fix, no PII-text
       delta). Evidence mcp-parallel/findings/backstop-p-broker-name-label-verify/finding.md.
+      CHG-0113 (2026-07-03, LOW-MED cross-tenant residual — completes CHG-0112 for volumes): broker destroy removed
+      the org VOLUME by name without label verification. CHG-0112 label-verified the CONTAINER, but destroy still
+      removed the auth volume (/data/mcp-auth) purely by volume_name(slug) (lossy) with NO label check; the volume was
+      auto-created UNLABELED. A legacy/reused volume owning the canonical name but belonging to a DIFFERENT org (pre-
+      CHG-0111 colliding slug) would be DESTROYED for the wrong org. FIX (docker_manager.py): (1) _ensure_volume
+      explicitly creates the volume WITH labels(org_slug) before the container run (idempotent, best-effort); (2)
+      destroy reads _volume_labels + REFUSES to remove a volume whose LABEL_ORG_SLUG differs from the requested org
+      (fail-closed); unlabeled-legacy/same-org volumes still removed. Org LABEL is now the tenant key for the volume
+      too. +5 tests. Gate: 8 volume + 155 broker passed; gateway unaffected. Oracle N/A. Evidence mcp-parallel/
+      findings/backstop-p-broker-volume-label-verify/finding.md.
+      AUDIT (this iteration, verification-only — no code change): re-probed the other tenant-selector surfaces, all
+      ALREADY hardened — gateway OAuth token store (org-prefixed clean-slug key; flow/callback/status org-scoped, one-
+      time state, PKCE, token from trusted flow record, callback XSS-escaped); control-plane _request_org (tenant from
+      authed profile OR secret-validated gateway-internal X-Org-Slug, client org NOT honored; MCPEvent sanitizes all
+      channels); tool-call cap per-key. FLAGGED for a FUTURE GATED iteration (not reachable today + control-plane test
+      env unavailable here — no venv, django/fakeredis not importable): _gateway_request_org should self-verify the
+      internal secret before honoring X-Org-Slug (defense-in-depth vs a future weaker-permission view).
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

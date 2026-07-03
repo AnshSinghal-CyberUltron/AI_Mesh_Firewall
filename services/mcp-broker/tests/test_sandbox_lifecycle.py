@@ -515,3 +515,58 @@ def test_find_container_ignores_name_match_with_foreign_label(manager: DockerMan
     manager.client.containers.list.return_value = [correct]
     got = manager.find_container("acme")
     assert got is correct and got.id == "correct-id"
+
+
+# ── CHG-0113: the sandbox VOLUME (auth store at /data/mcp-auth) is now created WITH the
+# org label and its label is VERIFIED on destroy — completing CHG-0112's "label is the
+# authoritative tenant key" for the volume resource. A volume labeled for a DIFFERENT org
+# (a legacy/reused name colliding onto this org's canonical volume name) must NOT be
+# destroyed for this org (cross-tenant data-destruction, fail-closed).
+
+
+def _mock_volume(*, org_slug=None):
+    v = MagicMock()
+    v.attrs = {
+        "Labels": ({LABEL_ROLE: ROLE_VALUE, LABEL_ORG_SLUG: org_slug} if org_slug else None)
+    }
+    return v
+
+
+def test_ensure_volume_creates_labeled_when_missing(manager: DockerManager):
+    manager.client.volumes.get.side_effect = Exception("not found")
+    manager._ensure_volume("acme")
+    manager.client.volumes.create.assert_called_once()
+    kwargs = manager.client.volumes.create.call_args.kwargs
+    assert kwargs["labels"][LABEL_ORG_SLUG] == "acme"
+    assert kwargs["labels"][LABEL_ROLE] == ROLE_VALUE
+
+
+def test_ensure_volume_idempotent_when_exists(manager: DockerManager):
+    manager.client.volumes.get.side_effect = None
+    manager.client.volumes.get.return_value = _mock_volume(org_slug="acme")
+    manager._ensure_volume("acme")
+    manager.client.volumes.create.assert_not_called()
+
+
+def test_destroy_removes_unlabeled_legacy_volume(manager: DockerManager):
+    vol = _mock_volume(org_slug=None)  # legacy auto-created, no labels
+    manager.client.volumes.get.side_effect = None
+    manager.client.volumes.get.return_value = vol
+    manager.destroy("acme")
+    vol.remove.assert_called_once_with(force=True)
+
+
+def test_destroy_removes_same_org_volume(manager: DockerManager):
+    vol = _mock_volume(org_slug="acme")
+    manager.client.volumes.get.side_effect = None
+    manager.client.volumes.get.return_value = vol
+    manager.destroy("acme")
+    vol.remove.assert_called_once_with(force=True)
+
+
+def test_destroy_refuses_foreign_labeled_volume(manager: DockerManager):
+    vol = _mock_volume(org_slug="other-tenant")  # owns the name, but is org B's data
+    manager.client.volumes.get.side_effect = None
+    manager.client.volumes.get.return_value = vol
+    manager.destroy("acme")
+    vol.remove.assert_not_called()  # fail-closed: no cross-tenant volume destruction

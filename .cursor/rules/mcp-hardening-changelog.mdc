@@ -1639,6 +1639,30 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   touched: broker `DockerManager` resolution; completes CHG-0111 (input-validation + label-verification =
   belt-and-suspenders). Evidence `mcp-parallel/findings/backstop-p-broker-name-label-verify/`.
 
+- **CHG-0113** (2026-07-03) — **LOW-MED cross-tenant residual (completes CHG-0112 for volumes): broker destroy
+  removed the org VOLUME by name without label verification**. CHG-0112 made the org LABEL authoritative for the
+  CONTAINER (`find_container`), but `destroy` still removed the org's auth VOLUME (`/data/mcp-auth`) purely by its
+  lossy-sanitized `volume_name(slug)` with NO label check — and the volume was auto-created UNLABELED, so it had no
+  label to verify. A legacy/reused volume owning the canonical name but belonging to a DIFFERENT org (a pre-CHG-0111
+  colliding slug) would be DESTROYED for the wrong org (cross-tenant data destruction). **FIX
+  (`services/mcp-broker/src/sandbox/docker_manager.py`):** (1) `_ensure_volume` explicitly creates the volume WITH
+  `labels(org_slug)` before the container run (idempotent + best-effort; a pre-existing volume is left as-is; failure
+  never blocks provisioning since the run auto-creates by name); (2) `destroy` reads `_volume_labels` and REFUSES to
+  remove a volume whose `LABEL_ORG_SLUG` is present AND differs from the requested org (logs + skips, fail-closed);
+  an unlabeled-legacy volume (name authoritative for canonical slugs post-CHG-0111) or a same-org volume is still
+  removed. The org LABEL is now the tenant key for the volume too. +5 tests. Gate: 8 volume + 155 broker passed;
+  gateway unaffected (broker-only). Oracle N/A (routing/isolation fix, no PII-text egress delta). touched: broker
+  `DockerManager` volume lifecycle; completes CHG-0111 (slug validation) + CHG-0112 (container label verification).
+  Evidence `mcp-parallel/findings/backstop-p-broker-volume-label-verify/`.
+  **AUDIT (verification-only, no code change):** re-probed the other tenant-selector surfaces, all ALREADY hardened —
+  gateway OAuth token store (org-prefixed clean-slug key; flow/callback/status org-scoped, one-time signed state,
+  PKCE, token bound from the trusted flow record, callback XSS-escaped B3); control-plane `_request_org` (tenant from
+  authed profile OR `secrets.compare_digest`-validated gateway-internal `X-Org-Slug`, client-supplied org NOT
+  honored/not spoofable; `MCPEvent` sanitizes ALL channels); gateway tool-call cap per-key. FLAGGED (not fixed —
+  control-plane test env unavailable here: no venv, `django`/`fakeredis` not importable; AND not reachable today, all
+  callers gated): `_gateway_request_org` honors `X-Org-Slug` relying on the view permission gate rather than
+  self-verifying the internal secret — a defense-in-depth self-verify is deferred to a gated iteration.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

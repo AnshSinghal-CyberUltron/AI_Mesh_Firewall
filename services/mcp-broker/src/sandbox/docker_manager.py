@@ -208,6 +208,35 @@ class DockerManager:
             labels = (getattr(container, "attrs", {}) or {}).get("Config", {}).get("Labels", {}) or {}
         return labels if isinstance(labels, dict) else {}
 
+    @staticmethod
+    def _volume_labels(volume: Any) -> dict:
+        """Best-effort label dict for a volume (``volume.attrs['Labels']``, may be None)."""
+        labels = (getattr(volume, "attrs", {}) or {}).get("Labels")
+        return labels if isinstance(labels, dict) else {}
+
+    def _ensure_volume(self, org_slug: str) -> None:
+        """Create the org's auth volume WITH the org label so ``destroy`` can verify
+        tenancy (CHG-0113).
+
+        The volume was previously auto-created (unlabeled) by the container run, so
+        ``destroy`` could only match it by its LOSSY-sanitized name — the same
+        cross-tenant fragility CHG-0112 fixed for containers. Creating it explicitly
+        with ``labels(org_slug)`` makes the org label the authoritative key for the
+        volume too. Idempotent + best-effort: a pre-existing volume is left as-is
+        (Docker won't relabel); a failure here never blocks provisioning because the
+        container run still auto-creates the volume by name.
+        """
+        name = self.volume_name(org_slug)
+        try:
+            self.client.volumes.get(name)
+            return  # already exists (labeled or legacy) — leave as-is
+        except Exception:
+            pass
+        try:
+            self.client.volumes.create(name=name, labels=self.labels(org_slug))
+        except Exception as exc:  # pragma: no cover - defensive; run auto-creates anyway
+            logger.debug("sandbox volume pre-create skipped for %s: %s", org_slug, exc)
+
     def get_container_by_name(self, org_slug: str) -> Any | None:
         """Look up the org's sandbox by its deterministic name — but VERIFY the org
         label before returning it (CHG-0112).
@@ -543,6 +572,7 @@ class DockerManager:
         return "already in use" in msg or "conflict" in msg
 
     def create_container(self, org_slug: str) -> Any:
+        self._ensure_volume(org_slug)  # CHG-0113: labeled volume for tenant-verified destroy
         last_exc: Exception | None = None
         for attempt in range(3):
             try:
@@ -643,8 +673,20 @@ class DockerManager:
         volume_name = self.volume_name(org_slug)
         try:
             volume = self.client.volumes.get(volume_name)
-            volume.remove(force=True)
-            removed = True
+            # CHG-0113: never destroy a volume LABELED for a DIFFERENT org (a legacy/
+            # reused name colliding onto this org's canonical volume name). No label =
+            # legacy unlabeled volume (its name is authoritative for canonical slugs
+            # post-CHG-0111) → removable; a MISMATCHED org label → skip, fail-closed.
+            _vorg = self._volume_labels(volume).get(LABEL_ORG_SLUG)
+            if _vorg is not None and _vorg != org_slug:
+                logger.warning(
+                    "sandbox volume org-label mismatch: name=%s requested_org=%s "
+                    "labeled_org=%s (refusing to remove, fail-closed)",
+                    volume_name, org_slug, _vorg,
+                )
+            else:
+                volume.remove(force=True)
+                removed = True
         except Exception:
             pass
         if self._registry is not None:
