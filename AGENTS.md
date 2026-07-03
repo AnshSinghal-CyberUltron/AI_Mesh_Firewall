@@ -886,6 +886,21 @@
     -> <img src=\"[exfil-redacted]\">; benign cdn img unchanged. Evidence mcp-parallel/findings/backstop-p-
     result-exfil-html-nested/. The MCP result path now defangs markdown/bare-URL/protocol-relative/HTML-media/
     srcset/CSS-url/SVG-href zero-click beacons (chat-guard parity).
+  - CHG-0098 (2026-07-03) — HIGH fail-open 1.4 leak: ext-proxy NON-FINITE SSE stream (server notifications)
+    egressed UNSCANNED. ext_mcp_proxy buffers+scans SSE only for finite methods; a non-finite stream
+    (notifications/*, subscribe, long-lived) was forwarded RAW (stream_gen yielded aiter_bytes verbatim, only a
+    LOG.warning) because buffering an open stream could hang/OOM — but an untrusted upstream can push sensitive
+    data in a notifications/message params, so it was a real unbounded egress leak (last unscanned MCP egress).
+    FIX: scan PER EVENT with bounded memory. _scan_reframe_sse_tool_result gained scan_notifications (a
+    notification frame — no result/error, has params — gets its whole message scanned via the floor, reusing
+    CHG-0093 reassembly). The non-finite branch buffers only up to ONE event (cap _MCP_SSE_EVENT_MAX_BYTES=1MB,
+    env), scans+re-emits; an over-cap unterminated event is WITHHELD fail-closed; a blocked event withheld via
+    SSE comment, stream continues. Audited (sse_stream_scanned / sse_stream_event_withheld / _too_large). NEW
+    TEST test_mcp_ext_sse_stream_scan.py (5); updated test_mcp_bare_proxy_scan.py's obsolete passthrough test
+    (another session's) to assert the scanned behavior. Gate: 5 + 1581 gateway passed 0 failed; broker 108.
+    Byte-level: notification secret+PII+IP -> AKIA****MPLE / b***@c***.example; benign progress unchanged.
+    Independent oracle (aidefence): has_pii false masked / true raw. Evidence mcp-parallel/findings/backstop-p-
+    ext-sse-stream-scan/. Cross-EVENT splits don't reassemble client-side, so per-event scanning suffices.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

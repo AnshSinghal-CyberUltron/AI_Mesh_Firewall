@@ -239,6 +239,12 @@ _MCP_MAX_BODY_BYTES = int(os.environ.get("MCP_MAX_BODY_BYTES", str(10 * 1024 * 1
 # response bytes; the streaming (non-finite SSE) passthrough is unaffected (never held
 # in memory). Env-tunable for operators who forward legitimately large tool results.
 _MCP_MAX_RESPONSE_BYTES = int(os.environ.get("MCP_MAX_RESPONSE_BYTES", str(10 * 1024 * 1024)))
+# CHG-0098: per-EVENT cap for the non-finite SSE streaming scanner. A single SSE event
+# (one notification / server message) is small; buffering ONLY up to one event (not the
+# whole long-lived stream) bounds memory while still scanning each frame. An event that
+# exceeds this without a boundary is withheld (fail-closed), so an untrusted upstream
+# cannot force unbounded buffering by never closing an event.
+_MCP_SSE_EVENT_MAX_BYTES = int(os.environ.get("MCP_SSE_EVENT_MAX_BYTES", str(1 * 1024 * 1024)))
 
 
 def _mcp_body_too_large(request) -> bool:
@@ -1153,6 +1159,7 @@ async def _scan_reframe_sse_tool_result(
     server_slug: str = "",
     enabled_info: dict | None = None,
     actor: dict | None = None,
+    scan_notifications: bool = False,
 ) -> tuple[str, dict | None]:
     """Scan the tool RESULT(s) inside a BUFFERED SSE (text/event-stream) body.
 
@@ -1212,8 +1219,17 @@ async def _scan_reframe_sse_tool_result(
             target_obj = obj.get("error")
             target_key = "error"
             if target_obj is None:
-                return list(evt_lines), None  # notification / keep-alive — verbatim
-        # Scan the ENTIRE result/error (dict content/structuredContent, list, or str).
+                # A NOTIFICATION frame (method+params, no result/error). On a buffered
+                # tools/call result stream we pass it through; on a long-lived NON-finite
+                # stream (``scan_notifications=True``, CHG-0098) an untrusted upstream can
+                # smuggle sensitive data in the ``params`` of a notifications/message
+                # frame, so scan the WHOLE message (params + any data field).
+                if not (scan_notifications and obj.get("params") is not None):
+                    return list(evt_lines), None  # notification / keep-alive — verbatim
+                target_obj = obj
+                target_key = None
+        # Scan the ENTIRE result/error/notification (dict content/structuredContent,
+        # list, or str).
         scanned, blocked, tags, _findings, _meta = await _scan_tool_result_floor(
             target_obj,
             tool_name=tool_name,
@@ -1230,7 +1246,10 @@ async def _scan_reframe_sse_tool_result(
                 "jsonrpc": obj.get("jsonrpc", "2.0"),
             }
         if scanned is not target_obj:
-            obj[target_key] = scanned
+            if target_key is None:  # CHG-0098: whole-message (notification) scan
+                obj = scanned if isinstance(scanned, dict) else obj
+            else:
+                obj[target_key] = scanned
             # Re-emit any non-data field lines (event:/id:/comments) verbatim, then the
             # masked payload as a SINGLE ``data:`` line (json.dumps is newline-free).
             non_data = [ln for i, ln in enumerate(evt_lines) if i not in data_pos]
@@ -1760,19 +1779,57 @@ async def ext_mcp_proxy(path: str, request: Request):
                     headers=_sse_headers,
                 )
 
-            # Non-finite SSE (notifications / *subscribe / long-lived streams):
-            # buffering could hang an open stream and there is no bounded RESULT to
-            # scan, so pass it through live (inbound args, if any, were still
-            # scanned). Finite result methods are handled by the scanned branch above.
-            LOG.warning(
-                "ext_mcp_proxy.streaming_egress_unscanned host=%s method-passthrough — "
-                "non-finite SSE response streamed through (no bounded result to scan)",
-                hostname,
-            )
+            # Non-finite SSE (notifications / *subscribe / long-lived streams). CHG-0098:
+            # previously streamed through RAW (unscanned) because buffering the whole
+            # open stream could hang / OOM. But an untrusted upstream can push sensitive
+            # data in a server notification (notifications/message params), so the raw
+            # passthrough was a real egress leak. Scan PER EVENT instead: buffer only up
+            # to one SSE event (bounded by _MCP_SSE_EVENT_MAX_BYTES — memory-safe, no
+            # whole-stream buffering), reassemble + scan each event's JSON-RPC message
+            # (result/error AND notification params) via the result floor, and re-emit.
+            # An event exceeding the cap without a boundary is withheld (fail-closed).
+            await _ext_audit("allow", "sse_stream_scanned", tool=_ext_tool_name)
+
             async def stream_gen():
+                buf = ""
                 try:
                     async for chunk in resp.aiter_bytes():
-                        yield chunk
+                        buf += chunk.decode("utf-8", "replace").replace("\r\n", "\n")
+                        while "\n\n" in buf:
+                            raw_event, buf = buf.split("\n\n", 1)
+                            reframed, block = await _scan_reframe_sse_tool_result(
+                                raw_event, tool_name=_ext_tool_name, scan_notifications=True,
+                            )
+                            if block is not None:
+                                LOG.warning(
+                                    "ext_mcp_proxy.sse_stream_event_withheld host=%s tags=%s",
+                                    hostname, block.get("tags"),
+                                )
+                                await _ext_audit(
+                                    "block", "sse_stream_event_withheld",
+                                    tool=_ext_tool_name, tags=block.get("tags"),
+                                )
+                                yield b": [event withheld: matched compliance policy]\n\n"
+                            else:
+                                yield (reframed + "\n\n").encode("utf-8")
+                        if len(buf) > _MCP_SSE_EVENT_MAX_BYTES:
+                            LOG.warning(
+                                "ext_mcp_proxy.sse_stream_event_too_large host=%s — "
+                                "withholding oversized unterminated event", hostname,
+                            )
+                            await _ext_audit(
+                                "block", "sse_stream_event_too_large", tool=_ext_tool_name)
+                            yield b": [event withheld: oversized]\n\n"
+                            buf = ""
+                    # Flush a trailing partial event (no terminating blank line).
+                    if buf.strip():
+                        reframed, block = await _scan_reframe_sse_tool_result(
+                            buf, tool_name=_ext_tool_name, scan_notifications=True,
+                        )
+                        if block is None:
+                            yield reframed.encode("utf-8")
+                        else:
+                            yield b": [event withheld: matched compliance policy]\n"
                 finally:
                     await resp.aclose()
                     await client.aclose()

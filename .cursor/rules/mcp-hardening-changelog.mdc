@@ -1367,6 +1367,25 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `mcp-parallel/findings/backstop-p-result-exfil-html-nested/`. The MCP result path now defangs markdown /
   bare-URL / protocol-relative / HTML-media / srcset / CSS-url / SVG-href zero-click beacons (chat-guard parity).
 
+- **CHG-0098** (2026-07-03) — **HIGH fail-open 1.4 leak: ext-proxy NON-FINITE SSE stream (server
+  notifications) egressed UNSCANNED**. `ext_mcp_proxy` buffers+scans SSE only for finite methods
+  (`_EXT_FINITE_RESULT_METHODS`); a non-finite stream (`notifications/*`, subscribe, long-lived) was forwarded
+  RAW (`stream_gen` yielded `aiter_bytes` verbatim, only a `LOG.warning("streaming_egress_unscanned")`) because
+  buffering an open stream could hang/OOM — but an untrusted upstream can push sensitive data in a
+  `notifications/message` `params`, so it was a real unbounded egress leak (the last unscanned MCP egress
+  channel). **FIX:** scan PER EVENT with bounded memory. `_scan_reframe_sse_tool_result` gained
+  `scan_notifications` (a notification frame — no result/error, has `params` — gets its whole message scanned
+  via the floor, reusing CHG-0093 reassembly). The non-finite branch buffers only up to ONE event (cap
+  `_MCP_SSE_EVENT_MAX_BYTES`=1 MB, env), scans + re-emits; an over-cap unterminated event is WITHHELD
+  fail-closed; a blocked event is withheld via an SSE comment and the stream continues. Audited
+  (`sse_stream_scanned` / `sse_stream_event_withheld` / `_too_large`). NEW TEST
+  `test_mcp_ext_sse_stream_scan.py` (5); updated `test_mcp_bare_proxy_scan.py`'s obsolete passthrough test
+  (another session's) to assert the scanned behavior. Gate: 5 + 1581 gateway passed, 0 failed; broker 108.
+  Byte-level: notification secret+PII+IP → `AKIA****MPLE` / `b***@c***.example`; benign progress unchanged.
+  Independent oracle (aidefence): `has_pii` false masked / true raw. touched: owning-session ext passthrough
+  (CHG-0039/0061/0064/0070/0095) + CHG-0093. Evidence `mcp-parallel/findings/backstop-p-ext-sse-stream-scan/`.
+  Cross-EVENT splits don't reassemble client-side, so per-event scanning suffices.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

@@ -512,24 +512,31 @@ async def test_ext_sse_result_scan_error_fails_closed():
 
 
 @pytest.mark.asyncio
-async def test_ext_non_toolscall_sse_passthrough(caplog):
-    """Non-tools/call SSE (notifications / long-lived) is NOT buffered — it
-    passes through live (there is no tool result to scan; buffering could hang)."""
-    import logging
-
+async def test_ext_non_toolscall_sse_stream_scanned():
+    """CHG-0098: a non-finite SSE stream (notifications / long-lived) is now SCANNED
+    per event (bounded per-event buffering), NOT forwarded raw. A secret in a
+    server notification is masked; a benign notification passes through. (Replaces the
+    obsolete ``test_ext_non_toolscall_sse_passthrough`` which asserted the raw
+    passthrough behavior CHG-0098 removed.)"""
     req = _ext_request({"jsonrpc": "2.0", "id": 1, "method": "notifications/subscribe"})
     sse = _ext_send_resp({}, content_type="text/event-stream")
 
     async def _aiter():
-        yield b"data: {\"jsonrpc\": \"2.0\", \"method\": \"notify\"}\n\n"
+        yield (b'data: {"jsonrpc":"2.0","method":"notifications/message",'
+               b'"params":{"data":"key AKIAIOSFODNN7EXAMPLE ok"}}\n\n')
+        yield b'data: {"jsonrpc":"2.0","method":"notify","params":{"x":1}}\n\n'
 
     sse.aiter_bytes = _aiter
     client = _ext_client(sse)
-    with caplog.at_level(logging.WARNING):
-        with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
-            resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 200
-    assert any("streaming_egress_unscanned" in r.message for r in caplog.records)
+    out = b""
+    async for chunk in resp.body_iterator:
+        out += chunk if isinstance(chunk, bytes) else chunk.encode("utf-8")
+    blob = out.decode("utf-8", "replace")
+    assert "AKIAIOSFODNN7EXAMPLE" not in blob   # secret masked in the stream
+    assert '"notify"' in blob                    # benign notification still passes through
 
 
 # ── CHG-0033: ext_mcp_proxy must NOT forward the caller's gateway credentials to
