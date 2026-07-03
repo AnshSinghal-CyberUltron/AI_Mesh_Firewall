@@ -173,7 +173,19 @@ export function MCPGuardrailSimulator() {
       const srvData = await srvRes.json();
       const list = Array.isArray(srvData) ? srvData : srvData.results || [];
       setServers(list);
-      setServerId((prev) => prev || (list.length ? list[0].id : ""));
+      setServerId((prev) => {
+        if (prev) return prev;
+        if (!list.length) return "";
+        // Default to a CONNECTED server that actually exposes tools — defaulting to
+        // a Failed or 0-tool server (whatever happens to sort first) makes the
+        // simulator dead on arrival (item 19). Prefer connected+tools, then any
+        // connected, then fall back to the first registered server.
+        const pick =
+          list.find((s) => s.connection_status === "connected" && Number(s.tools_count) > 0) ||
+          list.find((s) => s.connection_status === "connected") ||
+          list[0];
+        return pick.id;
+      });
     } catch (e) {
       setLoadError(e.message || "Failed to load org context.");
     }
@@ -406,7 +418,10 @@ export function MCPGuardrailSimulator() {
               {servers.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} {s.server_slug ? `(${s.server_slug})` : ""} ·{" "}
-                  {s.transport || "?"} · {s.is_active ? "active" : "disabled"}
+                  {s.transport || "?"} ·{" "}
+                  {s.connection_status === "connected"
+                    ? `connected · ${Number(s.tools_count) || 0} tools`
+                    : s.connection_status || "unknown"}
                 </option>
               ))}
             </select>
@@ -445,6 +460,13 @@ export function MCPGuardrailSimulator() {
             {selectedTool?.description && (
               <p className="mt-1 line-clamp-2 text-[11px] text-slate-500 dark:text-slate-400">
                 {selectedTool.description}
+              </p>
+            )}
+            {!toolsLoading && serverId && serverTools.length === 0 && (
+              <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                {selectedServer?.connection_status === "connected"
+                  ? "Connected, but no tools discovered yet — re-sync this server from the Servers tab."
+                  : "This server isn’t connected, so it has no tools. Pick a connected server above, or re-sync it from the Servers tab."}
               </p>
             )}
           </div>
