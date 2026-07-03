@@ -87,7 +87,12 @@
  LogDetailPage+liveGateway+charts; SSE terminal trace capture; stream trace frame reconciles
  total+ttft_ms; simulator TTFT label. Browser: Duration 13607.1ms not 0. 5 FE+1 GW tests.
  Gate: lint+build green. Evidence mcp-parallel/findings/pipeline-p16-frontend-latency-ttft/.
- - PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
+ - PIPELINE-0018 (2026-07-03) — LATENCY PARITY E2E (P5-18): backend pipeline_trace.total_latency_ms
+  == UI Duration (header + Total Duration metric) within 0.1ms rounding. parsePipelineDurationMs +
+  latencyMsWithinTolerance; Playwright gate pipeline_p18_latency_parity_verify.mjs; GW UI-format
+  contract tests. Browser: event 295909 api/header/metric all 14860.9ms delta=0. 3 FE + 2 GW tests.
+  Gate: 2055 GW + build green. Evidence mcp-parallel/findings/pipeline-p18-latency-parity/.
+- PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
  (dominant stage/share, by_stage, hints[]) via build_latency_breakdown+attach_latency_breakdown;
  stream frame recomputes after total reconcile. FE LogDetailPage breakdown table + "How to reduce
  latency" cards; pipelineTrace resolveLatencyHints + legacy stage-sum fallback. 8 GW + 5 FE tests.

@@ -8,6 +8,9 @@ import {
   normalizeStages,
   resolveTotalLatencyMs,
   formatPipelineDurationMs,
+  parsePipelineDurationMs,
+  latencyMsWithinTolerance,
+  LATENCY_MS_PARITY_TOLERANCE,
   resolveTtftMs,
   resolveLatencyBreakdown,
   resolveLatencyHints,
@@ -121,6 +124,31 @@ test("resolveTotalLatencyMs uses meta.latency_ms when trace absent", () => {
 test("formatPipelineDurationMs renders rounded ms", () => {
   assert.equal(formatPipelineDurationMs(13555.44), "13555.4ms");
   assert.equal(formatPipelineDurationMs(null), "--");
+});
+
+test("parsePipelineDurationMs reads leading ms from Duration labels", () => {
+  assert.equal(parsePipelineDurationMs("13607.1ms"), 13607.1);
+  assert.equal(
+    parsePipelineDurationMs("13607.1ms (stages 120ms + overhead 13487ms)"),
+    13607.1,
+  );
+  assert.equal(parsePipelineDurationMs("--"), null);
+});
+
+test("latencyMsWithinTolerance allows 0.1ms rounding delta (PIPELINE-0018)", () => {
+  assert.equal(LATENCY_MS_PARITY_TOLERANCE, 0.1);
+  assert.equal(latencyMsWithinTolerance(13607.14, 13607.1), true);
+  assert.equal(latencyMsWithinTolerance(13607.14, 13607.0), false);
+  assert.equal(
+    latencyMsWithinTolerance(
+      resolveTotalLatencyMs({
+        pipelineTrace: { total_latency_ms: 14860.94, stage_latency_sum_ms: 100, overhead_ms: 10 },
+        meta: { latency_ms: 0 },
+      }),
+      parsePipelineDurationMs(formatPipelineDurationMs(14860.94)),
+    ),
+    true,
+  );
 });
 
 test("resolveTtftMs reads ttft from pipeline_trace then zeroshield", () => {

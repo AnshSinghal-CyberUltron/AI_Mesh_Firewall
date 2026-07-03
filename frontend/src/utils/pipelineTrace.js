@@ -171,10 +171,30 @@ export function resolveTotalLatencyMs(sources = {}) {
   return null;
 }
 
+/** Acceptable |api_ms − ui_ms| for end-to-end latency parity (PIPELINE-0018). */
+export const LATENCY_MS_PARITY_TOLERANCE = 0.1;
+
 export function formatPipelineDurationMs(ms) {
   if (ms == null || !Number.isFinite(Number(ms))) return "--";
   const rounded = Math.round(Number(ms) * 10) / 10;
   return `${rounded}ms`;
+}
+
+/** Parse the leading ms value from a Duration label ("13607.1ms" or "13607.1ms (stages …)"). */
+export function parsePipelineDurationMs(label) {
+  if (label == null || label === "--") return null;
+  const m = String(label).match(/^([\d.]+)\s*ms\b/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** True when api and ui durations agree within tolerance (default 0.1ms). */
+export function latencyMsWithinTolerance(apiMs, uiMs, tolerance = LATENCY_MS_PARITY_TOLERANCE) {
+  const a = finiteMs(apiMs);
+  const u = finiteMs(uiMs);
+  if (a == null || u == null) return false;
+  return Math.abs(a - u) <= tolerance;
 }
 
 /** Time-to-first-token for streaming responses (when backend exposes it). */

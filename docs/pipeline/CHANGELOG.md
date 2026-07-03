@@ -2,6 +2,28 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0018 (2026-07-03)
+
+**End-to-end latency parity: backend `total_latency_ms` == UI Duration (P5 item 18).**
+
+Root Cause:
+- PIPELINE-0016/0017 wired Duration to `pipeline_trace.total_latency_ms` but had no
+  automated gate proving the Scan Detail DOM matches the threat-feed detail API JSON.
+
+Fix:
+- `frontend/src/utils/pipelineTrace.js`: `LATENCY_MS_PARITY_TOLERANCE` (0.1ms),
+  `parsePipelineDurationMs()` (leading ms from Duration label, strips breakdown suffix),
+  `latencyMsWithinTolerance()`.
+- `scripts/ralph/pipeline_p18_latency_parity_verify.mjs`: Playwright gate — login :8180,
+  fetch `/api/security/threat-feed/{id}/`, open Scan Detail, assert header Duration +
+  Total Duration metric match API within 0.1ms.
+- `test_pipeline_latency_ui_parity.py`: gateway rounding contract mirrors UI `Math.round(ms*10)/10`.
+
+Verification:
+- Browser: event 295909 → api=14860.9ms, header=14860.9ms, metric=14860.9ms, delta=0.
+  Evidence: `mcp-parallel/findings/pipeline-p18-latency-parity/`.
+- 3 new FE tests + 2 GW tests; Playwright ok:true; gateway 2055 passed; build green.
+
 ## PIPELINE-0017 (2026-07-03)
 
 **Latency breakdown + actionable reduction hints on pipeline trace (P5 item 17).**
