@@ -125,3 +125,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** the gate sweeps Servers + Observability tabs at 1440/1024/768/375 × light/dark, asserting no overflow, no content bleed, touch≥24px (WCAG AA), 0 console errors (16 screenshots/run). Before: cleanup09 (truncated "Servers connec…"); After: cleanup11/cleanup14-after (wraps, equal heights, "(unnamed)" label).
 - **AFFECTS:** verification only — the gate guards against alignment/responsive regressions.
 - **VERIFY:** cleanup12Pass:true (all 8 combos clean, 0 console errors). Section C (10–14) complete.
+
+## MCP-PAGE-CLEANUP-15 — diagnose context-assembly "redactions = 0"
+- **files:** (diagnosis) control/ai_mesh_control/policy/security_views.py; frontend/src/components/firewall-module-utils.js
+- **WHAT:** diagnosed why the 1.4 "PII Redaction: 0 sanitized" reads 0 despite ~4000 fields.
+- **WHY (root cause):** redaction IS running (LIVE: 244 redact MCPEvent + 244 redact EnforcementEvent source=mcp_scan). The page maps sanitized=threatFeedActionCounts.redact from /api/security/threat-feed/?source=mcp_scan (collapse=true default). The collapse path scans only ordered[:_THREAT_FEED_DEDUP_SCAN_CAP=4000] (most-recent 4000 events); under 108k monitor events (stress testing), the 244 redacts fall outside the window → action_counts {monitor:3971, block:27}, redact=0. collapse=false correctly returns redact:244.
+- **NOW DOES:** documents the exact cause; fix is item 16 (compute block/redact/total from full DB queries, not the 4000-capped scan).
+- **AFFECTS:** diagnosis only.
+- **VERIFY:** DB counts (MCPEvent/EnforcementEvent) + threat-feed collapse vs collapse=false action_counts.
