@@ -3414,3 +3414,22 @@ ModelConnectionPanel.jsx; `npm run lint` (node --test) pass; `npm run build` (vi
 **Conclusion:** all completion conditions RE-CONFIRMED green under churn EXCEPT the literal full-corpus ×
 all-10-models live sweep (throttle-bounded, redundant with 645×3 + this family-complete live matrix).
 No source change this iteration (re-validation only). Ledger unchanged: 26 leaks + 1 false-block fixed.
+
+---
+
+## R6 POLISH — pipeline-trace card (StageTimeline) impeccable critique + polish — 2026-07-03
+Ran an impeccable critique pass on the owned pipeline-trace card. It's already well-crafted (full a11y,
+dark mode, crash-guard via normalizeStages, XSS-safe text-only render, viewport-aware popover flip,
+evidence de-dup). Two GENUINE low-risk craft gaps found + fixed:
+1. **Pointer-type copy**: the per-stage label said "Hover for details" and the tip said "Hover a stage…
+   click to pin" — both MOUSE-specific and misleading on TOUCH (where tap-to-pin is the interaction, via
+   onClick). Fixed to pointer-neutral/accurate: label → "View details"; tip → "Hover or tap a stage for
+   instant detail; click to pin while comparing stages."
+2. **Directional flow**: the inter-stage connector was a FLAT gray segment that didn't convey the
+   left→right pipeline flow. Replaced with a subtle horizontal gradient that darkens toward the NEXT
+   stage (`bg-gradient-to-r from-slate-300/50 to-slate-400/80` + dark variant) so the pipeline direction
+   reads at a glance. No motion (reduced-motion-safe by construction), no layout change.
+**Gates (owned components):** impeccable detector `[]` (clean); `npm run lint` (node --test) **78/78**;
+`npm run build` (vite) **built in 4.67s**. Copy+CSS-only change — zero behavior/logic change (the
+normalizeStages guard, a11y aria-labels, popover positioning, and XSS-safe rendering are untouched).
+Owned file only: `frontend/src/components/simulator/StageTimeline.jsx`. Playwright render-verify follows.

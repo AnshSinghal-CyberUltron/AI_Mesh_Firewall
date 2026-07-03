@@ -211,13 +211,15 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
                 <div className="mt-2 flex items-center gap-1.5">
                   <span className={`h-1.5 w-1.5 rounded-full ${theme.dot} ${isActive ? "animate-pulse" : ""}`} />
                   <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                    {isExpanded ? "Pinned" : "Hover for details"}
+                    {isExpanded ? "Pinned" : "View details"}
                   </span>
                 </div>
               </button>
 
+              {/* Directional connector: the gradient darkens toward the NEXT stage so the
+                  left→right pipeline flow reads at a glance (was a flat segment). */}
               {i < stages.length - 1 && (
-                <div className="mx-1 h-[2px] w-4 rounded-full bg-slate-300/70 dark:bg-slate-600/60" />
+                <div className="mx-1 h-[2px] w-4 rounded-full bg-gradient-to-r from-slate-300/50 to-slate-400/80 dark:from-slate-600/50 dark:to-slate-500/80" />
               )}
             </div>
           );
@@ -245,7 +247,7 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
       )}
 
       <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-        Tip: Hover a stage for instant detail, click to pin details while comparing stages.
+        Tip: Hover or tap a stage for instant detail; click to pin while comparing stages.
       </div>
     </div>
   );
