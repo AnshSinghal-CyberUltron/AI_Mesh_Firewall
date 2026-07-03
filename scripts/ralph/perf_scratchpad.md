@@ -98,7 +98,11 @@
       P5 COMPLETE (15 pg, 16 redis, 17 verify). Verification only, no code/stack change.
 
 ## P6 — Fix hot endpoints
-- [ ] 18. soc-kpis: standalone BRIN/btree index on EnforcementEvent.created_at (migration) so the window seeks.
+- [x] 18. soc-kpis: standalone BRIN/btree index on EnforcementEvent.created_at (migration) so the window seeks.
+      → policy/0036_ev_created_at_brin (BRIN, CONCURRENTLY/atomic=False, no lock). Composite index leads with org →
+      useless for created_at-only window. APPLIED to shared DB. PROVEN: index=40kB (472MB table); selective window →
+      Bitmap Index Scan on ev_created_at_brin, 0.3ms. PERF-0008 → 4 memories. NB dominant 24-30s cost = metadata JSON
+      hauling (288k×1.6KB), fixed items 19-20. Data all within 24h so live 24h query still seq-scans (correct); index seeks in prod.
 - [ ] 19. soc-kpis: stop hauling metadata JSON — denormalize risk_score/latency_ms/request_id OR aggregate in SQL.
 - [ ] 20. soc-kpis: simplify org filter to the direct FK; drop the legacy OR-with-joins. Verify <1s (from 24–30s).
 - [ ] 21. Fix other endpoints with the same scan+JSON pattern.

@@ -7,6 +7,30 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0008 — soc-kpis: BRIN index on EnforcementEvent.created_at (DB schema change)
+- **Date:** 2026-07-03
+- **Files:** `control/ai_mesh_control/policy/models.py` (Meta index),
+  `control/ai_mesh_control/policy/migrations/0036_ev_created_at_brin.py`.
+- **What (item 18):** The soc-kpis view (`security_views.py:1140`) filters
+  `created_at >= since`, but the only created_at-bearing index was the composite
+  `(organization, event_class, created_at DESC)` whose leading column is
+  organization — useless for a created_at-only window. Added a standalone **BRIN**
+  index `ev_created_at_brin` on `created_at`. BRIN because the table is an
+  append-only event log (rows inserted in created_at order) → block-range pruning
+  seeks the recent window and the index stays tiny as the table grows.
+- **Applied CONCURRENTLY** (`AddIndexConcurrently` + `atomic=False`) — **no table
+  lock** on the shared 288k-row / 472 MB table.
+- **AFFECTS:** the shared Postgres schema — **the index is already live on the
+  shared DB** (migration 0036 applied). Backward-compatible (old control code works;
+  queries just faster).
+- **ACTION FOR OTHERS:** `docker compose build control` at your convenience to get
+  the migration file; `manage.py migrate` will then see 0036 already applied (no-op).
+  No restart needed.
+- **PROOF:** index = **40 kB**; selective 10-min window → `Bitmap Index Scan on
+  ev_created_at_brin` (block-range pruning), **0.3 ms**. NB: the *dominant* soc-kpis
+  cost (24–30 s) is hauling 288k × ~1.6 KB metadata JSON into Python — fixed in
+  items 19–20; this index handles the window-seek half.
+
 ## PERF-0007 — Redis/cache pools sized from the detector (vault already done)
 - **Date:** 2026-07-03
 - **Files:** `shared/ai_mesh_shared/resource_budget.py` (+`redis_pool` field/CLI,
