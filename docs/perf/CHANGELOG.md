@@ -7,6 +7,25 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0009 — soc-kpis: stop hauling metadata JSON (extract 3 fields in SQL)
+- **Date:** 2026-07-03
+- **Files:** `control/ai_mesh_control/policy/security_views.py` (SocKpisView).
+- **What (item 19):** The view did `list(events.values("action", "metadata"))` —
+  pulling the **entire** metadata JSONB (~1.6 KB/row × 288k = ~460 MB) to Python and
+  decoding 288k dicts, then looping. It now extracts only the 3 fields the metrics
+  use — `security_risk_score`, `latency_ms`, `request_id` — in SQL via
+  `KeyTextTransform`, and the (unchanged) per-row loop reads those scalars. Metadata
+  field types are uniform (risk/latency = JSON number, request_id = JSON string), so
+  text extraction is exactly faithful.
+- **AFFECTS:** the `ai_mesh_firewall-control` image (behavior identical, just faster).
+- **ACTION FOR OTHERS:** `docker compose build control` to adopt. **Output is
+  byte-identical** — no dashboard/API change; no restart required.
+- **PROOF:** on the live 288k-row / 24h window: full view compute **14.67s → 0.98s
+  (14.9×)**; `METRICS IDENTICAL: True` across every field (total/blocked/redacted/
+  critical/actions/latency buckets/latency_sum/requests_*); per-row extraction 0
+  mismatches / 288,216; `manage.py check` clean. Pairs with the BRIN index (PERF-0008)
+  for the window seek; item 20 (org filter) is the remaining piece toward <1s.
+
 ## PERF-0008 — soc-kpis: BRIN index on EnforcementEvent.created_at (DB schema change)
 - **Date:** 2026-07-03
 - **Files:** `control/ai_mesh_control/policy/models.py` (Meta index),

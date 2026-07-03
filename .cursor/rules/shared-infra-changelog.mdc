@@ -13,6 +13,14 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0009 — soc-kpis: stop hauling metadata JSON (2026-07-03)
+- Item 19. SocKpisView (`security_views.py`) replaced `values("action","metadata")`
+  (hauls full 1.6KB JSONB/row) with `KeyTextTransform` extraction of just risk/latency/
+  request_id. Full view compute 14.67s → 0.98s (14.9×), OUTPUT BYTE-IDENTICAL
+  (verified 0 mismatches / 288k rows, all metrics equal). AFFECTS: control image
+  (behavior identical). ACTION: `docker compose build control`; no restart. Pairs with
+  BRIN (PERF-0008); item 20 (org filter) next toward <1s.
+
 ## PERF-0008 — soc-kpis BRIN index on EnforcementEvent.created_at (2026-07-03) [DB SCHEMA]
 - Item 18. Migration `policy/0036_ev_created_at_brin` adds a standalone BRIN index on
   `created_at` (the composite index leads with organization, useless for a

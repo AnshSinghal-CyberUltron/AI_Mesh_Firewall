@@ -103,7 +103,11 @@
       useless for created_at-only window. APPLIED to shared DB. PROVEN: index=40kB (472MB table); selective window →
       Bitmap Index Scan on ev_created_at_brin, 0.3ms. PERF-0008 → 4 memories. NB dominant 24-30s cost = metadata JSON
       hauling (288k×1.6KB), fixed items 19-20. Data all within 24h so live 24h query still seq-scans (correct); index seeks in prod.
-- [ ] 19. soc-kpis: stop hauling metadata JSON — denormalize risk_score/latency_ms/request_id OR aggregate in SQL.
+- [x] 19. soc-kpis: stop hauling metadata JSON — denormalize risk_score/latency_ms/request_id OR aggregate in SQL.
+      → security_views.py SocKpisView: replaced values("action","metadata") (hauls full 1.6KB JSONB/row) with
+      KeyTextTransform extraction of ONLY risk_score/latency_ms/request_id; per-row loop unchanged (types uniform → faithful).
+      PROVEN on live 288k/24h: full view compute 14.67s→0.98s (14.9×), METRICS IDENTICAL across every field, 0 mismatches/288216,
+      check clean. PERF-0009 → 4 memories. Chose aggregate-in-SQL-fields (safest, zero output change) over denormalize (migration+backfill).
 - [ ] 20. soc-kpis: simplify org filter to the direct FK; drop the legacy OR-with-joins. Verify <1s (from 24–30s).
 - [ ] 21. Fix other endpoints with the same scan+JSON pattern.
 
