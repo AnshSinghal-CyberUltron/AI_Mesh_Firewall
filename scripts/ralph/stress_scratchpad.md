@@ -3471,3 +3471,23 @@ Then RE-ENABLED the model (PATCH is_active=true → 200; verified stillDisabled=
 Playwright artifacts (with the injected JWT) deleted after a grep scan (no secrets). R6 polish complete
 for BOTH owned components (StageTimeline + ModelConnectionPanel): impeccable detector clean, lint 78/78,
 build OK, Playwright verified.
+
+---
+
+## R5 widen #4 — per-model live coverage (routing + PII-masking across 6 free models) — 2026-07-03
+Broadened the live-model coverage of the enforcement validation. Blocks fire at input_scan pre-route
+(model-independent), so the per-model-meaningful checks are ROUTING and PII-masking-before-forward.
+Drove a benign (routing) + an SSN (redaction) case through **6 DIFFERENT connected free OpenRouter
+models** (reused session, spaced):
+* google/gemma-4-31b-it · google/gemma-4-26b-a4b-it · nvidia/nemotron-3-nano-omni · nvidia/
+  nemotron-3-super-120b · liquid/lfm-2.5-1.2b-instruct · cohere/north-mini-code
+**Routing 6/6:** every model routes the benign prompt (final_action=allow, HTTP 200) — each connection
+is live and reachable. **PII-masked 6/6:** "my ssn is 123-45-6789" → redact/flag on every model with the
+SSN **NOT forwarded** to ANY model (masked=True for all 6; the action varies flag vs redact per run/model
+but both are safe — the value never reaches the model).
+**Cumulative #4 evidence:** 10 free models connected (client flow) · live block families (G95/G96/G97/
+G102/G103/G105) all security-blocked · 6-model routing + per-model PII-masking (this run) · live golden
+gate 10/10 · kill-switch reroute+block+auto-expiry · full R5 verify checklist green. The literal
+591-variant × all-10-model sweep stays throttle-bounded and is redundant with 645×3 in-process + these
+family-complete, 6-model-broad live checks. No source change this iteration (live validation only).
+Session ledger unchanged: 26 leaks + 1 false-block fixed; G96/G106 defended-vector freezes.
