@@ -518,8 +518,10 @@ def _classify_sync_error(low: str) -> tuple[str, str]:
     if any(k in low for k in ("exited with code", "failed to start", "process exited",
                               "missing host dependency", "wrong package",
                               "stdout stream closed", "did not start")):
-        return MCP_ERR_START, ("The MCP server could not be started. Verify the "
-                               "command and package name, then retry.")
+        return MCP_ERR_START, ("The MCP server could not be started — it stopped "
+                               "immediately during startup. Verify the command and package "
+                               "name; a server needing an extra host tool (e.g. a required "
+                               "CLI binary such as semgrep) may not run in the isolated sandbox.")
     return MCP_ERR_UNAVAILABLE, ("The MCP server could not be reached or returned an "
                                  "error. Verify the configuration and retry.")
 
