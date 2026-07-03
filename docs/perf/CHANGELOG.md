@@ -7,6 +7,30 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0013 — ModuleKpisView (module-kpis) type-safe metadata extraction + deploy
+- **Date:** 2026-07-03
+- **Files:** `control/ai_mesh_control/policy/security_views.py` (ModuleKpisView).
+- **Why:** On the live overview dashboard the "PROTECTED SUBMODULES" section sat on
+  "-- / 7 Awaiting data" — powered by `module-kpis`, the one full-haul dashboard
+  endpoint left after PERF-0009/0011 (it passes the whole metadata dict to the
+  firewall-module classifier, so the 3-scalar trick didn't apply).
+- **What:** The classifier reads a **bounded** set of keys — including **booleans**
+  (`is_audit_log`, `is_isolation_event`) and a **number** (`security_risk_score`) —
+  so text extraction would corrupt truthiness/comparison. Fixed with **`KeyTransform`**
+  (`metadata->'key'`, which preserves native JSON types): extract the 10-key set
+  (`_MODULE_META_FIELDS`) and reconstruct a partial `meta` dict that is identical, for
+  the classifier, to the full metadata.
+- **AFFECTS:** the `ai_mesh_firewall-control` image AND the **running control-1**
+  (rebuilt + recreated to deploy; healthy in 2 s, 16 workers). Output identical.
+- **ACTION FOR OTHERS:** none — already live; `docker compose build control` to adopt
+  the image. No restart needed beyond the recreate already done.
+- **PROOF:** classifier+risk verified **0 mismatches / 237,860 rows**; `module-kpis`
+  **5.64s → 2.56s** (2.2×, fetch 10.8s→2.64s = 4.1×); the overview dashboard now shows
+  **"PROTECTED SUBMODULES 7 / 7 — All firewall lanes online"** (was "-- / 7 Awaiting
+  data"), live status "Connected", hero KPIs populated; frontend audit `GATE PASSED`,
+  0 JS errors. (Still >1 s because the per-event classifier loop is inherent CPU;
+  fetch is now optimal.)
+
 ## PERF-0012 — Shared control-1 RECREATED to the multi-worker image (was wedged)
 - **Date:** 2026-07-03
 - **What:** The running shared **control-1** container was recreated

@@ -13,6 +13,15 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0013 — module-kpis type-safe metadata extraction + deploy (2026-07-03) [RUNNING STACK]
+- ModuleKpisView (dashboard "PROTECTED SUBMODULES") extracted the classifier's bounded
+  10-key metadata set via KeyTransform (preserves native JSON types — bools/numbers)
+  instead of hauling full metadata. Verified 0 mismatches/237860 rows. module-kpis
+  5.64s→2.56s. Control rebuilt + control-1 recreated (healthy, 16 workers) to deploy.
+  AFFECTS: control image + running control-1. ACTION: none (live). PROOF: dashboard now
+  shows "PROTECTED SUBMODULES 7/7 — All firewall lanes online" (was "-- /7 Awaiting
+  data"); status Connected; audit GATE PASSED.
+
 ## PERF-0012 — Shared control-1 RECREATED to multi-worker image (2026-07-03) [RUNNING STACK]
 - The live control-1 was wedged/unhealthy ~46 min (single-Daphne event loop stuck;
   streak 277, CPU idle, /api/health/ timeout). Recreated via `docker compose up -d
