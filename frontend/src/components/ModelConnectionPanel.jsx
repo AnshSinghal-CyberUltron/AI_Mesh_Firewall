@@ -604,9 +604,10 @@ export function ModelConnectionPanel({
         <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">LLM Router &amp; Model Provider</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Cloud/Local Provider</label>
+            <label htmlFor="llm-provider" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Cloud/Local Provider</label>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">Select provider to configure API credentials</p>
             <select
+              id="llm-provider"
               value={formData.provider}
               onChange={(e) => handleProviderChange(e.target.value)}
               className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 focus:border-transparent"
@@ -618,12 +619,14 @@ export function ModelConnectionPanel({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <label htmlFor="llm-apikey" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
               {selectedProvider?.label || "Provider"} API Key
             </label>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">This box appears dynamically based on the selected provider</p>
             <input
+              id="llm-apikey"
               type="password"
+              autoComplete="off"
               value={activeApiKey}
               onChange={(e) =>
                 setProviderApiKeys((prev) => ({ ...prev, [formData.provider]: e.target.value }))
@@ -958,8 +961,9 @@ export function ModelConnectionPanel({
 
               {useCustomModelName && selectedProvider && selectedProvider.models.length > 0 && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Custom Model Name *</label>
+                  <label htmlFor="mcp-custom-modelname" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Custom Model Name *</label>
                   <input
+                    id="mcp-custom-modelname"
                     type="text"
                     required
                     value={formData.custom_model_name}

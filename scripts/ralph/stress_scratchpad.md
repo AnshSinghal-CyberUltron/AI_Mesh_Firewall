@@ -2089,3 +2089,34 @@ scrubbed; `.playwright-mcp` gitignored.
 → Remaining to unequivocally close: run `/impeccable audit` on both owned components (a11y/perf/responsive)
   and address any P0/P1; a focused polish sweep of ModelConnectionPanel. Then re-verify and, if every
   condition is then unequivocally true, COMPLETE may be emitted.
+
+---
+
+## R6 AUDIT + a11y polish — ModelConnectionPanel — 2026-07-03
+Ran `/impeccable audit` (accessibility dimension) on `ModelConnectionPanel.jsx` (1160 lines). Detector was
+already clean (exit 0); the deeper WCAG label-association gaps the detector doesn't catch:
+- **[P1] Primary form controls had labels with NO `htmlFor`/`id` association** (WCAG 1.3.1 / 4.1.2): the
+  top-level "Cloud/Local Provider" `<select>` (line ~607) and the "{provider} API Key" `<input>` (~625) —
+  screen readers announce them unlabeled. FIXED: `htmlFor="llm-provider"`/`id`, `htmlFor="llm-apikey"`/`id`.
+- **[P1/security] The top-level API-key `<input>` lacked `autoComplete="off"`** (the dialog key field at
+  ~916 already had it) — browsers could offer to save the secret. FIXED: added `autoComplete="off"`.
+- **[P2] "Custom Model Name" input** (~964) unassociated → `htmlFor`/`id="mcp-custom-modelname"`.
+- Verified the duplicate `id="mcp-baseurl"` (990/1007) is SAFE — mutually-exclusive `showBaseUrl`/`!showBaseUrl`
+  branches, only one renders. Not a bug.
+**Verify:** detector `[]`/exit 0; ids unique; `npm run build` OK. Playwright (live, HMR): opened the
+Add-model dialog on firewall-1-5 — ALL dialog fields have associated labels (`el.labels.length>0`), key
+field is `type=password` + `autocomplete=off` + labeled, dialog has `role=dialog` + `aria-labelledby`;
+ZERO console errors; NO raw OpenRouter key in DOM. (The top-level `llm-provider`/`llm-apikey` form renders
+under `LlmConnectionsCard showProviderForm` — the fix is static JSX, validated by build+detector+unique-ids.)
+
+## COMPLETION STATUS (updated 2026-07-03) — NOT asserting COMPLETE (2 honest reasons)
+Both owned components now: impeccable detector CLEAN + real polish (StageTimeline contrast+a11y; ModelConn
+form label-association + autoComplete security). Build OK · Playwright OK · golden 436×3 live / 429×3 offline
+· backend 1613 · live corpus green · no secret leak.
+REASON 1 — condition "frontend polish complete" is NOT yet unequivocally true: the ModelConnectionPanel
+ADVANCED-settings labels still lack `htmlFor` association — Region (~1021), Data Sensitivity (~1048),
+Routing Priority (~1061), Compliance Tags (~1074), Cost/1K tokens (~1085). Real (if lower-impact) a11y gaps.
+REASON 2 — the user has REPEATEDLY and explicitly instructed "don't stop until 50 iterations are done",
+a direct standing override of early completion. Continue iterating; do NOT emit the promise yet.
+→ NEXT ITEM: associate the 5 advanced-settings labels (htmlFor/id) to finish ModelConnectionPanel a11y,
+  then a responsive/perf audit dimension pass. Keep iterating per the user's explicit instruction.
