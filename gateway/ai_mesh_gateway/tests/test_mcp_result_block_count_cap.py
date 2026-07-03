@@ -144,5 +144,43 @@ async def test_monitor_action_skips_depth_cap():
     assert blocked is False
 
 
+
+# ── CHG-0116: input-side twin of CHG-0115 — proactive depth cap on inbound tool ARGS
+# (attacker-controlled). Deep args would RecursionError the recursive arg scan (caught as a
+# generic arg_scan_error, and under "monitor" that fail-closed block violates observe-only).
+
+
+async def _args(arguments, *, enabled_info=None):
+    return await mcp_proxy._scan_tool_args_block(
+        arguments, tool_name="fetch", enabled_info=enabled_info,
+        org_slug="o", server_slug="s", actor=None)
+
+
+@pytest.mark.asyncio
+async def test_deeply_nested_args_fail_closed_with_clear_reason():
+    scanned, blocked, tags, findings, meta = await _args(
+        {"payload": _nest_dict(20000)}, enabled_info={"default_scan_action": "redact"})
+    assert blocked is True
+    assert meta.get("args_too_deeply_nested") is True
+    assert meta.get("max_arg_depth") == mcp_proxy._MCP_MAX_ARG_DEPTH
+    assert "RESOURCE_LIMIT" in tags
+
+
+@pytest.mark.asyncio
+async def test_deeply_nested_args_monitor_forwarded_not_blocked():
+    scanned, blocked, tags, findings, meta = await _args(
+        {"payload": _nest_dict(20000)}, enabled_info={"tool_scan_actions": {"fetch": "monitor"}})
+    assert blocked is False  # observe-only: never block, even a deep-args bomb
+    assert meta.get("monitor_scan_skipped") is True
+
+
+@pytest.mark.asyncio
+async def test_shallow_args_still_scanned_and_masked():
+    scanned, blocked, tags, findings, meta = await _args(
+        {"q": "email bob@corp.example"}, enabled_info={"default_scan_action": "redact"})
+    assert blocked is False
+    assert "bob@corp.example" not in json.dumps(scanned)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

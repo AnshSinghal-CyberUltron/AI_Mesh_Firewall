@@ -1138,6 +1138,16 @@
     tests. Gate: 11 block-count-cap + 1703 gateway passed 0 failed; broker unaffected. Oracle N/A (DoS containment,
     no PII-text delta). Extends CHG-0104 (block-count) / complements CHG-0114 (exfil-walk). Evidence mcp-parallel/
     findings/backstop-p-result-depth-cap/.
+  - CHG-0116 (2026-07-03) — LOW-MED resource-bomb + monitor fix (INPUT-side twin of CHG-0115): proactive depth cap on
+    inbound tool ARGS. CHG-0115 capped the RESULT floor, but _scan_tool_args_block (scans attacker-controlled tool-
+    call ARGUMENTS) had none -> deep args RecursionError'd the input scan (caught as generic arg_scan_error; under a
+    per-tool "monitor" action -> wrongful fail-closed block violating observe-only). FIX (mcp_proxy.py):
+    _scan_tool_args_block runs the same iterative _exceeds_nesting_depth BEFORE the scan; past _MCP_MAX_ARG_DEPTH
+    (defaults to _MCP_MAX_RESULT_DEPTH=500, env MCP_MAX_ARG_DEPTH) branches on action -> real action: fail-closed
+    RESOURCE_LIMIT + args_too_deeply_nested; monitor: forward UNCHANGED (never block, monitor_scan_skipped). Deep args
+    can't crash the scan, get a clear reason, monitor stays observe-only; credential force-block on shallow args
+    unchanged. +3 tests. Gate: 14 resource-limit + 1706 gateway passed 0 failed; broker unaffected. Oracle N/A (DoS
+    containment). Input-side twin of CHG-0115; parity with CHG-0104. Evidence mcp-parallel/findings/backstop-p-args-depth-cap/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

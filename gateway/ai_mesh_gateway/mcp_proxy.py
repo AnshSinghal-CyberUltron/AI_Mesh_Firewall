@@ -261,6 +261,9 @@ _MCP_MAX_CONTENT_BLOCKS = int(os.environ.get("MCP_MAX_CONTENT_BLOCKS", "10000"))
 # the scan and fail-closes with a clear RESOURCE_LIMIT reason. 500 ≫ any realistic legit
 # result (a handful of levels) and well under the stack limit; env-tunable.
 _MCP_MAX_RESULT_DEPTH = int(os.environ.get("MCP_MAX_RESULT_DEPTH", "500"))
+# CHG-0116: same cap for inbound tool ARGS (attacker-controlled). Defaults to the result
+# cap; separately env-tunable.
+_MCP_MAX_ARG_DEPTH = int(os.environ.get("MCP_MAX_ARG_DEPTH", str(_MCP_MAX_RESULT_DEPTH)))
 
 
 def _exceeds_nesting_depth(obj, limit: int) -> bool:
@@ -1044,6 +1047,23 @@ async def _scan_tool_args_block(
     an arg-scan failure prefers blocking over silently egressing raw arguments.
     """
     scan_action = _effective_scan_action(tool_name, enabled_info)
+    # CHG-0116: proactive depth cap on inbound ARGS (input-side twin of CHG-0115). A deeply
+    # -nested attacker-controlled args payload would RecursionError the recursive scan (caught
+    # below as a generic ``arg_scan_error``, AND under "monitor" that fail-closed block
+    # violates the observe-only contract). Iterative guard (own stack, can't itself be DoS'd),
+    # action-aware: real action → fail CLOSED (RESOURCE_LIMIT); monitor → forward unchanged.
+    if isinstance(arguments, (dict, list)) and _exceeds_nesting_depth(arguments, _MCP_MAX_ARG_DEPTH):
+        LOG.warning(
+            "mcp_proxy.args_too_deeply_nested org=%s server=%s tool=%s (>%d) action=%s",
+            org_slug, server_slug, tool_name, _MCP_MAX_ARG_DEPTH, scan_action,
+        )
+        if scan_action == "monitor":
+            return arguments, False, [], [], {
+                "args_too_deeply_nested": True, "monitor_scan_skipped": True,
+            }
+        return arguments, True, ["RESOURCE_LIMIT"], [], {
+            "args_too_deeply_nested": True, "max_arg_depth": _MCP_MAX_ARG_DEPTH,
+        }
     try:
         scanned, blocked, tags, findings, meta = await _mcp_security_scan(
             arguments,
