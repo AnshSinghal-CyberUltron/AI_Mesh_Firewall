@@ -3273,13 +3273,29 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                             },
                             status_code=200,
                         )
-                    elif _scanned_out is not _scan_target and "result" in payload:
+                    elif _scanned_out is not _scan_target:
+                        # CHG-0091: swap the redacted scan output back wherever the
+                        # scan target lived. Normal result -> payload["result"]; a BARE
+                        # ERROR envelope (no "result" key — the standard JSON-RPC error
+                        # a stdio/ws upstream returns on tool failure, scanned whole per
+                        # ``_scan_target`` above) -> swap the entire redacted envelope.
+                        # Previously this branch required ``"result" in payload``, so a
+                        # secret/PII in error.message was detected then DISCARDED and
+                        # the raw error egressed.
                         decision = "redact"
-                        payload["result"] = _scanned_out
+                        if "result" in payload:
+                            payload["result"] = _scanned_out
+                        else:
+                            payload = _scanned_out
+                            if isinstance(payload.get("error"), dict):
+                                reason = str(payload["error"].get("message", ""))[:255]
                         adapter_resp = JSONResponse(content=payload, status_code=200)
                     elif (
-                        "result" in payload
-                        and _mcp_redact_result_on_detect_enabled()
+                        # CHG-0091: dropped the ``"result" in payload`` guard so the
+                        # redaction floor ALSO fires for a bare error envelope whose
+                        # error.message carries a secret/PII under the default "tag"
+                        # posture (the detect-only case no swap branch had covered).
+                        _mcp_redact_result_on_detect_enabled()
                         and _scan_action != "monitor"
                         and (
                             _findings_have_secret_or_pii(_out_find_new)
@@ -3335,7 +3351,12 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                             )
                         elif _scanned_floor is not _scan_target:
                             decision = "redact"
-                            payload["result"] = _scanned_floor
+                            if "result" in payload:  # CHG-0091: error-envelope parity
+                                payload["result"] = _scanned_floor
+                            else:
+                                payload = _scanned_floor
+                                if isinstance(payload.get("error"), dict):
+                                    reason = str(payload["error"].get("message", ""))[:255]
                             adapter_resp = JSONResponse(content=payload, status_code=200)
                             _scan_meta_out = {
                                 **_scan_meta_out,

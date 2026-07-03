@@ -425,6 +425,22 @@
       1527 gateway passed, 0 failed; broker -k "not websocket" 108 passed. Evidence:
       mcp-parallel/findings/backstop-p20-1.4-concurrency-safety/finding.md. HONESTY: proves concurrency-
       safety, NOT the full 300–500-sandbox live stress (host-blocked, owned by CP47-50).
+      CHG-0091 (2026-07-03, HIGH fail-open 1.4 leak — MCP adapter stdio/ws ERROR-envelope tool result):
+      org_mcp_jsonrpc's adapter tools/call output scan uses `_scan_target = payload.get("result") if "result"
+      in payload else payload` — so a BARE JSON-RPC ERROR envelope ({"jsonrpc","id","error":{…}}, NO "result"
+      key, the standard MCP tool-FAILURE response) is scanned whole and a secret/PII/internal-IP in
+      error.message IS detected + tagged, BUT all 3 output swap branches were gated on `"result" in payload`
+      → redaction computed then DISCARDED, raw error egressed. Default "tag" posture = FLOOR is the operative
+      masker, and its gate was the one excluding error envelopes. This is the residual CHG-0061 left open (its
+      "ORG path unaffected — same floor" claim missed that the org floor gated on "result"). FIX (mcp_proxy.py):
+      dropped `"result" in payload` from the floor condition; both redact-swap branches write back to the WHOLE
+      envelope when no "result" key (payload = _scanned_out/_scanned_floor), + keep audited reason in sync with
+      masked message. Now MASKED, or fail-CLOSED [BLOCKED] on an unmaskable survivor. NEW TEST
+      test_mcp_adapter_error_envelope_redaction.py (5). Gate: 5 + 1534 gateway passed 0 failed; broker 108.
+      Byte-truth: fixed egress [CONNECTION_STRING_REDACTED], flag-off egress still ghp_…@10.0.0.5. Independent
+      oracle (aidefence): email/SSN error envelope → has_pii false fixed / true raw. Evidence:
+      mcp-parallel/findings/backstop-p-adapter-error-envelope/finding.md. RESIDUAL: tools/LIST adapter
+      fall-through (~L2943 raw return on non-tools-shaped payload) same class, lower probability — noted.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

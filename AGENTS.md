@@ -786,6 +786,24 @@
     NOTE (this iter, verification-only, no change): CROSS-TENANT isolation solid — all MCP caches keyed
     {org}/{server}, OAuth tokens {org}|{url}, tool-call cap {key_id} (org-bound), rate-limit {org}-scoped;
     no non-org-scoped cache holds tenant data. (Backs the cross-tenant-canary requirement.)
+  - CHG-0091 (2026-07-03) — HIGH fail-open 1.4 leak on the stdio/websocket ADAPTER tools/call path
+    (mcp_proxy.py org_mcp_jsonrpc): a BARE JSON-RPC ERROR envelope ({"jsonrpc","id","error":{…}}, NO
+    "result" key — the standard response an MCP upstream returns on tool FAILURE) with a secret/PII/internal-
+    IP in error.message was scanned whole (`_scan_target = payload.get("result") if "result" in payload else
+    payload`) and DETECTED, but all 3 output swap branches were gated on `"result" in payload` → for an error
+    envelope the redaction was computed then DISCARDED and the RAW error egressed. Under the default "tag"
+    posture the FLOOR is the operative masker and its gate was exactly the one excluding error envelopes.
+    FIX: dropped the `"result" in payload` guard from the floor condition + both redact-swap branches now
+    write back to the WHOLE envelope when there is no "result" key (also keep audited `reason` in sync with
+    the masked message). Now a secret/PII/IP in a bare error egress is MASKED (or fail-CLOSED blocked on an
+    unmaskable survivor). streamable-http path was already correct (swaps unconditionally). NEW TEST
+    test_mcp_adapter_error_envelope_redaction.py (5): redacted-under-tag / benign-unchanged / flag-off-raw /
+    monitor-wins / unmaskable→[BLOCKED]. Gate: 5 + 1534 gateway passed 0 failed; broker 108. Byte-truth:
+    fixed egress `[CONNECTION_STRING_REDACTED]`, flag-off egress still `ghp_…@10.0.0.5`. Independent oracle
+    (aidefence, decoupled from patterns.py): email/SSN error envelope → has_pii false fixed / true raw.
+    Evidence mcp-parallel/findings/backstop-p-adapter-error-envelope/. RESIDUAL: tools/LIST adapter
+    fall-through (~L2943 raw return on non-tools-shaped payload) is the same class, far lower probability —
+    noted, not fixed (scope).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
