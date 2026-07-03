@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -336,6 +337,95 @@ async def _start_reader(proc: StdioProcess):
         proc._pending.clear()
 
 
+# ── Host-tool install (general CLI-binary support) ──────────────────────────
+# Some MCP servers shell out to a CLI binary that the minimal sandbox image does
+# NOT ship (e.g. Semgrep MCP -> the `semgrep` CLI), so they exit immediately at
+# startup. Rather than baking every possible tool into the image, an operator
+# declares a server's host-tool prerequisites in its env var MCP_HOST_TOOLS
+# (already flows control -> gateway -> broker -> agent with the rest of env_vars):
+#
+#     MCP_HOST_TOOLS = "pip:semgrep npm:some-cli"      (whitespace/comma separated)
+#     MCP_HOST_TOOLS = "semgrep"                        (bare name -> pip/uv tool)
+#
+# The agent installs each declared tool INTO THE WRITABLE TMPFS before launching
+# the server: pip/uv tools via `uv tool install` (entry points land on
+# UV_TOOL_BIN_DIR=/var/cache/uv/bin, which the image puts on PATH), npm CLIs via
+# `npm install -g` (prefix redirected to the tmpfs npm cache). The installer verb
+# is FIXED — only the operator-declared PACKAGE NAME is interpolated, and it is
+# validated against a strict package-name regex (no shell, no path traversal), so
+# this never becomes arbitrary command execution. Read-only rootfs keeps the base
+# image immutable; installs are ephemeral per container (re-done on cold start) and
+# cached in-process so repeated launches don't reinstall.
+_HOST_TOOL_MANAGERS = {"pip", "uv", "npm"}
+_HOST_TOOL_INSTALL_TIMEOUT = float(os.environ.get("MCP_HOST_TOOL_INSTALL_TIMEOUT", "300"))
+_HOST_TOOL_PKG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+@/-]{0,127}$")
+_host_tools_installed: set[str] = set()          # marker cache (per container lifetime)
+_host_tools_lock = asyncio.Lock()                # serialize concurrent installs
+
+
+async def _install_host_tool(manager: str, package: str) -> None:
+    marker = f"{manager}:{package}"
+    if marker in _host_tools_installed:
+        return
+    async with _host_tools_lock:
+        if marker in _host_tools_installed:  # re-check inside the lock
+            return
+        if manager in ("pip", "uv"):
+            # `uv tool install` creates an isolated venv under UV_TOOL_DIR and links
+            # the CLI entry point into UV_TOOL_BIN_DIR (both tmpfs, writable).
+            cmd = ["uv", "tool", "install", "--quiet", package]
+        else:  # npm
+            cmd = ["npm", "install", "-g", "--no-audit", "--no-fund", package]
+        LOG.info("Installing declared host tool %s via %s", package, manager)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError(f"host tool installer '{cmd[0]}' unavailable") from exc
+        try:
+            _out, _err = await asyncio.wait_for(
+                proc.communicate(), timeout=_HOST_TOOL_INSTALL_TIMEOUT,
+            )
+        except asyncio.TimeoutError as exc:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            raise RuntimeError(
+                f"host tool '{package}' install timed out after "
+                f"{int(_HOST_TOOL_INSTALL_TIMEOUT)}s"
+            ) from exc
+        if proc.returncode != 0:
+            tail = (_err or b"").decode("utf-8", "replace").strip()[-300:]
+            raise RuntimeError(f"host tool '{package}' ({manager}) install failed: {tail}")
+        _host_tools_installed.add(marker)
+        LOG.info("Host tool %s installed", package)
+
+
+async def _ensure_host_tools(requested_env: dict[str, str]) -> None:
+    """Install any host CLI tools declared in MCP_HOST_TOOLS before launching."""
+    spec = (requested_env.get("MCP_HOST_TOOLS") or "").strip()
+    if not spec:
+        return
+    for entry in re.split(r"[,\s]+", spec):
+        entry = entry.strip()
+        if not entry:
+            continue
+        manager, sep, package = entry.partition(":")
+        if not sep:  # bare name → default to a pip/uv tool
+            manager, package = "pip", entry
+        manager = manager.strip().lower()
+        package = package.strip()
+        if manager not in _HOST_TOOL_MANAGERS:
+            raise RuntimeError(
+                f"host tool manager '{manager}' not allowed (use pip, uv, or npm)"
+            )
+        if not _HOST_TOOL_PKG_RE.match(package):
+            raise RuntimeError(f"invalid host tool package name: {package!r}")
+        await _install_host_tool(manager, package)
+
+
 async def _ensure_process(
     key: str,
     command: str,
@@ -407,6 +497,13 @@ async def _ensure_process(
             )
             await _kill_process(oldest)
             org_keys = [k for k in _processes if k.startswith(f"{ORG_SLUG}/")]
+
+        # Install any operator-declared host CLI tools (MCP_HOST_TOOLS) before the
+        # server launches, so a server that shells out to a binary the base image
+        # doesn't ship (e.g. semgrep) finds it on PATH. A failure here surfaces as a
+        # clean start error rather than the server exiting immediately with an
+        # opaque "missing host dependency".
+        await _ensure_host_tools(requested_env)
 
         proc_env = _build_child_env(
             requested_env,

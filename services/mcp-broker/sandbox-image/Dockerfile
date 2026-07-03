@@ -9,9 +9,14 @@ FROM python:3.12-slim-bookworm AS runtime
 COPY --from=ghcr.io/astral-sh/uv:python3.12-bookworm-slim /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
 
 ENV PYTHONUNBUFFERED=1 \
-    PATH="/opt/agent/.venv/bin:$PATH" \
     ORG_SLUG=default \
-    MCP_REMOTE_CONFIG_DIR=/data/mcp-auth
+    MCP_REMOTE_CONFIG_DIR=/data/mcp-auth \
+    npm_config_prefix=/var/npm-cache/global
+# PATH includes the WRITABLE-tmpfs install targets so operator-declared host tools
+# (MCP_HOST_TOOLS: `uv tool install` / `npm -g`) resolve for the spawned MCP server.
+# /var/cache/uv/bin = UV_TOOL_BIN_DIR; /var/npm-cache/global/bin = npm -g prefix bin.
+# Both are runtime tmpfs mounts; listing them here is harmless when absent.
+ENV PATH="/opt/agent/.venv/bin:/var/cache/uv/bin:/var/npm-cache/global/bin:$PATH"
 
 WORKDIR /opt/agent
 
@@ -42,7 +47,13 @@ COPY shared/ai_mesh_shared/mcp_stdio_common.py /opt/shared/ai_mesh_shared/mcp_st
 RUN mkdir -p /opt/shared/ai_mesh_shared \
     && printf '%s\n' '"""Sandbox subset of ai_mesh_shared (stdio common only)."""' \
         > /opt/shared/ai_mesh_shared/__init__.py
-ENV PYTHONPATH="/opt/shared:${PYTHONPATH}"
+# CHG-0153: PYTHONPATH is a plain assignment (no ":${PYTHONPATH}"). At build time
+# ${PYTHONPATH} is undefined, so the old value resolved to "/opt/shared:" — the trailing
+# colon = an empty sys.path entry = the process CWD on the import path (a classic import-
+# hijack footgun, and the source of the docker build UndefinedVar warning). A sandbox
+# running untrusted MCP servers must not carry CWD on the agent's import path. `docker run
+# -e PYTHONPATH=...` overrides this ENV anyway, so nothing legitimate is lost.
+ENV PYTHONPATH="/opt/shared"
 
 # Sandbox-agent (in-container stdio MCP process manager).
 COPY services/mcp-broker/sandbox-image/pyproject.toml ./pyproject.toml
