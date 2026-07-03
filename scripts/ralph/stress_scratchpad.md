@@ -3200,3 +3200,9 @@ NFKC → fold), fullwidth controls, zalgo/combining marks (Mn dropped), variatio
 folds neither. NEXT item (extend confusable map to the real Armenian/Cherokee Latin-lookalikes).
 Session ledger: TWENTY-THREE leaks (G74..G95, G97, G98, G100, G101) + ONE false-block (G99) fixed; G96
 freezes 6 defended vectors; G77/G78/G80 frozen.
+
+### G101 DEPLOY + LIVE-VERIFY — 2026-07-03
+Rebuilt+redeployed the baked gateway (tag rollback-g101 → build → up -d --no-deps → healthy ~4s).
+LIVE-verified: parenthesized-letter injection → **block**; parenthesized-digit SSN → flag-and-**masked**
+(neither the plain nor the parenthesized form forwarded — no PII to model). G101 validated end-to-end
+(in-process 624×3 + backend 1846 + live deployed).
