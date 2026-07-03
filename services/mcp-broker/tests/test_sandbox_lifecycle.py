@@ -377,6 +377,21 @@ def test_egress_lockdown_injects_proxy_env():
     assert env["HTTP_PROXY"] == "http://allowlist-proxy:3128"
     assert env["HTTPS_PROXY"] == "http://allowlist-proxy:3128"
     assert "NO_PROXY" in env
+    # CHG-0125: BOTH cases must be set — curl/wget/git honor ONLY the lowercase
+    # variants, so uppercase-only leaves an egress-proxy BYPASS (direct exfil path).
+    assert env["http_proxy"] == "http://allowlist-proxy:3128"
+    assert env["https_proxy"] == "http://allowlist-proxy:3128"
+    assert env["no_proxy"] == env["NO_PROXY"]
+
+
+def test_no_egress_proxy_env_when_lockdown_off_and_no_proxy():
+    # Default config: lockdown off, no explicit proxy -> NO proxy vars injected at all
+    # (neither case), so the absence is unambiguous and can't be half-set.
+    manager = DockerManager(client=_mock_client(), config=SandboxDockerConfig())
+    env = manager._run_kwargs("acme")["environment"]
+    for k in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+              "http_proxy", "https_proxy", "no_proxy"):
+        assert k not in env
 
 
 def test_refuses_docker_socket_mount():

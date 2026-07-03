@@ -429,10 +429,23 @@ class DockerManager:
             return {}
         http_proxy = self.config.http_proxy or _DEFAULT_EGRESS_PROXY
         https_proxy = self.config.https_proxy or http_proxy
+        # CHG-0125: set BOTH upper- and lower-case proxy vars. curl honors ONLY the
+        # lowercase ``http_proxy`` for plain HTTP (a deliberate curl behavior since the
+        # httpoxy / CVE-2016-5385 era — its man page: "http_proxy is only used in
+        # lowercase"); wget/git also prefer lowercase. With only the UPPERCASE vars set,
+        # a sandboxed MCP server (or any subprocess) shelling out to curl/wget/git would
+        # BYPASS the egress proxy and connect directly to arbitrary hosts even under
+        # MCP_SANDBOX_EGRESS_LOCKDOWN=true — an exfiltration path that defeats the
+        # egress-lockdown guardrail. Emitting both cases is the standard, defensive
+        # convention (every production egress-proxy setup sets both).
+        no_proxy = self.config.no_proxy
         return {
             "HTTP_PROXY": http_proxy,
             "HTTPS_PROXY": https_proxy,
-            "NO_PROXY": self.config.no_proxy,
+            "NO_PROXY": no_proxy,
+            "http_proxy": http_proxy,
+            "https_proxy": https_proxy,
+            "no_proxy": no_proxy,
         }
 
     @staticmethod

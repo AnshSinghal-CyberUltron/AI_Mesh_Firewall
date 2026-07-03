@@ -1465,3 +1465,11 @@
 - **Gap closed:** disabled-block was only UNIT-covered (test_mcp_enabled_tools_cache). Added e2e proof that internal_tools_call short-circuits EXECUTION for a disabled tool — never forwards on sandbox (_adapter_forward) OR legacy httpx -> no egress. Guards the invariant against the many parallel sessions editing mcp_proxy.py.
 - **Gate:** test_mcp_internal_http_result_scan.py -> 10 passed; full gateway suite 1787 passed 0 failed.
 - **Evidence:** mcp-parallel/findings/backstop-p-chat-path-disabled-tool-authz-lock/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked; item-21 UI cross-plane).
+
+---
+## CHG-0125 (2026-07-03) — egress-lockdown bypass: sandbox proxy env was uppercase-only (item 12 egress dimension)
+
+- **Gap:** `_egress_proxy_env` (services/mcp-broker/src/sandbox/docker_manager.py) injected only UPPERCASE HTTP_PROXY/HTTPS_PROXY/NO_PROXY. curl uses ONLY lowercase http_proxy for plain HTTP (httpoxy/CVE-2016-5385); wget/git prefer lowercase. -> a sandboxed MCP server shelling to curl/wget/git BYPASSED the egress proxy -> direct exfil to arbitrary hosts over the org bridge NAT even under MCP_SANDBOX_EGRESS_LOCKDOWN=true. Found while surveying container hardening (items 10/12): resource/security kwargs (mem/memswap/nano_cpus/pids/read_only/cap_drop ALL/no-new-privileges/seccomp/tmpfs) are DONE + thoroughly regression-locked in test_sandbox_lifecycle.py; the egress proxy-env was the weak spot.
+- **Fix:** emit BOTH cases; {}-when-disabled fast path preserved. `_egress_proxy_env` is the ONLY proxy-env source (grep-verified).
+- **Gate:** broker test_sandbox_lifecycle.py -k "egress or proxy" 2 passed; full broker -k "not websocket" 158 passed.
+- **Honesty:** closes the SOFT env bypass for proxy-respecting tools; a HARD network lockdown (internal net + forced/transparent proxy or iptables egress) remains INFRA (unchanged); egress-lockdown OFF by default. Evidence mcp-parallel/findings/backstop-p-egress-proxy-lowercase-bypass/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked).
