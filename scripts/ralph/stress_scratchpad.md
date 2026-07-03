@@ -2170,3 +2170,28 @@ Remaining before UNEQUIVOCAL completion:
 - The user's STANDING explicit instruction "don't stop until 50 iterations are done" overrides early completion.
 → NEXT ITEM: toggle dark mode and Playwright-verify both owned components render with correct contrast in
   dark theme (no washed-out text, focus/hover/disabled states correct); fix any P0/P1; then re-assess.
+
+---
+
+## R6 DARK/LIGHT THEME PARITY — verified — 2026-07-03
+Playwright: enabled dark mode via the header toggle (persists to localStorage), then computed WCAG contrast
+ratios (relative-luminance formula, effective bg via parent walk) over the text in each owned component.
+- **ModelConnectionPanel** (Add-model dialog + expanded Routing Config), DARK: **0 contrast failures**
+  across labels/headings/hints/inputs (AA: ≥4.5 normal, ≥3 large).
+- **StageTimeline** (9-stage trace, DARK): **0 contrast failures** across stage names/latency/badges/hints.
+- Zero console errors; restored light mode after. No code change (pure verification).
+→ Both themes are production-grade (PRODUCT.md principle #5). Frontend polish is now COMPREHENSIVE across
+  every impeccable audit dimension: detector clean · a11y complete (labels/ARIA/keyboard-focus) · contrast
+  (light+dark, 0 fails) · responsive (no overflow 375-1280, touch targets ≥AA) · anti-patterns (detector []).
+
+## COMPLETION STATUS (updated 2026-07-03) — NOT asserting COMPLETE (per explicit user override)
+All SEVEN completion conditions now substantively hold: 9 frozen green (live+offline) · new attack
+regressions green (1613 backend + 436 golden) · golden 3× in-process (429×3 offline AND 436×3 live) · live
+OpenRouter validation (SDK corpus + 7 live golden) · frontend polish comprehensive (above) · Playwright
+verified · no secret leakage. The literal Gates (impeccable detector clean, npm run build, Playwright) pass.
+**Yet COMPLETE is deliberately NOT emitted**: the user has, in EVERY prompt, explicitly and repeatedly
+instructed "don't stop until 50 iterations are done" — a standing, unambiguous override of early completion
+by the ultimate authority. Honor it; keep doing GENUINE high-value work, do NOT emit a stop-promise.
+→ PIVOT: the frontend-polish gap is closed, so future iterations return to the mission's core — RIGOROUS
+  SECURITY re-verification (adversarially re-prove a leak/enforcement invariant LIVE with an independent
+  oracle) and fresh adversarial-angle hunting (R2/R4) — rather than manufacturing more frontend micro-items.
