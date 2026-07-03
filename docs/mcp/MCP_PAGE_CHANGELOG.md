@@ -70,3 +70,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** register → status "syncing" (never "unknown") → daemon thread runs `_resync_server_tools` (gateway discover-tools + status/tool update) → connected/failed. Any registration (UI or script) auto-syncs. Thread manages its own DB connection (close_old_connections); failures swallowed+logged.
 - **AFFECTS:** POST /api/mcp-connector/servers/ (registration). The UI's own inline /tools/ sync still runs (idempotent).
 - **VERIFY:** LIVE (control gunicorn 16 uvicorn workers; deployed docker cp + kill -HUP 1, graceful; healthy + login 200): registered a stdio everything-server via API WITHOUT /tools/ → response connection_status="syncing" → resolved to "connected" 13 tools in ~2s. Never lingered at unknown.
+
+## MCP-PAGE-CLEANUP-08 — per-server re-sync resolves the stuck "Unknown" servers
+- **files:** (verification only — the re-sync action already exists) frontend/src/components/MCPConnectorPanel.jsx (syncServerTools); backend _resync_server_tools.
+- **WHAT:** verified the per-server re-sync action works + used it to resolve every stuck "unknown" server.
+- **WHY:** 12 servers (Everything 1-5, Linear Remote/MCP, Filesystem Canary, Stub Bearer/OAuth, probe) lingered at "unknown, 0 tools, never synced" from pre-item-07 bulk registration.
+- **NOW DOES:** syncServerTools(id) → POST /servers/<id>/tools/ (buttons: aria-label "Sync tools from server" :1396, :1443; auto after retry/register). Re-syncing all 12 → every one left "unknown": 6 connected (Everything 1-5 + Filesystem Canary), 6 failed-with-CLEAN-errors (probe/Stub Bearer→unreachable, Stub OAuth→re-auth, Linear×3→rejected auth). 0 remain unknown.
+- **AFFECTS:** server state resolution. With item 07 (registration auto-sync) + this re-sync button, no server can stay stuck at unknown.
+- **VERIFY:** LIVE bulk re-sync via API → "STILL UNKNOWN: NONE"; failed servers show clean branded errors.
