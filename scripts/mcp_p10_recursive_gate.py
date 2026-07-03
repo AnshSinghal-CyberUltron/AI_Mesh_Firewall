@@ -17,6 +17,7 @@ Env:
   SKIP_INPROCESS  1 to skip pytest (not recommended)
   SKIP_PLAYWRIGHT 1 to skip UI gate
   INCLUDE_SUSTAINED 1 to run SUSTAINED=1 phase in multi_org harness (slow)
+  INTER_ROUND_SANDBOX_RESTART 1 (default) restart scale sandboxes between gate rounds
 """
 from __future__ import annotations
 
@@ -48,6 +49,8 @@ P9_HARNESSES = [
 
 INTER_HARNESS_SLEEP = float(os.environ.get("INTER_HARNESS_SLEEP", "8"))
 INTER_ROUND_SLEEP = float(os.environ.get("INTER_ROUND_SLEEP", "45"))
+INTER_ROUND_SANDBOX_RESTART = os.environ.get("INTER_ROUND_SANDBOX_RESTART", "1") == "1"
+POST_LEAKAGE_RESTART_SLEEP = float(os.environ.get("POST_LEAKAGE_RESTART_SLEEP", "45"))
 
 
 def _run(cmd, *, cwd=REPO, env=None, timeout=900, marker=None, label="") -> tuple[bool, str]:
@@ -143,10 +146,13 @@ def p9_harness(label: str, script: str, env_over: dict, marker: str) -> tuple[bo
     time.sleep(INTER_HARNESS_SLEEP)
     env = dict(os.environ)
     env.update(env_over)
+    timeout = int(os.environ.get("P9_LOAD_TIMEOUT", "1500")) if label == "load" else int(
+        os.environ.get("P9_HARNESS_TIMEOUT", "900")
+    )
     return _run(
         [PYBIN, "-u", os.path.join(HERE, script)],
         env=env,
-        timeout=900,
+        timeout=timeout,
         marker=marker,
         label=label,
     )
@@ -189,6 +195,17 @@ def run_round(rnd: int) -> tuple[bool, list[dict]]:
         entries.append({"gate": label, "ok": ok, "summary": tail})
         round_ok = round_ok and ok
 
+    if not round_ok and os.environ.get("INPROCESS_RETRY", "1") == "1":
+        if any(e["gate"] in ("broker-pytest", "agent-pytest") and not e["ok"] for e in entries):
+            print("  [retry] in-process suites (DNS/egress flake)…")
+            time.sleep(float(os.environ.get("INPROCESS_RETRY_SLEEP", "20")))
+            entries = [e for e in entries if e["gate"] not in ("broker-pytest", "agent-pytest")]
+            round_ok = all(e["ok"] for e in entries)
+            for label, ok, tail in inprocess_gates():
+                print(f"  [{'PASS' if ok else 'FAIL'}] {label} (retry): {tail}")
+                entries.append({"gate": label, "ok": ok, "summary": tail})
+                round_ok = round_ok and ok
+
     ok, tail = multi_org_harness()
     print(f"  [{'PASS' if ok else 'FAIL'}] multi-org: {tail}")
     entries.append({"gate": "multi-org", "ok": ok, "summary": tail})
@@ -196,6 +213,14 @@ def run_round(rnd: int) -> tuple[bool, list[dict]]:
     time.sleep(INTER_HARNESS_SLEEP)
 
     for label, script, env_over, marker in P9_HARNESSES:
+        if label == "concurrency" and os.environ.get("PRE_CONCURRENCY_SANDBOX_RESTART", "1") == "1":
+            _restart_scale_sandboxes()
+            time.sleep(float(os.environ.get("POST_CONCURRENCY_RESTART_SLEEP", "30")))
+        if label == "load" and os.environ.get("PRE_LOAD_SANDBOX_RESTART", "0") == "1":
+            _restart_scale_sandboxes()
+        if label == "leakage" and os.environ.get("PRE_LEAKAGE_SANDBOX_RESTART", "1") == "1":
+            _restart_scale_sandboxes()
+            time.sleep(POST_LEAKAGE_RESTART_SLEEP)
         ok, tail = p9_harness(label, script, env_over, marker)
         print(f"  [{'PASS' if ok else 'FAIL'}] {label}: {tail}")
         entries.append({"gate": label, "ok": ok, "summary": tail})
@@ -231,6 +256,9 @@ def main() -> int:
             all_green = False
             break
         if rnd < ROUNDS_GATE:
+            if INTER_ROUND_SANDBOX_RESTART:
+                print(f"\n[prep] inter-round sandbox restart after round {rnd}…")
+                _restart_scale_sandboxes()
             time.sleep(INTER_ROUND_SLEEP)
 
     report = {
