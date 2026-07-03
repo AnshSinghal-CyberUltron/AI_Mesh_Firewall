@@ -68,7 +68,12 @@
       no sync-redis, no .result() on a loop. Control ws consumers wrap ORM in sync_to_async. Control HTTP=100% sync
       views (0 async/38 sync) → serialize on the per-worker thread-sensitive thread (not loop-block); mitigated by N
       workers (item 07). Worst staller = soc-kpis 24-30s sync query (fixed in P6). Audit only, no code/stack change.
-- [ ] 13. Offload/convert: sync ORM → sync_to_async/async; requests → httpx async; CPU → run_in_executor.
+- [x] 13. Offload/convert: sync ORM → sync_to_async/async; requests → httpx async; CPU → run_in_executor.
+      → VERIFIED no conversions needed — all three already implemented. Hot path proxy_chat (main.py:4509, async):
+      await request.json(), await REDIS_CLIENT.incr/expire (redis.asyncio), await check_kill_switch/model_state/
+      RATE_LIMITER, await LLM_ROUTER.acompletion (async upstream), await asyncio.to_thread(_security_scan) (CPU offloaded).
+      Only sync requests.* left = control ADMIN views (IsAdminOrSuperuser, timeout=10, low-RPS, Django thread-sensitive —
+      not a loop block); pooling would be churn. No code/stack change; documented in BLOCKING_CALLS.md. Item 14 proves empirically.
 - [ ] 14. Verify a slow request no longer stalls concurrent requests on the same worker.
 
 ## P5 — Scale the data layer  [STACK-CHANGE → log to 4 memories]

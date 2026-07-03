@@ -66,3 +66,27 @@ not on a request path. Non-issue (left as-is).
    on the same worker — i.e. the `run_in_executor` offload keeps the loop free.
 3. The soc-kpis slow query (the one call that genuinely monopolizes a worker) is
    handled in P6, not by async conversion.
+
+## Item 13 (offload/convert) — verified: no conversions needed
+
+The three conversions the mandate lists (sync ORM → `sync_to_async`, `requests` →
+async, CPU → `run_in_executor`) have **no remaining targets** — they are already
+implemented. Confirmed on the single most important handler, the inference hot path
+`proxy_chat` (`main.py:4509`, `async def`):
+
+- Body: `await request.json()` (async).
+- Redis (rate-limit/burst/rpm, kill-switch, model-state): `await REDIS_CLIENT.incr/
+  expire`, `await check_kill_switch`, `await check_model_state` — all `redis.asyncio`.
+- Rate limiting: `await RATE_LIMITER.check_rate_limit / check_org_rate_limit`.
+- Upstream LLM: `await LLM_ROUTER.acompletion(...)` — litellm **async**, not sync
+  `completion`.
+- CPU Tier-1 scan: `await asyncio.to_thread(_security_scan, ...)` — offloaded off the
+  loop (alongside the `run_in_executor` scanner path).
+
+So a `proxy_chat` request never runs sync work on the event loop. The only sync-HTTP
+`requests.*` left in either service is in **control admin views** (circuit-breaker /
+RAG-collection / db-test proxies, `IsAdminOrSuperuser`-gated, `timeout=10`) — a
+low-RPS admin path on Django's thread-sensitive executor, not an event-loop block;
+pooling/async-converting it would be churn with no throughput benefit. **No code
+change made for item 13** — the de-blocked state is the finding. Item 14 proves it
+empirically.
