@@ -1165,6 +1165,26 @@
       [x]: install gVisor + set MCP_SANDBOX_RUNTIME=runsc + _REQUIRED=true on the broker in BOTH compose files
       (+ define the broker in prod compose), prove Runtime=runsc live; network egress default-deny — all need
       the deploy host. Evidence: mcp-parallel/findings/backstop-p12-runtime-degraded-warning/finding.md.
+      CHG-0147 (2026-07-03, LOW test-only regression-lock, NO code change): the sandbox egress allowlist
+      (_validate_upstream, the pre-dial chokepoint for all remote transports) matches the URL host against
+      allowed_hosts by NORMALIZED (lowercase/trailing-dot-stripped/IDNA) EXACT set membership, fail-closed —
+      verified correct. GAP: the only existing test covered a wholly-different host; NONE covered the classic
+      allowlist-bypass edges — subdomain of an allowed host (evil.mcp.example.com), string-suffix attack not
+      label-aligned (notmcp.example.com, which a naive endswith wrongly allows), allowed host as a left label
+      (mcp.example.com.evil.com), + the normalization cases that must still ALLOW (case/trailing-dot both
+      sides). A future "support subdomains" refactor to endswith/in would silently open egress-exfil. FIX
+      (test only, test_ssrf_ip_classifier.py): +13 parametrized (deny non-exact → egress denied -32002; allow
+      normalized-exact → returns None; empty allowed_hosts → fail closed). Gate: 36 passed (13 new);
+      suffix_string_attack (notmcp.example.com DENIED) proves exact set membership not endswith. _validate_upstream
+      is pure (no dial/network) → version-agnostic (runs on the 3.14 venv though the image is py3.12). Evidence:
+      mcp-parallel/findings/backstop-p12-egress-allowlist-exact-match-lock/finding.md.
+      RESIDUALS found this iter (documented, NOT shipped): (1) broker src/sandbox/routes.py _forward_sandbox_rpc
+      reads the sandbox agent's response via response.json()/response.text with NO size cap — a buggy/compromised
+      (gVisor-contained, auth'd, self-caps at 8MB) per-org agent returning a huge body could OOM the SHARED
+      broker; a real fix needs flipping client.post → capped client.stream in _post_agent_rpc, which breaks every
+      test that mocks client.post (high blast radius) for a LOW-severity scenario — deferred. (2) sandbox agent
+      _log_stderr stderr-flood self-hang (LOW; fix is py3.12-vs-3.14 asyncio-dependent, unverifiable vs the prod
+      3.12 runtime here — see auto-memory sandbox-py312-vs-test-py314-asyncio).
 
 ## G4 — Production hardening (Phase 3)
 - [ ] 13. Monitoring + metrics + tracing wired; backup; auto-recovery (sandbox/broker/Redis/PG self-heal).

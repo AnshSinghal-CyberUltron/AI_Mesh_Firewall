@@ -23,6 +23,7 @@ from agent.upstream_manager import (  # noqa: E402
     UpstreamError,
     _assert_upstream_not_ssrf,
     _resolved_ip_blocked,
+    _validate_upstream,
 )
 
 _MUST_BLOCK = [
@@ -69,3 +70,53 @@ async def test_assert_ssrf_blocks_literal_mapped_ipv6_metadata():
 @pytest.mark.asyncio
 async def test_assert_ssrf_allows_public_literal_ip():
     await _assert_upstream_not_ssrf("8.8.8.8")  # must not raise
+
+
+# ── CHG-0147: egress ALLOWLIST exact-match lock. _validate_upstream matches the URL host
+# against allowed_hosts via NORMALIZED (lowercased, trailing-dot-stripped, IDNA) EXACT set
+# membership — never a substring/suffix/subdomain match. A regression to endswith()/`in`
+# would open the classic allowlist bypass (exfil to attacker host that merely *contains* an
+# allowed host as a suffix). These lock the fail-closed exact-match invariant. ────────────
+
+def _up(url, allowed):
+    return {"url": url, "allowed_hosts": allowed}
+
+
+# (label, url_host_in_url, allowed) that MUST be DENIED (-32002 egress denied)
+_DENY = [
+    ("subdomain_of_allowed", "https://evil.mcp.example.com/mcp", ["mcp.example.com"]),
+    ("suffix_string_attack", "https://notmcp.example.com/mcp", ["mcp.example.com"]),   # ends-with, not label-aligned
+    ("allowed_as_left_label", "https://mcp.example.com.evil.com/mcp", ["mcp.example.com"]),
+    ("wholly_different_host", "https://attacker.test/mcp", ["mcp.example.com"]),
+    ("ip_not_in_allowlist", "https://93.184.216.34/mcp", ["203.0.113.10"]),
+]
+
+
+@pytest.mark.parametrize("label,url,allowed", _DENY, ids=[d[0] for d in _DENY])
+def test_egress_allowlist_denies_non_exact(label, url, allowed):
+    with pytest.raises(UpstreamError, match="egress denied"):
+        _validate_upstream(_up(url, allowed))
+
+
+# (label, url, allowed) that MUST be ALLOWED (no raise) — normalized exact match.
+_ALLOW = [
+    ("exact", "https://mcp.example.com/mcp", ["mcp.example.com"]),
+    ("case_insensitive_url", "https://MCP.Example.COM/mcp", ["mcp.example.com"]),
+    ("case_insensitive_allow", "https://mcp.example.com/mcp", ["MCP.EXAMPLE.COM"]),
+    ("trailing_dot_in_url", "https://mcp.example.com./mcp", ["mcp.example.com"]),
+    ("trailing_dot_in_allow", "https://mcp.example.com/mcp", ["mcp.example.com."]),
+    ("ip_exact", "https://93.184.216.34/mcp", ["93.184.216.34"]),
+    ("second_of_multiple", "https://b.example.com/mcp", ["a.example.com", "b.example.com"]),
+]
+
+
+@pytest.mark.parametrize("label,url,allowed", _ALLOW, ids=[a[0] for a in _ALLOW])
+def test_egress_allowlist_allows_normalized_exact(label, url, allowed):
+    # _validate_upstream returns None (does not raise) when the host is allowlisted.
+    assert _validate_upstream(_up(url, allowed)) is None
+
+
+def test_egress_allowlist_required_fail_closed():
+    # Empty/missing allowed_hosts must fail closed (allowlist is mandatory).
+    with pytest.raises(UpstreamError, match="allowed_hosts is required"):
+        _validate_upstream(_up("https://mcp.example.com/mcp", []))
