@@ -1685,15 +1685,78 @@ async def _apply_output_guard_nonstream(
     # request/RAG context is available, preserving prior behavior.
     _context_chunks = await _resolve_rag_context_chunks(request)
     try:
+        from .enforcement import enforce_output as _enforce_output
+    except ImportError:
+        from enforcement import enforce_output as _enforce_output
+
+    _guard_exc = None
+    verdict = None
+    try:
         verdict = await OUTPUT_GUARD.inspect(
             _scan_text,
             context_chunks=_context_chunks,
             org_config=(CONFIG_SYNC.get_config(org_slug) if (CONFIG_SYNC is not None and org_slug) else None),
             org_slug=org_slug or "",
         )
-    except Exception:  # noqa: BLE001 - output guard must never crash the response
-        LOG.exception("Output guard inspect failed (sync_pre_llm path); failing open")
+    except Exception as _og_exc:  # noqa: BLE001
+        LOG.exception("Output guard inspect failed (sync_pre_llm path); failing CLOSED per enforce_output")
+        _guard_exc = _og_exc
+
+    _enforcement_mode = org_config.get("enforcement_mode", "block")
+    _out_decision = _enforce_output(
+        verdict_action=verdict.action if verdict else None,
+        verdict_threat_type=verdict.threat_type if verdict else None,
+        verdict_confidence=getattr(verdict, "confidence", None) if verdict else None,
+        verdict_detail=verdict.detail if verdict else None,
+        verdict_matched_patterns=getattr(verdict, "matched_patterns", None) if verdict else None,
+        verdict_compliance_tags=getattr(verdict, "compliance_tags", None) if verdict else None,
+        scan_degraded=False,
+        enforcement_mode=_enforcement_mode,
+        is_streaming=False,
+        exception=_guard_exc,
+    )
+
+    if _out_decision.action == "allow":
         return None
+
+    if _out_decision.is_terminal_block and _guard_exc is not None:
+        METRICS["blocked"] = METRICS.get("blocked", 0) + 1
+        _emit_telemetry(
+            status_code=403,
+            event_type="output_guard",
+            action="block",
+            risk_score=0.0,
+            latency_ms=(time.perf_counter() - start) * 1000,
+            metadata={
+                "detail": "Output guard exception; failing CLOSED (D-05 fix)",
+                "response_snippet": response_text[:500] if response_text else "",
+            },
+            model=body.get("model", ""),
+            user_id=user_id,
+            project_id=str(project_id or ""),
+            key_prefix=key_prefix,
+            threat_type="guard_exception",
+            pipeline_stage="generator",
+            prompt_snippet=prompt_snippet,
+            endpoint_id=endpoint_id,
+        )
+        return _build_block_response(
+            403,
+            "output_blocked",
+            _build_zeroshield_metadata(
+                action="block",
+                reason="Output guard failed; blocked to prevent unscanned egress (fail-closed).",
+                detection_tier="output_guard",
+                threat_type="guard_exception",
+                confidence=0.0,
+                original_prompt=prompt,
+                processing_time_ms=(time.perf_counter() - start) * 1000,
+                security_incident=True,
+            ),
+            prompt=prompt,
+            requested_model=body.get("model", ""),
+        )
+
     if verdict is None or verdict.action == "allow":
         return None
 
@@ -6436,6 +6499,7 @@ async def proxy_chat(
                 from enforcement import (
                     normalize_action as _normalize_enforcement_action,
                     resolve_enforcement as _resolve_enforcement,
+                    resolve_and_enforce as _resolve_and_enforce,
                     should_apply_redaction as _should_apply_redaction,
                     should_hard_block as _should_hard_block,
                 )
@@ -6443,6 +6507,7 @@ async def proxy_chat(
                 from .enforcement import (
                     normalize_action as _normalize_enforcement_action,
                     resolve_enforcement as _resolve_enforcement,
+                    resolve_and_enforce as _resolve_and_enforce,
                     should_apply_redaction as _should_apply_redaction,
                     should_hard_block as _should_hard_block,
                 )
@@ -6455,34 +6520,32 @@ async def proxy_chat(
                 or verdict.action
                 or "allow"
             )
-            injection_threshold = org_config.get("prompt_injection_threshold", 0.80)
-            _INJECTION_THREAT_TYPES = {"prompt_injection", "jailbreak", "goal_hijacking"}
-            _is_injection = verdict.threat_type in _INJECTION_THREAT_TYPES
-            if _is_injection and _normalize_enforcement_action(_guard_rec) == "block":
-                # Injection-type threats: respect scan_block_on_injection + confidence gate
-                if (
-                    not org_config.get("scan_block_on_injection", True)
-                    or verdict.confidence < injection_threshold
-                ):
-                    _guard_rec = "monitor"
-            elif (
-                _normalize_enforcement_action(_guard_rec) == "block"
-                and _is_redactable_pii_threat(verdict.threat_type)
-            ):
-                # PII is redacted, not hard-blocked, on the input path.
-                _guard_rec = "redact"
 
             _org_policy_action = None
             if check_resp.get("matched_rules") or check_resp.get("matched_policy_names") or check_resp.get("matched_policies"):
                 _org_policy_action = check_resp.get("action") or None
 
-            _resolved_input_action = _resolve_enforcement(
-                _guard_rec,
+            _input_decision = _resolve_and_enforce(
+                scanner_recommendation=_guard_rec,
+                scanner_action=verdict.action,
+                scanner_threat_type=verdict.threat_type,
+                scanner_confidence=verdict.confidence,
+                scanner_tier=verdict.tier,
+                scanner_matched_patterns=verdict.matched_patterns,
+                scanner_detail=verdict.detail,
                 org_policy_action=_org_policy_action,
+                matched_rules=check_resp.get("matched_rules") or [],
+                matched_policy_names=check_resp.get("matched_policy_names") or [],
                 enforcement_mode=enforcement_mode,
+                tier2_degraded=_is_tier2_degraded_verdict(verdict),
                 redaction_possible=True,
+                pii_detection_enabled=bool(org_config.get("scan_block_on_pii", True)),
+                scan_block_on_injection=org_config.get("scan_block_on_injection", True),
+                injection_threshold=org_config.get("prompt_injection_threshold", 0.80),
             )
-            _should_block_verdict = _should_hard_block(_resolved_input_action, enforcement_mode)
+
+            _resolved_input_action = _input_decision.action
+            _should_block_verdict = _input_decision.is_terminal_block
             if _should_block_verdict:
                 LOG.warning(
                     "Input blocked by scanner (type=%s, detail=%s, user=%s)",
@@ -6551,24 +6614,18 @@ async def proxy_chat(
                         verdict.threat_type, verdict.confidence, user_id,
                     )
 
-            # pii_detection_enabled (mapped to scan_block_on_pii in the gateway
-            # payload) is org-scoped. When an org disables PII detection we skip
-            # PII redaction for that org. Secrets/credentials are ALWAYS redacted
-            # regardless of this toggle.
+            # The canonical decision already evaluated pii_detection_enabled;
+            # _input_decision.is_redact is True iff the threat is redactable.
             pii_detection_enabled = bool(org_config.get("scan_block_on_pii", True))
             _redact_threat = (
                 verdict.threat_type == "secret"
                 or (pii_detection_enabled and _is_redactable_pii_threat(verdict.threat_type))
             )
 
-            # B1 (egress = truth, fail-closed honesty): remember the exact bytes that
-            # go INTO the deterministic PII redactor so we can byte-verify afterward
-            # that the flagged span actually left the wire (mirrors the embeddings
-            # byte-verify in _scan_redact_embedding_inputs).
             _text_before_pii_redact = effective_prompt
             _pii_redaction_applied = False
 
-            if _should_apply_redaction(_resolved_input_action, verdict.threat_type) and _redact_threat:
+            if _input_decision.is_redact and _redact_threat:
                 # C-2: matched_patterns can carry tier-2 guard EVIDENCE fragments
                 # (not just pattern keys) that echo scanned identifiers. Scrub
                 # before logging so raw PII never persists to the gateway logs.
@@ -6621,13 +6678,20 @@ async def proxy_chat(
                 except ImportError:  # pragma: no cover - packaging fallback
                     from .llm_router import _redact_text_with_backstop as _egress_backstop
                 _redaction_noop = _egress_backstop(prompt, effective_prompt) == prompt
-                _resolved_after_noop = _resolve_enforcement(
-                    _guard_rec,
+                _noop_decision = _resolve_and_enforce(
+                    scanner_recommendation=_guard_rec,
+                    scanner_action=verdict.action,
+                    scanner_threat_type=verdict.threat_type,
+                    scanner_confidence=verdict.confidence,
+                    scanner_tier=verdict.tier,
                     org_policy_action=_org_policy_action,
                     enforcement_mode=enforcement_mode,
                     redaction_possible=not _redaction_noop,
+                    pii_detection_enabled=pii_detection_enabled,
+                    scan_block_on_injection=org_config.get("scan_block_on_injection", True),
+                    injection_threshold=org_config.get("prompt_injection_threshold", 0.80),
                 )
-                if _redaction_noop and _should_hard_block(_resolved_after_noop, enforcement_mode):
+                if _redaction_noop and _noop_decision.is_terminal_block:
                     LOG.warning(
                         "PII/secret flagged but redaction was a no-op (unmaskable); "
                         "failing closed to prevent raw egress (type=%s, user=%s)",

@@ -113,8 +113,15 @@ class _FakeStreamCtx:
         return self.text.encode()
 
     async def aiter_bytes(self):
-        # CHG-0066: the JSON branch now reads incrementally via aiter_bytes(); yield the
-        # body in a few chunks so the size cap can fire mid-stream.
+        # CHG-0066: the JSON branch reads incrementally via aiter_bytes(). CHG-0130: the
+        # SSE branch now also reads via aiter_bytes() (bounded line reader), so yield the
+        # SSE frames as bytes when present; else yield the text body in a few chunks.
+        if self._sse:
+            for payload in self._sse:
+                yield b"event: message\n"
+                yield ("data: " + json.dumps(payload) + "\n").encode()
+                yield b"\n"
+            return
         data = self.text.encode()
         for i in range(0, max(len(data), 1), 64):
             yield data[i:i + 64]
@@ -253,6 +260,11 @@ def test_sse_cold_tools_list_auto_inits(agent_client):
                 else:
                     import asyncio
                     await asyncio.sleep(0.01)
+
+        async def aiter_bytes(self):
+            # CHG-0130: the reader now reads via aiter_bytes(); reuse the line generator.
+            async for ln in self.aiter_lines():
+                yield (ln + "\n").encode()
 
     class _FakePostStream:
         status_code = 202

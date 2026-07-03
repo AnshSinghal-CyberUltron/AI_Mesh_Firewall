@@ -133,6 +133,37 @@ async def _aread_snippet(response: httpx.Response, limit: int = 1024) -> bytes:
     return b"".join(parts)[:limit]
 
 
+async def _aiter_sse_lines_bounded(response: httpx.Response, max_line_bytes: int):
+    """Yield decoded SSE text lines from an UNTRUSTED upstream while bounding the pending
+    (unterminated) line buffer.
+
+    CHG-0130: httpx ``aiter_lines()`` buffers a whole line with NO size cap, so an upstream
+    that sends one enormous line with no newline can OOM the sandbox agent BEFORE the line is
+    ever yielded (the CHG-0128 per-event cap and CHG-0129 queue bound both act only AFTER a
+    line is yielded). This reads raw bytes and splits on ``\\n`` (stripping a trailing ``\\r``),
+    raising ``UpstreamError`` as soon as an UNTERMINATED line would exceed ``max_line_bytes`` —
+    so the in-memory buffer is bounded. Used by both SSE read paths (the legacy sse-transport
+    reader and the streamable-http SSE branch)."""
+    buf = bytearray()
+    async for chunk in response.aiter_bytes():
+        if not chunk:
+            continue
+        buf.extend(chunk)
+        start = 0
+        while True:
+            nl = buf.find(b"\n", start)
+            if nl == -1:
+                break
+            yield bytes(buf[start:nl]).decode("utf-8", "replace").rstrip("\r")
+            start = nl + 1
+        if start:
+            del buf[:start]
+        if len(buf) > max_line_bytes:
+            raise UpstreamError(-32000, "upstream SSE line too large")
+    if buf:
+        yield bytes(buf).decode("utf-8", "replace").rstrip("\r")
+
+
 @dataclass
 class UpstreamSession:
     server_slug: str
@@ -448,7 +479,8 @@ async def _post_streamable_http(
 
             data_lines: list[str] = []
             total = 0
-            async for line in response.aiter_lines():
+            # CHG-0130: bounded byte-line reader (aiter_lines buffers one line unbounded).
+            async for line in _aiter_sse_lines_bounded(response, _MAX_RESPONSE_BYTES):
                 if line.startswith("data:"):
                     data_lines.append(line[5:].lstrip())
                     total += len(line)

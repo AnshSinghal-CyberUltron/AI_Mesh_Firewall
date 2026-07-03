@@ -14,10 +14,15 @@
     8 divergences (D-01–D-19); highest risk = D-05 (output guard fail-open exception Path B), D-06
     (streaming skips reasoning_content/tool_calls). Streaming vs non-streaming enforcement matrix.
     Cross-ref to the known input_scan BLOCK + model_output 7710ms leak.
-  - PIPELINE-0003 (2026-07-03) — docs/pipeline/CANONICAL.md: ONE canonical pipeline, ONE enforcement
-    authority. resolve_and_enforce() + enforce_output() → frozen PipelineDecision. Fail-closed
-    (degraded→redact, exception→block). Fixes D-05/D-06/D-18. Migration: ~550 LOC inline → 1 call;
-    proxy_chat ~4000→~2000. Mermaid diagram.
+ - PIPELINE-0003 (2026-07-03) — docs/pipeline/CANONICAL.md: ONE canonical pipeline, ONE enforcement
+ authority. resolve_and_enforce() + enforce_output() → frozen PipelineDecision. Fail-closed
+ (degraded→redact, exception→block). Fixes D-05/D-06/D-18. Migration: ~550 LOC inline → 1 call;
+ proxy_chat ~4000→~2000. Mermaid diagram.
+ - PIPELINE-0004 (2026-07-03) — enforcement.py + main.py: canonical enforcement authority
+ IMPLEMENTED. PipelineDecision frozen dataclass + resolve_and_enforce() (input) +
+ enforce_output() (output) in enforcement.py. Input enforcement block (~L6435-6691) wired
+ to resolve_and_enforce(). D-05 FIX: _apply_output_guard_nonstream exception → fail-CLOSED
+ block (was fail-open return None). 30 new tests. Gate: 151 targeted + 1824 full suite passed.
 
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is

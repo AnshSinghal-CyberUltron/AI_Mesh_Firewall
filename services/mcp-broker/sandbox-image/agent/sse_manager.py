@@ -20,6 +20,7 @@ from agent.upstream_manager import (
     UpstreamError,
     UpstreamSession,
     _MAX_RESPONSE_BYTES,
+    _aiter_sse_lines_bounded,
     _error_response,
     _wrap_response,
 )
@@ -96,7 +97,8 @@ async def _sse_reader_loop(session: UpstreamSession, connect_timeout: float) -> 
             data_lines: list[str] = []
             data_bytes = 0          # CHG-0128: bound per-event data accumulation
             skipping = False        # CHG-0128: drop the remainder of an oversized event
-            async for line in response.aiter_lines():
+            # CHG-0130: bounded byte-line reader (aiter_lines buffers one line unbounded).
+            async for line in _aiter_sse_lines_bounded(response, _MAX_RESPONSE_BYTES):
                 if line.startswith("event:"):
                     event_type = line[6:].strip()
                 elif line.startswith("data:"):

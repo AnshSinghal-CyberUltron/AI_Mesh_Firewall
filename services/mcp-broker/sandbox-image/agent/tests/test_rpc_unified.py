@@ -132,6 +132,11 @@ def test_all_transports_accepted_on_post_rpc(agent_client, transport):
                         import asyncio
                         await asyncio.sleep(0.01)
 
+            async def aiter_bytes(self):
+                # CHG-0130: the reader now reads via a bounded aiter_bytes() line splitter.
+                async for ln in self.aiter_lines():
+                    yield (ln + "\n").encode()
+
         class _FakePostStream:
             status_code = 202
             headers = {"content-type": "text/plain"}

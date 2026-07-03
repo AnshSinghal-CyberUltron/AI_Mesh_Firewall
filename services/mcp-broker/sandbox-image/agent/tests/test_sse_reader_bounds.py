@@ -19,7 +19,7 @@ if str(SANDBOX_IMAGE) not in sys.path:
     sys.path.insert(0, str(SANDBOX_IMAGE))
 
 from agent import sse_manager  # noqa: E402
-from agent.upstream_manager import UpstreamSession  # noqa: E402
+from agent.upstream_manager import UpstreamError, UpstreamSession  # noqa: E402
 
 
 class _FakeSSEResponse:
@@ -37,6 +37,11 @@ class _FakeSSEResponse:
     async def aiter_lines(self):
         for ln in self._lines:
             yield ln
+
+    async def aiter_bytes(self):
+        # CHG-0130: the reader now reads via a bounded aiter_bytes() line splitter.
+        for ln in self._lines:
+            yield (ln + "\n").encode()
 
 
 class _FakeClient:
@@ -113,6 +118,46 @@ async def test_multiline_data_under_cap_still_joined():
 
 
 # ── CHG-0129: bound the sse_responses queue (unsolicited-flood OOM guard) ─────
+
+class _FakeBytesResponse:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks
+        self.status_code = 200
+        self.headers = {"content-type": "text/event-stream"}
+
+    async def __aenter__(self) -> "_FakeBytesResponse":
+        return self
+
+    async def __aexit__(self, *_a) -> bool:
+        return False
+
+    async def aiter_bytes(self):
+        for c in self._chunks:
+            yield c
+
+
+class _FakeBytesClient:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks
+
+    def stream(self, _method, _url, **_kw):
+        return _FakeBytesResponse(self._chunks)
+
+
+@pytest.mark.asyncio
+async def test_single_unterminated_huge_line_is_bounded():
+    # CHG-0130: ONE giant line with NO newline, streamed in chunks. With a small cap the
+    # bounded byte-line reader raises "line too large" BEFORE buffering it all — httpx
+    # aiter_lines() would have buffered the whole line unbounded (OOM). The reader ends.
+    chunks = [b"data: " + b"x" * 100, b"x" * 100, b"x" * 100]
+    sess = UpstreamSession(
+        server_slug="srv", transport="sse", url="http://up.example/sse",
+        allowed_hosts=[], headers={}, client=_FakeBytesClient(chunks),
+    )
+    with patch.object(sse_manager, "_MAX_RESPONSE_BYTES", 80):
+        with pytest.raises(UpstreamError, match="line too large"):
+            await sse_manager._sse_reader_loop(sess, connect_timeout=1.0)
+
 
 @pytest.mark.asyncio
 async def test_bounded_put_drops_oldest_when_full():

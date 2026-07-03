@@ -2,6 +2,35 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0004 (2026-07-03)
+
+**Canonical enforcement authority implemented** — `enforcement.py` now contains the two
+canonical entry points defined in CANONICAL.md. All pipeline enforcement decisions flow
+through `resolve_and_enforce()` (input) and `enforce_output()` (output), returning a
+frozen `PipelineDecision` dataclass.
+
+Changes:
+- **enforcement.py**: Added `PipelineDecision` frozen dataclass (action, blocked_by,
+  threat_type, detection_tier, matched_rules, confidence, degraded, etc.) with
+  `is_terminal_block` / `is_redact` / `as_dict()`. Added `resolve_and_enforce()` which
+  merges scanner recommendation + org policy + enforcement mode + degraded state through
+  the existing `resolve_enforcement` lattice, with injection/PII/secret gating and the
+  fail-closed contract (degraded+PII→redact, degraded+clean→monitor, exception→block).
+  Added `enforce_output()` which handles guard verdict + exceptions, with fail-CLOSED on
+  exception (fixes D-05), degraded→redact, rewrite+streaming→block, flag+block→block
+  (harmonizes D-18).
+- **main.py input enforcement block (~L6435-6691)**: Replaced inline divergent logic
+  (manual import of 4 enforcement helpers + injection/PII branching + resolve + should_block)
+  with a single `resolve_and_enforce()` call. The `_input_decision` drives block short-circuit,
+  redaction gating, and unmaskable-PII fail-closed escalation. Telemetry, audit, and response
+  building preserved unchanged.
+- **main.py `_apply_output_guard_nonstream` (~L1687-1696)**: Wired through `enforce_output()`.
+  **D-05 FIX**: guard exception now returns `PipelineDecision(action="block")` instead of
+  `return None` (fail-open). Block response emits telemetry + 403 with zeroshield metadata.
+
+Files: enforcement.py, main.py, tests/test_pipeline_enforcement_authority.py (new, 30 tests).
+Gate: 151 targeted (enforcement+output_guard+pipeline) + 1824 full gateway suite passed.
+
 ## PIPELINE-0003 (2026-07-03)
 
 **docs/pipeline/CANONICAL.md created** — Defines the ONE canonical chat pipeline with ONE

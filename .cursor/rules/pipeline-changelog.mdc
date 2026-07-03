@@ -46,3 +46,7 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   (output), both returning frozen PipelineDecision. Fail-closed contract (degraded→redact,
   exception→block). Fixes D-05/D-06/D-18. Migration map: ~250-line inline enforcement →
   single call; proxy_chat ~4000→~2000 LOC. Mermaid sequence diagram.
+- PIPELINE-0004 (2026-07-03) — enforcement.py + main.py: canonical enforcement authority
+  IMPLEMENTED. PipelineDecision frozen dataclass + resolve_and_enforce() (input) +
+  enforce_output() (output). Input block wired (~L6435-6691). D-05 FIX: output guard
+  exception → fail-CLOSED block (was fail-open return None). 30 new tests. Gate: 1824 passed.
