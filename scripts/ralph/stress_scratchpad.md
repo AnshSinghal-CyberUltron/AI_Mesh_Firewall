@@ -1901,3 +1901,45 @@ MANY minutes on every restart while control is down. Registration is non-fatal (
 so the fix is to make these boot-time control calls non-blocking / short-timeout / backgrounded so the
 gateway serves from its Redis policy cache immediately and registers opportunistically. Different code
 path from G72 (startup vs per-request) → separate scoped item.
+
+---
+
+## R5 LIVE VALIDATION — 2026-07-03 (post-G72) — full adversarial corpus via the STOCK OpenAI SDK
+G72 UNBLOCKED this: the complete corpus now runs end-to-end through the real routing pipeline
+(stock `openai` SDK 2.38.0 → `http://localhost:8300/v1` → real FREE OpenRouter models), which was
+impossible before (every allowed/redact request hung ~40s). Key passed via ENV inline, never persisted.
+Drivers (untracked, scratchpad): `r5_live_corpus.py` (R5.4, SDK) + `r5_live_corpus_ext.py` (supplement).
+Model: `google/gemma-4-31b-it:free` (content-emitting; NB `cohere/*-code:free` is a REASONING model —
+`content` is null when max_tokens is spent on `reasoning_content`, which explained earlier "empty replies").
+
+**Corpus results — 11 cases + egress oracle, ALL PASS:**
+- benign → allow, real reply "4"; honest full trace: auth→rate_limit→policy→input_scan→kill_switch→
+  model_routing(**reroute**)→model_input→model_output→output_guardrail, each per-stage action.
+- plain_pii(SSN+email) → redact (policy=redact, zs=redact); obf_pii(U+2011 hyphen + fullwidth @) → redact
+  (canonicalization, input_scan=flag→zs=redact); b64_pii → block(content_filter); injection → block;
+  obf_injection("ig no re") → block. Blocks carry err_code=content_filter + non-empty request_id (SDK-typed).
+- cred_stripe / cred_ghpat / cred_connstr (G68) → block(content_filter), zero raw-credential leak.
+- dos_messages_260 → 400 `too_many_messages`; dos_tools_300 → 400 `too_many_tools` (array caps enforced).
+- EGRESS ORACLE (digit-count; answer carries no raw value so the output guard can't mask the signal):
+  raw SSN NOT in envelope; model did not return "9".
+
+**EGRESS-TRUTH proven by CODE (not just inference) — resolves the "does `flag` forward raw PII?" question:**
+`enforcement.py:131 should_apply_redaction(act, threat)` returns True for `redact` AND for
+`flag`/`monitor` when threat ∈ {pii,secret,phi,pci} → `main.py:6485 INPUT_SCANNER.redact_pii(...)` masks
+the forwarded prompt BEFORE `LLM_ROUTER.acompletion(body, redacted_prompt)` (main.py:6638). Co-gate
+`_redact_threat` (main.py:6454): secrets are ALWAYS masked; PII masked when org `scan_block_on_pii`
+(default true, zeroshield=on). B1 fail-closes a no-op redact. So NO raw PII/secret reaches the model on
+block/redact/flag/monitor for the zeroshield org. The only unredacted-PII path is an org EXPLICITLY
+disabling PII detection (by-design; secrets still masked). Invariant already FROZEN: `test_enforcement.py:97`
+`should_apply_redaction("flag","pii")` → True (13/13 green).
+
+**R5 assertions status:** no PII reaches models ✓ | redactions remain redacted ✓ | blocks justified
+(content_filter + request_id) ✓ | routing correct (model_routing=reroute) ✓ | pipeline traces honest
+per-stage ✓ | kill-switch: `kill_switch` stage present in every live trace (allow); midstream kill covered
+by `test_e13_killswitch_midstream` (not re-driven live this iter). Stability: golden 429 passed (re-affirmed),
+test_enforcement 13 passed. No secret persisted (env-only). → **live OpenRouter validation = DONE**.
+
+**Remaining completion gaps (do NOT emit COMPLETE):** (1) fresh R6 Playwright pass on the owned frontend
+(ModelConnectionPanel + trace cards) — now meaningful since live traces render real model responses;
+(2) startup-registration availability follow-up (documented above); (3) the 7 GATEWAY_LIVE golden cases
+still need a `GATEWAY_LIVE=1` in-process run to flip from skip→pass.
