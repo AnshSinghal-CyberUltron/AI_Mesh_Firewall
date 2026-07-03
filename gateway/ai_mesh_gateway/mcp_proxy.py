@@ -1052,6 +1052,28 @@ def _result_content_texts(result_content) -> list[str]:
             if isinstance(b, dict) and isinstance(b.get("text"), str)]
 
 
+# CHG-0102: a secret/credential token is short, so a cross-block split only spans a
+# BLOCK BOUNDARY within this many chars. The split scan trims each block to its boundary
+# regions (below), bounding its cost to O(num_blocks * span) instead of O(total_text) —
+# a LONG block's interior is already covered for CONTIGUOUS secrets by the full-text scan.
+_MCP_SPLIT_SECRET_SPAN = int(os.environ.get("MCP_SPLIT_SECRET_SPAN", "512"))
+
+
+def _boundary_concat(texts: list[str]) -> str:
+    """CHG-0102: concatenate blocks keeping only their BOUNDARY regions, so a secret that
+    spans block boundaries stays contiguous while a long block's interior (covered by the
+    full-text scan) is dropped — bounds the split-scan cost. A sentinel breaks a long
+    block's own first/last halves so they cannot form a false cross-boundary span."""
+    span = _MCP_SPLIT_SECRET_SPAN
+    parts: list[str] = []
+    for t in texts:
+        if len(t) <= 2 * span:
+            parts.append(t)
+        else:
+            parts.append(t[:span] + "\n\x00\n" + t[-span:])
+    return "".join(parts)
+
+
 def _result_has_split_secret(result_content) -> tuple[bool, list[str]]:
     """CHG-0100: detect a HIGH-CONFIDENCE secret SPLIT across content-array items.
 
@@ -1059,11 +1081,11 @@ def _result_has_split_secret(result_content) -> tuple[bool, list[str]]:
     (``…AKIAIOSFOD`` / ``NN7EXAMPLE…``) in adjacent content blocks. The whole-payload
     scan never sees the value contiguous (the blocks are separated by JSON structure),
     yet a client that CONCATENATES the text blocks reconstructs it. This scans the
-    block-text concatenation for secrets/credentials and returns the kinds that appear
-    there but NOT wholly inside any single block (i.e. reconstructed only by the join).
-    Scoped to secrets/credentials (not generic PII) so the ``""``-join can't false-fire on
-    two adjacent benign blocks — a real AWS key / token forming across a boundary from
-    legit text is astronomically unlikely."""
+    block-boundary concatenation (CHG-0102) for secrets/credentials and returns the kinds
+    that appear there but NOT wholly inside any single block (i.e. reconstructed only by
+    the join). Scoped to secrets/credentials (not generic PII) so the join can't
+    false-fire on two adjacent benign blocks — a real AWS key / token forming across a
+    boundary from legit text is astronomically unlikely."""
     texts = _result_content_texts(result_content)
     if len(texts) < 2:
         return False, []  # need >=2 blocks to split a value across
@@ -1073,7 +1095,7 @@ def _result_has_split_secret(result_content) -> tuple[bool, list[str]]:
         detect_secrets,
         get_compliance_tags,
     )
-    concat = "".join(texts)
+    concat = _boundary_concat(texts)
     found: dict[str, str] = {}
     found.update(detect_secrets(concat))
     found.update(detect_credential_exposure(concat))

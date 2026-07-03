@@ -942,6 +942,19 @@
     Gate: 4 (2+2) + 1604 gateway passed 0 failed; broker 108. Evidence mcp-parallel/findings/backstop-p20-
     render-leak-concurrency/. HONESTY: proves concurrency-safety, NOT the full 300-500-sandbox live stress
     (host-blocked, owned by CP47-50).
+  - CHG-0102 (2026-07-03) — MEDIUM DoS-amplification SELF-CORRECTION (item 16 resource-bombs): a resource-bomb
+    probe found the scan fails CLOSED on a JSON bomb (deeply-nested -> SCAN_ERROR block) but my CHG-0100
+    split-check added ~3s (33%) to a 5MB multi-block result — it concatenated ALL content-block text and ran 3
+    detect passes over the full O(total_text) concat. Under 5k-10k concurrent that's a real DoS vector.
+    FIX (mcp_proxy.py): a secret is short so a cross-block split only spans a boundary within
+    _MCP_SPLIT_SECRET_SPAN (default 512, env); _boundary_concat trims each block to its boundary regions (block
+    <=2*span kept whole; longer block keeps first-span + \n\x00\n sentinel + last-span, dropping the interior
+    which the full-text scan already covers); _result_has_split_secret scans that -> O(num_blocks*span). +1
+    test. Perf: 5MB multiblock split-check 3.03s -> 0.378s (~8x). Correctness unchanged (2-way/3-way/huge-left
+    splits caught; contiguous-in-interior not falsely flagged). Gate: 9 + 1605 gateway passed 0 failed; broker
+    108. Evidence mcp-parallel/findings/backstop-p16-split-check-dos-bound/. RESIDUAL: a >512-char secret split
+    into a long block's trimmed interior could be missed (extreme; span env-tunable; full-text scan catches
+    contiguous). Pre-existing ~10s detect on a 9MB single block is a separate product-level trade-off, unchanged.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

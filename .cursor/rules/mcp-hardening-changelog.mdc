@@ -1437,6 +1437,22 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `mcp-parallel/findings/backstop-p20-render-leak-concurrency/`. **HONESTY NOTE:** proves concurrency-SAFETY,
   NOT the full 300–500-sandbox live stress (items 14–20, host-blocked).
 
+- **CHG-0102** (2026-07-03) — **MEDIUM DoS-amplification SELF-CORRECTION (item 16 resource-bombs)**: a
+  resource-bomb probe of the scan path found it fails CLOSED on a JSON bomb (deeply-nested → `SCAN_ERROR`
+  block) but my CHG-0100 split-check added ~3 s (33 %) to a 5 MB multi-block result — it concatenated ALL
+  content-block text (`"".join`) and ran 3 detect passes over the full O(total_text) concat. Under 5k–10k
+  concurrent that's a real DoS vector I introduced. **FIX (`mcp_proxy.py`):** a secret token is short, so a
+  cross-block split only spans a boundary within `_MCP_SPLIT_SECRET_SPAN` (default 512, env). `_boundary_concat`
+  trims each block to its boundary regions (block ≤ 2×span kept whole; a longer block keeps first-span +
+  `\n\x00\n` sentinel + last-span, dropping the interior which the full-text scan already covers for CONTIGUOUS
+  secrets); `_result_has_split_secret` scans that → O(num_blocks × span). +1 test. **Perf:** 5 MB multi-block
+  split-check 3.03 s → 0.378 s (~8×). **Correctness unchanged:** 2-way / 3-way / huge-left-boundary splits
+  caught; contiguous-in-interior not falsely flagged; benign passes. Gate: 9 + 1605 gateway passed, 0 failed;
+  broker 108. touched: self-correction of CHG-0100. Evidence
+  `mcp-parallel/findings/backstop-p16-split-check-dos-bound/`. RESIDUAL: a >512-char secret split into a long
+  block's trimmed interior could be missed (extreme; span env-tunable; full-text scan catches contiguous). The
+  pre-existing ~10 s detect on a 9 MB single block is a separate product-level trade-off, unchanged.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

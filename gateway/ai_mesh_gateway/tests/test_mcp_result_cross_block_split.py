@@ -110,5 +110,24 @@ def test_result_has_split_secret_helper():
     assert fn(_blocks(_SEC))[0] is False
 
 
+def test_boundary_concat_bounds_cost_and_preserves_detection():
+    """CHG-0102: the split scan uses a BOUNDARY concatenation (trim long-block interiors)
+    so its cost is O(num_blocks * span), not O(total_text) — but boundary splits (incl.
+    across a HUGE block) are still caught, and a contiguous secret in a long block's
+    interior is NOT falsely flagged (the full-text scan covers it)."""
+    fn = mcp_proxy._result_has_split_secret
+    # boundary split where the LEFT block is far larger than 2*span (interior trimmed)
+    huge_left = "filler " * 100_000 + _SEC[:10]
+    assert fn(_blocks(huge_left, _SEC[10:] + " end"))[0] is True
+    # a 3-way split with a short middle block fully inside the secret
+    assert fn(_blocks("k " + _SEC[:6], _SEC[6:14], _SEC[14:] + " x"))[0] is True
+    # a contiguous secret in a LONG block's interior is NOT a split (normal scan handles it)
+    huge_interior = "filler " * 50_000 + _SEC + " filler " * 50_000
+    assert fn(_blocks(huge_interior, "other"))[0] is False
+    # the boundary concat of a big result is much smaller than the raw concat
+    texts = ["word " * 2000] * 500  # ~5MB total
+    assert len(mcp_proxy._boundary_concat(texts)) < 3 * mcp_proxy._MCP_SPLIT_SECRET_SPAN * len(texts)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
