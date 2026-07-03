@@ -1,0 +1,11 @@
+---
+description: MCP page (firewall-1-4) cleanup changelog — clean errors, stuck-state, redactions, banner, alignment
+globs: frontend/src/components/MCPConnectorPanel.jsx, frontend/src/components/MCPScanControlMatrix.jsx, gateway/ai_mesh_gateway/mcp_proxy.py, gateway/ai_mesh_gateway/mcp_stdio_adapter.py
+alwaysApply: false
+---
+
+# MCP Page Cleanup Changelog (program claude-mcp-page-cleanup)
+
+One item/iteration; never fake green; four-memory log every change (id|files|WHAT|WHY|NOW DOES|AFFECTS|VERIFY).
+
+- MCP-PAGE-CLEANUP-00 (page ownership) | claims/claude-mcp-page-cleanup-C0.claim; MCP_PAGE_CHANGELOG.md; this file; AGENTS.md | CLAIM the MCP page (firewall-1-4) frontend (MCPConnectorPanel/MCPScanControlMatrix/PolicyManagementPanel + 1.4 slices) + MCP error/state backend (mcp_proxy discovery+transport errors, mcp_stdio_adapter stdio-start, mcp_connector/views sync classifier). Cursor's broad frontend/** + chat-pipeline carve-out respected. | VERIFY: claim file + ledger row; branch main.
