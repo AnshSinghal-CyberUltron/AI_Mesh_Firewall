@@ -293,6 +293,22 @@ def _iter_transport_decodes(text: str):
                 layer = nxt
 
 
+def _iter_transport_decodes_canon(text: str, canon: str):
+    """G75: yield decoded payloads from transport (base64/hex) blobs in BOTH the raw text and
+    its canonical form, de-duplicated. An attacker can split a base64/hex token with invisible
+    format chars (e.g. U+061C ALM interleaved through the blob) so the RAW token regex never
+    matches it — yet the canonical form (all Cf stripped by canonicalize_for_detection) tokenizes
+    and decodes cleanly, surfacing the buried PII/secret/credential. When canon == text (plain
+    ASCII) this is exactly one pass, so plain-text behaviour is unchanged."""
+    seen: set[str] = set()
+    for source in ((text,) if canon == text else (text, canon)):
+        for _tok, dec in _iter_transport_decodes(source):
+            if dec in seen:
+                continue
+            seen.add(dec)
+            yield dec
+
+
 # B2-redactor-coverage: a trailing 10-digit US phone that may carry a SINGLE
 # separator (space / dot / hyphen) between groups. Used ONLY in the
 # context-gated ``phone_us_bare_contextual`` pattern below, so a phone cue
@@ -823,9 +839,10 @@ def detect_pii(text: str) -> Dict[str, str]:
     if canon != text:
         for k, v in _detect_pii_core(canon).items():
             found.setdefault(k, v)
-    for _tok, dec in _iter_transport_decodes(text):
+    for dec in _iter_transport_decodes_canon(text, canon):
         # G26: the decoded payload may itself be unicode-obfuscated (base64 ∘ zero-width /
-        # tags), so match its CANONICAL form too, not just the raw decode.
+        # tags), so match its CANONICAL form too, not just the raw decode. G75: the decode set
+        # now also covers the canonical text, so a Cf-split (e.g. ALM-in-blob) base64 is decoded.
         dec_canon = canonicalize_for_detection(dec)
         for src in ((dec, dec_canon) if dec_canon != dec else (dec,)):
             for k, v in _detect_pii_core(src).items():
@@ -879,7 +896,7 @@ def detect_secrets(text: str) -> Dict[str, str]:
     if canon != text:
         for k, v in _detect_secrets_core(canon).items():
             found.setdefault(k, v)
-    for _tok, dec in _iter_transport_decodes(text):
+    for dec in _iter_transport_decodes_canon(text, canon):   # G75: raw + canonical decode set
         dec_canon = canonicalize_for_detection(dec)   # G26: canonicalize obfuscated decode
         for src in ((dec, dec_canon) if dec_canon != dec else (dec,)):
             for k, v in _detect_secrets_core(src).items():
@@ -1378,7 +1395,7 @@ def detect_credential_exposure(text: str) -> Dict[str, str]:
     if canon != text:
         for k, v in _detect_credential_exposure_core(canon).items():
             found.setdefault(k, v)
-    for _tok, dec in _iter_transport_decodes(text):
+    for dec in _iter_transport_decodes_canon(text, canon):   # G75: raw + canonical decode set
         dec_canon = canonicalize_for_detection(dec)
         for src in ((dec, dec_canon) if dec_canon != dec else (dec,)):
             for k, v in _detect_credential_exposure_core(src).items():

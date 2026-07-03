@@ -405,7 +405,13 @@ def _nested_decode_variants(token: str, is_hex: bool, seen: set[str]) -> list[st
         # payload we must catch. Strip that obfuscation for the printability gate only, so
         # the compound (base64 ∘ zero-width) evasion is not dropped before the caller
         # normalizes it. Genuine binary garbage still has no printable residue and breaks.
-        probe = _ZERO_WIDTH_RE.sub("", _decode_unicode_tags(decoded))
+        # G75: the printability gate must strip ALL category Cf (bidi / U+061C ALM / isolates),
+        # not just the enumerated zero-width set — else a base64-wrapped payload obfuscated with
+        # a Cf char the set omits fails isprintable() and is DROPPED here, before the caller can
+        # normalize+rescan it (parity with _normalize_unicode's Cf drop; same gap class as G74).
+        # Genuine binary garbage keeps non-Cf unprintable residue and still breaks the loop.
+        probe = _decode_unicode_tags(decoded)
+        probe = "".join(ch for ch in probe if unicodedata.category(ch) != "Cf")
         if not probe.isprintable():
             break
         if decoded not in seen:

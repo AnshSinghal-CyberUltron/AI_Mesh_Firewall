@@ -2221,3 +2221,25 @@ letters). Golden **440 passed × 3** (was 435; +6 PII guards +3 injection-block 
 `test_adversarial_attacks.py` G74 = `test_g74_bidi_combining_obfuscation_must_not_leak` (6),
 `test_g74_bidi_injection_is_blocked` (3), `test_g74_benign_rtl_not_blocked` (2).
 Cumulative confirmed-live leaks now include G74 (bidi/ALM injection) alongside G40-G71 etc.
+
+---
+
+## G75 (2 CONFIRMED NEW LEAKS — fixed) — 2026-07-03 — nested Cf obfuscation across transport-decode
+Probed nested/combined obfuscation (Cf inside/around base64). Two confirmed leaks, both the SAME root
+class as G74 (enumerated strip ≠ categorical Cf drop), but at the TRANSPORT-DECODE boundary:
+- **G75a (injection):** `base64(bidi/ALM-injection)` → verdict **allow** (miss). Root cause: the decode
+  printability gate (`scanner._nested_decode_variants` line ~408) stripped only enumerated `_ZERO_WIDTH_RE`,
+  so a decoded payload bearing U+061C ALM failed `isprintable()` and was DROPPED before normalize+rescan.
+  FIX: categorical `Cf` drop for the printability probe (parity with `_normalize_unicode`).
+- **G75b (PII/secret/credential):** a base64 blob with ALM interleaved THROUGH it (`M<ALM>T<ALM>I…`) →
+  scanner verdict **allow** (`detect_pii(raw)=False`, `detect_pii(canon)=True`). Root cause: the detectors
+  ran `_iter_transport_decodes(text)` on RAW text, so the Cf-split token never matched the base64 regex →
+  never decoded. FIX: new DRY helper `_iter_transport_decodes_canon(text, canon)` — decode blobs in BOTH
+  raw AND canonical (Cf-stripped) text; wired into detect_pii / detect_secrets / detect_credential_exposure.
+**Verify (in-process):** b64_of_bidi + b64_of_alm injections → **block**; ALM/zero-width-in-b64blob
+SSN/key/stripe → **redact** (was allow); benign base64 → allow (no FP). redact_all is a no-op on a
+Cf-broken blob (can't remap the outer token), so egress safety = detection→redact→main.py **B1 fail-closed
+block**; the golden asserts `_verdict != allow` for the blob cases (B1's no-op→block is main-suite covered).
+golden **444 passed × 3** (was 440; +2 injection-block +2 blob-detect); backend `ai_mesh_gateway/tests`
+1625 passed; ruff clean.
+**Frozen (owned golden):** `test_g75_nested_cf_injection_is_blocked` (2), `test_g75_cf_split_base64_blob_is_detected` (2).
