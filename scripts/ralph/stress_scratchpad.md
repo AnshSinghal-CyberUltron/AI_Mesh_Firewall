@@ -1293,6 +1293,20 @@
         DoS surface note: chat (MAX_MESSAGES + per-msg len), embeddings (batch+chars), moderations (G63 batch+
         chars), exfil-URL flood (G49), ReDoS caps — all bounded. completions batches via chat (per-prompt
         dispatch, each firewalled + capped).
+    - 🟠 G64 /v1/completions unbounded prompt-batch = LLM fan-out DoS/cost amplification (LLM04, 2026-07-03):
+        Continued the DoS vein. /v1/completions dispatches ONE full chat call (incl. an UPSTREAM LLM inference)
+        PER item of a list prompt, serially, with NO array-length cap (only per-prompt length was bounded via
+        the chat MAX_PROMPT_LENGTH). WORSE than G63 (scan-only): each prompt is a PAID provider call, so a
+        single authenticated request with a large prompt array fans out into hundreds of inferences —
+        cost/DoS amplification that BYPASSES per-request rate limits. FIX (owned main.py chat surface):
+        MAX_COMPLETION_PROMPTS=64 + MAX_COMPLETION_INPUT_CHARS=200_000; reject an over-count OR over-char
+        prompt array with 413 BEFORE any dispatch. VERIFY (real endpoint via ASGI recording client that
+        captures every provider call): 65-item + over-char arrays -> 413 with ZERO provider calls; a 3-item
+        batch -> 200 with exactly 3 choices + 3 provider calls (contrast proves normal batching works + the cap
+        actually prevents fan-out). FROZEN a c4 adversarial fan-out-bound test (asserts captured==[] on the
+        over-limit request). GATE: golden 406×3; gateway suite 1528 pass. commit 257fac73. REDEPLOYING
+        (rollback gateway-rollback-pre-g64). DoS surface now fully bounded across EVERY inference/scan batch
+        endpoint: chat, embeddings, moderations (G63), completions (G64).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
