@@ -3230,3 +3230,9 @@ detected+masked; в/к/м/т/н homoglyph injection → block; Armenian օ→o f
 **Frozen:** golden `test_g102_*` (incl. the drift parity guard).
 Session ledger: TWENTY-FOUR leaks (G74..G95, G97, G98, G100, G101, G102) + ONE false-block (G99) fixed;
 G96 freezes 6 defended vectors; G77/G78/G80 frozen.
+
+### G102 DEPLOY + LIVE-VERIFY — 2026-07-03
+Rebuilt+redeployed the baked gateway (tag rollback-g102 → build → up -d --no-deps → healthy ~4s).
+LIVE-verified: Cyrillic-homoglyph (в/к/м/т/н) injection → **block**; Cyrillic-homoglyph github token →
+**redact + masked** (not forwarded). G102 validated end-to-end (in-process 629×3 + backend 1850 + live
+deployed). The parity-guard golden now prevents future scanner/patterns confusable-map divergence.
