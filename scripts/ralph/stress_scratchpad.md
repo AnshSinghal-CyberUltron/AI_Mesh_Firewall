@@ -3274,3 +3274,29 @@ returns HTTP 400 `upstream_error` — that is the free OpenRouter model itself r
 function-call request shape, NOT a firewall block (in-process the scanner verdict is `allow`, and the
 G103 golden `test_g103_benign_function_call_not_blocked` passes). G103 validated end-to-end (in-process
 633×3 + backend 1896 + live block).
+
+---
+
+## G104 (CONFIRMED leak — fixed) — 2026-07-03 — Responses-API indirect injection (function_call / function_call_output unscanned)
+Extended the G103 structured-channel sweep to the /v1/responses endpoint. `main._extract_prompt_from_
+responses_input` folded item `content`/`text` + top-level `instructions`, but the Responses `input` array
+also carries **`function_call` items (model-facing `arguments`)** and **`function_call_output` items (the
+tool `output` — a classic INDIRECT-injection channel)** — NEITHER is `content`/`text`, so an injection/PII/
+credential smuggled there reached the model UNSCANNED (extracted text was ''). The exact G103 fail-open
+class, for the Responses API.
+**FIX (main.py — CLAIMED, minimal, non-owned):** in `_extract_prompt_from_responses_input`, fold
+`function_call.{name,arguments}` and `function_call_output.output` (str OR json-coerced), parallel to the
+G103 chat fix. One added block per item type; no other path changed.
+**Verify:** Responses function_call injection → **block**; function_call_output injection → **block**;
+function_call_output/arguments PII → **redact + masked**; benign Responses function_call ({"city":"Paris"}
++ "sunny 20C" output) → **allow** (FP-clean). content/text/instructions still scanned. In-process golden
+**637 ×3** (was 633; +4 G104, via `_fold_responses` — faithful replica of the real Responses extraction);
+backend `ai_mesh_gateway/tests` **1902 passed / 0 failed** (excl. other session's untracked WIP).
+**Frozen:** golden `test_g104_*` + added the `_fold_responses` replica helper.
+
+### COORDINATION NOTE: claimed a minimal main.py edit (2nd)
+Edited `main._extract_prompt_from_responses_input` (added the function_call / function_call_output fold,
+G104) — the Responses-API input flattener, a chat-module boundary. Minimal + security-critical (closes a
+fail-open) + backward-compatible. Keep the golden `_fold_responses` replica in sync if you touch it.
+Session ledger: TWENTY-SIX leaks (G74..G95, G97, G98, G100..G104) + ONE false-block (G99) fixed; G96
+freezes 6 defended vectors; G77/G78/G80 frozen.

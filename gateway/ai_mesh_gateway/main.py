@@ -1198,6 +1198,31 @@ def _extract_prompt_from_responses_input(input_value, instructions=None):
             _it = item.get("text")
             if isinstance(_it, str):
                 parts.append(_it)
+            # G104: Responses-API function-call channels (the analog of G103 for chat). A
+            # ``function_call`` item carries model-facing ARGUMENTS and a ``function_call_output``
+            # item carries the tool OUTPUT — neither is ``content``/``text``, so an injection / PII /
+            # credential smuggled there reached the model UNSCANNED (the tool-result output is also a
+            # classic INDIRECT-injection channel). Fold both, coercing non-str to JSON.
+            _itype = item.get("type")
+            if _itype == "function_call":
+                _args = item.get("arguments")
+                if not isinstance(_args, str):
+                    try:
+                        _args = json.dumps(_args) if _args is not None else ""
+                    except (TypeError, ValueError):
+                        _args = ""
+                _nm = item.get("name") or ""
+                if _nm or _args:
+                    parts.append(f"function_call[{_nm}]: {_args}")
+            elif _itype == "function_call_output":
+                _out = item.get("output")
+                if not isinstance(_out, str):
+                    try:
+                        _out = json.dumps(_out) if _out is not None else ""
+                    except (TypeError, ValueError):
+                        _out = ""
+                if _out:
+                    parts.append(f"function_call_output: {_out}")
     return "\n".join(p for p in parts if p)
 
 
