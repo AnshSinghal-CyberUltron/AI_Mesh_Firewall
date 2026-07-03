@@ -511,6 +511,32 @@ def _diag_cache_key(ref: str) -> str:
     return f"{MCP_DIAG_CACHE_PREFIX}{ref}"
 
 
+def _read_gateway_diagnostic(ref: str) -> dict | None:
+    """CLEANUP-05: read a GATEWAY-originated diagnostic by correlation ref.
+
+    The gateway's ``mcp_error_classifier.sanitize_mcp_error`` records the REAL cause
+    (exit code, upstream body, internal host, raw exc) to Redis under the PLAIN key
+    ``mcp:diag:<ref>`` as JSON — which is NOT the django_redis cache key
+    (``<KEY_PREFIX>:<version>:mcp:diag:<ref>``, pickled). Read it directly off the
+    shared Redis so this ONE staff-only endpoint surfaces BOTH control- and
+    gateway-originated diagnostics. Best-effort: any failure → None (falls through
+    to a 404), never an error.
+    """
+    try:
+        import redis as _redis
+        url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
+        client = _redis.Redis.from_url(url, decode_responses=True)
+        raw = client.get(_diag_cache_key(ref))
+        try:
+            client.close()
+        except Exception:  # noqa: BLE001
+            pass
+        return json.loads(raw) if raw else None
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("gateway diagnostic read failed [ref=%s]: %s", ref, exc)
+        return None
+
+
 def _store_sync_diagnostic(ref, code, raw, *, org_slug="", server_slug="") -> None:
     """Persist the REAL cause behind a sanitized client error, keyed by ``ref``.
 
@@ -2109,7 +2135,11 @@ class MCPDiagnosticDetailView(APIView):
                 {"error": "Invalid correlation ref."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        record = cache.get(_diag_cache_key(ref))
+        # Control-originated diagnostics (django_redis cache), then GATEWAY-originated
+        # (raw Redis key written by the gateway classifier — CLEANUP-05) so this one
+        # staff-only endpoint resolves any correlation ref regardless of which service
+        # sanitized the error.
+        record = cache.get(_diag_cache_key(ref)) or _read_gateway_diagnostic(ref)
         if not record:
             return Response(
                 {"error": "No diagnostic for this correlation ref (expired or unknown).",

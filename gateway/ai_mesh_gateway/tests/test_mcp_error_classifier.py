@@ -1,6 +1,8 @@
 """Item 01 — the gateway MCP failure classifier: every named case maps to a clean
 (code, message), and the message NEVER leaks the raw cause (exit codes, upstream
 HTML/bodies, internal hostnames, 'sandbox-agent logs')."""
+import json
+
 import httpx
 import pytest
 
@@ -117,3 +119,35 @@ async def test_sanitize_async_returns_clean_body_even_with_redis_down():
     body = await C.sanitize_mcp_error(status=405, org_slug="o", server_slug="s")
     assert body["code"] == C.MCP_UPSTREAM_HTTP_ERROR and "HTTP 405" in body["error"]
     assert len(body["ref"]) == 12
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_write_uses_gateway_raw_key_and_full_cause(monkeypatch):
+    # CLEANUP-05: the dev-only diagnostic must be written under the PLAIN key
+    # mcp:diag:<ref> (JSON, 7d TTL) with the FULL raw cause — the exact key + format
+    # control's staff-only endpoint reads back via _read_gateway_diagnostic. This
+    # closes the write(gateway)↔read(control) loop the live check proved on the read side.
+    import redis.asyncio as aioredis
+
+    written = {}
+
+    class _FakeRedis:
+        async def set(self, key, val, ex=None):
+            written.update(key=key, val=val, ex=ex)
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr(aioredis, "from_url", lambda *a, **k: _FakeRedis())
+    exc = httpx.ConnectError("[Errno -2] getaddrinfo failed: secret-internal-host.corp:8931")
+    body = await C.sanitize_mcp_error(exc=exc, org_slug="zeroshield", server_slug="ruflo")
+
+    assert written["key"] == f"mcp:diag:{body['ref']}"          # PLAIN key, not django-cache prefixed
+    assert written["ex"] == C._DIAG_TTL_SECONDS                 # 7d TTL
+    rec = json.loads(written["val"])
+    assert rec["code"] == C.MCP_DNS_FAILURE and rec["ref"] == body["ref"]
+    assert rec["org_slug"] == "zeroshield" and rec["server_slug"] == "ruflo"
+    # the FULL cause (host + errno) is preserved SERVER-SIDE (dev diagnostic) ...
+    assert "secret-internal-host.corp" in rec["raw_cause"]
+    # ... but NEVER in the client body
+    assert "secret-internal-host" not in json.dumps(body)

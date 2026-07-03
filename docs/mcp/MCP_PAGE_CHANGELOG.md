@@ -46,3 +46,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** ext + control transport `except` → `sanitize_mcp_error(exc=exc)` → clean DNS/refused/timeout `{error,code,ref}` at 502 (hostname/exc → log+diag by ref only). NEW upstream 401/403 intercept → `sanitize_mcp_error(status=401)` → "needs re-authentication — re-authorize the connection" (raw upstream body not echoed).
 - **AFFECTS:** the external HTTP/SSE passthrough + the control-proxy error path. Not yet deployed live (item 06).
 - **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_ext_transport_clean_errors.py -q` → 3 passed (DNS→MCP_DNS_FAILURE no host/Errno/no detail field; refused→MCP_CONNECTION_REFUSED no IP; 401→MCP_AUTH_FAILED re-auth, no token hint); ext regression 57 passed; full suite 1776 passed.
+
+## MCP-PAGE-CLEANUP-05 — dev-only correlation-id → full-cause diagnostic (unified endpoint)
+- **files:** control/ai_mesh_control/mcp_connector/views.py; gateway/ai_mesh_gateway/tests/test_mcp_error_classifier.py
+- **WHAT:** control's staff-only `MCPDiagnosticDetailView` now resolves BOTH control- and gateway-originated diagnostics by ref, via new `_read_gateway_diagnostic(ref)`.
+- **WHY:** the gateway classifier writes the full cause to the raw Redis key `mcp:diag:<ref>` (JSON), but django_redis prefixes keys (`cache:1:mcp:diag:<ref>`, pickled), so `cache.get` missed gateway diags — the staff endpoint could not surface them.
+- **NOW DOES:** `cache.get(_diag_cache_key(ref)) or _read_gateway_diagnostic(ref)` — the fallback does a raw Redis read of `mcp:diag:<ref>` off the shared Redis. Plus the always-on structured-log channel (`sanitize_mcp_error` logs ref→full cause at WARNING). Both dev-only, never client-facing (IsAdminUser + internal logs).
+- **AFFECTS:** the staff-only diagnostics endpoint. Control change goes live on the next control restart (item 06 coordinated deploy).
+- **VERIFY:** write side pytest — `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_error_classifier.py -q` → 34 passed (writes key `mcp:diag:<ref>`, 7d TTL, JSON full cause with host, host absent from client body). Read side LIVE (docker exec control shell): raw read returned the code; `cache.get` returned None; django key was `cache:1:mcp:diag:probekey` (prefix mismatch confirmed).
