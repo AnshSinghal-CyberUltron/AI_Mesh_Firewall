@@ -54,7 +54,7 @@ def _internal_req(args):
 async def _drive_internal(args, *, capture=None):
     audit = AsyncMock()
 
-    async def _fwd(transport, cfg, org, srv, call_body, jr, mid, *, correlation_id=""):
+    async def _fwd(transport, cfg, org, srv, call_body, jr, mid, *, correlation_id="", forwarded_auth=None, **_kw):
         if capture is not None:
             capture["args"] = call_body["params"]["arguments"]
         return JSONResponse(content=_CLEAN_RESULT, status_code=200)

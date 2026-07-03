@@ -2544,6 +2544,7 @@ async def internal_discover_tools(request: Request):
         _adapter_resp = await _adapter_forward(
             transport, config, org_slug, server_slug,
             tools_list_body, "2.0", 1, correlation_id=_disc_req_id,  # CHG-0120
+            forwarded_auth=_forwarded_auth_from_body(body),
         )
         try:
             _payload = json.loads(_adapter_resp.body.decode("utf-8")) if _adapter_resp.body else None
@@ -2821,6 +2822,7 @@ async def internal_tools_call(request: Request):
         _adapter_resp = await _adapter_forward(
             transport, config, org_slug, server_slug, call_body, "2.0", 1,
             correlation_id=_int_req_id,  # CHG-0120
+            forwarded_auth=_forwarded_auth_from_body(body),
         )
         try:
             _adapter_obj = json.loads(_adapter_resp.body.decode("utf-8")) if _adapter_resp.body else None
@@ -3377,6 +3379,21 @@ def _is_sandbox_routed(transport: str) -> bool:
     return False
 
 
+def _forwarded_auth_from_body(body: dict) -> dict:
+    """Extract the control-forwarded upstream auth (manual OAuth / BYOK) from a
+    discover/call request body so the sandbox path can honor it — the token for a
+    control-plane 'manual OAuth' (or BYOK bearer/basic/header) server lives in the
+    control plane and arrives here, NOT in the gateway's own OAuth store."""
+    return {
+        "auth_type": body.get("auth_type", "none"),
+        "auth_token": body.get("auth_token", ""),
+        "auth_username": body.get("auth_username", ""),
+        "auth_password": body.get("auth_password", ""),
+        "auth_header_key": body.get("auth_header_key", ""),
+        "auth_header_value": body.get("auth_header_value", ""),
+    }
+
+
 async def _adapter_forward(
     transport: str,
     server_config: dict,
@@ -3387,6 +3404,7 @@ async def _adapter_forward(
     msg_id,
     *,
     correlation_id: str = "",
+    forwarded_auth: dict | None = None,
 ) -> JSONResponse:
     """Forward a JSON-RPC message to the per-org sandbox for a non-backend transport.
 
@@ -3408,18 +3426,39 @@ async def _adapter_forward(
             from mcp_sandbox_client import broker_send_rpc
 
             upstream_url = server_config.get("url", "")
+            # PREFER the control-forwarded token (manual OAuth / BYOK) over the
+            # gateway's own OAuth store. A "manual OAuth" server's token lives in the
+            # control plane and is passed in the request body; get_stored_token() only
+            # holds tokens from the gateway-driven OAuth flow — so without this the
+            # sandbox dials the upstream with NO Authorization header and a valid,
+            # unexpired token is never sent → the upstream 401s (root cause of the
+            # "rejected your OAuth token" loop for control-plane OAuth servers).
+            fwd = forwarded_auth or {}
+            fwd_type = (fwd.get("auth_type") or "none").lower()
+            fwd_headers: dict = {}
             oauth_token = None
-            try:
-                from mcp_oauth_proxy import get_stored_token
-                oauth_token = await get_stored_token(org_slug, upstream_url)
-            except Exception:  # noqa: BLE001 — no token store / not authed → None
-                oauth_token = None
+            if fwd_type == "bearer" and fwd.get("auth_token"):
+                oauth_token = fwd["auth_token"]
+            elif fwd_type == "basic" and fwd.get("auth_username"):
+                import base64 as _b64
+                _cred = _b64.b64encode(
+                    f"{fwd['auth_username']}:{fwd.get('auth_password', '')}".encode()
+                ).decode()
+                fwd_headers["Authorization"] = f"Basic {_cred}"
+            elif fwd_type == "authheaders" and fwd.get("auth_header_key"):
+                fwd_headers[fwd["auth_header_key"]] = fwd.get("auth_header_value", "")
+            if not oauth_token and not fwd_headers:
+                try:
+                    from mcp_oauth_proxy import get_stored_token
+                    oauth_token = await get_stored_token(org_slug, upstream_url)
+                except Exception:  # noqa: BLE001 — no token store / not authed → None
+                    oauth_token = None
             up_config = {
                 "server_slug": server_slug,
                 "transport": transport,
                 "url": upstream_url,
                 "allowed_hosts": server_config.get("allowed_hosts") or [],
-                "headers": dict(server_config.get("upstream_headers") or {}),
+                "headers": {**dict(server_config.get("upstream_headers") or {}), **fwd_headers},
             }
             result = await broker_send_rpc(
                 org_slug, up_config, method, params if params else None,

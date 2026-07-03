@@ -38,7 +38,7 @@ async def _drive(fn_name, body, adapter_result):
     audit = AsyncMock()
     fwd_corr = []
 
-    async def _fwd(transport, cfg, org, srv, call_body, jr, mid, *, correlation_id=""):
+    async def _fwd(transport, cfg, org, srv, call_body, jr, mid, *, correlation_id="", forwarded_auth=None, **_kw):
         fwd_corr.append(correlation_id)
         return JSONResponse(content=adapter_result, status_code=200)
 
