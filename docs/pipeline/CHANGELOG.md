@@ -2,6 +2,32 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0017 (2026-07-03)
+
+**Latency breakdown + actionable reduction hints on pipeline trace (P5 item 17).**
+
+Root Cause:
+- Scan Detail showed per-stage latency bars and total duration (PIPELINE-0016) but gave
+  operators no dominant-stage attribution or guidance on how to reduce end-to-end latency
+  (e.g. model_output 7710ms with no "use a faster model / enable caching" hint).
+
+Fix:
+- `pipeline_trace.py`: `build_latency_breakdown()` + `attach_latency_breakdown()` attach
+  `latency_breakdown` to every trace (dominant stage/share, sorted `by_stage`, `hints[]`
+  with severity + actions). Stage-specific hints: model_output → faster model/caching;
+  input_scan → Tier-2 async; policy → rule count/bundle cache; overhead secondary hint.
+- `stream_orchestration.py`: recompute breakdown after stream total reconciliation.
+- `frontend/src/utils/pipelineTrace.js`: extend `resolveLatencyBreakdown` / add
+  `resolveLatencyHints` with legacy-trace fallback (derive stage sum from `stages[]`).
+- `LogDetailPage.jsx`: Latency Breakdown table + "How to reduce latency" hint cards.
+
+Verification:
+- 8 new gateway tests (`test_pipeline_latency_breakdown.py`).
+- 5 new frontend tests (`pipelineTrace.test.js` breakdown/hints/legacy).
+- Browser (:8180): event 295909 → Duration 14860.9ms, hint card visible, model-output
+  reduction actions present. Evidence: `mcp-parallel/findings/pipeline-p17-latency-hints/`.
+- Gate: breakdown 8 + latency 5 + pipelineTrace 18 passed; lint + build green.
+
 ## PIPELINE-0016 (2026-07-03)
 
 **Frontend Duration/total matches backend latency; streaming TTFT exposed (P5 item 16).**

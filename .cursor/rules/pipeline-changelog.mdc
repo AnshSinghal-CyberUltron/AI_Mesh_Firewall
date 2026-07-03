@@ -124,3 +124,7 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   frame captured; stream build_stream_trace_frame reconciles total+ttft_ms; simulator shows TTFT.
   Browser: Scan Detail Duration 13607.1ms (not 0). 5 FE + 1 GW tests. Gate: lint+build green.
   Evidence mcp-parallel/findings/pipeline-p16-frontend-latency-ttft/.
+- PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
+  (dominant stage, by_stage, hints[]) + stream recompute; LogDetailPage breakdown table +
+  reduction hint cards; pipelineTrace resolveLatencyHints + legacy fallback. 8 GW + 5 FE tests.
+  Browser: 14860.9ms slow event → model_output hint visible. Evidence pipeline-p17-latency-hints/.

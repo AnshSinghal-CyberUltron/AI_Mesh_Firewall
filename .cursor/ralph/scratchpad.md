@@ -28,7 +28,7 @@
 ## P5 — Latency: correct, coherent, reducible
 - [x] 15. Instrument per-stage latency accurately; total_latency == sum(stages) + overhead, reconciled. (Fix L8; use Context7 for FastAPI/ASGI timing best practices.)
 - [x] 16. Frontend Duration/total == backend (fix the "0ms" vs 13555ms); add time-to-first-token for streaming. DONE: resolveTotalLatencyMs/formatPipelineDurationMs/resolveTtftMs in pipelineTrace.js; LogDetailPage + liveGateway + module charts wired to pipeline_trace.total_latency_ms (PIPELINE-0015); SSE terminal frame capture; stream build_stream_trace_frame reconciles total+ttft_ms; AttackSimulator/SimulatorShell TTFT label. Browser: Scan Detail Duration 13607.1ms (not 0). PIPELINE-0016.
-- [ ] 17. Add a latency BREAKDOWN + "how to reduce" hints (e.g. model_output 7710ms dominates → smaller/faster model, caching, parallel scans).
+- [x] 17. Add a latency BREAKDOWN + "how to reduce" hints (e.g. model_output 7710ms dominates → smaller/faster model, caching, parallel scans).
 - [ ] 18. Verify latency numbers match end-to-end across backend JSON and the UI.
 
 ## P6 — Full frontend transparency (the pipeline log/trace)

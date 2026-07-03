@@ -10,6 +10,7 @@ import { getModuleLogCharts } from "./module-specific-log-charts";
 import { useAuth } from "../context/AuthContext";
 import {
   formatPipelineDurationMs,
+  formatDominantStageLabel,
   resolveLatencyBreakdown,
   resolveTotalLatencyMs,
   resolveTtftMs,
@@ -185,6 +186,8 @@ export function LogDetailPage({ logData, onBack }) {
   const timestamp = normalized.timestamp;
   const duration = normalized.duration;
   const ttftMs = normalized.ttftMs;
+  const latencyBreakdown = normalized.latencyBreakdown;
+  const latencyHints = latencyBreakdown?.hints || [];
   const status = normalized.status;
   const action = normalized.action;
   const scanId = normalized.scanId;
@@ -342,6 +345,87 @@ export function LogDetailPage({ logData, onBack }) {
               series: [{ name: "Latency", type: "bar", barWidth: "55%", itemStyle: { color: "#3b82f6", borderRadius: [3, 3, 0, 0] }, data: timelineData.map((d) => d.latency) }],
             }}
           />
+        </div>
+      )}
+
+      {latencyBreakdown && (latencyBreakdown.by_stage?.length > 0 || latencyHints.length > 0) && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm p-6">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-3">
+            Latency Breakdown
+          </h3>
+          {latencyBreakdown.dominant_stage && (
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+              Dominant stage:{" "}
+              <span className="font-medium text-slate-900 dark:text-slate-100">
+                {formatDominantStageLabel(latencyBreakdown.dominant_stage)}
+              </span>
+              {latencyBreakdown.dominant_latency_ms != null && (
+                <>
+                  {" "}— {formatPipelineDurationMs(latencyBreakdown.dominant_latency_ms)}
+                  {latencyBreakdown.dominant_share_pct != null && (
+                    <> ({Math.round(latencyBreakdown.dominant_share_pct)}% of total)</>
+                  )}
+                </>
+              )}
+            </p>
+          )}
+          {Array.isArray(latencyBreakdown.by_stage) && latencyBreakdown.by_stage.length > 0 && (
+            <div className="overflow-x-auto mb-4">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                    <th className="py-2 pr-4 font-medium">Stage</th>
+                    <th className="py-2 pr-4 font-medium text-right">Latency</th>
+                    <th className="py-2 font-medium text-right">Share</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                  {latencyBreakdown.by_stage.map((row) => (
+                    <tr key={row.stage}>
+                      <td className="py-2 pr-4 text-slate-800 dark:text-slate-200">
+                        {formatDominantStageLabel(row.stage)}
+                      </td>
+                      <td className="py-2 pr-4 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                        {formatPipelineDurationMs(row.latency_ms)}
+                      </td>
+                      <td className="py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">
+                        {row.share_pct != null ? `${Math.round(row.share_pct)}%` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {latencyHints.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                How to reduce latency
+              </h4>
+              {latencyHints.map((hint) => (
+                <div
+                  key={hint.stage}
+                  className={`rounded-lg border p-4 ${
+                    hint.severity === "high"
+                      ? "border-amber-300 bg-amber-50 dark:border-amber-700/60 dark:bg-amber-950/30"
+                      : "border-slate-200 bg-slate-50 dark:border-slate-600 dark:bg-slate-900/40"
+                  }`}
+                  data-testid={`latency-hint-${hint.stage}`}
+                >
+                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">
+                    {hint.message}
+                  </p>
+                  {Array.isArray(hint.actions) && hint.actions.length > 0 && (
+                    <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-300 space-y-1">
+                      {hint.actions.map((action) => (
+                        <li key={action}>{action}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -9,6 +9,9 @@ import {
   resolveTotalLatencyMs,
   formatPipelineDurationMs,
   resolveTtftMs,
+  resolveLatencyBreakdown,
+  resolveLatencyHints,
+  formatDominantStageLabel,
 } from "./pipelineTrace.js";
 
 // Robustness: the trace card (StageTimeline) renders `stage.action` per element, so a
@@ -124,4 +127,73 @@ test("resolveTtftMs reads ttft from pipeline_trace then zeroshield", () => {
   assert.equal(resolveTtftMs({ pipelineTrace: { ttft_ms: 88.2 } }), 88.2);
   assert.equal(resolveTtftMs({ zeroshield: { ttft_ms: 41 } }), 41);
   assert.equal(resolveTtftMs({ meta: { ttft_ms: 9 } }), 9);
+});
+
+test("resolveLatencyHints uses backend latency_breakdown when present", () => {
+  const hints = resolveLatencyHints({
+    pipelineTrace: {
+      total_latency_ms: 8000,
+      latency_breakdown: {
+        hints: [{
+          stage: "model_output",
+          severity: "high",
+          message: "Model Output took 7710.0ms (96% of total).",
+          actions: ["Switch to a smaller or faster model for this workload."],
+        }],
+      },
+    },
+  });
+  assert.equal(hints.length, 1);
+  assert.equal(hints[0].stage, "model_output");
+  assert.ok(hints[0].actions[0].includes("faster model"));
+});
+
+test("resolveLatencyHints falls back to stage latencies for legacy traces", () => {
+  const hints = resolveLatencyHints({
+    pipelineTrace: {
+      total_latency_ms: 1000,
+      stages: [
+        { name: "input_scan", latency_ms: 600 },
+        { name: "model_output", latency_ms: 300 },
+      ],
+    },
+  });
+  assert.equal(hints.length, 1);
+  assert.equal(hints[0].stage, "input_scan");
+});
+
+test("resolveLatencyBreakdown includes by_stage and dominant fields", () => {
+  const bd = resolveLatencyBreakdown({
+    pipelineTrace: {
+      total_latency_ms: 7710,
+      stage_latency_sum_ms: 7700,
+      overhead_ms: 10,
+      latency_breakdown: {
+        dominant_stage: "model_output",
+        dominant_latency_ms: 7710,
+        dominant_share_pct: 99.9,
+        by_stage: [{ stage: "model_output", latency_ms: 7710, share_pct: 99.9 }],
+        hints: [{ stage: "model_output", severity: "high", message: "x", actions: ["y"] }],
+      },
+    },
+  });
+  assert.equal(bd.dominant_stage, "model_output");
+  assert.equal(bd.hints.length, 1);
+  assert.equal(bd.by_stage.length, 1);
+});
+
+test("resolveLatencyBreakdown works for legacy traces without stage_latency_sum_ms", () => {
+  const bd = resolveLatencyBreakdown({
+    pipelineTrace: {
+      total_latency_ms: 14860.9,
+      stages: [
+        { name: "model_output", latency_ms: 12128 },
+        { name: "input_scan", latency_ms: 1200 },
+      ],
+    },
+  });
+  assert.ok(bd);
+  assert.equal(bd.hints.length, 1);
+  assert.equal(bd.hints[0].stage, "model_output");
+  assert.ok(bd.by_stage.length >= 2);
 });

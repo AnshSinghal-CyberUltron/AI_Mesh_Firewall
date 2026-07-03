@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Callable, TYPE_CHECKING
 
+from pipeline_trace import attach_latency_breakdown
+
 if TYPE_CHECKING:
     from llm_router import LLMRouter, ModelSelection
     from rate_limiter import RateLimiter
@@ -579,6 +581,7 @@ def build_stream_trace_frame(
             pt["total_latency_ms"] = round(elapsed_ms, 2)
             if metrics.ttft_ms > 0:
                 pt["ttft_ms"] = round(metrics.ttft_ms, 2)
+            attach_latency_breakdown(pt)
             frame["pipeline_trace"] = pt
         except Exception:
             frame["pipeline_trace"] = pipeline_trace_base

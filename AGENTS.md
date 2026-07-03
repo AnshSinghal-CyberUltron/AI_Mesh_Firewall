@@ -87,6 +87,12 @@
  LogDetailPage+liveGateway+charts; SSE terminal trace capture; stream trace frame reconciles
  total+ttft_ms; simulator TTFT label. Browser: Duration 13607.1ms not 0. 5 FE+1 GW tests.
  Gate: lint+build green. Evidence mcp-parallel/findings/pipeline-p16-frontend-latency-ttft/.
+ - PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
+ (dominant stage/share, by_stage, hints[]) via build_latency_breakdown+attach_latency_breakdown;
+ stream frame recomputes after total reconcile. FE LogDetailPage breakdown table + "How to reduce
+ latency" cards; pipelineTrace resolveLatencyHints + legacy stage-sum fallback. 8 GW + 5 FE tests.
+ Browser: 14860.9ms event → model_output hint visible. Gate: lint+build green. Evidence
+ mcp-parallel/findings/pipeline-p17-latency-hints/.
  - PIPELINE-0014 (2026-07-03) — OUTPUT REDACT BYTE-VERIFIED (P4-14): enforce_output() maskable
  block→redact + redaction_possible noop→block; connected sync Path D + _apply_output_guard_nonstream
  wired through enforce_output(); sanitize byte-check fail-closed. 15 new tests. Gate: 2029 passed.

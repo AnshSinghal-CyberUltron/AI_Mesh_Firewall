@@ -95,6 +95,170 @@ def finalize_stage_metrics(
     m["stage_latency_sum_ms"] = round(stage_sum, 1)
     return m
 
+
+# Minimum stage latency (ms) before a reduction hint is emitted.
+_LATENCY_HINT_MIN_MS = 5.0
+# Dominant stage must represent at least this share of total to emit a hint.
+_LATENCY_HINT_MIN_SHARE_PCT = 10.0
+
+_STAGE_REDUCTION_HINTS: dict[str, list[str]] = {
+    "model_output": [
+        "Switch to a smaller or faster model for this workload.",
+        "Enable prompt/response caching for repeat traffic.",
+        "Lower max_tokens or simplify tool schemas.",
+    ],
+    "model_input": [
+        "Reduce prompt size or trim conversation history.",
+        "Use a faster tokenizer/model pair for long contexts.",
+    ],
+    "input_scan": [
+        "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+        "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+        "Narrow scan scope (fewer PII/secret detectors) if compliance permits.",
+    ],
+    "output_guardrail": [
+        "Run output Tier-2 scans asynchronously when policy allows.",
+        "Reduce output length limits to shrink scan surface.",
+    ],
+    "policy": [
+        "Reduce the number of active policy rules for this endpoint.",
+        "Compile and cache policy bundles to avoid per-request re-evaluation.",
+        "Scope rules to specific actors/models instead of org-wide.",
+    ],
+    "rate_limit": [
+        "Raise org TPM/RPM ceilings if throttling is expected under load.",
+        "Spread burst traffic across keys or stagger concurrent requests.",
+    ],
+    "auth": [
+        "Cache API-key validation results when safe for your threat model.",
+    ],
+    "model_routing": [
+        "Pre-select a model instead of dynamic routing when latency-sensitive.",
+    ],
+    "kill_switch": [
+        "Keep kill-switch checks cached; they should stay sub-millisecond.",
+    ],
+}
+
+_OVERHEAD_REDUCTION_HINTS: list[str] = [
+    "Overhead dominates — check network RTT, serialization, and gateway load.",
+    "Co-locate clients with the gateway or enable HTTP keep-alive.",
+]
+
+
+def build_latency_breakdown(
+    stages: list[dict[str, Any]],
+    *,
+    total_latency_ms: float,
+    overhead_ms: float,
+) -> dict[str, Any]:
+    """Dominant-stage latency breakdown + actionable reduction hints (PIPELINE-0017)."""
+    total = max(float(total_latency_ms or 0), 0.0)
+    overhead = max(float(overhead_ms or 0), 0.0)
+
+    by_stage: list[dict[str, Any]] = []
+    for s in stages or []:
+        if not isinstance(s, dict):
+            continue
+        name = str(s.get("name") or "").strip()
+        if not name:
+            continue
+        lat = max(float(s.get("latency_ms") or 0), 0.0)
+        share = round((lat / total * 100.0), 1) if total > 0 else 0.0
+        by_stage.append({"stage": name, "latency_ms": round(lat, 1), "share_pct": share})
+
+    by_stage.sort(key=lambda x: x["latency_ms"], reverse=True)
+
+    dominant_stage = ""
+    dominant_ms = 0.0
+    dominant_share = 0.0
+    if by_stage and by_stage[0]["latency_ms"] > 0:
+        dominant_stage = by_stage[0]["stage"]
+        dominant_ms = by_stage[0]["latency_ms"]
+        dominant_share = by_stage[0]["share_pct"]
+
+    overhead_share = round((overhead / total * 100.0), 1) if total > 0 else 0.0
+
+    hints: list[dict[str, Any]] = []
+
+    def _append_hint(stage: str, lat_ms: float, share_pct: float, actions: list[str]) -> None:
+        if lat_ms < _LATENCY_HINT_MIN_MS or share_pct < _LATENCY_HINT_MIN_SHARE_PCT:
+            return
+        label = stage.replace("_", " ")
+        hints.append(
+            {
+                "stage": stage,
+                "severity": "high" if share_pct >= 40 else "medium",
+                "message": f"{label.title()} took {lat_ms:.1f}ms ({share_pct:.0f}% of total).",
+                "actions": list(actions),
+            }
+        )
+
+    if dominant_stage:
+        actions = list(_STAGE_REDUCTION_HINTS.get(dominant_stage, []))
+        if dominant_stage == "policy":
+            for s in stages or []:
+                if isinstance(s, dict) and s.get("name") == "policy":
+                    detail = str(s.get("detail") or "")
+                    if "rule" in detail.lower():
+                        actions.insert(
+                            0,
+                            "Review matched policy rules — high rule count increases evaluation time.",
+                        )
+                    break
+        if not actions:
+            actions = [
+                f"Investigate why {dominant_stage.replace('_', ' ')} is the slowest pipeline stage.",
+            ]
+        _append_hint(dominant_stage, dominant_ms, dominant_share, actions)
+
+    if overhead >= _LATENCY_HINT_MIN_MS and overhead_share >= 25.0:
+        if not hints or hints[0].get("stage") != "overhead":
+            hints.append(
+                {
+                    "stage": "overhead",
+                    "severity": "high" if overhead_share >= 40 else "medium",
+                    "message": (
+                        f"Unattributed overhead took {overhead:.1f}ms "
+                        f"({overhead_share:.0f}% of total)."
+                    ),
+                    "actions": list(_OVERHEAD_REDUCTION_HINTS),
+                }
+            )
+
+    return {
+        "by_stage": by_stage,
+        "dominant_stage": dominant_stage,
+        "dominant_latency_ms": round(dominant_ms, 1),
+        "dominant_share_pct": dominant_share,
+        "overhead_ms": round(overhead, 1),
+        "overhead_share_pct": overhead_share,
+        "hints": hints,
+    }
+
+
+def attach_latency_breakdown(trace: dict[str, Any]) -> dict[str, Any]:
+    """Recompute ``latency_breakdown`` on an existing pipeline_trace dict."""
+    if not isinstance(trace, dict):
+        return trace
+    stages = trace.get("stages") if isinstance(trace.get("stages"), list) else []
+    total = float(trace.get("total_latency_ms") or 0)
+    overhead = float(trace.get("overhead_ms") or 0)
+    if overhead <= 0 and total > 0:
+        stage_sum = sum(
+            float(s.get("latency_ms") or 0)
+            for s in stages
+            if isinstance(s, dict)
+        )
+        overhead = max(0.0, total - stage_sum)
+    trace["latency_breakdown"] = build_latency_breakdown(
+        stages,
+        total_latency_ms=total,
+        overhead_ms=overhead,
+    )
+    return trace
+
+
 # Deterministic PII/secret redactor. Applied to every prompt/response text field
 # written into the trace so raw PII never leaks into the operator UI / SSE / API
 # (redact_all is a no-op on benign text, so the preview utility is preserved).
@@ -893,7 +1057,7 @@ def build_pipeline_trace(
     elif is_blocked and blocked_stage == "output_guardrail":
         guard_summary = output_guard
 
-    return {
+    trace_out: dict[str, Any] = {
         "stages": stages,
         "total_latency_ms": total,
         "stage_latency_sum_ms": stage_sum,
@@ -901,3 +1065,5 @@ def build_pipeline_trace(
         "prompt_preview": prompt_preview,
         "guard_summary": guard_summary,
     }
+    attach_latency_breakdown(trace_out)
+    return trace_out

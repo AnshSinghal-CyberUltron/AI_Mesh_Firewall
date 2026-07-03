@@ -193,13 +193,105 @@ export function resolveTtftMs(sources = {}) {
 export function resolveLatencyBreakdown(sources = {}) {
   const trace = resolvePipelineTrace(sources);
   if (!trace) return null;
-  const stageSum = finiteMs(trace.stage_latency_sum_ms);
-  const overhead = finiteMs(trace.overhead_ms);
+  let stageSum = finiteMs(trace.stage_latency_sum_ms);
+  let overhead = finiteMs(trace.overhead_ms);
   const total = resolveTotalLatencyMs(sources);
-  if (stageSum == null && overhead == null) return null;
+
+  if (stageSum == null && Array.isArray(trace.stages) && trace.stages.length) {
+    stageSum = Math.round(
+      trace.stages.reduce((acc, s) => acc + (finiteMs(s?.latency_ms) ?? 0), 0) * 10,
+    ) / 10;
+  }
+  if (overhead == null && total != null && stageSum != null) {
+    overhead = Math.round(Math.max(0, total - stageSum) * 10) / 10;
+  }
+
+  const backend = trace.latency_breakdown && typeof trace.latency_breakdown === "object"
+    ? trace.latency_breakdown
+    : null;
+
+  if (stageSum == null && overhead == null && !backend && !(trace.stages?.length)) {
+    return null;
+  }
+
   return {
     total_latency_ms: total,
     stage_latency_sum_ms: stageSum,
     overhead_ms: overhead,
+    dominant_stage: backend?.dominant_stage || null,
+    dominant_latency_ms: finiteMs(backend?.dominant_latency_ms),
+    dominant_share_pct: finiteMs(backend?.dominant_share_pct),
+    by_stage: Array.isArray(backend?.by_stage) && backend.by_stage.length
+      ? backend.by_stage
+      : computeByStage(trace, total),
+    hints: resolveLatencyHints({ ...sources, pipelineTrace: trace }),
   };
+}
+
+function computeByStage(trace, totalMs) {
+  const stages = Array.isArray(trace?.stages) ? trace.stages : [];
+  const total = finiteMs(totalMs) ?? 0;
+  return stages
+    .filter((s) => s && (s.name || s.stage))
+    .map((s) => {
+      const stage = s.name || s.stage;
+      const latency_ms = finiteMs(s.latency_ms) ?? 0;
+      const share_pct = total > 0 ? Math.round((latency_ms / total) * 1000) / 10 : 0;
+      return { stage, latency_ms, share_pct };
+    })
+    .sort((a, b) => b.latency_ms - a.latency_ms);
+}
+
+const STAGE_REDUCTION_HINTS = {
+  model_output: [
+    "Switch to a smaller or faster model for this workload.",
+    "Enable prompt/response caching for repeat traffic.",
+    "Lower max_tokens or simplify tool schemas.",
+  ],
+  input_scan: [
+    "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+    "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+  ],
+  policy: [
+    "Reduce the number of active policy rules for this endpoint.",
+    "Compile and cache policy bundles to avoid per-request re-evaluation.",
+  ],
+  output_guardrail: [
+    "Run output Tier-2 scans asynchronously when policy allows.",
+    "Reduce output length limits to shrink scan surface.",
+  ],
+};
+
+/** Actionable latency-reduction hints (PIPELINE-0017). */
+export function resolveLatencyHints(sources = {}) {
+  const trace = resolvePipelineTrace(sources);
+  if (!trace) return [];
+
+  const backendHints = trace.latency_breakdown?.hints;
+  if (Array.isArray(backendHints) && backendHints.length) {
+    return backendHints.filter((h) => h && typeof h === "object");
+  }
+
+  const total = resolveTotalLatencyMs(sources) ?? 0;
+  const byStage = computeByStage(trace, total);
+  if (!byStage.length || !total) return [];
+
+  const top = byStage[0];
+  if (!top || top.latency_ms < 5 || top.share_pct < 10) return [];
+
+  const actions = STAGE_REDUCTION_HINTS[top.stage] || [
+    `Investigate why ${String(top.stage).replace(/_/g, " ")} is the slowest pipeline stage.`,
+  ];
+  const label = STAGE_LABELS[top.stage] || String(top.stage).replace(/_/g, " ");
+  return [{
+    stage: top.stage,
+    severity: top.share_pct >= 40 ? "high" : "medium",
+    message: `${label} took ${top.latency_ms}ms (${Math.round(top.share_pct)}% of total).`,
+    actions,
+  }];
+}
+
+export function formatDominantStageLabel(stage) {
+  if (!stage) return "";
+  return STAGE_LABELS[stage] || String(stage).replace(/_/g, " ");
 }
