@@ -2302,3 +2302,23 @@ Probed three fresh angles; ALL already defended (no new leak — the firewall is
 injection-blocked + 2 legit-role FP guards — LLM01-indirect is a top OWASP class; a future change to the
 role-flattening now fails here. Test-only (no prod change); 8 passed; golden 452 unchanged.
 Session ledger: G74/G75/G76 = 4 real leaks fixed+deployed; G77/G78 = angles verified defended + frozen.
+
+---
+
+## G79 (soft output-side DoS — fixed) — 2026-07-03 — ReDoS/amplification in output-guard regex
+Stress-timed the detection path for ReDoS (R1). The `_is_repetitive` heuristic + 10k input cap block
+repetitive/oversized INPUT before regex work — so the input detectors were fast on all adversarial inputs.
+But `output_guard._EMPH_HTML_TOKEN_RE` (`[\w@.\-]{1,256}(?:SEP{1,64}[\w@.\-]{1,256})+`, applied via `.sub`
+to the MODEL OUTPUT at line ~1476) took **~1.5s on a 200KB value-char run** with no separator: the value
+quantifier backtracks `{1,256}` at EVERY start position → O(256·n). The OUTPUT path does NOT apply the
+10k input length cap, so a crafted large model output (attacker induces it via injection + high max_tokens)
+is a soft DoS amplification (~256× per-char cost).
+**Root cause:** greedy value quantifier backtracks even though it can never help — `_RENDER_INVIS_SEP`
+always starts with `[*`<]`, DISJOINT from the value class `[\w@.\-]` (`\w` excludes those).
+**FIX (owned output_guard.py, 2 chars):** make the value runs POSSESSIVE — `{1,256}` → `{1,256}+`.
+Semantically identical for any real match (disjoint classes ⇒ no backtrack ever needed); each start
+becomes O(1). Verified: 200KB 1500ms → **137ms** (11×); valid PII split by `<!-- -->` / `*` separators
+still tokenized (correctness preserved). Python 3.11+ possessive (container 3.12 ✓).
+**Verify:** output/guard/egress/exfil tests 206 passed; full backend `ai_mesh_gateway/tests` **1633 passed**;
+golden 452; ruff clean.
+**Frozen:** `ai_mesh_gateway/tests/test_output_guard_redos.py` (2) — linear-timing bound + valid-split correctness.

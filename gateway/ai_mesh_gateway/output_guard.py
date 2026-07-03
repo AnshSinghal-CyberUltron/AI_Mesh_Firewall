@@ -1419,8 +1419,14 @@ _ENT = _NUMERIC_ENTITY_RE.pattern
 # each match ATTEMPT is O(cap), not O(len) — otherwise a long value run wrapped by a
 # separator char (``x<!-- <150KB> -->y``) makes re restart+backtrack O(n^2). Caps well above
 # any real obfuscated value; longer runs are simply not one value.
+# G79: the value-char runs are POSSESSIVE ({1,256}+). The separator always starts with a char
+# DISJOINT from the value class ([*`<] vs [\w@.\-]), so backtracking a value run can never help
+# find a separator — greedy-without-giveback is semantically identical for any real match. Without
+# possessive, a long value-char OUTPUT with no separator (which the output path does NOT length-cap
+# like the 10k input cap) backtracks {1,256} at every start position -> O(256·n) (~1.5s for 200KB,
+# a soft output-side DoS). Possessive makes each start O(1) -> ~140ms for 200KB.
 _EMPH_HTML_TOKEN_RE = re.compile(
-    rf"[\w@.\-]{{1,256}}(?:{_RENDER_INVIS_SEP}{{1,64}}[\w@.\-]{{1,256}})+", re.DOTALL
+    rf"[\w@.\-]{{1,256}}+(?:{_RENDER_INVIS_SEP}{{1,64}}[\w@.\-]{{1,256}}+)+", re.DOTALL
 )
 _ENTITY_TOKEN_RE = re.compile(rf"(?:[\w@.\-]|{_ENT}){{1,512}}")
 _RENDER_INVIS_STRIP_RE = re.compile(_RENDER_INVIS_SEP, re.DOTALL)
