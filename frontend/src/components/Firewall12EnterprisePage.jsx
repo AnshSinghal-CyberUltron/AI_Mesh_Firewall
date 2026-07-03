@@ -114,7 +114,9 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
     ? { label: "Operational", cls: "bg-emerald-50 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300", Icon: CheckCircle2 }
     : backendHealth === "checking"
       ? { label: "Checking…", cls: "bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300", Icon: RefreshCw }
-      : { label: "Backend offline", cls: "bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300", Icon: AlertTriangle };
+      : backendHealth === "degraded"
+        ? { label: "Degraded", cls: "bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300", Icon: RefreshCw }
+        : { label: "Backend offline", cls: "bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300", Icon: AlertTriangle };
   const [policies, setPolicies] = useState([]);
   const [policyLoading, setPolicyLoading] = useState(true);
 

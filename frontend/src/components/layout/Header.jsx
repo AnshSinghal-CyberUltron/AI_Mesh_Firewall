@@ -269,7 +269,9 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
     ? { label: "Connected", dot: "bg-emerald-500", cls: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" }
     : backendHealth === "checking"
       ? { label: "Connecting…", dot: "bg-amber-500", cls: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300" }
-      : { label: "Offline", dot: "bg-red-500", cls: "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300" };
+      : backendHealth === "degraded"
+        ? { label: "Degraded", dot: "bg-amber-500", cls: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300" }
+        : { label: "Offline", dot: "bg-red-500", cls: "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300" };
 
   const isDark = resolvedTheme === "dark";
   const ThemeIcon = isDark ? Sun : Moon;

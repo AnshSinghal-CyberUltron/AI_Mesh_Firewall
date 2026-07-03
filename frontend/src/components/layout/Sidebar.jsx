@@ -58,7 +58,9 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
     ? { line: "All systems operational", dot: "bg-teal-500", pulse: "animate-pulse", label: "Protected", labelCls: "text-teal-700 dark:text-teal-400" }
     : backendHealth === "checking"
       ? { line: "Checking system status…", dot: "bg-amber-500", pulse: "animate-pulse", label: "Connecting…", labelCls: "text-amber-700 dark:text-amber-400" }
-      : { line: "Backend unreachable", dot: "bg-red-500", pulse: "", label: "Offline", labelCls: "text-red-700 dark:text-red-400" };
+      : backendHealth === "degraded"
+        ? { line: "Backend slow to respond", dot: "bg-amber-500", pulse: "animate-pulse", label: "Degraded", labelCls: "text-amber-700 dark:text-amber-400" }
+        : { line: "Backend unreachable", dot: "bg-red-500", pulse: "", label: "Offline", labelCls: "text-red-700 dark:text-red-400" };
   const { hasPlatform } = useOfferingVisibility(user);
   const [expandedModules, setExpandedModules] = useState([]);
   const [hasCustomizedExpansion, setHasCustomizedExpansion] = useState(false);
