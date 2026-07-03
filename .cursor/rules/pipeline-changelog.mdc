@@ -131,3 +131,7 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   (dominant stage, by_stage, hints[]) + stream recompute; LogDetailPage breakdown table +
   reduction hint cards; pipelineTrace resolveLatencyHints + legacy fallback. 8 GW + 5 FE tests.
   Browser: 14860.9ms slow event → model_output hint visible. Evidence pipeline-p17-latency-hints/.
+- PIPELINE-0019 (2026-07-03) — BLOCKED-EVENT PIPELINE TRACE (P6-19/L9): telemetry input_blocked/
+  output_guard omitted metadata.pipeline_trace. FIX: _build_blocked_pipeline_trace +
+  _REQUEST_PIPELINE_CTX + _enrich_blocked_event_pipeline_trace in _emit_telemetry; policy/check
+  explicit trace. +4 tests. Gate: 2059 passed.

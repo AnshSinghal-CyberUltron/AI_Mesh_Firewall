@@ -32,7 +32,7 @@
 - [x] 18. Verify latency numbers match end-to-end across backend JSON and the UI. DONE: parsePipelineDurationMs + latencyMsWithinTolerance (0.1ms); Playwright gate pipeline_p18_latency_parity_verify.mjs; event 295909 api=14860.9 header=14860.9 metric=14860.9 delta=0. PIPELINE-0018.
 
 ## P6 — Full frontend transparency (the pipeline log/trace)
-- [ ] 19. Record + expose the FULL per-stage trace for EVERY event type — including input_blocked/output_blocked (fix L9: "no per-stage trace recorded").
+- [x] 19. Record + expose the FULL per-stage trace for EVERY event type — including input_blocked/output_blocked (fix L9: "no per-stage trace recorded"). DONE: PIPELINE-0019.
 - [ ] 20. For each stage show: action, WHY (matched policies/rules, guard reason, tier, confidence), exact latency, prompt_in/prompt_out (redacted-safe), and the decision source.
 - [ ] 21. Show the ROUTING decision explicitly: where the request went — RAG / Vector DB / MCP / which model — and why (the adjudicator factors/weights). (Answers "where to route".)
 - [ ] 22. Show the actual INPUT and OUTPUT (redacted-safe) so operators see what was blocked/redacted and why.

@@ -3788,7 +3788,7 @@ def _redact_trace_text(text) -> str:
         return ""
 
 
-def _build_block_response(
+def _build_blocked_pipeline_trace(
     status_code: int,
     code: str,
     zeroshield: dict,
@@ -3799,24 +3799,19 @@ def _build_block_response(
     requested_model: str = "",
     scan_verdict=None,
     output_scan_verdict=None,
-) -> JSONResponse:
-    """
-    Build a unified blocked JSONResponse with zeroshield metadata.
-    CRITICAL: Uses _build_safe_block_response to NEVER expose sensitive details.
-    In zeroshield dict: extracts threat category, redacts internal details, and keeps only safe metadata.
-    """
+) -> dict:
+    """Build the full per-stage pipeline_trace for a terminal block outcome."""
     from pipeline_trace import build_pipeline_trace
 
     threat_category = zeroshield.get("threat_type", "policy_violation")
-    request_id = zeroshield.get("request_id")
-    internal_detail = zeroshield.get("detail")  # Will be logged server-side only
+    internal_detail = zeroshield.get("detail")
     detection_tier = str(zeroshield.get("detection_tier") or "")
     blocked_stage = _resolve_pipeline_blocked_by(
         code=code,
         threat_category=threat_category,
         detection_tier=detection_tier,
     )
-    pipeline_trace = build_pipeline_trace(
+    return build_pipeline_trace(
         prompt=_redact_trace_text(prompt),
         stage_metrics=stage_metrics,
         final_action="block",
@@ -3829,6 +3824,47 @@ def _build_block_response(
         requested_model=requested_model,
         output_scan_verdict=output_scan_verdict,
     )
+
+
+def _build_block_response(
+    status_code: int,
+    code: str,
+    zeroshield: dict,
+    *,
+    stage_metrics: dict | None = None,
+    prompt: str = "",
+    route_metadata: dict | None = None,
+    requested_model: str = "",
+    scan_verdict=None,
+    output_scan_verdict=None,
+    pipeline_trace: dict | None = None,
+) -> JSONResponse:
+    """
+    Build a unified blocked JSONResponse with zeroshield metadata.
+    CRITICAL: Uses _build_safe_block_response to NEVER expose sensitive details.
+    In zeroshield dict: extracts threat category, redacts internal details, and keeps only safe metadata.
+    """
+    threat_category = zeroshield.get("threat_type", "policy_violation")
+    request_id = zeroshield.get("request_id")
+    internal_detail = zeroshield.get("detail")  # Will be logged server-side only
+    detection_tier = str(zeroshield.get("detection_tier") or "")
+    blocked_stage = _resolve_pipeline_blocked_by(
+        code=code,
+        threat_category=threat_category,
+        detection_tier=detection_tier,
+    )
+    if pipeline_trace is None:
+        pipeline_trace = _build_blocked_pipeline_trace(
+            status_code,
+            code,
+            zeroshield,
+            stage_metrics=stage_metrics,
+            prompt=prompt,
+            route_metadata=route_metadata,
+            requested_model=requested_model,
+            scan_verdict=scan_verdict,
+            output_scan_verdict=output_scan_verdict,
+        )
 
     return _build_safe_block_response(
         status_code=status_code,
@@ -3897,6 +3933,148 @@ _REQUEST_ORG_ID: _ctxvars.ContextVar[int | None] = _ctxvars.ContextVar("_req_org
 _REQUEST_ORG_SLUG: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_org_slug", default="")
 _REQUEST_SOURCE_IP: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_src_ip", default="")
 _REQUEST_METHOD: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_method", default="POST")
+# Mutable per-request pipeline context for blocked-event telemetry enrichment
+# (PIPELINE-0019). Holds live stage_metrics + prompt so input_blocked/output_guard
+# events carry the same full stages[] as the HTTP block envelope.
+_REQUEST_PIPELINE_CTX: _ctxvars.ContextVar[dict | None] = _ctxvars.ContextVar(
+    "_req_pipeline_ctx", default=None
+)
+
+_PIPELINE_TRACE_TELEMETRY_EVENTS = frozenset({
+    "input_blocked",
+    "output_guard",
+    "output_blocked",
+})
+
+
+def _sync_pipeline_ctx(**fields) -> None:
+    ctx = _REQUEST_PIPELINE_CTX.get()
+    if ctx is not None:
+        ctx.update(fields)
+
+
+def _infer_blocked_trace_params(
+    *,
+    event_type: str,
+    threat_type: str,
+    metadata: dict,
+    ctx: dict,
+    status_code: int,
+    risk_score: float,
+    scan_verdict=None,
+) -> tuple[int, str, dict]:
+    """Derive (status_code, block_code, zeroshield) for telemetry trace synthesis."""
+    md = metadata or {}
+    sv = scan_verdict or ctx.get("scan_verdict")
+    detail = md.get("detail") or ""
+    matched = (
+        md.get("matched_patterns")
+        or md.get("matched_rules")
+        or md.get("matched_keywords")
+        or []
+    )
+
+    if event_type in ("output_guard", "output_blocked") or str(
+        md.get("detection_tier") or ""
+    ).lower() == "output_guard":
+        detection_tier = "output_guard"
+        code = "output_blocked"
+        threat = threat_type or "policy_violation"
+    elif threat_type == "blocked_keyword":
+        detection_tier = "config"
+        code = "content_blocked"
+        threat = "blocked_keyword"
+    elif threat_type in ("high_risk_actor", "threat_intel"):
+        detection_tier = "threat_intel"
+        code = "threat_intel_blocked"
+        threat = threat_type
+    elif threat_type.startswith("rate_limit") or "rate_limit" in (threat_type or ""):
+        detection_tier = "rate_limit"
+        code = "rate_limit_exceeded"
+        threat = threat_type or "rate_limit"
+    elif md.get("matched_policies") or md.get("matched_rules"):
+        detection_tier = "policy"
+        code = "content_blocked"
+        threat = threat_type or "policy_violation"
+    elif sv is not None:
+        detection_tier = getattr(sv, "tier", None) or "tier_1"
+        code = "content_blocked"
+        threat = getattr(sv, "threat_type", None) or threat_type or "policy_violation"
+        matched = list(getattr(sv, "matched_patterns", None) or matched or [])
+        detail = detail or getattr(sv, "detail", "") or ""
+    elif threat_type == "model_not_allowed":
+        detection_tier = "access_control"
+        code = "model_not_allowed"
+        threat = "model_not_allowed"
+    else:
+        detection_tier = "tier_1"
+        code = "content_blocked"
+        threat = threat_type or "policy_violation"
+
+    zs = _build_zeroshield_metadata(
+        action="block",
+        reason=detail or f"Blocked: {threat}",
+        detection_tier=detection_tier,
+        threat_type=threat,
+        confidence=float(risk_score or 0.0),
+        matched_patterns=list(matched) if isinstance(matched, list) else [],
+        original_prompt=ctx.get("prompt") or md.get("prompt_snippet") or "",
+        detail=detail,
+        processing_time_ms=float(md.get("processing_time_ms") or 0.0),
+    )
+    if md.get("matched_policies"):
+        zs["matched_policies"] = md.get("matched_policies")
+    if md.get("matched_policy_names"):
+        zs["matched_policy_names"] = md.get("matched_policy_names")
+    if md.get("matched_rule_names"):
+        zs["matched_rule_names"] = md.get("matched_rule_names")
+    return status_code, code, zs
+
+
+def _enrich_blocked_event_pipeline_trace(kwargs: dict) -> None:
+    """Attach pipeline_trace to blocked telemetry metadata when absent (PIPELINE-0019)."""
+    event_type = str(kwargs.get("event_type") or "")
+    action = str(kwargs.get("action") or "").lower()
+    if event_type not in _PIPELINE_TRACE_TELEMETRY_EVENTS:
+        if not (event_type == "stream_complete" and action == "block"):
+            return
+    if action not in ("block", "monitor", "rewrite"):
+        return
+
+    md = dict(kwargs.get("metadata") or {})
+    if md.get("pipeline_trace"):
+        kwargs["metadata"] = md
+        return
+
+    ctx = _REQUEST_PIPELINE_CTX.get() or {}
+    stage_metrics = md.get("stage_metrics_ms") or ctx.get("stage_metrics")
+    prompt = ctx.get("prompt") or md.get("prompt_snippet") or kwargs.get("prompt_snippet") or ""
+    route_metadata = ctx.get("route_metadata")
+    requested_model = ctx.get("requested_model") or kwargs.get("model") or ""
+    scan_verdict = ctx.get("scan_verdict")
+    output_scan_verdict = ctx.get("output_scan_verdict")
+
+    status_code, code, zs = _infer_blocked_trace_params(
+        event_type=event_type,
+        threat_type=str(kwargs.get("threat_type") or ""),
+        metadata=md,
+        ctx=ctx,
+        status_code=int(kwargs.get("status_code") or 403),
+        risk_score=float(kwargs.get("risk_score") or 0.0),
+        scan_verdict=scan_verdict,
+    )
+    md["pipeline_trace"] = _build_blocked_pipeline_trace(
+        status_code,
+        code,
+        zs,
+        stage_metrics=stage_metrics,
+        prompt=prompt,
+        route_metadata=route_metadata,
+        requested_model=requested_model,
+        scan_verdict=scan_verdict,
+        output_scan_verdict=output_scan_verdict,
+    )
+    kwargs["metadata"] = md
 
 # Event types that represent isolation / kill-switch / circuit-breaker actions.
 # These are security-critical and MUST always be recorded, even when an org
@@ -3947,6 +4125,10 @@ def _emit_telemetry(status_code: int = 200, **kwargs):
     if TELEMETRY is None:
         return
     from telemetry import build_telemetry_event
+    try:
+        _enrich_blocked_event_pipeline_trace(kwargs)
+    except Exception:
+        LOG.exception("blocked-event pipeline_trace enrichment failed; emitting without trace")
     kwargs.setdefault("organization_id", _REQUEST_ORG_ID.get())
     kwargs.setdefault("source_ip", _REQUEST_SOURCE_IP.get())
     kwargs.setdefault("method", _REQUEST_METHOD.get())
@@ -4736,6 +4918,14 @@ async def proxy_chat(
         "upstream_ms": 0.0,
         "telemetry_enqueue_ms": 0.0,
     }
+    _REQUEST_PIPELINE_CTX.set({
+        "stage_metrics": stage_metrics,
+        "prompt": "",
+        "route_metadata": None,
+        "requested_model": "",
+        "scan_verdict": None,
+        "output_scan_verdict": None,
+    })
     org_slug = ""
     chat_outcome = "success"
 
@@ -6078,6 +6268,7 @@ async def proxy_chat(
         if _rf_text:
             prompt = (prompt + "\n" + _rf_text) if prompt else _rf_text
         _prompt_snippet = prompt[:500] if prompt else ""
+        _sync_pipeline_ctx(prompt=prompt, requested_model=body.get("model", ""))
         agent_data = _extract_agent_data(body, x_agent_data)
 
         # ── Input scanning (always runs, even without backend) ──
@@ -6612,6 +6803,7 @@ async def proxy_chat(
                 )
 
             scan_verdict = verdict
+            _sync_pipeline_ctx(scan_verdict=verdict)
             _degraded_pii_detected = False
 
             if _is_tier2_degraded_verdict(verdict):
@@ -7405,6 +7597,8 @@ async def proxy_chat(
                 "weights": routing_prefs["weights"],
             }
 
+        _sync_pipeline_ctx(route_metadata=route_metadata)
+
         if _is_routing_sentinel_model(requested_model):
             resolved = _resolve_routing_hint_model(
                 requested_model, org_config, inference_models
@@ -7877,6 +8071,7 @@ async def proxy_chat(
                 org_config=(CONFIG_SYNC.get_config(org_slug) if (CONFIG_SYNC is not None and org_slug) else None),
                 org_slug=org_slug or "",
             )
+            _sync_pipeline_ctx(output_scan_verdict=output_verdict)
             stage_metrics["output_guardrail_ms"] = round((time.perf_counter() - _og_start) * 1000, 1)
             # M11: tier-2 OUTPUT guard outage → the response was passed UNSCANNED
             # (fail-open by design). Make it VISIBLE: emit an operator telemetry
@@ -8299,6 +8494,7 @@ async def proxy_chat(
                 )
         elif INPUT_SCANNER is not None and response_text and org_config.get("output_scan_enabled", True):
             output_verdict = await INPUT_SCANNER.scan_output(response_text)
+            _sync_pipeline_ctx(output_scan_verdict=output_verdict)
             if output_verdict.action == "flag" and output_verdict.threat_type in ("pii", "secret"):
                 LOG.info("PII/secret detected in LLM response, redacting (user=%s)", user_id)
                 redacted_response = INPUT_SCANNER.redact_pii(response_text)
@@ -12618,6 +12814,29 @@ async def _policy_check_tier1_scan_block(
         return None
     if not _should_block_tier1_verdict(verdict, org_config):
         return None
+    tier_label = {
+        "tier_1": "Tier 1 regex",
+        "tier_1_5": "Tier 1.5 fuzzy",
+        "tier_1_6": "Tier 1.6 semantic",
+        "tier_2": "Tier 2 ML",
+    }.get(verdict.tier, verdict.tier or "tier_1")
+    _policy_zs = _build_zeroshield_metadata(
+        action="block",
+        reason=f"Input blocked by {tier_label} scanner.",
+        detection_tier=verdict.tier or "tier_1",
+        threat_type=verdict.threat_type,
+        confidence=verdict.confidence,
+        matched_patterns=verdict.matched_patterns,
+        original_prompt=prompt,
+        detail=verdict.detail,
+    )
+    _policy_trace = _build_blocked_pipeline_trace(
+        403,
+        f"{verdict.tier or 'tier_1'}_{verdict.threat_type}",
+        _policy_zs,
+        prompt=prompt,
+        scan_verdict=verdict,
+    )
     _emit_telemetry(
         status_code=403,
         event_type="input_blocked",
@@ -12640,28 +12859,17 @@ async def _policy_check_tier1_scan_block(
             "confidence": verdict.confidence,
             "matched_patterns": verdict.matched_patterns,
             "endpoint": "/v1/policy/check",
+            "pipeline_trace": _policy_trace,
         },
     )
     METRICS["blocked"] += 1
-    tier_label = {
-        "tier_1": "Tier 1 regex",
-        "tier_1_5": "Tier 1.5 fuzzy",
-        "tier_1_6": "Tier 1.6 semantic",
-        "tier_2": "Tier 2 ML",
-    }.get(verdict.tier, verdict.tier or "tier_1")
     return _build_block_response(
         403,
         f"{verdict.tier or 'tier_1'}_{verdict.threat_type}",
-        _build_zeroshield_metadata(
-            action="block",
-            reason=f"Input blocked by {tier_label} scanner.",
-            detection_tier=verdict.tier or "tier_1",
-            threat_type=verdict.threat_type,
-            confidence=verdict.confidence,
-            matched_patterns=verdict.matched_patterns,
-            original_prompt=prompt,
-            detail=verdict.detail,
-        ),
+        _policy_zs,
+        prompt=prompt,
+        scan_verdict=verdict,
+        pipeline_trace=_policy_trace,
     )
 
 

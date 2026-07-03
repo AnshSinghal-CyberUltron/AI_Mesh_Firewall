@@ -2,6 +2,30 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0019 (2026-07-03)
+
+**Blocked events carry full pipeline_trace in telemetry (P6 item 19 / L9).**
+
+Root Cause:
+- HTTP 403 block responses included `pipeline_trace.stages[]` via
+  `_build_block_response`, but `input_blocked` / `output_guard` telemetry
+  metadata omitted `pipeline_trace` — the control drain stored thin events,
+  so threat-feed / scan detail had no per-stage trace for blocked requests.
+
+Fix:
+- `main.py`: extracted `_build_blocked_pipeline_trace()`; added
+  `_REQUEST_PIPELINE_CTX` (live stage_metrics, prompt, routing, scan verdicts
+  during `proxy_chat`); `_enrich_blocked_event_pipeline_trace()` auto-attaches
+  `metadata.pipeline_trace` inside `_emit_telemetry` for `input_blocked`,
+  `output_guard`, and `stream_complete`+block; `/v1/policy/check` block path
+  builds trace once for both emit and response.
+- Control `tasks.py` already hoists `metadata.pipeline_trace` — no change needed.
+
+Verification:
+- `test_pipeline_blocked_trace_telemetry.py` (+4): input_scan block → auth/policy
+  run, input_scan=block, model stages skip; output guard keeps model stages run.
+- Gateway gate: 2059 passed.
+
 ## PIPELINE-0018 (2026-07-03)
 
 **End-to-end latency parity: backend `total_latency_ms` == UI Duration (P5 item 18).**

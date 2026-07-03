@@ -92,6 +92,11 @@
   latencyMsWithinTolerance; Playwright gate pipeline_p18_latency_parity_verify.mjs; GW UI-format
   contract tests. Browser: event 295909 api/header/metric all 14860.9ms delta=0. 3 FE + 2 GW tests.
   Gate: 2055 GW + build green. Evidence mcp-parallel/findings/pipeline-p18-latency-parity/.
+ - PIPELINE-0019 (2026-07-03) — BLOCKED-EVENT PIPELINE TRACE (P6-19/L9): input_blocked/output_guard
+  telemetry omitted metadata.pipeline_trace (HTTP 403 had stages[] only). FIX: main.py
+  _build_blocked_pipeline_trace + _REQUEST_PIPELINE_CTX + _enrich_blocked_event_pipeline_trace in
+  _emit_telemetry; policy/check builds trace once for emit+response. Control tasks.py hoist unchanged.
+  +4 tests test_pipeline_blocked_trace_telemetry.py. Gate: 2059 passed.
 - PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
  (dominant stage/share, by_stage, hints[]) via build_latency_breakdown+attach_latency_breakdown;
  stream frame recomputes after total reconcile. FE LogDetailPage breakdown table + "How to reduce
