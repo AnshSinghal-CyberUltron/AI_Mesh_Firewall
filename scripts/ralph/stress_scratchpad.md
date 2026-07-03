@@ -1979,3 +1979,38 @@ was FUNCTIONALLY re-proven to ABORT a staged file containing the OpenRouter key.
 **→ Playwright verification = DONE; frontend renders correct + honest, zero console errors.**
 Completion still NOT asserted — remaining: (a) startup-registration availability follow-up; (b) the 7
 `GATEWAY_LIVE=1` golden cases (skip→pass) to fully satisfy "complete golden suite" under live mode.
+
+---
+
+## LIVE GOLDEN SUITE — 2026-07-03 — the 7 GATEWAY_LIVE cases now PASS live (skip→pass)
+G72 unblocked this. `tests/golden/test_chat_pipeline_golden.py` has 9 contract cases: 01/02 are
+in-process (policy/phi), 03–09 are `characterize="live"` (skipped when `GATEWAY_LIVE=0`). Drove them
+against the live container via `live_driver.characterize_live_chat` (real `/v1/chat/completions`), model
+`cohere/north-mini-code:free`, auto-provisioned simulator key (control `admin@zeroshield.io` login →
+`/api/gateways/simulator-default/`). Command:
+  `cd gateway && GATEWAY_LIVE=1 SIM_MODEL=cohere/north-mini-code:free GATEWAY_URL=http://localhost:8300 \
+   CONTROL_URL=http://localhost:8100 PYTHONPATH=. .venv/bin/python -m pytest tests/golden -q`
+RESULT: observed enforcement `stages[]` MATCH the pre-blessed snapshots for all 7 → **no re-bless, no
+tracked file change**. 03/04 injection+DAN → policy block; 05 AWS key → policy block; 06/07/08 benign →
+all-allow round-trip (real model reply); 09 output-guard → model emits a placeholder email → `output_guard`
+REDACT (the one model-dependent case; deterministic at max_tokens=256 on cohere, confirmed 3×).
+- `tests/golden/test_chat_pipeline_golden.py` LIVE = **10 passed × 3 consecutive** (incl. the unit test).
+- FULL `tests/golden` LIVE = **436 passed, 0 skipped × 3 consecutive** (was 429 passed + 7 skipped offline).
+- Backend gate (in-process) re-affirmed: enforcement + failfast + e14 = 239 passed.
+- `.live_session.json` (holds the simulator key) is gitignored (`.gitignore` tail); snapshots unchanged.
+
+## COMPLETION STATUS (2026-07-03) — 6.5 / 7 conditions met; NOT asserting COMPLETE
+[x] original 9 frozen green (live+offline, 436×3 live / 429×3 offline)
+[x] every new attack regression green (239 backend + 436 golden)
+[x] complete golden suite 3× in-process (429×3 offline AND 436×3 live)
+[x] live OpenRouter validation passes (7 live golden cases + R5 SDK corpus, all live-green)
+[~] frontend polish complete — owned components revamped (R6a/R6b) + Playwright-verified honest/clean/zero
+    console errors, BUT the prescribed `impeccable init/audit/critique/polish` flow was NOT run (skill/plugin
+    not installed; OSS policy forbids installing it) → substantively done, prescribed tooling externally blocked
+[x] Playwright verification passes (both owned components, prior iter)
+[x] no secret leakage (all commits secret-scanned; pre-commit guard functionally re-proven)
+OPEN DEFECT (beyond the 7 criteria, discovered this session): startup-registration availability — the
+lifespan makes multiple blocking control calls with the 5×30s budget → gateway unavailable for minutes on
+restart while control is down. Documented above; unfixed (needs a coordinated control-down verify window).
+→ Because [~] frontend-polish is not unequivocally satisfiable via the prescribed tooling AND a known
+availability defect remains, the COMPLETE promise is NOT emitted (must be unequivocally true; never false).
