@@ -109,6 +109,11 @@ _control_audit_client: "httpx.AsyncClient | None" = None
 _AUDIT_TASKS: set = set()
 _AUDIT_INFLIGHT = 0
 _AUDIT_MAX_INFLIGHT = int(os.environ.get("GATEWAY_AUDIT_MAX_INFLIGHT", "64"))
+# CHG-0094: security-decision audits get a HIGHER inflight ceiling so they survive a
+# backpressure burst that (correctly) sheds the high-volume allow/monitor/clean records.
+# The shared counter still bounds total inflight to this high cap.
+_AUDIT_MAX_INFLIGHT_HIGH = int(os.environ.get("GATEWAY_AUDIT_MAX_INFLIGHT_HIGH", "256"))
+_AUDIT_HIGH_PRIORITY_DECISIONS = frozenset({"block", "redact", "rate_limited", "error"})
 
 
 def _get_control_audit_client() -> "httpx.AsyncClient":
@@ -141,10 +146,29 @@ def _spawn_audit_event(headers: dict, payload: dict) -> bool:
     """Fire the audit POST off the tool-call hot path, bounded. Best-effort: if too
     many audits are already draining to (serial) control, DROP this record rather
     than block the response or grow the backlog unbounded. asyncio is single-loop
-    per worker, so the counter needs no lock."""
+    per worker, so the counter needs no lock.
+
+    CHG-0094: the drop is DECISION-PRIORITY-AWARE. A SECURITY decision
+    (block/redact/rate_limited/error) gets a higher inflight ceiling
+    (``_AUDIT_MAX_INFLIGHT_HIGH``) so it survives a backpressure burst that sheds the
+    high-volume allow/monitor/clean records first — previously an attack that produced
+    many blocks could fill the queue and DROP the very block/redact audits it created,
+    breaking the ...->tag->AUDIT chain silently. Every drop now also increments the
+    ``mcp_audit_dropped_total`` metric so lost security audits are visible/alertable."""
     global _AUDIT_INFLIGHT
-    if _AUDIT_INFLIGHT >= _AUDIT_MAX_INFLIGHT:
-        LOG.warning("Audit dropped under backpressure (inflight=%s)", _AUDIT_INFLIGHT)
+    decision = str(payload.get("decision") or "").strip().lower()
+    high = decision in _AUDIT_HIGH_PRIORITY_DECISIONS
+    cap = _AUDIT_MAX_INFLIGHT_HIGH if high else _AUDIT_MAX_INFLIGHT
+    if _AUDIT_INFLIGHT >= cap:
+        LOG.warning(
+            "Audit dropped under backpressure (inflight=%s decision=%s priority=%s)",
+            _AUDIT_INFLIGHT, decision or "?", "high" if high else "normal",
+        )
+        try:  # visibility: a non-zero high-priority series = a lost security audit
+            import metrics as _metrics
+            _metrics.record_mcp_audit_dropped("high" if high else "normal", decision or "unknown")
+        except Exception:
+            pass
         return False
     _AUDIT_INFLIGHT += 1
     task = asyncio.create_task(_post_audit_event(headers, payload))

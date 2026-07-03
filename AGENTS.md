@@ -832,6 +832,18 @@
     AKIAIOSFODNN7EXAMPLE+IP variant masked. Independent oracle (aidefence): has_pii false fixed / true raw.
     Evidence mcp-parallel/findings/backstop-p-sse-multiline-split/. Note: E14 streaming-split tests cover the
     CHAT SecureStreamingResponse guard, a DIFFERENT mechanism — this MCP SSE reframer gap was uncovered.
+  - CHG-0094 (2026-07-03) — MEDIUM audit-completeness gap: MCP audit backpressure (_spawn_audit_event,
+    mcp_proxy.py) dropped SECURITY-decision records under load. The inflight cap (_AUDIT_MAX_INFLIGHT=64) shed
+    audits INDISCRIMINATELY, so under 5k–10k concurrent calls + slow control the 64 slots fill and block/redact/
+    rate_limited/error audits drop too — an attack producing many blocks drops the very block audits it created,
+    breaking the …→tag→AUDIT chain silently (only a LOG.warning). FIX: priority-aware shedding — security
+    decisions get a higher ceiling (_AUDIT_MAX_INFLIGHT_HIGH=256, env-overridable) so allow/monitor/clean shed
+    first and security audits survive; shared counter still bounds total inflight to 256. + new metric
+    amf_gateway_mcp_audit_dropped_total{priority,decision} (metrics.record_mcp_audit_dropped) — non-zero
+    priority=high = a lost security audit, alertable. _spawn_audit_event reads payload["decision"] (no caller
+    change). NEW TEST test_mcp_audit_backpressure_priority.py (5). Gate: 5 + 1552 gateway passed 0 failed;
+    broker 108. Evidence mcp-parallel/findings/backstop-p-audit-backpressure-priority/. (Observability/audit
+    fix — no content leak, so no aidefence oracle; proof is the shed-decision + drop-metric behavior test.)
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

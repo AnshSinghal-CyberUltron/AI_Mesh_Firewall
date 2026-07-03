@@ -1299,6 +1299,23 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   streaming-split suite covers the CHAT `SecureStreamingResponse` guard — a DIFFERENT mechanism; this MCP SSE
   reframer split-gap was uncovered.
 
+- **CHG-0094** (2026-07-03) — **MEDIUM audit-completeness gap: MCP audit backpressure dropped SECURITY
+  audits under load**. `_spawn_audit_event` (mcp_proxy.py) sheds audit POSTs at inflight ≥
+  `_AUDIT_MAX_INFLIGHT`(64) — correct backpressure — but INDISCRIMINATELY: under 5k–10k concurrent calls +
+  slow control the 64 slots fill and `block`/`redact`/`rate_limited`/`error` audits drop too. An attack
+  producing many blocks fills the queue and drops the very block/redact audits it created → the
+  `…→tag→AUDIT` chain breaks silently (only a `LOG.warning`, no metric). **FIX:** priority-aware shedding —
+  security decisions get a higher ceiling (`_AUDIT_MAX_INFLIGHT_HIGH=256`, env-overridable) so the
+  high-volume `allow`/`monitor`/`clean` records shed first and the security audits survive; the shared
+  counter still bounds total inflight to 256 (memory bounded). + new metric
+  `amf_gateway_mcp_audit_dropped_total{priority,decision}` (`metrics.record_mcp_audit_dropped`, fail-safe) —
+  a non-zero `priority="high"` series = a lost security audit, alertable. `_spawn_audit_event` reads
+  `payload["decision"]` (already present) → no caller change. NEW TEST
+  `test_mcp_audit_backpressure_priority.py` (5). Gate: 5 + 1552 gateway passed, 0 failed; broker 108. touched:
+  owning-session proxy audit sink (CP49) + CHG-0087/0088 metrics. Evidence
+  `mcp-parallel/findings/backstop-p-audit-backpressure-priority/`. (Observability fix — no content leak, so no
+  aidefence oracle; proof is the shed-decision + drop-metric behavior test.)
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

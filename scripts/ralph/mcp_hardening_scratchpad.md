@@ -470,6 +470,18 @@
       Evidence mcp-parallel/findings/backstop-p-sse-multiline-split/finding.md. Note: E14 streaming-split tests
       cover the CHAT SecureStreamingResponse guard — a DIFFERENT mechanism; this MCP SSE reframer gap was
       uncovered.
+      CHG-0094 (2026-07-03, MEDIUM audit-completeness gap — MCP audit backpressure dropped SECURITY audits
+      under load): _spawn_audit_event (mcp_proxy.py) sheds audit POSTs at inflight >= _AUDIT_MAX_INFLIGHT(64)
+      but INDISCRIMINATELY — under 5k–10k concurrent calls + slow control the slots fill and block/redact/
+      rate_limited/error audits drop too; an attack producing many blocks drops the very block audits it made,
+      breaking the …→tag→AUDIT chain silently (only LOG.warning, no metric). FIX: priority-aware shedding —
+      security decisions get a higher ceiling (_AUDIT_MAX_INFLIGHT_HIGH=256, env-overridable) so allow/monitor/
+      clean shed first and security audits survive; shared counter bounds total inflight to 256. + metric
+      amf_gateway_mcp_audit_dropped_total{priority,decision} (record_mcp_audit_dropped) — non-zero priority=high
+      = lost security audit, alertable. _spawn_audit_event reads payload["decision"] (no caller change). NEW
+      TEST test_mcp_audit_backpressure_priority.py (5). Gate: 5 + 1552 gateway passed 0 failed; broker 108.
+      Evidence mcp-parallel/findings/backstop-p-audit-backpressure-priority/finding.md. (Observability fix — no
+      content leak, so no aidefence oracle; proof is the shed-decision + drop-metric behavior test.)
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

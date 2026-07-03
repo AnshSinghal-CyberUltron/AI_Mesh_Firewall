@@ -131,6 +131,17 @@ if _PROM_AVAILABLE:
         buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
         registry=REGISTRY,
     )
+    # CHG-0094: MCP audit records DROPPED under backpressure (inflight >= cap), labeled
+    # by priority (high = block/redact/rate_limited/error security decisions; normal =
+    # allow/monitor/clean) and decision. A non-zero high-priority count means a security
+    # decision was made but its audit record was lost — the ...->tag->AUDIT chain broke
+    # under load; alert on it (item 13/20 audit-completeness under peak load).
+    mcp_audit_dropped_total = Counter(
+        "amf_gateway_mcp_audit_dropped_total",
+        "MCP audit records dropped under backpressure, by priority and decision.",
+        ["priority", "decision"],
+        registry=REGISTRY,
+    )
     bedrock_embed_total = Counter(
         "amf_gateway_bedrock_embed_total",
         "Bedrock Titan embedding calls, labeled by result.",
@@ -295,6 +306,22 @@ def record_mcp_scan_decision(org_slug: str, decision: str, compliance_tags=None,
             mcp_call_seconds.labels(org=org, decision=dec).observe(float(latency_ms) / 1000.0)
         except (TypeError, ValueError):  # pragma: no cover
             pass
+
+
+def record_mcp_audit_dropped(priority: str, decision: str) -> None:
+    """CHG-0094: meter an MCP audit record dropped under backpressure. Best-effort /
+    fail-safe (no-op when prometheus_client is absent). ``priority`` is high|normal;
+    ``decision`` is the dropped record's decision. A non-zero high-priority series is a
+    lost SECURITY-decision audit — the ...->tag->AUDIT chain broke under load."""
+    if not _PROM_AVAILABLE:
+        return
+    try:
+        mcp_audit_dropped_total.labels(
+            priority=_safe_label(priority, "normal"),
+            decision=_safe_label(decision, "unknown"),
+        ).inc()
+    except Exception:  # pragma: no cover - metrics must never break the request path
+        return
 
 
 def record_stream_complete(
