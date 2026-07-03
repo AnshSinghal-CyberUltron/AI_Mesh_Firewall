@@ -585,6 +585,45 @@ def test_ext_proxy_forward_headers_injects_only_upstream_oauth():
     assert "caller-gateway-key" not in out["Authorization"]
 
 
+# ── CHG-0110: least-privilege egress context-minimization. The outbound header set
+# must also strip request-ROUTING / client-IDENTITY / topology headers so a third-party
+# external MCP server never learns the caller's real IP, the internal gateway topology,
+# or the internal URL + org/tenant slug (via referer).
+
+
+def test_ext_proxy_forward_headers_strips_client_ip_and_topology():
+    inbound = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Mcp-Session-Id": "sess-1",
+        "Mcp-Protocol-Version": "2024-11-05",
+        "User-Agent": "vscode",
+        "X-Forwarded-For": "203.0.113.9, 10.0.0.2",
+        "X-Real-IP": "203.0.113.9",
+        "X-Forwarded-Host": "gw.internal.local",
+        "X-Forwarded-Proto": "https",
+        "X-Forwarded-Port": "443",
+        "Forwarded": "for=203.0.113.9;host=gw.internal",
+        "Via": "1.1 gw-internal",
+        "Referer": "https://gw.internal/org/demo/chat",
+    }
+    out = mcp_proxy._ext_proxy_forward_headers(inbound)
+    lower = {k.lower() for k in out}
+    for h in ("x-forwarded-for", "x-forwarded-host", "x-forwarded-proto",
+              "x-forwarded-port", "x-real-ip", "forwarded", "via", "referer"):
+        assert h not in lower, f"{h} leaked to third-party server"
+    # none of the leaked VALUES survive anywhere (client IP, internal host, org slug)
+    blob = json.dumps(out)
+    assert "203.0.113.9" not in blob and "10.0.0.2" not in blob
+    assert "gw.internal" not in blob
+    assert "org/demo" not in blob  # tenant slug not disclosed via referer
+    # protocol / benign headers still forwarded so the MCP handshake works
+    assert out["Content-Type"] == "application/json"
+    assert out["Mcp-Session-Id"] == "sess-1"
+    assert out["Mcp-Protocol-Version"] == "2024-11-05"
+    assert out["User-Agent"] == "vscode"
+
+
 # ── CHG-0038: tools/list VISIBILITY parity with call-time authz. A restricted key
 # must not even SEE tools it would be 403'd on at call time (_tool_allowed_by_key).
 

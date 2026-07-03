@@ -1574,6 +1574,14 @@ _EXT_HOP_BY_HOP_HEADERS = frozenset({"host", "content-length", "transfer-encodin
 _EXT_CREDENTIAL_HEADERS = frozenset({
     "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key",
 })
+# CHG-0110: least-privilege egress context-minimization. Stripping only credentials
+# still forwarded request-ROUTING / client-IDENTITY / topology headers to the untrusted
+# third-party external server — leaking the client's real IP (x-forwarded-for / x-real-ip),
+# the internal gateway host + proxy chain (x-forwarded-host / forwarded / via), and the
+# internal URL + ORG/TENANT slug (referer, e.g. https://gw.internal/org/<slug>/chat). An
+# MCP server needs NONE of these; drop them so a third party sees neither the caller's IP
+# nor the internal topology/tenant. (``x-forwarded-*`` handled by prefix below.)
+_EXT_ROUTING_HEADERS = frozenset({"x-real-ip", "forwarded", "via", "referer", "referrer"})
 
 # CHG-0039: MCP request/response methods whose result is FINITE (bounded) and can
 # carry content the 1.4 result scan must inspect. An SSE response for one of these
@@ -1614,7 +1622,9 @@ def _ext_proxy_forward_headers(inbound, *, oauth_token: str | None = None) -> di
         kl = str(k).lower()
         if kl in _EXT_HOP_BY_HOP_HEADERS or kl in _EXT_CREDENTIAL_HEADERS:
             continue
-        if kl.startswith("x-gateway-"):
+        if kl in _EXT_ROUTING_HEADERS:  # CHG-0110: client-IP / topology / tenant leak
+            continue
+        if kl.startswith("x-gateway-") or kl.startswith("x-forwarded-"):
             continue
         out[k] = v
     if oauth_token:

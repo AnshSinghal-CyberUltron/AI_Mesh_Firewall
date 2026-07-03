@@ -1588,6 +1588,23 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   Evidence `mcp-parallel/findings/backstop-p-inbound-redact-audit/`. Inbound-redact audit now at parity across all
   4 tool-call paths.
 
+- **CHG-0110** (2026-07-03) — **LOW-MED least-privilege / context-minimization: ext-proxy egress leaked client IP /
+  internal topology / org slug to third-party servers**. `_ext_proxy_forward_headers` (the transparent EXTERNAL
+  proxy outbound header set) is a DENYLIST — it stripped credentials (`authorization`/`cookie`/`x-api-key`,
+  CHG-0033) + `x-gateway-*` + hop-by-hop, but forwarded EVERYTHING else to the untrusted third-party server. So
+  request-ROUTING / client-IDENTITY headers leaked: `x-forwarded-for`/`x-real-ip` (caller's real public IP + an
+  internal IP), `x-forwarded-host`/`forwarded`/`via` (internal gateway host + proxy chain), and `referer` (internal
+  URL **+ the ORG/TENANT slug**, e.g. `https://gw.internal/org/demo/chat`). Byte-verified pre-fix: `203.0.113.9` +
+  `10.0.0.2` + `gw.internal` + `org/demo` all egressed. **FIX (`mcp_proxy.py`):** also drop `_EXT_ROUTING_HEADERS`
+  (`x-real-ip`, `forwarded`, `via`, `referer`, `referrer`) + any `x-forwarded-*` (prefix). A third-party server now
+  sees only protocol/benign headers (`content-type`, `accept`, `mcp-session-id`, `mcp-protocol-version`,
+  `user-agent`) + the gateway's OWN injected upstream OAuth — NEITHER the caller's IP, NOR the internal topology,
+  NOR the tenant slug. Credential-stripping (CHG-0033) unchanged. NEW TEST (+1 in `test_mcp_bare_proxy_scan.py`).
+  Gate: 3 `forward_headers` + 1682 gateway passed, 0 failed; broker 120 (unaffected). NOT a credential leak (creds
+  already stripped) → privacy / topology / tenant-identity minimization; aidefence is blind to the IP/header class
+  (`piiFound=false` on the raw blob) → byte-level header-absence assertion is authoritative. touched: owning-session
+  `_ext_proxy_forward_headers` (extends CHG-0033). Evidence `mcp-parallel/findings/backstop-p-ext-egress-header-minimization/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

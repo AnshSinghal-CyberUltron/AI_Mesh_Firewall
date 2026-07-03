@@ -1193,6 +1193,19 @@
       (unaffected). NOT a leak (egress already redacted) — audit-visibility fix; oracle (aidefence): forwarded
       masked args has_pii false. Evidence mcp-parallel/findings/backstop-p-inbound-redact-audit/finding.md. Inbound-
       redact audit now at parity across all 4 tool-call paths (main/internal/REST/ext).
+      CHG-0110 (2026-07-03, LOW-MED least-privilege/context-minimization): ext-proxy egress leaked client IP /
+      internal topology / org slug to third-party servers. _ext_proxy_forward_headers (transparent EXTERNAL proxy
+      outbound header set) is a DENYLIST — stripped credentials (authorization/cookie/x-api-key CHG-0033) + x-gateway-*
+      + hop-by-hop, but forwarded EVERYTHING else. So x-forwarded-for/x-real-ip (caller real IP + internal IP),
+      x-forwarded-host/forwarded/via (internal host + proxy chain), referer (internal URL + ORG/TENANT slug e.g.
+      https://gw.internal/org/demo/chat) leaked to the untrusted third party. Byte-verified pre-fix: 203.0.113.9 +
+      10.0.0.2 + gw.internal + org/demo all egressed. FIX (mcp_proxy.py): also drop _EXT_ROUTING_HEADERS (x-real-ip,
+      forwarded, via, referer, referrer) + any x-forwarded-* (prefix); third party now sees only content-type/accept/
+      mcp-session-id/mcp-protocol-version/user-agent + gateway's own upstream OAuth. NEW TEST (+1 in
+      test_mcp_bare_proxy_scan.py). Gate: 3 forward_headers + 1682 gateway passed 0 failed; broker 120 (unaffected).
+      NOT a credential leak (creds already stripped) -> privacy/topology/tenant-identity minimization; aidefence blind
+      to IP/header class -> byte-level header-absence authoritative. Evidence mcp-parallel/findings/backstop-p-ext-
+      egress-header-minimization/finding.md.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.
