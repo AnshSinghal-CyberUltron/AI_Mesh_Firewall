@@ -70,6 +70,14 @@
  recommendation → REDACT under any posture when bytes can be masked; unmaskable PII
  always fails closed to BLOCK regardless of enforcement_mode. 17 new tests in
  test_enforcement.py. Gate: 28 targeted + 1965 full suite passed.
+ - PIPELINE-0011 (2026-07-03) — TIER-1 FP FIXED (L3): plain-text PII with unrelated
+ markup (**bold**, &#169;) no longer classified as "Markdown/HTML-obfuscated" (→ redact, not
+ block). Root cause: G33/G53/G76 obfuscation detectors compared decoded-variant detections
+ against "raw" detections using detect_*/detect_secrets, but those canonicalize internally
+ (strip ZWC, fold fullwidth) → (a) plain SSN near **bold** wrongly obfuscated, (b) ZWC-
+ interleaved credential wrongly filtered OUT. FIX: use _*_core variants (no canon) for the
+ plain-text filter in scanner.py (G33+G53) + mcp_scan_orchestrator.py (G76). 17 new tests
+ in test_pipeline_obfuscation_fp.py. Gate: 17 targeted + 2000 full suite passed.
 
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is

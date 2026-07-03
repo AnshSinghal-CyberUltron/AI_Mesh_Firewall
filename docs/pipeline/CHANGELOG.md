@@ -2,6 +2,59 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0011 (2026-07-03)
+
+**Tier-1 false positive fixed (L3): plain-text PII no longer classified as
+"Markdown/HTML-obfuscated".**
+
+Root Cause:
+- The G33 (text-encoding), G53 (markdown-emphasis), and G76 (MCP encoded-exfil)
+  obfuscation detectors fire when *any* decoded/stripped variant reveals
+  PII/secret that the original text didn't contain. The intended contract: only
+  classify as "obfuscated" if the detection was genuinely REVEALED by decoding —
+  i.e., the pattern was hidden by encoding/markup and only became detectable
+  after stripping.
+- Bug: all four `detect_*` functions (`detect_pii`, `detect_secrets`,
+  `detect_credential_exposure`, `detect_ip_leakage`) internally canonicalize
+  via `canonicalize_for_detection()` (strips zero-width characters, folds
+  fullwidth, etc.). The G33/G53/G76 guards compared decoded-variant detections
+  against "raw-text detections" to filter out kinds already present in plain
+  text — but the "raw" detections used the canonicalizing `detect_*` functions.
+  This caused two classes of false positive:
+  1. **Plain PII + unrelated markup**: A sentence with a plain SSN and an
+     unrelated `**bold**` word or `&#169;` entity. `strip_interleaved_emphasis`
+     removes the emphasis markup → `detect_pii` finds the SSN (which was
+     already in plain text). The guard `_md_stripped != _msrc` fires because
+     emphasis WAS stripped somewhere, and since `detect_pii(stripped)` found the
+     SSN, it was wrongly classified as "obfuscated" → block instead of redact.
+  2. **ZWC-obfuscated secrets (correctness)**: Conversely, a ZWC-interleaved
+     credential (e.g., `sk\u200b-ant\u200b-...`) was detected by `detect_secrets(raw)`
+     via internal canonicalization → appeared in `_raw_detected_kinds` → filtered
+     out of `_hidden` → lost the genuine obfuscation-block.
+
+Fix:
+- Replace all four `detect_*` calls in the plain-text filter with their `_*_core`
+  counterparts (`_detect_pii_core`, `_detect_secrets_core`,
+  `_detect_credential_exposure_core`, `_detect_ip_leakage_core`) which perform
+  NO internal canonicalization. These accurately report what is detectable in
+  the truly raw text without any deobfuscation.
+- Applied to three sites: `scanner._scan_prompt_sync` G33 + G53 blocks,
+  `mcp_scan_orchestrator._scan_text_tier1_sync` G76 block.
+- Net effect: plain-text PII with unrelated markup → "pii" threat_type (redact),
+  never "obfuscated_pii" (block). Genuinely obfuscated content (ZWC, HTML-entity,
+  markdown-emphasis split) → still correctly blocked.
+
+Tests:
+- New `test_pipeline_obfuscation_fp.py` — 17 test cases:
+  - 6 plain-PII-with-emphasis/entity → action=redact, threat_type=pii (not
+    obfuscated_pii)
+  - 4 genuinely obfuscated → action=block, threat_type=obfuscated_*
+  - 2 MCP orchestrator (plain secret + entity vs genuinely encoded secret)
+  - 5 benign markdown/entity → action=allow
+
+Gate: 17 targeted + 2000 full suite passed, 0 failed. No regression on
+CHG-0076/0079/0083 (74 obfuscation/unicode/tools-list-audit tests all green).
+
 ## PIPELINE-0010 (2026-07-03)
 
 **resolve_enforcement REDACT mapping fixed (L5).**

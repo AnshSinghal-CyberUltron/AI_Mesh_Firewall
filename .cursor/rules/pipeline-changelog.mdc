@@ -87,3 +87,12 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   posture. Two bugs: (1) policy=block+mode!=block lost data-protection redaction at
   resolve_enforcement level; (2) unmaskable PII under non-block mode forwarded raw (honesty
   check missed is_terminal_block). 17 new tests. Gate: 28 targeted + 1965 full suite passed.
+- PIPELINE-0011 (2026-07-03) — TIER-1 FP FIXED (L3): plain-text PII with unrelated
+  markup (bold/entity/emphasis) no longer classified as "Markdown/HTML-obfuscated" → redact
+  (not block). Root cause: G33/G53/G76 obfuscation detectors compared decoded-variant
+  detections against "raw" detections from detect_*/detect_secrets, but those functions
+  internally canonicalize (strip ZWC, fold fullwidth), so (a) a plain SSN near **bold** was
+  wrongly classified as obfuscated, and (b) a ZWC-interleaved credential was wrongly filtered
+  OUT of the obfuscation list. Fix: use _*_core variants (no canonicalization) for the
+  plain-text filter in scanner.py (G33+G53) + mcp_scan_orchestrator.py (G76). 17 new tests.
+  Gate: 17 targeted + 2000 full suite passed.

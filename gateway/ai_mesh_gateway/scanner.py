@@ -36,6 +36,9 @@ try:
         detect_secrets,
         detect_credential_exposure,
         detect_ip_leakage,
+        _detect_pii_core,
+        _detect_secrets_core,
+        _detect_credential_exposure_core,
         redact_all,
         strip_interleaved_emphasis,
         canonicalize_for_detection,
@@ -56,6 +59,9 @@ except ImportError:
         detect_secrets,
         detect_credential_exposure,
         detect_ip_leakage,
+        _detect_pii_core,
+        _detect_secrets_core,
+        _detect_credential_exposure_core,
         redact_all,
         strip_interleaved_emphasis,
         canonicalize_for_detection,
@@ -1341,6 +1347,11 @@ class InputScanner:
         _canon_in = canonicalize_for_detection(text)
         _enc_sources_in = (text,) if _canon_in == text else (text, _canon_in)
         for _esrc in _enc_sources_in:
+            # PIPELINE-0011: compute raw detections on the source ONCE so the
+            # loop can filter out kinds that were already detectable WITHOUT
+            # any decoding/stripping (plain PII, not obfuscated).
+            _esrc_pii = _detect_pii_core(_esrc)
+            _esrc_sec = _detect_secrets_core(_esrc)
             for _variant in _decode_text_encoding_variants(_esrc):
                 # G91: the decoded value may ALSO be markdown-emphasis-split (entity-decode of
                 # ``&#49;*&#50;*...`` yields ``1*2*3*...``), so also strip emphasis from the decoded
@@ -1353,6 +1364,10 @@ class InputScanner:
                 for _cv in _in_cands:
                     _v_pii = detect_pii(_cv)
                     _v_secret = detect_secrets(_cv)
+                    # PIPELINE-0011: filter out kinds already detectable in the
+                    # un-decoded source — those are plain PII, not obfuscated.
+                    _v_pii = {k: v for k, v in _v_pii.items() if k not in _esrc_pii}
+                    _v_secret = {k: v for k, v in _v_secret.items() if k not in _esrc_sec}
                     if _v_pii or _v_secret:
                         _kinds = list(_v_pii.keys()) + list(_v_secret.keys())
                         return ScanVerdict(
@@ -1385,6 +1400,21 @@ class InputScanner:
                 # internal-IP leakage is an OUTPUT concern (a user-supplied IP is not exfil).
                 _s_cred = detect_credential_exposure(_md_stripped)
                 if _s_pii or _s_secret or _s_cred:
+                    # PIPELINE-0011: plain-text PII must NOT be classified as
+                    # "Markdown/HTML-obfuscated". The ``_md_stripped != _msrc`` guard
+                    # fires whenever ANY emphasis was stripped ANYWHERE in the text,
+                    # even if the detected PII/secret span was already in plain text
+                    # (no emphasis markers around it). Re-run detection on the
+                    # UN-stripped source: any pattern key also present there was
+                    # already detectable without stripping → plain PII, not obfuscated.
+                    _raw_pii = _detect_pii_core(_msrc)
+                    _raw_sec = _detect_secrets_core(_msrc)
+                    _raw_crd = _detect_credential_exposure_core(_msrc)
+                    _s_pii = {k: v for k, v in _s_pii.items() if k not in _raw_pii}
+                    _s_secret = {k: v for k, v in _s_secret.items() if k not in _raw_sec}
+                    _s_cred = {k: v for k, v in _s_cred.items() if k not in _raw_crd}
+                    if not (_s_pii or _s_secret or _s_cred):
+                        continue
                     _skinds = list(_s_pii.keys()) + list(_s_secret.keys()) + list(_s_cred.keys())
                     return ScanVerdict(
                         action="block",

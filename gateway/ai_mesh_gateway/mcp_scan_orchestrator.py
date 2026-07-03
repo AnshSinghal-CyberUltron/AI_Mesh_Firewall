@@ -528,6 +528,22 @@ def _scan_text_tier1_sync(
         # IP hidden that way dodges the raw regexes but the model reads it deobfuscated.
         if _deob != text:
             _variants.append(_deob)
+        # PIPELINE-0011: collect kinds detectable in the TRULY RAW text (no
+        # canonicalization) so the encoded-exfil check only fires on kinds
+        # genuinely REVEALED by decoding/deobfuscation, not plain-text kinds.
+        # ALL four detect_* functions internally canonicalize (strip ZWC, fold
+        # fullwidth), so a ZWC-hidden credential appears in the detect_* result
+        # even though it's really obfuscated — use the _*_core variants (no
+        # canon) for the filter.
+        from patterns import (  # local: no cycle
+            _detect_pii_core, _detect_secrets_core,
+            _detect_ip_leakage_core, _detect_credential_exposure_core,
+        )
+        _raw_detected_kinds: set[str] = set()
+        _raw_detected_kinds.update(_detect_pii_core(text).keys())
+        _raw_detected_kinds.update(_detect_secrets_core(text).keys())
+        _raw_detected_kinds.update(_detect_ip_leakage_core(text).keys())
+        _raw_detected_kinds.update(_detect_credential_exposure_core(text).keys())
         for _variant in _variants:
             if _variant == text:
                 continue
@@ -550,6 +566,9 @@ def _scan_text_tier1_sync(
                 k: v for k, v in detect_pii(_variant).items()
                 if "SECRET" in get_compliance_tags([k])
             })
+            # PIPELINE-0011: filter out kinds already detected in plain text.
+            _hidden = {k: v for k, v in _hidden.items()
+                       if k not in _raw_detected_kinds}
             if _hidden:
                 findings.append(
                     McpFinding(
