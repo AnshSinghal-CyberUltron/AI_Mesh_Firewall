@@ -172,7 +172,10 @@ def canonicalize_for_detection(text: str) -> str:
 # a legitimate ``sk_live_``/token prefix (masking the credential detector). Emphasis that
 # WRAPS a whole token (space-adjacent ``**bold**`` / ``_italic_``) is left intact. Disjoint
 # char classes on both sides -> linear (no ReDoS).
-_MD_EMPH_INTERLEAVE = re.compile(r"(?<=[\w@.\-])[*`]+(?=[\w@.\-])")
+# Only 1–2 interleaved markers are markdown emphasis (``1**2**3``). Smart partial
+# redaction masks use 3+ asterisks (``j***@a***.com``, ``***-**-6789``) — stripping
+# those reconstructs a false PII hit (G53 obfuscated_pii FP on already-masked text).
+_MD_EMPH_INTERLEAVE = re.compile(r"(?<=[\w@.\-])[*`]{1,2}(?=[\w@.\-])")
 
 # G51: markup a renderer DROPS (renders to nothing) — an attacker splits a value with it
 # to evade byte-level matching while it visually reassembles: HTML COMMENTS (<!-- … -->),
@@ -192,6 +195,39 @@ def strip_interleaved_emphasis(text: str) -> str:
     exposing a value split to evade byte-level matching: markdown emphasis (``*`` / `` ` ``)
     AND render-invisible HTML (comments / empty tags — G51). Detection-only helper."""
     return _RENDER_INVISIBLE_HTML.sub("", _MD_EMPH_INTERLEAVE.sub("", text))
+
+
+_SMART_MASK_SHAPE_RE = re.compile(
+    r"\b(?:"
+    r"[A-Za-z]\*\*\*@[A-Za-z]\*\*\*\.[A-Za-z]{2,24}"
+    r"|\*\*\*-\*\*-\d{4}"
+    r"|\*\*\*-\*\*\*-\d{4}"
+    r"|\*\*\*\*-\*\*\*\*-\*\*\*\*-\d{4}"
+    r")\b"
+)
+
+
+def contains_smart_redaction_markers(text: str) -> bool:
+    """True when the text carries policy/redact_all smart partial-mask shapes."""
+    return bool(_SMART_MASK_SHAPE_RE.search(text or ""))
+
+
+def smart_mask_redaction_noop_is_expected(
+    prompt: str,
+    matched_pattern_keys: list | None = None,
+) -> bool:
+    """True when a redact no-op on ``prompt`` is expected (already smart-masked).
+
+    PIPELINE-0012: partial masks (j***@a***.com, ***-**-6789, …) are unchanged
+    by redact_all by design — the B1 honesty guard must not treat that as
+    unmaskable PII.
+    """
+    if not contains_smart_redaction_markers(prompt):
+        return False
+    keys = matched_pattern_keys or []
+    if not keys:
+        return True
+    return all(str(k).endswith("_smart_masked") for k in keys)
 
 
 # --- bounded transport decode (G2): surface PII/secrets hidden in base64/hex ---
@@ -582,6 +618,12 @@ PII_PATTERNS: Dict[str, str] = {
     # adjacent digits. Version strings ("1.2.3") and dotted-quad IPs do not fit
     # the exact 3.3.4 digit-count shape.
     "phone_dotted": r"\b\d{3}\.\d{3}\.\d{4}\b",
+    # Smart partial masks emitted by policy/redact_all (j***@e***.com, ***-**-6789, …).
+    # Already-redacted spans must classify as PII → redact (not G53 obfuscated-block).
+    "email_smart_masked": r"\b[A-Za-z]\*\*\*@[A-Za-z]\*\*\*\.[A-Za-z]{2,24}\b",
+    "ssn_smart_masked": r"\b\*\*\*-\*\*-\d{4}\b",
+    "phone_smart_masked": r"\b\*\*\*-\*\*\*-\d{4}\b",
+    "card_smart_masked": r"\b\*\*\*\*-\*\*\*\*-\*\*\*\*-\d{4}\b",
     # Contextual bare 10-digit US phone. Tier-2 detects these semantically, but
     # phone_us intentionally skips separatorless runs (order IDs, revenue figures).
     # Only match when an explicit phone/contact lead-in immediately precedes the
@@ -1012,7 +1054,18 @@ def _detect_pii_core(text: str) -> Dict[str, str]:
         for pii_type, pattern_str in group.items():
             compiled = compile_pattern(pattern_str)
             match = compiled.search(text)
-            if match:
+            if not match:
+                continue
+            if pii_type == "credit_card":
+                # A card must pass Luhn; a bare 16-digit run (id / numeric schema
+                # bound / timestamp) is a false positive. Record the first Luhn-valid
+                # occurrence, or skip credit_card entirely.
+                card = next((mm.group(0) for mm in compiled.finditer(text)
+                             if _luhn_ok(mm.group(0))), None)
+                if card is None:
+                    continue
+                found.setdefault(pii_type, card)
+            else:
                 found.setdefault(pii_type, match.group(0))
     return found
 
@@ -1109,9 +1162,34 @@ def _mask_email(m: re.Match) -> str:
         return "[EMAIL]"
 
 
+def _luhn_ok(s: str) -> bool:
+    """Luhn (mod-10) checksum. A real payment card passes Luhn; a bare 16-digit run
+    (an order id, a numeric schema bound like ``"maximum": <n>``, a unix-nanos
+    timestamp) almost never does. Gating the ``credit_card`` detector/masker on this
+    stops the firewall false-positive-redacting non-card numerics — which was
+    corrupting MCP tool-discovery JSON (``"maximum": <bignum>`` → ``****-****-****-NNNN``
+    → invalid JSON → MCP_UNAVAILABLE) and over-redacting ordinary numbers everywhere."""
+    digits = [int(c) for c in s if c.isdigit()]
+    if not (13 <= len(digits) <= 19):
+        return False
+    total = 0
+    for i, d in enumerate(reversed(digits)):
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+
 def _mask_credit_card(m: re.Match) -> str:
-    """4111-1111-1111-1111 → ****-****-****-1111"""
-    digits = re.sub(r"[\s\-]", "", m.group(0))
+    """4111-1111-1111-1111 → ****-****-****-1111. Luhn-gated: a 16-digit run that fails
+    the checksum is NOT a card — returned UNCHANGED so redaction never corrupts non-card
+    numerics (schema bounds, ids, timestamps)."""
+    raw = m.group(0)
+    digits = re.sub(r"[\s\-]", "", raw)
+    if not _luhn_ok(digits):
+        return raw
     return f"****-****-****-{digits[-4:]}"
 
 
@@ -1193,10 +1271,19 @@ def _mask_phone_bare_contextual(m: re.Match) -> str:
     return s[: digits_match.start()] + masked + s[digits_match.end() :]
 
 
+def _mask_identity(m: re.Match) -> str:
+    """Already smart-masked value — leave bytes unchanged."""
+    return m.group(0)
+
+
 _PII_MASKERS = {
     "email": _mask_email,
     "credit_card": _mask_credit_card,
     "ssn": _mask_ssn,
+    "email_smart_masked": _mask_identity,
+    "ssn_smart_masked": _mask_identity,
+    "phone_smart_masked": _mask_identity,
+    "card_smart_masked": _mask_identity,
     "ssn_spaced": _mask_ssn_digits,
     "ssn_nosep": _mask_ssn_nosep,
     "phone_us": _mask_phone,
@@ -1313,8 +1400,13 @@ def _detect_all_spans(text: str):
         for label, pattern_str in group.items():
             compiled = compile_pattern(pattern_str)
             for m in compiled.finditer(text):
-                if m.group(0):
-                    yield label, m.start(), m.end()
+                if not m.group(0):
+                    continue
+                # Luhn-gate credit_card so a bare non-card 16-digit run is not
+                # span-redacted (would corrupt numerics / non-card data).
+                if label == "credit_card" and not _luhn_ok(m.group(0)):
+                    continue
+                yield label, m.start(), m.end()
 
 
 # CHG-0058: an ENCODED (base64/hex/url) internal IP/host/URL bypassed the obfuscation
