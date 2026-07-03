@@ -2357,3 +2357,23 @@ skipping structural keys (type/$ref/format); depth≤8, shared char budget 8000.
 → **redact**; benign weather/search schemas → **allow** (no FP); 300 tools × 50 props → 0.3ms, budget-capped
 (DoS-safe). backend `ai_mesh_gateway/tests` **1644 passed**; golden 462×3; ruff clean.
 **Frozen:** `ai_mesh_gateway/tests/test_tool_param_injection.py` (9): 6 threat-caught + 2 benign-FP + 1 DoS-bound.
+
+---
+
+## G82 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — injection via response_format structured-output schema
+Adjacent to G81 (structured content the model reads but the firewall doesn't scan). Checked two candidates:
+- **Legacy `functions[]`:** NOT reachable — `functions` is NOT in `llm_router._PASSTHROUGH_PARAMS`, so the
+  gateway STRIPS it before forwarding; the model never sees it → not a leak (good, drop-by-whitelist).
+- **`response_format.json_schema`:** CONFIRMED REACHABLE LEAK — `response_format` IS in `_PASSTHROUGH_PARAMS`
+  (forwarded to the provider) and the model reads the structured-output schema (json_schema name/description
+  + property descriptions + enum values guide the output). An injection/PII/secret in
+  `response_format.json_schema.schema.properties.X.description` (or the schema description / an enum) reached
+  the model UNSCANNED (verdict allow; the scanned prompt = messages + tool-defs only). OWASP LLM01 indirect.
+**FIX (owned main.py, minimal+claimed):** new `_extract_response_format_text(rf)` folds the model-facing
+schema strings (reusing G81's bounded `_extract_schema_text`) into the scanned prompt at the tool-defs fold
+site (~main.py:5810).
+**Verify:** injection in schema-prop / schema-desc / enum / ALM-obfuscated → **block**; SSN → **redact**;
+benign json_schema + plain json_object (no schema) → **allow** / no-op (no FP). backend `ai_mesh_gateway/tests`
+**1657 passed**; golden 462×3; ruff clean.
+**Frozen:** `ai_mesh_gateway/tests/test_response_format_injection.py` (8): 5 threat + 2 benign-FP + 1 no-op.
+Session ledger: SIX confirmed leaks (G74/G75/G76/G81/G82) + soft DoS (G79) fixed+deployed; G77/G78/G80 frozen.

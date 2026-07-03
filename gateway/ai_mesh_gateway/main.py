@@ -1383,6 +1383,32 @@ def _extract_tool_definitions_text(tools) -> str:
     return "\n".join(parts)
 
 
+def _extract_response_format_text(response_format) -> str:
+    """G82: fold the model-facing strings of a STRUCTURED-OUTPUT schema
+    (``response_format.json_schema``: its name/description + the schema's property
+    descriptions/enum values) into the scanned prompt. ``response_format`` is in
+    ``_PASSTHROUGH_PARAMS`` (forwarded to the provider) and the model reads the schema, so an
+    injection / PII / secret smuggled there would otherwise reach the model UNSCANNED — the same
+    class as the tool-parameter gap (G81). Bounded by the shared schema depth + char budget."""
+    if not isinstance(response_format, dict):
+        return ""
+    js = response_format.get("json_schema")
+    if not isinstance(js, dict):
+        return ""
+    budget = [_TOOL_SCHEMA_TEXT_BUDGET]
+    parts: list[str] = []
+    name = js.get("name") or ""
+    desc = js.get("description") or ""
+    if name or desc:
+        parts.append(f"response_schema[{name}]: {desc}")
+    schema = js.get("schema")
+    if isinstance(schema, (dict, list)):
+        schema_strs = _extract_schema_text(schema, 0, budget)
+        if schema_strs:
+            parts.append("response_schema_props: " + " ".join(schema_strs))
+    return "\n".join(parts)
+
+
 def _extract_agent_data(body: dict, x_agent_data: str | None):
     """agent_data from body.agent_data, body.mcp_context, or X-Agent-Data header.
 
@@ -5810,6 +5836,11 @@ async def proxy_chat(
         _tool_defs_text = _extract_tool_definitions_text(body.get("tools"))
         if _tool_defs_text:
             prompt = (prompt + "\n" + _tool_defs_text) if prompt else _tool_defs_text
+        # G82: fold the structured-output response_format json_schema (name/description +
+        # property descriptions/enums) — it is forwarded to the provider and read by the model.
+        _rf_text = _extract_response_format_text(body.get("response_format"))
+        if _rf_text:
+            prompt = (prompt + "\n" + _rf_text) if prompt else _rf_text
         _prompt_snippet = prompt[:500] if prompt else ""
         agent_data = _extract_agent_data(body, x_agent_data)
 
