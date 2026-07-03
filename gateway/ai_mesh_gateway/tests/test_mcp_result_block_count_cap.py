@@ -90,5 +90,59 @@ def test_cap_is_positive_and_env_configurable():
     assert mcp_proxy._MCP_MAX_CONTENT_BLOCKS == int(os.environ.get("MCP_MAX_CONTENT_BLOCKS", "10000"))
 
 
+
+
+# ── CHG-0115: PROACTIVE nesting-depth cap (deeply-nested result resource bomb). A
+# structure nested past the recursion limit would RecursionError mid-scan (fail-closed but
+# fragile / generic reason); the floor now blocks it O(depth-bounded) BEFORE the scan with a
+# clear reason, and the guard itself is ITERATIVE so it cannot be DoS'd by the deep payload.
+
+
+def _nest_dict(n):
+    o = {"leaf": "x"}
+    for _ in range(n):
+        o = {"k": o}
+    return o
+
+
+def test_exceeds_nesting_depth_is_iterative_no_recursion():
+    # 50k deep must NOT RecursionError the guard itself.
+    assert mcp_proxy._exceeds_nesting_depth(_nest_dict(50000), 500) is True
+    assert mcp_proxy._exceeds_nesting_depth({"a": {"b": {"c": "x"}}}, 500) is False
+    # wide-but-shallow is not falsely flagged
+    assert mcp_proxy._exceeds_nesting_depth({"content": [{"t": "x"}] * 5000}, 500) is False
+
+
+@pytest.mark.asyncio
+async def test_deeply_nested_result_fails_closed_with_clear_reason():
+    scanned, blocked, tags, findings, meta = await _floor(
+        {"structuredContent": _nest_dict(20000)},
+        enabled_info={"default_scan_action": "redact"})
+    assert blocked is True
+    assert meta.get("result_too_deeply_nested") is True
+    assert meta.get("max_result_depth") == mcp_proxy._MCP_MAX_RESULT_DEPTH
+    assert "RESOURCE_LIMIT" in tags
+
+
+@pytest.mark.asyncio
+async def test_shallow_result_not_blocked_by_depth_cap():
+    # A realistic (a few levels) result scans normally + masks PII (not depth-blocked).
+    scanned, blocked, tags, findings, meta = await _floor(
+        {"content": [{"type": "text", "text": "user bob@corp.example"}]},
+        enabled_info={"default_scan_action": "redact"})
+    assert blocked is False
+    assert "bob@corp.example" not in json.dumps(scanned)
+
+
+@pytest.mark.asyncio
+async def test_monitor_action_skips_depth_cap():
+    # A per-tool "monitor" override is observe-only and must not block (parity with the
+    # block-count cap).
+    _, blocked, _, _, _ = await _floor(
+        {"structuredContent": _nest_dict(20000)},
+        enabled_info={"tool_scan_actions": {"fetch": "monitor"}})
+    assert blocked is False
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

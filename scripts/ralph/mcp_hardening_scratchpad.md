@@ -1259,6 +1259,17 @@
       defanged. +6 tests. Gate: 33 exfil + 1699 gateway passed 0 failed; broker unaffected. Oracle N/A (DoS + beacon-
       defang; byte assertions authoritative). RESIDUAL: beacon nested past the 200 cap not per-leaf-defanged (not a
       realistic client auto-render vector). Evidence mcp-parallel/findings/backstop-p-exfil-deep-nest-dos/finding.md.
+      CHG-0115 (2026-07-03, LOW-MED resource-bomb containment + monitor fix): proactive nesting-depth cap on tool
+      RESULTS. A result STRUCTURE nested thousands deep makes the recursive scan hit Python's recursion limit (~1000)
+      -> RecursionError; the floor's except already fail-CLOSED (safe, no leak) but (a) relied on catching a fragile
+      mid-scan RecursionError (generic SCAN_ERROR) and (b) under a per-tool "monitor" action (observe-only, must NEVER
+      block) the scan still ran, RecursionError'd, fail-closed -> a WRONGFUL block violating monitor. FIX
+      (mcp_proxy.py): new ITERATIVE _exceeds_nesting_depth (own stack, can't be recursion-DoS'd) runs BEFORE the scan;
+      past _MCP_MAX_RESULT_DEPTH (500, env MCP_MAX_RESULT_DEPTH) branches on action -> real action: fail-closed
+      RESOURCE_LIMIT + result_too_deeply_nested; monitor: forward UNSCANNED (never block, monitor_scan_skipped). Deep
+      results can't crash the scan, get a clear reason, monitor stays observe-only. +4 tests. Gate: 11 block-count-cap
+      + 1703 gateway passed 0 failed; broker unaffected. Oracle N/A (DoS containment, no PII-text delta). Extends
+      CHG-0104 / complements CHG-0114. Evidence mcp-parallel/findings/backstop-p-result-depth-cap/finding.md.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

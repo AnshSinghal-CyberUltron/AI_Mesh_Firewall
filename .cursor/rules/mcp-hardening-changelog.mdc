@@ -1680,6 +1680,20 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   per-leaf-defanged (not a realistic client auto-render vector; closing the stack-DoS is the priority). touched: the
   owning-session orchestrator `_neutralize_exfil_deep`. Evidence `mcp-parallel/findings/backstop-p-exfil-deep-nest-dos/`.
 
+- **CHG-0115** (2026-07-03) — **LOW-MED resource-bomb containment + monitor fix: proactive nesting-depth cap on tool
+  RESULTS**. A result STRUCTURE nested thousands deep makes the recursive scan/serialize hit Python's recursion limit
+  (~1000) → `RecursionError`. `_scan_tool_result_floor`'s except already fail-CLOSED (so it never LEAKED), but (a) it
+  relied on catching a fragile mid-scan RecursionError (generic `SCAN_ERROR`) and (b) under a per-tool **`monitor`**
+  action (observe-only, must NEVER block) the scan still ran, RecursionError'd, and fail-closed → a WRONGFUL block
+  violating the monitor contract. **FIX (`mcp_proxy.py`):** a new O(depth-bounded), ITERATIVE `_exceeds_nesting_depth`
+  (its own explicit stack — the guard can't itself be recursion-DoS'd) runs BEFORE the scan; past
+  `_MCP_MAX_RESULT_DEPTH` (500, env `MCP_MAX_RESULT_DEPTH`) it branches on the resolved action — real action → fail
+  CLOSED (`result_too_deeply_nested` + `RESOURCE_LIMIT`); `monitor` → forward UNSCANNED (never block,
+  `monitor_scan_skipped`). Deep results can no longer crash the scan, get a clear audit reason, and monitor stays
+  observe-only. +4 tests. Gate: 11 block-count-cap + 1703 gateway passed, 0 failed; broker unaffected (gateway-only).
+  Oracle N/A — DoS-containment/robustness fix, no PII-text leak delta. touched: result floor `_scan_tool_result_floor`
+  (extends CHG-0104; complements CHG-0114). Evidence `mcp-parallel/findings/backstop-p-result-depth-cap/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

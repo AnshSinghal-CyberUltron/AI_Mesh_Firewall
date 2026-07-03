@@ -253,6 +253,35 @@ _MCP_SSE_EVENT_MAX_BYTES = int(os.environ.get("MCP_SSE_EVENT_MAX_BYTES", str(1 *
 # handful of blocks); env-tunable.
 _MCP_MAX_CONTENT_BLOCKS = int(os.environ.get("MCP_MAX_CONTENT_BLOCKS", "10000"))
 
+# CHG-0115: max nesting depth of a tool RESULT structure. A deeply-nested untrusted result
+# (thousands of levels) makes the recursive scan/serialize hit Python's recursion limit
+# (~1000) → RecursionError. The floor's except already fail-CLOSES on that (so it never
+# leaks), but relying on catching a mid-scan RecursionError is fragile and only yields a
+# generic SCAN_ERROR. This PROACTIVE cap detects excessive nesting O(depth-bounded) BEFORE
+# the scan and fail-closes with a clear RESOURCE_LIMIT reason. 500 ≫ any realistic legit
+# result (a handful of levels) and well under the stack limit; env-tunable.
+_MCP_MAX_RESULT_DEPTH = int(os.environ.get("MCP_MAX_RESULT_DEPTH", "500"))
+
+
+def _exceeds_nesting_depth(obj, limit: int) -> bool:
+    """True if ``obj`` nests deeper than ``limit``. ITERATIVE (its own explicit stack)
+    so the guard itself NEVER recurses — a deeply-nested untrusted payload cannot DoS
+    the check that is meant to catch it. Short-circuits on the first over-limit path."""
+    stack = [(obj, 0)]
+    while stack:
+        cur, depth = stack.pop()
+        if depth > limit:
+            return True
+        if isinstance(cur, dict):
+            nxt = depth + 1
+            for v in cur.values():
+                stack.append((v, nxt))
+        elif isinstance(cur, list):
+            nxt = depth + 1
+            for v in cur:
+                stack.append((v, nxt))
+    return False
+
 
 def _mcp_body_too_large(request) -> bool:
     """True when the declared Content-Length exceeds the MCP body ceiling.
@@ -1168,6 +1197,29 @@ async def _scan_tool_result_floor(
             return result_content, True, ["RESOURCE_LIMIT"], [], {
                 "result_too_many_content_blocks": True, "content_block_count": len(_blocks),
             }
+    # CHG-0115: guard an excessively-DEEP result BEFORE the recursive scan. A structure
+    # nested past the recursion limit would otherwise RecursionError mid-scan (the except
+    # below fail-closes on that, but only as a generic SCAN_ERROR — AND under "monitor" that
+    # fail-closed block VIOLATES the observe-only contract). This applies to BOTH actions
+    # (the point is to avoid the recursion CRASH), branching on enforcement: under a real
+    # action → fail CLOSED with a clear RESOURCE_LIMIT reason; under "monitor" → forward the
+    # result UNSCANNED (never block), noting the skip. The check is ITERATIVE so the guard
+    # itself can't be DoS'd by the deep payload.
+    if isinstance(result_content, (dict, list)) and _exceeds_nesting_depth(
+        result_content, _MCP_MAX_RESULT_DEPTH
+    ):
+        LOG.warning(
+            "mcp_proxy.result_too_deeply_nested org=%s server=%s tool=%s (>%d) action=%s",
+            org_slug, server_slug, tool_name, _MCP_MAX_RESULT_DEPTH, scan_action,
+        )
+        if scan_action == "monitor":
+            # Observe-only: never block; forward unscanned (the recursive scan would crash).
+            return result_content, False, [], [], {
+                "result_too_deeply_nested": True, "monitor_scan_skipped": True,
+            }
+        return result_content, True, ["RESOURCE_LIMIT"], [], {
+            "result_too_deeply_nested": True, "max_result_depth": _MCP_MAX_RESULT_DEPTH,
+        }
     try:
         scanned, blocked, tags, findings, meta = await _mcp_security_scan(
             result_content,
