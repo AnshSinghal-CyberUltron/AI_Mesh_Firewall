@@ -2243,3 +2243,22 @@ block**; the golden asserts `_verdict != allow` for the blob cases (B1's no-op�
 golden **444 passed × 3** (was 440; +2 injection-block +2 blob-detect); backend `ai_mesh_gateway/tests`
 1625 passed; ruff clean.
 **Frozen (owned golden):** `test_g75_nested_cf_injection_is_blocked` (2), `test_g75_cf_split_base64_blob_is_detected` (2).
+
+---
+
+## G76 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — whitespace-split base64 laundering
+Probed whitespace/percent/entity/math-bold obfuscation. Percent, HTML-entity, math-bold, rot13-of-b64,
+b64-of-percent were all ALREADY caught (block). **Whitespace-split base64 was a CONFIRMED LEAK:**
+a base64 blob split by ASCII spaces/newlines/tabs (`MTIz LTQ1 LTY3 ODk=`) → scanner verdict **allow**,
+and a whitespace-aware oracle (strip ws → b64decode) recovered `123-45-6789` from the FORWARDED bytes.
+Root cause: `_B64ISH_RE` matches only CONTIGUOUS runs; whitespace splits the token so the blob never
+reassembles/decodes — yet a lenient decoder (and most LLMs) ignore whitespace and recover the payload.
+**FIX (patterns.py):** extended the G75 helper `_iter_transport_decodes_canon` with a WHITESPACE-COLLAPSED
+source (`re.sub(r"\\s+","",...)` over raw AND canonical) so space/newline/tab-split base64/hex reassembles
+and decodes. FP-safe: the existing printable + detect gates reject ordinary prose (collapses to high-entropy
+bytes matching nothing) — verified benign prose / word-lists / benign base64 still ALLOW.
+**Verify:** ssn/key/stripe whitespace-split base64 (space/newline/tab) → **redact** (egress-safe via
+detection→redact→B1); benign prose/lists → allow (no FP). golden **450 passed × 3** (was 444; +4 detect
++2 benign-FP); backend 1625; ruff clean.
+**Frozen:** `test_g76_whitespace_split_base64_is_detected` (4), `test_g76_benign_whitespace_prose_not_flagged` (2).
+Fresh-angle hunt tally this session: G74 (bidi/ALM injection), G75 (nested-Cf ×2), G76 (whitespace-split b64).

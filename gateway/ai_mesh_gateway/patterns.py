@@ -294,14 +294,27 @@ def _iter_transport_decodes(text: str):
 
 
 def _iter_transport_decodes_canon(text: str, canon: str):
-    """G75: yield decoded payloads from transport (base64/hex) blobs in BOTH the raw text and
-    its canonical form, de-duplicated. An attacker can split a base64/hex token with invisible
-    format chars (e.g. U+061C ALM interleaved through the blob) so the RAW token regex never
-    matches it — yet the canonical form (all Cf stripped by canonicalize_for_detection) tokenizes
-    and decodes cleanly, surfacing the buried PII/secret/credential. When canon == text (plain
-    ASCII) this is exactly one pass, so plain-text behaviour is unchanged."""
+    """G75/G76: yield decoded payloads from transport (base64/hex) blobs across several views of
+    the text, de-duplicated:
+      * RAW and CANONICAL (Cf-stripped) forms — G75: catches a token split by invisible format
+        chars (e.g. U+061C ALM interleaved through the blob) that the raw token regex misses.
+      * a WHITESPACE-COLLAPSED form — G76: catches a base64/hex blob split by ASCII spaces/newlines
+        ("MTIz LTQ1 LTY3 ODk="), which the contiguous token regex never reassembles even though a
+        lenient decoder (and most LLMs) ignore whitespace and recover the payload.
+    The existing printable + detect gates keep this FP-safe: ordinary prose collapses to
+    high-entropy bytes that neither stay printable nor match any detector. When there is nothing
+    to add (plain ASCII, no whitespace) this is exactly one pass, so plain-text behaviour is
+    unchanged."""
     seen: set[str] = set()
-    for source in ((text,) if canon == text else (text, canon)):
+    sources: list[str] = [text]
+    if canon != text:
+        sources.append(canon)
+    # G76: collapse ASCII whitespace so space/newline-split base64/hex tokens reassemble.
+    for base in (text, canon):
+        ws = re.sub(r"\s+", "", base)
+        if ws != base and ws not in sources:
+            sources.append(ws)
+    for source in sources:
         for _tok, dec in _iter_transport_decodes(source):
             if dec in seen:
                 continue

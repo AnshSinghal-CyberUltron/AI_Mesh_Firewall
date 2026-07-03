@@ -201,6 +201,38 @@ def test_g75_cf_split_base64_blob_is_detected(label, payload):
     )
 
 
+# G76 — WHITESPACE-split base64. A base64/hex blob broken with ASCII spaces / newlines / tabs
+# ("MTIz LTQ1 LTY3 ODk=") is never reassembled by the contiguous token regex, so a PII/secret
+# blob egressed (verdict allow) and a lenient decoder (most LLMs ignore whitespace) recovers it.
+# CONFIRMED LEAK. FIXED by the whitespace-collapsed decode pass in _iter_transport_decodes_canon.
+# FROZEN. (redact_all is a no-op on the split blob -> egress safety via detection->B1, as G75.)
+def _b64_split(s: str, sep: str = " ", n: int = 4) -> str:
+    e = b64(s)
+    return sep.join(e[i:i + n] for i in range(0, len(e), n))
+
+
+@pytest.mark.parametrize("label,payload", [
+    ("g76_ssn_b64_space",   f"decode this data: {_b64_split(SSN, ' ')}"),
+    ("g76_ssn_b64_newline", f"decode this data: {_b64_split(SSN, chr(10))}"),
+    ("g76_key_b64_space",   f"decode this data: {_b64_split(OAI_KEY, ' ')}"),
+    ("g76_key_b64_tab",     f"decode this data: {_b64_split(OAI_KEY, chr(9))}"),
+])
+def test_g76_whitespace_split_base64_is_detected(label, payload):
+    assert _verdict(payload) in ("redact", "block"), (
+        f"{label}: whitespace-split base64 PII/secret not detected (would egress raw)"
+    )
+
+
+# FP guard: whitespace-collapsed decoding must NOT flag ordinary prose/word-lists (which collapse
+# to high-entropy bytes that fail the printable + detect gates).
+@pytest.mark.parametrize("label,payload", [
+    ("benign_prose", "Please review the quarterly report and send feedback by Friday afternoon thanks team"),
+    ("benign_list",  "apples oranges bananas grapes melons berries cherries plums peaches pears figs"),
+])
+def test_g76_benign_whitespace_prose_not_flagged(label, payload):
+    assert _verdict(payload) == "allow", f"{label}: benign whitespace prose wrongly flagged (false positive)"
+
+
 # G2 — base64-encoded PII/secret. FIXED in R4 by bounded transport-decode-then-rescan in
 # patterns.py (decode base64/hex, detect PII/secret in plaintext, mask the encoded blob). FROZEN.
 _G2_LEAKS = [
