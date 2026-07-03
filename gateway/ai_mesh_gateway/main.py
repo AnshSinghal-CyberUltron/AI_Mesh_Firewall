@@ -4725,8 +4725,9 @@ async def proxy_chat(
     METRICS["total_requests"] += 1
     METRICS["active_connections"] += 1
     start = time.perf_counter()
-    org_slug = ""
-    chat_outcome = "success"
+    from pipeline_trace import PipelineStageTimer, finalize_stage_metrics
+
+    _ptimer = PipelineStageTimer(start)
     stage_metrics = {
         "auth_ms": 0.0,
         "policy_ms": 0.0,
@@ -4735,6 +4736,8 @@ async def proxy_chat(
         "upstream_ms": 0.0,
         "telemetry_enqueue_ms": 0.0,
     }
+    org_slug = ""
+    chat_outcome = "success"
 
     # Set per-request telemetry context
     _REQUEST_SOURCE_IP.set(request.client.host if request.client else "")
@@ -5215,7 +5218,7 @@ async def proxy_chat(
 
         # ── Identity: prefer auth_context from AuthMiddleware, fall back to legacy headers ──
         auth_ctx = getattr(request.state, "auth_context", None)
-        stage_metrics["auth_ms"] = round((time.perf_counter() - start) * 1000, 2)
+        stage_metrics["auth_ms"] = _ptimer.mark_segment_end("auth")
 
         route_selection = None
         route_metadata = None
@@ -5483,6 +5486,7 @@ async def proxy_chat(
                         )
 
         # ── Kill-switch check (Redis, ~0.1ms) ──
+        _ks_start = time.perf_counter()
         if org_config.get("kill_switch_enabled", True):
             if REDIS_CLIENT is None:
                 METRICS["blocked"] += 1
@@ -5646,6 +5650,10 @@ async def proxy_chat(
                             "code": "kill_switch_active",
                         },
                     )
+
+            stage_metrics["kill_switch_ms"] = round((time.perf_counter() - _ks_start) * 1000, 1)
+        else:
+            stage_metrics["kill_switch_ms"] = 0.0
 
         # ── Model state check (Redis, org-scoped, ~0.1ms) ──
         if REDIS_CLIENT is not None:
@@ -5839,6 +5847,7 @@ async def proxy_chat(
                     )
 
         # ── Per-org RPM + burst rate limiting (from firewall config) ──
+        _rl_start = time.perf_counter()
         if (
             not firewall_disabled
             and org_config.get("rate_limit_enabled", CONFIG.get("rate_limit_enabled", True))
@@ -6047,6 +6056,8 @@ async def proxy_chat(
                     },
                     headers={"Retry-After": "60"},
                 )
+
+        stage_metrics["rate_limit_ms"] = round((time.perf_counter() - _rl_start) * 1000, 1)
 
         max_ctx = getattr(auth_ctx, "max_context_tokens", 0) if auth_ctx else 0
         if not max_ctx:
@@ -7137,6 +7148,7 @@ async def proxy_chat(
                     )
                     if _out_verdict is not None and getattr(_out_verdict, "action", "allow") not in ("allow",):
                         _trace_final = getattr(_out_verdict, "action", _trace_final)
+                    stage_metrics = finalize_stage_metrics(stage_metrics, start, ptimer=_ptimer)
                     resp["pipeline_trace"] = build_pipeline_trace(
                         prompt=_redact_trace_text(prompt),
                         forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
@@ -7222,6 +7234,7 @@ async def proxy_chat(
                     },
                 )
         if routing_active:
+            _rt_start = time.perf_counter()
             # B1 FIX (CRITICAL): exclude runtime-ISOLATED (model_state) and KILL-SWITCHED
             # models from the routing candidate set BEFORE adjudication. The scorer
             # (_score_routing_models) only hard-filters on LLMModelConfig.is_active and
@@ -7353,7 +7366,10 @@ async def proxy_chat(
                         "zeroshield": {"routing": route_metadata},
                     },
                 )
-        elif isolation_reroute_audit is not None:
+            stage_metrics["model_routing_ms"] = round((time.perf_counter() - _rt_start) * 1000, 1)
+        else:
+            stage_metrics["model_routing_ms"] = 0.0
+        if isolation_reroute_audit is not None and not routing_active:
             route_metadata = _build_isolation_reroute_metadata(
                 isolation_reroute_audit,
                 routing_prefs,
@@ -7689,6 +7705,7 @@ async def proxy_chat(
                 ]
 
         # ── Circuit breaker check ──
+        _model_in_start = time.perf_counter()
         if CIRCUIT_BREAKER is not None:
             cb_status = await CIRCUIT_BREAKER.check(requested_model)
             if cb_status.should_block:
@@ -7746,8 +7763,10 @@ async def proxy_chat(
                 input_action=_input_decision.action if _input_decision is not None else "allow",
             )
         upstream_start = time.perf_counter()
+        stage_metrics["model_input_ms"] = round((upstream_start - _model_in_start) * 1000, 1)
         code, llm_resp = await LLM_ROUTER.acompletion(body, redacted_prompt)
-        stage_metrics["upstream_ms"] = round((time.perf_counter() - upstream_start) * 1000, 2)
+        stage_metrics["upstream_ms"] = round((time.perf_counter() - upstream_start) * 1000, 1)
+        stage_metrics["model_output_ms"] = stage_metrics["upstream_ms"]
         if code != 200:
             # Record circuit breaker error
             if CIRCUIT_BREAKER is not None and code >= 500:
@@ -7830,6 +7849,7 @@ async def proxy_chat(
             and org_config.get("output_scan_enabled", CONFIG.get("output_scan_enabled", True))
         )
         if _output_guard_active:
+            _og_start = time.perf_counter()
             # Hallucination grounding must score the answer against ACTUAL
             # retrieved RAG context — never against the user's own prompt.
             # Previously context_chunks was seeded from the request's own
@@ -7857,6 +7877,7 @@ async def proxy_chat(
                 org_config=(CONFIG_SYNC.get_config(org_slug) if (CONFIG_SYNC is not None and org_slug) else None),
                 org_slug=org_slug or "",
             )
+            stage_metrics["output_guardrail_ms"] = round((time.perf_counter() - _og_start) * 1000, 1)
             # M11: tier-2 OUTPUT guard outage → the response was passed UNSCANNED
             # (fail-open by design). Make it VISIBLE: emit an operator telemetry
             # signal here and surface output_scan_degraded=true in the client
@@ -8777,6 +8798,7 @@ async def proxy_chat(
 
             _zs_full = llm_resp.get("zeroshield") if isinstance(llm_resp.get("zeroshield"), dict) else {}
             _final = _input_decision.action if _input_decision is not None else (_zs_full.get("action") or "allow")
+            stage_metrics = finalize_stage_metrics(stage_metrics, start, ptimer=_ptimer)
             llm_resp["pipeline_trace"] = build_pipeline_trace(
                 prompt=_redact_trace_text(prompt),
                 forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),

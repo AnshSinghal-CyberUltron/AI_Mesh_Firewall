@@ -26,7 +26,7 @@
 - [x] 14. Redaction (not block) where output carries PII and can be masked; byte-verified (bytes changed). Verify on a real completion. DONE: enforce_output maskable block→redact + noop fail-closed; connected sync + sync_pre_llm wired; 15 tests. PIPELINE-0014.
 
 ## P5 — Latency: correct, coherent, reducible
-- [ ] 15. Instrument per-stage latency accurately; total_latency == sum(stages) + overhead, reconciled. (Fix L8; use Context7 for FastAPI/ASGI timing best practices.)
+- [x] 15. Instrument per-stage latency accurately; total_latency == sum(stages) + overhead, reconciled. (Fix L8; use Context7 for FastAPI/ASGI timing best practices.)
 - [ ] 16. Frontend Duration/total == backend (fix the "0ms" vs 13555ms); add time-to-first-token for streaming.
 - [ ] 17. Add a latency BREAKDOWN + "how to reduce" hints (e.g. model_output 7710ms dominates → smaller/faster model, caching, parallel scans).
 - [ ] 18. Verify latency numbers match end-to-end across backend JSON and the UI.

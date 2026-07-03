@@ -97,6 +97,11 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   plain-text filter in scanner.py (G33+G53) + mcp_scan_orchestrator.py (G76). 17 new tests.
   Gate: 17 targeted + 2000 full suite passed.
 
+- PIPELINE-0015 (2026-07-03) — LATENCY RECONCILED (P5 item 15 / L8): removed fake
+  `_latency()` defaults; skipped stages (incl. blocked `model_output`) → `latency_ms=0`;
+  `total_latency_ms = stage_latency_sum_ms + overhead_ms`. Added `PipelineStageTimer` +
+  `finalize_stage_metrics()`; `proxy_chat` wires perf_counter per stage. 5 new tests.
+  Gate: 2039 gateway passed.
 - PIPELINE-0014 (2026-07-03) — OUTPUT REDACT BYTE-VERIFIED (P4 item 14): enforce_output() gains
   redaction_possible + pii_detection_enabled; maskable block→redact; noop→block fail-closed.
   Connected sync output block + _apply_output_guard_nonstream wired through enforce_output();

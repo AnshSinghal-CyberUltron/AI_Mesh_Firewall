@@ -7,7 +7,93 @@ so raw PII is never persisted or echoed back to the client (see `_truncate`).
 
 from __future__ import annotations
 
+import time
 from typing import Any
+
+# Ordered pipeline stages (Module 1.1 trace contract).
+PIPELINE_STAGE_NAMES: tuple[str, ...] = (
+    "auth",
+    "rate_limit",
+    "policy",
+    "input_scan",
+    "kill_switch",
+    "model_routing",
+    "model_input",
+    "model_output",
+    "output_guardrail",
+)
+
+_STAGE_METRIC_KEYS: tuple[str, ...] = (
+    "auth_ms",
+    "rate_limit_ms",
+    "policy_ms",
+    "input_scan_ms",
+    "kill_switch_ms",
+    "model_routing_ms",
+    "model_input_ms",
+    "model_output_ms",
+    "output_guardrail_ms",
+)
+
+
+class PipelineStageTimer:
+    """Monotonic (perf_counter) per-stage latency tracker for proxy_chat."""
+
+    def __init__(self, wall_start: float | None = None) -> None:
+        self._wall_start = wall_start if wall_start is not None else time.perf_counter()
+        self._segment_start = self._wall_start
+        self._durations: dict[str, float] = {}
+
+    def mark_segment_end(self, stage: str) -> float:
+        """Attribute elapsed time since the last boundary to *stage*."""
+        now = time.perf_counter()
+        ms = round((now - self._segment_start) * 1000, 1)
+        self._durations[stage] = round(self._durations.get(stage, 0.0) + ms, 1)
+        self._segment_start = now
+        return ms
+
+    def add_ms(self, stage: str, ms: float) -> None:
+        if ms <= 0:
+            return
+        self._durations[stage] = round(self._durations.get(stage, 0.0) + ms, 1)
+
+    def wall_ms(self) -> float:
+        return round((time.perf_counter() - self._wall_start) * 1000, 1)
+
+
+def finalize_stage_metrics(
+    metrics: dict | None,
+    wall_start: float,
+    *,
+    ptimer: PipelineStageTimer | None = None,
+) -> dict[str, float]:
+    """Merge measured spans, compute input_scan + overhead; reconcile to wall clock."""
+    m: dict[str, float] = {}
+    if isinstance(metrics, dict):
+        for k, v in metrics.items():
+            try:
+                m[str(k)] = _round_ms(v)
+            except Exception:
+                pass
+    if ptimer is not None:
+        for stage in PIPELINE_STAGE_NAMES:
+            key = f"{stage}_ms"
+            if not m.get(key) and ptimer._durations.get(stage):
+                m[key] = ptimer._durations[stage]
+    tier1 = m.get("tier1_ms") or 0.0
+    tier2 = m.get("tier2_ms") or 0.0
+    if not m.get("input_scan_ms") and (tier1 or tier2):
+        m["input_scan_ms"] = _round_ms(tier1 + tier2)
+    upstream = m.get("upstream_ms") or 0.0
+    if not m.get("model_output_ms") and upstream:
+        m["model_output_ms"] = upstream
+    wall = round((time.perf_counter() - wall_start) * 1000, 1)
+    m["total_ms"] = wall
+    stage_sum = sum(m.get(k) or 0.0 for k in _STAGE_METRIC_KEYS)
+    telemetry = m.get("telemetry_enqueue_ms") or 0.0
+    m["overhead_ms"] = round(max(0.0, wall - stage_sum - telemetry), 1)
+    m["stage_latency_sum_ms"] = round(stage_sum, 1)
+    return m
 
 # Deterministic PII/secret redactor. Applied to every prompt/response text field
 # written into the trace so raw PII never leaks into the operator UI / SSE / API
@@ -322,12 +408,26 @@ def _metrics(stage_metrics: dict | None) -> dict[str, float]:
     sm = stage_metrics if isinstance(stage_metrics, dict) else {}
     tier1 = _round_ms(sm.get("tier1_ms"))
     tier2 = _round_ms(sm.get("tier2_ms"))
+    input_scan = _round_ms(sm.get("input_scan_ms"))
+    if not input_scan and (tier1 or tier2):
+        input_scan = _round_ms(tier1 + tier2)
+    upstream = _round_ms(sm.get("upstream_ms"))
+    model_output = _round_ms(sm.get("model_output_ms"), upstream)
     return {
         "auth_ms": _round_ms(sm.get("auth_ms")),
+        "rate_limit_ms": _round_ms(sm.get("rate_limit_ms")),
         "policy_ms": _round_ms(sm.get("policy_ms")),
-        "input_scan_ms": _round_ms(tier1 + tier2, tier1 or tier2),
-        "upstream_ms": _round_ms(sm.get("upstream_ms")),
-        "total_hint_ms": _round_ms(sm.get("total_ms")),
+        "input_scan_ms": input_scan,
+        "kill_switch_ms": _round_ms(sm.get("kill_switch_ms")),
+        "model_routing_ms": _round_ms(sm.get("model_routing_ms")),
+        "model_input_ms": _round_ms(sm.get("model_input_ms")),
+        "model_output_ms": model_output,
+        "upstream_ms": upstream,
+        "output_guardrail_ms": _round_ms(sm.get("output_guardrail_ms")),
+        "telemetry_ms": _round_ms(sm.get("telemetry_enqueue_ms")),
+        "overhead_ms": _round_ms(sm.get("overhead_ms")),
+        "stage_latency_sum_ms": _round_ms(sm.get("stage_latency_sum_ms")),
+        "total_ms": _round_ms(sm.get("total_ms") or sm.get("total_hint_ms")),
     }
 
 
@@ -470,21 +570,23 @@ def build_pipeline_trace(
         ):
             scan_action = "allow"
 
-    def _latency(name: str, explicit: float | None = None) -> float:
+    def _latency(name: str, explicit: float | None = None, *, skipped: bool = False) -> float:
+        if skipped:
+            return 0.0
         if explicit is not None:
             return _round_ms(explicit)
         mapping = {
             "auth": metrics["auth_ms"],
-            "rate_limit": max(metrics["auth_ms"] * 0.05, 0.1) if metrics["auth_ms"] else 0.1,
-            "policy": metrics["policy_ms"] or (0.2 if not is_blocked else 0.5),
-            "input_scan": metrics["input_scan_ms"] or _round_ms(zs.get("processing_time_ms")),
-            "kill_switch": 0.1,
-            "model_routing": 0.5,
-            "model_input": 0.1,
-            "model_output": metrics["upstream_ms"] or _round_ms(zs.get("processing_time_ms")),
-            "output_guardrail": 0.2,
+            "rate_limit": metrics["rate_limit_ms"],
+            "policy": metrics["policy_ms"],
+            "input_scan": metrics["input_scan_ms"],
+            "kill_switch": metrics["kill_switch_ms"],
+            "model_routing": metrics["model_routing_ms"],
+            "model_input": metrics["model_input_ms"],
+            "model_output": metrics["model_output_ms"] or metrics["upstream_ms"],
+            "output_guardrail": metrics["output_guardrail_ms"],
         }
-        return mapping.get(name, 0.1)
+        return mapping.get(name, 0.0)
 
     def _action(stage: str, default: str = "allow") -> str:
         if blocked_stage == stage:
@@ -758,6 +860,7 @@ def build_pipeline_trace(
                 if _s_idx > _b_idx:
                     _s["action"] = "skip"
                     _s["detail"] = f"Skipped — request was blocked upstream at {_blocked_label}"
+                    _s["latency_ms"] = 0.0
                     for _k in _clear_keys:
                         if _k in _s:
                             _s[_k] = [] if isinstance(_s[_k], list) else ""
@@ -766,11 +869,21 @@ def build_pipeline_trace(
                     if "risk_score" in _s:
                         _s["risk_score"] = None
 
-    total = sum(_round_ms(s.get("latency_ms")) for s in stages)
-    if metrics["total_hint_ms"]:
-        total = metrics["total_hint_ms"]
-    elif zs.get("processing_time_ms"):
-        total = max(total, _round_ms(zs.get("processing_time_ms")))
+    # Skipped stages never ran — zero latency (fixes model_output showing upstream
+    # processing_time when the LLM was never called).
+    for _s in stages:
+        if _s.get("action") == "skip":
+            _s["latency_ms"] = 0.0
+
+    stage_sum = sum(_round_ms(s.get("latency_ms")) for s in stages)
+    overhead = metrics.get("overhead_ms") or 0.0
+    telemetry = metrics.get("telemetry_ms") or 0.0
+    wall = metrics.get("total_ms")
+    if not wall and zs.get("processing_time_ms"):
+        wall = _round_ms(zs.get("processing_time_ms"))
+    if wall:
+        overhead = _round_ms(max(0.0, wall - stage_sum - telemetry))
+    total = _round_ms(stage_sum + overhead)
 
     guard_summary = input_guard
     if output_scan_verdict is not None or str(zs.get("detection_tier") or "") == "output_guard":
@@ -783,6 +896,8 @@ def build_pipeline_trace(
     return {
         "stages": stages,
         "total_latency_ms": total,
+        "stage_latency_sum_ms": stage_sum,
+        "overhead_ms": overhead,
         "prompt_preview": prompt_preview,
         "guard_summary": guard_summary,
     }

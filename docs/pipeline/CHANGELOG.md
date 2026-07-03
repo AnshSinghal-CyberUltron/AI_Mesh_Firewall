@@ -2,6 +2,34 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0015 (2026-07-03)
+
+**Per-stage latency instrumentation + reconciliation (P5 item 15 / L8).**
+
+Root Cause:
+- `build_pipeline_trace()` `_latency()` used hardcoded fake defaults (0.1–0.5 ms) for
+  unrouted stages and fell back to `zeroshield.processing_time_ms` (wall-clock) for
+  `input_scan` / `model_output` — so a blocked request showed `model_output` ≈11.6 ms
+  (total request time) even when the LLM never ran.
+- `total_latency_ms` was overridden by `processing_time_ms` instead of
+  `sum(stages) + overhead_ms`.
+
+Fix:
+- `pipeline_trace.py`: `PipelineStageTimer` (monotonic `perf_counter`) +
+  `finalize_stage_metrics()`; measured keys for all 9 stages; skipped stages forced
+  to `latency_ms=0`; `total_latency_ms = stage_latency_sum_ms + overhead_ms` (explicit
+  fields on trace).
+- `main.py` `proxy_chat`: perf_counter boundaries for auth, kill_switch, rate_limit,
+  policy (existing), input_scan tiers (existing), model_routing, model_input prep,
+  model_output/upstream, output_guardrail; finalize before `build_pipeline_trace`.
+
+Verification:
+- 5 new tests (`test_pipeline_latency.py`): skip-zero-latency, sum invariant, no fakes,
+  upstream-not-processing_time, timer unit.
+- Gate: 2039 gateway tests passed.
+
+Evidence: `mcp-parallel/findings/pipeline-p15-latency-reconciliation/` (tests authoritative)
+
 ## PIPELINE-0014 (2026-07-03)
 
 **Output guard REDACTS maskable PII (not block); byte-verified; noop scrub fail-closed (P4 item 14).**
