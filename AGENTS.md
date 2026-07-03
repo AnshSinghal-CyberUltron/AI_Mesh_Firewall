@@ -931,6 +931,17 @@
     Gate: 8 + 1602 gateway passed 0 failed; broker 108. BLOCK decision (aidefence-as-oracle N/A). Evidence
     mcp-parallel/findings/backstop-p-result-cross-block-split/. Completes the split-evasion family (SSE CHG-0093,
     markdown CHG-0099, content-array CHG-0100).
+  - CHG-0101 (2026-07-03) — item-20 concurrency dimension (verification + regression-lock, ZERO defects):
+    CHG-0090 proved the plaintext-redaction chain concurrency-safe but predates the render-leak neutralization
+    (CHG-0096/0097/0099 exfil beacons + markdown-split/encoded PII) and the cross-block split-block (CHG-0100),
+    which run in the HOT scan path. NEW TESTS (test_mcp_scan_concurrency_safety.py, +2): 300 concurrent
+    _scan_tool_result_floor across 10 orgs — (1) each w/ a UNIQUE benign token + UNIQUE base64 exfil beacon +
+    markdown-split secret -> token survives, beacon defanged, markdown-split does NOT reconstruct, 0
+    cross-contamination; (2) each w/ a valid AWS key split across 2 content blocks -> ALL 300 blocked. RESULT:
+    0/0/0/0 + 300/300 blocked -> the CHG-0096-0100 guardrails are stateless/isolation-safe under concurrency.
+    Gate: 4 (2+2) + 1604 gateway passed 0 failed; broker 108. Evidence mcp-parallel/findings/backstop-p20-
+    render-leak-concurrency/. HONESTY: proves concurrency-safety, NOT the full 300-500-sandbox live stress
+    (host-blocked, owned by CP47-50).
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

