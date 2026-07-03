@@ -2262,3 +2262,24 @@ detection→redact→B1); benign prose/lists → allow (no FP). golden **450 pas
 +2 benign-FP); backend 1625; ruff clean.
 **Frozen:** `test_g76_whitespace_split_base64_is_detected` (4), `test_g76_benign_whitespace_prose_not_flagged` (2).
 Fresh-angle hunt tally this session: G74 (bidi/ALM injection), G75 (nested-Cf ×2), G76 (whitespace-split b64).
+
+---
+
+## G77 (angle DEFENDED — froze the coupling) — 2026-07-03 — truncation-boundary evasion
+Probed decoy-padding / truncation-boundary evasion (+ fancy-digit PII). Findings:
+- Fancy-digit PII (circled ①②③) → caught (NFKC folds). Plaintext PII at any offset → caught (raw pass
+  is UNCAPPED). NOT leaks.
+- Detector limitation CONFIRMED: OBFUSCATED PII (fullwidth SSN) placed past `patterns._CANON_MAX_LEN`
+  (20000) escapes the canonical pass — `detect_pii(fullwidth_ssn @ 21k)` = False (canonicalize only folds
+  `text[:_CANON_MAX_LEN]`).
+- **But UNREACHABLE on INPUT (defended, not a leak):** `_scan_prompt_sync` HARD-BLOCKS any prompt >
+  `MAX_PROMPT_LENGTH` (10k, scanner.py:1010, DoS), the scanner decode helpers skip text > 10k (535/571),
+  and 10k < 20k. So every text reaching detection is ≤10k < the canon cap → fully canonicalized. Verified:
+  fullwidth SSN within-limit → redact/block; 21k varied-filler + fullwidth SSN → block (length cap).
+  Output-guard path lacks a 10k cap but the truncation-past-20k vector there is highly contrived (the model
+  would have to self-obfuscate context data in fullwidth past 20k on command) — noted, not fixed.
+**Action (R7 freeze — test-only, no prod change):** froze the coupling `_CANON_MAX_LEN >= MAX_PROMPT_LENGTH`
+(`test_g77_canon_cap_covers_reachable_input`) + oversized-obfuscated-PII → block
+(`test_g77_oversized_obfuscated_pii_prompt_is_blocked`), so raising the prompt cap without raising the canon
+cap fails HERE instead of silently opening an obfuscated-PII-past-the-cap evasion. golden **452 passed × 3**
+(was 450; +2). Honest outcome: this angle was already defended; froze the defense against config drift.

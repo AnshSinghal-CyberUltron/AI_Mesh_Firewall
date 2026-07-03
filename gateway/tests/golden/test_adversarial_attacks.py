@@ -233,6 +233,33 @@ def test_g76_benign_whitespace_prose_not_flagged(label, payload):
     assert _verdict(payload) == "allow", f"{label}: benign whitespace prose wrongly flagged (false positive)"
 
 
+# G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
+# PII/secret placed PAST patterns._CANON_MAX_LEN escapes the canonical pass (a fullwidth SSN at
+# offset 21k -> detect_pii False, since canonicalize_for_detection only folds text[:_CANON_MAX_LEN];
+# the RAW pass is uncapped so PLAINTEXT is always caught). On INPUT this is UNREACHABLE: the scanner
+# hard-BLOCKS any prompt > MAX_PROMPT_LENGTH (scanner.py:1010) and every decode helper skips text
+# > MAX_PROMPT_LENGTH, and MAX_PROMPT_LENGTH (10k) < _CANON_MAX_LEN (20k). These freeze that so a
+# future config change that raises the prompt cap without raising the canon cap fails HERE instead
+# of silently opening an obfuscated-PII-past-the-cap evasion.
+def test_g77_canon_cap_covers_reachable_input():
+    from scanner import MAX_PROMPT_LENGTH
+    assert patterns._CANON_MAX_LEN >= MAX_PROMPT_LENGTH, (
+        f"canon/decode cap ({patterns._CANON_MAX_LEN}) dropped below the reachable prompt length "
+        f"({MAX_PROMPT_LENGTH}) -> obfuscated PII past the canon cap could evade detection"
+    )
+
+
+def test_g77_oversized_obfuscated_pii_prompt_is_blocked():
+    # A prompt long enough to push obfuscated PII past the canon cap is itself over
+    # MAX_PROMPT_LENGTH -> DoS-blocked (varied filler, so it is the LENGTH cap, not repetition).
+    from scanner import MAX_PROMPT_LENGTH
+    oversized = " ".join(f"word{i}" for i in range(2500)) + " my ssn is " + fullwidth(SSN)
+    assert len(oversized) > MAX_PROMPT_LENGTH
+    assert _verdict(oversized) == "block", (
+        "oversized prompt hiding obfuscated PII past the canon cap must be DoS-blocked (unreachable evasion)"
+    )
+
+
 # G2 — base64-encoded PII/secret. FIXED in R4 by bounded transport-decode-then-rescan in
 # patterns.py (decode base64/hex, detect PII/secret in plaintext, mask the encoded blob). FROZEN.
 _G2_LEAKS = [
