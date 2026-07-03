@@ -1804,6 +1804,12 @@ async def ext_mcp_proxy(path: str, request: Request):
                     if _scanned_args is not _ext_args:
                         _ext_params["arguments"] = _scanned_args
                         body = json.dumps(_ext_req).encode()
+                        # CHG-0109: audit the inbound ARG redaction (parity with the
+                        # credential-block branch above; inbound twin of CHG-0081/0106).
+                        await _ext_audit(
+                            "redact", "pii_redacted_inbound",
+                            tool=_ext_tool_name, tags=_in_tags, findings=_in_findings,
+                        )
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(max(_TIMEOUT, 120)), verify=True)
     try:
@@ -2511,6 +2517,23 @@ async def internal_tools_call(request: Request):
     # Forward any per-tier inbound redaction the orchestrator applied.
     if _scanned_args is not arguments:
         arguments = _scanned_args
+        # CHG-0109: audit the inbound ARG redaction (PII/IP masked in args, not blocked).
+        # Previously swapped silently → a compliance-relevant input redaction (the gateway
+        # masked a user's PII before it egressed to the MCP server) was INVISIBLE to the
+        # audit/SIEM trail, unlike the block branch above AND the main org_mcp_jsonrpc path
+        # (which folds inbound redaction into its per-call _was_redacted event). Inbound
+        # twin of the result-side redact audits (CHG-0081 REST / CHG-0106 internal).
+        await _record_gateway_event(
+            org_slug=org_slug,
+            server_slug=server_slug,
+            tool_name=tool_name,
+            decision="redact",
+            reason="pii_redacted_inbound",
+            latency_ms=int((time.time() - _internal_call_t0) * 1000),
+            metadata={"transport": "internal", "enforced_at": "gateway", **_scan_meta_in},
+            compliance_tags=list(_in_tags),
+            scan_findings=list(_in_findings),
+        )
 
     call_body = {
         "jsonrpc": "2.0",
@@ -4307,6 +4330,20 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
             parsed["arguments"] = scanned_args
             arguments = scanned_args
             body = json.dumps(parsed).encode()
+            # CHG-0109: audit the inbound ARG redaction (parity with the block branch
+            # above + the main org path's _was_redacted event; inbound twin of CHG-0081).
+            await _record_gateway_event(
+                org_slug=org_slug,
+                server_slug=server_slug,
+                tool_name=tool_name,
+                decision="redact",
+                reason="pii_redacted_inbound",
+                request_id=_req_id,
+                latency_ms=int((time.time() - call_t0) * 1000),
+                metadata={"transport": "rest", "enforced_at": "gateway", **scan_meta_in},
+                compliance_tags=list(in_tags),
+                scan_findings=list(in_findings),
+            )
 
     async with httpx.AsyncClient(timeout=max(_TIMEOUT, 60)) as client:
         try:

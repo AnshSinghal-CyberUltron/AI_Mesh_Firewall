@@ -1569,6 +1569,25 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   Evidence `mcp-parallel/findings/backstop-p-internal-discover-tools-unscanned/`. tools/list scanning now at full
   parity across org-jsonrpc / REST / ext-proxy / internal-discovery.
 
+- **CHG-0109** (2026-07-03) — **LOW-MED audit-completeness (tag-inputs→audit): INBOUND arg redaction was not
+  audited on the internal / bare-REST / ext paths**. When tool ARGUMENTS carry PII/IP the gateway MASKS
+  (`scan_action="redact"`, not a hard block) before forwarding, the main `org_mcp_jsonrpc` path folds it into its
+  per-call `_was_redacted` event — but `internal_tools_call` / `org_mcp_tool_call` / `ext_mcp_proxy` swapped the
+  masked args in SILENTLY (`if scanned_args is not arguments: arguments = scanned_args`, no `_record_gateway_event`)
+  → the INPUT redaction was INVISIBLE to the audit/SIEM trail, asymmetric with the block branch
+  (`pii_blocked_inbound`) + the result-side redact audits (CHG-0081 REST / CHG-0106 internal). Byte-proven
+  reachable: a `default_scan_action="redact"` server masked `bob.jones@corp.example` → `b***@c***.example` in the
+  forwarded args, and ZERO gateway events were recorded. **FIX (`mcp_proxy.py`):** the 3 paths now record
+  `decision="redact", reason="pii_redacted_inbound"` (inbound tags + findings + meta) on inbound redaction (not
+  blocked) — parity with the block branch + the main-path per-call event. Benign args → nothing (no noise);
+  credential → still force-BLOCK (never a redact). The ext edit is defense-in-depth parity (ext scans args with
+  `enabled_info=None` → `"tag"` → no inbound redaction under current config). NEW TEST
+  `test_mcp_inbound_redact_audit.py` (5). Gate: 5 + 1673 gateway passed, 0 failed; broker 120 (unaffected). NOT a
+  leak — the egress was already redacted; this is an audit-VISIBILITY fix (oracle: forwarded masked args
+  `has_pii=false`). touched: owning-session proxy's 3 non-main inbound paths; inbound twin of CHG-0081/0106.
+  Evidence `mcp-parallel/findings/backstop-p-inbound-redact-audit/`. Inbound-redact audit now at parity across all
+  4 tool-call paths.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

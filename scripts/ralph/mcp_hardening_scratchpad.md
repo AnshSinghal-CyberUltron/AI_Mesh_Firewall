@@ -1179,6 +1179,20 @@
       example key AKIA****MPLE host [INTERNAL_IPV4_REDACTED]; poisoned .ssh/id_rsa desc -> tools/list withheld. Oracle
       (aidefence): has_pii true raw / false masked. Evidence mcp-parallel/findings/backstop-p-internal-discover-tools-
       unscanned/finding.md. tools/list scanning now at FULL PARITY across org-jsonrpc / REST / ext-proxy / internal-discovery.
+      CHG-0109 (2026-07-03, LOW-MED audit-completeness — tag-inputs->audit): INBOUND arg redaction was not audited on
+      the internal / bare-REST / ext paths. When tool ARGUMENTS carry PII/IP the gateway MASKS (scan_action=redact,
+      not a hard block) before forwarding, the main org_mcp_jsonrpc path folds it into its per-call _was_redacted
+      event, but internal_tools_call / org_mcp_tool_call / ext_mcp_proxy swapped the masked args in SILENTLY (no
+      _record_gateway_event) -> the INPUT redaction was invisible to audit/SIEM, asymmetric with the block branch
+      (pii_blocked_inbound) + result-side redact audits (CHG-0081/0106). Byte-proven reachable: a redact-configured
+      server masked bob.jones@corp.example -> b***@c***.example in the forwarded args, ZERO events recorded. FIX
+      (mcp_proxy.py): the 3 paths now record decision=redact reason=pii_redacted_inbound (inbound tags+findings) on
+      inbound redaction (not blocked); benign -> nothing (no noise); credential -> still block-not-redact. Ext edit
+      = defense-in-depth parity (ext scans args enabled_info=None -> tag -> no inbound redaction under current
+      config). NEW TEST test_mcp_inbound_redact_audit.py (5). Gate: 5 + 1673 gateway passed 0 failed; broker 120
+      (unaffected). NOT a leak (egress already redacted) — audit-visibility fix; oracle (aidefence): forwarded
+      masked args has_pii false. Evidence mcp-parallel/findings/backstop-p-inbound-redact-audit/finding.md. Inbound-
+      redact audit now at parity across all 4 tool-call paths (main/internal/REST/ext).
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.
