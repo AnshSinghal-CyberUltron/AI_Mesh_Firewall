@@ -3308,3 +3308,28 @@ LIVE-verified through the deployed **/v1/responses** endpoint: injection in a Re
 (both were fail-opens before G104). G104 validated end-to-end (in-process 637×3 + backend 1902 + live block
 on the real Responses endpoint). G103+G104 close the structured-channel indirect-injection fail-opens on
 BOTH /v1/chat/completions and /v1/responses.
+
+---
+
+## G104 CORRECTION (was a FALSE finding — dead-code function) — 2026-07-03
+INTEGRITY CORRECTION. The prior G104 entry claimed a Responses-API fail-open in
+`main._extract_prompt_from_responses_input`. On rigorous re-check that function is **DEAD CODE — it has
+NO call sites**. /v1/responses (main.py `@app.post("/v1/responses")`) runs `responses_adapters.
+responses_to_chat(raw_body)` → `_dispatch_chat_internally(chat_body)` = the FULL chat pipeline. And
+`responses_to_chat._input_item_to_message` maps a Responses `function_call` input item → a chat
+**`tool_calls`** message (scanned by G7) and `function_call_output` → a **`tool`**-role message (scanned).
+PROVEN independent of my edit: `responses_to_chat(...)` + `_extract_prompt_from_messages` folds the
+injection and returns **block** for both — WITHOUT the dead-function edit. So NO live gap existed; the
+Responses input was already scanned via conversion. The output side (`_extract_responses_output_text`) is
+ALSO dead code — Responses output is guarded on the chat representation (`_extract_scannable_output_text`
+DOES scan tool_calls args + reasoning_content; verified captured+detected).
+**Correction applied:** the golden `test_g104_*` were rewritten to freeze the REAL defense (Responses
+input → `responses_to_chat` → chat scan → block); the `_fold_responses` replica of the dead function was
+removed. The dead-code fold in `_extract_prompt_from_responses_input` is RETAINED as harmless latent
+belt-and-suspenders (relabeled in-comment) — it is NOT a live fix. main.py is LEFT UNSTAGED this iteration:
+the shared worktree currently also holds ANOTHER session's uncommitted main.py change (a policy
+block-downgrade "B-POL FIX / PIPELINE-0009" block) — I did not commit or disturb it, and did NOT redeploy
+(to avoid deploying their uncommitted work).
+**Corrected ledger: TWENTY-FIVE leaks (G74..G95, G97, G98, G100, G101, G102, G103) + ONE false-block (G99)
+fixed.** G104 is NOT counted as a leak. G96 freezes 6 defended vectors; G77/G78/G80 frozen. In-process
+golden **637 ×3** (the G104 tests now guard the real conversion path).
