@@ -26,7 +26,10 @@
       Real host (unconstrained 16c/58.85GiB) detects 16 workers / 32 threads — full-machine use confirmed.
 
 ## P2 — Dynamic workers (all cores)  [STACK-CHANGE → log to 4 memories]
-- [ ] 06. Gateway entrypoint computes WEB_CONCURRENCY from the detector (replace hardcoded 4); env still overrides.
+- [x] 06. Gateway entrypoint computes WEB_CONCURRENCY from the detector (replace hardcoded 4); env still overrides.
+      → gateway/entrypoint.sh + Dockerfile CMD. PERF-0001 logged to 4 memories (Ruflo store+notify, AGENTS.md,
+      .cursor/rules, docs/perf/CHANGELOG.md). Image rebuilt. PROVEN in real Docker cgroup-v2: --cpus=6→6w/12t,
+      --cpus=12→12w/24t, WEB_CONCURRENCY=3→3w (override). Shared host unchanged (.env pins 6). Fallback 4 if detector errors.
 - [ ] 07. Control plane runs a dynamically-sized async server (gunicorn+UvicornWorker or N Daphne) — replace the fixed 2 procs.
 - [ ] 08. Verify all cores light up under load.
 

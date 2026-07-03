@@ -1,0 +1,23 @@
+---
+description: Shared-infra changes from the dynamic full-hardware concurrency (perf) lane. Read before rebuilding/restarting the stack or editing docker-compose/Dockerfiles/settings.
+globs:
+alwaysApply: false
+---
+
+# Shared Infra Changelog (perf lane)
+
+This lane makes the backend size workers/threads/DB pools dynamically from a
+cgroup-aware detector (`shared/ai_mesh_shared/resource_budget.py`). Changes that
+affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
+`AGENTS.md` (## Shared Infra Changes), and Ruflo `shared/infra-changes`.
+
+Newest first.
+
+## PERF-0001 — Gateway WEB_CONCURRENCY derived from the detector (2026-07-03)
+- Gateway image now runs `gateway/entrypoint.sh`, which sets gunicorn `--workers`
+  from the detector (one UvicornWorker/core, RAM-bounded) instead of the hardcoded
+  `${WEB_CONCURRENCY:-4}`. Explicit `WEB_CONCURRENCY` env still overrides.
+- AFFECTS: `ai_mesh_firewall-gateway` image. ACTION: `docker compose build gateway`
+  to adopt. Behavior UNCHANGED on the shared host (`.env` pins `WEB_CONCURRENCY=6`);
+  no DB change, no forced restart. Running container not recreated.
+- Proof: `--cpus=6`→6 workers, `--cpus=12`→12 workers, `WEB_CONCURRENCY=3`→3.
