@@ -283,6 +283,17 @@ _MCP_SSE_STREAM_MAX_EVENTS = int(os.environ.get("MCP_SSE_STREAM_MAX_EVENTS", "10
 # withheld (fail-closed). Generous default (10k ≫ any realistic legit result, which has a
 # handful of blocks); env-tunable.
 _MCP_MAX_CONTENT_BLOCKS = int(os.environ.get("MCP_MAX_CONTENT_BLOCKS", "10000"))
+# CHG-0150: cap the TOTAL node count (dict keys + list items) of a tool result. A wide-but-
+# shallow result (e.g. a 10 MB list of small objects) passes the depth + content-block caps
+# yet has millions of nodes — which (a) makes apply_field_redaction's ``max_nodes`` walk
+# STOP early and return a PARTIALLY-redacted result, so a redaction_fields target beyond the
+# limit egresses RAW (CHG-0148 residual #1), and (b) forces a multi-second copy.deepcopy +
+# recursive scan (measured ~2.1s deepcopy for ~5M nodes) — a resource bomb. This guard
+# BLOCKS such results (RESOURCE_LIMIT) BEFORE the expensive copy/scan/redact, fail-closed.
+# 1M nodes ≫ any realistic legit result (a DB page is thousands of nodes) and its deepcopy
+# is ~0.4s; the redaction max_nodes is set ABOVE this (2M) so anything that passes is fully
+# masked. env-tunable.
+_MCP_MAX_RESULT_NODES = int(os.environ.get("MCP_MAX_RESULT_NODES", "1000000"))
 
 # CHG-0115: max nesting depth of a tool RESULT structure. A deeply-nested untrusted result
 # (thousands of levels) makes the recursive scan/serialize hit Python's recursion limit
@@ -323,6 +334,32 @@ def _exceeds_nesting_depth(obj, limit: int) -> bool:
             nxt = depth + 1
             for v in cur:
                 stack.append((v, nxt))
+    return False
+
+
+def _exceeds_node_count(obj, limit: int) -> bool:
+    """True if ``obj`` holds more than ``limit`` dict-keys + list-items (the same 'nodes'
+    the field-redaction walk counts). ITERATIVE + short-circuits the moment the running
+    total crosses ``limit``, so the guard itself is O(limit) and cannot be DoS'd by the very
+    wide payload it bounds (CHG-0150)."""
+    count = 0
+    stack = [obj]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, dict):
+            count += len(cur)
+            if count > limit:
+                return True
+            for v in cur.values():
+                if isinstance(v, (dict, list)):
+                    stack.append(v)
+        elif isinstance(cur, list):
+            count += len(cur)
+            if count > limit:
+                return True
+            for v in cur:
+                if isinstance(v, (dict, list)):
+                    stack.append(v)
     return False
 
 
@@ -1278,6 +1315,25 @@ async def _scan_tool_result_floor(
             }
         return result_content, True, ["RESOURCE_LIMIT"], [], {
             "result_too_deeply_nested": True, "max_result_depth": _MCP_MAX_RESULT_DEPTH,
+        }
+    # CHG-0150: guard an excessively WIDE result (too many total nodes) the same way as depth.
+    # apply_field_redaction's max_nodes walk would otherwise STOP early → a redaction_fields
+    # target beyond the limit egresses RAW (CHG-0148 residual #1); and the copy.deepcopy +
+    # recursive scan of millions of nodes is a multi-second resource bomb. Block BEFORE the
+    # expensive copy/scan, fail-closed (monitor forwards unscanned, like the depth guard).
+    if isinstance(result_content, (dict, list)) and _exceeds_node_count(
+        result_content, _MCP_MAX_RESULT_NODES
+    ):
+        LOG.warning(
+            "mcp_proxy.result_too_many_nodes org=%s server=%s tool=%s (>%d) action=%s",
+            org_slug, server_slug, tool_name, _MCP_MAX_RESULT_NODES, scan_action,
+        )
+        if scan_action == "monitor":
+            return result_content, False, [], [], {
+                "result_too_many_nodes": True, "monitor_scan_skipped": True,
+            }
+        return result_content, True, ["RESOURCE_LIMIT"], [], {
+            "result_too_many_nodes": True, "max_result_nodes": _MCP_MAX_RESULT_NODES,
         }
     try:
         scanned, blocked, tags, findings, meta = await _mcp_security_scan(

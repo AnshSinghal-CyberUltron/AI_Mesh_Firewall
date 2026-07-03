@@ -964,7 +964,12 @@ def apply_field_redaction(
     # everything that can reach here; the walk is now ITERATIVE (below) so a 500-deep
     # structure cannot blow the recursion limit (which would raise -> caller fail-open).
     max_depth: int = 500,
-    max_nodes: int = 100_000,
+    # CHG-0150: was 100_000 — a wide result with a redaction_fields target beyond the 100k-th
+    # node had the walk STOP early → the target egressed RAW (CHG-0148 residual #1). Raised
+    # ABOVE the gateway's _MCP_MAX_RESULT_NODES guard (1M), which BLOCKS results wider than
+    # that before this runs — so anything reaching here is ≤1M nodes and is now FULLY walked
+    # (2M margin absorbs any node-counting discrepancy between the guard and this walk).
+    max_nodes: int = 2_000_000,
 ) -> Any:
     """Return a deep-copied ``obj`` with values under matching keys replaced.
 

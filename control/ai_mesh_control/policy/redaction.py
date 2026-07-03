@@ -142,7 +142,11 @@ def apply_field_redaction(
     # scan, so this was the only layer protecting them. Raised to 500; the walk below is
     # now ITERATIVE so a deep structure can't blow the recursion limit.
     max_depth: int = 500,
-    max_nodes: int = 100_000,
+    # CHG-0150: was 100_000 — a wide result with a redaction target beyond the 100k-th node
+    # had the walk STOP early → the target egressed RAW. The gateway's _MCP_MAX_RESULT_NODES
+    # guard (1M) blocks wider results upstream on the chat path; raised here (2M margin) so any
+    # result that reaches this redactor is FULLY walked. (Defense-in-depth for the control path.)
+    max_nodes: int = 2_000_000,
 ) -> Any:
     """Return a deep-copied version of ``obj`` with matching keys redacted.
 

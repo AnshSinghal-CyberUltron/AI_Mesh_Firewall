@@ -711,6 +711,27 @@
       (CHG-0148 residual #1): node-count overflow (max_nodes=100k) still fail-open on a huge-but-shallow result
       — the clean fail-closed fix over-blocks benign large results, so it stays a documented tradeoff for the
       owning session. Evidence: mcp-parallel/findings/backstop-p2-depth-guard-recalibrate/finding.md.
+      CHG-0150 (2026-07-03, MEDIUM 1.4 leak + resource-bomb containment — CLOSES CHG-0148 residual #1): result
+      NODE-COUNT guard. apply_field_redaction bounds its walk with max_nodes=100k and returned the
+      PARTIALLY-masked result on overflow (fail-open). The depth guard bounds NESTING but not WIDTH — a
+      wide-but-shallow result (10MB list of small objects, millions of nodes) passed all caps, and a
+      redaction_fields target beyond the 100k-th node egressed RAW (pure-import repro: ssn behind 150k padding
+      nodes leaked; opaque named fields like session_token aren't caught by the content scan). Separately, such
+      a wide result forces a ~2.1s copy.deepcopy (measured; on the FULL structure regardless of max_nodes) +
+      recursive scan = resource bomb. FIX: (1) gateway/ai_mesh_gateway/mcp_proxy.py — _exceeds_node_count
+      (iterative, short-circuits O(limit)) + _MCP_MAX_RESULT_NODES (default 1M) wired into
+      _scan_tool_result_floor AFTER the depth guard: a result wider than the cap BLOCKS cleanly
+      (RESOURCE_LIMIT/result_too_many_nodes) BEFORE the deepcopy/scan/redact, fail-closed (monitor forwards
+      unscanned, parity with the depth guard). (2) redaction max_nodes 100k→2M in BOTH impls (policy_engine.py +
+      control/policy/redaction.py) — ABOVE the 1M guard so anything passing is FULLY walked (2M margin absorbs
+      node-counting differences). Behavior: results wider than 1M nodes (~10× any realistic result) block under
+      a real action (trims resource bombs only). +4 tests (kept light: cap monkeypatched small / small explicit
+      max_nodes — no million-node builds). Gate: test_mcp_result_block_count_cap.py + test_mcp_scan_orchestrator.py
+      pass; full gateway 2053 passed 0 failed; control verified via standalone pure-import repro (wide-result ssn
+      masked). NOTE: a mid-work full-suite test_output_guard_redos regex-linearity flake was INDUCED by my
+      initial million-node test payloads (passes in isolation, references none of this code) — fixed by making
+      the tests light; NOT a product regression. This closes the LAST open field-redaction residual (CHG-0148 #1
+      + #2 both now closed by CHG-0150/0149). Evidence: mcp-parallel/findings/backstop-p2-node-count-guard/finding.md.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER

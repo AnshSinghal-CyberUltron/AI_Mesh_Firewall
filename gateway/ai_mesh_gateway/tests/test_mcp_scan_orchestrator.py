@@ -684,6 +684,25 @@ def test_apply_field_redaction_deep_nesting_not_a_bypass():
     assert "X" not in json.dumps(out2) and "Y" not in json.dumps(out2)
 
 
+def test_apply_field_redaction_wide_result_not_a_bypass():
+    """CHG-0150: a redaction target 'late' in the walk order (behind padding, beyond the node
+    budget) must still be masked when the budget covers the result. Demonstrates the
+    overflow-leak mechanism with a small budget, then confirms the raised default (2M — the
+    gateway's _MCP_MAX_RESULT_NODES guard blocks anything wider upstream) masks it. Kept light
+    via a small explicit max_nodes rather than building millions of nodes."""
+    import json
+
+    from policy_engine import apply_field_redaction
+
+    # LIFO walk processes 'pad' before 'deep', so the ssn sits beyond the padding in walk order.
+    payload = {"deep": {"ssn": "LEAK"}, "pad": [{"i": i} for i in range(500)]}  # ~1000 nodes
+    leaky = apply_field_redaction(payload, ["ssn"], max_nodes=100)   # too small -> target beyond -> leaks
+    assert "LEAK" in json.dumps(leaky), "sanity: a too-small node budget leaks a late target"
+    covered = apply_field_redaction(payload, ["ssn"])                # default (2M) covers it
+    assert "LEAK" not in json.dumps(covered), "a target within the node budget must be masked"
+    assert covered["deep"]["ssn"] == "[REDACTED]"
+
+
 # ── 3b cross-stage: extra_redaction_fields projects INPUT-stage policy fields out
 # of the RESPONSE (control HTTP-path parity for "role X never sees field F", where
 # the rule fires on the CALL not the response). The caller threads an input scan's

@@ -124,6 +124,52 @@ async def test_deeply_nested_result_fails_closed_with_clear_reason():
     assert "RESOURCE_LIMIT" in tags
 
 
+def test_exceeds_node_count_iterative_and_short_circuits():
+    # CHG-0150: counts dict-keys + list-items, short-circuits at limit+1 (O(limit), not O(n)).
+    # A 100k-item list vs a limit of 1000 must return True having examined ~1000 nodes, not
+    # 100k — proving the short-circuit (kept light: only the container len is added per pop).
+    assert mcp_proxy._exceeds_node_count({"a": [0] * 100_000}, 1000) is True
+    assert mcp_proxy._exceeds_node_count({"a": {"b": "c"}}, 1000) is False
+    assert mcp_proxy._exceeds_node_count({"content": [{"t": "x"}] * 50}, 1000) is False
+    # Real default cap is generous (>= any realistic result); a small result is under it.
+    assert mcp_proxy._MCP_MAX_RESULT_NODES >= 1_000_000
+    assert mcp_proxy._exceeds_node_count({"r": [{"i": 1}] * 100}, mcp_proxy._MCP_MAX_RESULT_NODES) is False
+
+
+@pytest.mark.asyncio
+async def test_wide_result_over_node_cap_fails_closed(monkeypatch):
+    """CHG-0150: a wide (too many total nodes) result is blocked cleanly (RESOURCE_LIMIT)
+    BEFORE the expensive copy.deepcopy + scan — closing CHG-0148 residual #1 (a redaction
+    target beyond the redaction walk's node limit would otherwise egress RAW) and containing
+    the multi-second-deepcopy resource bomb. (Cap monkeypatched small so the test stays light.)"""
+    monkeypatch.setattr(mcp_proxy, "_MCP_MAX_RESULT_NODES", 100)
+    wide = {"structuredContent": {"rows": [{"i": i} for i in range(200)]}}  # ~400 nodes > 100
+    scanned, blocked, tags, findings, meta = await _floor(
+        wide, enabled_info={"default_scan_action": "redact"})
+    assert blocked is True
+    assert meta.get("result_too_many_nodes") is True
+    assert "RESOURCE_LIMIT" in tags
+
+
+@pytest.mark.asyncio
+async def test_wide_result_over_node_cap_monitor_forwards_unscanned(monkeypatch):
+    # Observe-only posture never blocks (parity with the depth guard): forward unscanned.
+    monkeypatch.setattr(mcp_proxy, "_MCP_MAX_RESULT_NODES", 100)
+    wide = {"structuredContent": {"rows": [{"i": i} for i in range(200)]}}
+    scanned, blocked, tags, findings, meta = await _floor(wide, enabled_info={"default_scan_action": "monitor"})
+    assert blocked is False
+    assert meta.get("result_too_many_nodes") is True
+    assert meta.get("monitor_scan_skipped") is True
+
+
+@pytest.mark.asyncio
+async def test_moderate_width_result_not_blocked_by_node_cap():
+    # A realistic result (well under the 1M node cap) is NOT node-blocked.
+    ok = {"structuredContent": {"rows": [{"i": i} for i in range(500)]}}  # ~1000 nodes
+    scanned, blocked, tags, findings, meta = await _floor(ok, enabled_info={"default_scan_action": "redact"})
+    assert meta.get("result_too_many_nodes") is not True
+
+
 @pytest.mark.asyncio
 async def test_depth_cap_fires_below_deepcopy_recursion_limit():
     """CHG-0149: the depth cap must fire CLEANLY (RESOURCE_LIMIT) for a result that would
