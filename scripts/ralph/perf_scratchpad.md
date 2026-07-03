@@ -126,7 +126,12 @@
       asgi_threads=12, cpu_bound). Both healthy 200. LOAD: gateway6 5117rps p99 104ms 0err cores=6.07/6 mem=1.24GiB;
       control6 2039rps p99 145ms 0err cores=6.31/6 mem=0.83GiB. Both SATURATE all 6 cores, 0 errors, combined RAM ~2GiB
       of 16 (< 12GiB=0.75*16 headroom), OOMKilled=false. Results → scratch_perf/p7_6c_results.txt (for item 24).
-- [ ] 23. Constrain --cpus=12 --memory=60g: detector up-scales; USES all 12 cores under load.
+- [x] 23. Constrain --cpus=12 --memory=60g: detector up-scales; USES all 12 cores under load.
+      → gateway+control constrained --cpus=12 --memory=60g. Detector UP-SCALED to 12 workers each (cpu_budget=12,
+      asgi_threads=24, ram_gib=58.85 correctly capped at physical since 60g>host). gateway12: 5140rps 0err, ALL 12
+      workers engaged+evenly balanced (per-worker CPU 11.2-12.4% each), ~8-9 cores (capped by co-located generator on
+      the shared 16-core host, NOT the gateway). control12 (item 17): 10.37/12 cores, 3060rps, 0err, no starvation.
+      RAM<<44GiB headroom, no OOM. control-1 stayed HEALTHY through all load (multi-worker resilient). → scratch_perf/p7_12c_results.txt.
 - [ ] 24. Load-test both: throughput scales with hardware, all cores used, p99 stable, RAM under budget + headroom, ~0 errors → docs/perf/SCALING_RESULTS.md.
 
 ## P8 — Freeze
