@@ -1326,6 +1326,17 @@
       Trace now continuous gateway->broker->sandbox on the chat path. NEW TEST test_mcp_internal_correlation_id.py (3) +
       fixed a CHG-0109 test mock signature. Gate: 3 + 1756 gateway passed 0 failed; broker 155. Oracle N/A (tracing).
       Evidence mcp-parallel/findings/backstop-p-internal-correlation-id/finding.md.
+      CHG-0121 (2026-07-03, LOW tracing completeness — LAST hop, closes the CHG-0052 residual): broker did not forward
+      X-Request-ID to the sandbox AGENT + the agent didn't log it. CHG-0051/0052 propagate + log the id at the broker,
+      CHG-0120 threads it gateway->adapter, but _post_agent_rpc was called with NO request_id + did client.post(json=
+      payload) with NO headers -> the id never reached the in-container agent, whose /rpc neither read nor logged it.
+      Trace broke at broker->agent. FIX: (1) services/mcp-broker/src/sandbox/routes.py: _forward_sandbox_rpc passes
+      request_id to _post_agent_rpc, which forwards it as an X-Request-ID header (omitted when absent); (2)
+      sandbox-image/agent/main.py: /rpc reads X-Request-ID (Header) + logs ONE line with SAFE metadata ONLY (org/server/
+      transport/method/jsonrpc_id/request_id, NEVER params/args/env/upstream, mirrors CHG-0052). Trace now continuous
+      gateway->broker->sandbox agent. +2 broker tests + 1 agent test. Gate: 5 ready-retry + 157 broker + 7 agent passed;
+      gateway unaffected. Oracle N/A (tracing). Completes CHG-0050/0051/0052/0120. Item-13 tracing residual now ONLY
+      OTEL/Jaeger + PG/Redis backup (INFRA/host-blocked). Evidence mcp-parallel/findings/backstop-p-agent-correlation-id/finding.md.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

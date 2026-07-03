@@ -11,7 +11,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header
 from pydantic import BaseModel, Field, model_validator
 
 from agent.stdio_manager import list_processes, send_jsonrpc, shutdown_all, start_reaper
@@ -95,8 +95,19 @@ async def health() -> dict[str, Any]:
 
 
 @app.post("/rpc")
-async def rpc(body: SandboxRpcRequest) -> dict[str, Any]:
+async def rpc(
+    body: SandboxRpcRequest,
+    x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
+) -> dict[str, Any]:
     """Transport-agnostic JSON-RPC forward (stdio, streamable-http, sse, websocket)."""
+    # CHG-0121: log the propagated correlation id (last trace hop) with SAFE metadata
+    # ONLY — never params/args/env/upstream, which can carry PII/secrets (mirrors the
+    # broker CHG-0052 log). Makes the trace continuous gateway → broker → sandbox agent.
+    LOG.info(
+        "agent rpc org=%s server=%s transport=%s method=%s jsonrpc_id=%s request_id=%s",
+        ORG_SLUG, body.server_slug, body.transport, body.method, body.jsonrpc_id,
+        x_request_id or "-",
+    )
     if not body.server_slug.strip():
         return _jsonrpc_error(body.jsonrpc_id, -32602, "server_slug is required")
 

@@ -210,6 +210,7 @@ async def _post_agent_rpc(
     agent_url: str,
     payload: dict[str, Any],
     timeout: float,
+    request_id: str | None = None,
 ) -> httpx.Response:
     """POST one RPC to the sandbox agent, tolerating the cold-start boot window.
 
@@ -218,13 +219,18 @@ async def _post_agent_rpc(
     — refresh the agent URL, back off, and retry, up to a bounded number of
     attempts. Only transport errors are retried; a real HTTP response (any
     status) is returned to the caller unchanged.
+
+    CHG-0121: forward the propagated ``X-Request-ID`` to the in-container agent
+    (last trace hop) so the agent can log it and the trace is continuous
+    gateway -> broker -> sandbox agent.
     """
     url = agent_url
+    _headers = {"X-Request-ID": request_id} if request_id else None
     last_exc: httpx.HTTPError | None = None
     for attempt in range(1, _AGENT_READY_RETRIES + 1):
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                return await client.post(url, json=payload)
+                return await client.post(url, json=payload, headers=_headers)
         except httpx.HTTPError as exc:
             last_exc = exc
             if attempt >= _AGENT_READY_RETRIES:
@@ -309,7 +315,8 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
 
         try:
             response = await _post_agent_rpc(
-                docker_manager, org_slug, agent_url, payload, timeout
+                docker_manager, org_slug, agent_url, payload, timeout,
+                request_id=request_id,  # CHG-0121: last trace hop → the sandbox agent
             )
         except httpx.HTTPError as exc:
             # B3 #20: the agent socket is still not bound after the cold-start

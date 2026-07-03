@@ -29,6 +29,7 @@ class _FakeClient:
 
     calls = 0
     fail_until = 0
+    last_headers = None  # CHG-0121: capture the forwarded headers for the trace test
 
     def __init__(self, *_a, **_k):
         pass
@@ -39,8 +40,9 @@ class _FakeClient:
     async def __aexit__(self, *_a):
         return False
 
-    async def post(self, _url, json=None):  # noqa: A002 - matches httpx signature
+    async def post(self, _url, json=None, headers=None):  # noqa: A002 - matches httpx signature
         type(self).calls += 1
+        type(self).last_headers = headers
         if type(self).calls <= type(self).fail_until:
             raise httpx.ConnectError("agent socket not ready")
         return _FakeResp(200)
@@ -93,3 +95,26 @@ async def test_raises_after_exhausting_retries(monkeypatch):
             _FakeDockerManager(), "org", "http://sandbox:8790/rpc", {"m": 1}, 5.0
         )
     assert _FakeClient.calls == 4
+
+
+# ── CHG-0121: forward the X-Request-ID correlation id to the in-container agent (last
+# trace hop), so the trace is continuous gateway → broker → sandbox agent.
+
+
+@pytest.mark.asyncio
+async def test_forwards_x_request_id_header_to_agent(monkeypatch):
+    _install(monkeypatch, fail_until=0)
+    await routes._post_agent_rpc(
+        _FakeDockerManager(), "org", "http://sandbox:8790/rpc", {"m": 1}, 5.0,
+        request_id="trace-agent-7",
+    )
+    assert _FakeClient.last_headers == {"X-Request-ID": "trace-agent-7"}
+
+
+@pytest.mark.asyncio
+async def test_no_request_id_sends_no_header(monkeypatch):
+    _install(monkeypatch, fail_until=0)
+    await routes._post_agent_rpc(
+        _FakeDockerManager(), "org", "http://sandbox:8790/rpc", {"m": 1}, 5.0,
+    )
+    assert _FakeClient.last_headers is None  # no spurious empty header

@@ -41,6 +41,14 @@ def agent_client(monkeypatch):
         yield client
 
 
+
+
+@pytest.fixture(autouse=True)
+def _skip_upstream_ssrf_dns(agent_client):
+    """Unit tests mock upstream I/O; skip live DNS resolution for mcp.example.com."""
+    with patch("agent.upstream_manager._assert_upstream_not_ssrf", new=AsyncMock()):
+        yield
+
 def test_single_post_rpc_route(agent_client):
     """Agent exposes exactly one JSON-RPC forward endpoint."""
     app = agent_client.app
@@ -220,3 +228,30 @@ def test_unknown_transport_rejected_on_post_rpc(agent_client):
     assert resp.status_code in (200, 422)
     if resp.status_code == 200:
         assert resp.json()["error"]["code"] == -32004
+
+
+# ── CHG-0121: the agent /rpc endpoint logs the propagated X-Request-ID (last trace hop)
+# with SAFE metadata ONLY — never params/args/env/upstream (mirrors broker CHG-0052).
+
+
+def test_rpc_logs_x_request_id_safely(agent_client, caplog):
+    import logging
+    import sys
+
+    agent_main = sys.modules["agent.main"]
+    with patch.object(
+        agent_main, "send_jsonrpc",
+        new=AsyncMock(return_value={"jsonrpc": "2.0", "id": 1, "result": {"tools": []}}),
+    ):
+        with caplog.at_level(logging.INFO):
+            resp = agent_client.post(
+                "/rpc",
+                headers={"X-Request-ID": "trace-agent-7"},
+                json={"server_slug": "srv", "transport": "stdio", "method": "tools/list",
+                      "jsonrpc_id": 1, "stdio": {"command": "npx", "args": ["-y", "secret-pkg"]}},
+            )
+    assert resp.status_code == 200
+    msgs = [r.getMessage() for r in caplog.records if r.getMessage().startswith("agent rpc")]
+    assert any("request_id=trace-agent-7" in m for m in msgs)              # correlated
+    assert all("npx" not in m and "secret-pkg" not in m and "command" not in m
+               for m in msgs)                                              # no args/command leaked
