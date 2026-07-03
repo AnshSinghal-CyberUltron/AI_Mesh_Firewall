@@ -495,7 +495,10 @@ PII_PATTERNS: Dict[str, str] = {
     # its first few chars (a bounded lookahead) so benign prose like "passport
     # application form" is not flagged. All quantifiers are bounded => linear/ReDoS-safe.
     "government_id": (
-        r"(?:passport|aadhaar|aadhar|national\s+insurance|driver'?s?\s+licen[cs]e|\bnino\b)"
+        # G94: also the BRITISH term "driving licence/license" (the standard UK phrasing for a
+        # driver's license) — previously only the US "driver'?s? licen[cs]e" cue was recognised, so a
+        # UK "driving licence number <X>" egressed undetected. driv(?:er'?s?|ing) covers both.
+        r"(?:passport|aadhaar|aadhar|national\s+insurance|driv(?:er'?s?|ing)\s+licen[cs]e|\bnino\b)"
         r"\s*(?:number|no\.?|id|#)?\s*[:#]?\s*"
         r"(?=[A-Za-z0-9\s\-]{0,6}\d)"
         r"([A-Za-z0-9][A-Za-z0-9\s\-]{4,16}[A-Za-z0-9])"

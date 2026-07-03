@@ -689,6 +689,31 @@ def test_g93_benign_lookalike_not_flagged(label, text):
     assert not _g93_detected(text), f"{label}: benign lookalike wrongly flagged as a credential (false positive)"
 
 
+# G94 — the BRITISH "driving licence/license" cue for the government_id detector (CONFIRMED gap, fixed
+# 2026-07-03). The G25 cue matched only the US "driver('s) licen[cs]e", so a UK "driving licence number
+# <X>" (the standard British term for a driver's license) egressed UNDETECTED. FIXED: driv(?:er'?s?|ing).
+# FROZEN with FP guards (a "driving lesson" / a "licence agreement" must NOT trip it).
+@pytest.mark.parametrize("label,payload,core", [
+    ("g94_driving_licence", "my driving licence number is A1234567890123", "A1234567890123"),
+    ("g94_driving_license", "driving license D1234567", "D1234567"),
+    ("g94_us_driver_still", "driver's licence D7654321", "D7654321"),
+    ("g94_passport_still",  "passport no 987654321", "987654321"),
+    ("g94_nino_still",      "nino AB123456C", "AB123456C"),
+])
+def test_g94_government_id_detected_and_masked(label, payload, core):
+    assert patterns.detect_pii(payload), f"{label}: government_id not detected"
+    assert core not in patterns.redact_all(payload), f"{label}: detected but not masked from egress"
+
+
+@pytest.mark.parametrize("label,payload", [
+    ("g94_fp_lesson",    "I took a driving lesson yesterday at 3pm sharp"),
+    ("g94_fp_agreement", "the software licence agreement v2 terms apply here"),
+    ("g94_fp_bare",      "order 987654321 shipped today in the afternoon"),
+])
+def test_g94_benign_gov_id_not_flagged(label, payload):
+    assert not patterns.detect_pii(payload), f"{label}: benign prose wrongly flagged as a government id (false positive)"
+
+
 # G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
 # PII/secret placed PAST patterns._CANON_MAX_LEN escapes the canonical pass (a fullwidth SSN at
 # offset 21k -> detect_pii False, since canonicalize_for_detection only folds text[:_CANON_MAX_LEN];

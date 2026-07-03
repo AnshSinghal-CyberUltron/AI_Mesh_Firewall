@@ -2745,3 +2745,22 @@ random ordering (shared-mock state leaks across tests). PROVEN independent of G9
 affect mock call_count; with `-p no:randomly` the file + full backend pass 10/10 and 1787/1787. Flagged for
 the MCP-suite owner to add per-test mock isolation.
 Session ledger: SEVENTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90/G91/G92/G93) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+
+---
+
+## G94 (CONFIRMED gap — fixed) — 2026-07-03 — UK "driving licence" cue missing from government_id detector
+PII-type completeness sweep (IBAN/passport/IPv6/IPv4/MAC/ITIN/routing all DET; national IDs are context-cue
+gated by design — a bare number is not PII). One real gap: the G25 `government_id` cue alternation had
+`driver'?s?\s+licen[cs]e` (US "driver('s) license/licence") but NOT the BRITISH "driving licence/license" —
+the STANDARD UK term for a driver's license. So `my driving licence number is <X>` egressed UNDETECTED (the
+number format matched; only the cue missed). FIXED (owned patterns.py, 1 token): `driv(?:er'?s?|ing)`.
+**Verify:** driving licence/license (UK) + driving license → DET + masked (`[GOVERNMENT_ID_REDACTED]`);
+driver's/drivers licence, passport, nino, aadhaar still DET; FP-clean on "driving lesson" / "software licence
+agreement" / bare order number. In-process golden **566 ×3 consecutive clean**; backend **1787 passed**.
+Also verified DEFENDED (no fix needed): output multi-part content-split (content_to_text concatenates
+parts with NO separator → mid-token splits reassemble → redact); ALL auto-loading HTML elements
+(iframe/object/embed/video/source/audio/track/svg-image/svg-use/link-preload/meta-refresh/input-image/
+body-background/poster) → redact+defang; Unicode-TAGS ASCII-smuggling (U+E00xx) → canonicalize decodes →
+input block/redact, output redact.
+**Frozen:** golden `test_g94_*` (5 detect+mask incl. regression + 3 FP).
+Session ledger: EIGHTEEN confirmed leaks/gaps (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90/G91/G92/G93/G94) + soft DoS (G79) fixed; G77/G78/G80 frozen.
