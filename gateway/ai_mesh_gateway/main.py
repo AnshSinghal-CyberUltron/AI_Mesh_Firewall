@@ -1321,6 +1321,22 @@ def _extract_prompt_from_messages(messages):
                     _args = ""
             if _name or _args:
                 parts.append(f"{role}.tool_call[{_name}]: {_args}")
+        # G103: fold the LEGACY singular `function_call` (pre-tool_calls API shape) into the
+        # INPUT scan too. G7 folded tool_calls[], but this channel was scanned only on the
+        # OUTPUT/enforcement side (I5), so an injection / PII / credential smuggled in
+        # function_call.arguments bypassed the block/redact DECISION and reached the model
+        # unscanned — the same fail-open class G7 closed for the plural shape.
+        _fc = m.get("function_call")
+        if isinstance(_fc, dict):
+            _fcn = _fc.get("name") or ""
+            _fca = _fc.get("arguments")
+            if not isinstance(_fca, str):
+                try:
+                    _fca = json.dumps(_fca) if _fca is not None else ""
+                except (TypeError, ValueError):
+                    _fca = ""
+            if _fcn or _fca:
+                parts.append(f"{role}.function_call[{_fcn}]: {_fca}")
     return "\n".join(parts)
 
 
