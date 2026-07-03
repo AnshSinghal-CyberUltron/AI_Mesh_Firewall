@@ -2187,6 +2187,70 @@ async def ext_mcp_proxy(path: str, request: Request):
 # Auth: validated via X-Gateway-Internal-Key (same shared secret as backend).
 
 
+async def _scan_internal_tools_list(
+    payload,
+    *,
+    jsonrpc,
+    msg_id,
+    enabled_info,
+    org_slug: str,
+    server_slug: str,
+    transport: str,
+):
+    """CHG-0108: scan a DISCOVERED tools/list payload before returning it to the
+    backend tool-sync / chat pipeline.
+
+    The internal discovery route (``internal_discover_tools``) returned upstream tool
+    METADATA (descriptions / names / inputSchema) RAW — a parity gap vs the org path
+    (``org_mcp_jsonrpc`` tools/list, CHG-0077/0092), the REST list (CHG-0079), and the
+    external proxy, all of which scan tool metadata. Tool descriptions come LIVE from an
+    UNTRUSTED upstream MCP server and are synced into the catalog + shown to the model:
+    a classic tool-poisoning / metadata-leak surface. A secret / PII / internal-IP (or a
+    CHG-0076 encoded-exfil payload) in a description therefore reached the backend/LLM
+    unredacted on the discovery path.
+
+    Tools-shaped result → reuse ``_scanned_tools_list_response`` (masks a maskable leak;
+    blocks fail-closed on poisoned/unmaskable metadata; audits). A bare ERROR ENVELOPE
+    (a tools/list auth-failure error can echo a token/URL) → scan the whole payload via
+    the result floor (CHG-0092 parity). Descriptions are not actor-scoped → ``actor=None``
+    (matches the org tools/list scan)."""
+    if not isinstance(payload, dict):
+        return JSONResponse(content=payload, status_code=200)
+    if isinstance(payload.get("result"), dict):
+        return await _scanned_tools_list_response(
+            payload, jsonrpc=jsonrpc, msg_id=msg_id, enabled_info=enabled_info,
+            org_slug=org_slug, server_slug=server_slug, actor=None,
+        )
+    # Non-tools-shaped (bare error envelope / malformed result): scan the whole payload
+    # so a secret/PII/internal-IP in an error message is masked or fail-closed blocked.
+    _s, _blk, _tags, _find, _meta = await _scan_tool_result_floor(
+        payload, tool_name="tools/list", enabled_info=enabled_info,
+        org_slug=org_slug, server_slug=server_slug, actor=None,
+    )
+    if _blk or (_s is not payload):
+        await _record_gateway_event(
+            org_slug=org_slug, server_slug=server_slug, tool_name="tools/list",
+            decision="block" if _blk else "redact", reason="tools_list_error_scan",
+            metadata={"transport": transport, "enforced_at": "gateway_internal_discover",
+                      "scan_pipeline": "two_tier"},
+            compliance_tags=list(_tags), scan_findings=_find,
+        )
+    if _blk:
+        return JSONResponse(
+            content={
+                "jsonrpc": jsonrpc, "id": msg_id,
+                "error": {
+                    "code": -32000,
+                    "message": "tools/list withheld: server response matched sensitive content",
+                },
+            },
+            status_code=200,
+        )
+    if _s is not payload:
+        return JSONResponse(content=_s, status_code=200)
+    return JSONResponse(content=payload, status_code=200)
+
+
 @router.post(
     "/internal/discover-tools",
     summary="Internal tool discovery for backend sync",
@@ -2226,6 +2290,9 @@ async def internal_discover_tools(request: Request):
         org_slug, server_slug, transport,
     )
 
+    # CHG-0108: metadata scan needs the server's scan action (respects a monitor override).
+    enabled_info = await _get_enabled_tools(org_slug, server_slug)
+
     tools_list_body = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -2234,9 +2301,21 @@ async def internal_discover_tools(request: Request):
     }
 
     if _is_sandbox_routed(transport):
-        return await _adapter_forward(
+        # CHG-0108: scan the sandbox (stdio/ws) upstream tool metadata before returning
+        # it to the backend tool-sync — was returned RAW (tool-poisoning / metadata-leak).
+        _adapter_resp = await _adapter_forward(
             transport, config, org_slug, server_slug,
             tools_list_body, "2.0", 1,
+        )
+        try:
+            _payload = json.loads(_adapter_resp.body.decode("utf-8")) if _adapter_resp.body else None
+        except Exception:
+            _payload = None
+        if not isinstance(_payload, dict):
+            return _adapter_resp
+        return await _scan_internal_tools_list(
+            _payload, jsonrpc="2.0", msg_id=1, enabled_info=enabled_info,
+            org_slug=org_slug, server_slug=server_slug, transport=transport,
         )
 
     # For streamable-http / sse: call the upstream MCP server directly
@@ -2314,15 +2393,24 @@ async def internal_discover_tools(request: Request):
                         data_str = line[5:].strip()
                         if data_str:
                             try:
-                                return JSONResponse(content=json.loads(data_str), status_code=200)
+                                _payload = json.loads(data_str)
                             except json.JSONDecodeError:
-                                pass
+                                continue
+                            # CHG-0108: scan upstream tool metadata before returning.
+                            return await _scan_internal_tools_list(
+                                _payload, jsonrpc="2.0", msg_id=1, enabled_info=enabled_info,
+                                org_slug=org_slug, server_slug=server_slug, transport=transport,
+                            )
                 return JSONResponse(
                     content={"jsonrpc": "2.0", "id": 1, "result": {"tools": []}},
                     status_code=200,
                 )
             else:
-                return JSONResponse(content=tools_resp.json(), status_code=200)
+                # CHG-0108: scan upstream tool metadata before returning.
+                return await _scan_internal_tools_list(
+                    tools_resp.json(), jsonrpc="2.0", msg_id=1, enabled_info=enabled_info,
+                    org_slug=org_slug, server_slug=server_slug, transport=transport,
+                )
     except Exception as exc:
         LOG.error("Internal discover-tools upstream error: %s", exc)
         return JSONResponse(

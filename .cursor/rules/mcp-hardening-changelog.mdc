@@ -1547,6 +1547,28 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   + sandbox agent (dedup CHG-0053 copy). Evidence `mcp-parallel/findings/backstop-p13-stdio-arg-url-cred-log-leak/`.
   One log-hygiene helper, both deployables.
 
+- **CHG-0108** (2026-07-03) — **MEDIUM-HIGH 1.4 leak + tool-poisoning: internal tool-DISCOVERY route returned
+  upstream tools/list metadata UNSCANNED**. `internal_discover_tools` (the `X-Gateway-Internal-Key` route the
+  backend uses to SYNC an MCP server's tool catalog) returned the upstream `tools/list` **RAW** on BOTH paths
+  (sandbox `_adapter_forward`; direct-httpx `json.loads(data_str)` / `tools_resp.json()`). Tool descriptions /
+  names / inputSchema come LIVE from an UNTRUSTED upstream MCP server, synced into the catalog + shown to the
+  model → a secret / PII / internal-IP (or a CHG-0076 encoded-exfil payload) in a description egressed to the
+  backend/LLM unredacted, while `org_mcp_jsonrpc` tools/list (CHG-0077/0092), the REST list (CHG-0079), AND the
+  ext-proxy all scan tool metadata. Byte-verified pre-fix: a description carrying `AKIAIOSFODNN7EXAMPLE` +
+  `bob.jones@corp.example` + `10.9.8.7` egressed all three raw on both paths. **FIX (`mcp_proxy.py`):** new
+  `_scan_internal_tools_list` scans the discovered payload — tools-shaped → `_scanned_tools_list_response` (mask a
+  maskable metadata leak; fail-closed BLOCK poisoned/unmaskable metadata; audit); a bare error envelope →
+  `_scan_tool_result_floor` (CHG-0092 parity) + audit; wired into all 3 return points (sandbox buffer+scan; direct
+  SSE; direct JSON); fetches `enabled_info` (respects a `monitor` override); `actor=None` (descriptions not
+  actor-scoped). NEW TEST `test_mcp_internal_discover_tools_scan.py` (5: direct desc secret+PII+IP masked + redact
+  audited; sandbox desc masked + audited; poisoned/unmaskable → withheld+block; error-envelope secret masked;
+  benign preserved). Gate: 5 + 1668 gateway passed, 0 failed; broker 120 (unaffected). Byte-level: `Contact
+  bob.jones@corp.example key AKIAIOSFODNN7EXAMPLE host 10.9.8.7` → `Contact b***@c***.example key AKIA****MPLE host
+  [INTERNAL_IPV4_REDACTED]`; poisoned `…/.ssh/id_rsa` desc → `tools/list withheld`. Independent oracle (aidefence):
+  `has_pii` true raw / false masked. touched: owning-session `internal_discover_tools`; extends CHG-0077/0079/0092.
+  Evidence `mcp-parallel/findings/backstop-p-internal-discover-tools-unscanned/`. tools/list scanning now at full
+  parity across org-jsonrpc / REST / ext-proxy / internal-discovery.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

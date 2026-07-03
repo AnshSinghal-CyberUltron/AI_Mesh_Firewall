@@ -1163,6 +1163,22 @@
       controls correct. Independent oracle (aidefence_scan): piiFound true raw / false masked (blind to AWS-key/URL-
       query class -> byte-level authoritative; masking uses urlsplit, independent of the detection regexes).
       Evidence mcp-parallel/findings/backstop-p13-stdio-arg-url-cred-log-leak/finding.md. One helper, both deployables.
+      CHG-0108 (2026-07-03, MEDIUM-HIGH 1.4 leak + tool-poisoning — internal tool-DISCOVERY route returned upstream
+      tools/list metadata UNSCANNED): internal_discover_tools (the X-Gateway-Internal-Key route the backend uses to
+      SYNC an MCP server's tool catalog) returned the upstream tools/list RAW on BOTH paths (sandbox _adapter_forward;
+      direct-httpx json.loads/tools_resp.json). Tool descriptions/names/inputSchema come LIVE from an untrusted
+      upstream, synced into the catalog + shown to the model -> a secret/PII/internal-IP (or CHG-0076 encoded-exfil)
+      in a description egressed to backend/LLM unredacted, while org_mcp_jsonrpc (CHG-0077/0092), REST (CHG-0079), and
+      the ext-proxy all scan tool metadata. Byte-verified pre-fix: desc AKIAIOSFODNN7EXAMPLE + bob.jones@corp.example
+      + 10.9.8.7 egressed all three raw on both paths. FIX (mcp_proxy.py): new _scan_internal_tools_list scans the
+      discovered payload — tools-shaped -> _scanned_tools_list_response (mask maskable / fail-closed BLOCK poisoned/
+      unmaskable / audit); bare error envelope -> _scan_tool_result_floor (CHG-0092 parity) + audit; wired into all 3
+      return points; fetches enabled_info (respects monitor override); actor=None (descriptions not actor-scoped). NEW
+      TEST test_mcp_internal_discover_tools_scan.py (5). Gate: 5 + 1668 gateway passed 0 failed; broker 120
+      (unaffected). Byte-level: Contact bob.jones@corp.example key AKIAIOSFODNN7EXAMPLE host 10.9.8.7 -> b***@c***.
+      example key AKIA****MPLE host [INTERNAL_IPV4_REDACTED]; poisoned .ssh/id_rsa desc -> tools/list withheld. Oracle
+      (aidefence): has_pii true raw / false masked. Evidence mcp-parallel/findings/backstop-p-internal-discover-tools-
+      unscanned/finding.md. tools/list scanning now at FULL PARITY across org-jsonrpc / REST / ext-proxy / internal-discovery.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.
