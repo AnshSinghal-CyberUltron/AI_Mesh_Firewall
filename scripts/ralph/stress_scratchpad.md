@@ -2918,3 +2918,38 @@ adversarial_corpus.py + test_adversarial_attacks.py) — NO source/behavior chan
 and the backend suite is unaffected.
 Session ledger: NINETEEN confirmed leaks/gaps (G74..G95) fixed + G96 freezes 6 verified-defended vectors;
 soft DoS (G79); G77/G78/G80 frozen.
+
+---
+
+## R5 LIVE — ~10 free OpenRouter models connected + enforcement validated through them — 2026-07-03
+Client-flow model connection + live enforcement validation via the deployed gateway + real free models.
+**Connection state (coordination finding):** the org ALREADY had **10 free OpenRouter models** connected
+with the provided key (ids 5-14, provider=custom, api_base=https://openrouter.ai/api/v1, key masked
+••••6c11) — connected by a prior/parallel session (the key is shared in the prompt across sessions). I
+first POSTed my own 10 via the client endpoint `/api/firewall/models/` (all **201 Created** — proves the
+provided key is accepted + the client connect flow works), then discovered they were DUPLICATES of the
+existing set, so I **DELETED my 10 (all 204)** to respect shared state / avoid pollution (coordination
+rule: minimize overlapping edits). Net org footprint unchanged; no net-new key persistence by me. Free
+models enumerated from OpenRouter public /models (26 free; pricing.prompt==0): gemma-4, nemotron-3-*,
+laguna, lfm-2.5, cohere north-mini, openrouter/free.
+**Live enforcement through the free models (deployed gateway /v1/chat/completions, simulator key drives
+the gateway, org's encrypted OpenRouter key reaches the model):**
+* Injections — plain / Greek-homoglyph (G95) / monospace-styled (G96) → **block** LIVE (no model call). ✓
+* PII — "my ssn is 123-45-6789" → org policy resolves to **flag-and-mask**; the SSN was **NOT forwarded**
+  to the model (verified the forwarded prompt_out/prompt_submitted has no raw SSN). Redaction held → **no
+  PII reaches the model.** ✓
+* Benign — input_scan **allow**; routes through policy→input_scan→route→reroute→output_guard (all allow);
+  pipeline trace correct. ✓
+* Free-model responses are often EMPTY/slow and rapid sequential requests hit OpenRouter free-tier RATE
+  LIMITS → a transient upstream failure surfaces as a block/error on that request (NOT a firewall
+  scan-block: in-process ALL these benign prompts verdict=allow, so the label is upstream-failure
+  handling, not a false positive). This bounds a FULL 591-case × 10-model live sweep (rate-impractical).
+**Kill-switch:** not toggled live (shared infra — would disrupt parallel sessions; covered by backend
+enforcement suite). **Secret hygiene:** provided key used only via the runtime client session (Playwright
+browser fetch to the app's own endpoint); NOT written to any tracked file / .env / snapshot / this record;
+Playwright artifacts grep-scanned (no key/JWT) then deleted; staged-diff secret scan gates the commit.
+**Conclusion:** R5 substantially validated — ~10 free models connected (client flow proven), and the
+firewall's enforcement holds END-TO-END through real free models (blocks justified, no PII to model,
+redactions held, routing + traces correct). The literal FULL-corpus × all-10-models sweep stays
+OpenRouter-rate-limit bounded. No source change this iteration.
+Session ledger unchanged: G74..G95 (19 leaks) fixed + G96 freezes 6 defended vectors; G77/G78/G80 frozen.
