@@ -1260,6 +1260,25 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_adapter_error_envelope_redaction.py -q`.
   Evidence `mcp-parallel/findings/backstop-p-adapter-error-envelope/`. RESIDUAL: tools/LIST adapter
   fall-through (~L2943 raw return on non-tools-shaped payload) is the same class, lower probability — noted.
+  → **CLOSED by CHG-0092.**
+
+- **CHG-0092** (2026-07-03) — **MEDIUM fail-open 1.4 leak, the CHG-0091 TWIN (closes the class)**: MCP adapter
+  tools/**LIST** fall-through in `org_mcp_jsonrpc` (the `return adapter_resp` after the tools-shaped branch).
+  Upstream tool DESCRIPTIONS are scanned only when the payload is tools-shaped (`_scanned_tools_list_response`,
+  CHG-0077/0081); any NON-tools-shaped payload — a bare JSON-RPC error envelope (auth-failure tools/list errors
+  realistically echo a token/URL/PII), or a malformed result — fell through to `return adapter_resp` UNSCANNED
+  → a secret/PII/internal-IP in `error.message` egressed raw. **FIX:** before the fall-through, scan the whole
+  payload via `_scan_tool_result_floor` (same floor as CHG-0091), mirroring `_scanned_tools_list_response`:
+  masked → redacted envelope; unmaskable survivor → fail-CLOSED withheld (generic error); clean → raw
+  passthrough (no change for benign errors); audit block/redact (`reason="tools_list_error_scan"`,
+  `enforced_at="gateway_adapter"`). +3 tools/list tests. Gate: 8 (5 tools/call + 3 tools/list) + 1538 gateway
+  passed, 0 failed; broker 108. Byte-truth: tools/list error egress `b***@c***.example` / `***-**-4321` (raw
+  `bob.jones@corp.example` / `987-65-4321`); AWS-key+IP variant both masked. Independent oracle (aidefence):
+  `has_pii` false fixed / true raw. touched: owning-session mcp_proxy.py (extends CHG-0077/0081/0091). VERIFY
+  `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_adapter_error_envelope_redaction.py -q`.
+  Evidence `mcp-parallel/findings/backstop-p-toolslist-error-envelope/`. NOTE: a `ghp_…` looked unmasked → a
+  test-token defect (pattern `\bghp_[a-zA-Z0-9]{36}\b`, exactly 36; a valid 36-char github token IS masked via
+  detect_pii→floor), NOT a code gap.
 
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 

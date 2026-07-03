@@ -2940,6 +2940,47 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         org_slug=org_slug, server_slug=server_slug, actor=mcp_actor,
                         request_id=_mcp_request_correlation_id(request, msg_id),  # CHG-0081
                     )
+                # CHG-0092: the adapter payload was NOT tools-shaped — e.g. a bare
+                # JSON-RPC ERROR envelope from a stdio/ws upstream (an auth-failure
+                # tools/list error can echo a token/URL), or a malformed result. It used
+                # to return RAW. Scan the whole envelope through the result floor so a
+                # secret/PII/internal-IP in an error message is masked (or fail-closed
+                # blocked) — the tools/list twin of the CHG-0091 tools/call fix.
+                _tl_s, _tl_blocked, _tl_tags, _tl_find, _tl_meta = await _scan_tool_result_floor(
+                    payload,
+                    tool_name="tools/list",
+                    enabled_info=enabled_info,
+                    org_slug=org_slug,
+                    server_slug=server_slug,
+                    actor=mcp_actor,
+                )
+                if _tl_blocked or (_tl_s is not payload):
+                    await _record_gateway_event(
+                        org_slug=org_slug,
+                        server_slug=server_slug,
+                        tool_name="tools/list",
+                        decision="block" if _tl_blocked else "redact",
+                        reason="tools_list_error_scan",
+                        request_id=_mcp_request_correlation_id(request, msg_id),
+                        metadata={"transport": transport, "enforced_at": "gateway_adapter",
+                                  "scan_pipeline": "two_tier"},
+                        compliance_tags=list(_tl_tags),
+                        scan_findings=_tl_find,
+                    )
+                if _tl_blocked:
+                    return JSONResponse(
+                        content={
+                            "jsonrpc": jsonrpc,
+                            "id": msg_id,
+                            "error": {
+                                "code": -32000,
+                                "message": "tools/list withheld: server response matched sensitive content",
+                            },
+                        },
+                        status_code=200,
+                    )
+                if _tl_s is not payload:
+                    return JSONResponse(content=_tl_s, status_code=200)
             return adapter_resp
 
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:

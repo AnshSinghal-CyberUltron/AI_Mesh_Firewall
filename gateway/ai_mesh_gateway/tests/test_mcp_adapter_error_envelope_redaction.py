@@ -49,6 +49,9 @@ from middleware import AuthContext  # noqa: E402
 # realistic shape: an upstream tool echoing the connection string it failed on.
 _RAW_SECRET = "ghp_REALLOOKINGSECRET1234ABCD"
 _RAW_IP = "10.0.0.5"
+# A secret that reliably matches a STANDALONE detector (not only inside a connection
+# string): the canonical AWS example access key → aws_access_key, tag SECRET.
+_RAW_SECRET_STANDALONE = "AKIAIOSFODNN7EXAMPLE"
 _LEAKY_ERR_MSG = (
     f"connect failed: postgres://svc:{_RAW_SECRET}@{_RAW_IP}:5432/prod timed out"
 )
@@ -177,6 +180,91 @@ async def test_error_envelope_unmaskable_survivor_fails_closed():
     # fail-closed => a [BLOCKED] result envelope, isError set
     assert "[BLOCKED]" in blob
     assert decoded.get("result", {}).get("isError") is True
+
+
+# ── CHG-0092: tools/LIST adapter error-envelope twin ─────────────────────────
+# The tools/list adapter fall-through (org_mcp_jsonrpc, the `return adapter_resp`
+# after the tools-shaped branch) returned RAW for any non-tools-shaped payload —
+# including a bare JSON-RPC error envelope (an auth-failure tools/list error can
+# echo a token/URL). Now it is scanned through the result floor too.
+
+
+async def _run_adapter_toolslist_error(request, body, *, enabled_info, error_obj):
+    """Drive org_mcp_jsonrpc on the stdio adapter tools/list path where the upstream
+    returns a BARE JSON-RPC ERROR envelope (no result/tools)."""
+    from fastapi.responses import JSONResponse
+    raw = JSONResponse(content={
+        "jsonrpc": "2.0", "id": body["id"], "error": error_obj,
+    }, status_code=200)
+    request.json = AsyncMock(return_value=body)
+    with (
+        patch.object(mcp_proxy, "_validate_org_scope", return_value=None),
+        patch.object(mcp_proxy, "_get_server_config",
+                     AsyncMock(return_value={"transport": "stdio", "command": "x"})),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=enabled_info)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "_adapter_forward", AsyncMock(return_value=raw)),
+    ):
+        return await mcp_proxy.org_mcp_jsonrpc("demo", "srv", request)
+
+
+def _list_body(msg_id):
+    return {"jsonrpc": "2.0", "id": msg_id, "method": "tools/list", "params": {}}
+
+
+@pytest.mark.asyncio
+async def test_toolslist_error_envelope_secret_and_ip_redacted():
+    """A token + internal IP echoed in a tools/list ERROR (e.g. auth failure) is MASKED
+    on the stdio adapter path, not returned raw."""
+    req = _make_request(_auth())
+    resp = await _run_adapter_toolslist_error(
+        req, _list_body(51), enabled_info=None,
+        error_obj={"code": -32001, "message": f"auth failed for key {_RAW_SECRET_STANDALONE} at {_RAW_IP}"},
+    )
+    blob = json.dumps(_decode(resp))
+    assert _RAW_SECRET_STANDALONE not in blob, "secret in tools/list error egressed RAW"
+    assert _RAW_IP not in blob, "internal IP in tools/list error egressed RAW"
+
+
+@pytest.mark.asyncio
+async def test_toolslist_error_envelope_benign_unchanged():
+    """A benign tools/list error is returned unchanged — no corruption or withholding."""
+    req = _make_request(_auth())
+    resp = await _run_adapter_toolslist_error(
+        req, _list_body(52), enabled_info=None,
+        error_obj={"code": -32000, "message": "server temporarily unavailable"},
+    )
+    decoded = _decode(resp)
+    assert decoded["error"]["message"] == "server temporarily unavailable"
+    assert "***" not in json.dumps(decoded)
+
+
+@pytest.mark.asyncio
+async def test_toolslist_tools_shaped_still_scanned_not_regressed():
+    """Guard: a normal tools-shaped tools/list response is still scanned via the
+    existing metadata path (CHG-0077) — the CHG-0092 fall-through must not shadow it.
+    A secret in a tool DESCRIPTION is masked."""
+    from fastapi.responses import JSONResponse
+    req = _make_request(_auth())
+    tools_payload = {
+        "jsonrpc": "2.0", "id": 53,
+        "result": {"tools": [
+            {"name": "echo", "description": f"echoes input; internal key {_RAW_SECRET_STANDALONE}"},
+        ]},
+    }
+    raw = JSONResponse(content=tools_payload, status_code=200)
+    req.json = AsyncMock(return_value=_list_body(53))
+    with (
+        patch.object(mcp_proxy, "_validate_org_scope", return_value=None),
+        patch.object(mcp_proxy, "_get_server_config",
+                     AsyncMock(return_value={"transport": "stdio", "command": "x"})),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "_adapter_forward", AsyncMock(return_value=raw)),
+    ):
+        resp = await mcp_proxy.org_mcp_jsonrpc("demo", "srv", req)
+    blob = json.dumps(_decode(resp))
+    assert _RAW_SECRET_STANDALONE not in blob, "secret in tool description egressed RAW"
 
 
 if __name__ == "__main__":

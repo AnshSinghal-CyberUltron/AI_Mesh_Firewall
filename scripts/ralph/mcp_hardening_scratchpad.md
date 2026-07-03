@@ -441,6 +441,20 @@
       oracle (aidefence): email/SSN error envelope → has_pii false fixed / true raw. Evidence:
       mcp-parallel/findings/backstop-p-adapter-error-envelope/finding.md. RESIDUAL: tools/LIST adapter
       fall-through (~L2943 raw return on non-tools-shaped payload) same class, lower probability — noted.
+      -> CLOSED by CHG-0092.
+      CHG-0092 (2026-07-03, MEDIUM fail-open 1.4 leak — the CHG-0091 TWIN, closes the class): MCP adapter
+      tools/LIST fall-through in org_mcp_jsonrpc (the `return adapter_resp` after the tools-shaped branch).
+      Upstream tool descriptions scanned only for tools-shaped payloads (_scanned_tools_list_response, CHG-
+      0077/0081); any NON-tools-shaped payload — a bare JSON-RPC error envelope (auth-failure tools/list errors
+      can echo a token/URL/PII), or a malformed result — returned RAW unscanned. FIX: before the fall-through,
+      scan the whole payload via _scan_tool_result_floor (same floor as CHG-0091), mirroring the
+      _scanned_tools_list_response contract — masked->redacted envelope, unmaskable->fail-CLOSED withheld,
+      clean->raw passthrough; audit block/redact (reason="tools_list_error_scan"). +3 tools/list tests. Gate:
+      8 + 1538 gateway passed 0 failed; broker 108. Byte-truth: tools/list error egress b***@c***.example /
+      ***-**-4321 (raw bob.jones@corp.example / 987-65-4321); AWS-key+IP variant both masked. Independent
+      oracle (aidefence): has_pii false fixed / true raw. Evidence mcp-parallel/findings/backstop-p-toolslist-
+      error-envelope/finding.md. NOTE: a ghp_… looked unmasked → test-token defect (pattern \bghp_[a-zA-Z0-9]
+      {36}\b exactly 36; valid 36-char github token IS masked via detect_pii→floor), not a code gap.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;
