@@ -1232,6 +1232,30 @@ def _extract_prompt_from_responses_input(input_value, instructions=None):
             _it = item.get("text")
             if isinstance(_it, str):
                 parts.append(_it)
+            # G104 (LATENT / dead-code hardening — NOT a live fix): this helper has no call sites;
+            # /v1/responses scans via responses_to_chat -> the chat pipeline, so a Responses
+            # function_call/function_call_output IS already scanned (as chat tool_calls/tool-role).
+            # These folds only matter IF this function is ever wired up; kept as belt-and-suspenders.
+            _itype = item.get("type")
+            if _itype == "function_call":
+                _args = item.get("arguments")
+                if not isinstance(_args, str):
+                    try:
+                        _args = json.dumps(_args) if _args is not None else ""
+                    except (TypeError, ValueError):
+                        _args = ""
+                _nm = item.get("name") or ""
+                if _nm or _args:
+                    parts.append(f"function_call[{_nm}]: {_args}")
+            elif _itype == "function_call_output":
+                _out = item.get("output")
+                if not isinstance(_out, str):
+                    try:
+                        _out = json.dumps(_out) if _out is not None else ""
+                    except (TypeError, ValueError):
+                        _out = ""
+                if _out:
+                    parts.append(f"function_call_output: {_out}")
     return "\n".join(p for p in parts if p)
 
 
@@ -1421,7 +1445,14 @@ def _extract_tool_definitions_text(tools) -> str:
     for t in tools:
         if not isinstance(t, dict):
             continue
-        fn = t.get("function") or {}
+        # G105: the OpenAI RESPONSES-API tool shape is FLAT ({type,name,description,parameters}) —
+        # no nested "function" wrapper — and responses_to_chat carries `tools` VERBATIM into the
+        # chat body, so a tool-definition injection / PII / secret via /v1/responses evaded this
+        # scan (which only read t["function"]). Fall back to the top-level fields when the chat-
+        # shape "function" key is absent. FP-safe: benign tool text only blocks when it IS an attack.
+        fn = t.get("function")
+        if not isinstance(fn, dict):
+            fn = t
         name = fn.get("name") or ""
         desc = fn.get("description") or ""
         if name or desc:

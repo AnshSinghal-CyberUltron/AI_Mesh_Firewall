@@ -3333,3 +3333,29 @@ block-downgrade "B-POL FIX / PIPELINE-0009" block) — I did not commit or distu
 **Corrected ledger: TWENTY-FIVE leaks (G74..G95, G97, G98, G100, G101, G102, G103) + ONE false-block (G99)
 fixed.** G104 is NOT counted as a leak. G96 freezes 6 defended vectors; G77/G78/G80 frozen. In-process
 golden **637 ×3** (the G104 tests now guard the real conversion path).
+
+---
+
+## G105 (CONFIRMED leak — fixed) — 2026-07-03 — tool-def injection via the FLAT Responses-API tool shape
+VERIFIED-LIVE finding (applied the G104 lesson: traced call-sites + live-tested before claiming). First
+confirmed two adapter endpoints are DEFENDED via live paths: /v1/completions dispatches EACH prompt
+(str or every array element) through `_dispatch_chat_internally` (full firewall); /v1/moderations scans
+EACH input via `INPUT_SCANNER.scan_prompt`. Then found a REAL gap: the OpenAI **Responses-API tool shape
+is FLAT** (`{type,name,description,parameters}` — no nested `function` wrapper), and `responses_to_chat`
+carries `tools` VERBATIM into the chat body. `main._extract_tool_definitions_text` (the LIVE tool-def
+scanner, called at main.py ~5992) only read `t["function"]`, so a prompt-injection / PII / secret in a
+Responses tool DESCRIPTION or PARAMETER schema evaded the tool-def scan (G81 covered only the nested chat
+shape). **Live-confirmed**: a /v1/responses request with a `tools[].description` injection was NOT
+security-blocked (HTTP 502 upstream_error — the firewall forwarded it; a chat NESTED tool would block).
+**FIX (main.py — CLAIMED, minimal):** in `_extract_tool_definitions_text`, fall back to the top-level
+fields (`fn = t`) when the chat-shape `t["function"]` key is absent — handling BOTH shapes.
+**Verify:** flat tool description/param injection → **block** (+ param PII detected); nested chat tool
+(G81) → still **block** (no regression); benign flat tool → **allow** (FP-clean). In-process golden
+**642 ×3** (was 637; +5 G105, via `_fold_tool_defs` replica handling both shapes); backend
+`ai_mesh_gateway/tests` **1926 passed / 0 failed** (excl. other session's untracked WIP).
+**Frozen:** golden `test_g105_*` + `_fold_tool_defs` helper.
+**Coordination:** the earlier shared-worktree entanglement RESOLVED — the other session committed their
+policy block-downgrade change (`194dde95 PIPELINE-0009`), so main.py is clean again; my main.py commit
+now contains only my G105 fix + the retained G104 latent-comment relabel.
+Session ledger: TWENTY-SIX leaks (G74..G95, G97, G98, G100, G101, G102, G103, G105) + ONE false-block
+(G99) fixed; G104 was a FALSE finding (dead code); G96 freezes 6 defended vectors; G77/G78/G80 frozen.
