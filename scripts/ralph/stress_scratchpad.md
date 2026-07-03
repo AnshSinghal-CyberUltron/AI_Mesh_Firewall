@@ -3206,3 +3206,27 @@ Rebuilt+redeployed the baked gateway (tag rollback-g101 → build → up -d --no
 LIVE-verified: parenthesized-letter injection → **block**; parenthesized-digit SSN → flag-and-**masked**
 (neither the plain nor the parenthesized form forwarded — no PII to model). G101 validated end-to-end
 (in-process 624×3 + backend 1846 + live deployed).
+
+---
+
+## G102 (CONFIRMED leak — fixed) — 2026-07-03 — confusable-map DRIFT (Cyrillic в/к/м/т/н missing from PII canon)
+The recurring hand-maintained-twin-map drift (same class as G95). Diffed scanner._HOMOGLYPH_MAP (injection
+path) vs patterns._CONFUSABLE_MAP (PII/secret path): scanner folded common Cyrillic lowercase look-alikes
+**в(b)/н(h)/к(k)/м(m)/т(t)** that patterns did NOT — so a secret/credential obfuscated with them
+(**valid github token `ghp_вкнмт…` → detected raw, NOT detected as Cyrillic-homoglyph = PII-PATH LEAK**),
+while the injection scan caught the same substitution. Conversely patterns had extended-Cyrillic
+Ԁ/Һ/Ԛ/Ԝ/У/ӏ/ԝ that scanner lacked.
+NOTE: last iteration's "Armenian leak" was mostly ARTIFICIAL — ի/ր/ց/ա are NOT genuine Latin look-alikes
+(an attacker's obfuscation wouldn't be readable); only Armenian small oh (օ) is a clean confusable.
+**FIX (both owned files):** reconciled BOTH maps to IDENTICAL key sets — added в/н/к/м/т + Armenian օ→o to
+patterns._CONFUSABLE_MAP; added ӏ/ԝ/Ԁ/Һ/Ԛ/Ԝ/У + օ→o to scanner._HOMOGLYPH_MAP. **Froze a PARITY GUARD**
+golden (`test_g102_confusable_maps_have_identical_keys`) so the two maps can NEVER silently diverge again
+(this drift has now caused 2 leaks: G95, G102).
+**Verify:** maps now key-identical (scanner-only=[], patterns-only=[]); Cyrillic-homoglyph github token →
+detected+masked; в/к/м/т/н homoglyph injection → block; Armenian օ→o folds. FP-clean: benign Russian
+("привет как дела") / Armenian ("բարև") prose / "the вкмт config" → allow, not flagged. In-process golden
+**629 ×3** (was 624; +5 G102: secret-detect + 2 injection + parity-guard + FP); backend
+`ai_mesh_gateway/tests` **1850 passed / 0 failed** (excl. other session's untracked WIP).
+**Frozen:** golden `test_g102_*` (incl. the drift parity guard).
+Session ledger: TWENTY-FOUR leaks (G74..G95, G97, G98, G100, G101, G102) + ONE false-block (G99) fixed;
+G96 freezes 6 defended vectors; G77/G78/G80 frozen.

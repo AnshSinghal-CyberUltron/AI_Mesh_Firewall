@@ -61,6 +61,12 @@ _CONFUSABLE_MAP = {
     "х": "x", "у": "y", "і": "i", "ј": "j", "ѕ": "s",
     # Cyrillic lowercase (NFKC-identity) not covered above
     "ԁ": "d", "һ": "h", "ӏ": "l", "ԛ": "q", "ԝ": "w",
+    # G102: reconcile the drift with scanner._HOMOGLYPH_MAP — it folded these common Cyrillic
+    # lowercase look-alikes (ve/en/ka/em/te) but this PII/secret canon did NOT, so a secret/
+    # credential obfuscated with them (``ghp_вкнмт…`` with Cyrillic в/к/м/т/н) evaded
+    # detect_pii/detect_secrets while the injection path caught it. + Armenian small oh (օ) which
+    # is a genuine Latin ``o`` look-alike (the one clean Armenian confusable).
+    "в": "b", "н": "h", "к": "k", "м": "m", "т": "t", "օ": "o",
     "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H",
     "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O",
     "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X",

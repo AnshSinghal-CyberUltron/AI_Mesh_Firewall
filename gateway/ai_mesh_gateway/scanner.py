@@ -364,6 +364,9 @@ _HOMOGLYPH_MAP: dict[str, str] = {
     "у": "y", "х": "x", "і": "i", "ј": "j", "һ": "h",
     "ԁ": "d", "ԛ": "q", "ѕ": "s", "н": "h", "в": "b",
     "м": "m", "т": "t", "к": "k",
+    # G102: reconcile the drift with patterns._CONFUSABLE_MAP — it folded these extended-Cyrillic
+    # + palochka look-alikes and Cyrillic У/Armenian oh, which this injection map lacked.
+    "ӏ": "l", "ԝ": "w", "Ԁ": "D", "Һ": "H", "Ԛ": "Q", "Ԝ": "W", "У": "Y", "օ": "o",
     # Cyrillic uppercase look-alikes
     "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M",
     "Н": "H", "О": "O", "Р": "P", "С": "C", "Т": "T",
