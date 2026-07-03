@@ -672,18 +672,29 @@ def _reassemble_split_words(tokens: list[str]) -> list[str]:
 # false-positive; the explanatory-mention carve-out covers the single-turn case.)
 _ROLE_LINE_RE = re.compile(r"^\[(user|assistant|system|developer|tool)\]:\s?(.*)$")
 _INSTRUCTION_ROLES = ("user", "developer")
+# G71: the cross-turn VALUE (PII/secret/credential) reassembly folds the user/developer
+# instruction channel PLUS `tool` results — a value split with one half in a tool result
+# (client/tool-provided data, an agentic-poisoning surface) and the other in a user turn was
+# missed by the instruction-only reassembly (G69). `assistant` is EXCLUDED on purpose: its
+# content is prior MODEL OUTPUT that was already OUTPUT-scanned when produced, AND folding it
+# would INSERT an intervening ack ("ok") between two user-turn halves, breaking a real
+# user+ack+user split. `system` is excluded (trusted-by-design, G47). Dropping the
+# non-value roles (like G69 drops acks) keeps intervening turns from splitting the value.
+_VALUE_ROLES = ("user", "developer", "tool")
 
 
-def _reassemble_user_turns(text: str, sep: str = " ") -> str | None:
-    """Return the instruction-turn-only reassembly (user + developer) of a folded
-    multi-turn conversation, or ``None`` when ``text`` is not a multi-turn fold (so
-    single-turn scans are unaffected). Continuation lines of a multi-line instruction
-    message are kept with that turn; assistant/tool/system turns are dropped.
+def _reassemble_user_turns(text: str, sep: str = " ", roles: tuple = _INSTRUCTION_ROLES) -> str | None:
+    """Return the ``roles``-only reassembly of a folded multi-turn conversation, or ``None``
+    when ``text`` is not a multi-turn fold (so single-turn scans are unaffected). Continuation
+    lines of a multi-line message are kept with that turn.
 
-    ``sep`` joins the turn segments — a SPACE (default) for the injection re-scan (words
-    are space-separated), or EMPTY for the G69 PII/secret/credential check (a value split
-    MID-TOKEN across turns, ``123-`` | ``45-6789``, must concatenate with no gap to match)."""
-    if "\n" not in text or not any(f"[{r}]:" in text for r in _INSTRUCTION_ROLES):
+    ``sep`` joins the turn segments — a SPACE (default) for the injection re-scan (words are
+    space-separated), or EMPTY for the G69/G71 PII/secret/credential check (a value split
+    MID-TOKEN across turns, ``123-`` | ``45-6789``, must concatenate with no gap to match).
+    ``roles`` selects which turns are folded — the user/developer INSTRUCTION channel for the
+    injection re-scan, or the broader ``_VALUE_ROLES`` (user/developer/tool) for the value
+    check (G71), so a value the model reassembles from a tool result + user turn is caught."""
+    if "\n" not in text or not any(f"[{r}]:" in text for r in roles):
         return None
     role_lines = 0
     parts: list[str] = []
@@ -693,10 +704,10 @@ def _reassemble_user_turns(text: str, sep: str = " ") -> str | None:
         if m:
             role_lines += 1
             cur_role = m.group(1)
-            if cur_role in _INSTRUCTION_ROLES:
+            if cur_role in roles:
                 parts.append(m.group(2))
-        elif cur_role in _INSTRUCTION_ROLES:
-            parts.append(ln)  # continuation of a multi-line instruction message
+        elif cur_role in roles:
+            parts.append(ln)  # continuation of a multi-line message
     # Require a real multi-turn fold: >=2 role-labelled turns and >=2 instruction segments.
     if role_lines < 2 or len(parts) < 2:
         return None
@@ -1272,7 +1283,10 @@ class InputScanner:
             # injection re-scan would false-positive on words run together). Reaching here
             # means the original text carried no contiguous PII/secret/credential (those
             # return early above), so any hit here is genuinely a cross-turn split.
-            _joined = _reassemble_user_turns(text, sep="")
+            # G71: fold the user/developer/tool turns (not just the instruction channel) — a
+            # value split across a tool result and a user turn is reassembled by the model and
+            # must be caught. assistant is excluded (already output-scanned; would insert acks).
+            _joined = _reassemble_user_turns(text, sep="", roles=_VALUE_ROLES)
             if _joined and _joined != text:
                 _j_pii = detect_pii(_joined)
                 _j_secret = detect_secrets(_joined)

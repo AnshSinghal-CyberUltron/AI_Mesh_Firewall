@@ -252,6 +252,40 @@ def test_g69_benign_multiturn_not_flagged(label, messages):
     assert _verdict(_fold(messages)) == "allow", f"{label}: benign multi-turn wrongly flagged (FP)"
 
 
+# ── G71: value split across a TOOL result (or tool+tool) reassembled by the model ─────────
+# G69 folded only the user/developer instruction channel, so a value split with one half in a
+# `tool` result (client/tool-provided data — an agentic-poisoning surface) was missed. The
+# value reassembly now folds user/developer/tool (assistant is EXCLUDED — its content was
+# already output-scanned, and folding it would insert an ack between two user-turn halves).
+_G71_SPLIT = [
+    ("g71_tool_user", [{"role": "tool", "tool_call_id": "c", "content": "record: 123-"},
+                       {"role": "user", "content": "45-6789 confirm"}]),
+    ("g71_tool_tool", [{"role": "tool", "tool_call_id": "a", "content": "part1 415-"},
+                       {"role": "tool", "tool_call_id": "b", "content": "555-0147"}]),
+    ("g71_user_ack",  [{"role": "user", "content": "here it is 123-"},
+                       {"role": "assistant", "content": "ok"},
+                       {"role": "user", "content": "45-6789 done"}]),  # ack must NOT break it
+]
+_G71_BENIGN = [
+    ("g71_benign_tool", [{"role": "user", "content": "look up order 42"},
+                         {"role": "tool", "tool_call_id": "c", "content": "order 42 shipped on time"}]),
+    ("g71_benign_chat", [{"role": "user", "content": "weather today"},
+                         {"role": "assistant", "content": "it is sunny in NYC"},
+                         {"role": "user", "content": "and tomorrow"}]),
+]
+
+
+@pytest.mark.parametrize("label,messages", _G71_SPLIT)
+def test_g71_cross_role_split_value_detected(label, messages):
+    assert _verdict(_fold(messages)) in ("redact", "block"), (
+        f"{label}: value split across tool/user turns reached the model (BYPASS)")
+
+
+@pytest.mark.parametrize("label,messages", _G71_BENIGN)
+def test_g71_benign_multirole_not_flagged(label, messages):
+    assert _verdict(_fold(messages)) == "allow", f"{label}: benign multi-role wrongly flagged (FP)"
+
+
 # ================================================================== fixed gap (now FROZEN)
 # G27 — multi-turn split injection across the DEVELOPER role. G6 reassembled USER turns
 # only, but the OpenAI ``developer`` role is also client-controlled and instruction-
