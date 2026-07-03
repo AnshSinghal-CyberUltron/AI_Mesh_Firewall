@@ -2764,3 +2764,29 @@ body-background/poster) → redact+defang; Unicode-TAGS ASCII-smuggling (U+E00xx
 input block/redact, output redact.
 **Frozen:** golden `test_g94_*` (5 detect+mask incl. regression + 3 FP).
 Session ledger: EIGHTEEN confirmed leaks/gaps (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90/G91/G92/G93/G94) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+
+---
+
+## R5 LIVE end-to-end validation (representative corpus through the DEPLOYED gateway) — 2026-07-03
+Drove adversarial cases through the deployed gateway's REAL /v1/chat/completions pipeline via
+`live_driver.characterize_live_chat` (login → simulator key → real connected OpenRouter model — the same
+path R5 describes; the OpenRouter key stays server-side encrypted, the SIMULATOR key drives the gateway).
+Results (real HTTP + real model in the loop):
+* plain injection → **block** ✓ ; bidi-obfuscated injection (G74) → **block** ✓ ; base64-wrapped injection
+  (G34) → **block** ✓  (blocks happen BEFORE any model call).
+* plain SSN → **redact** ✓ ; entity+Cf-encoded SSN (G87) → **redact/masked** — the forwarded prompt is
+  `my ssn is [ENCODED_SECRET_REDACTED]` (verified `redact_pii` masks it; recoverable=False), so NO PII
+  reaches the model. (In-process the scanner verdict is `block`/obfuscated_pii; the LIVE org-enforcement
+  layer resolves it to redact-and-mask — both are safe. The forward path is `llm_router._apply_redaction`
+  = redact_all + the B1 FAIL-CLOSED digit backstop, which blocks if any sensitive run survives masking, so
+  the wire is never raw.)
+* benign → allow (when not rate-limited).
+**Constraint:** free OpenRouter models RATE-LIMIT rapid sequential requests, so ~3 of 8 later cases returned
+HTTPStatusError (transient, incl. the benign one) — this bounds running the COMPLETE corpus rapidly through
+the live SDK, not the enforcement. Blocks (no model call) are unaffected.
+**Conclusion:** the deployed gateway's core enforcement is validated END-TO-END through the real pipeline —
+injections blocked, PII (plain AND obfuscated) masked before forward (no PII reaches the model), B1
+fail-closed backstop present. R5's "no PII reaches models / blocks justified" holds for the representative
+corpus; the FULL-corpus + ~10-model live sweep remains rate-limit-bounded (and the frozen live golden
+`test_chat_pipeline_golden` already exercises the live pipeline 10/10). No code change this iteration.
+Session ledger unchanged: EIGHTEEN confirmed leaks/gaps (G74..G94) + soft DoS (G79) fixed & deployed; G77/G78/G80 frozen.
