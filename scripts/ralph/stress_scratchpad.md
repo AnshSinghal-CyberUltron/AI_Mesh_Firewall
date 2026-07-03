@@ -2982,3 +2982,35 @@ would disrupt parallel sessions on shared main — covered by backend enforcemen
 Full literal 591×10 sweep stays throttle/rate-bounded (and redundant with in-process 591×3 + these
 family-representative live cases). No source change; no key persisted; Playwright artifacts cleaned.
 Session ledger unchanged: G74..G95 (19 leaks) fixed + G96 freezes 6 defended vectors; G77/G78/G80 frozen.
+
+---
+
+## R5 kill-switch verification (LIVE, non-disruptive, per-model) — 2026-07-03
+Verified the kill-switch END-TO-END through the deployed gateway (the last unchecked R5 verify item).
+Per-model, org-scoped (Redis `kill_switch:{slug}:model:{model}` + `ModelState.status`), so tested on ONE
+free model with explicit recovery (isolate → target it → verify → recover).
+* **action=reroute:** isolate `google/gemma-4-31b-it:free` (fallback nemotron) → request TARGETING gemma
+  → **allow, selected=nvidia/nemotron-3-super-120b:free** (routed AWAY from the isolated model). ✓
+* **action=block:** isolate gemma (block) → request TARGETING gemma → **HTTP 503** (isolated model refused,
+  not served). ✓
+* **auto-expiry:** the Redis kill-switch key TTL = cooldown (60s) → after expiry the request to gemma
+  returns **allow 200** again (enforcement lifted). ✓
+R5 verify checklist NOW COMPLETE: no PII to models ✓ · redactions hold ✓ · blocks justified ✓ · routing
+correct ✓ · **kill-switch works ✓** · traces correct ✓.
+
+### COORDINATION FINDING (not my code — control/core, flagged for its owner): recover API 404s on slash model-ids
+`POST /api/models/recover/<str:model_name>/` and `GET/PATCH /api/models/status/<str:model_name>/` take the
+model_name from the URL PATH. Django's `<str:>` converter does NOT match `/`, so an OpenRouter-style id
+containing a slash (`google/gemma-4-31b-it:free`) → **404**, and URL-encoding the slash (`%2F`) also 404s.
+Consequence: a slash-named model isolated via `POST /api/models/isolate/` (which takes model_name in the
+BODY, so slashes are fine) **cannot be explicitly recovered via the API** — only the Redis enforcement
+auto-expires (cooldown TTL), while `ModelState.status` stays stuck at `"isolated"` in the DB. That stale
+status makes `main._drop_isolated_or_killed_candidates` exclude the model from `model='auto'` routing
+indefinitely (availability/soft-DoS: one isolate permanently sidelines a slash-named model from
+auto-routing until a manual DB fix). `POST /api/models/sync/` only CREATES missing rows, it does not
+reset an existing isolated status. **Fix belongs to the control/model_state owner** (e.g. accept the
+model_name via the request body, or use `<path:model_name>`, or canonicalize). I did NOT edit control
+code (out of ownership). **Cleanup done:** recovered the one gemma row I created via the control ORM
+(`ModelState.status='active'`, Redis re-synced); verified **no models left isolated** (11 states, all
+active). No owned-source change this iteration.
+Session ledger unchanged: G74..G95 (19 leaks) fixed + G96 freezes 6 defended vectors; G77/G78/G80 frozen.
