@@ -321,6 +321,21 @@ class SecureStreamingResponse:
         self._last_flush_reason = reason
 
         full_text = "".join(self._content_buffer)
+        try:
+            from output_guard import normalize_output_scan_text
+        except ImportError:
+            from .output_guard import normalize_output_scan_text
+        full_text = normalize_output_scan_text(full_text)
+        if not full_text and self._output_guard is not None:
+            # L7: whitespace-only / empty model output — release without guard scan.
+            if reason == FlushReason.DONE:
+                for original_sse, _ in self._chunk_queue:
+                    yield original_sse
+                self._clear_buffers()
+            else:
+                for original_sse in self._release_with_lookahead_tail():
+                    yield original_sse
+            return
 
         # E14 long-secret split fix (fix_hint option 2): if the PREVIOUS flush
         # redacted a secret that ran to the buffer edge, a "secret-in-progress"

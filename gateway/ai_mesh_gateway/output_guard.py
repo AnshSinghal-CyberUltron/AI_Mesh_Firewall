@@ -635,6 +635,20 @@ class HallucinationScore:
     detail: str = ""
 
 
+def normalize_output_scan_text(text: str) -> str:
+    """Return model-generated text suitable for OUTPUT-guard scanning.
+
+    Whitespace-only completions are treated as empty (L7): the guard must not
+    run PII/secret checks when the model produced no substantive output bytes.
+    Non-empty text is returned unchanged (internal spacing preserved).
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    if not text.strip():
+        return ""
+    return text
+
+
 class OutputGuard:
     """
     Orchestrates all output inspection checks and returns the
@@ -701,6 +715,7 @@ class OutputGuard:
             org_slug: Tenant identifier passed to the semantic grounding
                 backend for embedder cache isolation and telemetry.
         """
+        text = normalize_output_scan_text(text)
         if not text:
             return OutputVerdict()
 

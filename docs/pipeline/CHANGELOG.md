@@ -2,6 +2,35 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0013 (2026-07-03)
+
+**Output guard scans model-generated text only; empty output is not PII (L6/L7).**
+
+Root Cause:
+- **L7:** Whitespace-only completions (`"   \n\t  "`) were truthy scan text → output
+  guard ran PII/secret checks on non-substantive “empty” model output.
+- **L6:** `sync_pre_llm` built `pipeline_trace` before `_apply_output_guard_nonstream`,
+  and `output_guardrail.detail` fell back to input-side `zeroshield.reason` → operator
+  trace showed input redaction text on the output stage when model output was empty.
+- Streaming `_flush_buffer` did not normalize whitespace-only buffered text before
+  `OUTPUT_GUARD.inspect()`.
+
+Fix:
+- `output_guard.py`: `normalize_output_scan_text()` — whitespace-only → empty; `inspect()`
+  returns allow on empty scan text.
+- `main.py`: `_model_output_scan_text()` wraps `_extract_scannable_output_text` +
+  normalization; used by Path B + Path D; `sync_pre_llm` runs output guard before trace
+  and passes `output_scan_verdict` into `build_pipeline_trace`.
+- `pipeline_trace.py`: output_guardrail `detail` no longer falls back to input-side
+  `zs.reason` unless `detection_tier=="output_guard"`.
+- `secure_streaming.py`: normalize buffered text before guard scan; skip guard on empty.
+
+Verification:
+- 12 new tests (`test_pipeline_output_guard_model_only.py`).
+- Gate: 2022 gateway tests passed.
+
+Evidence: `mcp-parallel/findings/pipeline-p13-output-guard-model-only/`
+
 ## PIPELINE-0012 (2026-07-03)
 
 **Pre-masked smart-mask PII must REDACT-forward, not BLOCK at input_scan.**

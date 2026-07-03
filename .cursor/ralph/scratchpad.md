@@ -22,7 +22,7 @@
 - [x] 12. Verify: PII record → policy redact → input_scan sees masked → final_action=redact → masked prompt to model. DONE: ROOT CAUSE = (1) G53 `strip_interleaved_emphasis` stripped `***` from smart partial masks (j***@a***.com→j@a.com) → false obfuscated_pii BLOCK; PIPELINE-0011 insufficient. (2) B1 redaction-no-op honesty guard treated already-masked bytes as unmaskable → BLOCK. (3) scan_block_on_pii=false downgraded scanner redact→allow. FIX: smart-mask PII patterns + {1,2}-marker emphasis cap + G53 smart-mask skip + noop exemption + force redact eligibility on smart-mask text + pipeline_trace input_scan=redact on noop. LIVE: input_scan enforcement REDACT, model forwarded masked prompt. 7 new tests. Gate: 38 obfuscation + 4 pre-mask + 2009 full suite. PIPELINE-0012.
 
 ## P4 — Fix the output guard
-- [ ] 13. Output guard evaluates the ACTUAL model output, never the input echo; an empty output does not "contain PII". (Fix L6, L7.)
+- [x] 13. Output guard evaluates the ACTUAL model output, never the input echo; an empty output does not "contain PII". (Fix L6, L7.) DONE: normalize_output_scan_text + _model_output_scan_text (whitespace-only→empty); inspect() allow on empty; sync_pre_llm guard-before-trace + output_scan_verdict; pipeline_trace output detail no input zs.reason fallback; streaming normalize before inspect. 12 new tests. PIPELINE-0013.
 - [ ] 14. Redaction (not block) where output carries PII and can be masked; byte-verified (bytes changed). Verify on a real completion.
 
 ## P5 — Latency: correct, coherent, reducible

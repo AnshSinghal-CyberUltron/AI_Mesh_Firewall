@@ -78,6 +78,10 @@
  interleaved credential wrongly filtered OUT. FIX: use _*_core variants (no canon) for the
  plain-text filter in scanner.py (G33+G53) + mcp_scan_orchestrator.py (G76). 17 new tests
  in test_pipeline_obfuscation_fp.py. Gate: 17 targeted + 2000 full suite passed.
+ - PIPELINE-0013 (2026-07-03) — OUTPUT GUARD MODEL-ONLY (L6/L7): normalize_output_scan_text +
+ _model_output_scan_text treat whitespace-only as empty; inspect() allow on empty; sync_pre_llm
+ guard-before-trace + output_scan_verdict; pipeline_trace output detail no input-echo fallback;
+ streaming normalize before inspect. 12 tests. Gate: 2022 full suite.
  - PIPELINE-0012 (2026-07-03) — PRE-MASKED SMART-MASK PII REDACTS (not block): G53 stripped `***`
  from partial masks (j***@a***.com→j@a.com) → false obfuscated_pii BLOCK; B1 noop guard blocked
  already-masked bytes; scan_block_on_pii=false downgraded redact→allow. FIX: smart-mask PII

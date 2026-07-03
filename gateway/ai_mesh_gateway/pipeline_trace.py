@@ -710,8 +710,15 @@ def build_pipeline_trace(
             "latency_ms": _latency("output_guardrail"),
             "detail": (
                 output_guard.get("guard_reason")
-                or zs.get("reason")
-                or zs.get("detail")
+                or (
+                    (zs.get("reason") or zs.get("detail"))
+                    if _enforced_at_output
+                    else (
+                        "No model output to scan"
+                        if not (response_text or "").strip()
+                        else "Output guard evaluation — no findings"
+                    )
+                )
                 or "Output guard evaluation"
             ),
             "content": _truncate(zs.get("redacted_response") or zs.get("rewritten_response") or response_text, 2000),
