@@ -450,9 +450,24 @@ async def _ensure_process(
 
 async def _log_stderr(proc: StdioProcess):
     assert proc.process and proc.process.stderr
+    stderr = proc.process.stderr
     try:
         while True:
-            line = await proc.process.stderr.readline()
+            try:
+                line = await stderr.readline()
+            except (asyncio.LimitOverrunError, ValueError):
+                # CHG-0152: an untrusted stdio server can flood stderr with a huge
+                # UNTERMINATED line. readline() raises once the line exceeds the stream
+                # limit (LimitOverrunError on py3.14, ValueError on py3.12) AND consumes the
+                # buffered bytes on BOTH runtimes (verified on python:3.12-slim + py3.14). The
+                # old catch-all `except Exception` sat OUTSIDE the loop, so it EXITED on that
+                # raise — stderr was then never drained again, the OS pipe buffer filled, and
+                # the child BLOCKED on write(2) to stderr (a self-hang of that org's server).
+                # SKIP the oversized line and KEEP DRAINING (a huge line drains in
+                # limit-sized chunks across successive raises; bounded by the sandbox
+                # cpu/mem limits; the reader survives).
+                LOG.warning("Stdio %s: skipped an oversized stderr line", proc.key)
+                continue
             if not line:
                 break
             decoded = line.decode(errors="replace").strip()

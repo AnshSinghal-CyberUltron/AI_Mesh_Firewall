@@ -6,9 +6,11 @@ MCP_OUT_OF_MEMORY, distinct from a generic crash/start failure.
 """
 from __future__ import annotations
 
+import asyncio
 import importlib
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 SANDBOX_IMAGE = Path(__file__).resolve().parents[2]
 
@@ -84,3 +86,60 @@ def test_stdout_closed_when_rc_none():
     m = _load()
     r = m._classify_exit_reason(None, "", oversized_line=False)
     assert "stdout stream closed" in r
+
+
+def _fake_stderr_proc(reader):
+    """Minimal StdioProcess-shaped object for _log_stderr (only the fields it reads)."""
+    return SimpleNamespace(
+        process=SimpleNamespace(stderr=reader),
+        key="test-server",
+        stderr_tail=[],
+        initialized=True,          # skip the OAuth-prompt heuristic branch
+        oauth_header_injected=False,
+    )
+
+
+def test_log_stderr_survives_oversized_line_flood():
+    """CHG-0152: an untrusted server flooding stderr with a huge UNTERMINATED line must NOT
+    hang the drain loop. The old catch-all EXITED on the LimitOverrunError/ValueError, leaving
+    stderr undrained (child blocks on write). _log_stderr must skip the oversized line and KEEP
+    reading, so a normal diagnostic line AFTER the flood is still captured. Verified cross-version
+    (py3.14 here + py3.12 via docker): both consume the buffer on the oversized-line raise."""
+    m = _load()
+
+    async def _run():
+        reader = asyncio.StreamReader(limit=1024)  # small limit -> readline raises fast
+        proc = _fake_stderr_proc(reader)
+        task = asyncio.create_task(m._log_stderr(proc))
+        reader.feed_data(b"F" * 4096)           # oversized chunk (one huge line)
+        await asyncio.sleep(0.05)
+        reader.feed_data(b"G" * 4096)           # same line continues (multi-raise drain)
+        await asyncio.sleep(0.05)
+        reader.feed_data(b"still-draining-after-flood\n")   # a normal line after the flood
+        await asyncio.sleep(0.05)
+        reader.feed_eof()
+        await asyncio.wait_for(task, timeout=2)
+        return proc
+
+    proc = asyncio.run(_run())
+    assert any("still-draining-after-flood" in s for s in proc.stderr_tail), (
+        "drain loop must survive the flood and keep reading subsequent stderr lines"
+    )
+
+
+def test_log_stderr_normal_lines_captured():
+    """Sanity: the normal path still tails stderr lines (no regression from the flood guard)."""
+    m = _load()
+
+    async def _run():
+        reader = asyncio.StreamReader(limit=8 * 1024 * 1024)
+        proc = _fake_stderr_proc(reader)
+        task = asyncio.create_task(m._log_stderr(proc))
+        reader.feed_data(b"line-one\nline-two\n")
+        reader.feed_eof()
+        await asyncio.wait_for(task, timeout=2)
+        return proc
+
+    proc = asyncio.run(_run())
+    assert "line-one" in proc.stderr_tail
+    assert "line-two" in proc.stderr_tail

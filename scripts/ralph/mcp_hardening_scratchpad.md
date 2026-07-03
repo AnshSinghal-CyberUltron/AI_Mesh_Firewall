@@ -1544,6 +1544,27 @@
 - [ ] 15. 5k–10k concurrent tool calls — routing correct, isolation holds, none dropped/mixed.
 - [ ] 16. Soak (hours) — no leaks/exhaustion/503 storms; reaper correct.
 - [ ] 17. Resource bombs (mem/fork/disk/timeout) — contained; neighbors + host safe.
+      CHG-0152 (2026-07-03, LOW-MEDIUM — CLOSES the last deferred code residual, flagged since CHG-0144):
+      sandbox agent _log_stderr self-hung on an oversized stderr line. services/mcp-broker/sandbox-image/agent/
+      stdio_manager.py _log_stderr drains a spawned stdio server's stderr via readline() in a while True wrapped
+      by a catch-all `except Exception: pass` OUTSIDE the loop. StreamReader limit=_MAX_LINE_BYTES (8MiB); an
+      untrusted server flooding stderr with a huge UNTERMINATED line makes readline() raise past the limit → the
+      raise hit the outer except → the loop EXITED → stderr never drained again → OS pipe filled → child BLOCKED
+      on write(2) to stderr = self-hang of that org's server. Deferred since CHG-0144 because the raise type +
+      buffer disposition are Python-version-sensitive (sandbox=py3.12, test venv=py3.14) — NOW VERIFIED ON BOTH
+      via docker python:3.12-slim: readline() over-limit CONSUMES the buffer on both (3.14→LimitOverrunError,
+      3.12→ValueError; my earlier "3.12 leaves data" note was WRONG — corrected in auto-memory). FIX: catch
+      INSIDE the loop and `continue` (NO blocking read — the CHG-0144 read() drain was the dead-end):
+      `except (asyncio.LimitOverrunError, ValueError): LOG.warning(...); continue`. A huge line drains in
+      limit-sized chunks across successive raises; a normal line after the flood reads cleanly; the reader
+      survives. stdout reader unchanged (fail-closes oversized stdout). +2 tests. Gate: test_stdio_exit_reason.py
+      11 passed (flood-survival + normal-path); fast agent sweep 88 passed; CROSS-VERSION: REAL _log_stderr run
+      on python:3.12-slim via docker (repo mounted) → survived flood, next line captured=True. REMAINING for
+      item 17 [x]: the live fork/mem/disk/timeout bomb drill at scale (needs a dedicated host). Evidence:
+      mcp-parallel/findings/backstop-p17-stderr-flood-self-hang/finding.md. NOTE: with CHG-0152, ALL documented
+      "code" residuals from the field-redaction + broker + agent hardening are now CLOSED (0148/0149/0150 field
+      redaction; 0151 broker response cap; 0152 stderr flood); what remains is host-blocked live stress + gVisor
+      install + the cross-plane frontend (item 21).
 - [ ] 18. Chaos (kill sandbox/broker/Redis/PG) — auto-recovery + no leakage during recovery.
 - [ ] 19. Cross-tenant leakage canaries at 500-sandbox scale under chaos — never observed anywhere.
       ORACLE FIXED — CHG-0009 (2026-07-02): the audit-log cross-tenant oracle in mcp_scale_matrix_live.py
