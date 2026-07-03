@@ -624,6 +624,22 @@
       dt=0.000s, loop gap 0.000s (was ~0.8s). Gate: 7 + 1620 gateway passed 0 failed; broker 108. Evidence
       mcp-parallel/findings/backstop-p16-content-block-count-cap/finding.md. No content leak -> no aidefence
       oracle. RESIDUAL: a single ~9MB block still costs ~10s CPU (off the loop via CHG-0103).
+      CHG-0105 (2026-07-03, HIGH fail-open 1.4 leak — internal chat->MCP route returned stdio/websocket tool
+      RESULTS UNSCANNED): internal_tools_call (the X-Gateway-Internal-Key route the CHAT pipeline uses to run an
+      MCP tool for a user) scans the RESULT only on the streamable-http path (_scan_internal_result); on the
+      SANDBOX transports (stdio/websocket, _is_sandbox_routed) it returned `return await _adapter_forward(...)`
+      DIRECTLY -> the raw result egressed to the chat pipeline -> LLM UNREDACTED (secret/PII/IP/exfil-beacon/
+      markdown-split), while the same tool via org_mcp_jsonrpc IS scanned. Confirmed empirically: AKIAIOSFODNN7
+      EXAMPLE + bob@corp.example + ![x](https://evil…) all egressed raw. FIX (mcp_proxy.py): the sandbox branch
+      buffers the adapter response + (error-envelope aware, CHG-0091) scans the whole result OR a bare error
+      envelope via _scan_tool_result_floor (all hardened machinery); swaps masked result, fails CLOSED on
+      unmaskable survivor, audits block/redact (transport=internal_sandbox). NEW TEST
+      test_mcp_internal_sandbox_result_scan.py (5). Gate: 5 + 1625 gateway passed 0 failed; broker 108.
+      Byte-level: alice.jones@corp.example/123-45-6789 -> a***@c***.example/***-**-6789. Independent oracle
+      (aidefence): has_pii false fixed / true raw. Evidence mcp-parallel/findings/backstop-p-internal-sandbox-
+      result-unscanned/finding.md. RESIDUAL: the internal streamable-http _scan_internal_result scans only
+      result.content (not a bare error frame / structuredContent) — narrower than the sandbox complete-skip;
+      follow-up to bring the HTTP path to the same error-envelope-aware whole-result scan.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

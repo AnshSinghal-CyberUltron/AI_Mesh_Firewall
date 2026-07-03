@@ -1485,6 +1485,26 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   to a thread (like CHG-0103) but a warm A/B showed no benefit (0.80 s inline vs 0.84 s offloaded) → REVERTED
   and landed on the block-count cap, which addresses the actual cost at O(1). No content leak → no aidefence oracle.
 
+- **CHG-0105** (2026-07-03) — **HIGH fail-open 1.4 leak: internal (chat→MCP) route returned stdio/websocket
+  tool RESULTS UNSCANNED**. `internal_tools_call` (the `X-Gateway-Internal-Key` route the CHAT pipeline uses
+  to run an MCP tool for a user) scans the RESULT only on the streamable-http path (`_scan_internal_result`);
+  on the SANDBOX transports (`stdio`/`websocket`) it returned the raw `_adapter_forward(...)` response
+  DIRECTLY → a secret / PII / IP / exfil-beacon / markdown-split value in a stdio/ws tool result egressed to
+  the chat pipeline → LLM context UNREDACTED, while the same tool via `org_mcp_jsonrpc` IS scanned. Confirmed:
+  a stdio result with `AKIAIOSFODNN7EXAMPLE` + `bob@corp.example` + `![x](https://evil…)` egressed all three
+  raw. **FIX (`mcp_proxy.py`):** the sandbox branch buffers the adapter response and (error-envelope aware,
+  CHG-0091) scans the whole `result` OR a bare `error` envelope via `_scan_tool_result_floor` (all hardened
+  machinery: redaction + render-leak neutralization CHG-0096-0100 + split-check + block-count cap); swaps in
+  the masked result, fails CLOSED (block error) on an unmaskable survivor, audits block/redact
+  (`transport="internal_sandbox"`) — full parity with the org path. NEW TEST
+  `test_mcp_internal_sandbox_result_scan.py` (5: secret+PII masked + redact audited; beacon defanged;
+  error-envelope secret masked; unmaskable → block; benign unchanged). Gate: 5 + 1625 gateway passed, 0
+  failed; broker 108. Byte-level: `alice.jones@corp.example` / `123-45-6789` → `a***@c***.example` /
+  `***-**-6789`. Independent oracle (aidefence): `has_pii` false fixed / true raw. touched: owning-session
+  `internal_tools_call`. Evidence `mcp-parallel/findings/backstop-p-internal-sandbox-result-unscanned/`.
+  RESIDUAL: the internal streamable-http `_scan_internal_result` scans only `result.content` (not a bare error
+  frame / `structuredContent`) — narrower than the sandbox complete-skip; follow-up.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

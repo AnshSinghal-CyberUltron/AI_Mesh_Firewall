@@ -980,6 +980,22 @@
     mcp-parallel/findings/backstop-p16-content-block-count-cap/. HONESTY: first tried offloading the split-check
     (like CHG-0103) but a warm A/B showed no benefit (0.80 inline vs 0.84 offloaded) -> REVERTED, landed on the
     block-count cap. No content leak -> no aidefence oracle.
+  - CHG-0105 (2026-07-03) — HIGH fail-open 1.4 leak: internal (chat->MCP) route returned stdio/websocket tool
+    RESULTS UNSCANNED. internal_tools_call (the X-Gateway-Internal-Key route the chat pipeline uses to run an
+    MCP tool for a user) scans the RESULT only on the streamable-http path (_scan_internal_result); on the
+    SANDBOX transports (stdio/websocket, _is_sandbox_routed) it returned the raw _adapter_forward response
+    DIRECTLY -> a secret/PII/IP/exfil-beacon/markdown-split value in a stdio/ws tool result egressed to the
+    chat pipeline -> LLM UNREDACTED, while the same tool via org_mcp_jsonrpc IS scanned. Confirmed: a stdio
+    result with AKIAIOSFODNN7EXAMPLE + bob@corp.example + ![x](https://evil…) egressed all three raw. FIX
+    (mcp_proxy.py): the sandbox branch buffers the adapter response + (error-envelope aware, CHG-0091) scans
+    the whole result OR a bare error envelope via _scan_tool_result_floor (all hardened machinery: redaction +
+    render-leak neutralization + split-check + block-count cap); swaps masked result, fails CLOSED on
+    unmaskable survivor, audits block/redact (transport=internal_sandbox). NEW TEST
+    test_mcp_internal_sandbox_result_scan.py (5). Gate: 5 + 1625 gateway passed 0 failed; broker 108.
+    Byte-level: alice.jones@corp.example / 123-45-6789 -> a***@c***.example / ***-**-6789. Independent oracle
+    (aidefence): has_pii false fixed / true raw. Evidence mcp-parallel/findings/backstop-p-internal-sandbox-
+    result-unscanned/. RESIDUAL: the internal streamable-http _scan_internal_result scans only result.content
+    (not a bare error frame / structuredContent) — narrower than the sandbox complete-skip; follow-up.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

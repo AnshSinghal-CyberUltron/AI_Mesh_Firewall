@@ -2432,10 +2432,61 @@ async def internal_tools_call(request: Request):
     }
 
     if _is_sandbox_routed(transport):
-        return await _adapter_forward(
-            transport, config, org_slug, server_slug,
-            call_body, "2.0", 1,
+        # CHG-0105: scan the sandbox (stdio/websocket) tool RESULT before returning. This
+        # path previously returned the raw adapter response UNSCANNED, so a secret / PII /
+        # exfil-beacon in a stdio/ws tool result egressed to the chat pipeline / LLM
+        # unredacted — while the streamable-http internal path (below) AND org_mcp_jsonrpc
+        # both scan it. Error-envelope aware (CHG-0091): scans the whole result OR a bare
+        # error envelope via the shared floor (render-leak neutralization + split-check +
+        # block-count cap all included); masks/blocks + audits, parity with the org path.
+        _adapter_resp = await _adapter_forward(
+            transport, config, org_slug, server_slug, call_body, "2.0", 1,
         )
+        try:
+            _adapter_obj = json.loads(_adapter_resp.body.decode("utf-8")) if _adapter_resp.body else None
+        except Exception:
+            _adapter_obj = None
+        if not isinstance(_adapter_obj, dict):
+            return _adapter_resp
+        _scan_target = _adapter_obj.get("result") if "result" in _adapter_obj else _adapter_obj
+        _sc, _blk, _tg, _fn, _mt = await _scan_tool_result_floor(
+            _scan_target, tool_name=tool_name, enabled_info=enabled_info,
+            org_slug=org_slug, server_slug=server_slug, actor=None,
+        )
+        if _blk:
+            await _record_gateway_event(
+                org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
+                decision="block", reason="pii_blocked_outbound",
+                latency_ms=int((time.time() - _internal_call_t0) * 1000),
+                metadata={"transport": "internal_sandbox", "enforced_at": "gateway", **_mt},
+                compliance_tags=list(_tg), scan_findings=list(_fn),
+            )
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0", "id": _adapter_obj.get("id", 1),
+                    "error": {
+                        "code": -32000,
+                        "message": (
+                            f"Response from '{tool_name}' matched compliance tags: "
+                            f"{', '.join(_tg) or 'PII'}."
+                        ),
+                    },
+                },
+                status_code=200,
+            )
+        if _sc is not _scan_target:
+            if "result" in _adapter_obj:
+                _adapter_obj["result"] = _sc
+            elif isinstance(_sc, dict):
+                _adapter_obj = _sc
+            await _record_gateway_event(
+                org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
+                decision="redact", reason="pii_redacted_outbound",
+                latency_ms=int((time.time() - _internal_call_t0) * 1000),
+                metadata={"transport": "internal_sandbox", "enforced_at": "gateway", **_mt},
+                compliance_tags=list(_tg), scan_findings=list(_fn),
+            )
+        return JSONResponse(content=_adapter_obj, status_code=200)
 
     upstream_url = config.get("url", "")
     if not upstream_url:
