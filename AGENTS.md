@@ -115,6 +115,13 @@
   main.py telemetry threads input_text/output_text; LogDetailPage Input/Output panels via
   resolvePipelineInputOutput (blocked withheld banner; redact before/after). +4 GW + 2 FE tests;
   pipeline_p22_input_output_verify.mjs. Gate: gateway + lint/build green.
+ - PIPELINE-0023 (2026-07-03) — EVENT CONFLATION FIX (P6-23/L10): proxy_chat honoured client
+  X-Request-ID as canonical request_id → concurrent pinned-header calls collided and threat-feed
+  sibling merge mixed prompts. FIX: _bind_gateway_request_id mints fresh zs-* per request (client
+  header → client_correlation_id only); _stamp_pipeline_trace_request_id; telemetry request_id +
+  pipeline_request_id; control _pipeline_io_fingerprint mismatch guard on sibling merge;
+  LogDetailPage trace-scoped I/O (no prompt_lineage bleed). +5 tests
+  test_pipeline_request_id_conflation.py. Gate: 2076 GW passed.
 - PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
  (dominant stage/share, by_stage, hints[]) via build_latency_breakdown+attach_latency_breakdown;
  stream frame recomputes after total reconcile. FE LogDetailPage breakdown table + "How to reduce

@@ -3821,18 +3821,20 @@ def _build_blocked_pipeline_trace(
         threat_category=threat_category,
         detection_tier=detection_tier,
     )
-    return build_pipeline_trace(
-        prompt=_redact_trace_text(prompt),
-        stage_metrics=stage_metrics,
-        final_action="block",
-        blocked_stage=blocked_stage,
-        http_status=status_code,
-        scan_verdict=scan_verdict,
-        zeroshield=zeroshield,
-        route_metadata=route_metadata,
-        blocked_detail=internal_detail or "",
-        requested_model=requested_model,
-        output_scan_verdict=output_scan_verdict,
+    return _stamp_pipeline_trace_request_id(
+        build_pipeline_trace(
+            prompt=_redact_trace_text(prompt),
+            stage_metrics=stage_metrics,
+            final_action="block",
+            blocked_stage=blocked_stage,
+            http_status=status_code,
+            scan_verdict=scan_verdict,
+            zeroshield=zeroshield,
+            route_metadata=route_metadata,
+            blocked_detail=internal_detail or "",
+            requested_model=requested_model,
+            output_scan_verdict=output_scan_verdict,
+        )
     )
 
 
@@ -3949,12 +3951,62 @@ _REQUEST_METHOD: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_method", d
 _REQUEST_PIPELINE_CTX: _ctxvars.ContextVar[dict | None] = _ctxvars.ContextVar(
     "_req_pipeline_ctx", default=None
 )
+# Optional inbound client trace header — stored separately from the canonical request_id
+# (L10: reusing X-Request-ID as the enforcement key conflates concurrent calls).
+_CLIENT_CORRELATION_ID: _ctxvars.ContextVar[str] = _ctxvars.ContextVar(
+    "gw_client_correlation_id", default=""
+)
 
 _PIPELINE_TRACE_TELEMETRY_EVENTS = frozenset({
     "input_blocked",
     "output_guard",
     "output_blocked",
 })
+
+
+def _inbound_correlation_header(request: Request) -> str:
+    """Return a trimmed inbound X-Request-ID / x-request-id header, if any."""
+    return (
+        request.headers.get("X-Request-ID")
+        or request.headers.get("x-request-id")
+        or ""
+    ).strip()
+
+
+def _bind_gateway_request_id(request: Request, *, prefix: str = "zs") -> str:
+    """Mint a gateway-owned request_id and bind it to the request context (PIPELINE-0023 / L10).
+
+    Always generates a fresh id — never reuses the client's correlation header as the
+    canonical enforcement/telemetry key (concurrent calls sharing a pinned header would
+    conflate threat-feed siblings and mix prompts in LogDetailPage).
+    """
+    client_corr = _inbound_correlation_header(request)
+    if prefix == "emb":
+        rid = f"zs-emb-{_uuid.uuid4().hex[:12]}"
+    elif prefix == "rag":
+        rid = f"zs-rag-{_uuid.uuid4().hex[:12]}"
+    elif prefix == "zs":
+        rid = f"zs-{_uuid.uuid4().hex[:12]}"
+    else:
+        rid = f"{prefix}-{_uuid.uuid4().hex[:12]}"
+    _REQUEST_ID.set(rid)
+    _CLIENT_CORRELATION_ID.set(client_corr if client_corr and client_corr != rid else "")
+    request.state.gw_request_id = rid
+    if client_corr:
+        request.state.client_correlation_id = client_corr
+    return rid
+
+
+def _stamp_pipeline_trace_request_id(trace: dict | None) -> dict | None:
+    """Attach the canonical gateway request_id to a pipeline_trace dict."""
+    if not isinstance(trace, dict):
+        return trace
+    rid = _REQUEST_ID.get("")
+    if not rid:
+        return trace
+    stamped = dict(trace)
+    stamped["request_id"] = rid
+    return stamped
 
 
 def _sync_pipeline_ctx(**fields) -> None:
@@ -4151,6 +4203,10 @@ def _emit_telemetry(status_code: int = 200, **kwargs):
         if _rid:
             _md = dict(kwargs.get("metadata") or {})
             _md.setdefault("request_id", _rid)
+            _md.setdefault("pipeline_request_id", _rid)
+            _client_corr = _CLIENT_CORRELATION_ID.get("")
+            if _client_corr and _client_corr != _rid:
+                _md.setdefault("client_correlation_id", _client_corr)
             kwargs["metadata"] = _md
     except Exception:
         pass
@@ -4942,19 +4998,9 @@ async def proxy_chat(
     # Set per-request telemetry context
     _REQUEST_SOURCE_IP.set(request.client.host if request.client else "")
     _REQUEST_METHOD.set(request.method)
-    # P9c: establish ONE request_id for the whole request and thread it through
-    # logs + the control telemetry emit. Honour an inbound correlation header,
-    # else mint a fresh one. Never crash if headers are unusual.
-    _rid = (
-        request.headers.get("X-Request-ID")
-        or request.headers.get("x-request-id")
-        or f"zs-{_uuid.uuid4().hex[:12]}"
-    )
-    _REQUEST_ID.set(_rid)
-    # D3: expose this same id on the x-request-id RESPONSE header (the OpenAI-compat
-    # shim middleware reads request.state.gw_request_id after the handler returns) so
-    # the SDK's response._request_id / error.request_id is populated and matches the body.
-    request.state.gw_request_id = _rid
+    # PIPELINE-0023 / L10: mint a gateway-owned request_id (never reuse a client-pinned
+    # X-Request-ID as the enforcement key — that conflates concurrent calls).
+    _rid = _bind_gateway_request_id(request, prefix="zs")
 
     try:
         try:
@@ -7351,19 +7397,21 @@ async def proxy_chat(
                     if _out_verdict is not None and getattr(_out_verdict, "action", "allow") not in ("allow",):
                         _trace_final = getattr(_out_verdict, "action", _trace_final)
                     stage_metrics = finalize_stage_metrics(stage_metrics, start, ptimer=_ptimer)
-                    resp["pipeline_trace"] = build_pipeline_trace(
-                        prompt=_redact_trace_text(prompt),
-                        forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
-                        policy_redacted_prompt=policy_redacted_prompt,
-                        policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
-                        stage_metrics=stage_metrics,
-                        final_action=_trace_final,
-                        http_status=200,
-                        scan_verdict=scan_verdict,
-                        zeroshield=_zs_full,
-                        response_text=_redact_trace_text(_extract_response_from_completion(resp)),
-                        requested_model=body.get("model", ""),
-                        output_scan_verdict=_out_verdict,
+                    resp["pipeline_trace"] = _stamp_pipeline_trace_request_id(
+                        build_pipeline_trace(
+                            prompt=_redact_trace_text(prompt),
+                            forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
+                            policy_redacted_prompt=policy_redacted_prompt,
+                            policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
+                            stage_metrics=stage_metrics,
+                            final_action=_trace_final,
+                            http_status=200,
+                            scan_verdict=scan_verdict,
+                            zeroshield=_zs_full,
+                            response_text=_redact_trace_text(_extract_response_from_completion(resp)),
+                            requested_model=body.get("model", ""),
+                            output_scan_verdict=_out_verdict,
+                        )
                     )
                 # ── SECURITY FIX: Redact sensitive fields from zeroshield metadata before returning to client ──
                 if isinstance(resp.get("zeroshield"), dict):
@@ -9006,24 +9054,26 @@ async def proxy_chat(
             _zs_full = llm_resp.get("zeroshield") if isinstance(llm_resp.get("zeroshield"), dict) else {}
             _final = _input_decision.action if _input_decision is not None else (_zs_full.get("action") or "allow")
             stage_metrics = finalize_stage_metrics(stage_metrics, start, ptimer=_ptimer)
-            llm_resp["pipeline_trace"] = build_pipeline_trace(
-                prompt=_redact_trace_text(prompt),
-                forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
-                policy_redacted_prompt=policy_redacted_prompt,
-                policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
-                stage_metrics=stage_metrics,
-                final_action=_final,
-                blocked_stage="",
-                http_status=200,
-                scan_verdict=scan_verdict,
-                route_metadata=route_metadata,
-                zeroshield=_zs_full,
-                response_text=_redact_trace_text(response_text or ""),
-                requested_model=(
-                    (route_metadata or {}).get("original_model")
-                    or body.get("model", "")
-                ),
-                output_scan_verdict=output_verdict,
+            llm_resp["pipeline_trace"] = _stamp_pipeline_trace_request_id(
+                build_pipeline_trace(
+                    prompt=_redact_trace_text(prompt),
+                    forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
+                    policy_redacted_prompt=policy_redacted_prompt,
+                    policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
+                    stage_metrics=stage_metrics,
+                    final_action=_final,
+                    blocked_stage="",
+                    http_status=200,
+                    scan_verdict=scan_verdict,
+                    route_metadata=route_metadata,
+                    zeroshield=_zs_full,
+                    response_text=_redact_trace_text(response_text or ""),
+                    requested_model=(
+                        (route_metadata or {}).get("original_model")
+                        or body.get("model", "")
+                    ),
+                    output_scan_verdict=output_verdict,
+                )
             )
 
         # Emit request telemetry with full pipeline_trace + I/O for Activity Preview.
@@ -9661,17 +9711,8 @@ async def proxy_embeddings(request: Request):
     """Proxy to upstream embedding model. OpenAI-compatible endpoint."""
     METRICS["total_requests"] += 1
     start = time.perf_counter()
-    # P9c: one request_id for the whole request, threaded into logs.
-    _emb_rid = (
-        request.headers.get("X-Request-ID")
-        or request.headers.get("x-request-id")
-        or f"zs-emb-{_uuid.uuid4().hex[:12]}"
-    )
-    _REQUEST_ID.set(_emb_rid)
-    # SEAM-C: expose the SAME canonical id on the x-request-id RESPONSE header (the
-    # compat shim reads request.state.gw_request_id) so the SDK's response._request_id
-    # joins the handler's _REQUEST_ID used for every embedding log/telemetry line.
-    request.state.gw_request_id = _emb_rid
+    # PIPELINE-0023: gateway-owned id (client header stored separately if present).
+    _emb_rid = _bind_gateway_request_id(request, prefix="emb")
 
     try:
         try:
@@ -10352,12 +10393,8 @@ async def rag_query(request: Request):
     METRICS["total_requests"] += 1
     METRICS["active_connections"] += 1
     start_rag = time.perf_counter()
-    # P9c: one request_id for the whole request, threaded into logs.
-    _REQUEST_ID.set(
-        request.headers.get("X-Request-ID")
-        or request.headers.get("x-request-id")
-        or f"zs-rag-{_uuid.uuid4().hex[:12]}"
-    )
+    # PIPELINE-0023: gateway-owned id (client header stored separately if present).
+    _bind_gateway_request_id(request, prefix="rag")
 
     try:
         if RAG_PIPELINE is None or VECTOR_POLICY_SYNC is None:

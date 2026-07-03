@@ -860,18 +860,101 @@ def _synthesize_routing_only_pipeline(meta: dict) -> dict | None:
     return trace
 
 
+def _pipeline_io_fingerprint(meta: dict) -> str:
+    """Stable prompt fingerprint for L10 sibling-merge guards (PIPELINE-0023)."""
+    if not isinstance(meta, dict):
+        return ""
+    pt = meta.get("pipeline_trace")
+    if isinstance(pt, dict):
+        for key in ("input_text", "prompt_preview", "prompt_submitted"):
+            val = pt.get(key)
+            if val:
+                return str(val)
+    for key in ("prompt_submitted", "prompt_snippet", "input_text"):
+        val = meta.get(key)
+        if val:
+            return str(val)
+    extra = meta.get("extra") if isinstance(meta.get("extra"), dict) else {}
+    for key in ("prompt_submitted", "prompt_snippet", "input_text"):
+        val = extra.get(key)
+        if val:
+            return str(val)
+    return ""
+
+
+def _merge_pipeline_trace_stages(anchor: dict, sibling: dict) -> dict:
+    """Merge stage rows from a sibling trace; anchor stages win on name collision."""
+    if not isinstance(anchor, dict):
+        return sibling if isinstance(sibling, dict) else {}
+    if not isinstance(sibling, dict):
+        return anchor
+    merged = dict(anchor)
+    anchor_stages = [
+        s for s in (merged.get("stages") or []) if isinstance(s, dict) and s.get("name")
+    ]
+    names = {s.get("name") for s in anchor_stages}
+    extra_stages = [
+        s
+        for s in (sibling.get("stages") or [])
+        if isinstance(s, dict) and s.get("name") and s.get("name") not in names
+    ]
+    if extra_stages:
+        merged["stages"] = anchor_stages + extra_stages
+    for key in (
+        "input_text",
+        "prompt_preview",
+        "prompt_submitted",
+        "output_text",
+        "final_response",
+        "request_id",
+    ):
+        if not merged.get(key) and sibling.get(key):
+            merged[key] = sibling[key]
+    return merged
+
+
+_SIBLING_IO_KEYS = (
+    "prompt_submitted",
+    "prompt_snippet",
+    "response_snippet",
+    "sanitized_output",
+    "raw_output",
+    "incident_id",
+    "request_id",
+    "pipeline_request_id",
+)
+
+
 def _merge_related_scan_metadata(base_meta: dict, related: list) -> dict:
     """Merge pipeline trace + I/O from sibling events sharing a request_id."""
     merged = dict(base_meta or {})
-    for sm in (getattr(r, "metadata", None) or {} for r in related):
+    anchor_fp = _pipeline_io_fingerprint(merged)
+
+    for r in related:
+        sm = getattr(r, "metadata", None) or {}
         if not isinstance(sm, dict):
             continue
-        if not merged.get("pipeline_trace") and sm.get("pipeline_trace"):
+        sib_fp = _pipeline_io_fingerprint(sm)
+        io_mismatch = bool(anchor_fp and sib_fp and anchor_fp != sib_fp)
+
+        sib_pt = sm.get("pipeline_trace")
+        if not isinstance(sib_pt, dict):
+            extra = sm.get("extra") if isinstance(sm.get("extra"), dict) else {}
+            sib_pt = extra.get("pipeline_trace") if isinstance(extra.get("pipeline_trace"), dict) else None
+
+        anchor_pt = merged.get("pipeline_trace")
+        if isinstance(sib_pt, dict) and not io_mismatch:
+            if not isinstance(anchor_pt, dict) or not anchor_pt.get("stages"):
+                merged["pipeline_trace"] = sib_pt
+            else:
+                merged["pipeline_trace"] = _merge_pipeline_trace_stages(anchor_pt, sib_pt)
+        elif not io_mismatch and not merged.get("pipeline_trace") and sm.get("pipeline_trace"):
             merged["pipeline_trace"] = sm["pipeline_trace"]
-        elif not merged.get("pipeline_trace"):
+        elif not io_mismatch and not merged.get("pipeline_trace"):
             extra_pt = (sm.get("extra") or {}).get("pipeline_trace")
             if extra_pt:
                 merged["pipeline_trace"] = extra_pt
+
         if not merged.get("prompt_lineage") and sm.get("prompt_lineage"):
             merged["prompt_lineage"] = sm.get("prompt_lineage")
         # Merge routing fields from model_routed siblings for legacy synthesis.
@@ -890,16 +973,9 @@ def _merge_related_scan_metadata(base_meta: dict, related: list) -> dict:
                 if not merged_extra.get(key) and sib_extra.get(key):
                     merged_extra[key] = sib_extra[key]
             merged["extra"] = merged_extra
-        for key in (
-            "prompt_submitted",
-            "prompt_snippet",
-            "response_snippet",
-            "sanitized_output",
-            "raw_output",
-            "incident_id",
-            "request_id",
-            "pipeline_request_id",
-        ):
+        if io_mismatch:
+            continue
+        for key in _SIBLING_IO_KEYS:
             if not merged.get(key) and sm.get(key):
                 merged[key] = sm[key]
     if not merged.get("incident_id"):

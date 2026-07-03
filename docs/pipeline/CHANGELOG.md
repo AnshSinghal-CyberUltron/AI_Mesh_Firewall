@@ -2,6 +2,29 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0023 (2026-07-03)
+
+**Event conflation fix (P6 item 23 / L10).**
+
+Root Cause:
+- `proxy_chat` honoured inbound `X-Request-ID` as the canonical enforcement key; concurrent
+  calls sharing a pinned client header collided on `request_id` → threat-feed sibling merge
+  mixed prompts from different requests (false leak appearance in LogDetailPage).
+- `_merge_related_scan_metadata` filled missing I/O from any sibling sharing `request_id`
+  without a prompt fingerprint guard.
+
+Fix:
+- `main.py`: `_bind_gateway_request_id()` always mints fresh `zs-*` (embeddings/rag too);
+  inbound header stored as `client_correlation_id` only; `_stamp_pipeline_trace_request_id`;
+  telemetry metadata sets `request_id` + `pipeline_request_id`.
+- `security_views.py`: `_pipeline_io_fingerprint` + mismatch guard on sibling I/O/trace merge.
+- `LogDetailPage.jsx`: `resolvePipelineInputOutput` trace-scoped I/O; removed `prompt_lineage[0]`
+  fallback bleed.
+
+Verification:
+- `test_pipeline_request_id_conflation.py` (+5): pinned-header concurrent → distinct ids/prompts;
+  full gateway suite green.
+
 ## PIPELINE-0022 (2026-07-03)
 
 **Trace-root input/output transparency (P6 item 22).**

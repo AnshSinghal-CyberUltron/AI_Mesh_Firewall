@@ -24,9 +24,6 @@ function normalizeLogDetail(logData) {
   const raw = logData?.raw || logData || {};
   const meta = logData?.metadata || raw?.metadata || logData?.event_metadata || {};
   const extra = meta?.extra || {};
-  const lineage = Array.isArray(meta?.prompt_lineage)
-    ? meta.prompt_lineage
-    : (Array.isArray(logData?.prompt_lineage) ? logData.prompt_lineage : []);
 
   const requestId =
     logData?.request_id
@@ -45,30 +42,42 @@ function normalizeLogDetail(logData) {
     || (String(requestId).startsWith("zs-") ? requestId : null)
     || (scanId !== "n/a" ? String(scanId) : null);
 
-  const promptText =
-    meta?.prompt_submitted
-    || meta?.prompt_snippet
-    || extra?.prompt_submitted
-    || extra?.prompt_snippet
-    || extra?.prompt
-    || logData?.prompt
-    || (lineage[0]?.prompt ?? "");
-
-  const responseText =
-    meta?.sanitized_output
-    || meta?.response_snippet
-    || extra?.sanitized_output
-    || extra?.response_snippet
-    || extra?.raw_output
-    || meta?.response_snippet
-    || logData?.response
-    || "";
-
   const pipelineTrace =
     logData?.pipeline_trace
     || meta?.pipeline_trace
     || extra?.pipeline_trace
     || {};
+
+  const io = resolvePipelineInputOutput({
+    meta,
+    extra,
+    pipelineTrace,
+    fallbackAction: logData?.action || raw?.action || "allow",
+  });
+
+  const promptText = io.fromTrace
+    ? (io.promptSubmitted || io.inputText || "")
+    : (
+      meta?.prompt_submitted
+      || meta?.prompt_snippet
+      || extra?.prompt_submitted
+      || extra?.prompt_snippet
+      || extra?.prompt
+      || logData?.prompt
+      || ""
+    );
+
+  const responseText = io.fromTrace
+    ? io.outputText
+    : (
+      meta?.sanitized_output
+      || meta?.response_snippet
+      || extra?.sanitized_output
+      || extra?.response_snippet
+      || extra?.raw_output
+      || logData?.response
+      || ""
+    );
 
   const pipelineStages = Array.isArray(pipelineTrace?.stages) ? pipelineTrace.stages : [];
 
