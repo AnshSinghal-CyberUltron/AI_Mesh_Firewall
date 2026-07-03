@@ -2322,3 +2322,19 @@ still tokenized (correctness preserved). Python 3.11+ possessive (container 3.12
 **Verify:** output/guard/egress/exfil tests 206 passed; full backend `ai_mesh_gateway/tests` **1633 passed**;
 golden 452; ruff clean.
 **Frozen:** `ai_mesh_gateway/tests/test_output_guard_redos.py` (2) — linear-timing bound + valid-split correctness.
+
+---
+
+## G80 (DoS sweep clean + froze precedence matrix) — 2026-07-03
+Two things this iteration:
+- **Output-guard DoS sweep (post-G79):** timed all 4 output-guard check methods (pii/cred/ip/exfil) ×
+  12 large (200KB) adversarial output patterns (value-run, entity, percent, ipish, connstr, basic-auth,
+  html-tags, colons, mixed-punct, backticks, `<a`-run, at-signs). ALL fast (<0.3s) — no other output-side
+  DoS after the G79 possessive fix. DoS surface on the output guard is clean.
+- **Enforcement precedence (R4 precedence-table-correctness):** verified consistent — `block` (injection)
+  > `redact` (pii/secret/credential) > `allow`, and INJECTION DOMINATES every combination
+  (injection+pii → block, injection+secret → block, injection+pii+secret → block; pii+secret → redact;
+  pii+credential → redact; benign → allow). Security-critical: a PII/secret-carrying injection is NOT
+  downgraded to redact-and-forward — it stays block. Froze the 10-case matrix as
+  `test_g80_enforcement_precedence`. golden **462 passed × 3** (was 452; +10). Test-only (no prod change).
+Session ledger update: 4 real leaks (G74-G76) + soft DoS (G79) fixed+deployed; G77/G78/G80 = defended+frozen.
