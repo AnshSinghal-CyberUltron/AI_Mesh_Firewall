@@ -3368,3 +3368,24 @@ security policy"** (before G105 it was HTTP 502 upstream — the firewall had fo
 benign flat tool → HTTP 502 upstream (NOT a firewall block — the free model errors on the tools shape,
 unrelated). G105 validated end-to-end (in-process 642×3 + backend 1926 + live block). Applied the G104
 lesson: traced call-sites + live-tested to confirm a REAL live gap before claiming/fixing.
+
+---
+
+## G106 (Responses-shape PARITY — verified defended + frozen) — 2026-07-03
+Completed the /v1/responses parity sweep (applying the G104 discipline: traced the REAL conversion path,
+verified in-process). All model-facing Responses input channels are at parity with chat:
+* `input` (str / message / function_call / function_call_output) → responses_to_chat → chat messages →
+  scanned (G7 via conversion; G104's "leak" was DEAD CODE, corrected).
+* `instructions` → **system message** → scanned → block. ✓
+* `tools` (FLAT shape) → G105 fix now scans description + param schema. ✓
+* native structured-output `text.format` → mapped to chat `response_format` → scanned by G82/G83 (handles
+  the unwrapped shape) → block. ✓
+Out of scope (verified low-value): `tool_choice` = a function-NAME reference (not model-facing prose);
+`prediction` = a speculative-decoding hint the model does NOT follow as instructions (weak vector; carried
+verbatim, unscanned, on BOTH chat + responses — documented, not chased).
+**FROZEN (G106, +3 golden):** instructions→system-message parity, text.format→response_format parity
+(both via the REAL `responses_to_chat` mapping so a mapping regression fails the test), + FP floor. Added
+`_fold_response_format` replica helper. In-process golden **645 ×3** (was 642). Test-only iteration (owned
+golden suite) — no source/behavior change, so no gateway rebuild.
+Session ledger unchanged: TWENTY-SIX leaks (G74..G95, G97, G98, G100, G101, G102, G103, G105) + ONE
+false-block (G99) fixed; G104 was a FALSE finding; G96/G106 freeze defended vectors; G77/G78/G80 frozen.
