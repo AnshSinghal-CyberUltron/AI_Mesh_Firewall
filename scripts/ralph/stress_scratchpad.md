@@ -3102,3 +3102,9 @@ Appears to be WIP (request-format mismatch with the current chat API) OR a real 
 for that session to investigate. I did NOT touch it (not owned). Flagged so the owning session knows.
 Session ledger: TWENTY-ONE confirmed leaks/gaps (G74..G95, G97, G98) fixed + G96 freezes 6 defended
 vectors; G77/G78/G80 frozen.
+
+### G98 DEPLOY + LIVE-VERIFY — 2026-07-03
+Rebuilt+redeployed the baked gateway (tag rollback-g98 → build → up -d --no-deps → healthy ~4s).
+LIVE-verified: base85 injection → **block**; base85 SSN → **block + masked** (not forwarded). G98 validated
+end-to-end (in-process 604×3 + backend 1826 + live deployed). base32(G97)+base85(G98) close the
+transport-laundering encoding gaps beyond base64/hex.
