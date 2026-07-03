@@ -594,6 +594,22 @@
       full-text scan catches contiguous). NOTE: resource-bomb probe also confirmed deeply-nested JSON ->
       fail-closed SCAN_ERROR block (RecursionError caught), 100k-asterisk markdown -> 0.30s (ReDoS-safe),
       50k content blocks -> 2.69s. Pre-existing ~10s detect on a 9MB single block = separate product decision.
+      CHG-0103 (2026-07-03, HIGH availability/DoS — MCP Tier-1 scan BLOCKED the event loop under load):
+      _scan_text_tier1 (mcp_scan_orchestrator.py) was async but its body is PURE SYNC CPU (detect_pii/secrets/
+      ip/cred loops of re.search + redact_all + encoded-exfil loop + render-leak neutralizers), NO await -> ran
+      INLINE on the loop. A large tool result (up to 10MB) is seconds of CPU (detect_pii ~2.6s on 8MB; whole
+      tier1 ~5-10s) -> BLOCKS the loop, freezing EVERY concurrent request on the worker. Measured: 8MB scan
+      stalled a trivial sleep(0.05) coroutine 9.67s (definitive: raced big_scan vs quick() via gather — quick
+      completed at t=9.67s = loop blocked). An untrusted upstream triggers it with one crafted result. FIX:
+      split into pure-CPU sync _scan_text_tier1_sync (unchanged body) + async wrapper _scan_text_tier1 (same
+      signature) that offloads to a thread via asyncio.to_thread when text > _TIER1_OFFLOAD_THRESHOLD (64KB,
+      env MCP_TIER1_OFFLOAD_BYTES); small inputs inline (avoid thread-pool pressure). re loop releases the GIL
+      between patterns -> loop responsive (empirically: run_in_executor offload dropped quick() from 9.67s to
+      0.16s). After fix: 8MB scan stalls only ~0.2s; secret still masked. +4 deterministic tests (patch
+      to_thread). Gate: 4 + 1609 gateway passed 0 failed; broker 108. Pre-existing gap (chat scanner.py already
+      offloads via run_in_executor lines 962/973; MCP tier1 did not). Evidence mcp-parallel/findings/backstop-
+      p16-tier1-event-loop-block/finding.md. RESIDUAL: total CPU of a 9MB scan (~10s) unchanged — no longer
+      blocks the loop; capping/reducing is a separate product-level trade-off.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

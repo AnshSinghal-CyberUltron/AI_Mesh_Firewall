@@ -955,6 +955,19 @@
     108. Evidence mcp-parallel/findings/backstop-p16-split-check-dos-bound/. RESIDUAL: a >512-char secret split
     into a long block's trimmed interior could be missed (extreme; span env-tunable; full-text scan catches
     contiguous). Pre-existing ~10s detect on a 9MB single block is a separate product-level trade-off, unchanged.
+  - CHG-0103 (2026-07-03) — HIGH availability/DoS: the MCP Tier-1 scan BLOCKED the event loop under load.
+    _scan_text_tier1 (mcp_scan_orchestrator.py) was async but its body is PURE SYNC CPU (detect_pii/secrets/ip/
+    cred loops of re.search + redact_all + encoded-exfil loop + render-leak neutralizers), NO await -> ran
+    INLINE on the loop. A large tool result (up to 10MB) is seconds of CPU (detect_pii ~2.6s on 8MB; whole
+    tier1 ~5-10s) -> BLOCKS the loop, freezing EVERY concurrent request on the worker. Measured: 8MB scan
+    stalled a trivial sleep(0.05) coroutine 9.67s. An untrusted upstream triggers it with one crafted result.
+    FIX: split into pure-CPU sync _scan_text_tier1_sync (unchanged body) + async wrapper _scan_text_tier1 (same
+    signature) that offloads to a thread via asyncio.to_thread when text > _TIER1_OFFLOAD_THRESHOLD (64KB, env
+    MCP_TIER1_OFFLOAD_BYTES); small inputs inline. re loop releases the GIL between patterns -> loop responsive.
+    After: 8MB scan stalls only ~0.2s; secret still masked (correctness through thread). +4 deterministic tests.
+    Gate: 4 + 1609 gateway passed 0 failed; broker 108. Pre-existing gap (chat scanner already offloads via
+    run_in_executor; MCP tier1 did not). Evidence mcp-parallel/findings/backstop-p16-tier1-event-loop-block/.
+    RESIDUAL: total CPU cost of a 9MB scan (~10s) unchanged — no longer blocks the loop; capping is separate.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

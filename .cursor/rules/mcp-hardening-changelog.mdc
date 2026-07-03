@@ -1453,6 +1453,23 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   block's trimmed interior could be missed (extreme; span env-tunable; full-text scan catches contiguous). The
   pre-existing ~10 s detect on a 9 MB single block is a separate product-level trade-off, unchanged.
 
+- **CHG-0103** (2026-07-03) — **HIGH availability/DoS: the MCP Tier-1 scan BLOCKED the event loop under
+  load**. `_scan_text_tier1` (`mcp_scan_orchestrator.py`) was `async def` but its body is PURE SYNC CPU
+  (detect_pii/secrets/ip/cred — each a loop of `re.search` — + redact_all + encoded-exfil loop + render-leak
+  neutralizers), NO `await` → ran INLINE on the loop. A large tool result (up to 10 MB) is seconds of CPU
+  (detect_pii ~2.6 s on 8 MB; whole Tier-1 ~5–10 s) → it BLOCKS the loop, freezing EVERY concurrent request on
+  the worker. Measured: an 8 MB scan stalled a trivial `sleep(0.05)` coroutine **9.67 s**; an untrusted
+  upstream triggers it with one crafted result. **FIX:** split into a pure-CPU sync `_scan_text_tier1_sync`
+  (unchanged body) + an async wrapper `_scan_text_tier1` (same signature) that offloads to a worker thread via
+  `asyncio.to_thread` when text > `_TIER1_OFFLOAD_THRESHOLD` (64 KB, env `MCP_TIER1_OFFLOAD_BYTES`); small
+  inputs run inline. The `re` loop releases the GIL between patterns → the loop stays responsive. After: the
+  8 MB scan stalls the coroutine only **~0.2 s**; the secret is still masked (correctness through the thread).
+  +4 deterministic tests (patch `to_thread` — no flaky timing). Gate: 4 + 1609 gateway passed, 0 failed;
+  broker 108. All prior Tier-1 tests still pass. Pre-existing gap (chat scanner already offloads via
+  `run_in_executor`; MCP Tier-1 did not). Evidence
+  `mcp-parallel/findings/backstop-p16-tier1-event-loop-block/`. RESIDUAL: total CPU cost of a 9 MB scan (~10 s)
+  unchanged — it just no longer blocks the loop; capping is a separate product-level trade-off.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

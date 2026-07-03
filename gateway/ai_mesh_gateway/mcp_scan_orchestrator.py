@@ -11,7 +11,9 @@ See :func:`_enforce_blocks`.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -322,7 +324,7 @@ def _neutralize_exfil_deep(text: str) -> str:
     return _json.dumps(obj) if changed[0] else text
 
 
-async def _scan_text_tier1(
+def _scan_text_tier1_sync(
     text: str,
     *,
     scan_direction: str,
@@ -580,6 +582,41 @@ async def _scan_text_tier1(
             )
             mutated = redact_all(_neu) if (pii or secrets or ip_leak or cred_exp) else _neu
     return mutated, findings, blocked, []
+
+
+# CHG-0103: the Tier-1 scan (detect_* + redact_all + the render-leak neutralizers, all
+# SYNCHRONOUS regex over the text) ran inline on the event loop. A LARGE tool result
+# (up to the 10MB response cap) took seconds of pure CPU and BLOCKED the loop — freezing
+# EVERY other concurrent request on that worker (measured: an 8MB scan stalled a trivial
+# coroutine ~9.8s). Offload the scan to a worker thread for large inputs so the loop stays
+# responsive (the ``re`` loop releases the GIL between patterns; the same 8MB scan then
+# stalls the loop only ~0.16s). Small results (the common case) run INLINE — the scan is
+# sub-millisecond and offloading would only add thread-pool pressure under peak load.
+_TIER1_OFFLOAD_THRESHOLD = int(os.environ.get("MCP_TIER1_OFFLOAD_BYTES", str(64 * 1024)))
+
+
+async def _scan_text_tier1(
+    text: str,
+    *,
+    scan_direction: str,
+    enforcement: str,
+    full_payload: Any,
+    org_slug: str,
+    server_slug: str,
+    tool_name: str,
+    actor: dict[str, Any] | None = None,
+) -> tuple[str, list[McpFinding], bool, list[str]]:
+    """Async entrypoint for the CPU-bound Tier-1 scan. Offloads a LARGE input to a worker
+    thread (CHG-0103) so the synchronous regex scan never blocks the event loop under load;
+    a small input runs inline to avoid thread-pool pressure. Same signature/return as the
+    prior async function, so callers + tests are unchanged."""
+    _kwargs = dict(
+        scan_direction=scan_direction, enforcement=enforcement, full_payload=full_payload,
+        org_slug=org_slug, server_slug=server_slug, tool_name=tool_name, actor=actor,
+    )
+    if len(text) > _TIER1_OFFLOAD_THRESHOLD:
+        return await asyncio.to_thread(_scan_text_tier1_sync, text, **_kwargs)
+    return _scan_text_tier1_sync(text, **_kwargs)
 
 
 async def _scan_text_tier2(
