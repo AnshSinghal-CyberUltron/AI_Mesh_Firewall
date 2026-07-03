@@ -1489,3 +1489,11 @@
 - **Fix:** new locked SandboxRegistry.is_idle(org, idle_timeout, now=None); reaper RE-CHECKS is_idle right before stopping each entry, SKIPS any reactivated since the snapshot (now=None reads a fresh clock so a post-snapshot touch is seen). Collapses the race window from whole-sweep to a single stop.
 - **Gate:** broker test_sandbox_reaper.py 12 passed (test_reaper_skips_sandbox_reactivated_mid_sweep drives the real race + is_idle unit); full broker -k "not websocket" 160 passed.
 - **Honesty:** residual micro-window between the re-check and the stop call remains (rarer; would need a reaping-state flag + re-provision-on-conflict). Evidence mcp-parallel/findings/backstop-p-reaper-toctou-reactivated-sandbox/finding.md. Promise WITHHELD (G5 live stress items 14-19 host-blocked).
+
+---
+## CHG-0128 (2026-07-03) — in-sandbox SSE reader: bound per-event data accumulation (resource-bomb containment, item 17)
+
+- **Gap:** _sse_reader_loop (services/mcp-broker/sandbox-image/agent/sse_manager.py) — the untrusted-upstream GET /sse reader — accumulated every data: line into data_lines with NO cap, joined on the blank line. An upstream streaming unbounded data: lines WITHOUT a blank line grows data_lines until the agent OOMs (mem_limit) -> crashes the sandbox -> drops ALL the org's servers. Siblings already bounded: CHG-0066 (streamable-http per-response), CHG-0117 (gateway ext-SSE stream), WS per-message.
+- **Fix:** track data_bytes; over _MAX_RESPONSE_BYTES (8MB, MCP_AGENT_MAX_RESPONSE_BYTES) DROP the oversized event (skipping flag discards to the next blank line) then resume normally. Legit events incl. multi-line-under-cap unchanged; reader survives.
+- **Gate:** test_sse_reader_bounds.py (new) 3 passed; test_upstream_proxy.py 18 passed (SSE path unbroken); full agent suite green.
+- **Residuals (honest, deferred):** (1) a single huge unterminated line still buffers inside httpx aiter_lines (needs an aiter_bytes bounded line-splitter); (2) the sse_responses asyncio.Queue is unbounded (needs drop/backpressure semantics). Evidence mcp-parallel/findings/backstop-p-agent-sse-reader-unbounded-event/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked).

@@ -62,14 +62,43 @@ async def _sse_reader_loop(session: UpstreamSession, connect_timeout: float) -> 
                 raise UpstreamError(-32000, f"upstream SSE HTTP {response.status_code}")
             event_type = ""
             data_lines: list[str] = []
+            data_bytes = 0          # CHG-0128: bound per-event data accumulation
+            skipping = False        # CHG-0128: drop the remainder of an oversized event
             async for line in response.aiter_lines():
                 if line.startswith("event:"):
                     event_type = line[6:].strip()
                 elif line.startswith("data:"):
-                    data_lines.append(line[5:].strip())
-                elif line == "" and data_lines:
+                    if skipping:
+                        continue
+                    _chunk = line[5:].strip()
+                    # CHG-0128: an untrusted upstream must not OOM the sandbox agent by
+                    # streaming unbounded data: lines before a terminating blank line.
+                    # Cap the accumulated event at _MAX_RESPONSE_BYTES and DROP the
+                    # overflow (the reader keeps running for the next event) — parity
+                    # with the gateway ext-SSE bounds (CHG-0117) and the streamable-http
+                    # per-response cap (CHG-0066).
+                    if data_bytes + len(_chunk) > _MAX_RESPONSE_BYTES:
+                        LOG.warning(
+                            "SSE event exceeded %d bytes for %s; dropping event",
+                            _MAX_RESPONSE_BYTES, session.server_slug,
+                        )
+                        skipping = True
+                        data_lines = []
+                        data_bytes = 0
+                        continue
+                    data_lines.append(_chunk)
+                    data_bytes += len(_chunk)
+                elif line == "" and (data_lines or skipping):
+                    if skipping:
+                        # oversized event fully consumed → reset and wait for the next.
+                        skipping = False
+                        data_lines = []
+                        data_bytes = 0
+                        event_type = ""
+                        continue
                     data = "\n".join(data_lines)
                     data_lines = []
+                    data_bytes = 0
                     if event_type == "endpoint" or "sessionId" in data or data.startswith("/"):
                         if data.startswith("/") or data.startswith("http"):
                             session.sse_messages_url = (
