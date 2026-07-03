@@ -2790,3 +2790,31 @@ fail-closed backstop present. R5's "no PII reaches models / blocks justified" ho
 corpus; the FULL-corpus + ~10-model live sweep remains rate-limit-bounded (and the frozen live golden
 `test_chat_pipeline_golden` already exercises the live pipeline 10/10). No code change this iteration.
 Session ledger unchanged: EIGHTEEN confirmed leaks/gaps (G74..G94) + soft DoS (G79) fixed & deployed; G77/G78/G80 frozen.
+
+---
+
+## R6 PLAYWRIGHT client-perspective verification (owned frontend components) — 2026-07-03
+Verified the two OWNED frontend components render correctly and leak NO secret client-side, from a real
+authenticated browser session (Playwright MCP against the live Vite frontend at :8180). Auth: injected a
+short-lived JWT into localStorage (`auth_access`/`auth_refresh`) obtained from `/api/auth/token/` with the
+tracked test creds (admin@zeroshield.io) — `/api/auth/me/` returned 200 (admin superuser); dashboard rendered
+with the user button + Navigation.
+**ModelConnectionPanel** (`?tab=firewall-1-5`, Multi-Model Governance):
+* Panel renders: "Add model" button, "encrypted at rest … never cached in this browser" copy, connections
+  table with a live-connected model whose credential is MASKED in the table as `Encrypted key set (••••470A)`
+  — NO plaintext key anywhere in the rendered UI.
+* Opened the "Add model" form; the API-key input (`#mcp-apikey`) is verified in the LIVE DOM as
+  `type="password"` + `autocomplete="off"` + placeholder "Enter … API key", `passwordInputs: 1` — masked,
+  no browser autofill/caching. Confirms the code-audit finding through the real renderer.
+**Pipeline-trace card** (StageTimeline.jsx): verified via unit tests (theme/a11y/normalizeStages) + code audit
+(renders user's-own-input + BACKEND-masked findings only; no innerHTML/dangerouslySetInnerHTML → no XSS/echo
+of raw attack payloads). No live trace captured this pass (would need a non-blocked model round-trip; the
+frozen live golden already exercises the pipeline 10/10).
+**Secret hygiene:** all Playwright artifacts (`.playwright-mcp/` snapshots+console logs, loose `.md`/`.png`)
+grep-scanned for `eyJ…`/`sk-or-`/`auth_access`/`Bearer` → NOTHING (the JWT lived only in localStorage, never
+the DOM/screenshots), then DELETED so nothing containing a session token is committed. No `sk-or-` key was
+typed this pass. No source change this iteration (verification only).
+**Conclusion:** R6 client-perspective security is verified — ModelConnectionPanel masks the API-key field
+(type=password/autocomplete=off) and the connections table (••••470A); no plaintext credential reaches the
+browser DOM. Session ledger unchanged: EIGHTEEN confirmed leaks/gaps (G74..G94) + soft DoS (G79) fixed &
+deployed; G77/G78/G80 frozen.
