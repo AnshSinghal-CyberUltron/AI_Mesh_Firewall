@@ -38,6 +38,7 @@ try:
         detect_ip_leakage,
         redact_all,
         strip_interleaved_emphasis,
+        canonicalize_for_detection,
         PII_PATTERNS,
         SECRET_PATTERNS,
     )
@@ -57,6 +58,7 @@ except ImportError:
         detect_ip_leakage,
         redact_all,
         strip_interleaved_emphasis,
+        canonicalize_for_detection,
         PII_PATTERNS,
         SECRET_PATTERNS,
     )
@@ -1349,24 +1351,33 @@ class InputScanner:
                 matched_values=dict(secret_matched),
             )
 
+        # G85: Cf (zero-width/bidi/format) interleaved through an ENCODED or markdown-split value
+        # breaks the raw entity/percent/emphasis decoders below, so the encoded PII evaded OUTPUT
+        # detection (verdict allow -> raw egress; a browser/markdown renderer drops the Cf and shows
+        # the value). Also run the G35/G44 decoders over the Cf-stripped canonical form so an
+        # interleaved-Cf encoded/split secret is detected (-> redact -> masked by redact_all's G85 pass).
+        _canon_out = canonicalize_for_detection(text)
+        _enc_sources = (text,) if _canon_out == text else (text, _canon_out)
+
         # G35: encoded PII/secret in model output (HTML-entity / URL / source escapes).
         # A manipulated model can emit PII as &#..; / %.. so the RAW value is absent
         # from egress bytes, yet a browser/markdown renderer decodes it back to the
         # PII. Flag it (same shape as plain output PII) so the egress sanitizer's
         # neutralize_encoded_pii masks the encoded run. Only fires when the DECODED
         # form has PII/secret the plaintext lacked (benign encoded output unaffected).
-        for _variant in _decode_text_encoding_variants(text):
-            _v_pii = detect_pii(_variant)
-            _v_secret = detect_secrets(_variant)
-            if _v_pii or _v_secret:
-                _k = list(_v_pii.keys()) + list(_v_secret.keys())
-                return ScanVerdict(
-                    action="flag",
-                    threat_type="pii" if _v_pii else "secret",
-                    confidence=0.85,
-                    detail=f"Encoded PII/secret in output: {', '.join(_k)}",
-                    matched_patterns=_k,
-                )
+        for _src in _enc_sources:
+            for _variant in _decode_text_encoding_variants(_src):
+                _v_pii = detect_pii(_variant)
+                _v_secret = detect_secrets(_variant)
+                if _v_pii or _v_secret:
+                    _k = list(_v_pii.keys()) + list(_v_secret.keys())
+                    return ScanVerdict(
+                        action="flag",
+                        threat_type="pii" if _v_pii else "secret",
+                        confidence=0.85,
+                        detail=f"Encoded PII/secret in output: {', '.join(_k)}",
+                        matched_patterns=_k,
+                    )
 
         # G44: PII/secret hidden by INLINE markdown emphasis interleaved among its chars
         # (``1**2**3-45-6789`` -> SSN, ``john`@`example.com`` -> email). The raw bytes
@@ -1374,25 +1385,26 @@ class InputScanner:
         # pii/secret + matched_patterns) so the output guard elevates to redact and the
         # egress sanitizer's neutralize_markdown_split_pii masks it. Only fires when
         # stripping REVEALS PII the plaintext lacked, so benign markdown is unaffected.
-        _md_stripped = strip_interleaved_emphasis(text)
-        if _md_stripped != text:
-            _m_pii = detect_pii(_md_stripped)
-            _m_secret = detect_secrets(_md_stripped)
-            # G50: also the credential + internal-IP detectors (obfuscated bearer/api
-            # key or ``10.**0**.0.5`` internal IP). Flagged as pii/secret so the guard
-            # elevates to redact and neutralize_markdown_split_pii masks the run.
-            _m_cred = detect_credential_exposure(_md_stripped)
-            _m_ip = detect_ip_leakage(_md_stripped)
-            if _m_pii or _m_secret or _m_cred or _m_ip:
-                _mk = (list(_m_pii.keys()) + list(_m_secret.keys())
-                       + list(_m_cred.keys()) + list(_m_ip.keys()))
-                return ScanVerdict(
-                    action="flag",
-                    threat_type="pii" if _m_pii else "secret",
-                    confidence=0.85,
-                    detail=f"Markdown-split PII/secret/credential/IP in output: {', '.join(_mk)}",
-                    matched_patterns=_mk,
-                )
+        for _src in _enc_sources:
+            _md_stripped = strip_interleaved_emphasis(_src)
+            if _md_stripped != _src:
+                _m_pii = detect_pii(_md_stripped)
+                _m_secret = detect_secrets(_md_stripped)
+                # G50: also the credential + internal-IP detectors (obfuscated bearer/api
+                # key or ``10.**0**.0.5`` internal IP). Flagged as pii/secret so the guard
+                # elevates to redact and neutralize_markdown_split_pii masks the run.
+                _m_cred = detect_credential_exposure(_md_stripped)
+                _m_ip = detect_ip_leakage(_md_stripped)
+                if _m_pii or _m_secret or _m_cred or _m_ip:
+                    _mk = (list(_m_pii.keys()) + list(_m_secret.keys())
+                           + list(_m_cred.keys()) + list(_m_ip.keys()))
+                    return ScanVerdict(
+                        action="flag",
+                        threat_type="pii" if _m_pii else "secret",
+                        confidence=0.85,
+                        detail=f"Markdown-split PII/secret/credential/IP in output: {', '.join(_mk)}",
+                        matched_patterns=_mk,
+                    )
 
         return ScanVerdict()
 

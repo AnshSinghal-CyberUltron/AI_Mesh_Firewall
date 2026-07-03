@@ -2430,3 +2430,39 @@ prose/word-runs; mask surgical (prose kept, secret not recoverable). Golden **47
 EGRESS BYTES carry no client-recoverable secret (tier-1-forced for determinism). Updated the now-stale
 G75/G76 "redact_all is a no-op -> B1 covers it" comments (input-only rationale that masked this leak).
 Session ledger: EIGHT confirmed leaks (G74/G75/G76/G81/G82/G83/G84) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+
+---
+
+## G85 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — Cf-interleaved ENCODED-output PII (entity/percent/markdown)
+Sibling of G84 for the OTHER output launderers. A manipulated/injected model emits a secret in its
+RESPONSE encoded as HTML-entities (`&#49;`), percent (`%31`), or markdown-emphasis-split (`1*2*3`) with
+Cf (zero-width/bidi/format) chars interleaved. A browser/markdown renderer DROPS the Cf and shows the
+plaintext, but the output detectors (`_decode_text_encoding_variants` / `strip_interleaved_emphasis`,
+G35/G44) AND the neutralizers (`neutralize_encoded_pii` / `neutralize_markdown_split_pii`) decode/strip
+over RAW text — so Cf-interleave broke the run and the secret evaded BOTH. **Worse than G84: detection
+returned action=ALLOW (not just a mask no-op), and the `allow` egress path runs NO sanitize/neutralize
+(they only run on redact/rewrite/flag) → raw egress.** CONFIRMED via real `OutputGuard.inspect`->sanitize:
+15/15 (SSN/AWS/email × entity-dec/entity-hex/percent/markdown/bidi-entity) egressed renderer-recoverable.
+Contiguous variants are SAFE (detection decodes them → redact → neutralize masks); only Cf-interleaved leaked.
+ROOT CAUSE: output detection decoders + maskers run over RAW text; Cf-interleave breaks them (same class
+as G84, now on the DETECTION side + the entity/percent/markdown maskers, not base64/hex).
+**FIX (owned, 2 files):**
+  * `scanner._scan_output_sync` (Part A — detection): run the G35 (`_decode_text_encoding_variants`) and
+    G44 (`strip_interleaved_emphasis`) branches over the **Cf-stripped canonical form** too
+    (`canonicalize_for_detection`), so an interleaved-Cf encoded/split secret is DETECTED → redact.
+  * `patterns._redact_obfuscated` (Part B — masking): mask entity (`_ENTITY_RUN_RE`), percent
+    (`_PCT_RUN_RE`), and markdown-split (`_MD_SPLIT_RUN_RE`) runs found on the **canon** view (Cf-stripped,
+    whitespace PRESERVED — an entity/percent/markdown value split by a SPACE renders WITH the space, so
+    whitespace is a genuine boundary, unlike a base64 blob), decode/strip each, and mask the mapped-back
+    ORIGINAL span via the canon idx map. (NB first attempt used G84's whitespace-collapsed `_tnorm` — that
+    merged `...6789end.` and broke the SSN boundary; `canon` is the correct view here.)
+**Verify:** egress fuzz **0 leaks / 84 cases** (was 15 for these + 24 transport); redact_all FP-clean on
+color-hex-entities/emoji-entities(incl. ZWJ)/url-percent/markdown-bold; verdict now **redact** (was allow)
+for all Cf cases; masking surgical. Golden **494** (+12 G85, ≥6 consecutive full-green runs; one prior fail
+was the known tier-2 08_benign_sensitivity_routing flake, orthogonal); backend `ai_mesh_gateway/tests`
+**1689 passed** (+2 net new G85 integration).
+**Frozen:** golden `test_g85_*` (8 egress-mask via a NEW renderer-recovery oracle `_renderer_recovers`
+[canon_probe + entity/percent/markdown decode] + 4 FP) in test_adversarial_attacks.py; integration
+`test_output_transport_egress.py` extended (`_client_recovers` now decodes entity/percent/markdown; +G85
+cases through the real inspect->sanitize path). Non-vacuous: oracle sees the unmasked leak, not after fix.
+Session ledger: NINE confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85) + soft DoS (G79) fixed; G77/G78/G80 frozen.

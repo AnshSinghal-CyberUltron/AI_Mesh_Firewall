@@ -282,6 +282,73 @@ def test_g84_benign_transport_content_not_masked(label, payload):
     )
 
 
+# G85 — Cf-interleaved ENCODED-output PII (CONFIRMED LEAK, fixed 2026-07-03). Sibling of G84 for the
+# OTHER output launderers: HTML-entity (&#49;), percent (%31), and markdown-emphasis-split (1*2*3)
+# encodings. A browser/markdown renderer drops interleaved zero-width/bidi/format (Cf) chars and shows
+# the value, but the output detectors (_decode_text_encoding_variants / strip_interleaved_emphasis) AND
+# the neutralizers decode/strip over RAW text — so Cf-interleave broke the run and the secret evaded
+# BOTH detection (verdict allow -> raw egress) AND masking. Confirmed: 15/15 secret×obf combos egressed
+# recoverable via the real OutputGuard.inspect->sanitize path. FIX: (a) _scan_output_sync runs the G35/G44
+# decoders over the Cf-stripped canonical form too (detection -> redact); (b) redact_all's _redact_obfuscated
+# masks entity/percent/markdown runs found on the Cf-stripped view, mapping the span back onto the original
+# bytes. FROZEN: _residual_secret (redact_all -> canon_probe -> decoding detect) finds nothing recoverable.
+def _ent(s: str) -> str:
+    return "".join(f"&#{ord(c)};" for c in s)
+
+
+def _pct(s: str) -> str:
+    return "".join(f"%{b:02X}" for b in s.encode())
+
+
+def _md_split(s: str) -> str:
+    return "*".join(s)
+
+
+def _renderer_recovers(redacted: str, core: str) -> bool:
+    """Model a browser/markdown renderer over the redacted egress bytes: strip Cf (canon_probe) +
+    markdown emphasis, decode HTML-entity/percent, then check the secret is recoverable. Stronger than
+    _residual_secret for entity/percent/markdown (whose decoders detect_pii does not run)."""
+    r = canon_probe(redacted)  # Cf/Mn strip + canonical fold
+    r = re.sub(r"[*`]", "", r)
+    r = re.sub(r"&#x([0-9a-fA-F]+);", lambda m: chr(int(m.group(1), 16)), r)
+    r = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), r)
+    r = re.sub(r"%([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), r)
+    return core in r
+
+
+_G85_ENCODED_CF = [
+    ("g85_ssn_zw_entity",    SSN,     "output: " + zero_width(_ent(SSN))),
+    ("g85_key_zw_entity",    OAI_KEY, "output: " + zero_width(_ent(OAI_KEY))),
+    ("g85_card_zw_entity",   CARD,    "output: " + zero_width(_ent(CARD))),
+    ("g85_key_bidi_entity",  OAI_KEY, "output: " + bidi(_ent(OAI_KEY))),
+    ("g85_ssn_zw_percent",   SSN,     "output: " + zero_width(_pct(SSN))),
+    ("g85_email_zw_percent", EMAIL,   "output: " + zero_width(_pct(EMAIL))),
+    ("g85_ssn_zw_markdown",  SSN,     "output: " + zero_width(_md_split(SSN))),
+    ("g85_key_zw_markdown",  OAI_KEY, "output: " + zero_width(_md_split(OAI_KEY))),
+]
+
+
+@pytest.mark.parametrize("label,core,payload", _G85_ENCODED_CF)
+def test_g85_cf_encoded_output_masked_from_egress(label, core, payload):
+    assert not _renderer_recovers(patterns.redact_all(payload), core), (
+        f"{label}: Cf-interleaved encoded PII/secret recoverable from redact_all egress (LEAK)"
+    )
+
+
+# FP guard: benign entity/percent/markdown content that does NOT decode/strip to a PII/secret must be
+# a strict NO-OP (colour hex entities, emoji entities, url-path percent, ordinary markdown emphasis).
+@pytest.mark.parametrize("label,payload", [
+    ("g85_fp_color_entities", "color &#35;&#70;&#70;&#48;&#48;&#48;&#48; hex"),
+    ("g85_fp_emoji_entities", "nice &#128512;&#128513;&#128514;&#128515;&#128516; day"),
+    ("g85_fp_url_percent",    "see https://x.com/a%2Fb%2Fc%2Fd%2Fe%2Ff path"),
+    ("g85_fp_markdown",       "This is **bold** and *italic* and `code` text here"),
+])
+def test_g85_benign_cf_encoded_not_masked(label, payload):
+    assert patterns.redact_all(payload) == payload, (
+        f"{label}: benign encoded/markdown content wrongly masked (false positive)"
+    )
+
+
 # G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
 # PII/secret placed PAST patterns._CANON_MAX_LEN escapes the canonical pass (a fullwidth SSN at
 # offset 21k -> detect_pii False, since canonicalize_for_detection only folds text[:_CANON_MAX_LEN];

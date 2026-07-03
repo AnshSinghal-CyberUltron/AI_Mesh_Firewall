@@ -66,6 +66,14 @@ def _client_recovers(egress: str, plain: str) -> bool:
     stripped = "".join(c for c in egress if unicodedata.category(c) not in ("Cf", "Mn", "Me"))
     views.add(stripped)
     views.add(re.sub(r"\s+", "", stripped))
+    # model a browser/markdown renderer: strip markdown emphasis, decode HTML entities + percent
+    for v in list(views):
+        views.add(re.sub(r"[*`]", "", v))
+        d = re.sub(r"&#x([0-9a-fA-F]+);", lambda m: chr(int(m.group(1), 16)), v)
+        d = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), d)
+        d = re.sub(r"%([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), d)
+        views.add(d)
+        views.add(re.sub(r"[*`]", "", d))
     for v in list(views):
         if plain in v:
             return True
@@ -130,3 +138,44 @@ def test_g84_benign_output_not_altered(benign):
     # Benign base64/whitespace content that does NOT decode to a secret must egress verbatim
     # (no false-positive masking, no false block).
     assert _egress(benign) == benign, f"benign output wrongly altered: {benign!r}"
+
+
+# G85: sibling of G84 for the OTHER output launderers — HTML-entity (&#49;), percent (%31), and
+# markdown-emphasis-split (1*2*3) encodings with Cf (zero-width/bidi/format) interleaved. A browser/
+# markdown renderer drops the Cf and shows the value; the RAW-text detectors/neutralizers were Cf-blind
+# so these evaded BOTH detection (verdict allow -> raw egress) and masking. Now detection runs its
+# decoders over the Cf-stripped canonical form (-> redact) and redact_all masks the mapped-back run.
+def _ent(s: str) -> str:
+    return "".join(f"&#{ord(c)};" for c in s)
+
+
+def _pct(s: str) -> str:
+    return "".join(f"%{b:02X}" for b in s.encode())
+
+
+def _md(s: str) -> str:
+    return "*".join(s)
+
+
+@pytest.mark.parametrize("plain", [_SSN, _AWS, _EMAIL])
+def test_g85_cf_encoded_secret_never_egresses(plain):
+    for oname, blob in [
+        ("zw_entity", _interleave(_ent(plain), _ZW)),
+        ("bidi_entity", "".join(c + _RLO for c in _ent(plain))),
+        ("zw_percent", _interleave(_pct(plain), _ZW)),
+        ("zw_markdown", _interleave(_md(plain), _ZW)),
+    ]:
+        egress = _egress(f"The value is: {blob} end.")
+        assert not _client_recovers(egress, plain), (
+            f"LEAK: {oname} of {plain!r} is client-recoverable from egress bytes: {egress!r}"
+        )
+
+
+@pytest.mark.parametrize("benign", [
+    "color &#35;&#70;&#70;&#48;&#48;&#48;&#48; hex",
+    "nice &#128512;&#128513;&#128514;&#128515;&#128516; day",
+    "see https://x.com/a%2Fb%2Fc%2Fd%2Fe%2Ff path",
+    "This is **bold** and *italic* and `code` text here",
+])
+def test_g85_benign_encoded_output_not_altered(benign):
+    assert _egress(benign) == benign, f"benign encoded/markdown output wrongly altered: {benign!r}"

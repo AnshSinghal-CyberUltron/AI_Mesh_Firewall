@@ -198,6 +198,24 @@ _PERCENT_TOKEN_RE = re.compile(
 )
 _MAX_URL_DECODE_TOKENS = 4096
 
+# G85: Cf-tolerant OUTPUT masking of entity/percent-encoded and markdown-split PII/secret. The raw
+# neutralizers/decoders are Cf-blind (contiguous-run regexes), so a value split with zero-width/bidi/
+# format (Cf) chars evaded masking even after detection was made Cf-aware. These runs are matched on
+# the Cf-STRIPPED view (``_tnorm`` in ``_redact_obfuscated``) and the span is mapped BACK onto the
+# original bytes (with the interleaved Cf) via the canon index map. Bounded (possessive value runs /
+# fixed entity+percent tokens) -> ReDoS-safe; masked only when the decode/strip reveals PII/secret.
+_ENTITY_RUN_RE = re.compile(r"(?:&#x[0-9A-Fa-f]{1,6};|&#[0-9]{1,7};){2,}")
+_PCT_RUN_RE = re.compile(r"(?:%[0-9A-Fa-f]{2}){2,}")
+_MD_SPLIT_RUN_RE = re.compile(r"[\w@.\-]{1,256}+(?:[*`]{1,8}[\w@.\-]{1,256}+){1,256}")
+
+
+def _decode_entity_run(run: str) -> str:
+    def _cp(n: int) -> str:
+        return chr(n) if 0 <= n < 0x110000 else ""
+    s = re.sub(r"&#x([0-9A-Fa-f]{1,6});", lambda m: _cp(int(m.group(1), 16)) or m.group(0), run)
+    s = re.sub(r"&#([0-9]{1,7});", lambda m: _cp(int(m.group(1))) or m.group(0), s)
+    return s
+
 
 def _printable_ratio(s: str) -> float:
     if not s:
@@ -1243,6 +1261,38 @@ def _redact_obfuscated(original: str, result: str) -> str:
                 orig_sub = original[idx[a]: idx[b - 1] + 1]
                 if orig_sub:
                     masks.append((orig_sub, f"[{label.upper()}_REDACTED]"))
+        # G85: entity/percent-encoded AND markdown-emphasis-split PII/secret with Cf (zero-width/bidi/
+        # format) interleaved through them. The output detectors + neutralizers decode/strip these over
+        # RAW text, so Cf-interleave broke the run and the secret evaded BOTH detection (verdict allow ->
+        # raw egress) AND masking. ``canon`` is the Cf-stripped view (whitespace PRESERVED — unlike a
+        # base64 blob, an entity/percent/markdown value split by a SPACE renders WITH the space, so it is
+        # a genuine boundary, not reassembled). Find each run in canon, decode/strip it, and if it reveals
+        # PII/secret/infra/credential mask the mapped-back ORIGINAL span (spanning the interleaved Cf).
+        def _reveals_secret(_s: str) -> bool:
+            return bool(_detect_pii_core(_s) or _detect_secrets_core(_s)
+                        or _dec_has_infra(_s) or _detect_credential_exposure_core(_s))
+
+        def _mask_canon_span(_a: int, _b: int, _tag: str) -> None:
+            if 0 <= _a < len(idx) and 0 <= _b - 1 < len(idx):
+                _os = original[idx[_a]: idx[_b - 1] + 1]
+                if _os:
+                    masks.append((_os, _tag))
+
+        for _m in _ENTITY_RUN_RE.finditer(canon):
+            _d = _decode_entity_run(_m.group(0))
+            if _d != _m.group(0) and _reveals_secret(_d):
+                _mask_canon_span(_m.start(), _m.end(), "[ENCODED_SECRET_REDACTED]")
+        for _m in _PCT_RUN_RE.finditer(canon):
+            try:
+                _d = urllib.parse.unquote(_m.group(0))
+            except Exception:  # noqa: BLE001 - decode must never break redaction
+                continue
+            if _d != _m.group(0) and _reveals_secret(_d):
+                _mask_canon_span(_m.start(), _m.end(), "[ENCODED_SECRET_REDACTED]")
+        for _m in _MD_SPLIT_RUN_RE.finditer(canon):
+            _st = _m.group(0).replace("*", "").replace("`", "")
+            if _st != _m.group(0) and _reveals_secret(_st):
+                _mask_canon_span(_m.start(), _m.end(), "[PII_REDACTED]")
     for tok, dec in _iter_transport_decodes(original):
         # G26: mask the OUTER encoded blob when its decode carries PII/secret in either
         # raw OR canonical (unicode-obfuscated, e.g. base64 ∘ zero-width) form.
