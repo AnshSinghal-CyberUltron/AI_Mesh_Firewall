@@ -65,8 +65,10 @@ def _classify_exit_code(exit_code: int) -> tuple[str, str] | None:
         return MCP_SERVER_CRASHED, ("The MCP server crashed while starting. Verify the "
                                     "command and package are compatible, then retry.")
     if exit_code != 0:
-        return MCP_START_FAILED, ("The MCP server could not be started. Verify the "
-                                  "command and package name, then retry.")
+        return MCP_START_FAILED, ("The MCP server could not be started — it stopped "
+                                  "immediately during startup. Verify the command and package "
+                                  "name; a server needing an extra host tool (e.g. a required "
+                                  "CLI binary) may not run in the isolated sandbox.")
     return None
 
 
@@ -152,8 +154,10 @@ def _classify_raw_text(low: str) -> tuple[str, str]:
                                         "refused. Check the host and port.")
     if any(k in low for k in ("exited with code", "failed to start", "process exited",
                               "missing host dependency", "did not start", "stdout stream closed")):
-        return MCP_START_FAILED, ("The MCP server could not be started. Verify the command "
-                                  "and package name, then retry.")
+        return MCP_START_FAILED, ("The MCP server could not be started — it stopped "
+                                  "immediately during startup. Verify the command and package "
+                                  "name; a server needing an extra host tool (e.g. a required "
+                                  "CLI binary) may not run in the isolated sandbox.")
     return MCP_UNAVAILABLE, ("The MCP server could not be reached or returned an error. "
                              "Verify the configuration and retry.")
 
