@@ -19,6 +19,7 @@ from ai_mesh_shared.mcp_stdio_common import (
     _args_have_oauth_header,
     _build_child_env,
     _looks_like_oauth_prompt,
+    _safe_args_for_log,
 )
 
 LOG = logging.getLogger("sandbox_agent.stdio")
@@ -65,35 +66,9 @@ _registry_lock = asyncio.Lock()
 _reaper_task: asyncio.Task | None = None
 
 
-# CHG-0053: stdio server args are logged for debuggability, but a configured
-# credential passed as ``--token XYZ`` / ``--api-key=XYZ`` must NOT land in operator
-# logs in plaintext. Mask the VALUE of any secret-looking flag before logging. (The
-# normal secret location is ``env``, which the agent never logs — this covers the
-# arg edge case; tool-call results/params are never logged either.)
-_SECRET_ARG_HINTS = (
-    "token", "key", "secret", "password", "passwd", "auth", "credential", "apikey",
-)
-
-
-def _safe_args_for_log(args: list[str]) -> list[str]:
-    out: list[str] = []
-    mask_next = False
-    for a in args:
-        s = str(a)
-        if mask_next:
-            out.append("***")
-            mask_next = False
-            continue
-        low = s.lower()
-        if s.startswith("-") and any(h in low for h in _SECRET_ARG_HINTS):
-            if "=" in s:
-                out.append(s.split("=", 1)[0] + "=***")
-            else:
-                out.append(s)       # keep the flag name itself
-                mask_next = True     # ...but mask the following value
-        else:
-            out.append(s)
-    return out
+# CHG-0053 / CHG-0107: ``_safe_args_for_log`` (masks secret-flag values AND
+# URL-embedded credentials before logging) now lives in the SHARED module so the
+# gateway adapter and this sandbox agent redact identically. Imported above.
 
 
 def _command_basename(command: str) -> str:

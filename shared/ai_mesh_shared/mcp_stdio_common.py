@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Mapping
+from urllib.parse import urlsplit, urlunsplit
 
 LOG = logging.getLogger("ai_mesh_shared.mcp_stdio_common")
 
@@ -114,6 +115,92 @@ def _args_have_oauth_header(args: list[str]) -> bool:
             if args[idx + 1].lower().startswith("authorization:"):
                 return True
     return False
+
+
+# CHG-0053 / CHG-0107: stdio server args are logged for debuggability, but a
+# configured credential must NOT land in operator logs in plaintext. Two vectors:
+#   (1) a secret-looking FLAG value  (``--token XYZ`` / ``--api-key=XYZ``)
+#   (2) a credential embedded in a URL passed as a STANDALONE arg
+#       (``postgres://u:pw@h/db`` · ``https://x:ghp_..@github`` · ``?api_key=..``)
+# CHG-0053 (sandbox agent only) masked (1); (2) still egressed raw, and the gateway
+# adapter masked NEITHER. This shared helper covers both, for both consumers.
+# (The normal secret location is ``env``, which is never logged; tool-call
+# results/params are never logged either — this hardens the arg edge case.)
+_SECRET_ARG_HINTS = (
+    "token", "key", "secret", "password", "passwd", "auth", "credential", "apikey",
+)
+
+
+def _redact_url_creds(s: str) -> str:
+    """Mask credentials embedded in a URL arg. Non-URL args return unchanged.
+
+    Masks (a) the WHOLE userinfo (``scheme://user:pass@host`` → ``scheme://***@host``
+    — the whole userinfo because a token can sit in the user OR password position,
+    e.g. ``https://ghp_x@h`` or ``https://x-access-token:ghp_x@h``) and (b) the
+    values of any query param whose name matches a secret hint
+    (``?api_key=v&token=v&page=2`` → ``?api_key=***&token=***&page=2``). Never
+    raises — on any parse hiccup it returns the string unchanged (fail-safe;
+    logging must not crash the spawn path).
+    """
+    if "://" not in s:
+        return s
+    try:
+        parts = urlsplit(s)
+    except Exception:
+        return s
+    if not parts.scheme or not parts.netloc:
+        return s
+    changed = False
+    netloc = parts.netloc
+    if "@" in netloc:
+        netloc = "***@" + netloc.rsplit("@", 1)[1]
+        changed = True
+    query = parts.query
+    if query:
+        pairs = []
+        for kv in query.split("&"):
+            k, sep, v = kv.partition("=")
+            if sep and v and any(h in k.lower() for h in _SECRET_ARG_HINTS):
+                pairs.append(k + "=***")
+                changed = True
+            else:
+                pairs.append(kv)
+        query = "&".join(pairs)
+    if not changed:
+        return s
+    return urlunsplit((parts.scheme, netloc, parts.path, query, parts.fragment))
+
+
+def _safe_args_for_log(args: list[str]) -> list[str]:
+    """Redact secrets from stdio spawn args before logging (see notes above).
+
+    Masks secret-looking flag values AND URL-embedded credentials in every arg
+    (standalone URLs and non-secret ``--flag=URL`` inline values). Benign
+    package specs / flags / plain URLs pass through unchanged.
+    """
+    out: list[str] = []
+    mask_next = False
+    for a in args:
+        s = str(a)
+        if mask_next:
+            out.append("***")
+            mask_next = False
+            continue
+        low = s.lower()
+        if s.startswith("-") and any(h in low for h in _SECRET_ARG_HINTS):
+            if "=" in s:
+                out.append(s.split("=", 1)[0] + "=***")
+            else:
+                out.append(s)       # keep the flag name itself
+                mask_next = True     # ...but mask the following value
+        elif s.startswith("-") and "=" in s:
+            # A non-secret flag with an inline value (``--dsn=postgres://u:pw@h``):
+            # the value may still be a URL carrying credentials — redact just it.
+            k, _, v = s.partition("=")
+            out.append(k + "=" + _redact_url_creds(v))
+        else:
+            out.append(_redact_url_creds(s))
+    return out
 
 
 def _looks_like_oauth_prompt(text: str, *, oauth_header_injected: bool = False) -> bool:

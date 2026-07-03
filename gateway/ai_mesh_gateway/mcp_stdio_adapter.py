@@ -30,6 +30,7 @@ from ai_mesh_shared.mcp_stdio_common import (
     _args_have_oauth_header,
     _build_child_env,
     _looks_like_oauth_prompt,
+    _safe_args_for_log,
 )
 
 LOG = logging.getLogger("gateway.mcp_stdio_adapter")
@@ -423,7 +424,12 @@ async def _ensure_process(key: str, command: str, args: list[str],
 
         proc_env = _build_child_env(requested_env, org_slug, log=LOG)
 
-        LOG.info("Starting stdio MCP process: %s %s (key=%s)", command, args, key)
+        # CHG-0107: mask secret-flag values + URL-embedded creds before logging
+        # (was RAW — a credential in args/URL landed in operator logs plaintext).
+        LOG.info(
+            "Starting stdio MCP process: %s %s (key=%s)",
+            command, _safe_args_for_log(args), key,
+        )
         try:
             process = await asyncio.create_subprocess_exec(
                 command, *args,

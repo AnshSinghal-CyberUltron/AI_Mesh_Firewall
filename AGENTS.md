@@ -1011,6 +1011,22 @@
     [INTERNAL_IPV4_REDACTED] user b***@c***.example; structuredContent -> "secret":"***","ssn":"***-**-6789".
     Independent oracle (aidefence): has_pii true raw / false fixed. Evidence mcp-parallel/findings/backstop-p-
     internal-http-result-scan/. Result-egress redaction now at full parity across org / sandbox / legacy-httpx.
+  - CHG-0107 (2026-07-03) — MEDIUM 1.4 credential leak to OPERATOR LOGS (both consumers): closes the CHG-0053
+    follow-up. The stdio-spawn log line logged args carrying secrets. (a) CHG-0053 masked secret-FLAG values
+    (--token X) but only on the sandbox agent; a credential embedded in a URL passed as a STANDALONE arg
+    (postgres://u:pw@h/db, https://x-access-token:ghp_..@github, https://h/mcp?api_key=..&token=..) egressed RAW.
+    (b) the GATEWAY adapter (mcp_stdio_adapter.py:426) logged args with NO masking at ALL. Byte-verified pre-fix:
+    all four URL-cred forms + --token XYZ egressed verbatim (gateway); the four URL forms egressed (sandbox). FIX:
+    ONE hardened _safe_args_for_log now lives in shared/ai_mesh_shared/mcp_stdio_common.py (imported by BOTH the
+    gateway adapter and the vendored sandbox agent) — masks secret-flag values AND, via _redact_url_creds, the
+    WHOLE URL userinfo (scheme://***@host) + secret-named query-param values (?api_key=***&token=***&page=2,
+    non-secret preserved); fail-safe (never raises). The sandbox agent's local CHG-0053 copy was deduped into
+    shared. NEW/UPDATED TESTS: shared +12 (test_stdio_common.py), sandbox agent +2, gateway +1. Gate: 12 shared +
+    120 broker + 33 sandbox-agent + 1663 gateway passed, 0 failed. Byte-level: postgres://admin:S3cr3tPass@... ->
+    postgres://***@...; ?api_key=AKIA..&token=abc&page=2 -> ?api_key=***&token=***&page=2; benign URL/pkgspec/flag
+    controls correct. Independent oracle (aidefence_scan): piiFound true raw / false masked (blind to AWS-key/URL-
+    query class -> byte-level authoritative; masking uses urlsplit, independent of the detection regexes). Evidence
+    mcp-parallel/findings/backstop-p13-stdio-arg-url-cred-log-leak/. One log-hygiene helper, both deployables.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

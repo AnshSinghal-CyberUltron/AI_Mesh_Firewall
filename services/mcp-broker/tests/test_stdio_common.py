@@ -10,6 +10,8 @@ from ai_mesh_shared.mcp_stdio_common import (
     _SECRET_ENV_DENYLIST,
     _build_child_env,
     _looks_like_oauth_prompt,
+    _redact_url_creds,
+    _safe_args_for_log,
 )
 
 
@@ -243,3 +245,77 @@ def test_build_child_env_ignore_scripts_not_overridable_by_host_env():
         host_environ={"PATH": "/usr/bin", "npm_config_ignore_scripts": "false"},
     )
     assert child["npm_config_ignore_scripts"] == "true"
+
+
+# ---------------------------------------------------------------------------
+# CHG-0107: _safe_args_for_log + _redact_url_creds — mask secret-flag values
+# AND URL-embedded credentials before logging stdio spawn args.
+# ---------------------------------------------------------------------------
+
+
+class TestSafeArgsForLog:
+    def test_masks_value_after_secret_flag(self):
+        assert _safe_args_for_log(["--token", "s3cr3t", "-y", "@pkg"]) == [
+            "--token", "***", "-y", "@pkg",
+        ]
+
+    def test_masks_inline_secret_flag(self):
+        assert _safe_args_for_log(["--api-key=s3cr3t"]) == ["--api-key=***"]
+
+    def test_masks_url_userinfo_password(self):
+        # postgres://user:pass@host — whole userinfo masked (CHG-0053 follow-up).
+        out = _safe_args_for_log(["-y", "mcp-remote",
+                                  "postgres://admin:S3cr3tPass@db.internal:5432/prod"])
+        assert out == ["-y", "mcp-remote", "postgres://***@db.internal:5432/prod"]
+        assert "S3cr3tPass" not in " ".join(out)
+
+    def test_masks_url_userinfo_token_in_either_position(self):
+        tok = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        # token in password position
+        out1 = _safe_args_for_log([f"https://x-access-token:{tok}@github.com/o/r"])
+        # token in username position (no colon)
+        out2 = _safe_args_for_log([f"https://{tok}@github.com/o/r"])
+        assert tok not in " ".join(out1) and out1 == ["https://***@github.com/o/r"]
+        assert tok not in " ".join(out2) and out2 == ["https://***@github.com/o/r"]
+
+    def test_masks_secret_query_params_only(self):
+        out = _safe_args_for_log(
+            ["https://api.example.com/mcp?api_key=AKIAIOSFODNN7EXAMPLE&token=abc&page=2"])
+        assert out == [
+            "https://api.example.com/mcp?api_key=***&token=***&page=2",
+        ]  # page=2 (non-secret) preserved
+
+    def test_masks_url_creds_in_non_secret_flag_inline_value(self):
+        # --dsn is not a secret flag, but its URL value carries a password.
+        assert _safe_args_for_log(["--dsn=postgres://u:pw_SEKRET@h/db"]) == [
+            "--dsn=postgres://***@h/db",
+        ]
+
+    def test_benign_url_and_pkgspec_untouched(self):
+        args = ["-y", "@modelcontextprotocol/server-filesystem@1.0.0",
+                "https://safe.example.com/mcp?page=2"]
+        assert _safe_args_for_log(args) == args
+
+    def test_bare_positional_without_url_untouched(self):
+        assert _safe_args_for_log(["mcp-remote", "tokenish-pkgname"]) == [
+            "mcp-remote", "tokenish-pkgname",
+        ]
+
+
+class TestRedactUrlCreds:
+    def test_non_url_unchanged(self):
+        assert _redact_url_creds("mcp-remote") == "mcp-remote"
+        assert _redact_url_creds("--token") == "--token"
+
+    def test_mailto_and_schemeless_unchanged(self):
+        # mailto: has no // netloc → not a hierarchical URL, left as-is.
+        assert _redact_url_creds("mailto:bob@corp.example") == "mailto:bob@corp.example"
+
+    def test_no_creds_unchanged(self):
+        assert _redact_url_creds("https://safe.example.com/x?a=1") == \
+            "https://safe.example.com/x?a=1"
+
+    def test_never_raises_on_garbage(self):
+        # Fail-safe: any parse hiccup returns the input unchanged, never raises.
+        for junk in ["://", "http://[bad", "ht!tp://x", "://@@@"]:
+            assert isinstance(_redact_url_creds(junk), str)

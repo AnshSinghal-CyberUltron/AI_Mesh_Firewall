@@ -208,3 +208,26 @@ async def test_send_jsonrpc_in_process_initialize_cached():
 
     assert result["id"] == 3
     assert result["result"]["protocolVersion"] == "2024-11-05"
+
+
+# CHG-0107: the gateway adapter's spawn-log previously logged args RAW (no
+# masking at all — worse than the sandbox agent's flag-only masking). It now
+# uses the SHARED _safe_args_for_log, which masks secret-flag values AND
+# URL-embedded credentials. Lock the wiring so it can't regress to raw logging.
+def test_adapter_uses_shared_safe_args_for_log():
+    from mcp_stdio_adapter import _safe_args_for_log
+
+    # secret flag value
+    assert _safe_args_for_log(["--token", "s3cr3t"]) == ["--token", "***"]
+    # URL userinfo (whole userinfo masked)
+    out = _safe_args_for_log(["-y", "mcp-remote",
+                              "postgres://admin:S3cr3tPass@db.internal:5432/prod"])
+    assert "S3cr3tPass" not in " ".join(out)
+    assert out[-1] == "postgres://***@db.internal:5432/prod"
+    # secret query params masked, non-secret preserved
+    assert _safe_args_for_log(
+        ["https://api.example.com/mcp?api_key=AKIAIOSFODNN7EXAMPLE&token=abc&page=2"]
+    ) == ["https://api.example.com/mcp?api_key=***&token=***&page=2"]
+    # benign spawn args unchanged
+    assert _safe_args_for_log(["-y", "@playwright/mcp@latest"]) == \
+        ["-y", "@playwright/mcp@latest"]

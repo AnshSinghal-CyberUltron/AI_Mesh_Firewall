@@ -252,9 +252,25 @@ class TestSafeArgsForLog:
         assert m._safe_args_for_log(args) == args
 
     def test_bare_positional_not_masked(self, monkeypatch):
-        # A standalone value not preceded by a secret flag is left intact (URLs /
-        # package specs must not be corrupted); flag-based secrets are the target.
+        # A standalone value with NO embedded credentials is left intact (package
+        # specs / plain URLs must not be corrupted); flag-based secrets are one target.
         m = _reload_stdio_manager(monkeypatch)
         assert m._safe_args_for_log(["mcp-remote", "tokenish-pkgname"]) == [
             "mcp-remote", "tokenish-pkgname",
         ]
+
+    # CHG-0107: the agent inherits the shared helper, which ALSO masks credentials
+    # embedded in a URL passed as a STANDALONE arg (the CHG-0053 follow-up leak).
+    def test_masks_url_userinfo_in_standalone_arg(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        out = m._safe_args_for_log(
+            ["-y", "mcp-remote", "postgres://admin:S3cr3tPass@db.internal:5432/prod"])
+        assert "S3cr3tPass" not in " ".join(out)
+        assert out[-1] == "postgres://***@db.internal:5432/prod"
+
+    def test_masks_url_query_secret_params_in_standalone_arg(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        out = m._safe_args_for_log(
+            ["https://api.example.com/mcp?api_key=AKIAIOSFODNN7EXAMPLE&token=abc&page=2"])
+        assert "AKIAIOSFODNN7EXAMPLE" not in " ".join(out)
+        assert out == ["https://api.example.com/mcp?api_key=***&token=***&page=2"]

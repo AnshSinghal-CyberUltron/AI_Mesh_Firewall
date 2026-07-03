@@ -1525,6 +1525,28 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (`_scan_internal_result`); completes CHG-0105 follow-up. Evidence `mcp-parallel/findings/backstop-p-internal-
   http-result-scan/`. Result-egress redaction now at full parity across org / sandbox / legacy-httpx.
 
+- **CHG-0107** (2026-07-03) — **MEDIUM 1.4 credential leak to OPERATOR LOGS (both consumers): URL-embedded creds
+  in stdio spawn args logged plaintext**. Closes the CHG-0053 follow-up. The stdio-spawn log line
+  (`Starting stdio MCP process: <cmd> <args> …`) had two defects: (a) CHG-0053's `_safe_args_for_log` masked
+  secret-FLAG values (`--token X` / `--api-key=X`) but ONLY on the sandbox agent; a credential in a URL passed as
+  a STANDALONE arg (`postgres://u:pw@h/db` · `https://x-access-token:ghp_…@github` · `https://h/mcp?api_key=…&token=…`)
+  still egressed RAW; (b) the GATEWAY adapter (`mcp_stdio_adapter.py:426`) logged args with NO masking at ALL.
+  Byte-verified pre-fix: all four URL-cred forms + `--token XYZ` egressed verbatim (gateway); the four URL forms
+  egressed (sandbox). **FIX:** ONE hardened `_safe_args_for_log` + `_redact_url_creds` now live in the SHARED
+  `shared/ai_mesh_shared/mcp_stdio_common.py` (imported by BOTH the gateway adapter and the vendored sandbox agent —
+  Dockerfile COPYs the shared file). Masks secret-flag values AND the WHOLE URL userinfo (`scheme://***@host` —
+  token can sit in user OR password position) + secret-named query-param values (`?api_key=***&token=***&page=2`,
+  non-secret preserved), for standalone args AND non-secret `--flag=URL` inline values; fail-safe (never raises on
+  a malformed URL). The sandbox agent's local CHG-0053 copy was DEDUPED into shared. TESTS: shared +12
+  (`test_stdio_common.py`), sandbox agent +2, gateway +1. Gate: 12 shared + 120 broker + 33 sandbox-agent + 1663
+  gateway passed, 0 failed. Byte-level: `postgres://admin:S3cr3tPass@db.internal:5432/prod` → `postgres://***@db.internal:5432/prod`;
+  `?api_key=AKIA…&token=abc&page=2` → `?api_key=***&token=***&page=2`; benign URL/pkgspec/flag controls correct.
+  Independent oracle (aidefence_scan): `piiFound` true on the raw postgres spawn-log line / false on the masked
+  line (aidefence is blind to the AWS-key/URL-query class → byte-level authoritative there; masking uses `urlsplit`
+  string ops, independent of the detection regexes). touched: shared stdio-common + gateway adapter (backstop add)
+  + sandbox agent (dedup CHG-0053 copy). Evidence `mcp-parallel/findings/backstop-p13-stdio-arg-url-cred-log-leak/`.
+  One log-hygiene helper, both deployables.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
