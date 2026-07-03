@@ -3265,3 +3265,12 @@ fail-open) + backward-compatible. Other sessions: this function now also folds `
 golden `_fold_full` replica in sync if you touch it.
 Session ledger: TWENTY-FIVE leaks (G74..G95, G97, G98, G100, G101, G102, G103) + ONE false-block (G99)
 fixed; G96 freezes 6 defended vectors; G77/G78/G80 frozen.
+
+### G103 DEPLOY + LIVE-VERIFY — 2026-07-03
+Rebuilt+redeployed the baked gateway (tag rollback-g103 → build → up -d --no-deps → healthy ~4s).
+LIVE-verified: an injection smuggled in a legacy `function_call.arguments` → **HTTP 400 "Request blocked
+due to security policy"** (was a fail-open before G103 — the firewall now scans it). A BENIGN function_call
+returns HTTP 400 `upstream_error` — that is the free OpenRouter model itself rejecting the legacy
+function-call request shape, NOT a firewall block (in-process the scanner verdict is `allow`, and the
+G103 golden `test_g103_benign_function_call_not_blocked` passes). G103 validated end-to-end (in-process
+633×3 + backend 1896 + live block).
