@@ -1348,6 +1348,23 @@
         (shared tree) — health-checked; MCP error-envelope completion is the MCP session's to finish.
         TWENTY-ONE confirmed-live leaks (G40-G46, G49-G61, G66) + G62 defense-in-depth + 3 DoS (G63-G65) + G48
         + 2 tradeoffs. Data-shape coercion now covers chat (in+out) AND the RAG-ingest surface.
+    - 🔴 G67 RAG-QUERY egress backstop skipped list/dict content (injection + PII, 2026-07-03):
+        Applied the data-shape lens to the RAG RETRIEVAL egress (rag_query, main.py ~10079). The two client-
+        egress backstops each scanned a returned doc ONLY when content was a str: the indirect-injection DROP
+        (isinstance(_scan_text,str), line 10120) and the PII redaction (isinstance(_content,str), line 10157).
+        A retrieved doc with LIST/DICT-shaped content (stored via a non-coercing path / an external BYOK vector
+        DB / pre-G66 data) therefore (a) SKIPPED the egress injection scan -> a POISONED doc was SERVED
+        (indirect injection, LLM01), and (b) SKIPPED the PII redaction -> PII/secret SERVED RAW (LLM06). FIX
+        (owned main.py firewall scan-coverage): injection scan coerces content via _content_to_text (drop if
+        injection, no content mutation); PII redaction flattens+redacts a non-str content and replaces it ONLY
+        when PII was actually masked (benign list/dict docs keep their original structure — no over-mutation).
+        VERIFY: list-content injection dropped, dict/list PII redacted, benign list kept unchanged. FROZEN 2
+        egress regressions (injection + PII, list/dict) in test_rag_egress_injection_backstop.py (helper updated
+        to mirror the coercion). GATE: golden 406×3; gateway suite 1540 pass (0 fail — the prior MCP-session-WIP
+        failures RESOLVED, that session committed their fix). commit 9bac21dd. REDEPLOYING (rollback pre-g67).
+        TWENTY-TWO confirmed-live leaks (G40-G46, G49-G61, G66, G67) + G62 DiD + 3 DoS (G63-G65) + G48 + 2
+        tradeoffs. Data-shape coercion now uniform across chat in/out, RAG ingest (G66), and RAG query egress
+        (G67) — no surface scans/redacts a str-only view of a shape that can be list/dict.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
