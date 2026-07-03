@@ -1187,7 +1187,7 @@ function MCPConnectorPanelInner() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-9 w-9"
                       aria-label={keyRevealed ? "Hide gateway API key" : "Reveal gateway API key"}
                       onClick={() => setKeyRevealed((v) => !v)}
                     >
@@ -1200,7 +1200,7 @@ function MCPConnectorPanelInner() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-9 w-9"
                       aria-label="Copy gateway API key"
                       onClick={() => {
                         navigator.clipboard.writeText(orgGatewayKey.key);
@@ -1313,7 +1313,7 @@ function MCPConnectorPanelInner() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
+                        className="h-9 w-9"
                         aria-label="Copy gateway URL"
                         onClick={() => copyEndpoint(absUrl)}
                       >
@@ -2391,7 +2391,7 @@ function MCPConnectorPanelInner() {
           <Button
             variant="ghost"
             size="icon"
-            className="ml-auto h-7 w-7 text-red-500 hover:text-red-700"
+            className="ml-auto h-9 w-9 text-red-500 hover:text-red-700"
             aria-label="Dismiss error"
             onClick={() => setError(null)}
           >

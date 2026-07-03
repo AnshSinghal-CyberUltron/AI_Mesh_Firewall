@@ -102,3 +102,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** label/sub use leading-tight (wrap, no clip); CardContent items-start (values line up across cards); Card h-full → fills the stretch grid cell → equal heights.
 - **AFFECTS:** the 6-card stat grid at the top of the 1.4 page.
 - **VERIFY:** build green; LIVE Playwright (both themes @1440+375) 0 console errors / no overflow; read light-1440 PNG → labels wrap (no clip), 6 cards equal-height, values top-aligned.
+
+## MCP-PAGE-CLEANUP-12 — responsiveness verified (both tabs, 4 widths) + touch-target bump
+- **files:** frontend/src/components/MCPConnectorPanel.jsx; scripts/ralph/mcp_page_cleanup_item12_verify.mjs (new)
+- **WHAT:** verified server list + evidence table reflow at all 4 widths/2 themes; bumped 4 on-page icon buttons to 36px.
+- **WHY:** item 12 requires no overflow/clipping/overlap + mobile touch targets; 4 icon buttons were 28px (h-7 w-7).
+- **NOW DOES:** h-7 w-7 → h-9 w-9 (gateway-key reveal/copy, copy-URL, dismiss-error). Harness sweeps servers + observability tabs; excludes the decorative hero-glow + global nav + inline text links (WCAG exempt).
+- **AFFECTS:** the 1.4 page icon buttons; responsiveness verification.
+- **VERIFY:** build green; LIVE Playwright cleanup12Pass:true (noOverflow, noBleed on both tabs all 8 combos, touchOk 24px WCAG 2.5.8 AA, 0 console errors). Evidence list = reflowing cards, stacks at 375.
