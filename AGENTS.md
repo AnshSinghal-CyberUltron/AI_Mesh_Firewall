@@ -57,6 +57,19 @@
  rules on masked text; if no block rule still matches → downgrade to "redact" + return
  masked prompt (input_scan sees clean text). Compile+push path verified. 18 new tests in
  test_pipeline_policy_redact.py. Gate: 18 targeted + 1948 full suite passed.
+ - PIPELINE-0010 (2026-07-03) — resolve_enforcement REDACT MAPPING FIXED (L5):
+ enforcement.py resolve_enforcement monitor-posture downgrade. Two bugs: (1) when scanner
+ rec=redact, policy=block, enforcement_mode!=block, the block→monitor downgrade LOST the
+ data-protection redaction (resolve_enforcement returned "monitor"; resolve_and_enforce
+ compensated via should_apply_redaction override but the atomic function violated its own
+ contract). (2) unmaskable PII (redaction_possible=False) under non-block enforcement_mode
+ was downgraded to "monitor" → the main.py honesty check at L6805 saw
+ is_terminal_block=False and forwarded RAW unmaskable PII to the model. FIX: monitor-posture
+ if-block now branches: rec=redact+possible → preserve "redact"; rec=redact+impossible →
+ preserve "block" (fail-closed, overrides monitor); else → "monitor". Net: REDACT
+ recommendation → REDACT under any posture when bytes can be masked; unmaskable PII
+ always fails closed to BLOCK regardless of enforcement_mode. 17 new tests in
+ test_enforcement.py. Gate: 28 targeted + 1965 full suite passed.
 
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is

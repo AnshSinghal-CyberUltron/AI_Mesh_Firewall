@@ -81,3 +81,9 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   streaming trace final_action now sourced from PipelineDecision.action (not ad-hoc zeroshield
   or hardcoded "allow"). _launch_chat_stream_response gains input_action param. No double-block
   in trace stages. 20 new tests. Gate: 20 + 1894 full suite passed.
+- PIPELINE-0010 (2026-07-03) — resolve_enforcement REDACT mapping: enforcement.py.
+  Monitor-posture downgrade now preserves REDACT when scanner rec=redact and redaction IS
+  possible; unmaskable PII (redaction_possible=False) fail-closed BLOCK overrides monitor
+  posture. Two bugs: (1) policy=block+mode!=block lost data-protection redaction at
+  resolve_enforcement level; (2) unmaskable PII under non-block mode forwarded raw (honesty
+  check missed is_terminal_block). 17 new tests. Gate: 28 targeted + 1965 full suite passed.

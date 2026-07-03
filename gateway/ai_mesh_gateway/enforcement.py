@@ -133,7 +133,12 @@ def resolve_enforcement(
 
     # Monitor posture: never hard-block when org enforcement_mode is not block.
     if resolved == "block" and str(enforcement_mode or "").strip().lower() != "block":
-        resolved = "monitor"
+        if rec == "redact" and not redaction_possible:
+            pass  # Unmaskable PII: fail-closed block overrides monitor posture.
+        elif rec == "redact" and redaction_possible:
+            resolved = "redact"
+        else:
+            resolved = "monitor"
 
     return resolved
 

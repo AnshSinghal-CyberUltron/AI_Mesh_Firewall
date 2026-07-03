@@ -2,6 +2,49 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0010 (2026-07-03)
+
+**resolve_enforcement REDACT mapping fixed (L5).**
+
+Root Cause:
+- `resolve_enforcement()` in `enforcement.py` has a "monitor posture" rule at
+  L134-136: when `resolved == "block"` and `enforcement_mode != "block"`, it
+  downgrades the action to `"monitor"`.
+- Bug 1: When the scanner recommended `"redact"` (PII masking) but the org
+  policy was `"block"` and enforcement_mode was not `"block"` (e.g. "monitor"),
+  `max_action` returned `"block"` (from policy), and the monitor-posture rule
+  downgraded it to `"monitor"` — losing the PII masking intent entirely. While
+  `resolve_and_enforce` compensated via `should_apply_redaction("monitor","pii")`
+  → True, the atomic `resolve_enforcement` function violated its own REDACT
+  contract (exported public API, could be called independently).
+- Bug 2: For unmaskable PII (`redaction_possible=False`) with `org_policy_action
+  ="block"` under non-block `enforcement_mode`: L123 didn't fire (resolved was
+  already "block" from max_action, not "redact"), L125 didn't fire (policy IS
+  "block"), and L134 downgraded to "monitor". In `resolve_and_enforce`, the
+  resulting `PipelineDecision(action="redact")` (via `should_apply_redaction`)
+  had `is_terminal_block=False`. The main.py honesty check at L6805 requires
+  `is_terminal_block=True` to block → unmaskable PII leaked to the model under
+  non-block enforcement modes.
+
+Fix:
+- The monitor-posture downgrade (L134-136) now branches three ways:
+  1. `rec == "redact" and not redaction_possible` → **no downgrade** (fail-closed
+     block overrides monitor posture; data-protection last-resort).
+  2. `rec == "redact" and redaction_possible` → `resolved = "redact"` (preserves
+     PII masking; the monitor posture suppresses blocks, not redactions).
+  3. Otherwise → `resolved = "monitor"` (unchanged for injection/other threats).
+
+Contract:
+- REDACT recommendation → REDACT under any posture when bytes can be masked.
+- Unmaskable PII always fails closed to BLOCK regardless of enforcement_mode.
+- Injection/other threats still respect monitor posture (block → monitor).
+- `resolve_and_enforce` produces correct `PipelineDecision` without relying
+  on the `should_apply_redaction` override for this case (defense-in-depth).
+
+Tests: 17 new tests in `test_enforcement.py` (7 atomic resolve_enforcement +
+10 end-to-end resolve_and_enforce scenarios). Gate: 28 targeted + 1965 full
+gateway suite passed.
+
 ## PIPELINE-0009 (2026-07-03)
 
 **Policy REDACTS PII/PCI/PHI before input_scan (B-POL fix).**

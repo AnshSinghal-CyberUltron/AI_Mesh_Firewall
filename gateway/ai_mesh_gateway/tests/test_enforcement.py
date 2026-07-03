@@ -8,6 +8,7 @@ from ai_mesh_gateway.enforcement import (
     action_rank,
     max_action,
     normalize_action,
+    resolve_and_enforce,
     resolve_enforcement,
     should_apply_redaction,
     should_hard_block,
@@ -89,6 +90,212 @@ class ResolveEnforcementTests(unittest.TestCase):
     def test_default_when_no_signal(self):
         self.assertEqual(resolve_enforcement(None), "allow")
         self.assertEqual(resolve_enforcement(None, default_action="monitor"), "monitor")
+
+
+class RedactMappingTests(unittest.TestCase):
+    """PIPELINE-0010: REDACT recommendation → REDACT; block only on
+    org_policy=block+enforcement_mode=block OR redaction byte-impossible."""
+
+    # --- resolve_enforcement atomic contract ---
+
+    def test_redact_rec_preserved_under_monitor_posture(self):
+        """Policy=block but mode=monitor: downgrade to redact, NOT monitor."""
+        self.assertEqual(
+            resolve_enforcement(
+                "redact",
+                org_policy_action="block",
+                enforcement_mode="monitor",
+                redaction_possible=True,
+            ),
+            "redact",
+        )
+
+    def test_redact_rec_preserved_under_redact_posture(self):
+        """Policy=block but mode=redact: preserve redact."""
+        self.assertEqual(
+            resolve_enforcement(
+                "redact",
+                org_policy_action="block",
+                enforcement_mode="redact",
+                redaction_possible=True,
+            ),
+            "redact",
+        )
+
+    def test_unmaskable_pii_blocks_even_under_monitor(self):
+        """Redaction byte-impossible overrides monitor posture (fail-closed)."""
+        self.assertEqual(
+            resolve_enforcement(
+                "redact",
+                org_policy_action=None,
+                enforcement_mode="monitor",
+                redaction_possible=False,
+            ),
+            "block",
+        )
+
+    def test_unmaskable_pii_blocks_with_policy_block_under_monitor(self):
+        """Policy=block + unmaskable: fail-closed block ignores monitor."""
+        self.assertEqual(
+            resolve_enforcement(
+                "redact",
+                org_policy_action="block",
+                enforcement_mode="monitor",
+                redaction_possible=False,
+            ),
+            "block",
+        )
+
+    def test_injection_block_still_downgrades_to_monitor(self):
+        """Injection block under monitor stays monitor (not redact)."""
+        self.assertEqual(
+            resolve_enforcement(
+                "block",
+                org_policy_action="block",
+                enforcement_mode="monitor",
+            ),
+            "monitor",
+        )
+
+    def test_redact_rec_no_policy_monitor_mode_stays_redact(self):
+        """No policy, rec=redact, mode=monitor: redact (max_action=redact)."""
+        self.assertEqual(
+            resolve_enforcement(
+                "redact",
+                org_policy_action=None,
+                enforcement_mode="monitor",
+                redaction_possible=True,
+            ),
+            "redact",
+        )
+
+    def test_redact_rec_policy_block_mode_block_is_block(self):
+        """Policy=block + mode=block: block (org explicitly blocks)."""
+        self.assertEqual(
+            resolve_enforcement(
+                "redact",
+                org_policy_action="block",
+                enforcement_mode="block",
+                redaction_possible=True,
+            ),
+            "block",
+        )
+
+    # --- resolve_and_enforce end-to-end contract ---
+
+    def test_e2e_pii_redact_under_monitor_posture(self):
+        """PII record: policy=block, mode=monitor → action=redact."""
+        decision = resolve_and_enforce(
+            scanner_recommendation="redact",
+            scanner_threat_type="pii",
+            scanner_confidence=0.95,
+            org_policy_action="block",
+            enforcement_mode="monitor",
+            redaction_possible=True,
+            pii_detection_enabled=True,
+        )
+        self.assertEqual(decision.action, "redact")
+        self.assertFalse(decision.is_terminal_block)
+
+    def test_e2e_pii_unmaskable_blocks_under_monitor(self):
+        """Unmaskable PII under monitor: is_terminal_block=True (fail-closed)."""
+        decision = resolve_and_enforce(
+            scanner_recommendation="redact",
+            scanner_threat_type="pii",
+            scanner_confidence=0.95,
+            org_policy_action="block",
+            enforcement_mode="monitor",
+            redaction_possible=False,
+            pii_detection_enabled=True,
+        )
+        self.assertEqual(decision.action, "block")
+        self.assertTrue(decision.is_terminal_block)
+
+    def test_e2e_pii_unmaskable_no_policy_blocks(self):
+        """Unmaskable PII without explicit policy: fail-closed block."""
+        decision = resolve_and_enforce(
+            scanner_recommendation="redact",
+            scanner_threat_type="pii",
+            scanner_confidence=0.95,
+            org_policy_action=None,
+            enforcement_mode="monitor",
+            redaction_possible=False,
+            pii_detection_enabled=True,
+        )
+        self.assertEqual(decision.action, "block")
+        self.assertTrue(decision.is_terminal_block)
+
+    def test_e2e_secret_redact_under_monitor(self):
+        """Secret: always redacted regardless of enforcement mode."""
+        decision = resolve_and_enforce(
+            scanner_recommendation="redact",
+            scanner_threat_type="secret",
+            scanner_confidence=0.99,
+            org_policy_action=None,
+            enforcement_mode="monitor",
+            redaction_possible=True,
+            pii_detection_enabled=False,
+        )
+        self.assertEqual(decision.action, "redact")
+        self.assertFalse(decision.is_terminal_block)
+
+    def test_e2e_pii_redact_under_redact_posture(self):
+        """PII with enforcement_mode=redact: still redact."""
+        decision = resolve_and_enforce(
+            scanner_recommendation="redact",
+            scanner_threat_type="pii",
+            scanner_confidence=0.90,
+            org_policy_action="redact",
+            enforcement_mode="redact",
+            redaction_possible=True,
+            pii_detection_enabled=True,
+        )
+        self.assertEqual(decision.action, "redact")
+        self.assertFalse(decision.is_terminal_block)
+
+    def test_e2e_pii_block_recommendation_becomes_redact(self):
+        """Scanner says 'block' for PII → downgraded to redact in resolve_and_enforce."""
+        decision = resolve_and_enforce(
+            scanner_recommendation="block",
+            scanner_threat_type="pii",
+            scanner_confidence=0.99,
+            org_policy_action=None,
+            enforcement_mode="block",
+            redaction_possible=True,
+            pii_detection_enabled=True,
+        )
+        self.assertEqual(decision.action, "redact")
+        self.assertFalse(decision.is_terminal_block)
+
+    def test_e2e_injection_block_allowed_under_block_mode(self):
+        """Injection with high confidence under block mode: terminal block."""
+        decision = resolve_and_enforce(
+            scanner_recommendation="block",
+            scanner_threat_type="prompt_injection",
+            scanner_confidence=0.95,
+            org_policy_action="block",
+            enforcement_mode="block",
+            redaction_possible=True,
+            scan_block_on_injection=True,
+            injection_threshold=0.80,
+        )
+        self.assertEqual(decision.action, "block")
+        self.assertTrue(decision.is_terminal_block)
+
+    def test_e2e_injection_monitor_under_monitor_mode(self):
+        """Injection under monitor mode: just observe."""
+        decision = resolve_and_enforce(
+            scanner_recommendation="block",
+            scanner_threat_type="prompt_injection",
+            scanner_confidence=0.95,
+            org_policy_action="block",
+            enforcement_mode="monitor",
+            redaction_possible=True,
+            scan_block_on_injection=True,
+            injection_threshold=0.80,
+        )
+        self.assertIn(decision.action, ("monitor", "allow"))
+        self.assertFalse(decision.is_terminal_block)
 
 
 class HelperTests(unittest.TestCase):
