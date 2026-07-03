@@ -108,6 +108,22 @@ _EXPLANATORY_LEADIN = re.compile(
 # How far back from a matched span we look for an explanatory lead-in.
 _EXPLANATORY_LEADIN_WINDOW = 30
 _QUOTE_CHARS = ("'", '"', "`")
+# G99: control-template token DISCUSSION carve-out. ChatML/Llama/Gemma control tokens
+# (<|im_start|>, <|im_end|>, <<sys>>, <start_of_turn>, <|endoftext|>) are a strong forged-turn
+# signal, but a developer/security user PARSING or EXPLAINING them ("in my code I parse the
+# <|im_start|> token", "the ChatML format uses <|im_start|>system and <|im_end|> markers") is
+# benign and was hard-blocked as a Tier-1 false positive. This carve-out is SCOPED to control-
+# token matches only and still obeys the every-match rule, so a real forged turn (control token
+# PLUS a separate injection-content match, which is NOT a discussion mention) still blocks.
+_CONTROL_TOKEN_MATCH_RE = re.compile(
+    r"<\|im_(?:start|end)\|>|<<\s*sys\s*>>|<\s*(?:start|end)_of_turn\s*>|<\|endoftext\|>"
+)
+_TOKEN_DISCUSSION_RE = re.compile(
+    r"(?i)\b(?:pars\w*|strip\w*|tokeni[sz]\w*|escap\w*|render\w*|delimit\w*|marker\w*|"
+    r"tags?|tokens?|special\s+tokens?|control\s+(?:char\w*|token\w*|sequence\w*)|"
+    r"chat\s?ml|template\w*|format\w*|syntax|sequences?)\b"
+)
+_TOKEN_DISCUSSION_WINDOW = 40
 
 @dataclass
 class ScanVerdict:
@@ -1573,6 +1589,15 @@ class InputScanner:
         lead_window = text[max(0, start - _EXPLANATORY_LEADIN_WINDOW):start]
         if _EXPLANATORY_LEADIN.search(lead_window):
             return True
+
+        # (c) G99: a chat-template CONTROL TOKEN being discussed/parsed (not used to open a
+        # forged turn). Scoped to control-token matches so a genuine injection phrase is never
+        # downgraded here; a real forged turn carries a SEPARATE injection-content match that is
+        # not a discussion mention, so the caller's every-match rule still blocks it.
+        if _CONTROL_TOKEN_MATCH_RE.search(match.group(0)):
+            ctx = text[max(0, start - _TOKEN_DISCUSSION_WINDOW):end + _TOKEN_DISCUSSION_WINDOW]
+            if _TOKEN_DISCUSSION_RE.search(ctx):
+                return True
 
         return False
 
