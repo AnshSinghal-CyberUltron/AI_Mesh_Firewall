@@ -137,6 +137,31 @@ def test_benign_documents_pass_through_unchanged():
     assert all(r["action"] == "allow" for r in scan)
 
 
+def test_g66_rag_ingest_list_dict_content_coerced_scanned_no_crash():
+    """G66: a document whose content/text is a LIST of content-parts or a DICT (non-conforming,
+    the G57 shape class) must be coerced to text before ingest. Before the fix the raw list/dict
+    (a) CRASHED detect_and_redact_typed with a TypeError and (b) was SKIPPED by the embed-scan
+    (non-str), so PII was embedded + PERSISTED unscanned. This pins the rag_ingest extraction
+    expression: every shape -> a scannable str, no crash, PII redacted."""
+    from typed_placeholder_redactor import detect_and_redact_typed
+    ssn = "123-45-6789"
+    docs = [
+        {"content": [{"type": "text", "text": f"patient ssn {ssn}"}]},   # list content
+        {"content": {"text": f"patient ssn {ssn}"}},                      # dict content
+        {"text": [{"type": "text", "text": f"patient ssn {ssn}"}]},       # list `text` field
+        {"content": f"patient ssn {ssn}"},                                # str baseline
+    ]
+    for d in docs:
+        # exact rag_ingest extraction expression (main.py):
+        text = (gateway_main._content_to_text(d.get("content"))
+                or gateway_main._content_to_text(d.get("text")) or str(d))
+        assert isinstance(text, str), f"extraction did not coerce to str: {d!r}"
+        detect_and_redact_typed(text)  # must not raise (crash regression)
+        red, _blk = _run(
+            gateway_main._scan_redact_embedding_inputs([text], {"input_scan_enabled": True}))
+        assert ssn not in str(red[0]), f"SSN persisted unscanned for shape {d!r}: {red[0]!r}"
+
+
 def test_all_blocked_returns_all_blocked_flag():
     """When every doc is blocked, all_blocked is True (caller returns 422)."""
     ids = ["p1", "p2"]

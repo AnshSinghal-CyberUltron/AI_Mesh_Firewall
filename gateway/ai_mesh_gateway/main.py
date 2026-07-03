@@ -10570,7 +10570,13 @@ async def rag_ingest(request: Request):
         for i in allowed_indices:
             d = documents[i]
             if isinstance(d, dict):
-                text = d.get("content", "") or d.get("text", "") or str(d)
+                # G66: a document's `content`/`text` may be a LIST of content-part dicts or
+                # a dict (non-conforming, same shape class as G57). The raw `or` chain
+                # grabbed the truthy list -> detect_and_redact_typed CRASHED (TypeError) and
+                # _scan_redact_embedding_inputs SKIPPED it (non-str), so PII/secrets were
+                # embedded + PERSISTED unscanned (at-rest leak). Coerce to text first so the
+                # ingest scan always sees a string.
+                text = _content_to_text(d.get("content")) or _content_to_text(d.get("text")) or str(d)
                 doc_id = d.get("id", ids[i] if i < len(ids) else f"doc-{_uuid.uuid4().hex[:8]}")
                 meta = d.get("metadata", metadatas[i] if i < len(metadatas) else {"source": "gateway"})
             else:
