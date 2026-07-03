@@ -3065,3 +3065,8 @@ signature fires on the token alone); a false-block to fix. (3) "grandma exploit"
 (soft jailbreak; high FP risk to pattern-match — deferred, likely out of pattern-firewall scope).
 Session ledger: TWENTY confirmed leaks/gaps (G74..G95, G97) fixed + G96 freezes 6 defended vectors;
 G77/G78/G80 frozen.
+
+### G97 DEPLOY + LIVE-VERIFY — 2026-07-03
+Rebuilt+redeployed the baked gateway (tag rollback-g97 → build → up -d --no-deps → healthy ~4s).
+LIVE-verified through the deployed pipeline: base32 injection → **block**; base32 SSN → **block + masked**
+(not forwarded). G97 validated end-to-end (in-process 598×3 + backend 1826 + live deployed).
