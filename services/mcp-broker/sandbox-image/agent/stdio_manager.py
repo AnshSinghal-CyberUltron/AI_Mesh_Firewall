@@ -75,26 +75,66 @@ def _command_basename(command: str) -> str:
     return os.path.basename(command).lower()
 
 
-def _extract_package_spec(command: str, args: list[str]) -> str | None:
-    """Best-effort extraction of the package spec an npx/uvx call will fetch.
+_PKG_FLAGS = ("--from", "--with", "--package", "-p")
 
-    npx  ["-y", "mcp-remote", "https://.."]   -> "mcp-remote"
-    npx  ["-y", "ruflo@latest", "mcp"]         -> "ruflo@latest"
-    uvx  ["semgrep-mcp"]                        -> "semgrep-mcp"
-    uvx  ["--from", "semgrep-mcp==1.0", ".."]  -> "semgrep-mcp==1.0"
-    Returns None for runtimes that don't fetch packages (node/python).
-    """
+
+def _extract_package_specs(command: str, args: list[str]) -> list[str]:
+    """ALL package specs an npx/uvx invocation would FETCH.
+
+    npx  ["-y", "mcp-remote", "https://.."]        -> ["mcp-remote"]
+    npx  ["-y", "ruflo@latest", "mcp"]              -> ["ruflo@latest"]
+    npx  ["--package=evil", "safe-cmd"]             -> ["evil"]         (=-form)
+    npx  ["-p", "a", "-p", "evil", "cmd"]           -> ["a", "evil"]    (multiple)
+    uvx  ["--from", "semgrep-mcp==1.0", "semgrep"]  -> ["semgrep-mcp==1.0"]
+    Returns [] for runtimes that don't fetch packages (node/python).
+
+    CHG-0126: this covers the ``--flag=value`` form and MULTIPLE package flags,
+    which the old single-spec extractor missed — an attacker could smuggle an
+    unlisted/unpinned package past the allowlist via ``--package=evil`` (skipped as
+    a flag, so the check ran against the wrong token) or a 2nd ``-p``. Enforcement
+    checks EVERY returned spec. When a package flag is present the bare positional
+    is the COMMAND to run (not a package), so it is only taken as a package when NO
+    package flag supplied one (``npx <pkg>`` / ``uvx <tool>``)."""
     if _command_basename(command) not in ("npx", "uvx", "uv"):
-        return None
+        return []
     skip = {"-y", "--yes", "-q", "--quiet", "tool", "run"}
+    specs: list[str] = []
+    saw_pkg_flag = False
+    positional_taken = False
     it = iter(args)
     for tok in it:
-        if tok in ("--from", "--with", "--package", "-p"):
-            return next(it, None)
+        matched = False
+        for fn in _PKG_FLAGS:
+            if tok == fn:                       # "--package", "evil"
+                val = next(it, None)
+                if val:
+                    specs.append(val)
+                    saw_pkg_flag = True
+                matched = True
+                break
+            if tok.startswith(fn + "="):        # "--package=evil"
+                val = tok[len(fn) + 1:]
+                if val:
+                    specs.append(val)
+                    saw_pkg_flag = True
+                matched = True
+                break
+        if matched:
+            continue
         if tok.startswith("-") or tok in skip:
             continue
-        return tok
-    return None
+        # A bare positional is the fetched package ONLY when no package flag gave
+        # one (else it is the command npx/uvx runs from the flagged package).
+        if not saw_pkg_flag and not positional_taken:
+            specs.append(tok)
+            positional_taken = True
+    return specs
+
+
+def _extract_package_spec(command: str, args: list[str]) -> str | None:
+    """Back-compat single-spec helper — the FIRST fetched spec (or None)."""
+    specs = _extract_package_specs(command, args)
+    return specs[0] if specs else None
 
 
 def _package_name(spec: str) -> str:
@@ -319,8 +359,10 @@ async def _ensure_process(
     # Package allowlist + pinned-version enforcement (N3 + N2).
     # Mirrors the same checks in gateway mcp_stdio_adapter so both paths have
     # identical supply-chain hardening regardless of MCP_STDIO_IN_PROCESS.
-    spec = _extract_package_spec(command, args)
-    if spec is not None:
+    # CHG-0126: check EVERY fetched spec (multiple -p/--package/--with flags and the
+    # --flag=value form), not just the first — else an unlisted/unpinned package could
+    # ride in past a benign first spec.
+    for spec in _extract_package_specs(command, args):
         name = _package_name(spec)
         if _PACKAGE_ALLOWLIST and name not in _PACKAGE_ALLOWLIST:
             raise RuntimeError(

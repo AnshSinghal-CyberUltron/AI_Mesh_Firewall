@@ -63,6 +63,30 @@ class TestExtractPackageSpec:
         m = _reload_stdio_manager(monkeypatch)
         assert m._extract_package_spec("python3", ["-m", "some_mcp"]) is None
 
+    # CHG-0126: --flag=value (equals) form + multiple package flags. The old
+    # single/space-only extractor missed these -> allowlist/pinned BYPASS.
+    def test_package_equals_form_is_extracted(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        # npx --package=evil safe-cmd : the FETCHED pkg is evil, not the command.
+        assert m._extract_package_specs("npx", ["--package=evil", "safe-cmd"]) == ["evil"]
+
+    def test_uvx_from_equals_form_is_extracted(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._extract_package_specs("uvx", ["--from=semgrep-mcp==1.0", "semgrep"]) == ["semgrep-mcp==1.0"]
+
+    def test_multiple_package_flags_all_extracted(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._extract_package_specs("npx", ["-p", "a", "-p", "evil", "cmd"]) == ["a", "evil"]
+
+    def test_positional_after_pkg_flag_is_command_not_package(self, monkeypatch):
+        # With a package flag present, the bare positional is the COMMAND, not a pkg.
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._extract_package_specs("npx", ["-p", "realpkg", "runcmd"]) == ["realpkg"]
+
+    def test_bare_positional_still_the_package(self, monkeypatch):
+        m = _reload_stdio_manager(monkeypatch)
+        assert m._extract_package_specs("npx", ["-y", "mcp-remote", "https://x"]) == ["mcp-remote"]
+
 
 # ---------------------------------------------------------------------------
 # _package_name
@@ -207,6 +231,37 @@ class TestEnsureProcessPackageGating:
                     "test-org/srv", "npx", ["-y", "mcp-remote@latest"], {}
                 )
         assert "must be version-pinned" not in str(exc_info.value)
+
+    async def test_allowlist_blocks_equals_form_smuggled_package(self, monkeypatch):
+        """CHG-0126: --package=evil (=-form) must NOT bypass the allowlist by making
+        the check run against the trailing command token instead of the real pkg."""
+        m = _reload_stdio_manager(
+            monkeypatch, MCP_STDIO_PACKAGE_ALLOWLIST="safe-cmd,mcp-remote"
+        )
+        with pytest.raises(RuntimeError, match="not in the on-demand allowlist"):
+            await m._ensure_process(
+                "test-org/srv", "npx", ["--package=evil-pkg", "safe-cmd"], {}
+            )
+
+    async def test_allowlist_blocks_second_package_flag(self, monkeypatch):
+        """CHG-0126: a 2nd -p must also be checked (not just the first)."""
+        m = _reload_stdio_manager(
+            monkeypatch, MCP_STDIO_PACKAGE_ALLOWLIST="allowed,mcp-remote"
+        )
+        with pytest.raises(RuntimeError, match="not in the on-demand allowlist"):
+            await m._ensure_process(
+                "test-org/srv", "npx", ["-p", "allowed", "-p", "evil", "cmd"], {}
+            )
+
+    async def test_require_pinned_blocks_equals_form_unpinned(self, monkeypatch):
+        """CHG-0126: --from=<unpinned> (=-form) must be caught by the pinned guard."""
+        m = _reload_stdio_manager(
+            monkeypatch, MCP_STDIO_REQUIRE_PINNED_PACKAGES="true"
+        )
+        with pytest.raises(RuntimeError, match="must be version-pinned"):
+            await m._ensure_process(
+                "test-org/srv", "uvx", ["--from=semgrep-mcp", "semgrep"], {}
+            )
 
     async def test_node_interpreter_bypasses_package_checks(self, monkeypatch):
         """N2+N3: non-fetching interpreters (node/python) skip package checks."""

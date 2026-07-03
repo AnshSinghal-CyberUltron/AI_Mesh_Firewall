@@ -1473,3 +1473,11 @@
 - **Fix:** emit BOTH cases; {}-when-disabled fast path preserved. `_egress_proxy_env` is the ONLY proxy-env source (grep-verified).
 - **Gate:** broker test_sandbox_lifecycle.py -k "egress or proxy" 2 passed; full broker -k "not websocket" 158 passed.
 - **Honesty:** closes the SOFT env bypass for proxy-respecting tools; a HARD network lockdown (internal net + forced/transparent proxy or iptables egress) remains INFRA (unchanged); egress-lockdown OFF by default. Evidence mcp-parallel/findings/backstop-p-egress-proxy-lowercase-bypass/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked).
+
+---
+## CHG-0126 (2026-07-03) — stdio package allowlist/pinning bypass (=-form + 2nd flag), BOTH adapters (item 8 supply-chain)
+
+- **Gap:** stdio_manager.py (sandbox agent) AND mcp_stdio_adapter.py (gateway host) extracted the npx/uvx package with a single-spec, SPACE-only parser. (1) `--package=evil safe-cmd` (=-form) skipped as a flag → allowlist/pinned check ran on the trailing COMMAND token while npx fetched evil; (2) `-p allowed -p evil cmd` → only first checked → unlisted/unpinned pkg runs in the sandbox AND on the shared gateway host ("no unknown npm on host"). Found by tracing the CHG-0022 package-gating and testing arg shapes.
+- **Fix:** `_extract_package_specs` (plural) handles `--flag value` + `--flag=value` for --from/--with/--package/-p + multiple flags; bare positional taken as package ONLY when no package flag supplied one (else it's the command npx runs). Enforcement loops over EVERY spec; thin `_extract_package_spec` wrapper preserves the helper API. Applied to BOTH adapters for parity.
+- **Gate:** agent test_stdio_manager_packages 41 passed / full agent suite 75 passed; gateway test_mcp_stdio_adapter_package_gating 7 passed / full gateway 1794 passed 0 failed.
+- **Evidence:** mcp-parallel/findings/backstop-p-stdio-package-allowlist-bypass/finding.md. Controls OFF by default (opt-in). Promise WITHHELD (G5 stress items 14-19 host-blocked).
