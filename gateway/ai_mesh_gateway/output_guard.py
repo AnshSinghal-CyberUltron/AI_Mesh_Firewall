@@ -182,6 +182,13 @@ def _tail_has_oversized_encoded_blob(tail: str) -> bool:
     return False
 
 
+# G90: a run of >=4 HTML numeric entities in a URL. A browser's HTML parser decodes ``&#NN;`` inside an
+# ``<img src>`` / ``<a href>`` attribute (markdown renders to exactly that), so an entity-encoded payload
+# in the URL is decoded by the client and exfiltrated. Entities in a URL are unusual (URLs use percent),
+# and a bare ``&#anchor`` fragment lacks the digit+``;``, so the >=4-entity gate is low-FP.
+_URL_ENTITY_RUN_RE = re.compile(r"(?:&#x[0-9A-Fa-f]{1,6};|&#[0-9]{1,7};){4,}")
+
+
 def _url_smuggles_data(url: str) -> str:
     """Return a non-empty reason if ``url`` carries a smuggled data payload.
 
@@ -240,14 +247,35 @@ def _url_smuggles_data(url: str) -> str:
             continue
         if _pd and _pd != _p:
             _pct_views.append(_pd)
+    # G90: a browser's HTML parser decodes ``&#NN;`` entities in an ``<img src>`` / ``<a href>``
+    # attribute (markdown renders to that), so an entity-encoded PII/secret/arbitrary-data payload in
+    # the URL is decoded by the client and exfiltrated. detect_* do NOT decode entities and the
+    # base64/hex/percent decoders don't cover them. Decode entity runs into the probe
+    # (sensitive_payload), and treat a substantial entity run decoding to printable text as an
+    # encoded_payload (arbitrary-data exfil, symmetric to the base64 signal). Entities in URLs are
+    # unusual (URLs use percent) -> low FP; the >=4-entity gate excludes a stray ``&#anchor``.
+    _ent_views: list[str] = []
+    _ent_encoded = False
+    if "&#" in tail:
+        for _e in (tail, canonicalize_for_detection(tail)):
+            _ed = _decode_encoded_run(_e)
+            if _ed and _ed != _e:
+                _ent_views.append(_ed)
+        for _m in _URL_ENTITY_RUN_RE.finditer(tail):
+            _dec = _decode_encoded_run(_m.group(0))
+            if (_dec != _m.group(0) and len(_dec) >= 8
+                    and sum(1 for _c in _dec if _c.isprintable()) / max(1, len(_dec)) >= 0.8):
+                _ent_encoded = True
+                break
     probe = (
         tail + "\n" + segmented
         + (("\n" + "\n".join(decoded_parts)) if decoded_parts else "")
         + (("\n" + "\n".join(_pct_views)) if _pct_views else "")
+        + (("\n" + "\n".join(_ent_views)) if _ent_views else "")
     )
     if detect_pii(probe) or detect_secrets(probe) or detect_credential_exposure(probe):
         return "sensitive_payload"
-    if decoded_parts:
+    if decoded_parts or _ent_encoded:
         return "encoded_payload"
     # G40: fallback for an oversized opaque blob the decode-byte cap skipped. Scan
     # BOTH the raw tail (query blobs) AND the delimiter-split view (so a PATH-segment

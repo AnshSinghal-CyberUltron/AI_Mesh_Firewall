@@ -2576,3 +2576,41 @@ In-process golden **520 ×3 consecutive clean**; backend `ai_mesh_gateway/tests`
 `test_output_transport_egress.py::test_g89_*` (full inspect→sanitize defang, 3 PII × 3 beacon shapes + 2 FP).
 Session ledger: THIRTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89) + soft DoS (G79) fixed; G77/G78/G80 frozen.
 (policy_count:0 deployed live-golden issue still flagged for the control-plane session — unchanged.)
+
+---
+
+## G89 REACHABILITY CORRECTION (rigor) — 2026-07-03
+Rigor re-check of G89: for a SHORT output the percent-encoded PII beacon is caught via tt=**pii** (the
+text-level `_scan_output_sync` G35 percent-decode), so `_url_smuggles_data` was REDUNDANT there — my
+original short-output evidence was the already-defended case. BUT `_decode_text_encoding_variants` is
+length-capped at MAX_PROMPT_LENGTH (10k); for a **>10k output** that encoded-check is SKIPPED, and G89's
+percent-decode in `_url_smuggles_data` becomes the SOLE catcher (verified: >10k percent-SSN beacon →
+tt=**exfil_channel**, without G89 it → allow → leak). So G89 IS a real fix, reachable via large model
+outputs past the text-scan cap. (Same reachability applies to G90 entity-PII.) Lesson: the exfil-URL
+detector is the backstop for encoded PII/secret in URLs when the length-capped text scan bails.
+
+## G90 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — HTML-entity-encoded payload in auto-render EXFIL URL
+Third encoding for the exfil-URL detector (after base64/hex G86, percent G89). A browser's HTML parser
+decodes `&#NN;` inside an `<img src>` / `<a href>` attribute — and markdown `![](url)` renders to exactly
+that HTML — so an entity-encoded payload in the URL is decoded by the client and beaconed to the attacker.
+`_url_smuggles_data` did NOT entity-decode (detect_* don't decode entities; base64/hex/percent decoders
+don't cover them). TWO reachable leaks: (1) entity-encoded PII/secret in a **>10k output** (text-level
+encoded-check length-capped → `_url_smuggles_data` is the sole catcher, and it missed entities);
+(2) entity-encoded ARBITRARY data (non-PII) at ANY size (never covered by the PII text scan). CONFIRMED:
+`>10k entity-SSN` → allow/recoverable; `entity-ARB` → allow/recoverable; both now redact/exfil_channel.
+**FIX (owned output_guard.py, `_url_smuggles_data`):** decode entity runs (`_decode_encoded_run`) into the
+probe (sensitive_payload) + treat a substantial entity run (`_URL_ENTITY_RUN_RE` ≥4 entities decoding to
+≥8 printable chars) as encoded_payload (arbitrary-data exfil). Entities in URLs are unusual (URLs use
+percent) and a bare `&#anchor` fragment lacks the digit+`;`, so low-FP.
+**Verify:** >10k entity-SSN + entity-ARB + entity-hex → redact/exfil_channel, recoverable=**False**;
+FP-clean on emoji-entity (<8 chars) / `&#anchor` fragment / short color-hex-entity / normal image URLs.
+In-process golden **528 ×3 consecutive clean**; backend `ai_mesh_gateway/tests` **1753 passed** (2
+intermittent MCP-inbound-audit failures are FLAKY cross-test pollution in the active MCP session's new
+tests — PROVEN independent of G90: pass in isolation (5/5), re-run full = 0 fail, HEAD-without-G90 = 0 fail).
+**Frozen:** golden `test_g90_*` (4 flag + 4 FP via `_url_smuggles_data`) + integration
+`test_output_transport_egress.py::test_g90_*` (full egress incl. the >10k reachability + 2 FP).
+Exfil-URL encoding coverage now COMPLETE: base64/hex (G86) + percent (G89) + HTML-entity (G90), all Cf-aware.
+NOTE: percent-encoded ARBITRARY (non-PII) data is DELIBERATELY not flagged — percent-encoded readable text
+is normal in URLs (paths/params) so it is FP-prohibitive; base64/entity in URLs are unusual so flaggable.
+Session ledger: FOURTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+(policy_count:0 deployed live-golden issue still flagged for the control-plane session — unchanged.)

