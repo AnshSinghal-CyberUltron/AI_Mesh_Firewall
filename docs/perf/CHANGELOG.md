@@ -7,6 +7,28 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0012 — Shared control-1 RECREATED to the multi-worker image (was wedged)
+- **Date:** 2026-07-03
+- **What:** The running shared **control-1** container was recreated
+  (`docker compose up -d --no-deps --force-recreate control`) from the old single
+  **Daphne** image to the new image. It had been **wedged/unhealthy for ~46 min**
+  (failing streak 277, CPU 0.19% idle, `/api/health/` timing out) — the classic
+  single-event-loop failure: one blocking op stalls the sole Daphne process and no
+  other worker can serve. It now runs **gunicorn + 16 UvicornWorker** (detector on
+  the 16-core host), healthy in 2 s, **1.95 GiB RAM** (efficient CoW), CPU idle.
+- **AFFECTS:** the **running shared control plane**. This deploys to the live stack
+  all the control-side perf work: multi-worker server (PERF-0002), ASGI thread pool
+  (PERF-0004), Redis/cache pool (PERF-0007), the BRIN index (PERF-0008, already
+  applied), and the soc-kpis/hot-endpoint query fixes (PERF-0009/0010/0011). Control
+  now uses all cores under load and is resilient (a wedged worker can't down the
+  service) instead of the previous single-core oscillation.
+- **ACTION FOR OTHERS:** none — control-1 is healthy and faster. It runs 16 workers
+  (~2 GiB); set `CONTROL_WEB_CONCURRENCY` if you want fewer. The old "control-1
+  oscillates unhealthy under load / wedges" problem is resolved. If you `docker
+  compose up` control it will keep the new image + worker sizing.
+- **PROOF:** health 200 (streak 0), `--workers 16`, mem 1.95 GiB; was streak 277
+  wedged. Constrained-profile behavior proven separately (items 22/23).
+
 ## PERF-0011 — Apply the metadata-extraction fix to 3 more full-haul endpoints
 - **Date:** 2026-07-03
 - **Files:** `control/ai_mesh_control/policy/security_views.py` (module-level

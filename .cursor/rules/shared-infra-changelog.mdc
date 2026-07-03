@@ -13,6 +13,16 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0012 — Shared control-1 RECREATED to multi-worker image (2026-07-03) [RUNNING STACK]
+- The live control-1 was wedged/unhealthy ~46 min (single-Daphne event loop stuck;
+  streak 277, CPU idle, /api/health/ timeout). Recreated via `docker compose up -d
+  --no-deps --force-recreate control` → gunicorn + 16 UvicornWorker (detector), healthy
+  in 2s, 1.95GiB RAM. Deploys to the running stack ALL control perf work (PERF-0002/
+  0004/0007/0008/0009/0010/0011). AFFECTS: running shared control plane (now multi-
+  worker, resilient, uses all cores under load). ACTION: none — healthier + faster;
+  set CONTROL_WEB_CONCURRENCY for fewer workers. Resolves "control-1 oscillates
+  unhealthy under load".
+
 ## PERF-0011 — metadata-extraction fix applied to 3 more endpoints (2026-07-03)
 - Item 21. Surveyed all `.values(...,"metadata")` full-haul views. 3 more used only
   bounded scalars → extract in SQL (KeyTextTransform): UserSecurityKpis + agent-risk
