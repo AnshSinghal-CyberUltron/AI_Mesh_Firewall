@@ -203,7 +203,16 @@ def _url_smuggles_data(url: str) -> str:
         decoded tail (plaintext or encoded PII exfil).
     """
     tail = _url_tail(url)
-    if not tail:
+    # G92: DNS-SUBDOMAIN exfil — data smuggled in the HOSTNAME (``https://<hex/base64-blob>.attacker.com/
+    # x.png``). When the client auto-fetches the beacon, RESOLVING the host leaks the subdomain to the
+    # attacker's authoritative DNS server (classic DNS exfiltration) — the HTTP request itself never needs
+    # to succeed. _url_tail DROPS scheme+host, so the exfil detector never saw the subdomain: PII-in-host
+    # is still caught by the text scan (the value is literal in the output), but ENCODED ARBITRARY data
+    # (base64/hex of conversation / system prompt) is not. Fold the host — its subdomain labels, '.'-'-'-'_'
+    # segmented so each label is an isolated decode candidate — into the SAME decode+detect analysis.
+    _hm = re.match(r"(?:https?:)?//([^/?#]*)", url, re.IGNORECASE)
+    host = _hm.group(1).split(":")[0].strip() if _hm else ""
+    if not tail and not host:
         return ""
     # A base64 blob smuggled in a PATH segment (…/beacon/<blob>.png) is fused with
     # the surrounding '/' and '.' (both legal in base64/URLs) so it won't decode as
@@ -211,6 +220,7 @@ def _url_smuggles_data(url: str) -> str:
     # is an isolated decode candidate. (The raw tail still covers query blobs that
     # use standard-base64 '/' which the split would otherwise break.)
     segmented = re.sub(r"[/?&=#;,.\s]+", " ", tail)
+    host_seg = re.sub(r"[.\-_]+", " ", host)
     decoded_parts: list[str] = []
     # G86: an exfil beacon can interleave zero-width/bidi/format (Cf) chars THROUGH the
     # base64/hex blob in the URL (``?d=W​W​9​1…``). The RAW _iter_transport_decodes token
@@ -221,8 +231,13 @@ def _url_smuggles_data(url: str) -> str:
     # already Cf-aware (canonicalizes), so sensitive_payload was covered; only encoded_payload
     # (arbitrary non-PII data: system prompt / conversation) was Cf-blind. Keep the outer-token
     # >=24 gate (low-FP), so use _iter_transport_decodes over each derived source.
-    _sources = [tail, segmented]
-    for _b in (tail, segmented):
+    # G92: include the HOST + its '.'-segmented labels as decode sources so a base64/hex-encoded
+    # subdomain blob (DNS exfil) is decoded like a query/path blob. The >=24-token gate keeps benign
+    # short subdomains (api / cdn / www) out; a random hash subdomain decodes to binary and fails the
+    # printable check inside _iter_transport_decodes, so only a real readable-data blob trips it.
+    _base_sources = [s for s in (tail, segmented, host, host_seg) if s]
+    _sources = list(_base_sources)
+    for _b in _base_sources:
         _c = canonicalize_for_detection(_b)
         if _c != _b and _c not in _sources:
             _sources.append(_c)
@@ -269,6 +284,7 @@ def _url_smuggles_data(url: str) -> str:
                 break
     probe = (
         tail + "\n" + segmented
+        + (("\n" + host + "\n" + host_seg) if host else "")  # G92: PII/secret in the subdomain
         + (("\n" + "\n".join(decoded_parts)) if decoded_parts else "")
         + (("\n" + "\n".join(_pct_views)) if _pct_views else "")
         + (("\n" + "\n".join(_ent_views)) if _ent_views else "")
@@ -359,6 +375,15 @@ def neutralize_exfil_channels(text: str) -> str:
 
     def _defang(url: str) -> str:
         raw = url.strip().rstrip(").,'\"")
+        # G92: DNS-subdomain exfil — when the HOST itself carries the smuggled payload
+        # (``https://<hex/base64-blob>.attacker.com/…``), preserving the host prefix would still leak
+        # it on DNS resolution (the HTTP request need not even succeed), so redact the ENTIRE reference
+        # rather than only the path/query. Otherwise keep the host prefix (transparency: the user still
+        # sees WHERE a tail-exfil beacon pointed).
+        _hm = re.match(r"(?:https?:)?//([^/?#]*)", raw, re.IGNORECASE)
+        _h = _hm.group(1).split(":")[0].strip() if _hm else ""
+        if _h and _url_smuggles_data("//" + _h):
+            return "[exfil-redacted]"
         return f"{_url_host_prefix(raw)}/[exfil-redacted]"
 
     def _img_sub(m: "re.Match[str]") -> str:

