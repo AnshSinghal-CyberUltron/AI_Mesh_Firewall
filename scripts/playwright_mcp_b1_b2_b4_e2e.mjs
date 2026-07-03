@@ -135,6 +135,18 @@ async function main() {
     A("E2E-B1-2 Linear: ≤1 Authorize button", linear && linear.authorizeCount <= 1, linear?.authorizeCount);
 
     // ---- E2E-2: HTTP oauth (B2) ----
+    await page.route("**/api/mcp-connector/servers/*/tools/**", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      // Pre-auth sync must not flip needs_reauth (405/unauthorized heuristics) — keep pending UI.
+      await route.fulfill({
+        status: 502,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Upstream MCP error 405 (method not allowed)", tools: [] }),
+      });
+    });
     await deleteByName(page, "e2e-verify-http-oauth");
     await deleteByName(page, "e2e-combined-http-oauth");
     await deleteByName(page, HTTP_NAME);

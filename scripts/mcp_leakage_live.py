@@ -173,8 +173,10 @@ async def main() -> int:
             # E. audit isolation
             aev = await client.get(f"{CONTROL}/api/mcp-connector/events/?hours=1", headers=_jwt(at), timeout=30)
             attacker_aggregate.append(aev.text)
-            check(f"E.audit[{atk['slug']}]", canary not in aev.text and (canary_slug or "\x00") not in aev.text,
-                  f"status={aev.status_code}")
+            # Secret token only: D records server_slug on the *attacker's own*
+            # org_scope block events — that is expected, not cross-tenant leakage.
+            check(f"E.audit[{atk['slug']}]", canary not in aev.text,
+                  f"status={aev.status_code} leak={canary in aev.text}")
 
         # ---- D2. full N×N invocation matrix: own key→own path = 200; foreign = rejected
         for ko in ORGS:
