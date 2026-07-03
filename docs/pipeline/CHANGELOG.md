@@ -2,6 +2,51 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0005 (2026-07-03)
+
+**Block short-circuit invariant VERIFIED** — A block at ANY input stage
+short-circuits the pipeline: no downstream stage runs, the model is NEVER called.
+
+Audit:
+- **6 input-side block returns** in `proxy_chat`, all before any model call:
+  1. Threat-intel actor block (L5324) — `return _build_block_response(403, "threat_intel_blocked", ...)`
+  2. Blocked-keyword match (L5983) — `return _build_block_response(403, "content_blocked", ...)`
+  3. Backend scan `block_immediately` (L6106) — `return _build_block_response(403, "content_blocked", ...)`
+  4. Policy engine block (L6220) — `return _build_block_response(403, "content_blocked", ...)`
+  5. Scanner `is_terminal_block` (L6603) — `return _build_block_response(403, "content_blocked", ...)`
+  6. Unmaskable PII/secret (L6745) — `return _build_block_response(403, "content_blocked", ...)`
+- **4 model-call sites** (all downstream of the 6 blocks):
+  - Standalone stream (L6802), standalone sync (L6819),
+    connected stream (L7542), connected sync (L7560)
+- **firewall_disabled bypass** (L6031/6046): intentional — only fires when
+  `firewall_enabled: false`. Not a vulnerability.
+- **2 output-guard block returns** (L8072/8140): correctly AFTER the model call.
+  Output-guard blocks are expected post-model; they block the RESPONSE, not the request.
+
+Tests (new, `test_pipeline_block_shortcircuit.py`, 24 tests):
+- **Structural source proof** (3 tests): parses `proxy_chat` source at import time;
+  asserts >=3 input-side `return _build_block_response(403, ...)` lines appear before
+  the earliest `LLM_ROUTER.acompletion` / `_launch_chat_stream_response`; verifies
+  output-guard blocks exist after model calls. Skips comment lines and the
+  `firewall_disabled` region.
+- **Pipeline-trace model-skip** (5 tests): calls `build_pipeline_trace` directly with
+  `blocked_stage` = policy / input_scan / rate_limit → `model_input` and `model_output`
+  stages have `action='skip'`; `blocked_stage=output_guardrail` → model stages are
+  NOT 'skip' (the model already ran).
+- **`_build_block_response` status-code** (3 tests): non-content threat category
+  (threat_intel) keeps 403; content category (prompt_injection) remaps to
+  `GATEWAY_BLOCK_STATUS` (default 400) per D-a contract.
+- **Enforcement authority terminal-block contract** (9 tests): injection above
+  threshold → `is_terminal_block`; unmaskable PII/secret → `is_terminal_block`;
+  org-policy override → `is_terminal_block`; PII-maskable → redact (NOT terminal);
+  monitor mode → never terminal; below threshold → not terminal; generic threat block →
+  terminal.
+- **Enforcement→trace linkage** (4 tests): policy/input_scan/kill_switch
+  blocked_stage → model_input+model_output='skip'; output_guardrail → not 'skip'.
+
+Files: tests/test_pipeline_block_shortcircuit.py (new, 24 tests).
+Gate: 24 targeted + 30 enforcement + 1851 full gateway suite passed.
+
 ## PIPELINE-0004 (2026-07-03)
 
 **Canonical enforcement authority implemented** — `enforcement.py` now contains the two

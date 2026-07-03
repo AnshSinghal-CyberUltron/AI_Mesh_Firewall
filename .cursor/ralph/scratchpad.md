@@ -10,7 +10,7 @@
 - [x] 04. Refactor all paths to the canonical enforcement (minimal main.py edits; put logic in enforcement.py). Streaming + non-streaming + degraded all go through it. DONE: PipelineDecision + resolve_and_enforce() + enforce_output() in enforcement.py; input block wired; D-05 fixed (fail-CLOSED). 1824 passed. PIPELINE-0004.
 
 ## P2 — Fix the LEAK: block short-circuits, security fails CLOSED
-- [ ] 05. A block at ANY stage short-circuits: NO downstream stage runs, the model is NEVER called. (Fix L1.)
+- [x] 05. A block at ANY stage short-circuits: NO downstream stage runs, the model is NEVER called. (Fix L1.) DONE: 6 input-side block returns (threat_intel L5324, keyword L5983, backend_scan L6106, policy L6220, scanner L6603, unmaskable_PII L6745) all precede ALL model calls (L6802/6819 standalone, L7542/7560 connected). Structural source proof + pipeline_trace model-skip verification + enforcement authority terminal-block tests. 24 new tests. PIPELINE-0005.
 - [ ] 06. Security fails CLOSED: a degraded/unavailable scanner must NOT fail-open raw PII to the model — it redacts or blocks. (No raw PII past input, ever.)
 - [ ] 07. ONE authoritative final_action + blocked_by; no double-block ambiguity. (Fix L2.)
 - [ ] 08. Verify: the PII record NEVER reaches the model; a block trace has empty/absent model_output (no 7710ms call).

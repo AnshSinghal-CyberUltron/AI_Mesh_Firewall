@@ -23,6 +23,15 @@
  enforce_output() (output) in enforcement.py. Input enforcement block (~L6435-6691) wired
  to resolve_and_enforce(). D-05 FIX: _apply_output_guard_nonstream exception → fail-CLOSED
  block (was fail-open return None). 30 new tests. Gate: 151 targeted + 1824 full suite passed.
+ - PIPELINE-0005 (2026-07-03) — BLOCK SHORT-CIRCUIT VERIFIED: 6 input-side block returns
+ (threat_intel L5324, keyword L5983, backend_scan L6106, policy L6220, scanner L6603,
+ unmaskable_PII L6745) ALL precede ALL model calls (L6802/6819 standalone, L7542/7560
+ connected) across all 4 paths (A/B/C/D). Structural source proof (line-number invariant) +
+ pipeline_trace model-skip verification (build_pipeline_trace blocked_stage=policy/input_scan →
+ model_input/model_output action='skip'; output_guardrail → NOT 'skip') + enforcement authority
+ terminal-block contract (injection/unmaskable-PII/org-policy → is_terminal_block; PII-maskable →
+ redact not block; monitor mode → never terminal). 24 new tests in
+ test_pipeline_block_shortcircuit.py. Gate: 24 targeted + 30 enforcement + 1851 full suite passed.
 
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is

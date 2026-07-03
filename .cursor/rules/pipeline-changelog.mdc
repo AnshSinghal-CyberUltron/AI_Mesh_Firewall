@@ -50,3 +50,8 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   IMPLEMENTED. PipelineDecision frozen dataclass + resolve_and_enforce() (input) +
   enforce_output() (output). Input block wired (~L6435-6691). D-05 FIX: output guard
   exception → fail-CLOSED block (was fail-open return None). 30 new tests. Gate: 1824 passed.
+- PIPELINE-0005 (2026-07-03) — BLOCK SHORT-CIRCUIT VERIFIED: 6 input-side block returns
+  (threat_intel L5324, keyword L5983, backend_scan L6106, policy L6220, scanner L6603,
+  unmaskable_PII L6745) ALL precede ALL model calls across all 4 paths (A/B/C/D). Structural
+  source proof + pipeline_trace model-skip verification + enforcement authority terminal-block
+  contract. 24 new tests. Gate: 24 + 30 + 1851 full suite passed.
