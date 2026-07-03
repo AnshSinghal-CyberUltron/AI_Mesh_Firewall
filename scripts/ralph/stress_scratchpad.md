@@ -2953,3 +2953,32 @@ firewall's enforcement holds END-TO-END through real free models (blocks justifi
 redactions held, routing + traces correct). The literal FULL-corpus × all-10-models sweep stays
 OpenRouter-rate-limit bounded. No source change this iteration.
 Session ledger unchanged: G74..G95 (19 leaks) fixed + G96 freezes 6 defended vectors; G77/G78/G80 frozen.
+
+---
+
+## R5 LIVE (broad) — 19-case enforcement sweep + 10/10 live golden through free models — 2026-07-03
+Widened #4's live coverage via the deployed gateway + the 10 connected free OpenRouter models.
+**Throttle root-cause (important):** rapid live batches were hitting HTTP **429 "Request was throttled.
+Expected available in 20 seconds"** — this is the CONTROL/gateway **login brute-force throttle**
+(`auth/throttling.py`), tripped because `characterize_live_chat` re-logs-in per call. A REAL client logs
+in ONCE and reuses the session; doing that (login once → reuse simulator key for all calls) the chat
+endpoint sustains a steady ~2.5s cadence with no 429. So #4's "rate-limit bound" is primarily the
+LOGIN throttle (a legit anti-credential-stuffing DoS defense), not the firewall.
+**Broad live enforcement sweep (reused session, spaced) — deployed gateway + real free models:**
+* **BLOCKS 12/12** — plain / bidi (G74) / base64 (G34) / greek-homoglyph (G95) / cyrillic-homoglyph /
+  monospace+bold+double-struck styled (G96) / small-caps (G21) / zero-width-split / separator-dots /
+  leetspeak → all **block** LIVE (pre-route, no upstream call). Every 2026 obfuscation FAMILY enforced live.
+* **REDACTS 5/5** — plain SSN / email / credit-card / AWS key / entity+zero-width SSN (G87) → org policy
+  resolves to block-on-input; the raw value is **NOT forwarded** to the model (verified from the trace's
+  forwarded prompt). **No PII/secret reaches the model.**
+* **BENIGN 2/2** — "capital of France" / "2+2" → **allow**, route to real free models (gemma-4-31b-it:free,
+  nemotron-3-super-120b:free); trace correct (policy→input_scan→route→reroute→output_guard all allow).
+  Free-model reply bodies are often empty (free-tier trait) — irrelevant to enforcement.
+**Sanctioned live golden gate:** `GATEWAY_LIVE=1 pytest test_chat_pipeline_golden.py` → **10 passed** (the
+designed live cases through the real deployed pipeline, cached-session so no login-throttle).
+**R5 verification checklist status:** no PII reaches models ✓ · redactions remain redacted ✓ · blocks
+justified ✓ · routing correct ✓ · traces correct ✓ · **kill-switch — NOT toggled live** (org-wide switch;
+would disrupt parallel sessions on shared main — covered by backend enforcement suite; deferred as next item).
+Full literal 591×10 sweep stays throttle/rate-bounded (and redundant with in-process 591×3 + these
+family-representative live cases). No source change; no key persisted; Playwright artifacts cleaned.
+Session ledger unchanged: G74..G95 (19 leaks) fixed + G96 freezes 6 defended vectors; G77/G78/G80 frozen.
