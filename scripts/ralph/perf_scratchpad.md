@@ -54,7 +54,12 @@
       (additive fields+CLI, 19 tests green); gateway/entrypoint.sh exports GATEWAY_SCANNER/SCAN_THREAD_POOL_SIZE,
       GATEWAY_BEDROCK_THREAD_POOL_SIZE, GATEWAY_VAULT_POOL_MAX (was fixed 8/4/16/8). Clamped since ×workers (item 11);
       vault feeds pg (item 15). PERF-0005 → 4 memories. PROVEN --cpus=6: PID1 env scanner=6/bedrock=12/vault=3, InputScanner thread_pool_size=6, override→3.
-- [ ] 11. Verify total threads = workers × pool (no explosion).
+- [x] 11. Verify total threads = workers × pool (no explosion).
+      → MEASURED (sum /proc/*/status Threads in-container): gw6=39 threads (6w), gw12=75 (12w) — LINEAR ~6/worker.
+      Key no-explosion proof: gw12 under 640 concurrent connections (--procs 8×80) = STILL 75 threads (== idle) —
+      threads track workers, NOT connection count (uvicorn multiplexes conns on the loop). Scan/bedrock/vault pools
+      are hard-capped ThreadPoolExecutors (lazy), so absolute ceiling = workers×Σ(clamped pools), linear in cores.
+      Starlette/anyio offload pool separately capped 40/worker (didn't spawn under async /health). No code change.
 
 ## P4 — De-block async handlers (the #1 latency cause)
 - [ ] 12. Audit for blockers (sync ORM, requests.get, CPU loops, sync file/lock) → docs/perf/BLOCKING_CALLS.md; claim shared files in the ledger + log.
