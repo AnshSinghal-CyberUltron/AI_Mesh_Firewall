@@ -62,3 +62,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **AFFECTS:** the live gateway (deployed via docker cp + kill -HUP 1; healthy). Dev retrieves the full cause by ref (item 05).
 - **VERIFY:** live re-sync via control API → clean errors w/ refs; `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q` → 1782 passed 0 failed (test_ssrf_reject_dns_reason_is_clean + 2 ext-SSRF tests updated to assert no IP/reason leak).
 - **NOTE:** mcp_proxy.py + its 2 test files' COMMIT is DEFERRED — a parallel session has an uncommitted SSE hunk in the same mcp_proxy.py; git add -p is blocked so selective staging isn't possible. The fix is deployed + test-green + live; source commits land when the file settles.
+
+## MCP-PAGE-CLEANUP-07 — registration triggers discovery/sync (no more stuck "Unknown")
+- **files:** control/ai_mesh_control/mcp_connector/views.py
+- **WHAT:** the registration create (MCPServerListCreateView.post) now sets connection_status="syncing" + fires a background sync so the state resolves; new `_trigger_background_sync(server, org)` helper.
+- **WHY:** connection_status only transitioned (connected/failed) via `_resync_server_tools` on POST /servers/<id>/tools/. The UI calls it, but non-UI/bulk registrations never did → servers lingered at "unknown, 0 tools, never synced".
+- **NOW DOES:** register → status "syncing" (never "unknown") → daemon thread runs `_resync_server_tools` (gateway discover-tools + status/tool update) → connected/failed. Any registration (UI or script) auto-syncs. Thread manages its own DB connection (close_old_connections); failures swallowed+logged.
+- **AFFECTS:** POST /api/mcp-connector/servers/ (registration). The UI's own inline /tools/ sync still runs (idempotent).
+- **VERIFY:** LIVE (control gunicorn 16 uvicorn workers; deployed docker cp + kill -HUP 1, graceful; healthy + login 200): registered a stdio everything-server via API WITHOUT /tools/ → response connection_status="syncing" → resolved to "connected" 13 tools in ~2s. Never lingered at unknown.

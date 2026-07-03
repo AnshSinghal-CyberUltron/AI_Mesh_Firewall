@@ -934,6 +934,35 @@ class MCPServicesHealthView(APIView):
 # ── MCP Servers ───────────────────────────────────────────────────
 
 
+def _trigger_background_sync(server, org) -> None:
+    """CLEANUP-07: kick off discovery/sync for a freshly-registered server in a
+    daemon thread so registration returns immediately while the state resolves
+    (unknown → syncing → connected/failed) — it must NEVER linger at "unknown".
+
+    ``_resync_server_tools`` does the gateway ``discover-tools`` round-trip + the
+    status/tool update; running it off-thread keeps the POST /servers/ response
+    fast (and covers non-UI registrations that never call POST /servers/<id>/tools/).
+    The thread gets its own DB connection, so close old connections at both ends to
+    avoid leaking one. Any failure is swallowed + logged — a background sync hiccup
+    must never surface as a registration error.
+    """
+    import threading
+
+    from django.db import close_old_connections
+
+    def _run():
+        close_old_connections()
+        try:
+            _resync_server_tools(server, org)
+        except Exception:  # noqa: BLE001
+            logger.exception("background sync failed for %s/%s",
+                             getattr(org, "slug", "?"), getattr(server, "server_slug", "?"))
+        finally:
+            close_old_connections()
+
+    threading.Thread(target=_run, name=f"mcp-sync-{server.pk}", daemon=True).start()
+
+
 class MCPServerListCreateView(APIView):
     """List all registered MCP servers or register a new one."""
 
@@ -1017,6 +1046,14 @@ class MCPServerListCreateView(APIView):
                     )
         except Exception:
             logger.exception("Failed to auto-provision MCP gateway key for org %s", org.id)
+
+        # CLEANUP-07: registration triggers discovery/sync so the state resolves
+        # (unknown → syncing → connected/failed) and NEVER lingers at "unknown".
+        # Mark "syncing" now (the response reflects it) and resolve off-thread; the
+        # UI's own inline sync (POST /tools/) still runs and is idempotent.
+        registration.connection_status = "syncing"
+        registration.save(update_fields=["connection_status", "updated_at"])
+        _trigger_background_sync(registration, org)
 
         response_data = MCPServerRegistrationSerializer(registration).data
         response_data.update(gw_key_info)
