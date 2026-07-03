@@ -47,6 +47,23 @@ def homoglyph(s: str) -> str:
     return "".join(_HOMO.get(c, c) for c in s.lower())
 
 
+_BIDI_CTRLS = ("‮", "⁧", "‏", "؜", "⁩", "‭", "⁦")
+# RLO, RLI, RLM, ALM, PDI, LRO, LRI — all category Cf.
+
+
+def bidi(s: str) -> str:
+    """Interleave Unicode bidirectional/format controls (all category Cf) between characters.
+    The firewall canonicaliser drops Cf before matching, so a value smuggled this way must
+    still be detected and masked out of the egress bytes."""
+    return "".join(c + _BIDI_CTRLS[i % len(_BIDI_CTRLS)] for i, c in enumerate(s))
+
+
+def combining(s: str) -> str:
+    """Append a combining mark (category Mn, U+0301) after each character. Mn is also dropped
+    by the canonicaliser, so the underlying value must still be detected/redacted."""
+    return "".join(c + "́" for c in s)
+
+
 def b64(s: str) -> str:
     return base64.b64encode(s.encode()).decode()
 

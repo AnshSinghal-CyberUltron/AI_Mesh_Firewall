@@ -467,6 +467,13 @@ def _normalize_unicode(text: str) -> str:
         return text
     stripped = _decode_unicode_tags(text)
     stripped = _ZERO_WIDTH_RE.sub("", stripped)
+    # G74: the enumerated zero-width/bidi set can miss format controls it doesn't list
+    # (e.g. U+061C ARABIC LETTER MARK, interlinear-annotation marks). A bidi-interleaved
+    # injection using ALM slipped through here while zero-width/combining variants were
+    # caught. Drop ALL remaining category Cf so a phrase/value split by ANY invisible
+    # format char is rejoined before matching — parity with patterns.canonicalize_for_detection.
+    # (The Unicode Tag block is already decoded to ASCII above, so it is not dropped here.)
+    stripped = "".join(ch for ch in stripped if unicodedata.category(ch) != "Cf")
     normalized = unicodedata.normalize("NFKC", stripped)
     # Strip combining marks (e.g. zalgo / diacritic smuggling).
     decomposed = unicodedata.normalize("NFD", normalized)

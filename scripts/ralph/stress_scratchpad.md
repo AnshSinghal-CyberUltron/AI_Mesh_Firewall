@@ -2195,3 +2195,29 @@ by the ultimate authority. Honor it; keep doing GENUINE high-value work, do NOT 
 → PIVOT: the frontend-polish gap is closed, so future iterations return to the mission's core — RIGOROUS
   SECURITY re-verification (adversarially re-prove a leak/enforcement invariant LIVE with an independent
   oracle) and fresh adversarial-angle hunting (R2/R4) — rather than manufacturing more frontend micro-items.
+
+---
+
+## G74 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — bidi/ALM injection bypass in Tier-0.5 deobfuscation
+Fresh adversarial angle (Unicode bidirectional / format controls). Probed PII/secret/credential AND
+injection with bidi (RLO/LRO/isolates/RLM/**ALM U+061C**) + combining (Mn U+0301) interleaved.
+- PII/secret/credential side: ALREADY DEFENDED (patterns canonicalizer drops ALL Cf + Mn at
+  patterns.py:116). Egress oracle (`redact_all`→`canon_probe`→detect) = no residual for all cases. Froze 6
+  regression guards.
+- **Injection side: CONFIRMED LEAK.** `scanner._normalize_unicode` stripped only the ENUMERATED
+  `_ZERO_WIDTH_CHARS` set (scanner.py:330), which omitted **U+061C ARABIC LETTER MARK**. A bidi-interleaved
+  "ignore all previous instructions" (ALM every 4th char) survived deobfuscation → phrase never matched →
+  verdict **allow** (bypass). zero-width & combining variants WERE caught (they're in the set / are Mn),
+  which masked the gap. Root cause: enumerated strip list ≠ categorical drop.
+**FIX (owned scanner.py, root-cause):** after `_decode_unicode_tags` + `_ZERO_WIDTH_RE.sub`, drop ALL
+remaining category `Cf` (`"".join(ch for ch in stripped if unicodedata.category(ch) != "Cf")`) — parity
+with `patterns.canonicalize_for_detection`. Closes the ENTIRE Cf class (ALM, interlinear-annotation, any
+future format char), not just an enumerated subset.
+**Verify (in-process):** bidi / ALM-only / bidi+reveal injections now → **block**; benign prose incl. REAL
+Arabic + Hebrew RTL text → **allow** (no false positive — Cf drop removes only invisible controls, not RTL
+letters). Golden **440 passed × 3** (was 435; +6 PII guards +3 injection-block +2 benign-RTL-FP); backend
+`ai_mesh_gateway/tests` 1625 passed; ruff clean.
+**Frozen (owned golden):** `adversarial_corpus.py` new `bidi()`/`combining()` helpers;
+`test_adversarial_attacks.py` G74 = `test_g74_bidi_combining_obfuscation_must_not_leak` (6),
+`test_g74_bidi_injection_is_blocked` (3), `test_g74_benign_rtl_not_blocked` (2).
+Cumulative confirmed-live leaks now include G74 (bidi/ALM injection) alongside G40-G71 etc.
