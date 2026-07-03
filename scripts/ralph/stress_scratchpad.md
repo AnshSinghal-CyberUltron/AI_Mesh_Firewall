@@ -2818,3 +2818,30 @@ typed this pass. No source change this iteration (verification only).
 (type=password/autocomplete=off) and the connections table (••••470A); no plaintext credential reaches the
 browser DOM. Session ledger unchanged: EIGHTEEN confirmed leaks/gaps (G74..G94) + soft DoS (G79) fixed &
 deployed; G77/G78/G80 frozen.
+
+---
+
+## R6 FRONTEND-GATE verification (condition #5: frontend polish complete) — 2026-07-03
+Closed the "frontend polish complete" completion condition with hard evidence rather than another
+speculative edit. Investigated one candidate polish item first — `prefers-reduced-motion` for the
+trace card's `animate-pulse` + `hover:-translate-y-0.5` + `transition-all` — and found it ALREADY
+handled globally: `frontend/src/index.css:512` has `@media (prefers-reduced-motion: reduce){*,*::before,
+*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:
+.01ms!important}}`, which neutralizes ALL motion app-wide. So adding `motion-reduce:` variants would be
+redundant (evidence beats assumption; no gratuitous edit made).
+**Gates (all green):**
+* impeccable detector on both owned files (`StageTimeline.jsx`, `ModelConnectionPanel.jsx`) → `[]` (clean).
+* `npm run lint` (= `node --test src/{utils,components,constants}/*.test.js`) → **78 pass / 0 fail**
+  (incl. pipelineTrace normalizeStages + theme/a11y suites).
+* `npm run build` (= `vite build`) → **built in 5.21s, exit 0** (only pre-existing advisories: liveGateway
+  dynamic/static mixed-import on NON-owned files + chunk-size — neither owned nor a regression).
+**Component craft (audit recap):** full a11y (aria-expanded/aria-label, onFocus/onBlur keyboard path),
+dark-mode throughout, `normalizeStages` crash-guard, XSS-safe (text-only render — no innerHTML/
+dangerouslySetInnerHTML), viewport-aware popover flip, evidence de-dup vs guard_reason, honest latency
+placeholder. Playwright client-perspective pass done previous iteration (key field type=password/
+autocomplete=off; table credential masked ••••470A).
+**Conclusion:** completion condition #5 (frontend polish complete) is EVIDENCE-BACKED done — detector
+clean, lint 78/78, build green, Playwright verified, no secret leakage. Remaining open condition is #4
+(full adversarial corpus through ~10 live free models), which is OpenRouter-rate-limit bounded. No source
+change this iteration. Session ledger unchanged: EIGHTEEN leaks/gaps (G74..G94) + soft DoS (G79) fixed &
+deployed; G77/G78/G80 frozen.
