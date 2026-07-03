@@ -455,6 +455,21 @@
       oracle (aidefence): has_pii false fixed / true raw. Evidence mcp-parallel/findings/backstop-p-toolslist-
       error-envelope/finding.md. NOTE: a ghp_… looked unmasked → test-token defect (pattern \bghp_[a-zA-Z0-9]
       {36}\b exactly 36; valid 36-char github token IS masked via detect_pii→floor), not a code gap.
+      CHG-0093 (2026-07-03, HIGH fail-open 1.4 leak — SSE multi-line data: split evades the MCP tool-result
+      scanner): _scan_reframe_sse_tool_result (mcp_proxy.py) walked the buffered SSE line-by-line and parsed
+      EACH data: line as standalone JSON. Per the SSE spec an event's data is the concat of ALL its data:
+      values joined by "\n", so an untrusted upstream can split a JSON-RPC result across data: lines at a
+      STRUCTURAL point (JSON whitespace between tokens) — each fragment invalid JSON alone (fell through to
+      "not JSON → verbatim"), yet a spec-compliant client reassembles them into the COMPLETE valid result →
+      secret egressed raw. FIX: parse the SSE PER EVENT, reassemble each event's data: values with "\n" BEFORE
+      json-parse + scan via _scan_tool_result_floor; redact → non-data lines verbatim + one masked data: line;
+      unmaskable → fail-CLOSED withhold; clean/keep-alive/non-JSON → verbatim. Covers result+error frames. NEW
+      TEST test_mcp_sse_multiline_split.py (7). Gate: 7 + 1540 gateway passed 0 failed; broker 108. Byte-truth
+      (client-reassembled): fixed c***@c***.example / ***-**-7788 (raw carol.roe@corp.example / 555-66-7788);
+      AKIAIOSFODNN7EXAMPLE+IP variant masked. Independent oracle (aidefence): has_pii false fixed / true raw.
+      Evidence mcp-parallel/findings/backstop-p-sse-multiline-split/finding.md. Note: E14 streaming-split tests
+      cover the CHAT SecureStreamingResponse guard — a DIFFERENT mechanism; this MCP SSE reframer gap was
+      uncovered.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

@@ -1280,6 +1280,25 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   test-token defect (pattern `\bghp_[a-zA-Z0-9]{36}\b`, exactly 36; a valid 36-char github token IS masked via
   detect_pii→floor), NOT a code gap.
 
+- **CHG-0093** (2026-07-03) — **HIGH fail-open 1.4 leak: SSE multi-line `data:` split** evades the MCP
+  tool-result scanner (`_scan_reframe_sse_tool_result`). Per the WHATWG SSE spec an event's data is the
+  concatenation of ALL its `data:` field values joined by `"\n"`. The reframer walked the buffered SSE
+  line-by-line and parsed EACH `data:` line as standalone JSON, so an untrusted upstream could SPLIT its
+  JSON-RPC result across several `data:` lines at a STRUCTURAL point (JSON whitespace between tokens): each
+  fragment is invalid JSON alone → the per-line `json.loads` raised → the frame fell through to "not JSON →
+  pass verbatim" (UNSCANNED), yet a spec-compliant client reassembles the fragments (joined by `\n`, valid
+  JSON whitespace) into the COMPLETE result → secret/PII egressed raw. **FIX:** parse the buffered SSE PER
+  EVENT (blank-line boundaries), reassemble each event's `data:` values with `\n` BEFORE json-parse + scan via
+  `_scan_tool_result_floor`; redact → re-emit non-`data:` field lines (`event:`/`id:`/comments) verbatim + the
+  masked payload as ONE `data:` line; unmaskable survivor → fail-CLOSED withhold; clean/keep-alive/non-JSON →
+  verbatim. Covers `result` + `error` frames. NEW TEST `test_mcp_sse_multiline_split.py` (7). Gate: 7 + 1540
+  gateway passed, 0 failed; broker 108. Byte-truth (client-reassembled): fixed `c***@c***.example` /
+  `***-**-7788` (raw `carol.roe@corp.example` / `555-66-7788`); AWS-key+IP variant masked. Independent oracle
+  (aidefence): `has_pii` false fixed / true raw. touched: owning-session mcp_proxy.py (extends
+  CHG-0039/0043/0064/0070). Evidence `mcp-parallel/findings/backstop-p-sse-multiline-split/`. NOTE: the E14
+  streaming-split suite covers the CHAT `SecureStreamingResponse` guard — a DIFFERENT mechanism; this MCP SSE
+  reframer split-gap was uncovered.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

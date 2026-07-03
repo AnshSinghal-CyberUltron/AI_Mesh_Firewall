@@ -1117,13 +1117,16 @@ async def _scan_reframe_sse_tool_result(
 ) -> tuple[str, dict | None]:
     """Scan the tool RESULT(s) inside a BUFFERED SSE (text/event-stream) body.
 
-    MCP Streamable-HTTP delivers a tools/call result as one or more ``data:``
-    frames, each carrying a JSON-RPC message. This walks the buffered SSE text
-    line-by-line; for every ``data:`` frame that is a JSON-RPC response with a
-    ``result.content`` it runs the outbound result floor (mask/redact via
-    ``_scan_tool_result_floor``, which fails CLOSED on scan error). Non-JSON
-    frames, keep-alives, and non-result frames pass through verbatim so the SSE
-    framing is preserved.
+    MCP Streamable-HTTP delivers a tools/call result as one or more SSE EVENTS,
+    each carrying a JSON-RPC message. Per the SSE spec an event's data may span
+    several ``data:`` lines (concatenated with "\n"), so this parses the buffered
+    SSE per EVENT — reassembling every event's ``data:`` values BEFORE json-parsing
+    — and for every event that is a JSON-RPC response with a ``result``/``error`` it
+    runs the outbound result floor (mask/redact via ``_scan_tool_result_floor``,
+    which fails CLOSED on scan error). Non-JSON events, keep-alives, and non-result
+    events pass through verbatim so the SSE framing is preserved. Reassembling per
+    event (not per line) closes CHG-0093: a structural multi-line ``data:`` split
+    that would otherwise slip a secret past a per-line scan.
 
     Returns ``(reframed_sse_text, block_info)``. ``block_info`` is None when
     nothing was hard-blocked; otherwise ``{"tags", "id", "jsonrpc"}`` which the
@@ -1134,51 +1137,46 @@ async def _scan_reframe_sse_tool_result(
     buffering and could hang). Closes the SSE raw-egress leak
     (BACKSTOP_FINDINGS G2 item 2 — the previous branch forwarded SSE verbatim).
     """
-    out_lines: list[str] = []
-    for raw_line in sse_text.split("\n"):
-        stripped = raw_line.strip()
-        if not stripped.startswith("data:"):
-            out_lines.append(raw_line)
-            continue
-        data_str = stripped[5:].strip()
-        if not data_str:
-            out_lines.append(raw_line)
-            continue
+    # CHG-0093: parse the buffered SSE per EVENT, not per line. Per the SSE spec
+    # (WHATWG), an event's data is the concatenation of ALL its ``data:`` field
+    # values joined by "\n". An untrusted upstream can therefore SPLIT a JSON-RPC
+    # result across several ``data:`` lines at a structural point (JSON whitespace
+    # between tokens) so each fragment is INVALID JSON on its own — evading the
+    # old per-line ``json.loads`` (each fragment fell through to "not JSON → verbatim")
+    # — yet a spec-compliant client reassembles the fragments into the COMPLETE
+    # result, leaking the secret. Reassembling per event BEFORE scanning closes it.
+    async def _scan_event(evt_lines: list[str]) -> tuple[list[str] | None, dict | None]:
+        """Scan one SSE event. Returns ``(emit_lines, block_info)``: ``emit_lines`` are
+        the SSE lines to append (verbatim, or reframed to a single masked ``data:``
+        line); a non-None ``block_info`` means withhold the entire result."""
+        if not evt_lines:
+            return [], None
+        data_pos = [i for i, ln in enumerate(evt_lines) if ln.strip().startswith("data:")]
+        if not data_pos:
+            return list(evt_lines), None
+        # SSE reassembly: join every data: field value with "\n" (the wire value a
+        # compliant client sees). ``strip()[5:].strip()`` mirrors the prior extraction.
+        data_val = "\n".join(evt_lines[i].strip()[5:].strip() for i in data_pos)
+        if not data_val:
+            return list(evt_lines), None
         try:
-            obj = json.loads(data_str)
+            obj = json.loads(data_val)
         except Exception:
-            out_lines.append(raw_line)  # not JSON — leave the frame verbatim
-            continue
-        result_obj = obj.get("result") if isinstance(obj, dict) else None
-        if result_obj is None:
-            # CHG-0043 (was CHG-0040; renumbered — id collided w/ P4.13 ws:// change):
-            # an ERROR frame (no result) can still carry a secret in its
-            # message/data from an untrusted server — scan + mask it (fail CLOSED:
-            # withhold on scan error). Notifications / keep-alives pass through.
-            err_obj = obj.get("error") if isinstance(obj, dict) else None
-            if err_obj is None:
-                out_lines.append(raw_line)
-                continue
-            e_scanned, e_blocked, e_tags, _ef, _em = await _scan_tool_result_floor(
-                err_obj, tool_name=tool_name, enabled_info=enabled_info,
-                org_slug=org_slug, server_slug=server_slug, actor=actor,
-            )
-            if e_blocked:
-                return "", {
-                    "tags": list(e_tags),
-                    "id": obj.get("id"),
-                    "jsonrpc": obj.get("jsonrpc", "2.0"),
-                }
-            if e_scanned is not err_obj:
-                obj["error"] = e_scanned
-                out_lines.append(f"data: {json.dumps(obj)}")
-            else:
-                out_lines.append(raw_line)
-            continue
-        # Scan the ENTIRE result (dict content/structuredContent, list, or str) —
-        # not just ``result.content`` — so every output shape is covered.
+            return list(evt_lines), None  # not JSON (keep-alive / partial) — verbatim
+        if not isinstance(obj, dict):
+            return list(evt_lines), None
+        # An ERROR frame (no result) can still carry a secret in its message/data from
+        # an untrusted server — scan + mask it too (CHG-0043; fail CLOSED on scan error).
+        target_key = "result"
+        target_obj = obj.get("result")
+        if target_obj is None:
+            target_obj = obj.get("error")
+            target_key = "error"
+            if target_obj is None:
+                return list(evt_lines), None  # notification / keep-alive — verbatim
+        # Scan the ENTIRE result/error (dict content/structuredContent, list, or str).
         scanned, blocked, tags, _findings, _meta = await _scan_tool_result_floor(
-            result_obj,
+            target_obj,
             tool_name=tool_name,
             enabled_info=enabled_info,
             org_slug=org_slug,
@@ -1186,18 +1184,37 @@ async def _scan_reframe_sse_tool_result(
             actor=actor,
         )
         if blocked:
-            # Hard block (policy block OR fail-closed scan error): withhold the
-            # entire result — do not emit any further frames.
-            return "", {
+            # Hard block (policy block OR fail-closed scan error): withhold everything.
+            return None, {
                 "tags": list(tags),
-                "id": obj.get("id") if isinstance(obj, dict) else None,
-                "jsonrpc": obj.get("jsonrpc", "2.0") if isinstance(obj, dict) else "2.0",
+                "id": obj.get("id"),
+                "jsonrpc": obj.get("jsonrpc", "2.0"),
             }
-        if scanned is not result_obj:
-            obj["result"] = scanned
-            out_lines.append(f"data: {json.dumps(obj)}")
+        if scanned is not target_obj:
+            obj[target_key] = scanned
+            # Re-emit any non-data field lines (event:/id:/comments) verbatim, then the
+            # masked payload as a SINGLE ``data:`` line (json.dumps is newline-free).
+            non_data = [ln for i, ln in enumerate(evt_lines) if i not in data_pos]
+            return non_data + [f"data: {json.dumps(obj)}"], None
+        return list(evt_lines), None
+
+    out_lines: list[str] = []
+    event_lines: list[str] = []
+    for raw_line in sse_text.split("\n"):
+        if raw_line.strip() == "":
+            emit, block = await _scan_event(event_lines)
+            if block is not None:
+                return "", block
+            out_lines.extend(emit)
+            out_lines.append(raw_line)  # preserve the blank event separator
+            event_lines = []
         else:
-            out_lines.append(raw_line)
+            event_lines.append(raw_line)
+    # Trailing event with no terminating blank line.
+    emit, block = await _scan_event(event_lines)
+    if block is not None:
+        return "", block
+    out_lines.extend(emit)
     return "\n".join(out_lines), None
 
 
