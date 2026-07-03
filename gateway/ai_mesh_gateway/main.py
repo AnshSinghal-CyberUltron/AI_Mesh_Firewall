@@ -1191,6 +1191,17 @@ def _set_responses_output_text(response, text: str) -> None:
                 _wrote = True
 
 
+def _parts_reveal_value(text: str) -> bool:
+    """G70: True if ``text`` carries a PII/secret/credential value. Used to decide whether a
+    NO-SEPARATOR concatenation of a message's text content-parts exposes a value the
+    space-join hid (a value split mid-token across parts). Detector import is lazy."""
+    try:
+        from patterns import detect_pii, detect_secrets, detect_credential_exposure
+    except ImportError:  # pragma: no cover - packaging fallback
+        from .patterns import detect_pii, detect_secrets, detect_credential_exposure
+    return bool(detect_pii(text) or detect_secrets(text) or detect_credential_exposure(text))
+
+
 def _extract_prompt_from_messages(messages):
     """Build a single prompt string from OpenAI-style messages."""
     parts = []
@@ -1199,12 +1210,14 @@ def _extract_prompt_from_messages(messages):
         content = m.get("content") or ""
         if isinstance(content, list):
             _seg = []
+            _text_parts = []
             for c in content:
                 if not isinstance(c, dict):
                     continue
                 _txt = c.get("text")
                 if isinstance(_txt, str):
                     _seg.append(_txt)
+                    _text_parts.append(_txt)
                 else:
                     # F5: never fold a non-text part's payload (image_url/data: URI,
                     # input_audio, file…) into scan_text — its multi-KB base64 blob
@@ -1213,6 +1226,19 @@ def _extract_prompt_from_messages(messages):
                     # still fully scanned.
                     _seg.append(f"[{c.get('type') or 'non-text'}]")
             content = " ".join(_seg)
+            # G70: the model receives the text parts CONCATENATED (the API inserts no
+            # space between text content-parts), so a PII/secret/credential value split
+            # MID-TOKEN across parts (["…my ssn is 123-","45-6789"]) is contiguous to the
+            # model but the space-join above breaks the pattern -> it egressed unscanned.
+            # When the no-separator concatenation of the text parts REVEALS a value the
+            # space-join hid, append it so the scanner sees what the model sees. Guarded
+            # (reveals-a-value + space-join didn't) so benign multi-part content and the
+            # injection space-join (which needs word spaces) are unchanged.
+            if len(_text_parts) >= 2:
+                _joined = "".join(_text_parts)
+                if (_joined and _joined != content
+                        and _parts_reveal_value(_joined) and not _parts_reveal_value(content)):
+                    content = content + "\n" + _joined
         # Bracket the gateway's OWN role label ("[system]:" not "system:") so the
         # role-spoof injection signature (scanner.py: `(system|developer):\s*you
         # (are|have|must|will)`) does NOT false-positive on a LEGITIMATE system
