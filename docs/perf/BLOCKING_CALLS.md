@@ -90,3 +90,24 @@ low-RPS admin path on Django's thread-sensitive executor, not an event-loop bloc
 pooling/async-converting it would be churn with no throughput benefit. **No code
 change made for item 13** — the de-blocked state is the finding. Item 14 proves it
 empirically.
+
+## Item 14 — a slow request does NOT stall same-worker concurrent requests (proven)
+
+`scripts/perf/deblock_probe.py`: a 3-endpoint FastAPI app run under the gateway
+image's own uvicorn, **1 worker**. `/fast` (instant), `/block?ms` (inline
+`time.sleep` — the anti-pattern), `/offload?ms` (`await asyncio.to_thread(time.sleep)`
+— exactly what `proxy_chat` does). Measured `/fast` latency while 8 concurrent slow
+(500 ms) requests hammered the same worker:
+
+| Background load on the worker | `/fast` RPS | `/fast` p50 | `/fast` p99 |
+|-------------------------------|------------:|------------:|------------:|
+| none (baseline)               | 5656        | 3.2 ms      | 4.6 ms      |
+| 8× inline `/block` (blocks loop) | **5.8**  | **4011 ms** | **4015 ms**  |
+| 8× `/offload` (asyncio.to_thread) | **5597**| **3.2 ms**  | **4.8 ms**   |
+
+Inline blocking stalls concurrent requests ~**975×** (p99 4011 ms vs 4.6 ms, RPS
+5.8 vs 5656). The offload pattern — the one the gateway uses on every hot path —
+leaves concurrent `/fast` traffic **statistically unchanged**. Combined with the
+item-13 code evidence, the gateway's async handlers provably do not stall the worker
+on slow work. (Control sync views are a separate, architectural serialization, sized
+around via N workers + the P6 query fix — not an event-loop stall.)

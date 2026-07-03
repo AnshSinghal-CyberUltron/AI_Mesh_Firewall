@@ -74,7 +74,11 @@
       RATE_LIMITER, await LLM_ROUTER.acompletion (async upstream), await asyncio.to_thread(_security_scan) (CPU offloaded).
       Only sync requests.* left = control ADMIN views (IsAdminOrSuperuser, timeout=10, low-RPS, Django thread-sensitive —
       not a loop block); pooling would be churn. No code/stack change; documented in BLOCKING_CALLS.md. Item 14 proves empirically.
-- [ ] 14. Verify a slow request no longer stalls concurrent requests on the same worker.
+- [x] 14. Verify a slow request no longer stalls concurrent requests on the same worker.
+      → scripts/perf/deblock_probe.py A/B under the gateway image's uvicorn (1 worker). While 8 concurrent 500ms
+      requests hammer the SAME worker: inline time.sleep (anti-pattern) → /fast p99 4011ms, 5.8 rps (STALLED);
+      asyncio.to_thread offload (the proxy_chat pattern) → /fast p99 4.8ms, 5597 rps (UNCHANGED vs 4.6ms baseline).
+      ~975x difference. Proves the gateway's offload keeps the loop free. P4 COMPLETE. Test tool only, no stack change.
 
 ## P5 — Scale the data layer  [STACK-CHANGE → log to 4 memories]
 - [ ] 15. Postgres max_connections = workers × db-threads + margin (raise OR add pgbouncer); sane CONN_MAX_AGE.
