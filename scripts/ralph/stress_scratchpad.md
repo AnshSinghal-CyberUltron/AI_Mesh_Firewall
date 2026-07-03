@@ -1436,6 +1436,23 @@
         (was 424; +5); gateway suite 1558 pass. commit 9e50122b. REDEPLOYING (rollback pre-g71).
         TWENTY-SIX confirmed-live leaks (G40-G46, G49-G61, G66-G71) + G62 DiD + 3 DoS (G63-G65) + G48 + 2
         tradeoffs. Cross-turn value reassembly is now ROLE-COMPLETE for the data channel (user/developer/tool).
+    - 🟠 R6 FRONTEND: pipeline-trace card crash-hardening (2026-07-03):
+        Pivoted to the unmet R6 completion criterion (frontend, owned: ModelConnectionPanel + pipeline-trace
+        cards). First VERIFIED the owned components: frontend build PASSES (vite, 4.9s, only a bundle-size
+        WARNING not an error); pipelineTrace unit suite 75/75; ModelConnectionPanel + StageTimeline compile
+        clean. Then found + fixed a real ROBUSTNESS gap (R2 'incorrect/broken UI card'): StageTimeline renders
+        `stage.action` per element, and several callers (RAGAttackTrustSimulator, AttackSimulatorPanel) pass
+        the gateway's RAW pipeline_trace.stages[] straight in (NOT via extractRealStages which filters) — so a
+        null / non-object stage element (serialization glitch) would throw and BLANK the WHOLE trace card. FIX
+        (owned pipeline-trace card): added a pure normalizeStages(raw) helper in utils/pipelineTrace.js (drops
+        non-object stages; [] for null/non-array; no mutation, nothing fabricated) + use it in StageTimeline.
+        FROZEN 3 node:test cases. VERIFY: build passes; trace-card unit 78/78; frontend serves 200 + loads
+        clean via Playwright (0 console errors) — fix is LIVE (frontend runs vite dev over a bind mount, HMR).
+        commit 4796d6f5. Honest per-stage rendering + empty-state unchanged; no behavior change on valid data.
+        R6 STATUS: owned components build-clean + unit-green + Playwright-loads-clean. impeccable skill NOT
+        installed (manual polish). ModelConnectionPanel connect-flow was Playwright-verified end-to-end in a
+        prior window (item 9). Remaining completion gaps: R5 live-OpenRouter (needs key typed in UI this
+        session) + a full R6 Playwright interaction pass.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
