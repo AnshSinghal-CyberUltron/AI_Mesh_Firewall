@@ -13,6 +13,13 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0003 — Harden gateway+control entrypoints vs empty WEB_CONCURRENCY (2026-07-03)
+- Both entrypoints now `export WEB_CONCURRENCY="$WORKERS"` before exec'ing gunicorn —
+  gunicorn reads WEB_CONCURRENCY at config-import time and crashes on an empty string
+  (`int('')`). AFFECTS: gateway+control images (rebuilt). ACTION: `docker compose build
+  gateway control`. No behavior change for valid configs; prevents a boot crash when
+  `WEB_CONCURRENCY=` (empty) is in the env. Running containers not recreated.
+
 ## PERF-0002 — Control: single Daphne → gunicorn + N UvicornWorker (2026-07-03)
 - Control image now runs `gunicorn main_app.asgi:application -k
   uvicorn.workers.UvicornWorker --workers N --forwarded-allow-ips *` (N from the

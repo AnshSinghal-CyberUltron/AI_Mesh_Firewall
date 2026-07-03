@@ -26,6 +26,12 @@ else
 fi
 
 # One diagnostic line + the full budget, so the running config is always in the logs.
+# Normalize the env for gunicorn: gunicorn itself reads WEB_CONCURRENCY at
+# config-import time (`int(os.environ.get("WEB_CONCURRENCY", 1))`) and crashes on
+# an empty string. Export the resolved integer so gunicorn's own default always
+# matches our --workers and can never be "" — regardless of how the env arrived.
+export WEB_CONCURRENCY="$WORKERS"
+
 echo "[gateway-entrypoint] WEB_CONCURRENCY=$WORKERS (source=$WSRC)" >&2
 python -m ai_mesh_shared.resource_budget --json 2>/dev/null \
     | sed 's/^/[gateway-entrypoint]   /' >&2 || true

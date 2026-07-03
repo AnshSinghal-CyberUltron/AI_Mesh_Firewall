@@ -7,6 +7,21 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0003 — Harden gateway + control entrypoints against empty WEB_CONCURRENCY
+- **Date:** 2026-07-03
+- **Files:** `gateway/entrypoint.sh`, `control/server-entrypoint.sh`.
+- **What:** gunicorn reads `WEB_CONCURRENCY` itself at config-import time
+  (`int(os.environ.get("WEB_CONCURRENCY", 1))`) and **crashes on an empty string**
+  (`ValueError: invalid literal for int() with base 10: ''`) before our `--workers`
+  is ever parsed. Both entrypoints now `export WEB_CONCURRENCY="$WORKERS"` (the
+  resolved integer) before exec'ing gunicorn, so gunicorn's own default always
+  matches `--workers` and can never be `""`. Found while proving item 08 (a test
+  passed `-e WEB_CONCURRENCY=`; the container exit-1'd at boot).
+- **AFFECTS:** `ai_mesh_firewall-gateway` + `ai_mesh_firewall-control` images (rebuilt).
+- **ACTION FOR OTHERS:** `docker compose build gateway control` to adopt. No behavior
+  change for valid configs — this only prevents a boot crash when some env source
+  sets `WEB_CONCURRENCY=` (empty). Running containers not recreated.
+
 ## PERF-0002 — Control plane: single Daphne → gunicorn + N UvicornWorker (detector-sized)
 - **Date:** 2026-07-03
 - **Files:** `control/Dockerfile` (CMD → entrypoint), `control/server-entrypoint.sh` (new).

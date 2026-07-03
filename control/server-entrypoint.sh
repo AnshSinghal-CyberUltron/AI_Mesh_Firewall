@@ -29,6 +29,11 @@ else
     WSRC="fallback"
 fi
 
+# gunicorn reads WEB_CONCURRENCY at config-import time and crashes on an empty
+# string; control inherits the shared .env which may carry WEB_CONCURRENCY. Export
+# the resolved integer so gunicorn's own default matches --workers and is never "".
+export WEB_CONCURRENCY="$WORKERS"
+
 echo "[control-entrypoint] CONTROL workers=$WORKERS (source=$WSRC)" >&2
 python -m ai_mesh_shared.resource_budget --json 2>/dev/null \
     | sed 's/^/[control-entrypoint]   /' >&2 || true

@@ -35,7 +35,13 @@
       --forwarded-allow-ips * (mirrors proven prod cmd; only --workers dynamic). CONTROL_WEB_CONCURRENCY overrides.
       PERF-0002 logged to 4 memories. Multiproc-safe (drain per-hostname SET NX lock; resync/seed idempotent).
       PROVEN: --cpus=6→6w, --cpus=12→12w, override→3w; LIVE boot 4 workers serve /api/health/ 200. Shared control NOT recreated.
-- [ ] 08. Verify all cores light up under load.
+- [x] 08. Verify all cores light up under load.
+      → loadtest.py gained --procs (multiprocess generator) — single-process urllib capped offered load at
+      ~3200rps (GIL), masking core scaling. PROVEN (constrained throwaway gateways, dummy POLICY_SIGNING_KEY):
+      gw6 (--cpus=6→6 workers) = 4971rps, 6.14/6 cores SATURATED, 0 err; gw12 (--cpus=12→12 workers) = 5909rps
+      (+19%), 9.16 cores (--procs6), 0 err. Baseline was 4.33 cores (6w single-gen) / 1.16 (1 daphne). Caveat:
+      one 16-core host shared by generator+target caps gw12 <12 (a dedicated load box hits 12). Also fixed a real
+      bug (PERF-0003): gunicorn crashes on empty WEB_CONCURRENCY at config-import → entrypoints now export resolved int.
 
 ## P3 — Dynamic thread pools
 - [ ] 09. Size Django ASGI_THREADS / asgiref executor from cpu_budget.

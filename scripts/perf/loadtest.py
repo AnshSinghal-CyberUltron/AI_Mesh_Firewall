@@ -89,7 +89,41 @@ def _pct(sorted_lat, q):
     return round(sorted_lat[idx] * 1000, 2)  # ms
 
 
-def run(url, concurrency, duration, method, timeout, containers, warmup):
+def _load_phase(url, concurrency, method, timeout, stop_at):
+    """Run `concurrency` threads hammering url until stop_at; return (lat[], errs, codes)."""
+    lat = []
+    errs = [0]
+    codes = {}
+    lock = threading.Lock()
+    threads = [
+        threading.Thread(target=_worker,
+                         args=(url, method, timeout, stop_at, lat, errs, codes, lock))
+        for _ in range(concurrency)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return lat, errs[0], codes
+
+
+def _child_entry(args_tuple):
+    """multiprocessing entry: run one generator process, return a compact summary."""
+    url, concurrency, method, timeout, stop_at = args_tuple
+    lat, err, codes = _load_phase(url, concurrency, method, timeout, stop_at)
+    lat.sort()
+    return {
+        "ok": len(lat),
+        "err": err,
+        "codes": codes,
+        "p50": _pct(lat, 0.50),
+        "p95": _pct(lat, 0.95),
+        "p99": _pct(lat, 0.99),
+        "max": round(lat[-1] * 1000, 2) if lat else None,
+    }
+
+
+def run(url, concurrency, duration, method, timeout, containers, warmup, procs=1):
     # Warmup (not measured).
     for _ in range(warmup):
         try:
@@ -97,42 +131,58 @@ def run(url, concurrency, duration, method, timeout, containers, warmup):
         except Exception:  # noqa: BLE001
             pass
 
-    lat = []
-    errs = [0]
-    codes = {}
     peaks = {}
     lock = threading.Lock()
     stop_at = time.monotonic() + duration
-
-    threads = [
-        threading.Thread(target=_worker,
-                         args=(url, method, timeout, stop_at, lat, errs, codes, lock))
-        for _ in range(concurrency)
-    ]
+    # Sampler runs in the parent for the whole window (measures the TARGET's cores).
     sampler = threading.Thread(target=_sample_stats, args=(containers, stop_at, peaks, lock))
     t0 = time.monotonic()
     sampler.start()
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+
+    if procs <= 1:
+        lat, err, codes = _load_phase(url, concurrency, method, timeout, stop_at)
+        lat.sort()
+        child_summaries = [{
+            "ok": len(lat), "err": err, "codes": codes,
+            "p50": _pct(lat, 0.50), "p95": _pct(lat, 0.95), "p99": _pct(lat, 0.99),
+            "max": round(lat[-1] * 1000, 2) if lat else None,
+        }]
+    else:
+        import multiprocessing as mp
+        payload = (url, concurrency, method, timeout, stop_at)
+        with mp.Pool(procs) as pool:
+            child_summaries = pool.map(_child_entry, [payload] * procs)
+
     sampler.join()
     elapsed = time.monotonic() - t0
 
-    lat.sort()
-    total = len(lat) + errs[0]
+    # Aggregate across generator processes.
+    ok = sum(c["ok"] for c in child_summaries)
+    err = sum(c["err"] for c in child_summaries)
+    total = ok + err
+    codes = {}
+    for c in child_summaries:
+        for k, v in c["codes"].items():
+            codes[k] = codes.get(k, 0) + v
+    # Latency: worst (max) percentile across generators — conservative.
+    def _worst(key):
+        vals = [c[key] for c in child_summaries if c[key] is not None]
+        return max(vals) if vals else None
+
     report = {
         "url": url,
         "concurrency": concurrency,
+        "procs": procs,
+        "total_clients": concurrency * procs,
         "duration_s": round(elapsed, 2),
         "requests": total,
-        "ok": len(lat),
-        "errors": errs[0],
+        "ok": ok,
+        "errors": err,
         "rps": round(total / elapsed, 1) if elapsed else 0,
-        "p50_ms": _pct(lat, 0.50),
-        "p95_ms": _pct(lat, 0.95),
-        "p99_ms": _pct(lat, 0.99),
-        "max_ms": round(lat[-1] * 1000, 2) if lat else None,
+        "p50_ms": _worst("p50"),
+        "p95_ms": _worst("p95"),
+        "p99_ms": _worst("p99"),
+        "max_ms": _worst("max"),
         "codes": codes,
         "containers": {
             name: {"peak_cpu_pct": round(v["cpu_pct"], 1),
@@ -152,13 +202,15 @@ def main(argv=None):
     ap.add_argument("--method", default="GET")
     ap.add_argument("--timeout", type=float, default=30)
     ap.add_argument("--warmup", type=int, default=5)
+    ap.add_argument("--procs", type=int, default=1,
+                    help="generator processes (bypass the Python GIL for higher offered load)")
     ap.add_argument("--containers", nargs="*", default=[])
     ap.add_argument("--out", default=None)
     ap.add_argument("--label", default=None)
     args = ap.parse_args(argv)
 
     report = run(args.url, args.concurrency, args.duration, args.method,
-                 args.timeout, set(args.containers), args.warmup)
+                 args.timeout, set(args.containers), args.warmup, procs=args.procs)
     if args.label:
         report["label"] = args.label
     text = json.dumps(report, indent=2)
