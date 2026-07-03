@@ -39,6 +39,10 @@
  degraded path. Output enforce_output(scan_degraded) → redact confirmed wired. 19 new tests
  in test_pipeline_degraded_failclosed.py. Gate: 19 targeted + 54 enforcement + 1870 full
  suite passed.
+ - PIPELINE-0007 (2026-07-03) — ONE authoritative final_action + blocked_by: main.py.
+ _build_safe_block_response single-writer (no double-resolution); removed redundant
+ pipeline_stage from 403 JSON. Trace final_action sourced from PipelineDecision (not ad-hoc).
+ Streaming input_action param. No double-block. 20 tests + 1894 full suite passed.
 
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is

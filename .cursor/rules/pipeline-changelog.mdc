@@ -59,3 +59,9 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   main.py. tier2_degraded + PII/secrets detected in scan text → REDACT (or BLOCK if
   unmaskable), never raw to model. Clean prompt under degraded → monitor only. Closes D-02
   fail-open. 19 new tests. Gate: 19 + 54 + 1870 full suite passed.
+- PIPELINE-0007 (2026-07-03) — ONE authoritative final_action + blocked_by: main.py.
+  _build_safe_block_response accepts blocked_by param (single-writer from _build_block_response,
+  no double-resolution); removed redundant pipeline_stage from 403 JSON. Non-streaming +
+  streaming trace final_action now sourced from PipelineDecision.action (not ad-hoc zeroshield
+  or hardcoded "allow"). _launch_chat_stream_response gains input_action param. No double-block
+  in trace stages. 20 new tests. Gate: 20 + 1894 full suite passed.

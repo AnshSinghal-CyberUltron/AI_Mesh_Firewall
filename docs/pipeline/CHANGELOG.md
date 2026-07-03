@@ -2,6 +2,61 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0007 (2026-07-03)
+
+**ONE authoritative `final_action` + `blocked_by`; no double-block ambiguity.**
+
+Problem:
+- `_build_safe_block_response` called `_resolve_pipeline_blocked_by` independently,
+  duplicating the resolution already done in `_build_block_response` — so `blocked_by`
+  could diverge from the trace's `blocked_stage`.
+- The client-facing 403 JSON body contained BOTH `blocked_by` and a redundant
+  `pipeline_stage` field (identical value, confusing).
+- `build_pipeline_trace` received `final_action` from ad-hoc sources (`zeroshield.action`,
+  hardcoded "allow") rather than from the authoritative `PipelineDecision`.
+- Streaming path used hardcoded `"allow"` for `final_action` in the base trace regardless
+  of the actual input enforcement decision.
+
+Changes:
+- **main.py `_build_safe_block_response`**: accepts `blocked_by: str | None` parameter;
+  uses it directly when provided (single-writer from `_build_block_response`), falls back
+  to `_resolve_pipeline_blocked_by` only when `None`. Removed redundant `pipeline_stage`
+  key from the 403 JSON body.
+- **main.py `_build_block_response`**: passes its already-resolved `blocked_stage` to
+  `_build_safe_block_response` as `blocked_by=blocked_stage` — eliminates double resolution.
+- **main.py non-streaming trace calls (L6962, L8527)**: `final_action` now reads from
+  `_input_decision.action` (the authoritative `PipelineDecision`) when available, falling
+  back to `zeroshield.action` only when the input scanner is disabled.
+- **main.py `_launch_chat_stream_response`**: gains `input_action: str = "allow"` param;
+  streaming trace uses it as `final_action` instead of hardcoded "allow". Both call sites
+  (L6827 standalone, L7568 connected) pass `_input_decision.action` when available.
+- **main.py (L5940)**: `_input_decision = None` initialized before enforcement — ensures
+  safe access in all downstream paths.
+
+Single-writer contract:
+- **Block path**: `_build_block_response` resolves `blocked_stage` ONCE via
+  `_resolve_pipeline_blocked_by` → passes to `_build_safe_block_response` → client JSON
+  has ONE `blocked_by` field (no duplicate `pipeline_stage`).
+- **Trace path**: `build_pipeline_trace(final_action=...)` always receives the
+  `PipelineDecision.action` — the same value that drove the block/redact/allow decision.
+- **No double-block**: a blocked request returns immediately (PIPELINE-0005 short-circuit);
+  `final_action` is set exactly once from the terminal stage.
+
+Tests (new, `test_pipeline_final_action.py`, 20 tests):
+- Input block (input_scan) → trace stages: input_scan=block, model_input/model_output=skip.
+- Policy block → policy stage=block, model stages=skip.
+- Output guard block → output_guardrail=block, model stages NOT skip.
+- Allow → all stages pass/allow, none skip, none block.
+- Redact → input_scan=redact, model stages proceed (not skip/block).
+- `_build_safe_block_response` with explicit `blocked_by` → no re-resolution, no
+  `pipeline_stage` in body.
+- `_build_safe_block_response` with `blocked_by=None` → falls back correctly.
+- `_launch_chat_stream_response` propagates `input_action` into trace.
+- `_input_decision` drives both streaming and non-streaming `final_action`.
+- No double-block in trace stages (a block at one stage doesn't set block at another).
+
+Gate: 20 targeted + 1894 full suite passed (0 failed).
+
 ## PIPELINE-0006 (2026-07-03)
 
 **Degraded scanner fails CLOSED** — A degraded/unavailable Tier-2 scanner no longer

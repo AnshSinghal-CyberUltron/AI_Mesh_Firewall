@@ -706,6 +706,7 @@ def _build_safe_block_response(
     internal_detail: str | None = None,
     detection_tier: str = "",
     pipeline_trace: dict | None = None,
+    blocked_by: str | None = None,
 ) -> JSONResponse:
     """
     Build a client-safe error response for policy blocks.
@@ -749,11 +750,12 @@ def _build_safe_block_response(
             code, threat_category, _request_id, internal_detail,
         )
 
-    blocked_by = _resolve_pipeline_blocked_by(
-        code=code,
-        threat_category=threat_category,
-        detection_tier=detection_tier,
-    )
+    if not blocked_by:
+        blocked_by = _resolve_pipeline_blocked_by(
+            code=code,
+            threat_category=threat_category,
+            detection_tier=detection_tier,
+        )
     # D-a: re-map CONTENT-category 403s to GATEWAY_BLOCK_STATUS (default 400) and
     # surface error.code="content_filter" so the stock SDK raises BadRequestError
     # and LiteLLM/LangChain key on "content_filter". Auth/actor blocks keep their
@@ -781,7 +783,6 @@ def _build_safe_block_response(
         "category": threat_category,  # Generic: NOT specific threat type
         "blocked_by": blocked_by,
         "detection_tier": detection_tier or "",
-        "pipeline_stage": blocked_by,
     }
     if pipeline_trace:
         # Strip per-stage evidence (matched_patterns / guard_findings / Evidence
@@ -2760,6 +2761,7 @@ def _launch_chat_stream_response(
     estimated_tokens: int = 20,
     org_tpm_limit: int = 0,
     secure_output_scan: bool = True,
+    input_action: str = "allow",
 ):
     """
     stream_phase + finalization_phase for /v1/chat/completions (SSE).
@@ -2896,7 +2898,7 @@ def _launch_chat_stream_response(
             scan_verdict=scan_verdict,
             zeroshield=_stream_zs_base,
             requested_model=_stream_echo_model,
-            final_action=str((_stream_zs_base or {}).get("action") or "allow"),
+            final_action=input_action,
             http_status=200,
         )
     except Exception:
@@ -3699,6 +3701,7 @@ def _build_block_response(
         internal_detail=internal_detail,
         detection_tier=detection_tier,
         pipeline_trace=pipeline_trace,
+        blocked_by=blocked_stage,
     )
 
 
@@ -5937,6 +5940,7 @@ async def proxy_chat(
         # the policy check was skipped (gated) for this request.
         check_resp = {}
         scan_verdict = None
+        _input_decision = None  # PIPELINE-0007: single authoritative enforcement decision
         hallucination_flagged = False
         output_enforcement = None
         is_rag_request = _detect_rag_request(body, messages)
@@ -6835,6 +6839,7 @@ async def proxy_chat(
                     estimated_tokens=estimated_request_tokens,
                     org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
                     secure_output_scan=bool(CONFIG.get("output_scan_enabled", True)),
+                    input_action=_input_decision.action if _input_decision is not None else "allow",
                 )
             upstream_start = time.perf_counter()
             code, resp = await LLM_ROUTER.acompletion(body, redacted_prompt)
@@ -6957,7 +6962,7 @@ async def proxy_chat(
                         policy_redacted_prompt=policy_redacted_prompt,
                         policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
                         stage_metrics=stage_metrics,
-                        final_action=_zs_full.get("action") or "allow",
+                        final_action=_input_decision.action if _input_decision is not None else (_zs_full.get("action") or "allow"),
                         http_status=200,
                         scan_verdict=scan_verdict,
                         zeroshield=_zs_full,
@@ -7576,6 +7581,7 @@ async def proxy_chat(
                 estimated_tokens=estimated_request_tokens,
                 org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
                 secure_output_scan=bool(CONFIG.get("output_scan_enabled", True)),
+                input_action=_input_decision.action if _input_decision is not None else "allow",
             )
         upstream_start = time.perf_counter()
         code, llm_resp = await LLM_ROUTER.acompletion(body, redacted_prompt)
@@ -8522,7 +8528,7 @@ async def proxy_chat(
             from pipeline_trace import build_pipeline_trace
 
             _zs_full = llm_resp.get("zeroshield") if isinstance(llm_resp.get("zeroshield"), dict) else {}
-            _final = _zs_full.get("action") or "allow"
+            _final = _input_decision.action if _input_decision is not None else (_zs_full.get("action") or "allow")
             llm_resp["pipeline_trace"] = build_pipeline_trace(
                 prompt=_redact_trace_text(prompt),
                 forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
