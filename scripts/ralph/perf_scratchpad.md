@@ -108,7 +108,11 @@
       KeyTextTransform extraction of ONLY risk_score/latency_ms/request_id; per-row loop unchanged (types uniform → faithful).
       PROVEN on live 288k/24h: full view compute 14.67s→0.98s (14.9×), METRICS IDENTICAL across every field, 0 mismatches/288216,
       check clean. PERF-0009 → 4 memories. Chose aggregate-in-SQL-fields (safest, zero output change) over denormalize (migration+backfill).
-- [ ] 20. soc-kpis: simplify org filter to the direct FK; drop the legacy OR-with-joins. Verify <1s (from 24–30s).
+- [x] 20. soc-kpis: simplify org filter to the direct FK; drop the legacy OR-with-joins. Verify <1s (from 24–30s).
+      → _enforcement_events_for_request (shared by ~31 SOC views): Q(org)|(org IS NULL & endpoint/agent/policy joins)+Endpoint
+      subquery → filter(organization=org). Safe: 0/288k NULL-org rows (drain sets it); row sets IDENTICAL (org2: 109417==109417).
+      VERIFIED <1s: full org-scoped soc-kpis compute 0.768s (from 24-30s). PERF-0010 → 4 memories. soc-kpis END-TO-END 24-30s→<1s
+      via PERF-0008(BRIN)+0009(JSON haul 14.9x)+0010(direct-FK). check clean, no dead imports.
 - [ ] 21. Fix other endpoints with the same scan+JSON pattern.
 
 ## P7 — Prove dynamic scaling

@@ -120,16 +120,16 @@ def _enforcement_events_for_request(request, base_queryset=None):
         if not getattr(request, "user", None) or not request.user.is_authenticated or not request.user.is_superuser:
             return base_queryset.none()
         return base_queryset
-    # Primary: use direct organization FK (set by telemetry drain)
-    q = Q(organization=org)
-    # Fallback: legacy scoping via endpoint/agent/policy org
-    org_endpoint_ids = list(Endpoint.objects.filter(organization=org).values_list("id", flat=True))
-    q |= Q(organization__isnull=True) & (
-        Q(endpoint_id__in=org_endpoint_ids)
-        | Q(agent__endpoint__organization=org)
-        | (Q(endpoint_id__isnull=True) & Q(agent__isnull=True) & Q(policy__organization=org))
-    )
-    return base_queryset.filter(q)
+    # perf item 20: scope by the direct organization FK only. The telemetry drain
+    # (and the evaluation path, `event_org_id = org.id`) set organization_id on every
+    # ingested event — verified 0 of 288k rows have a NULL organization — so the
+    # legacy fallback below matched ONLY `organization IS NULL` rows, deriving org via
+    # a SEPARATE Endpoint subquery + agent__endpoint / policy joins. It produced
+    # identical results (row sets verified identical, org=2: 109417 == 109417) while
+    # costing an extra query and three joins on EVERY call to this helper (used by
+    # ~31 SOC views). Dropped. If a NULL-org event is ever introduced, backfill its
+    # organization_id rather than reviving the joins here.
+    return base_queryset.filter(organization=org)
 
 
 def _event_organization_id(ev):

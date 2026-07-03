@@ -7,6 +7,27 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0010 — soc-kpis: direct-FK org filter (drop legacy OR-with-joins) → <1s
+- **Date:** 2026-07-03
+- **Files:** `control/ai_mesh_control/policy/security_views.py`
+  (`_enforcement_events_for_request`).
+- **What (item 20):** The shared org-scoping helper (used by ~31 SOC views) filtered
+  `Q(organization=org) | (Q(organization__isnull=True) & <endpoint/agent/policy
+  joins>)` plus a separate `Endpoint.objects.filter(...)` subquery. The telemetry
+  drain (and the eval path) set `organization_id` on every event — **0 of 288k rows
+  are NULL-org** — so the legacy branch matched nothing while costing an extra query
+  and three joins per call. Simplified to `base_queryset.filter(organization=org)`.
+- **AFFECTS:** the `ai_mesh_firewall-control` image — **all ~31 SOC views** get the
+  simplified filter (identical results, fewer queries/joins).
+- **ACTION FOR OTHERS:** `docker compose build control` to adopt. **Output identical**
+  (row sets verified equal). No restart. If a NULL-org event is ever introduced,
+  backfill its `organization_id` rather than reviving the joins.
+- **PROOF:** row sets identical (org=2: 109417 == 109417); full org-scoped soc-kpis
+  compute (direct-FK + PERF-0009 extraction + loop) = **0.768s** for org 2's 109k
+  rows → **<1s** (from the 24–30s baseline). `manage.py check` clean.
+- **soc-kpis end-to-end:** 24–30s → <1s via BRIN index (PERF-0008) + JSON-haul fix
+  (PERF-0009) + this direct-FK filter.
+
 ## PERF-0009 — soc-kpis: stop hauling metadata JSON (extract 3 fields in SQL)
 - **Date:** 2026-07-03
 - **Files:** `control/ai_mesh_control/policy/security_views.py` (SocKpisView).

@@ -13,6 +13,15 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0010 — soc-kpis: direct-FK org filter, drop legacy OR-with-joins (2026-07-03)
+- Item 20. `_enforcement_events_for_request` (shared by ~31 SOC views) simplified from
+  `Q(organization=org) | (organization IS NULL & endpoint/agent/policy joins)` + a
+  separate Endpoint subquery → `filter(organization=org)`. Safe: 0/288k rows are
+  NULL-org (drain sets it); row sets verified identical (org=2: 109417==109417).
+  AFFECTS: control image (all 31 views, identical output). ACTION: `docker compose
+  build control`; no restart. PROOF: full org-scoped soc-kpis compute 0.768s <1s (from
+  24-30s). soc-kpis end-to-end 24-30s→<1s via PERF-0008+0009+0010.
+
 ## PERF-0009 — soc-kpis: stop hauling metadata JSON (2026-07-03)
 - Item 19. SocKpisView (`security_views.py`) replaced `values("action","metadata")`
   (hauls full 1.6KB JSONB/row) with `KeyTextTransform` extraction of just risk/latency/
