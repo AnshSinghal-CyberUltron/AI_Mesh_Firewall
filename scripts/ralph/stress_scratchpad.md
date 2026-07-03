@@ -2641,3 +2641,24 @@ consecutive clean** (GATEWAY_LIVE=0); backend `ai_mesh_gateway/tests` **1776 pas
 **Frozen:** golden `test_g91_*` (2 input-block + 2 output-mask via renderer-recovery oracle + 3 FP).
 Session ledger: FIFTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90/G91) + soft DoS (G79) fixed; G77/G78/G80 frozen.
 (policy_count:0 deployed live-golden issue still flagged for the control-plane session — unchanged.)
+
+---
+
+## POLICY-CACHE FLAG RESOLVED (was flagged G87–G91) — 2026-07-03
+The deployed-gateway `policy_count: 0` I flagged for several iterations was **TRANSIENT control-redeploy
+churn**, NOT data loss. Root cause: the control plane container gets redeployed/restarted (another session
+is active on it), and the gateway briefly reports `policy_count: 0 / config_sync_loaded: false` because it
+synced BEFORE control was ready. The org policies live in postgres (persistent, up 15h) and are re-synced
+automatically once control is healthy again. VERIFIED this iteration: polled the gateway → policies
+self-healed to **policy_count: 48, version: 86** (no action taken — the gateway re-synced on its own poll).
+The idempotent restoration command (for the control-plane owner, if it ever sticks at 0) is
+`docker compose exec control python manage.py seed_policy_package --org-slug zeroshield` (WITHOUT --reset).
+**Live golden floor RESTORED:** with policies loaded, the frozen chat_pipeline golden cases pass LIVE:
+`03_jailbreak_block`/`04_injection_block`/`05_secrets_block` (policy/input-scan blocks, no model call) AND
+the full suite **10/10** (06–09 exercise a real connected model). So the earlier block→redact drift on 05
+was purely the empty-policy state, now gone.
+**Golden state (this iteration):** in-process (GATEWAY_LIVE=0) **535 ×3 consecutive clean**; live
+chat_pipeline **10/10**. Completion conditions now met: original-9 frozen green (live 10/10), every new
+attack regression green (535), 3 consecutive in-process runs. Still OUTSTANDING for COMPLETE: R5 full
+adversarial corpus through the live SDK with ~10 connected models, R6 frontend polish, Playwright.
+Session ledger unchanged: FIFTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90/G91) + soft DoS (G79) fixed; G77/G78/G80 frozen.
