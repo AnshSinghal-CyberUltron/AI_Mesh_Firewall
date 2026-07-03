@@ -901,6 +901,21 @@
     Byte-level: notification secret+PII+IP -> AKIA****MPLE / b***@c***.example; benign progress unchanged.
     Independent oracle (aidefence): has_pii false masked / true raw. Evidence mcp-parallel/findings/backstop-p-
     ext-sse-stream-scan/. Cross-EVENT splits don't reassemble client-side, so per-event scanning suffices.
+  - CHG-0099 (2026-07-03) — HIGH fail-open 1.4 leak: markdown-split / encoded PII-secret in MCP tool results
+    evaded the scanner. The chat output guard applies THREE render-leak neutralizers (neutralize_exfil_channels
+    -> neutralize_encoded_pii -> neutralize_markdown_split_pii G44); CHG-0096 wired only the FIRST into the MCP
+    result path. So a PII/secret with chars interleaved by inline markdown emphasis/code/HTML (1**2**3-45-6789,
+    AKIA**IOSFODNN7**EXAMPLE, 4111**-1111-1111-**1111, 1&#50;3-45-6789) evaded the raw regexes (tags=[]) yet a
+    markdown client STRIPS the emphasis on render and reconstructs the value -> real leak. FIX: _neutralize_
+    render_leaks(text) composes all 3 (same order as sanitize_output_for_verdict); _neutralize_exfil_deep (the
+    CHG-0097 JSON-leaf walker) calls it per leaf, so exfil beacons AND markdown-split/encoded PII nested in a
+    JSON field are neutralized. Masked run -> [PII_REDACTED]; finding drives the E12 floor under default 'tag'.
+    Strict no-op on benign markdown (**bold**, 2*3, `code`, a_b_c). +9 tests (5 md/encoded-split masked + 4
+    benign untouched; all exfil-beacon tests pass). Gate: 27 + 1594 gateway passed 0 failed; broker 108.
+    Byte-level: "The SSN is 1**2**3-45-6789 exactly" -> "The SSN is [PII_REDACTED] exactly". Independent oracle
+    (aidefence on RENDERED view): has_pii true rendered-raw / false rendered-fixed. Evidence mcp-parallel/
+    findings/backstop-p-result-markdown-split-pii/. The MCP result egress now has FULL chat-guard render-leak
+    parity. RESIDUAL: secret SPLIT ACROSS content-array items (client-concat-dependent) — future item.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

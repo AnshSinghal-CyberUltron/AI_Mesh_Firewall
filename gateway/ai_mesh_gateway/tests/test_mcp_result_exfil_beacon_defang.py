@@ -129,6 +129,50 @@ async def test_benign_html_media_untouched(text):
     assert not any((f.get("threat_type") == "exfil") for f in findings)
 
 
+# ── CHG-0099: markdown-split / encoded PII-secret in a tool result ───────────────
+# A PII/secret whose chars are interleaved with inline markdown emphasis / code / HTML
+# markers (1**2**3-45-6789 renders as an SSN) evaded the raw regexes, but a markdown
+# client reconstructs the value on render. CHG-0096 only wired neutralize_exfil_channels
+# into the MCP path; CHG-0099 adds neutralize_encoded_pii + neutralize_markdown_split_pii
+# (full chat-output-guard parity).
+def _rendered(md: str) -> str:
+    return md.replace("**", "").replace("*", "").replace("`", "").replace("_", "")
+
+
+_MD_SPLIT_LEAKS = [
+    ("ssn", "The SSN is 1**2**3-45-6789 exactly", "123-45-6789"),
+    ("email", "Contact john`@`example.com now", "john@example.com"),
+    ("awskey", "key AKIA**IOSFODNN7**EXAMPLE here", "AKIAIOSFODNN7EXAMPLE"),
+    ("cc", "card 4111**-1111-1111-**1111 ok", "4111-1111-1111-1111"),
+    ("html_entity_ssn", "ssn 1&#50;3-45-6789 here", "123-45-6789"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("name", "text", "sensitive"), _MD_SPLIT_LEAKS)
+async def test_markdown_split_pii_secret_neutralized(name, text, sensitive):
+    blob, blocked, tags, findings, meta = await _floor(text)
+    assert sensitive not in _rendered(blob), f"{name}: sensitive value reconstructs on render: {blob}"
+    assert "[PII_REDACTED]" in blob
+    assert any((f.get("threat_type") == "exfil") for f in findings)  # drives the floor
+    assert meta.get("result_redaction_floor")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", [
+    "This is **important** and `code` and _emphasis_ text",
+    "compute 2*3 and reference a_b_c in the formula",
+    "run `npm install` then `npm run build` to compile",
+    "The **quarterly** report shows *strong* growth this year",
+])
+async def test_benign_markdown_untouched(text):
+    """Strict no-op on benign markdown (only a run whose stripped form is PII/secret masks)."""
+    blob, blocked, tags, findings, meta = await _floor(text)
+    assert text in blob, f"benign markdown was altered: {blob}"
+    assert "[PII_REDACTED]" not in blob
+    assert not any((f.get("threat_type") == "exfil") for f in findings)
+
+
 def test_findings_have_exfil_helper():
     fn = mcp_proxy._findings_have_exfil
     assert fn([{"threat_type": "exfil"}]) is True

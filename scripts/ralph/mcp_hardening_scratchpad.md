@@ -538,6 +538,23 @@
       b***@c***.example; benign progress unchanged. Independent oracle (aidefence): has_pii false masked / true
       raw. Evidence mcp-parallel/findings/backstop-p-ext-sse-stream-scan/finding.md. Cross-EVENT splits don't
       reassemble client-side, so per-event scanning suffices.
+      CHG-0099 (2026-07-03, HIGH fail-open 1.4 leak — markdown-split / encoded PII-secret in MCP tool results
+      evaded the scanner): the chat output guard applies THREE render-leak neutralizers (neutralize_exfil_
+      channels -> neutralize_encoded_pii -> neutralize_markdown_split_pii G44); CHG-0096 wired only the FIRST
+      into the MCP result path. So a PII/secret with chars interleaved by inline markdown emphasis/code/HTML
+      (1**2**3-45-6789, AKIA**IOSFODNN7**EXAMPLE, 4111**-1111-1111-**1111, 1&#50;3-45-6789) evaded the raw
+      regexes (tags=[]) yet a markdown client STRIPS the emphasis on render and reconstructs the value -> real
+      leak. FIX: _neutralize_render_leaks(text) composes all 3 (same order as sanitize_output_for_verdict);
+      _neutralize_exfil_deep (CHG-0097 JSON-leaf walker) calls it per leaf, so exfil beacons AND markdown-split/
+      encoded PII nested in a JSON field are neutralized. Masked run -> [PII_REDACTED]; finding drives the E12
+      floor under default 'tag'. Strict no-op on benign markdown. +9 tests. Gate: 27 + 1594 gateway passed 0
+      failed; broker 108. Byte-level: "The SSN is 1**2**3-45-6789 exactly" -> "The SSN is [PII_REDACTED]
+      exactly". Independent oracle (aidefence on RENDERED view): has_pii true rendered-raw / false
+      rendered-fixed. Evidence mcp-parallel/findings/backstop-p-result-markdown-split-pii/finding.md. MCP result
+      egress now has FULL chat-guard render-leak parity. RESIDUAL: secret SPLIT ACROSS content-array items
+      (client-concat-dependent) — future item. NOTE (verification-only): leakage_detector.track_cross_request
+      is DEAD CODE (defined+tested+made-atomic in CHG-0084 but never wired into any request flow); it's a crude
+      per-key fragment heuristic that would FP on legit list-returning tools — inactivity is defensible.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;

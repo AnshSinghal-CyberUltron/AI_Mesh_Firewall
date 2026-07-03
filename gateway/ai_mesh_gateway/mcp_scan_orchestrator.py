@@ -263,31 +263,52 @@ def _resolve_tier_action(ctrl: dict[str, Any] | None, fallback: str) -> str:
     return a
 
 
+def _neutralize_render_leaks(text: str) -> str:
+    """CHG-0099: full chat-output-guard parity — neutralize every RENDER-TIME
+    reconstruction leak in a single leaf, in the same order as
+    ``output_guard.sanitize_output_for_verdict``:
+      1. ``neutralize_exfil_channels`` — zero-click auto-render exfil beacons (runs FIRST
+         so it sees the raw URL, before any masking hides the payload);
+      2. ``neutralize_encoded_pii`` — HTML-entity / percent-encoded runs that DECODE to a
+         PII/secret;
+      3. ``neutralize_markdown_split_pii`` — a PII/secret whose chars are interleaved with
+         inline markdown emphasis / code / HTML markers (``1**2**3-45-6789`` renders as an
+         SSN) — the CHG-0096 MCP gap (only #1 was wired, so a markdown-split PII/secret in
+         a tool RESULT evaded the raw regexes yet a markdown client reconstructed it).
+    Each is a STRICT no-op on benign markdown/URLs."""
+    from output_guard import (  # local: avoid import cycle
+        neutralize_encoded_pii,
+        neutralize_exfil_channels,
+        neutralize_markdown_split_pii,
+    )
+    return neutralize_markdown_split_pii(neutralize_encoded_pii(neutralize_exfil_channels(text)))
+
+
 def _neutralize_exfil_deep(text: str) -> str:
-    """CHG-0097: exfil-beacon neutralization that is robust to JSON serialization.
+    """CHG-0097/0099: render-leak neutralization that is robust to JSON serialization.
 
     The MCP tier-1 scan target is usually the WHOLE result payload JSON-serialized
     (``target_mode="entire"``), so HTML attribute quotes are escaped (``src=\\"...\\"``)
-    and ``neutralize_exfil_channels``'s HTML/srcset regexes (which expect real quotes)
-    miss them — the CHG-0096 residual (markdown/bare-URL beacons defanged, HTML not). If
-    ``text`` is a JSON structure, parse it and neutralize each UNESCAPED string leaf, then
-    re-serialize — so HTML/SVG/CSS beacons are defanged too. Non-JSON text (a plain-string
+    and the HTML/srcset regexes (which expect real quotes) miss them — the CHG-0096
+    residual. If ``text`` is a JSON structure, parse it and neutralize each UNESCAPED
+    string leaf (via ``_neutralize_render_leaks`` — exfil beacons + encoded-PII +
+    markdown-split PII, CHG-0099), then re-serialize — so HTML/SVG/CSS beacons AND
+    markdown-split PII nested in a field are handled too. Non-JSON text (a plain-string
     result) is neutralized directly. Returns the ORIGINAL text unchanged when nothing was
-    defanged (no reformatting churn, so a benign result stays byte-identical)."""
-    from output_guard import neutralize_exfil_channels  # local: avoid import cycle
+    neutralized (no reformatting churn, so a benign result stays byte-identical)."""
     stripped = text.lstrip()
     if stripped[:1] not in ("{", "["):
-        return neutralize_exfil_channels(text)
+        return _neutralize_render_leaks(text)
     import json as _json
     try:
         obj = _json.loads(text)
     except Exception:
-        return neutralize_exfil_channels(text)
+        return _neutralize_render_leaks(text)
     changed = [False]
 
     def _walk(o):
         if isinstance(o, str):
-            n = neutralize_exfil_channels(o)
+            n = _neutralize_render_leaks(o)
             if n != o:
                 changed[0] = True
             return n
@@ -544,14 +565,17 @@ async def _scan_text_tier1(
         if _neu != text:
             findings.append(
                 McpFinding(
-                    entity_type="exfil_channel",
+                    entity_type="render_reconstruction",
                     score=0.9,
                     start=0,
                     end=len(text),
                     direction=mcp_dir,
                     tier="tier1",
                     threat_type="exfil",
-                    detail="Defanged zero-click auto-render exfil beacon (markdown-image / HTML / srcset)",
+                    detail=(
+                        "Neutralized a render-time reconstruction leak (zero-click exfil "
+                        "beacon / encoded-PII / markdown-split PII-secret)"
+                    ),
                 )
             )
             mutated = redact_all(_neu) if (pii or secrets or ip_leak or cred_exp) else _neu
