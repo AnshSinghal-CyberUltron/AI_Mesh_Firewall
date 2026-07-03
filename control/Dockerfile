@@ -27,4 +27,12 @@ COPY --from=builder /app/control/.venv /app/control/.venv
 
 WORKDIR /app/control
 EXPOSE 8000
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "--proxy-headers", "main_app.asgi:application"]
+
+# Control runs gunicorn managing N UvicornWorker processes, N derived at start
+# from the cgroup-aware detector (one worker per core, RAM-bounded) instead of a
+# single Daphne. CONTROL_WEB_CONCURRENCY env overrides. See control/server-entrypoint.sh
+# + shared/ai_mesh_shared/resource_budget.py.
+COPY control/server-entrypoint.sh /app/control/server-entrypoint.sh
+RUN chmod +x /app/control/server-entrypoint.sh
+
+CMD ["/app/control/server-entrypoint.sh"]

@@ -13,6 +13,19 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0002 — Control: single Daphne → gunicorn + N UvicornWorker (2026-07-03)
+- Control image now runs `gunicorn main_app.asgi:application -k
+  uvicorn.workers.UvicornWorker --workers N --forwarded-allow-ips *` (N from the
+  detector) via `control/server-entrypoint.sh`, replacing the single Daphne (dev) /
+  hardcoded `--workers 5` (prod). `CONTROL_WEB_CONCURRENCY` env overrides.
+- Multiproc-safe: telemetry drain is per-hostname single-runner-locked; resync/seed
+  idempotent. Boot verified: 4 workers serve `/api/health/` 200.
+- AFFECTS: `ai_mesh_firewall-control` image. ACTION: `docker compose build control`.
+  Running container NOT recreated (shared host still single Daphne). ⚠️ Before
+  recreating on the 16-core host, pin `CONTROL_WEB_CONCURRENCY` (e.g. 6) — an
+  unpinned recreate = 16 workers and can pressure Postgres `max_connections=400`
+  (sized in a later item). Recreate: `docker compose up -d --force-recreate control`.
+
 ## PERF-0001 — Gateway WEB_CONCURRENCY derived from the detector (2026-07-03)
 - Gateway image now runs `gateway/entrypoint.sh`, which sets gunicorn `--workers`
   from the detector (one UvicornWorker/core, RAM-bounded) instead of the hardcoded

@@ -7,6 +7,35 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0002 — Control plane: single Daphne → gunicorn + N UvicornWorker (detector-sized)
+- **Date:** 2026-07-03
+- **Files:** `control/Dockerfile` (CMD → entrypoint), `control/server-entrypoint.sh` (new).
+- **What:** Control ran a **single Daphne** process (dev) / a hardcoded
+  `--workers 5` (prod, `docker-compose.prod.yml`). It now runs
+  `gunicorn main_app.asgi:application -k uvicorn.workers.UvicornWorker --workers N
+  --forwarded-allow-ips *`, where **N comes from the detector** (one worker/core,
+  RAM-bounded). Invocation mirrors the already-proven prod command; only `--workers`
+  is dynamic. `CONTROL_WEB_CONCURRENCY` env overrides; falls back to 2 if the
+  detector errors. Migrations are NOT run by this entrypoint (control's CMD never
+  did — unchanged). Channels websockets still work (uvicorn[standard]; group sends
+  via the Redis channel layer).
+- **Multiproc safety (verified):** the telemetry drain is already per-hostname
+  single-runner-locked (`drain_telemetry_from_redis`: atomic Lua dequeue + `SET NX
+  EX` per `gethostname`), so N web workers in one container → only one drains per
+  tick. Gateway-key resync + simulator seed are idempotent. Boot smoke test: 4
+  workers serve `GET /api/health/` → 200 in 2 s.
+- **AFFECTS:** the `ai_mesh_firewall-control` image (rebuilt). Baseline was 346 rps
+  @ 1.16 cores on one Daphne; multi-worker lets control use all cores.
+- **ACTION FOR OTHERS:** `docker compose build control` to adopt. The **running
+  control container was NOT recreated** — the shared host still runs the old single
+  Daphne, so no behavior change until you recreate it. ⚠️ **Before recreating on the
+  16-core host, pin `CONTROL_WEB_CONCURRENCY` conservatively (e.g. 6)** in `.env`:
+  an unpinned recreate starts 16 workers, and 16 × (asgi threads) DB connections can
+  approach Postgres `max_connections=400` — that is sized properly in item 15
+  (PERF-00xx, pending). Recreate command:
+  `docker compose up -d --force-recreate control`.
+- **Rollback:** revert the two control files and rebuild; the single-Daphne CMD returns.
+
 ## PERF-0001 — Gateway WEB_CONCURRENCY now derived from the cgroup-aware detector
 - **Date:** 2026-07-03
 - **Files:** `gateway/Dockerfile` (CMD → entrypoint), `gateway/entrypoint.sh` (new),

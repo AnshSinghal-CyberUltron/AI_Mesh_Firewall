@@ -30,7 +30,11 @@
       → gateway/entrypoint.sh + Dockerfile CMD. PERF-0001 logged to 4 memories (Ruflo store+notify, AGENTS.md,
       .cursor/rules, docs/perf/CHANGELOG.md). Image rebuilt. PROVEN in real Docker cgroup-v2: --cpus=6→6w/12t,
       --cpus=12→12w/24t, WEB_CONCURRENCY=3→3w (override). Shared host unchanged (.env pins 6). Fallback 4 if detector errors.
-- [ ] 07. Control plane runs a dynamically-sized async server (gunicorn+UvicornWorker or N Daphne) — replace the fixed 2 procs.
+- [x] 07. Control plane runs a dynamically-sized async server (gunicorn+UvicornWorker or N Daphne) — replace the fixed 2 procs.
+      → control/server-entrypoint.sh + Dockerfile. gunicorn -k uvicorn.workers.UvicornWorker --workers <detector>
+      --forwarded-allow-ips * (mirrors proven prod cmd; only --workers dynamic). CONTROL_WEB_CONCURRENCY overrides.
+      PERF-0002 logged to 4 memories. Multiproc-safe (drain per-hostname SET NX lock; resync/seed idempotent).
+      PROVEN: --cpus=6→6w, --cpus=12→12w, override→3w; LIVE boot 4 workers serve /api/health/ 200. Shared control NOT recreated.
 - [ ] 08. Verify all cores light up under load.
 
 ## P3 — Dynamic thread pools
