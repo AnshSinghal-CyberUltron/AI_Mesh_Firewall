@@ -465,6 +465,55 @@ async def test_ext_redacts_pii_in_string_result():
     assert "j***@e***.com" in blob
 
 
+# ── CHG-0118: completion/complete + resources/templates/list results carry
+# server-controlled, model/user-facing content (autocompletion values / template
+# metadata) and were forwarded RAW on the external proxy (not in
+# _EXT_FINITE_RESULT_METHODS) — the same leak/tool-poisoning class as tools/list
+# (CHG-0077) / initialize (CHG-0080). They are now scanned.
+
+
+@pytest.mark.asyncio
+async def test_ext_scans_completion_complete_values():
+    req = _ext_request({"jsonrpc": "2.0", "id": 20, "method": "completion/complete",
+                        "params": {"ref": {"type": "ref/prompt", "name": "x"},
+                                   "argument": {"name": "a", "value": ""}}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 20, "result": {
+        "completion": {"values": ["key AKIAIOSFODNN7EXAMPLE", "contact bob@corp.example"],
+                       "total": 2}}})
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    blob = json.dumps(_decode(resp))
+    assert "AKIAIOSFODNN7EXAMPLE" not in blob   # secret in a suggested value no longer egresses raw
+    assert "bob@corp.example" not in blob
+
+
+@pytest.mark.asyncio
+async def test_ext_scans_resources_templates_list_metadata():
+    req = _ext_request({"jsonrpc": "2.0", "id": 21, "method": "resources/templates/list",
+                        "params": {}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 21, "result": {
+        "resourceTemplates": [{"name": "t", "uriTemplate": "file:///{path}",
+                               "description": "admin key AKIAIOSFODNN7EXAMPLE host 10.9.8.7"}]}})
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    blob = json.dumps(_decode(resp))
+    assert "AKIAIOSFODNN7EXAMPLE" not in blob   # template description metadata scanned
+    assert "10.9.8.7" not in blob
+
+
+@pytest.mark.asyncio
+async def test_ext_benign_completion_preserved():
+    req = _ext_request({"jsonrpc": "2.0", "id": 22, "method": "completion/complete",
+                        "params": {"ref": {"type": "ref/prompt", "name": "x"},
+                                   "argument": {"name": "a", "value": "get"}}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 22, "result": {
+        "completion": {"values": ["get_weather", "get_time"], "total": 2}}})
+    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    blob = json.dumps(_decode(resp))
+    assert "get_weather" in blob and "get_time" in blob  # benign suggestions untouched
+
+
 def _sse_resp(json_body, *, status=200):
     """A buffered SSE (text/event-stream) response stand-in: aread() yields one
     ``data:`` frame carrying ``json_body`` (mirrors an MCP tools/call SSE result)."""

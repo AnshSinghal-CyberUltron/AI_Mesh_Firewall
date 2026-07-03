@@ -1680,6 +1680,15 @@ _EXT_FINITE_RESULT_METHODS = frozenset({
     # set), so a malicious upstream's initialize instructions/serverInfo reached the
     # model unscanned. The handshake result is finite → safe to buffer + scan.
     "initialize",
+    # CHG-0118: two more finite, server-controlled, model/user-facing result methods
+    # were forwarded RAW (unscanned) on the external proxy — the same leak/tool-poisoning
+    # class as tools/list (CHG-0077) and initialize (CHG-0080):
+    #  · completion/complete → result.completion.values[] (autocompletion strings the
+    #    client shows to the user/model) — a secret/PII/beacon in a suggested value leaked.
+    #  · resources/templates/list → result.resourceTemplates[].{name,description,uriTemplate}
+    #    (server metadata, model-facing like resources/list, which IS scanned).
+    # Both results are finite → safe to buffer + scan via the result floor.
+    "completion/complete", "resources/templates/list",
 })
 
 # CHG-0041: methods whose params carry an ``arguments`` object that must be

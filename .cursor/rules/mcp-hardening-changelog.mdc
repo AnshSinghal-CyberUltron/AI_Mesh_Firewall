@@ -1723,6 +1723,22 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   non-finite SSE path (extends CHG-0098; streaming-path twin of the CHG-0104/0115/0116 caps). Evidence
   `mcp-parallel/findings/backstop-p-sse-stream-total-bound/`.
 
+- **CHG-0118** (2026-07-03) — **MEDIUM 1.4 leak + tool-poisoning: ext-proxy forwarded `completion/complete` +
+  `resources/templates/list` results UNSCANNED**. `ext_mcp_proxy` scans a result only when its method is in
+  `_EXT_FINITE_RESULT_METHODS` (`_ext_scan_result` gate). Two finite, server-controlled, model/user-facing result
+  methods were MISSING → forwarded RAW: `completion/complete` → `result.completion.values[]` (autocompletion strings
+  the client shows to the user/model — a secret/PII/beacon in a suggested value leaked); `resources/templates/list` →
+  `result.resourceTemplates[].{name,description,uriTemplate}` (server metadata, model-facing like `resources/list`,
+  which IS scanned). Same leak/tool-poisoning class as tool descriptions (CHG-0077) / initialize instructions
+  (CHG-0080). Byte-verified: a `completion.values` carrying `AKIAIOSFODNN7EXAMPLE` + `bob@corp.example` and a template
+  `description` carrying `AKIA…` + `10.9.8.7` egressed raw pre-fix. **FIX (`mcp_proxy.py`):** added both methods to
+  `_EXT_FINITE_RESULT_METHODS` → their finite results are buffered + scanned via the same result floor (mask/block +
+  render-leak neutralization + depth/block caps) on the JSON AND SSE branches; benign completions/templates preserved.
+  +3 tests. Gate: 3 + 55 ext-proxy + 1713 gateway passed, 0 failed; broker unaffected (gateway-only). Byte-level:
+  `completion.values` → `["key AKIA****MPLE","contact b***@c***.example"]`; template `description` → `AKIA****MPLE host
+  [INTERNAL_IPV4_REDACTED]`. Independent oracle (aidefence): `has_pii` true raw / false masked. touched: `ext_mcp_proxy`
+  finite-result scan set (extends CHG-0077 / CHG-0080). Evidence `mcp-parallel/findings/backstop-p-ext-completion-templates-scan/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

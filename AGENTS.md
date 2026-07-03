@@ -1159,6 +1159,18 @@
     Generous defaults >> any realistic notification feed; env-tunable. +3 tests. Gate: 8 ext-sse + 1709 gateway
     passed 0 failed; broker unaffected. Oracle N/A (DoS containment). Streaming-path twin of CHG-0104/0115/0116;
     extends CHG-0098. Evidence mcp-parallel/findings/backstop-p-sse-stream-total-bound/.
+  - CHG-0118 (2026-07-03) — MEDIUM 1.4 leak + tool-poisoning: ext-proxy forwarded completion/complete +
+    resources/templates/list results UNSCANNED. ext_mcp_proxy scans a result only when its method is in
+    _EXT_FINITE_RESULT_METHODS; two finite server-controlled model/user-facing methods were MISSING -> raw:
+    completion/complete (result.completion.values[] autocompletion strings shown to user/model) + resources/templates
+    /list (result.resourceTemplates[].{name,description,uriTemplate} metadata, model-facing like resources/list which
+    IS scanned). Same class as tools/list (CHG-0077) / initialize (CHG-0080). Byte-verified: completion.values with
+    AKIAIOSFODNN7EXAMPLE + bob@corp.example and a template description with AKIA.. + 10.9.8.7 egressed raw. FIX
+    (mcp_proxy.py): added both methods to _EXT_FINITE_RESULT_METHODS -> buffered + scanned via the result floor
+    (mask/block/render-leak/caps) on JSON + SSE branches; benign preserved. +3 tests. Gate: 3 + 55 ext-proxy + 1713
+    gateway passed 0 failed; broker unaffected. Byte-level: completion.values [key AKIA****MPLE, contact
+    b***@c***.example]; template desc AKIA****MPLE host [INTERNAL_IPV4_REDACTED]. Oracle (aidefence): has_pii true raw
+    / false masked. Extends CHG-0077/0080. Evidence mcp-parallel/findings/backstop-p-ext-completion-templates-scan/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
