@@ -146,6 +146,33 @@ async def test_c4_completions_injection_blocks_with_request_id(recording_app):
     assert captured == [], f"injection prompt leaked to provider: {captured!r}"
 
 
+@pytest.mark.asyncio
+async def test_c4_completions_prompt_batch_cap_bounds_llm_fanout(recording_app):
+    """G64: /v1/completions makes one upstream LLM call PER prompt, so an oversized `prompt`
+    array (count OR total chars) is rejected 413 up front — a single request must not fan out
+    into unbounded paid inferences. A normal small batch still works (one choice per prompt,
+    and NO extra provider calls beyond the batch size)."""
+    from ai_mesh_gateway import main as gm
+    client = _raw(recording_app)
+    captured = recording_app._c4_captured
+    try:
+        over = await client.post("/v1/completions", json={
+            "model": "gpt-4o-mini", "prompt": ["hi"] * (gm.MAX_COMPLETION_PROMPTS + 1)})
+        assert over.status_code == 413 and "completion_input_too_large" in over.text, over.text
+        assert captured == [], "over-limit completion fanned out to the provider (DoS)"
+        huge = "a" * (gm.MAX_COMPLETION_INPUT_CHARS // 2 + 100)
+        over_chars = await client.post("/v1/completions", json={
+            "model": "gpt-4o-mini", "prompt": [huge, huge]})
+        assert over_chars.status_code == 413, over_chars.text
+        # a normal batch is served: exactly one choice + one provider call per prompt.
+        ok = await client.post("/v1/completions", json={
+            "model": "gpt-4o-mini", "prompt": ["a", "b", "c"]})
+        assert ok.status_code == 200 and len(ok.json()["choices"]) == 3, ok.text
+        assert len(captured) == 3, f"expected 3 provider calls, got {len(captured)}"
+    finally:
+        await client.aclose()
+
+
 # ───────────────────── 4. moderations agrees with an independent detector ─────────────────────
 
 @pytest.mark.asyncio

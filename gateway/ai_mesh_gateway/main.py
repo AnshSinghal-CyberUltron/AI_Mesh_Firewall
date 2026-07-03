@@ -1915,6 +1915,14 @@ MAX_EMBED_BATCH = 256            # max items in a batch `input` array
 MAX_MODERATION_BATCH = 256
 MAX_MODERATION_INPUT_CHARS = 200_000
 
+# G64: /v1/completions dispatches ONE full chat call (incl. an upstream LLM inference) PER
+# item of a list `prompt`, serially. An unbounded array is therefore a cost/DoS amplification
+# FAR worse than a scan-only batch — a single authenticated request could fan out into
+# hundreds of paid provider calls, bypassing per-request rate limits. Cap the prompt count
+# (each item is already length-bounded by the chat MAX_PROMPT_LENGTH) + total chars.
+MAX_COMPLETION_PROMPTS = 64
+MAX_COMPLETION_INPUT_CHARS = 200_000
+
 # input-val#6: hard ceiling on the number of chat messages per request. The
 # per-message text length is already capped, but an unbounded ``messages`` array
 # is itself a resource-exhaustion / scanner-amplification vector.
@@ -12557,6 +12565,17 @@ async def create_legacy_completion(
     else:
         return JSONResponse(status_code=400, content=_build_oai_error(
             400, "'prompt' must be a string or a non-empty list of strings.", code="invalid_request", param="prompt"))
+    # G64: bound the batch — each prompt is a SEPARATE upstream LLM call, so an unbounded
+    # array is a cost/DoS amplification. Reject an over-limit count or total-char array with
+    # 413 BEFORE any dispatch (per-prompt length is already bounded by the chat pipeline).
+    if len(prompts) > MAX_COMPLETION_PROMPTS:
+        return JSONResponse(status_code=413, content=_build_oai_error(
+            413, f"'prompt' array exceeds the maximum of {MAX_COMPLETION_PROMPTS} items.",
+            code="completion_input_too_large", param="prompt"))
+    if sum(len(p) for p in prompts) > MAX_COMPLETION_INPUT_CHARS:
+        return JSONResponse(status_code=413, content=_build_oai_error(
+            413, "'prompt' total size exceeds the maximum.",
+            code="completion_input_too_large", param="prompt"))
 
     # Sampling params that are valid on BOTH surfaces flow through to chat unchanged.
     _passthrough = {k: body[k] for k in (
