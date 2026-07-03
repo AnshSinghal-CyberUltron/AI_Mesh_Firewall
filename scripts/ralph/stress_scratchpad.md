@@ -2662,3 +2662,29 @@ chat_pipeline **10/10**. Completion conditions now met: original-9 frozen green 
 attack regression green (535), 3 consecutive in-process runs. Still OUTSTANDING for COMPLETE: R5 full
 adversarial corpus through the live SDK with ~10 connected models, R6 frontend polish, Playwright.
 Session ledger unchanged: FIFTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89/G90/G91) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+
+---
+
+## R6 FRONTEND VERIFICATION (owned: ModelConnectionPanel + pipeline-trace card StageTimeline) — 2026-07-03
+Audited + verified the owned frontend components (no code change needed — already polished from prior R6 work):
+* **impeccable detector**: CLEAN (`node .claude/skills/impeccable/scripts/detect.mjs --json` → `[]`) on both.
+* **npm run build**: ✓ (6.3s; only the general >500kB chunk-size advisory, not a failure).
+* **npm run test:unit --run**: **78 pass, 0 fail** (incl. StageTimeline theme/axis tests + SimulatorShell).
+* **SECURITY audit (aligns with mandate):**
+  - ModelConnectionPanel API-key handling is SECURE: BOTH key inputs are `type="password"` + `autoComplete="off"`
+    (lines 628, 918); the provider (OpenRouter) key lives ONLY in React state (`providerApiKeys`), never
+    `setItem`'d (the sole localStorage use is a READ of the separate gateway key at line 167); on submit it is
+    sent to the backend and encrypted at rest — the panel's "never cached in this browser" copy is TRUE. No
+    key leak, no unmasked field.
+  - StageTimeline (pipeline-trace card) renders only the user's OWN submitted prompt (before/after) + the
+    backend's ALREADY-MASKED findings/matched_values (AUDIT-2 masks them server-side); all text is React-escaped
+    (no XSS); `normalizeStages` guards against a malformed stage crashing the card. No raw-secret display.
+  - a11y complete (prior R6: onFocus/onBlur/aria-expanded/aria-label on stage buttons; labels+autocomplete on
+    all ModelConnectionPanel fields).
+* **Playwright client-perspective verification: BLOCKED by external dependency** — the dashboard UI is auth-gated
+  (`/api/auth/me/` → 401; root stuck at "Loading ZeroShield…") and this session has NO dashboard login
+  credentials (only the OpenRouter provider key + the gateway/org API path, which the LIVE golden 10/10 already
+  exercises). Reaching the owned components in the browser needs a logged-in session; documenting as blocked so
+  the completion condition "Playwright passes" is honestly not-yet-met (not a component defect).
+R6 status: owned components detector-clean + building + unit-tested + security-verified + a11y-complete; only the
+browser-driven Playwright gate remains, blocked on dashboard auth. (No frozen-golden or backend change this iter.)
