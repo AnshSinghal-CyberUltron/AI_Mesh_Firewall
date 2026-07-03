@@ -865,6 +865,21 @@
       gateway passed. Evidence: mcp-parallel/findings/backstop-p8-npm-ignore-scripts/finding.md. NOTE: this
       closes the core RUNTIME gap; sub-items (1) prod-pin-enable, (2) baked .npmrc/private registry, (3) live
       malicious-postinstall egress-capture proof REMAIN (need a dedicated host) — so item 8 stays [ ].
+      CHG-0142 (2026-07-03, LOW-MEDIUM — closes sub-item (2) "baked .npmrc" at the image level): the
+      sandbox image (services/mcp-broker/sandbox-image/Dockerfile) baked NO npm-level control — install
+      scripts were disabled ONLY by the CHG-0044 runtime env pin (npm_config_ignore_scripts=true in
+      _build_child_env), which protects just the one spawn path that calls it (a manual/debug `npx`, a
+      future spawn path that forgets the env, or a regression dropping the pin would run with
+      ignore-scripts=false). FIX: bake a GLOBAL npmrc at /usr/local/etc/npmrc (= $PREFIX/etc/npmrc for the
+      /usr/local prefix, read for ANY user) with ignore-scripts=true (+ audit/fund/update-notifier=false to
+      cut incidental egress from the egress-locked sandbox); root-owned (created pre-USER sandbox) so the
+      unprivileged user can't rewrite it. npm precedence (global < env) → the CHG-0044 env still wins and
+      AGREES = belt-and-suspenders, no behavior change; package bin still runs, only install hooks
+      suppressed. +1 guard test (test_dockerfile_bakes_global_npmrc_ignore_scripts). Gate:
+      test_sandbox_image.py 5 passed; broker suite -k "not websocket" 167 passed 0 failed. STILL BLOCKING
+      item 8 [x]: sub-item (1) prod-enable MCP_STDIO_REQUIRE_PINNED_PACKAGES=true + private-registry pin;
+      sub-item (3) live malicious-postinstall egress-capture proof (both need a Docker/isolated host — no
+      Docker here). Evidence: mcp-parallel/findings/backstop-p8-npmrc-global-ignore-scripts/finding.md.
 - [ ] 9. Gateway auth/authz/validation/rate-limit/policy/audit — verified + hardened.
       LIVE VERIFIED (auth/authz/validation) — CHG-0016 (2026-07-02): probed the live gateway. Auth ENFORCED
       (no-auth→401, bad-key→401); CROSS-ORG key ISOLATION ENFORCED (org-a key on org-b endpoint→403

@@ -22,6 +22,21 @@ RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && mkdir -p /data/mcp-auth /tmp/mcp-orgs
 
+# BACKSTOP CHG-0142 (item 8, supply-chain defense-in-depth): bake a GLOBAL npmrc that
+# force-disables npm/npx install lifecycle scripts for EVERY invocation in the sandbox —
+# not only the one child that inherits ``npm_config_ignore_scripts=true`` from
+# ``_build_child_env`` (CHG-0044). npm reads ``$PREFIX/etc/npmrc`` (= /usr/local/etc/npmrc
+# for the /usr/local prefix) as the global config for ANY user, so a manual/debug ``npx``
+# inside the container, or any future spawn path that forgets to set the env, STILL runs
+# with install scripts OFF (the supply-chain RCE vector stays closed). Owned by root
+# (created pre-USER), so the unprivileged ``sandbox`` user cannot rewrite it to re-enable
+# scripts. audit/fund/update-notifier off = no needless egress from the egress-locked
+# sandbox. The runtime env (``npm_config_ignore_scripts=true``) still takes precedence and
+# AGREES — this is belt-and-suspenders, not a behavior change.
+RUN mkdir -p /usr/local/etc \
+    && printf '%s\n' 'ignore-scripts=true' 'audit=false' 'fund=false' 'update-notifier=false' \
+        > /usr/local/etc/npmrc
+
 # Shared stdio denylist/OAuth heuristics (gateway parity).
 COPY shared/ai_mesh_shared/mcp_stdio_common.py /opt/shared/ai_mesh_shared/mcp_stdio_common.py
 RUN mkdir -p /opt/shared/ai_mesh_shared \
