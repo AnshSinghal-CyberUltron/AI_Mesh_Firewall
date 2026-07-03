@@ -3511,3 +3511,26 @@ ReDoS bait must scan+detect+redact in <2.0s (a ~25× margin over the measured wo
 genuine exponential blow-up of minutes/hang trips it). In-process golden **654 ×3** (was 645). Test-only
 iteration (owned golden suite) — no source/behavior change, no gateway rebuild.
 Session ledger unchanged: 26 leaks + 1 false-block fixed; G96/G106 defended freezes; G107 ReDoS guard.
+
+---
+
+## G108 (COMPOUND obfuscation — VERIFIED DEFENDED + frozen) — 2026-07-03
+R2 stress of the INTERACTION between the transport-decode layer and the canonicalize layer (does
+base32/64/85/a85 ∘ homoglyph/styled/zero-width COMPOSE?). Swept encode∘obfuscate combinations of the
+recent fixes. ALL realistic compounds DEFENDED:
+* base32(greek) · base32(cyrillic-genuine) · base85(sans-bold-styled) · ascii85(greek) · base32(monospace-
+  styled) · zero_width(base32) · base64(greek) · base32(base64(greek)) → **block**.
+* base32(SSN) · base85(cyrillic-token) · base32(styled-email) → **detected + masked**.
+The decode yields the obfuscated string, which the canon then folds to the exact pattern → match. Layers
+compose correctly.
+**One apparent "leak" — base32(cyrillic with n->н) → allow — is a PROBE ARTIFACT, not a real leak:** н is
+the Unicode confusable for Latin **H** (Н→H), so it folds to 'h' (G102), giving "ig**h**ore" which no
+model reads as "ignore"; the RAW form only caught it via a FUZZY near-miss match (similarity 0.889), and
+the fuzzy tier runs on raw input, not decoded variants. A REALISTIC compound (base32 ∘ genuine cyrillic
+confusables a/e/o/p/c/i) canonicalizes to the EXACT phrase and BLOCKS. Documented as an intentional
+low-value edge (base32-wrapped fuzzy near-miss = a weak attack the model wouldn't follow anyway); not
+fixed (extending fuzzy-match to all decoded variants = FP/perf cost for negligible gain).
+**FROZEN (G108, +11 golden):** 8 compound injections + 3 compound secrets, using GENUINE homoglyphs so a
+future regression in either the decode or the canon layer fails the test. In-process golden **665 ×3**
+(was 654). Test-only iteration (owned golden suite) — no source/behavior change, no gateway rebuild.
+Session ledger unchanged: 26 leaks + 1 false-block fixed; G96/G106/G108 defended freezes; G107 ReDoS guard.
