@@ -1446,3 +1446,13 @@
       magnitude → item 22 NOT satisfiable from this shared-stack backstop session; the <promise> stays
       unspoken. Remaining non-stress gaps are infra (gVisor/egress/OTEL/backup/npm-prod) or owned/cross-plane
       (item-21 UI tags via control response, item-5 vocab).
+
+---
+## CHG-0123 (2026-07-03) — internal streamable-http SSE branch: per-EVENT reassembly (correctness/robustness parity)
+
+- **Item:** the last SSE surface still using a naive per-LINE split (org SSE=CHG-0093, ext finite SSE=CHG-0122 already reassemble per-event). LOW severity — correctness/robustness, NOT a new leak.
+- **Root gap:** `internal_tools_call` legacy streamable-http SSE branch (reached only with `MCP_HTTP_VIA_SANDBOX=0`; streamable-http is sandbox-routed by default) parsed the SSE per LINE and returned the FIRST parseable `data:` line via `_scan_internal_result`. (a) a server-pushed NOTIFICATION before the result was returned as the response (WRONG frame; tool result lost); (b) a multi-line-`data:` result failed `json.loads` per partial line → dropped → "Empty SSE response". Byte-probed both pre-fix.
+- **Fix (mcp_proxy.py ~L2977):** parse PER EVENT (`split("\n\n")`), reassemble each event's `data:` fields joined by `"\n"` (SSE spec), prefer the result/error event, skip notifications → the chosen result/error is floor-scanned by `_scan_internal_result`; a notification is never returned to the chat pipeline. Not a new leak (returned frame still floor-scanned; split secret fails safe to empty).
+- **Gate:** `test_mcp_internal_http_result_scan.py` → 8 passed (3 new). Staged blob (HEAD + only this hunk, no CLEANUP-06) py_compiles. The 2 `test_mcp_bare_proxy_scan` ssrf failures in a full run are the mcp-page session's IN-FLIGHT CLEANUP-06 (pass on clean HEAD; independent — `ext_mcp_proxy`).
+- **SHARED-WORKTREE (KEY):** the mcp-page session (MCP-PAGE-CLEANUP-06) had DEFERRED its mcp_proxy.py+tests commit because `git add -p` is blocked and my SSE hunk was intermixed (their own AGENTS.md note). Solved with `git apply --cached` of the isolated CHG-0123 hunk → committed ONLY my hunk; their CLEANUP-06 SSRF hunks + test edits stay uncommitted in the working tree (neither committed nor destroyed). This UN-BLOCKS their deferred commit — the file "settles".
+- **Evidence:** `mcp-parallel/findings/backstop-p-internal-sse-event-reassembly/finding.md`. Parity: org CHG-0093, ext CHG-0122. Promise still WITHHELD (G5 stress items 14-19 host-blocked; item-21 UI owned cross-plane).

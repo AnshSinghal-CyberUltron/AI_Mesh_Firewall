@@ -140,5 +140,66 @@ async def test_http_benign_result_preserved():
     assert "block" not in decisions and "redact" not in decisions
 
 
+# ── CHG-0123: the legacy internal streamable-http SSE branch parsed PER LINE and returned
+# the FIRST parseable data: line — which could be a server-pushed NOTIFICATION (wrong
+# response) — and dropped a multi-line-data result. It now parses PER EVENT, reassembles
+# data: fields, and returns the RESULT/ERROR event (parity with CHG-0093/0122).
+
+
+def _sse_resp(sse_text):
+    r = AsyncMock()
+    r.status_code = 200
+    r.json = lambda: {}
+    r.text = sse_text
+    r.headers = {"content-type": "text/event-stream"}
+    r.raise_for_status = lambda: None
+    return r
+
+
+async def _drive_http_sse(sse_text, *, enabled_info=None):
+    init = _http_resp({"jsonrpc": "2.0", "id": 1, "result": {}})
+    notif = _http_resp({})
+    call = _sse_resp(sse_text)
+    client = _fake_client([init, notif, call])
+    with (
+        patch.object(mcp_proxy, "_valid_internal_key", return_value=True),
+        patch.object(mcp_proxy, "_is_sandbox_routed", return_value=False),
+        patch.object(mcp_proxy, "_get_server_config",
+                     AsyncMock(return_value={"transport": "streamable-http",
+                                             "url": "https://safe.example.com/mcp"})),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=enabled_info)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "is_safe_outbound_url", return_value=(True, "")),
+        patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client),
+    ):
+        resp = await mcp_proxy.internal_tools_call(_internal_req())
+    return resp.body.decode("utf-8")
+
+
+@pytest.mark.asyncio
+async def test_sse_returns_result_not_leading_notification():
+    sse = ('data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":50}}\n\n'
+           'data: {"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"THE_ANSWER"}]}}\n\n')
+    body = await _drive_http_sse(sse)
+    assert "THE_ANSWER" in body        # the actual result event is returned
+    assert "progress" not in body      # the leading notification is NOT returned
+
+
+@pytest.mark.asyncio
+async def test_sse_reassembles_multiline_data_result():
+    sse = ('data: {"jsonrpc":"2.0","id":1,"result":\n'
+           'data: {"content":[{"type":"text","text":"MULTILINE_OK"}]}}\n\n')
+    body = await _drive_http_sse(sse)
+    assert "MULTILINE_OK" in body      # multi-line data reassembled, not dropped as Empty SSE
+
+
+@pytest.mark.asyncio
+async def test_sse_result_secret_still_masked():
+    sse = 'data: {"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"key AKIAIOSFODNN7EXAMPLE"}]}}\n\n'
+    body = await _drive_http_sse(sse, enabled_info={"default_scan_action": "redact"})
+    assert "AKIAIOSFODNN7EXAMPLE" not in body   # the returned result is still floor-scanned
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
