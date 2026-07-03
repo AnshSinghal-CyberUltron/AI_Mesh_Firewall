@@ -1325,6 +1325,29 @@
         suite 1534 pass. commit 8381e432. REDEPLOYING (rollback gateway-rollback-pre-g65).
         DoS surface bounded across ALL model-controlled arrays: messages (MAX_MESSAGES), tools (G65 MAX_TOOLS),
         embeddings/moderations/completions batches (G63/G64), exfil-URL flood (G49), decode depth, ReDoS caps.
+    - 🔴 G66 RAG-ingest list/dict document content = crash + at-rest PII persistence leak (LLM06, 2026-07-03):
+        Applied the G57 data-shape lens to the RAG-INGEST surface (rag_ingest, main.py ~10231). Document text
+        was extracted as `d.get('content','') or d.get('text','') or str(d)`. When content (or text) is a LIST
+        of content-part dicts or a DICT (non-conforming, same shape class as G57), the truthy list short-
+        circuited the or-chain -> text = the list. PROBED: (a) detect_and_redact_typed(list) CRASHES TypeError
+        (rag_redaction path -> 500 on malformed input); (b) _scan_redact_embedding_inputs SKIPS non-str texts
+        (line 3270 appends them unchanged) -> the list is EMBEDDED + PERSISTED in the vector store UNSCANNED
+        (at-rest PII/secret leak, round-trips back to RAG-query callers + downstream prompts). FIX (owned
+        main.py firewall scan-coverage): coerce content/text to a string via _content_to_text (str identity;
+        list joins text parts; dict extracts text; image-safe) BEFORE scanning -> every shape yields a
+        scannable str, no crash, PII redacted before embed/persist. VERIFY (initialized InputScanner): list +
+        dict + list-text-field docs coerced to str, no crash, SSN redacted by the embed-scan; str baseline
+        unchanged. FROZEN a rag-ingest extraction regression (test_vector_upsert_scan_redact.py). GATE: golden
+        406×3; vector-upsert 7 pass; full gateway suite 1536 pass + 2 UNRELATED MCP-session-WIP failures (see
+        below). commit 92a47ffc. REDEPLOYING (rollback gateway-rollback-pre-g66).
+      ⚠ COORDINATION 2026-07-03: a concurrent MCP session has UNCOMMITTED WIP in mcp_proxy.py +
+        test_mcp_adapter_error_envelope_redaction.py (both ' M') — 2 currently-RED tests (a ghp_ token +
+        internal IP egressing RAW in an MCP tools/list error envelope; their redaction fix is incomplete). NOT
+        caused by my rag_ingest change (orthogonal, 0 shared refs). I did NOT touch mcp_* (never-edit). Left the
+        attribution in my G66 commit msg so the failures aren't misattributed. The redeploy bakes their WIP too
+        (shared tree) — health-checked; MCP error-envelope completion is the MCP session's to finish.
+        TWENTY-ONE confirmed-live leaks (G40-G46, G49-G61, G66) + G62 defense-in-depth + 3 DoS (G63-G65) + G48
+        + 2 tradeoffs. Data-shape coercion now covers chat (in+out) AND the RAG-ingest surface.
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
