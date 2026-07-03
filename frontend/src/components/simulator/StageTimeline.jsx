@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Clock, Shield, AlertTriangle, XCircle, CheckCircle, Pin, X, ArrowRightLeft } from "lucide-react";
+import { normalizeStages } from "../../utils/pipelineTrace";
 import {
   formatDecisionSource,
   formatDetectionTier,
@@ -97,12 +98,19 @@ function formatStageLatency(stage) {
  * Shows color-coded stages with hoverable detail cards, latency, and threat info.
  * Detail card appears on hover and stays visible when hovering over the card itself.
  */
-export function StageTimeline({ stages = [], className = "" }) {
+export function StageTimeline({ stages: rawStages = [], className = "" }) {
   const containerRef = useRef(null);
   const stageRefs = useRef({});
   const [hoveredStage, setHoveredStage] = useState(null);
   const [expandedStage, setExpandedStage] = useState(null);
   const [popoverPos, setPopoverPos] = useState({ left: 180, top: 160, placement: "below" });
+
+  // Robustness: several callers pass the gateway's RAW pipeline_trace.stages[] straight in
+  // (not via extractRealStages, which filters). A null / non-object element would make the
+  // render below (`stage.action`) throw and CRASH the whole trace card. normalizeStages keeps
+  // only renderable object stages so one malformed entry never blanks the card (and a null
+  // `stages` prop is handled). Honest: nothing is fabricated — only non-renderable junk drops.
+  const stages = normalizeStages(rawStages);
 
   if (!stages.length) return null;
 

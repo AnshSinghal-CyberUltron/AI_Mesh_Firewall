@@ -5,7 +5,34 @@ import {
   buildHonestTraceStages,
   extractRealStages,
   extractFinalAction,
+  normalizeStages,
 } from "./pipelineTrace.js";
+
+// Robustness: the trace card (StageTimeline) renders `stage.action` per element, so a
+// null/non-object stage would CRASH the whole card. normalizeStages drops non-renderable
+// junk (and handles a null/non-array prop) without fabricating anything.
+test("normalizeStages drops null / non-object stages and keeps valid ones", () => {
+  const good = { name: "auth", action: "allow" };
+  const good2 = { name: "input_scan", action: "redact" };
+  assert.deepEqual(
+    normalizeStages([good, null, "junk", undefined, 42, good2, {}]),
+    [good, good2, {}],
+  );
+});
+
+test("normalizeStages returns [] for null / non-array input (no crash)", () => {
+  assert.deepEqual(normalizeStages(null), []);
+  assert.deepEqual(normalizeStages(undefined), []);
+  assert.deepEqual(normalizeStages("nope"), []);
+  assert.deepEqual(normalizeStages({ stages: [] }), []);
+});
+
+test("normalizeStages does not mutate the input array", () => {
+  const src = [{ action: "allow" }, null];
+  const out = normalizeStages(src);
+  assert.equal(src.length, 2, "input must not be mutated");
+  assert.equal(out.length, 1);
+});
 
 // TRACE_UI_CONTRACT.md: each stage must render its OWN action; a redact whose
 // scrubber was a no-op is displayed as flag (never a phantom redaction).

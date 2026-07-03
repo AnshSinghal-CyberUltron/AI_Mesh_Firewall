@@ -99,6 +99,14 @@ export function extractRealStages(event) {
     : [];
 }
 
+// Robustness helper for the pipeline-trace card: keep only renderable object stages so a
+// null / non-object element (a serialization glitch, or a caller passing the gateway's RAW
+// stages straight in) can never make `stage.action` throw and CRASH the whole card. Honest:
+// nothing is fabricated — only non-renderable junk is dropped. A non-array yields [].
+export function normalizeStages(raw) {
+  return Array.isArray(raw) ? raw.filter((s) => s && typeof s === "object") : [];
+}
+
 export function extractFinalAction(event, fallback) {
   const meta = (event && event.metadata) || {};
   const extra = meta.extra || {};
