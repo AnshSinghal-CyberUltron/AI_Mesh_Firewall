@@ -59,6 +59,14 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   main.py. tier2_degraded + PII/secrets detected in scan text → REDACT (or BLOCK if
   unmaskable), never raw to model. Clean prompt under degraded → monitor only. Closes D-02
   fail-open. 19 new tests. Gate: 19 + 54 + 1870 full suite passed.
+- PIPELINE-0008 (2026-07-03) — LEAK VERIFIED FIXED: PII NEVER reaches model on block;
+  original input_scan BLOCK + model_output 7710ms signature structurally impossible.
+  resolve_and_enforce → is_terminal_block → short-circuit return BEFORE all model calls.
+  build_pipeline_trace blocked_stage=input_scan → model_input/model_output skip, content="".
+  redact_all byte-removes SSN+email+AWS key; degraded+PII → redact or block (never raw).
+  LIVE verified: SSN+email+key → HTTP 403, model_input=skip, model_output=skip, 9.7ms
+  total (no 7710ms LLM call). 26 new tests in test_pipeline_leak_verification.py.
+  Gate: 26 targeted + 1920 full suite passed.
 - PIPELINE-0007 (2026-07-03) — ONE authoritative final_action + blocked_by: main.py.
   _build_safe_block_response accepts blocked_by param (single-writer from _build_block_response,
   no double-resolution); removed redundant pipeline_stage from 403 JSON. Non-streaming +

@@ -2,6 +2,41 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0008 (2026-07-03)
+
+**LEAK VERIFIED FIXED: PII NEVER reaches the model on a block; the original
+input_scan BLOCK + model_output 7710ms signature is structurally impossible.**
+
+Evidence (26 tests + LIVE verification):
+
+1. **Input BLOCK → model NEVER called**: `resolve_and_enforce` produces
+   `is_terminal_block=True` for injection/unmaskable-PII/toxicity/org-policy.
+   `build_pipeline_trace(blocked_stage=input_scan)` produces `model_input=skip`,
+   `model_output=skip`, `content=""`. Structural source proof: ≥3 block-return
+   sites in `proxy_chat` precede ALL `LLM_ROUTER.acompletion` calls.
+
+2. **Input REDACT → model sees masked only**: `redact_all` byte-removes SSN
+   (123-45-6789), email (alice.jones@...), AWS key (AKIAIOSFODNN7EXAMPLE)
+   simultaneously. The pipeline trace `model_input.content` has zero raw PII.
+   Integration chain: `detect_pii` → `resolve_and_enforce(redact)` → `redact_all`
+   → byte-absent verified.
+
+3. **Degraded + PII → redact or block, never raw**: Tier-2 degraded +
+   `tier1_pii_detected=True` → `action=redact`. Unmaskable → `action=block`,
+   `is_terminal_block=True`. Clean prompt under degraded → `monitor` only.
+
+4. **Original leak signature impossible**: `blocked_stage=input_scan` →
+   `_model_skipped=True` → `model_output.action=skip`, `content=""`. The
+   skip-after-block centralized invariant (L718-744 in pipeline_trace.py) forces
+   ALL stages after the blocked stage to `action=skip` with cleared metadata.
+
+5. **LIVE verification** (Docker stack, enforcement_mode=block): Sent
+   `SSN 123-45-6789 + email + AKIAIOSFODNN7EXAMPLE` → HTTP 403, blocked_by=policy,
+   `model_input=skip`, `model_output=skip`, `content=""`, total_latency=9.7ms
+   (no 7710ms LLM call). Zero raw PII in any trace stage.
+
+Gate: 26 new tests + 1920 full gateway suite passed.
+
 ## PIPELINE-0007 (2026-07-03)
 
 **ONE authoritative `final_action` + `blocked_by`; no double-block ambiguity.**
