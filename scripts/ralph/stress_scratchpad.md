@@ -3459,3 +3459,15 @@ inputs type=password/autocomplete=off). One GENUINE semantic-color gap found + f
 (vite) **built in 5.19s**. AlertTriangle still used elsewhere (import intact); color+icon swap only, no
 logic/behavior/security change (credential masking, key-input security untouched). Owned file only:
 `frontend/src/components/ModelConnectionPanel.jsx`. Playwright render-verify follows.
+
+### R6 POLISH — ModelConnectionPanel Playwright render-verify — 2026-07-03
+Client-perspective verified the polished connections table LIVE (authenticated, ?tab=firewall-1-5). To
+exercise the changed element I disabled one free model via the API (PATCH is_active=false on
+poolside/laguna-xs.2:free, id 10), reloaded, and inspected the "Disabled" badge:
+* classes `bg-slate-100 dark:bg-slate-700/50 text-slate-600` (NEUTRAL slate, disabledIsRed=false) ✓
+* PowerOff icon present, AlertTriangle/warning icon absent ✓
+* credential column still MASKED ("Encrypted key set (••••XXXX)") — no regression ✓
+Then RE-ENABLED the model (PATCH is_active=true → 200; verified stillDisabled=[]) to restore org state.
+Playwright artifacts (with the injected JWT) deleted after a grep scan (no secrets). R6 polish complete
+for BOTH owned components (StageTimeline + ModelConnectionPanel): impeccable detector clean, lint 78/78,
+build OK, Playwright verified.
