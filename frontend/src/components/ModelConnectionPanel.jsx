@@ -708,8 +708,10 @@ export function ModelConnectionPanel({
                         <CheckCircle className="w-3 h-3" /> Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300">
-                        <AlertTriangle className="w-3 h-3" /> Disabled
+                      // A disabled model is an INTENTIONAL operational state (won't receive traffic),
+                      // not an error — so use a neutral "powered-off" treatment, not alarming red/warning.
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-400">
+                        <PowerOff className="w-3 h-3" /> Disabled
                       </span>
                     )}
                   </td>

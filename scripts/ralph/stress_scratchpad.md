@@ -3442,3 +3442,20 @@ live ("View details" ✓, "Hover or tap a stage…" ✓) and the old mouse-only 
 Screenshot captured + reviewed, then deleted with the rest of the Playwright artifacts (grep-scanned for
 JWT/secrets → none; the injected session token lived only in localStorage). R6 polish complete for the
 trace card: impeccable detector clean, lint 78/78, build OK, Playwright verified.
+
+---
+
+## R6 POLISH — ModelConnectionPanel impeccable critique + polish — 2026-07-03
+Impeccable critique of the owned connections panel. Already well-crafted (proper EMPTY state with dashed
+border + "Add model" CTA, loading spinner, per-row action spinner, MASKED credential column "Encrypted
+key set (••••XXXX)", color-coded sensitivity badges, a11y label associations, 44px touch targets, API-key
+inputs type=password/autocomplete=off). One GENUINE semantic-color gap found + fixed:
+* **"Disabled" status was styled as an ERROR** — alarming **red** background + `AlertTriangle` (warning)
+  icon. But a disabled model (`is_active:false`) is an INTENTIONAL operational state (it just won't
+  receive traffic), NOT an error/danger. Red+warning is a false-alarm color. Fixed to a NEUTRAL
+  "powered-off" treatment: slate background + the already-imported `PowerOff` icon
+  (`bg-slate-100 dark:bg-slate-700/50 text-slate-600`). "Active" stays emerald+CheckCircle (correct).
+**Gates (owned component):** impeccable detector `[]` (clean); `npm run lint` **78/78**; `npm run build`
+(vite) **built in 5.19s**. AlertTriangle still used elsewhere (import intact); color+icon swap only, no
+logic/behavior/security change (credential masking, key-input security untouched). Owned file only:
+`frontend/src/components/ModelConnectionPanel.jsx`. Playwright render-verify follows.
