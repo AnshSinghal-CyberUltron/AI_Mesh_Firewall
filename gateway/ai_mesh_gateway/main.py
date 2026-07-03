@@ -1392,9 +1392,13 @@ def _extract_response_format_text(response_format) -> str:
     class as the tool-parameter gap (G81). Bounded by the shared schema depth + char budget."""
     if not isinstance(response_format, dict):
         return ""
+    # Chat shape wraps the schema in ``json_schema``; the Responses API's ``text.format`` is
+    # UNWRAPPED ({type,name,schema} at top level) and responses_to_chat maps it VERBATIM into
+    # response_format (SEAM-B). Handle BOTH so a Responses-path structured-output schema is
+    # scanned too (G83) — otherwise an injection in text.format.schema.properties slips past.
     js = response_format.get("json_schema")
     if not isinstance(js, dict):
-        return ""
+        js = response_format
     budget = [_TOOL_SCHEMA_TEXT_BUDGET]
     parts: list[str] = []
     name = js.get("name") or ""

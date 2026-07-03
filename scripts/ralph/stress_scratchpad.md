@@ -2377,3 +2377,22 @@ benign json_schema + plain json_object (no schema) → **allow** / no-op (no FP)
 **1657 passed**; golden 462×3; ruff clean.
 **Frozen:** `ai_mesh_gateway/tests/test_response_format_injection.py` (8): 5 threat + 2 benign-FP + 1 no-op.
 Session ledger: SIX confirmed leaks (G74/G75/G76/G81/G82) + soft DoS (G79) fixed+deployed; G77/G78/G80 frozen.
+
+---
+
+## G83 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — Responses-API structured-output schema shape bypass
+The /v1/responses handler translates the request to a chat body (`_responses_to_chat`, main.py:8858) and
+reuses the chat scanning — so it inherits G81/G82. BUT the Responses native structured-output key
+`text.format` is UNWRAPPED (`{type,name,schema}` at TOP level), and `responses_to_chat` (responses_adapters
+SEAM-B, ~line 265) maps it VERBATIM into `chat.response_format`. My G82 `_extract_response_format_text` only
+read the CHAT shape `response_format.json_schema.schema`, so it returned "" for the unwrapped shape →
+an injection in `text.format.schema.properties.X.description` on the Responses path reached the model
+UNSCANNED (verdict allow). Shape mismatch = a real bypass of the G82 fix on /v1/responses.
+**FIX (owned main.py, 1 line):** `_extract_response_format_text` now falls back to the unwrapped shape
+(`js = response_format` when there is no `json_schema` wrapper), so it scans BOTH the chat-wrapped and the
+Responses-unwrapped `response_format`.
+**Verify:** chat-wrapped + Responses-unwrapped + full `responses_to_chat(text.format)` flow injections →
+**block**; PII → **redact**; benign (both shapes) + `json_object` → **allow**/no-op (no FP). backend
+`ai_mesh_gateway/tests` **1662 passed**; golden 462×3; ruff clean.
+**Frozen:** extended `test_response_format_injection.py` (now 13): +unwrapped-shape + full-responses-flow + FP.
+Session ledger: SEVEN confirmed leaks (G74/G75/G76/G81/G82/G83) + soft DoS (G79) fixed+deployed.
