@@ -2,6 +2,33 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0024 (2026-07-03)
+
+**Pipeline-trace view UI revamp (P6 item 24).**
+
+Root Cause:
+- LogDetailPage pipeline-trace section (StageTimeline + RoutingDecisionCard + metrics)
+  had alignment/truncation issues at narrow widths, inline hex colors in MetricCard,
+  undersized touch targets on header/copy controls, and no durable browser gate for
+  the Scan Detail pipeline view.
+
+Fix:
+- `LogDetailPage.jsx`: MetricCard uses `CHART_PALETTE` + Tailwind icon tokens (no inline
+  hex); equal-height metric cards (`h-full`, `leading-tight` labels); responsive metrics
+  grid (`sm:grid-cols-2`, `xl:grid-cols-4/5`); `min-h-9` header/copy buttons;
+  `CollapsibleSection` gains `aria-expanded`, dark icon variant, `testId` prop;
+  `data-testid="pipeline-trace-view"`, `log-detail-pipeline-stages`, `routing-decision-card`.
+- `StageTimeline.jsx`: `data-testid="pipeline-stage-timeline"`; stage buttons `min-h-11`
+  + responsive min-width; popover `w-[min(360px,calc(100vw-2rem))]` with viewport-clamped
+  positioning; detail grid `grid-cols-1 sm:grid-cols-2`; pin/close `min-h-9 min-w-9`.
+- `scripts/ralph/pipeline_p24_trace_view_verify.mjs`: Playwright gate sweeps Scan Detail
+  @ 1440/1024/768/375 × light/dark — overflow, bleed, touch ≥24px, stage buttons, 0 console errors.
+
+Verification:
+- impeccable detect on LogDetailPage + StageTimeline → `[]` (clean).
+- `npm run lint` 92/92 + `npm run build` green.
+- Playwright `pipelineP24Pass: true` (8/8 combos, event zs-294755069ea4, 9 stages).
+
 ## PIPELINE-0023 (2026-07-03)
 
 **Event conflation fix (P6 item 23 / L10).**

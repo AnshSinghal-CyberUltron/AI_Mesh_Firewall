@@ -19,6 +19,16 @@ import {
   resolveTtftMs,
 } from "../utils/pipelineTrace";
 import { formatDecisionSource, formatRoutingReason } from "../constants/zeroshieldBrand";
+import { CHART_PALETTE } from "../utils/chartTheme";
+
+const METRIC_ICON_CLASS = {
+  blue: "text-blue-500 dark:text-blue-400",
+  teal: "text-teal-500 dark:text-teal-400",
+  purple: "text-purple-500 dark:text-purple-400",
+  emerald: "text-emerald-500 dark:text-emerald-400",
+  amber: "text-amber-500 dark:text-amber-400",
+  red: "text-red-500 dark:text-red-400",
+};
 
 function normalizeLogDetail(logData) {
   const raw = logData?.raw || logData || {};
@@ -330,19 +340,19 @@ export function LogDetailPage({ logData, onBack }) {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => handleCopy(JSON.stringify(logData, null, 2), "Request Payload")}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm font-medium"
+              className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
             >
               <Copy className="w-4 h-4" />
               {copiedField === "Request Payload" ? "Copied!" : "Copy"}
             </button>
-            <button onClick={handleShare} className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm font-medium">
+            <button onClick={handleShare} className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
               <Share2 className="w-4 h-4" />
               <span>{copiedField === "Shared" ? "Shared!" : "Share"}</span>
             </button>
-            <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium">
+            <button onClick={handleExport} className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700">
               <Download className="w-4 h-4" />Export
             </button>
           </div>
@@ -350,7 +360,7 @@ export function LogDetailPage({ logData, onBack }) {
       </div>
 
       {/* Key Metrics */}
-      <div className={`grid grid-cols-1 gap-4 ${ttftMs != null ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
+      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${ttftMs != null ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
         <MetricCard icon={CheckCircle} label="Overall Status" value={(effectiveAction || status).toUpperCase()} color={ACTION_TONE[String(effectiveAction || status).toLowerCase()] || "emerald"} />
         <MetricCard icon={Clock} label="Total Duration" value={duration} color="blue" />
         {ttftMs != null && (
@@ -370,7 +380,7 @@ export function LogDetailPage({ logData, onBack }) {
               tooltip: { trigger: "axis", valueFormatter: (v) => `${v} ms` },
               xAxis: { type: "category", data: timelineData.map((d) => d.time), axisLabel: { fontSize: 11, rotate: timelineData.length > 4 ? 30 : 0, interval: 0 } },
               yAxis: { type: "value", axisLabel: { fontSize: 11, formatter: "{value} ms" } },
-              series: [{ name: "Latency", type: "bar", barWidth: "55%", itemStyle: { color: "#3b82f6", borderRadius: [3, 3, 0, 0] }, data: timelineData.map((d) => d.latency) }],
+              series: [{ name: "Latency", type: "bar", barWidth: "55%", itemStyle: { color: CHART_PALETTE[6], borderRadius: [3, 3, 0, 0] }, data: timelineData.map((d) => d.latency) }],
             }}
           />
         </div>
@@ -484,14 +494,15 @@ export function LogDetailPage({ logData, onBack }) {
           isExpanded={expandedSections.pipeline}
           onToggle={() => toggleSection("pipeline")}
           allowOverflow
+          testId="log-detail-pipeline-stages"
         >
           {pipelineStages.length > 0 ? (
-            <>
+            <div data-testid="pipeline-trace-view" className="space-y-4">
               {routingDecision && (
                 <RoutingDecisionCard routing={routingDecision} />
               )}
               <StageTimeline stages={pipelineStages} />
-            </>
+            </div>
           ) : (
             <p className="text-sm text-slate-500 dark:text-slate-400">
               No per-stage pipeline trace was recorded for this event
@@ -713,15 +724,15 @@ function StatusBadge({ status, action }) {
 }
 
 function MetricCard({ icon: Icon, label, value, color }) {
-  const colorMap = { blue: "#3b82f6", teal: "#14b8a6", purple: "#8b5cf6", emerald: "#10b981", amber: "#f59e0b", red: "#ef4444" };
   const bgMap = { blue: "bg-blue-50 dark:bg-blue-900/20", teal: "bg-teal-50 dark:bg-teal-900/20", purple: "bg-purple-50 dark:bg-purple-900/20", emerald: "bg-emerald-50 dark:bg-emerald-900/20", amber: "bg-amber-50 dark:bg-amber-900/20", red: "bg-red-50 dark:bg-red-900/20" };
+  const iconClass = METRIC_ICON_CLASS[color] || METRIC_ICON_CLASS.teal;
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm p-4">
-      <div className={`inline-flex items-center justify-center w-10 h-10 ${bgMap[color] || bgMap.teal} rounded-lg mb-3`}>
-        <Icon className="w-5 h-5" style={{ color: colorMap[color] }} />
+    <div className="flex h-full flex-col rounded-xl border-2 border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg ${bgMap[color] || bgMap.teal}`}>
+        <Icon className={`h-5 w-5 ${iconClass}`} />
       </div>
-      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">{value}</div>
-      <div className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</div>
+      <div className="mb-1 text-xl font-bold leading-tight text-slate-900 dark:text-slate-100 sm:text-2xl">{value}</div>
+      <div className="text-xs font-medium leading-tight text-slate-600 dark:text-slate-400">{label}</div>
     </div>
   );
 }
@@ -737,7 +748,7 @@ function RoutingDecisionCard({ routing }) {
     || formatDecisionSource(routing.decision_source);
 
   return (
-    <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-500/30 dark:bg-indigo-500/10">
+    <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-500/30 dark:bg-indigo-500/10" data-testid="routing-decision-card">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
           Routing decision
@@ -807,7 +818,7 @@ function RoutingDecisionCard({ routing }) {
   );
 }
 
-function CollapsibleSection({ title, icon: Icon, isExpanded, onToggle, children, allowOverflow = false }) {
+function CollapsibleSection({ title, icon: Icon, isExpanded, onToggle, children, allowOverflow = false, testId }) {
   // allowOverflow: opt OUT of the card's overflow clipping for sections whose
   // content renders floating popovers/tooltips that must escape the card bounds
   // (e.g. the Pipeline Stages hover-detail card). `overflow-hidden` on the card
@@ -815,16 +826,18 @@ function CollapsibleSection({ title, icon: Icon, isExpanded, onToggle, children,
   // would otherwise cut the popover off at the section's edge. The pipeline's
   // StageTimeline scrolls horizontally on its own, so the wrapper is redundant here.
   return (
-    <div className={`bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm ${allowOverflow ? "" : "overflow-hidden"}`}>
+    <div className={`rounded-xl border-2 border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 ${allowOverflow ? "" : "overflow-hidden"}`} data-testid={testId}>
       <button
+        type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between rounded-t-[10px] p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+        aria-expanded={isExpanded}
+        className="flex min-h-11 w-full items-center justify-between rounded-t-[10px] px-4 py-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 sm:px-6 sm:py-5"
       >
-        <div className="flex items-center gap-3">
-          <Icon className="w-5 h-5 text-teal-600" />
-          <span className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</span>
+        <div className="flex min-w-0 items-center gap-3">
+          <Icon className="h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+          <span className="text-left text-base font-semibold leading-tight text-slate-900 dark:text-slate-100">{title}</span>
         </div>
-        <ChevronDown className={`w-5 h-5 text-slate-500 dark:text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-5 w-5 shrink-0 text-slate-500 transition-transform dark:text-slate-400 ${isExpanded ? "rotate-180" : ""}`} />
       </button>
       {isExpanded && (
         <div className="px-6 pb-6 border-t border-slate-200 dark:border-slate-700 pt-4">
@@ -839,7 +852,7 @@ function DataRow({ label, value }) {
   return (
     <tr>
       <td className="py-2.5 pr-4 text-xs font-medium text-slate-600 dark:text-slate-400 w-1/3">{label}</td>
-      <td className="py-2.5 text-sm text-slate-900 dark:text-slate-100 font-mono">{value}</td>
+      <td className="break-words py-2.5 text-sm font-mono text-slate-900 dark:text-slate-100">{value}</td>
     </tr>
   );
 }
@@ -850,7 +863,7 @@ function ContentBlock({ label, text, onCopy, copied }) {
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">{label}</span>
         {text ? (
-          <button onClick={onCopy} className="text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300">{copied ? "Copied!" : "Copy"}</button>
+          <button type="button" onClick={onCopy} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded px-2 text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">{copied ? "Copied!" : "Copy"}</button>
         ) : null}
       </div>
       <pre className="whitespace-pre-wrap break-words rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-3 text-xs font-mono text-slate-800 dark:text-slate-200 max-h-72 overflow-auto">

@@ -159,3 +159,8 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   pipeline_request_id; control _pipeline_io_fingerprint mismatch guard on sibling merge;
   LogDetailPage trace-scoped I/O (no prompt_lineage bleed). +5 tests test_pipeline_request_id_conflation.py.
   Gate: full gateway green.
+- PIPELINE-0024 (2026-07-03) — PIPELINE-TRACE VIEW UI (P6-24): LogDetailPage + StageTimeline
+  impeccable revamp (CHART_PALETTE, equal-height metrics, responsive grid, touch targets, testIds,
+  CollapsibleSection a11y); StageTimeline responsive popover + detail grid. Playwright gate
+  pipeline_p24_trace_view_verify.mjs 8/8 @1440/1024/768/375 light/dark. detect clean; lint+build green.
+  Evidence mcp-parallel/findings/pipeline-p24-trace-view/.

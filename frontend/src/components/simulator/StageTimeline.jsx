@@ -124,7 +124,8 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
     const containerRect = container.getBoundingClientRect();
     const stageRect = stageEl.getBoundingClientRect();
     const desiredLeft = stageRect.left - containerRect.left + stageRect.width / 2;
-    const clampedLeft = Math.max(180, Math.min(desiredLeft, containerRect.width - 180));
+    const halfPopover = Math.min(180, Math.max(96, containerRect.width / 2 - 8));
+    const clampedLeft = Math.max(halfPopover, Math.min(desiredLeft, containerRect.width - halfPopover));
 
     // Viewport-aware vertical placement: the detail card can be tall (input_scan /
     // output_guardrail carry guard reasoning + before/after blocks). If there is
@@ -161,12 +162,13 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
   return (
     <div
       ref={containerRef}
+      data-testid="pipeline-stage-timeline"
       className={`relative rounded-2xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50 p-3 shadow-sm dark:border-slate-700/70 dark:from-slate-900 dark:to-slate-900/70 ${className}`}
       onMouseLeave={() => setHoveredStage(null)}
     >
-      <div className="pointer-events-none absolute left-8 right-8 top-[56px] h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-600" />
+      <div className="pointer-events-none absolute left-4 right-4 top-[56px] hidden h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent sm:left-8 sm:right-8 dark:via-slate-600 sm:block" />
 
-      <div className="flex items-stretch gap-3 overflow-x-auto pb-2 pt-1">
+      <div className="-mx-1 flex items-stretch gap-2 overflow-x-auto pb-2 pt-1 sm:mx-0 sm:gap-3">
         {stages.map((stage, i) => {
           const theme = ACTION_THEME[stage.action] || ACTION_THEME.skip;
           const Icon = ACTION_ICONS[stage.action] || Clock;
@@ -177,6 +179,7 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
           return (
             <div key={i} className="relative flex items-center">
               <button
+                type="button"
                 ref={(el) => {
                   stageRefs.current[i] = el;
                 }}
@@ -188,7 +191,7 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
                 aria-label={`Pipeline stage ${(stage.name || "").replace(/_/g, " ")}: ${stage.action}, ${formatStageLatency(stage)}. ${
                   isExpanded ? "Details pinned; activate to unpin." : "Activate to pin details."
                 }`}
-                className={`group relative min-w-[132px] cursor-pointer rounded-2xl border px-3 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.card} ${
+                className={`group relative min-h-11 min-w-[120px] cursor-pointer rounded-2xl border px-3 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:min-w-[132px] ${theme.card} ${
                   isActive ? `ring-2 ${theme.highlight}` : "ring-0"
                 }`}
               >
@@ -201,7 +204,7 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
                   </span>
                 </div>
 
-                <div className="text-xs font-semibold capitalize leading-tight text-slate-800 dark:text-slate-100">
+                <div className="text-xs font-semibold capitalize leading-snug text-slate-800 dark:text-slate-100">
                   {(stage.name || "").replace(/_/g, " ")}
                 </div>
                 <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
@@ -228,7 +231,7 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
 
       {visibleStageIndex !== null && stages[visibleStageIndex] && (
         <div
-          className={`absolute z-40 w-[360px] max-w-[calc(100%-1rem)] -translate-x-1/2 ${
+          className={`absolute z-40 w-[min(360px,calc(100vw-2rem))] max-w-[calc(100%-1rem)] -translate-x-1/2 ${
             popoverPos.placement === "above" ? "-translate-y-full" : ""
           }`}
           style={{ left: `${popoverPos.left}px`, top: `${popoverPos.top}px` }}
@@ -330,15 +333,16 @@ function StageDetailCard({ stage, onClose, isPinned }) {
           )}
         </h4>
         <button
+          type="button"
           onClick={onClose}
-          className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          className="inline-flex min-h-9 min-w-9 items-center justify-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
         >
           {isPinned ? <X className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
           {isPinned ? "Close" : "Pin"}
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+      <div className="grid grid-cols-1 gap-2 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-2">
         {(stage.name === "input_scan" || stage.name === "output_guardrail" || stage.name === "policy") && stage.guard_reason && (
           <div className="col-span-2 rounded-xl border border-violet-200/80 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-500/10">
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
