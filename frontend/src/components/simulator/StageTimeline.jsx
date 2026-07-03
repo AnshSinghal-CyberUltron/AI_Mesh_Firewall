@@ -181,7 +181,13 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
                   stageRefs.current[i] = el;
                 }}
                 onMouseEnter={() => handleStageEnter(i)}
+                onFocus={() => handleStageEnter(i)}
+                onBlur={() => setHoveredStage((cur) => (cur === i ? null : cur))}
                 onClick={() => handleStageClick(i)}
+                aria-expanded={isExpanded}
+                aria-label={`Pipeline stage ${(stage.name || "").replace(/_/g, " ")}: ${stage.action}, ${formatStageLatency(stage)}. ${
+                  isExpanded ? "Details pinned; activate to unpin." : "Activate to pin details."
+                }`}
                 className={`group relative min-w-[132px] cursor-pointer rounded-2xl border px-3 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.card} ${
                   isActive ? `ring-2 ${theme.highlight}` : "ring-0"
                 }`}
@@ -256,7 +262,7 @@ function BeforeAfterBlock({ beforeLabel, beforeText, afterLabel, afterText }) {
       </div>
       <div>
         <span className="mb-1 block text-slate-500 dark:text-slate-400">{afterLabel}:</span>
-        <pre className="max-h-40 overflow-y-auto rounded-lg border border-emerald-200 bg-emerald-50/70 p-2 font-mono text-[11px] whitespace-pre-wrap text-slate-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-slate-100">
+        <pre className="max-h-40 overflow-y-auto rounded-lg border border-emerald-200 bg-emerald-50/70 p-2 font-mono text-[11px] whitespace-pre-wrap text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-50">
           {afterText}
         </pre>
       </div>

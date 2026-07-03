@@ -2051,3 +2051,41 @@ The startup-availability OPEN DEFECT is now CLOSED. The ONLY remaining gap is:
 → NEXT ITEM (to legitimately close [~]): do a MANUAL polish/critique pass on the two owned components
   (impeccable unavailable → do it by hand), make targeted design improvements, re-verify via `npm run build`
   + Playwright. Only after that is every condition unequivocally true may COMPLETE be emitted.
+
+---
+
+## R6 POLISH — 2026-07-03 — impeccable IS available (repo skill); detector CLEAN + a11y polish
+CORRECTION to the prior note: the `impeccable` skill IS present and user-invocable at
+`.claude/skills/impeccable/` (v3.9.1, node-based repo skill — NOT external OSS, so using it is
+sanctioned; it needs no package install). Ran it via `/impeccable critique <StageTimeline>` and drove
+its deterministic detector directly.
+
+**Detector gate — `node .claude/skills/impeccable/scripts/detect.mjs --json <owned files>`:**
+- Initial: 2 `gray-on-color` WARNINGS at `StageTimeline.jsx:259` (the BeforeAfterBlock "after redaction"
+  `<pre>` used `text-slate-700` / `dark:text-slate-100` on an EMERALD success-semantic bg — washed-out +
+  cross-theme muddy). Exit was already 0 (warnings, not errors), but they're real AA/cohesion nits.
+- Fix: emerald-hued text tied to the bg — `text-emerald-900 dark:text-emerald-50` (high contrast both
+  themes, cohesive with the "sanitized" green semantic; PRODUCT.md principle #4).
+- Re-run: `[]` — **detector fully clean, exit 0** on BOTH owned components (StageTimeline + ModelConnectionPanel).
+
+**A11y polish on the trace card (PRODUCT.md "Sam"/keyboard-only persona):** the stage `<button>`s were
+keyboard-focusable but hover-only revealed the detail popover, and lacked ARIA state. Added
+`onFocus`→`handleStageEnter` (+ `onBlur` clear) so KEYBOARD FOCUS reveals details at parity with hover;
+`aria-expanded={isExpanded}`; and a complete `aria-label` ("Pipeline stage <name>: <action>, <latency>.
+Activate to pin details.").
+
+**Verified:** detector `[]`/exit 0; `npm run build` OK; owned unit tests `pipelineTrace.test.js` 8/8;
+Playwright (HMR, live): ran a benign pipeline → 9 stage buttons render, each with the complete aria-label
++ `aria-expanded="false"`; focusing a stage IS focusable AND reveals the popover (onFocus parity works);
+ZERO console errors. Playwright snapshot artifacts (held the gateway key from the non-owned sim key field)
+scrubbed; `.playwright-mcp` gitignored.
+
+## COMPLETION STATUS (updated 2026-07-03, post-R6-polish) — NOT asserting COMPLETE
+[x] impeccable detector CLEAN (exit 0, both owned components) — the literal Gate is met
+[x] npm run build OK · Playwright passes · owned unit tests 8/8
+[~] frontend polish — trace card (StageTimeline) polished (contrast + a11y) & verified; the impeccable
+    formal `audit` (a11y/perf/responsive technical pass) and a deeper polish sweep of ModelConnectionPanel
+    (1160 lines) have NOT been run yet. Substance strong; more legitimate depth remains.
+→ Remaining to unequivocally close: run `/impeccable audit` on both owned components (a11y/perf/responsive)
+  and address any P0/P1; a focused polish sweep of ModelConnectionPanel. Then re-verify and, if every
+  condition is then unequivocally true, COMPLETE may be emitted.
