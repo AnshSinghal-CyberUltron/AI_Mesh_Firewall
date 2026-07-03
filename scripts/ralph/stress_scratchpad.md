@@ -2145,3 +2145,28 @@ Still NOT emitting COMPLETE:
 - The user's STANDING explicit instruction "don't stop until 50 iterations are done" overrides early completion.
 → NEXT ITEM: responsive audit of the two owned components at 1440/1024/768/375 (overflow, touch targets,
   dark/light parity via Playwright resize) + fix any P0/P1; then re-assess completion.
+
+---
+
+## R6 RESPONSIVE AUDIT — both owned components — 2026-07-03
+Playwright viewport resize (375 / 768 / 1280) with live measurement.
+- **ModelConnectionPanel** (Add-model dialog + expanded Routing Config): NO page overflow at 375 or 768
+  (`docOverflow=0`; dialog centered/contained, `dlgScrollOverflow=0`). Form inputs are 38px tall — pass
+  WCAG 2.5.8 AA (≥24px) and suit the operator-console density (44px is AAA-aspirational, not forced).
+  Two genuine sub-24px touch targets FIXED: "Close dialog" `p-1`→`p-1.5` (24→28px) and the "Routing
+  Configuration" disclosure `mb-3`→`mb-2 py-1.5` (16→**28px**). Verified live via HMR at 375px.
+- **StageTimeline**: at 375px NO page overflow (`docOverflow=0`); the 9-stage row scrolls horizontally
+  INSIDE its own contained `overflow-x-auto` container (card fits viewport; page body never scrolls) —
+  the correct wide-content pattern. 9 stage buttons render.
+- detector `[]`/exit 0 (both); `npm run build` OK; zero console errors.
+
+## COMPLETION STATUS (updated 2026-07-03) — NOT asserting COMPLETE
+Owned components now: detector clean · a11y complete (labels/ARIA/keyboard-focus) · contrast fixed ·
+responsive verified (no overflow 375-1280, touch targets AA). All backend/live gates green.
+Remaining before UNEQUIVOCAL completion:
+- DARK/LIGHT theme parity (PRODUCT.md principle #5 "both themes are production") not yet explicitly
+  verified on the owned components in DARK mode (all testing so far was light theme). The components use
+  `dark:` variants throughout, but contrast/rendering in dark mode hasn't been Playwright-verified.
+- The user's STANDING explicit instruction "don't stop until 50 iterations are done" overrides early completion.
+→ NEXT ITEM: toggle dark mode and Playwright-verify both owned components render with correct contrast in
+  dark theme (no washed-out text, focus/hover/disabled states correct); fix any P0/P1; then re-assess.

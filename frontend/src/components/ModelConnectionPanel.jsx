@@ -882,7 +882,7 @@ export function ModelConnectionPanel({
           >
             <div className="flex items-center justify-between mb-4">
               <h3 id="model-config-dialog-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">{editingModel ? "Edit Model Configuration" : "Add Model Configuration"}</h3>
-              <button type="button" onClick={() => { setModalOpen(false); setEditingModel(null); }} aria-label="Close dialog" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors">
+              <button type="button" onClick={() => { setModalOpen(false); setEditingModel(null); }} aria-label="Close dialog" className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors">
                 <X className="w-4 h-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
               </button>
             </div>
@@ -1039,7 +1039,7 @@ export function ModelConnectionPanel({
                   type="button"
                   onClick={() => setRoutingExpanded(!routingExpanded)}
                   aria-expanded={routingExpanded}
-                  className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 w-full text-left"
+                  className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 py-1.5 w-full text-left"
                 >
                   {routingExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />}
                   Routing Configuration
