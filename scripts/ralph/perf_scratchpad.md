@@ -121,7 +121,11 @@
       not extraction-fixable; get PERF-0010 org filter). [:N]/scan_cap views already bounded. PERF-0011 → 4 memories. P6 DONE.
 
 ## P7 — Prove dynamic scaling
-- [ ] 22. Constrain --cpus=6 --memory=16g: detector down-scales; runs healthy; no OOM.
+- [x] 22. Constrain --cpus=6 --memory=16g: detector down-scales; runs healthy; no OOM.
+      → gateway+control constrained --cpus=6 --memory=16g. Detector DOWN-SCALED to 6 workers each (cpu_budget=6,
+      asgi_threads=12, cpu_bound). Both healthy 200. LOAD: gateway6 5117rps p99 104ms 0err cores=6.07/6 mem=1.24GiB;
+      control6 2039rps p99 145ms 0err cores=6.31/6 mem=0.83GiB. Both SATURATE all 6 cores, 0 errors, combined RAM ~2GiB
+      of 16 (< 12GiB=0.75*16 headroom), OOMKilled=false. Results → scratch_perf/p7_6c_results.txt (for item 24).
 - [ ] 23. Constrain --cpus=12 --memory=60g: detector up-scales; USES all 12 cores under load.
 - [ ] 24. Load-test both: throughput scales with hardware, all cores used, p99 stable, RAM under budget + headroom, ~0 errors → docs/perf/SCALING_RESULTS.md.
 
