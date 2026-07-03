@@ -38,3 +38,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** non-SSE branch checks `tools_resp.status_code >= 400` → clean "HTTP <status> — check the endpoint URL" (405 case) and guards `.json()`; the outer except classifies the exc (DNS/refused/timeout) into a branded message. Raw exc/HTML/hostname → log + dev diagnostic keyed by ref only.
 - **AFFECTS:** the streamable-http/sse discovery path (backend tool-sync). Not yet deployed live (item 06 coordinated verify).
 - **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_discovery_clean_errors.py -q` → 3 passed (405 HTML→"HTTP 405"+code+ref, no raw HTML; DNS→MCP_DNS_FAILURE no host; refused→MCP_CONNECTION_REFUSED no IP); discovery-scan regression 5 passed; full suite 1773 passed.
+
+## MCP-PAGE-CLEANUP-04 — transport (HTTP/SSE/WS) + OAuth 401 clean errors
+- **files:** gateway/ai_mesh_gateway/mcp_proxy.py; gateway/ai_mesh_gateway/tests/test_mcp_ext_transport_clean_errors.py (new)
+- **WHAT:** the external-passthrough transport failures + upstream 401/403 now route through the classifier.
+- **WHY:** ext_mcp_proxy's `except` returned `f"DNS resolution failed for '{hostname}'"` + `detail=str(exc)` (leaks the operator hostname + raw exception) and `detail=str(exc)` on generic unreachable; the control-proxy `except` also leaked `str(exc)`; an upstream 401 was passed through (its body can hint at tokens/endpoints).
+- **NOW DOES:** ext + control transport `except` → `sanitize_mcp_error(exc=exc)` → clean DNS/refused/timeout `{error,code,ref}` at 502 (hostname/exc → log+diag by ref only). NEW upstream 401/403 intercept → `sanitize_mcp_error(status=401)` → "needs re-authentication — re-authorize the connection" (raw upstream body not echoed).
+- **AFFECTS:** the external HTTP/SSE passthrough + the control-proxy error path. Not yet deployed live (item 06).
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_ext_transport_clean_errors.py -q` → 3 passed (DNS→MCP_DNS_FAILURE no host/Errno/no detail field; refused→MCP_CONNECTION_REFUSED no IP; 401→MCP_AUTH_FAILED re-auth, no token hint); ext regression 57 passed; full suite 1776 passed.

@@ -535,11 +535,10 @@ async def _proxy(base_url: str, path: str, request: Request) -> JSONResponse:
                 data = resp.text
             return JSONResponse(content=data, status_code=resp.status_code)
         except httpx.RequestError as exc:
-            LOG.error("MCP proxy error → %s: %s", url, exc)
-            return JSONResponse(
-                content={"error": "MCP service unreachable", "detail": str(exc)},
-                status_code=502,
-            )
+            # CLEANUP-04: never leak the raw exception (host / connection internals).
+            LOG.error("MCP proxy error [%s] → %s: %s", type(exc).__name__, url, exc)
+            clean = await sanitize_mcp_error(exc=exc)
+            return JSONResponse(content=clean, status_code=502)
 
 
 async def _get_server_config(org_slug: str, server_slug: str) -> dict | None:
@@ -2364,21 +2363,22 @@ async def ext_mcp_proxy(path: str, request: Request):
                     "redact", "nonok_body_redacted",
                     tool=_ext_tool_name, tags=_whole_tags, findings=_wf)
 
+        # CLEANUP-04: an upstream auth failure surfaces as a clean re-authentication
+        # prompt — NOT the raw (even if scanned) upstream 401/403 body, which can hint
+        # at token/endpoint internals. The action ("re-authorize") is in the message.
+        if resp.status_code in (401, 403):
+            clean = await sanitize_mcp_error(status=resp.status_code, server_slug=f"ext:{hostname}")
+            return JSONResponse(content=clean, status_code=resp.status_code, headers=resp_headers)
         return JSONResponse(content=data, status_code=resp.status_code, headers=resp_headers)
     except httpx.RequestError as exc:
         await client.aclose()
-        exc_name = type(exc).__name__
-        if "name resolution" in str(exc).lower() or "nodename" in str(exc).lower():
-            LOG.error("DNS resolution failed for ext-proxy target %s: %s", target_url, exc)
-            return JSONResponse(
-                content={"error": f"DNS resolution failed for '{hostname}'", "detail": str(exc)},
-                status_code=502,
-            )
-        LOG.error("External MCP proxy error → %s: %s (%s)", target_url, exc, exc_name)
-        return JSONResponse(
-            content={"error": "External MCP server unreachable", "detail": str(exc)},
-            status_code=502,
-        )
+        # CLEANUP-04: classify the transport failure into a clean, non-revealing
+        # message. NEVER leak the internal hostname or the raw exception (both can
+        # expose the operator-configured host / connection internals). The raw cause
+        # (with the hostname) goes ONLY to the log + dev diagnostic keyed by ref.
+        LOG.error("External MCP proxy error [%s] → %s: %s", type(exc).__name__, target_url, exc)
+        clean = await sanitize_mcp_error(exc=exc, server_slug=f"ext:{hostname}")
+        return JSONResponse(content=clean, status_code=502)
 
 
 # ── Internal MCP Tool Discovery ──────────────────────────────────────
