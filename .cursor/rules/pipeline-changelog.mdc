@@ -40,3 +40,9 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   tool_calls scanning). Streaming vs non-streaming enforcement matrix. Fail-open sites
   cataloged with evidence. Cross-referenced to the known input_scan BLOCK + model_output
   7710ms leak.
+- PIPELINE-0003 (2026-07-03) — docs/pipeline/CANONICAL.md: ONE canonical pipeline, ONE
+  enforcement authority. 7-stage pipeline (pre→policy→input_scan→enforcement→routing→model
+  →output_guard→finalize). Two entry points: resolve_and_enforce() (input) + enforce_output()
+  (output), both returning frozen PipelineDecision. Fail-closed contract (degraded→redact,
+  exception→block). Fixes D-05/D-06/D-18. Migration map: ~250-line inline enforcement →
+  single call; proxy_chat ~4000→~2000 LOC. Mermaid sequence diagram.
