@@ -2554,3 +2554,25 @@ renderer-recoverable=**False**; FP-clean on color-entities / url-percent / plain
 `test_output_transport_egress.py::test_g88_encoded_credential_never_egresses` (full inspect→sanitize path).
 Session ledger: TWELVE confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88) + soft DoS (G79) fixed; G77/G78/G80 frozen.
 (policy_count:0 deployed-gateway live-golden issue from G87 still flagged for the control-plane session — unchanged.)
+
+---
+
+## G89 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — percent-encoded PII/secret in auto-render EXFIL URL
+Sibling of G86 for the `sensitive_payload` signal. `output_guard._url_smuggles_data` ran
+detect_pii/detect_secrets/detect_credential on the URL tail (canonicalized) + base64/hex `decoded_parts`,
+but did NOT PERCENT-DECODE the tail. URLs NATIVELY percent-encode data, and any receiving web server
+transparently percent-decodes `?d=%31%32%33%2D%34%35...` back to `123-45-6789`. So a percent-encoded
+PII/secret/credential in an auto-render beacon (markdown image / `<img>` / path segment) → verdict
+**allow** → egressed raw → attacker's server decodes the payload. CONFIRMED: plain SSN/email in URL →
+sensitive_payload; percent SSN/email/AWS (query AND path, ± Cf) → '' (not flagged). More natural than the
+base64 G86 case — percent is the STANDARD URL data encoding, so an attacker would reach for it first.
+**FIX (owned output_guard.py, `_url_smuggles_data`):** percent-decode the tail (raw + Cf-stripped view via
+`urllib.parse.unquote`) into the `probe` before the detect_* gate. Decode-gated → benign URL escapes
+(`%2F`→'/', `%20`→' ', presigned sigs that decode to non-PII) are untouched.
+**Verify:** percent SSN/email/AWS/OAI-key (query/path, ±Cf) → **sensitive_payload** → full egress
+**redact**, payload_survives=**False** (md-image/`<img>` defanged); FP-clean on path-escape/space/presigned.
+In-process golden **520 ×3 consecutive clean**; backend `ai_mesh_gateway/tests` **1713 passed**.
+**Frozen:** golden `test_g89_*` (5 flag + 3 FP via `_url_smuggles_data`) + integration
+`test_output_transport_egress.py::test_g89_*` (full inspect→sanitize defang, 3 PII × 3 beacon shapes + 2 FP).
+Session ledger: THIRTEEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87/G88/G89) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+(policy_count:0 deployed live-golden issue still flagged for the control-plane session — unchanged.)

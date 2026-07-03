@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import logging
 import re
+import urllib.parse
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -225,7 +226,25 @@ def _url_smuggles_data(url: str) -> str:
         for tok, dec in _iter_transport_decodes(src):
             if len(tok) >= 24 and len(dec) >= 8:
                 decoded_parts.append(dec)
-    probe = tail + "\n" + segmented + (("\n" + "\n".join(decoded_parts)) if decoded_parts else "")
+    # G89: URLs NATIVELY percent-encode data, so a PII/secret/credential payload smuggled as %XX
+    # (`?d=%31%32%33-...`) — which the receiving server transparently percent-decodes back to the raw
+    # value — evaded the sensitive_payload signal: detect_* canonicalize but do NOT percent-decode, and
+    # the base64/hex decoded_parts don't cover percent. Percent-decode the tail (and the Cf-stripped
+    # view) into the probe so the raw PII/secret is seen. Decode-gated by detect_* below, so benign URL
+    # escapes (`%2F`->'/', `%20`->' ') that decode to non-PII are untouched.
+    _pct_views: list[str] = []
+    for _p in (tail, canonicalize_for_detection(tail)):
+        try:
+            _pd = urllib.parse.unquote(_p)
+        except Exception:  # noqa: BLE001 - decode must never break the exfil scan
+            continue
+        if _pd and _pd != _p:
+            _pct_views.append(_pd)
+    probe = (
+        tail + "\n" + segmented
+        + (("\n" + "\n".join(decoded_parts)) if decoded_parts else "")
+        + (("\n" + "\n".join(_pct_views)) if _pct_views else "")
+    )
     if detect_pii(probe) or detect_secrets(probe) or detect_credential_exposure(probe):
         return "sensitive_payload"
     if decoded_parts:
