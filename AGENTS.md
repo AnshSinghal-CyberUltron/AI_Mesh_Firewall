@@ -1,5 +1,20 @@
 # AGENTS.md — AI Mesh Firewall
 
+## Pipeline Consolidate + Fix + FREEZE changelog
+- Cursor Ralph pipeline lane consolidates, fixes, and freezes the chat pipeline code paths.
+  **Every pipeline change is logged to four memories in the SAME commit:** Ruflo
+  (`memory store --namespace pipeline/changes`), this file (one-line pointer), Cursor
+  (`.cursor/rules/pipeline-changelog.mdc`), and the canonical `docs/pipeline/CHANGELOG.md`
+  (source of truth).
+- Scratchpad: `.cursor/ralph/scratchpad.md` (P1–P9, one item/iteration).
+- Changelog pointers (newest last):
+  - PIPELINE-0001 (2026-07-03) — docs/pipeline/PATHS.md: complete code-path enumeration (4 sub-paths
+    + firewall-disabled + responses-delegate), 6 fail-open sites documented.
+  - PIPELINE-0002 (2026-07-03) — docs/pipeline/DIVERGENCES.md: divergence analysis across all paths.
+    8 divergences (D-01–D-19); highest risk = D-05 (output guard fail-open exception Path B), D-06
+    (streaming skips reasoning_content/tool_calls). Streaming vs non-streaming enforcement matrix.
+    Cross-ref to the known input_scan BLOCK + model_output 7710ms leak.
+
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
   logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`

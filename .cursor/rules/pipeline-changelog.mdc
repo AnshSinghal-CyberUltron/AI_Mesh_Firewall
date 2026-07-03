@@ -1,0 +1,42 @@
+---
+description: Pipeline consolidation/fix/freeze changelog (mirror of docs/pipeline/CHANGELOG.md)
+globs:
+  - "gateway/ai_mesh_gateway/main.py"
+  - "gateway/ai_mesh_gateway/enforcement.py"
+  - "gateway/ai_mesh_gateway/secure_streaming.py"
+  - "gateway/ai_mesh_gateway/output_guard.py"
+  - "gateway/ai_mesh_gateway/scanner.py"
+  - "gateway/ai_mesh_gateway/pipeline_trace.py"
+  - "docs/pipeline/**"
+alwaysApply: false
+---
+
+# Pipeline Consolidate + Fix + FREEZE — changelog protocol (Cursor mirror)
+
+The pipeline lane consolidates, fixes, and freezes the chat pipeline code paths in
+`gateway/ai_mesh_gateway/main.py` (13036 lines). Every pipeline change MUST be logged
+to **all four memories in the same commit**:
+
+1. Ruflo — `memory store --namespace pipeline/changes --key "<PIPELINE-id>" --value "…"`.
+2. Claude — one-line pointer in repo-root `AGENTS.md` (*Pipeline changelog* section).
+3. Cursor — an entry appended to THIS file (`.cursor/rules/pipeline-changelog.mdc`).
+4. Canonical — the full entry in `docs/pipeline/CHANGELOG.md` (source of truth).
+
+Minimum fields per entry: change-id · date · files · WHAT · WHY · NOW DOES · VERIFY.
+
+Hard rules: one `PIPELINE-NNNN` per logical change (never reuse an id); commit small;
+stage narrowly (the worktree/index is SHARED across sessions — never `git add -A`);
+rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
+(`cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`).
+
+## Changelog entries (newest last)
+
+- PIPELINE-0001 (2026-07-03) — docs/pipeline/PATHS.md: complete enumeration of every chat
+  code path (4 sub-paths + firewall-disabled + responses-delegate), 6 fail-open sites,
+  stage sequences documented.
+- PIPELINE-0002 (2026-07-03) — docs/pipeline/DIVERGENCES.md: full divergence analysis across
+  all 4 sub-paths. 8 divergences documented with severity + line refs. Highest risk: D-05
+  (output guard fail-open on exception, Path B), D-06 (streaming skips reasoning_content/
+  tool_calls scanning). Streaming vs non-streaming enforcement matrix. Fail-open sites
+  cataloged with evidence. Cross-referenced to the known input_scan BLOCK + model_output
+  7710ms leak.
