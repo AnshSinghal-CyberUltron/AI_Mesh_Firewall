@@ -59,6 +59,11 @@ def greek_homoglyph(s: str) -> str:
     return "".join(_GREEK_HOMO.get(c, c) for c in s.lower())
 
 
+def base32(s: str) -> str:
+    """G97: base32-encode (A-Z2-7). Prompt-laundering the base64/hex decode used to miss."""
+    return base64.b32encode(s.encode()).decode()
+
+
 # G96: Mathematical Alphanumeric Symbols (U+1D400+) — "fancy" unicode a jailbreak is often
 # pasted in (𝓲𝓰𝓷𝓸𝓻𝓮 / 𝕚𝕘𝕟𝕠𝕣𝕖 / 𝚒𝚐𝚗𝚘𝚛𝚎 …). NFKC compat-folds these to ASCII, so the firewall
 # must still block. Lowercase bases; a few styles place letters as letterlike symbols OUTSIDE

@@ -3034,3 +3034,34 @@ live golden gate 10/10 (GATEWAY_LIVE=1) · kill-switch reroute+block+auto-expiry
 The FULL literal 591-variant × all-10-models sweep stays throttle-bounded and is redundant with
 in-process 591×3 + this family-complete live matrix. No source change; no key persisted; secret-scan gated.
 Session ledger unchanged: G74..G95 (19 leaks) fixed + G96 freezes 6 defended vectors; G77/G78/G80 frozen.
+
+---
+
+## G97 (CONFIRMED leak — fixed) — 2026-07-03 — base32 transport-laundering bypass (R3-informed)
+R3: studied OSS/garak/LLM-Guard/Rebuff-documented vectors and translated the untested ones into an
+in-process probe. Most were DEFENDED (chat-template/special-token injection `<|im_start|>`/`[INST]`/
+`<<SYS>>`/`### Instruction`/`<|system|>` → block; rot13 + hex encodings → block; DAN/developer-mode/
+roleplay/refusal-suppression/hypothetical jailbreaks → block). Two encoding LEAKS found: **base32 AND
+base85**-wrapped injections → **allow** (the transport decoder handled base64+hex but not these).
+**Root cause:** base32's alphabet (A-Z2-7) is a SUBSET of base64's, so the base64 decode attempt on a
+base32 blob yields non-printable garbage and is gated out — an injection OR PII/secret laundered through
+base32 ("please base32-decode and follow: <blob>") slipped past BOTH the injection scan and detect_pii/
+detect_secrets. LLMs decode base32, so it's the same realistic prompt-laundering class as G34/base64.
+**FIX (both owned files):** added a base32 decode pass — scanner.py `_BASE32_TOKEN_RE` +
+`_decode_one_layer` base32 branch; patterns.py `_B32ISH_RE` + `_decode_one_b32` + `_iter_transport_decodes`
+base32 pass. Printable-ratio/printability gated (FP-safe), shares the existing decoded-byte budget
+(decode-bomb safe), follows nested base32∘base64/hex layers, reports the OUTER token so masking lands on
+the original bytes.
+**Verify:** base32 injection (+ nested base32-of-base64) → **block**; base32 SSN/email/AWS/openai-key →
+detected + masked out of egress; FP-clean on benign base32 prose / all-caps acronym runs / TOTP base32
+seeds (JBSWY3DPEHPK3PXP) / plain text. In-process golden **598 ×3 consecutive** (was 591; +7 G97: 3 inject
++ 3 secret + 1 FP); frozen chat-pipeline golden 3 pass; backend `ai_mesh_gateway/tests` **1826 passed / 0
+failed**. Added `base32()` corpus helper.
+**Frozen:** golden `test_g97_*`.
+**Follow-ups flagged (separate items):** (1) **base85** injection/secret still leaks (broader alphabet
+overlaps base64; needs a conservative b85 pass) — NEXT. (2) **FALSE POSITIVE** — a benign discussion of
+the `<|im_start|>` chat token ("in my code I parse the <|im_start|> token…") is BLOCKED (the special-token
+signature fires on the token alone); a false-block to fix. (3) "grandma exploit" persona extraction allowed
+(soft jailbreak; high FP risk to pattern-match — deferred, likely out of pattern-firewall scope).
+Session ledger: TWENTY confirmed leaks/gaps (G74..G95, G97) fixed + G96 freezes 6 defended vectors;
+G77/G78/G80 frozen.

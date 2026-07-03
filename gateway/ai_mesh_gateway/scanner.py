@@ -386,6 +386,11 @@ _SMALLCAP_TABLE: dict[int, int] = {k: ord(v) for k, v in _SMALLCAP_MAP.items()}
 _TRANSPORT_DECODE_MAX_LEN: int = 200
 _BASE64_TOKEN_RE: re.Pattern[str] = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
 _HEX_TOKEN_RE: re.Pattern[str] = re.compile(r"(?:[0-9a-fA-F]{2}){8,}")
+# G97: base32 laundering ("please base32-decode and follow: <blob>"). The base64/hex decode
+# missed it (base32's A-Z2-7 alphabet IS a subset of base64's, so the base64 attempt just yields
+# non-printable garbage and is gated out) — so an injection wrapped in base32 slipped past. Same
+# realistic prompt-laundering class as G34/base64; LLMs decode base32. Printability-gated => FP-safe.
+_BASE32_TOKEN_RE: re.Pattern[str] = re.compile(r"[A-Z2-7]{16,}={0,6}")
 # G22: follow up to this many NESTED encoding layers (double-base64 / base64-of-hex
 # "prompt laundering") so an injection wrapped in >1 encoding layer is still rescanned.
 # Bounded depth + per-token length cap => decode-bomb safe.
@@ -530,6 +535,21 @@ def _decode_one_layer(text: str, seen: set[str]) -> list[str]:
         if len(token) > _TRANSPORT_DECODE_MAX_LEN:
             continue
         out.extend(_nested_decode_variants(token, True, seen))
+    # G97: base32-decode embedded tokens (single layer; the decoded output re-enters the
+    # level-2 pass in _decode_transport_variants so base32∘base64 laundering is still caught).
+    for token in _BASE32_TOKEN_RE.findall(text)[:8]:
+        core = token.rstrip("=")
+        if not (16 <= len(core) <= _TRANSPORT_DECODE_MAX_LEN):
+            continue
+        try:
+            raw = base64.b32decode(core + "=" * (-len(core) % 8), casefold=False)
+            decoded = raw.decode("utf-8", errors="strict")
+        except (binascii.Error, ValueError, UnicodeDecodeError):
+            continue
+        probe = "".join(ch for ch in _decode_unicode_tags(decoded) if unicodedata.category(ch) != "Cf")
+        if probe.isprintable() and decoded not in seen:
+            seen.add(decoded)
+            out.append(decoded)
     for v in _decode_text_encoding_variants(text):
         if v not in seen:
             seen.add(v)

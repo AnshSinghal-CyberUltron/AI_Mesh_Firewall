@@ -179,6 +179,10 @@ def strip_interleaved_emphasis(text: str) -> str:
 # --- bounded transport decode (G2): surface PII/secrets hidden in base64/hex ---
 _B64ISH_RE = re.compile(r"[A-Za-z0-9+/]{12,}={0,2}")
 _HEXISH_RE = re.compile(r"(?:[0-9A-Fa-f]{2}){8,}")
+# G97: base32 (A-Z2-7). Its alphabet is a subset of base64's, so the base64 pass tries these
+# tokens first and yields garbage (gated out) — a PII/secret laundered through base32 therefore
+# leaked. Decode them as base32 here. Printable-ratio gated => FP-safe (parity with scanner G97).
+_B32ISH_RE = re.compile(r"[A-Z2-7]{16,}={0,6}")
 # CHG-0060: the decode scan is bounded by a decoded-BYTE budget, not a token COUNT.
 # The old count cap (12) let a result hide an encoded secret past 12 decoy tokens
 # (``<12 benign base64 blobs> <base64(secret)>`` -> the secret token was never decoded
@@ -259,6 +263,20 @@ def _decode_one(tok: str, is_hex: bool):
 _ALL_HEX_RE = re.compile(r"[0-9a-fA-F]+")
 
 
+def _decode_one_b32(tok: str):
+    """G97: decode a single base32 token to mostly-printable UTF-8, else ``None``."""
+    try:
+        core = tok.rstrip("=")
+        raw = base64.b32decode(core + "=" * (-len(core) % 8), casefold=False)
+        if not (0 < len(raw) <= _MAX_DECODE_BYTES):
+            return None
+        dec = raw.decode("utf-8")
+    except Exception:
+        return None
+    probe = canonicalize_for_detection(dec)
+    return dec if probe and _printable_ratio(probe) >= 0.8 else None
+
+
 def _decode_nested(layer: str):
     """A decoded blob may itself be another encoding layer. Find the first base64/hex
     token in ``layer`` and decode it; returns the next-layer text or ``None``. A pure-
@@ -318,6 +336,29 @@ def _iter_transport_decodes(text: str):
                 budget -= len(nxt)
                 yield top_tok, nxt
                 layer = nxt
+    # G97: base32 pass (A-Z2-7). Runs after base64/hex over the same budget; the decoded
+    # payload follows nested base32∘base64/hex layers, always reporting the OUTER token.
+    seen32 = 0
+    for m in _B32ISH_RE.finditer(scan):
+        if seen32 >= _MAX_DECODE_TOKENS or budget <= 0:
+            break
+        seen32 += 1
+        top_tok = m.group(0)
+        dec = _decode_one_b32(top_tok)
+        if dec is None:
+            continue
+        budget -= len(dec)
+        yield top_tok, dec
+        layer = dec
+        for _ in range(_MAX_DECODE_DEPTH - 1):
+            if budget <= 0:
+                break
+            nxt = _decode_nested(layer)
+            if nxt is None or nxt == layer:
+                break
+            budget -= len(nxt)
+            yield top_tok, nxt
+            layer = nxt
 
 
 def _iter_transport_decodes_canon(text: str, canon: str):
