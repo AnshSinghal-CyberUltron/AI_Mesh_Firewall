@@ -3300,3 +3300,11 @@ G104) — the Responses-API input flattener, a chat-module boundary. Minimal + s
 fail-open) + backward-compatible. Keep the golden `_fold_responses` replica in sync if you touch it.
 Session ledger: TWENTY-SIX leaks (G74..G95, G97, G98, G100..G104) + ONE false-block (G99) fixed; G96
 freezes 6 defended vectors; G77/G78/G80 frozen.
+
+### G104 DEPLOY + LIVE-VERIFY — 2026-07-03
+Rebuilt+redeployed the baked gateway (tag rollback-g104 → build → up -d --no-deps → healthy ~4s).
+LIVE-verified through the deployed **/v1/responses** endpoint: injection in a Responses `function_call`
+→ **HTTP 400 "Request blocked due to security policy"**; injection in `function_call_output` → **HTTP 400**
+(both were fail-opens before G104). G104 validated end-to-end (in-process 637×3 + backend 1902 + live block
+on the real Responses endpoint). G103+G104 close the structured-channel indirect-injection fail-opens on
+BOTH /v1/chat/completions and /v1/responses.
