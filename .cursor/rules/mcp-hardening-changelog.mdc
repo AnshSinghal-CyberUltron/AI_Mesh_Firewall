@@ -1316,6 +1316,21 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `mcp-parallel/findings/backstop-p-audit-backpressure-priority/`. (Observability fix — no content leak, so no
   aidefence oracle; proof is the shed-decision + drop-metric behavior test.)
 
+- **CHG-0095** (2026-07-03) — **MEDIUM audit-completeness gap: ext-proxy infra-error WITHHOLD/redact
+  decisions were not audited**. `ext_mcp_proxy` audits its SSRF/credential/PII blocks (CHG-0068/0070) but
+  several fail-closed enforcement decisions recorded NOTHING → invisible in the MCPEvent trail:
+  response-too-large withhold (SSE + non-SSE, CHG-0064), non-JSON body withhold + redact, JSON-RPC
+  error-content withhold + redact, non-200 body withhold + redact (CHG-0061), request-body-too-large DoS
+  reject. This is the residual CHG-0068/0070 explicitly left open. **FIX:** added `_ext_audit(...)` at every
+  silent site (fire-and-forget, no latency, no-op unauth) with stable reasons (`response_too_large`,
+  `text_body_withheld`/`text_body_redacted`, `error_content_withheld`/`error_content_redacted`,
+  `nonok_body_withheld`/`nonok_body_redacted`, `request_too_large`), carrying tool + tags + findings. Purely
+  additive (response bodies unchanged). NEW TEST `test_mcp_ext_withhold_audit.py` (5, assert
+  `_record_gateway_event` fired with the right decision/reason; text test also asserts email masked on
+  egress). Gate: 5 + 1558 gateway passed, 0 failed; broker 108. touched: owning-session ext passthrough audit
+  (CHG-0068/0070). Evidence `mcp-parallel/findings/backstop-p-ext-withhold-audit/`. RESIDUAL: the
+  domain-not-allowlisted 403 (before the `_ext_audit` closure, static input reject) left unaudited by design.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

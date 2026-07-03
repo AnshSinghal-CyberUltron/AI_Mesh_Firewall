@@ -844,6 +844,17 @@
     change). NEW TEST test_mcp_audit_backpressure_priority.py (5). Gate: 5 + 1552 gateway passed 0 failed;
     broker 108. Evidence mcp-parallel/findings/backstop-p-audit-backpressure-priority/. (Observability/audit
     fix — no content leak, so no aidefence oracle; proof is the shed-decision + drop-metric behavior test.)
+  - CHG-0095 (2026-07-03) — MEDIUM audit-completeness gap: ext-proxy (ext_mcp_proxy, mcp_proxy.py) infra-error
+    WITHHOLD/redact decisions were NOT audited. It audits SSRF/credential/PII blocks (CHG-0068/0070) but the
+    fail-closed infra paths recorded nothing → invisible in the MCPEvent trail: response-too-large withhold
+    (SSE+non-SSE, CHG-0064), non-JSON body withhold+redact, JSON-RPC error-content withhold+redact, non-200
+    body withhold+redact (CHG-0061), request-too-large DoS reject. This is the residual CHG-0068/0070 left
+    open. FIX: added _ext_audit(...) at every silent site (fire-and-forget, no-op unauth) with stable reasons
+    (response_too_large / text_body_withheld+redacted / error_content_withheld+redacted / nonok_body_withheld+
+    redacted / request_too_large), carrying tool+tags+findings. Purely additive (bodies unchanged). NEW TEST
+    test_mcp_ext_withhold_audit.py (5, assert _record_gateway_event fired with the right decision/reason). Gate:
+    5 + 1558 gateway passed 0 failed; broker 108. Evidence mcp-parallel/findings/backstop-p-ext-withhold-audit/.
+    RESIDUAL: domain-not-allowlisted 403 (before _ext_audit def, static input reject) left unaudited by design.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

@@ -1553,6 +1553,7 @@ async def ext_mcp_proxy(path: str, request: Request):
 
     # CHG-0034: reject an oversized body before buffering it (DoS guard).
     if _mcp_body_too_large(request):
+        await _ext_audit("block", "request_too_large")  # CHG-0095: audit the DoS-guard reject
         return _mcp_body_too_large_response()
 
     target_url = f"https://{hostname}/{remaining}"
@@ -1694,6 +1695,8 @@ async def ext_mcp_proxy(path: str, request: Request):
                         "ext_mcp_proxy.sse_response_too_large host=%s tool=%s",
                         hostname, _ext_tool_name or "?",
                     )
+                    await _ext_audit(  # CHG-0095: audit the fail-closed SSE too-large withhold
+                        "block", "response_too_large", tool=_ext_tool_name)
                     return _mcp_upstream_too_large_response()
                 await resp.aclose()
                 await client.aclose()
@@ -1779,6 +1782,8 @@ async def ext_mcp_proxy(path: str, request: Request):
             await resp.aclose()
             await client.aclose()
             LOG.warning("ext_mcp_proxy.response_too_large host=%s", hostname)
+            await _ext_audit(  # CHG-0095: audit the fail-closed too-large withhold
+                "block", "response_too_large", tool=_ext_tool_name)
             return _mcp_upstream_too_large_response()
         await resp.aclose()
         await client.aclose()
@@ -1813,11 +1818,18 @@ async def ext_mcp_proxy(path: str, request: Request):
                         "non-JSON body could not be safely inspected",
                         hostname, _ext_tool_name or "?", _txt_tags,
                     )
+                    await _ext_audit(  # CHG-0095: audit the non-JSON body withhold
+                        "block", "text_body_withheld",
+                        tool=_ext_tool_name, tags=_txt_tags, findings=_tf)
                     return Response(
                         content="Response withheld: body could not be safely inspected.",
                         status_code=resp.status_code, media_type="text/plain",
                         headers=resp_headers,
                     )
+                if _txt_scanned is not _raw_text:  # CHG-0095: audit the non-JSON body redaction
+                    await _ext_audit(
+                        "redact", "text_body_redacted",
+                        tool=_ext_tool_name, tags=_txt_tags, findings=_tf)
                 _out_text = _txt_scanned if isinstance(_txt_scanned, str) else _raw_text
                 return Response(
                     content=_out_text.encode("utf-8"),
@@ -1916,6 +1928,9 @@ async def ext_mcp_proxy(path: str, request: Request):
                     "could not be safely inspected",
                     hostname,
                 )
+                await _ext_audit(  # CHG-0095: audit the error-content withhold
+                    "block", "error_content_withheld",
+                    tool=_ext_tool_name, tags=_err_tags, findings=_err_findings)
                 return JSONResponse(
                     content={
                         "jsonrpc": data.get("jsonrpc", "2.0"),
@@ -1930,6 +1945,9 @@ async def ext_mcp_proxy(path: str, request: Request):
                 )
             if _scanned_err is not _ext_err:
                 data["error"] = _scanned_err
+                await _ext_audit(  # CHG-0095: audit the error-content redaction
+                    "redact", "error_content_redacted",
+                    tool=_ext_tool_name, tags=_err_tags, findings=_err_findings)
 
         elif resp.status_code != 200 and data is not None:
             # CHG-0061: a non-200 body WITHOUT a JSON-RPC result/error (e.g.
@@ -1950,12 +1968,18 @@ async def ext_mcp_proxy(path: str, request: Request):
                     "non-200 body could not be safely inspected",
                     hostname, resp.status_code, _whole_tags,
                 )
+                await _ext_audit(  # CHG-0095: audit the non-200 body withhold
+                    "block", "nonok_body_withheld",
+                    tool=_ext_tool_name, tags=_whole_tags, findings=_wf)
                 return JSONResponse(
                     content={"error": "Response withheld: body could not be safely inspected."},
                     status_code=resp.status_code, headers=resp_headers,
                 )
             if _whole_scanned is not data:
                 data = _whole_scanned
+                await _ext_audit(  # CHG-0095: audit the non-200 body redaction
+                    "redact", "nonok_body_redacted",
+                    tool=_ext_tool_name, tags=_whole_tags, findings=_wf)
 
         return JSONResponse(content=data, status_code=resp.status_code, headers=resp_headers)
     except httpx.RequestError as exc:

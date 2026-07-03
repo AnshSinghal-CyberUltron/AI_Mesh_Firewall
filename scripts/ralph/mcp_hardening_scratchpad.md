@@ -482,6 +482,17 @@
       TEST test_mcp_audit_backpressure_priority.py (5). Gate: 5 + 1552 gateway passed 0 failed; broker 108.
       Evidence mcp-parallel/findings/backstop-p-audit-backpressure-priority/finding.md. (Observability fix — no
       content leak, so no aidefence oracle; proof is the shed-decision + drop-metric behavior test.)
+      CHG-0095 (2026-07-03, MEDIUM audit-completeness gap — ext-proxy infra-error WITHHOLD/redact not audited):
+      ext_mcp_proxy (mcp_proxy.py) audits SSRF/credential/PII blocks (CHG-0068/0070) but the fail-closed infra
+      paths recorded nothing → invisible in the MCPEvent trail: response-too-large withhold (SSE+non-SSE,
+      CHG-0064), non-JSON body withhold+redact, JSON-RPC error-content withhold+redact, non-200 body withhold+
+      redact (CHG-0061), request-too-large DoS reject. This CLOSES the residual at item-9 lines ~760-769 ("infra-
+      error withholds not yet audited"). FIX: _ext_audit(...) at every silent site (fire-and-forget, no-op unauth)
+      with stable reasons (response_too_large / text_body_withheld+redacted / error_content_withheld+redacted /
+      nonok_body_withheld+redacted / request_too_large), carrying tool+tags+findings; purely additive. NEW TEST
+      test_mcp_ext_withhold_audit.py (5). Gate: 5 + 1558 gateway passed 0 failed; broker 108. Evidence
+      mcp-parallel/findings/backstop-p-ext-withhold-audit/finding.md. RESIDUAL: domain-not-allowlisted 403
+      (before _ext_audit def, static input reject) left unaudited by design.
       CHG-0061 (2026-07-02, HIGH — ext_mcp_proxy non-200 / non-JSON egress leak): the tenant-facing
       external passthrough ext_mcp_proxy (/v1/mcp/ext-proxy/{host}/{path}) ran its outbound result/error
       redaction floor ONLY on status==200 JSON bodies — so a NON-JSON body (HTML/text/xml error page;
