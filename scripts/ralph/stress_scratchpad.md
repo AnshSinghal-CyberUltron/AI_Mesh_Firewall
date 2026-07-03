@@ -1277,6 +1277,22 @@
         URL channel; exotic one-click vector — fold+neutralize is a larger fix, revisit if a realistic trigger).
         TWENTY confirmed-live leaks + G62 defense-in-depth (G40-G46, G49-G62) + G48 + 2 tradeoffs. OUTPUT content
         extraction now handles EVERY shape: str, list, dict — no content shape can skip the output guard.
+    - 🟠 G63 /v1/moderations unbounded input array = CPU DoS (LLM04, 2026-07-02):
+        Pivoted from PII-leak extraction to DoS. /v1/moderations tier-1-scans EVERY item of the input array
+        (~ms each) but had NO batch/size cap — unlike /v1/embeddings (MAX_EMBED_BATCH=256 / MAX_EMBED_INPUT_
+        CHARS=200_000). MEASURED: ~31ms/scan, so a single AUTHENTICATED request with a ~5000-item array = ~155s
+        of scan CPU (resource-exhaustion DoS). Per-item length is already bounded (scanner MAX_PROMPT_LENGTH=
+        10000 rejects a huge single element in 0ms), so the batch COUNT was the unbounded axis. FIX (owned
+        main.py chat surface): MAX_MODERATION_BATCH=256 + MAX_MODERATION_INPUT_CHARS=200_000; reject an over-
+        limit item-count OR total-char array with 413 BEFORE any scan runs (mirrors the embeddings ceilings).
+        VERIFY (real endpoint via ASGI client): 257-item + over-char arrays -> 413 up front; a 3-item batch ->
+        200 with 3 results (contrast catches a stuck-413). FROZEN a c4 adversarial DoS-bound test. GATE: golden
+        406×3; gateway suite 1527 pass; moderation tests 7 pass. commit 00d26b2f (own msg; NOTE: bash command-
+        substituted the backticked `input` in the -m message to empty — cosmetic only, code correct; LESSON: no
+        backticks in `git commit -m`). REDEPLOYING (rollback gateway-rollback-pre-g63).
+        DoS surface note: chat (MAX_MESSAGES + per-msg len), embeddings (batch+chars), moderations (G63 batch+
+        chars), exfil-URL flood (G49), ReDoS caps — all bounded. completions batches via chat (per-prompt
+        dispatch, each firewalled + capped).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
