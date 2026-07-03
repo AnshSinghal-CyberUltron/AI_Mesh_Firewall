@@ -33,6 +33,11 @@ from ai_mesh_shared.mcp_stdio_common import (
     _safe_args_for_log,
 )
 
+try:  # CLEANUP-03: route stdio-start failures through the gateway classifier
+    from .mcp_error_classifier import mint_ref, sanitize_mcp_error
+except ImportError:  # pragma: no cover - flat-module deployment
+    from mcp_error_classifier import mint_ref, sanitize_mcp_error
+
 LOG = logging.getLogger("gateway.mcp_stdio_adapter")
 
 # How long an idle process lives before being reaped (seconds)
@@ -232,6 +237,46 @@ def _flag_needs_reauth(proc: StdioProcess, evidence: str) -> None:
     asyncio.create_task(_kill_process(proc.key))
 
 
+async def _stdio_failure_message(proc, rc, stderr_tail: str) -> str:
+    """CLEANUP-03: clean, non-revealing CLIENT message for a stdio server that died.
+
+    Routes the cause through the shared gateway classifier so the message set on the
+    pending futures is exit-code-free, env-var-free, brand-safe, and carries no server
+    key. The raw exit code, stderr tail, and operator env-var tuning hints stay in the
+    WARNING logs + the dev-only diagnostic keyed by ref — never in the client message.
+    A V8 heap OOM aborts with SIGABRT (134) but is really OOM, so the stderr signature
+    is checked BEFORE the exit code (134 alone would misclassify as a crash)."""
+    low = (stderr_tail or "").lower()
+    oom = any(s in low for s in ("heap out of memory", "out of memory",
+                                 "fatal error: reached heap limit"))
+    disk_full = any(s in low for s in ("enospc", "no space left on device"))
+    org_slug, _, srv_slug = (proc.key or "").partition("/")
+    if getattr(proc, "oversized_line", False):
+        LOG.warning("Stdio %s failed [ref=%s cause=oversized_line rc=%s] — raise "
+                    "MCP_STDIO_MAX_LINE_BYTES (%s) for very large tool catalogs",
+                    proc.key, mint_ref(), rc, _MAX_LINE_BYTES)
+        return ("The MCP server sent a response too large for the gateway to process. "
+                "Contact support if this persists.")
+    if disk_full:
+        clean = await sanitize_mcp_error(raw="no space left on device",
+                                         org_slug=org_slug, server_slug=srv_slug)
+    elif oom or rc in (-9, 137):
+        clean = await sanitize_mcp_error(raw="out of memory",
+                                         org_slug=org_slug, server_slug=srv_slug)
+    elif rc is None:
+        clean = await sanitize_mcp_error(raw="stdout stream closed",
+                                         org_slug=org_slug, server_slug=srv_slug)
+    elif rc == 0:
+        clean = await sanitize_mcp_error(
+            raw="server exited immediately, likely a missing host dependency or wrong package name",
+            org_slug=org_slug, server_slug=srv_slug)
+    else:
+        clean = await sanitize_mcp_error(exit_code=rc, org_slug=org_slug, server_slug=srv_slug)
+    LOG.warning("Stdio %s failed [ref=%s code=%s rc=%s oom=%s disk_full=%s]",
+                proc.key, clean["ref"], clean["code"], rc, oom, disk_full)
+    return clean["error"]
+
+
 async def _start_reader(proc: StdioProcess):
     """Background task that reads stdout lines and resolves pending futures."""
     assert proc.process and proc.process.stdout
@@ -291,44 +336,11 @@ async def _start_reader(proc: StdioProcess):
         if stderr_tail:
             LOG.warning("Stdio %s stderr tail (rc=%s):\n%s",
                         proc.key, rc, stderr_tail[-2000:])
-        # A V8 heap OOM (NODE_OPTIONS --max-old-space-size cap, CP20) aborts with
-        # SIGABRT (134) but prints "JavaScript heap out of memory"; a kernel
-        # OOM-kill is -9/137. Detect the stderr signature FIRST so it is
-        # categorized as OOM (→ MCP_OUT_OF_MEMORY) not a generic crash.
-        _low_err = stderr_tail.lower()
-        _oom_in_stderr = any(
-            s in _low_err
-            for s in ("heap out of memory", "out of memory", "fatal error: reached heap limit")
-        )
-        _disk_full = any(s in _low_err for s in ("enospc", "no space left on device"))
-        if proc.oversized_line:
-            reason = (
-                "the MCP server sent a response larger than the gateway's "
-                f"{_MAX_LINE_BYTES}-byte line buffer (raise "
-                "MCP_STDIO_MAX_LINE_BYTES for servers with very large tool "
-                "catalogs)"
-            )
-        elif _disk_full:
-            reason = ("the MCP server's install exceeded the sandbox storage limit "
-                      "(no space left on device). Raise MCP_SANDBOX_NPM_CACHE_SIZE_MB "
-                      "(and usually MCP_SANDBOX_MEMORY_MB) for heavy servers")
-        elif _oom_in_stderr or rc in (-9, 137):
-            reason = (f"the MCP server ran out of memory (exit code {rc}; exceeded the "
-                      "per-org sandbox memory limit). Raise MCP_SANDBOX_MEMORY_MB for "
-                      "heavy servers or reduce its footprint")
-        elif rc is None:
-            reason = "stdout stream closed unexpectedly"
-        elif rc == 0:
-            reason = ("the MCP server exited immediately without responding "
-                      "(likely a missing host dependency or wrong package name)")
-        elif rc in (-6, 134):
-            reason = (f"the MCP server crashed on startup (exit code {rc} / SIGABRT). "
-                      "Verify the command and package are compatible")
-        else:
-            reason = (f"the MCP server process exited with code {rc} "
-                      "(check the command and its host dependencies)")
-        safe_msg = (f"Stdio MCP server '{proc.key}' failed to start: {reason}. "
-                    "See gateway logs for details.")
+        # CLEANUP-03: the CLIENT-facing message is built by the shared classifier
+        # (see _stdio_failure_message) — exit-code-free, env-var-free, brand-safe,
+        # no server key. The raw exit code / stderr / operator env-var hints stay in
+        # the WARNING logs + the dev-only diagnostic keyed by ref.
+        safe_msg = await _stdio_failure_message(proc, rc, stderr_tail)
         # Mark all pending futures as failed with the secret-free message.
         for fut in proc._pending.values():
             if not fut.done():
