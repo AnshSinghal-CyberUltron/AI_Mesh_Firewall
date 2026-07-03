@@ -329,6 +329,30 @@ def _store_oauth_tokens(server, tok: dict) -> None:
     server.save(update_fields=update_fields)
 
 
+def _oauth_token_present_and_unexpired(server) -> bool:
+    """True when the server currently holds a usable OAuth access token that has
+    not expired — so a fresh re-authorization would just re-mint the same kind of
+    token the upstream may already be rejecting."""
+    if getattr(server, "auth_type", "") != "oauth" or not getattr(server, "auth_token", ""):
+        return False
+    exp = getattr(server, "oauth_token_expires_at", None)
+    return exp is None or exp > timezone.now()
+
+
+def _is_auth_rejection_message(msg: str) -> bool:
+    """True when a sanitized sync error indicates the UPSTREAM rejected auth
+    (401/403), as opposed to a missing / expired local token."""
+    low = (msg or "").lower()
+    return any(
+        k in low
+        for k in (
+            "rejected authentication", "rejected the oauth", "re-authorize",
+            "re-authenticate", "needs re-authentication", " 401", " 403",
+            "unauthorized", "forbidden",
+        )
+    )
+
+
 def _ensure_oauth_token_fresh(server) -> bool:
     """Refresh the OAuth access token in place when missing or near expiry.
 
@@ -720,6 +744,24 @@ def _resync_server_tools(server, org) -> dict:
     server.last_sync_at = timezone.now()
     server.connection_status = "connected" if (sync_error is None) else "failed"
     update_fields = ["tools_count", "last_sync_at", "connection_status", "updated_at"]
+    # OAuth token PRESENT + UNEXPIRED but the upstream STILL rejected it (401/403):
+    # re-authorizing just re-mints a token of the same kind the server already
+    # refused, so the generic "re-authorize the connection" message sends the operator
+    # in a loop ("even though I clicked re-authorize"). Replace it with an honest,
+    # non-looping message and leave needs_reauth False — re-auth cannot fix an OAuth
+    # config / audience / account-access mismatch on an otherwise-valid token.
+    if (
+        sync_error is not None
+        and _oauth_token_present_and_unexpired(server)
+        and _is_auth_rejection_message(sync_error)
+    ):
+        _ref = re.search(r"\(Ref: [0-9a-fA-F]{6,}\)", sync_error or "")
+        sync_error = (
+            "The MCP server rejected your OAuth token even though it is valid and "
+            "unexpired — re-authorizing will not help. Check this server's OAuth "
+            "configuration (scopes, resource/audience) and that your account has "
+            "access to it." + (f" {_ref.group(0)}" if _ref else "")
+        )
     if hasattr(server, "last_sync_error"):
         server.last_sync_error = sync_error or ""
         update_fields.append("last_sync_error")
