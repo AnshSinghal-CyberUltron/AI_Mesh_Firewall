@@ -7,6 +7,7 @@ and DROPS the oversized event while continuing to serve subsequent events.
 """
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -109,3 +110,31 @@ async def test_multiline_data_under_cap_still_joined():
     sess = _session(lines)
     await sse_manager._sse_reader_loop(sess, connect_timeout=1.0)
     assert _drain(sess) == [{"jsonrpc": "2.0", "id": 3, "result": {"v": 1}}]
+
+
+# ── CHG-0129: bound the sse_responses queue (unsolicited-flood OOM guard) ─────
+
+@pytest.mark.asyncio
+async def test_bounded_put_drops_oldest_when_full():
+    q = asyncio.Queue(maxsize=2)
+    sse_manager._bounded_put(q, {"id": 1}, "srv")
+    sse_manager._bounded_put(q, {"id": 2}, "srv")
+    sse_manager._bounded_put(q, {"id": 3}, "srv")   # full → evict oldest (id 1)
+    assert q.qsize() == 2
+    assert [q.get_nowait(), q.get_nowait()] == [{"id": 2}, {"id": 3}]
+
+
+@pytest.mark.asyncio
+async def test_unsolicited_message_flood_keeps_queue_bounded():
+    # No consumer drains; an untrusted upstream floods 50 unsolicited message events.
+    # The (patched-small) bounded queue must stay <= maxsize and RETAIN the freshest.
+    lines: list[str] = []
+    for i in range(50):
+        lines += ["event: message", f'data: {{"jsonrpc":"2.0","id":{i},"result":{{}}}}', ""]
+    sess = _session(lines)
+    with patch.object(sse_manager, "_SSE_QUEUE_MAXSIZE", 8):
+        await sse_manager._sse_reader_loop(sess, connect_timeout=1.0)
+    assert sess.sse_responses is not None
+    assert sess.sse_responses.qsize() <= 8          # never grew unbounded
+    ids = [d["id"] for d in _drain(sess)]
+    assert 49 in ids and 0 not in ids               # drop-oldest kept the freshest

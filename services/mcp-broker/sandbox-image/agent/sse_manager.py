@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -24,6 +25,37 @@ from agent.upstream_manager import (
 )
 
 LOG = logging.getLogger("sandbox_agent.sse")
+
+# CHG-0129: bound the per-session SSE response queue. The persistent reader keeps
+# running between RPCs, so an untrusted upstream flooding UNSOLICITED `message`
+# events (with no consumer draining) would grow an unbounded asyncio.Queue until
+# the sandbox agent OOMs. Cap it and drop the OLDEST on overflow (keep the freshest,
+# most likely to match a pending request) — the reader never blocks.
+_SSE_QUEUE_MAXSIZE = max(16, int(os.environ.get("MCP_AGENT_SSE_QUEUE_MAXSIZE", "1024")))
+
+
+def _new_sse_queue() -> asyncio.Queue:
+    return asyncio.Queue(maxsize=_SSE_QUEUE_MAXSIZE)
+
+
+def _bounded_put(queue: asyncio.Queue, item: Any, server_slug: str) -> None:
+    """Non-blocking put that drops the oldest entry when the queue is full, so a
+    flooding upstream cannot grow the queue unbounded and cannot stall the reader.
+    (A waiting get() receives the item directly and never counts against maxsize.)"""
+    try:
+        queue.put_nowait(item)
+        return
+    except asyncio.QueueFull:
+        pass
+    try:
+        queue.get_nowait()  # evict oldest — atomic (no await between get/put)
+    except asyncio.QueueEmpty:
+        pass
+    try:
+        queue.put_nowait(item)
+    except asyncio.QueueFull:
+        pass
+    LOG.warning("SSE response queue full for %s; dropped oldest response", server_slug)
 
 
 async def stop_sse_reader(session: UpstreamSession) -> None:
@@ -44,7 +76,7 @@ async def _sse_reader_loop(session: UpstreamSession, connect_timeout: float) -> 
     """Maintain GET /sse; parse endpoint + message events until cancelled."""
     assert session.client is not None
     if session.sse_responses is None:
-        session.sse_responses = asyncio.Queue()
+        session.sse_responses = _new_sse_queue()
     ready = session.sse_ready or asyncio.Event()
     session.sse_ready = ready
     headers = {**session.headers, "Accept": "text/event-stream"}
@@ -116,7 +148,7 @@ async def _sse_reader_loop(session: UpstreamSession, connect_timeout: float) -> 
                         except json.JSONDecodeError:
                             parsed = None
                         if isinstance(parsed, dict):
-                            await session.sse_responses.put(parsed)
+                            _bounded_put(session.sse_responses, parsed, session.server_slug)
                     event_type = ""
     except asyncio.CancelledError:
         raise
@@ -136,7 +168,7 @@ async def ensure_sse_reader(session: UpstreamSession, connect_timeout: float) ->
     """Start (or await) the background SSE reader and return the POST messages URL."""
     if session.sse_task is None or session.sse_task.done():
         session.sse_messages_url = None
-        session.sse_responses = asyncio.Queue()
+        session.sse_responses = _new_sse_queue()
         session.sse_ready = asyncio.Event()
         session.sse_task = asyncio.create_task(_sse_reader_loop(session, connect_timeout))
     ready = session.sse_ready

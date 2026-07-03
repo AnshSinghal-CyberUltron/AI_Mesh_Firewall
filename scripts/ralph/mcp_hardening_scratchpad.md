@@ -1497,3 +1497,11 @@
 - **Fix:** track data_bytes; over _MAX_RESPONSE_BYTES (8MB, MCP_AGENT_MAX_RESPONSE_BYTES) DROP the oversized event (skipping flag discards to the next blank line) then resume normally. Legit events incl. multi-line-under-cap unchanged; reader survives.
 - **Gate:** test_sse_reader_bounds.py (new) 3 passed; test_upstream_proxy.py 18 passed (SSE path unbroken); full agent suite green.
 - **Residuals (honest, deferred):** (1) a single huge unterminated line still buffers inside httpx aiter_lines (needs an aiter_bytes bounded line-splitter); (2) the sse_responses asyncio.Queue is unbounded (needs drop/backpressure semantics). Evidence mcp-parallel/findings/backstop-p-agent-sse-reader-unbounded-event/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked).
+
+---
+## CHG-0129 (2026-07-03) — in-sandbox SSE response queue bounded (closes CHG-0128 residual #2, item 17)
+
+- **Gap:** session.sse_responses (services/mcp-broker/sandbox-image/agent/sse_manager.py) was an UNBOUNDED asyncio.Queue(). The reader is a persistent bg task that put()s every upstream message-event; the consumer (send_sse_jsonrpc) only drains WHILE an RPC is in flight (id-matched). An untrusted upstream flooding UNSOLICITED message events while no RPC is active grows the queue unbounded -> agent OOM -> drops ALL the org's servers. Residual #2 documented in CHG-0128.
+- **Fix:** _new_sse_queue() with maxsize=_SSE_QUEUE_MAXSIZE (default 1024, floor 16, env MCP_AGENT_SSE_QUEUE_MAXSIZE); _bounded_put replaces the producer await put() — put_nowait, on QueueFull evict oldest then put (atomic, keeps freshest, NEVER blocks the reader). A waiting consumer get() receives the item directly (never counts vs maxsize) so normal RPC delivery is unchanged.
+- **Gate:** test_sse_reader_bounds.py 5 passed (3 CHG-0128 + 2 new); test_upstream_proxy.py SSE RPC path unbroken; full agent suite green.
+- **Residual STILL open:** single huge unterminated line via httpx aiter_lines (needs aiter_bytes bounded line-splitter). Evidence mcp-parallel/findings/backstop-p-agent-sse-response-queue-unbounded/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked).
