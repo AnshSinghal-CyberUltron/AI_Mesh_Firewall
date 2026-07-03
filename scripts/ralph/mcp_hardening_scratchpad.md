@@ -1046,6 +1046,22 @@
       roles are server-derived from the API key (not caller-spoofable), forwarded via X-Gateway-Roles.
       Combined with per-key mcp_allowed_tools (CHG-0006/7/8) + field-level RBAC (CHG-0024/25), the mandate's
       "per-user/agent/role tool authorization" is implemented. (Backs item 9 authz.)
+      CHG-0146 (2026-07-03, LOW-MEDIUM — DoS containment: broker agent-RPC timeout had NO upper bound):
+      services/mcp-broker/src/sandbox/routes.py _forward_sandbox_rpc computed the per-RPC agent timeout as
+      max(_AGENT_TIMEOUT, body.timeouts["init_seconds"], body.timeouts["method_seconds"]) with no ceiling.
+      body.timeouts is a CALLER-supplied dict on SandboxRpcRequest. Normally the gateway sends init=120/
+      method≈60 (~130s), but the broker TRUSTS the caller — a misconfigured gateway (MCP_STDIO_INIT_TIMEOUT
+      huge), a buggy caller, or a non-gateway caller could set init_seconds=99999 → the broker holds the agent
+      httpx connection + serving coroutine open ~28h; a handful exhausts the connection pool/event-loop →
+      availability DoS for all orgs. The broker must self-defend (parity with the gateway body caps
+      CHG-0034/0063/0140). FIX: _AGENT_TIMEOUT_MAX = max(_AGENT_TIMEOUT, env MCP_BROKER_AGENT_TIMEOUT_MAX
+      default 900s); after the max() fold, clamp `if timeout > _AGENT_TIMEOUT_MAX: log + timeout =
+      _AGENT_TIMEOUT_MAX`. Ceiling ≥ base so an operator's explicit base isn't clipped; 900s generous so no
+      legitimate slow cold-start/tool call is affected. +2 tests. Gate: test_sandbox_routes.py 16 passed
+      (init=method=99999 → effective==_AGENT_TIMEOUT_MAX, 99999 never used; init=120/method=60 →
+      effective==base unclamped); broker -k "not websocket" 172 passed 0 failed. STILL host-blocked for item
+      10 [x]: the live fork/mem/disk/timeout bomb drill + neighbor-safety proof at scale need a dedicated host.
+      Evidence: mcp-parallel/findings/backstop-p10-agent-rpc-timeout-clamp/finding.md.
 - [ ] 11. PostgreSQL + Redis schemas/usage/restart-safety verified.
       LIVE VERIFIED (usage/schema) — CHG-0023 (2026-07-02): REDIS usage correct — mcp:scan_ver:* 72 keys
       (M-15 scan-config version cache-invalidation, string counters e.g. "99"); ratelimit:* 2 keys (S12

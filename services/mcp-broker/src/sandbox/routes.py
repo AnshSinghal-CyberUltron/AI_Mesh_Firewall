@@ -46,6 +46,19 @@ def _require_canonical_org_slug(org_slug: str) -> None:
 
 
 _AGENT_TIMEOUT = float(os.environ.get("MCP_BROKER_AGENT_TIMEOUT", "130"))
+# CHG-0146: hard CEILING on the effective per-RPC agent timeout. The caller-supplied
+# ``body.timeouts`` (init_seconds/method_seconds) is folded in via ``max(...)`` with no
+# upper bound, so an oversized value (a misconfigured/malicious/non-gateway caller) would
+# hold a broker->agent httpx connection + the serving worker open for that whole duration
+# — under concurrency a connection-pool / event-loop exhaustion DoS. The broker
+# self-defends (like the gateway's inbound body cap) rather than trusting the caller to
+# send sane values. Kept >= the base timeout so an operator's explicit MCP_BROKER_AGENT_
+# TIMEOUT is never clipped; generous (15 min) so no legitimate slow cold-start/tool call
+# is affected.
+_AGENT_TIMEOUT_MAX = max(
+    _AGENT_TIMEOUT,
+    float(os.environ.get("MCP_BROKER_AGENT_TIMEOUT_MAX", "900")),
+)
 # Cold-start agent-readiness window. A freshly (re)started sandbox container
 # reports "running" as soon as its PID-1 process starts, but the in-container
 # HTTP agent takes a beat to bind its socket. Without tolerating that window the
@@ -321,6 +334,14 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
                 body.timeouts.get("init_seconds", 0),
                 body.timeouts.get("method_seconds", 0),
             )
+        # CHG-0146: clamp the caller-influenced timeout to a hard ceiling so no single RPC
+        # can pin a broker->agent connection open for an unbounded time (DoS containment).
+        if timeout > _AGENT_TIMEOUT_MAX:
+            LOG.warning(
+                "sandbox rpc org=%s: requested agent timeout %.0fs exceeds ceiling %.0fs; clamping",
+                org_slug, timeout, _AGENT_TIMEOUT_MAX,
+            )
+            timeout = _AGENT_TIMEOUT_MAX
 
         try:
             response = await _post_agent_rpc(

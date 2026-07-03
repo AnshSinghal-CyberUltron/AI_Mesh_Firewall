@@ -212,6 +212,54 @@ def test_stdio_rpc_forwards_to_agent_and_touches_activity(
     assert entry.last_activity == 1_719_660_000.0
 
 
+def _rpc_with_timeouts(broker_client, docker_manager, registry, timeouts):
+    """Drive one /stdio/rpc and return the timeout(s) httpx.AsyncClient was built with."""
+    running = _mock_container()
+    docker_manager.client.containers.list.return_value = [running]
+    registry.register(ORG, running.id, "http://172.28.0.42:9320", last_activity=100.0)
+    agent_response = httpx.Response(
+        200, json={"jsonrpc": "2.0", "id": 1, "result": {}},
+        request=httpx.Request("POST", "http://172.28.0.42:9320/rpc"),
+    )
+    mock_http = AsyncMock()
+    mock_http.post.return_value = agent_response
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+    factory = MagicMock(return_value=mock_http)
+    body = {"server_slug": "srv", "command": "npx", "args": ["-y", "x"],
+            "method": "tools/list", "jsonrpc_id": 1, "timeouts": timeouts}
+    with patch("sandbox.routes.httpx.AsyncClient", factory):
+        resp = broker_client.post(f"/v1/sandbox/{ORG}/stdio/rpc", json=body, headers=_auth_headers())
+    assert resp.status_code == 200
+    return [c.kwargs.get("timeout") for c in factory.call_args_list]
+
+
+def test_agent_rpc_timeout_clamped_to_ceiling(broker_client, docker_manager, registry):
+    """CHG-0146: a caller-supplied agent timeout beyond the ceiling is clamped, so no single
+    RPC can pin a broker->agent connection open for an unbounded duration (DoS containment)."""
+    from sandbox.routes import _AGENT_TIMEOUT_MAX
+    timeouts_used = _rpc_with_timeouts(
+        broker_client, docker_manager, registry,
+        {"init_seconds": 99999, "method_seconds": 99999},
+    )
+    assert _AGENT_TIMEOUT_MAX in timeouts_used, timeouts_used
+    assert 99999 not in timeouts_used
+    assert all(t is None or t <= _AGENT_TIMEOUT_MAX for t in timeouts_used), timeouts_used
+
+
+def test_agent_rpc_normal_timeout_not_clamped(broker_client, docker_manager, registry):
+    """A normal (sub-ceiling) timeout is passed through unchanged — the clamp only trims
+    pathological values, never a legitimate slow cold-start/tool call."""
+    from sandbox.routes import _AGENT_TIMEOUT, _AGENT_TIMEOUT_MAX
+    timeouts_used = _rpc_with_timeouts(
+        broker_client, docker_manager, registry,
+        {"init_seconds": 120, "method_seconds": 60},
+    )
+    # Effective = max(base, 120, 60) = base (130 default), which is < ceiling -> unclamped.
+    assert _AGENT_TIMEOUT in timeouts_used, timeouts_used
+    assert all(t is None or t <= _AGENT_TIMEOUT_MAX for t in timeouts_used)
+
+
 def test_unified_rpc_route_forwards_remote_transport(
     broker_client: TestClient,
     docker_manager: DockerManager,
