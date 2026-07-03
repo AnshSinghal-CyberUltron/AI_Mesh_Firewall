@@ -187,6 +187,9 @@ _B32ISH_RE = re.compile(r"[A-Z2-7]{16,}={0,6}")
 # decoded, so no cross-decode FP. Printable-ratio gated. Parity with scanner G98.
 _B85ISH_RE = re.compile(r"[0-9A-Za-z!#$%&()*+;<=>?@^_`{|}~-]{14,}")
 _B85_ONLY_CHARS = frozenset("!#$%&()*;<>?@^_`{|}~-")
+# G100: Ascii85 (a85, alphabet !..u). Gated on an a85-ONLY char + printable-ratio. Parity with scanner G100.
+_A85ISH_RE = re.compile(r"[!-u]{14,}")
+_A85_ONLY_CHARS = frozenset("!\"#$%&'()*,-.:;<=>?@[\\]^_`")
 # CHG-0060: the decode scan is bounded by a decoded-BYTE budget, not a token COUNT.
 # The old count cap (12) let a result hide an encoded secret past 12 decoy tokens
 # (``<12 benign base64 blobs> <base64(secret)>`` -> the secret token was never decoded
@@ -286,6 +289,20 @@ def _decode_one_b85(tok: str):
     Caller gates on ``_B85_ONLY_CHARS`` so a base64/hex blob is never re-decoded as b85."""
     try:
         raw = base64.b85decode(tok)
+        if not (0 < len(raw) <= _MAX_DECODE_BYTES):
+            return None
+        dec = raw.decode("utf-8")
+    except Exception:
+        return None
+    probe = canonicalize_for_detection(dec)
+    return dec if probe and _printable_ratio(probe) >= 0.8 else None
+
+
+def _decode_one_a85(tok: str):
+    """G100: decode a single Ascii85 token to mostly-printable UTF-8, else ``None``.
+    Caller gates on ``_A85_ONLY_CHARS`` so a base64/hex blob is never re-decoded as a85."""
+    try:
+        raw = base64.a85decode(tok)
         if not (0 < len(raw) <= _MAX_DECODE_BYTES):
             return None
         dec = raw.decode("utf-8")
@@ -400,7 +417,29 @@ def _iter_transport_decodes(text: str):
                 break
             budget -= len(nxt)
             yield top_tok, nxt
-            layer = nxt
+    # G100: Ascii85 pass. Gated on _A85_ONLY_CHARS (never a base64/hex blob); shares budget.
+    seenA85 = 0
+    for m in _A85ISH_RE.finditer(scan):
+        if seenA85 >= _MAX_DECODE_TOKENS or budget <= 0:
+            break
+        top_tok = m.group(0)
+        if not any(c in _A85_ONLY_CHARS for c in top_tok):
+            continue
+        seenA85 += 1
+        dec = _decode_one_a85(top_tok)
+        if dec is None:
+            continue
+        budget -= len(dec)
+        yield top_tok, dec
+        layer = dec
+        for _ in range(_MAX_DECODE_DEPTH - 1):
+            if budget <= 0:
+                break
+            nxt = _decode_nested(layer)
+            if nxt is None or nxt == layer:
+                break
+            budget -= len(nxt)
+            yield top_tok, nxt
 
 
 def _iter_transport_decodes_canon(text: str, canon: str):

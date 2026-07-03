@@ -69,6 +69,11 @@ def base85(s: str) -> str:
     return base64.b85encode(s.encode()).decode()
 
 
+def ascii85(s: str, adobe: bool = False) -> str:
+    """G100: Ascii85 (a85) encode; adobe=True adds the <~...~> frame."""
+    return base64.a85encode(s.encode(), adobe=adobe).decode()
+
+
 # G96: Mathematical Alphanumeric Symbols (U+1D400+) — "fancy" unicode a jailbreak is often
 # pasted in (𝓲𝓰𝓷𝓸𝓻𝓮 / 𝕚𝕘𝕟𝕠𝕣𝕖 / 𝚒𝚐𝚗𝚘𝚛𝚎 …). NFKC compat-folds these to ASCII, so the firewall
 # must still block. Lowercase bases; a few styles place letters as letterlike symbols OUTSIDE

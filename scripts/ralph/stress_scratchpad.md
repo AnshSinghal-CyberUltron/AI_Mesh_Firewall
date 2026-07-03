@@ -3144,3 +3144,27 @@ validated end-to-end (in-process 614×3 + backend 1827 + live deployed). NOTE: a
 as "block" — it was actually an HTTP 404 model-routing error (harness defaulted to unconfigured
 "gemma-free"); benign requests proceed past input_scan to routing, so a valid connected model must be
 passed. Injection cases block at input_scan pre-routing so they were unaffected.
+
+---
+
+## G100 (CONFIRMED leak — fixed) — 2026-07-03 — Ascii85 (a85) transport-laundering (b85 sibling, deferred from G98)
+Closed the a85/Ascii85 variant deferred in G98. Ascii85's alphabet (!..u) is BROAD (overlaps base64 +
+lots of punctuation), so it's the FP-riskiest encoding — the base64 decode gated out, and an injection or
+PII/secret laundered through Ascii85 ("ascii85-decode: <blob>", including the Adobe <~...~> frame — its
+inner content matches as a bare a85 token) slipped past.
+**FIX (both owned files):** a85 decode pass — scanner.py `_A85_TOKEN_RE`+`_a85_decode_printable`+
+`_decode_one_layer` branch; patterns.py `_A85ISH_RE`+`_decode_one_a85`+`_iter_transport_decodes` pass.
+**FP-safety (critical for the broad alphabet):** GATED on `_A85_ONLY_CHARS` (a85 chars never valid in
+base64: `!"#$%&'()*,-.:;<=>?@[\]^_`+backtick) so a base64/base32/hex blob is never re-decoded as a85;
+14+ contiguous run (prose has spaces => no match); printability/printable-ratio + strict-UTF-8 gated.
+**Regression proof:** a DIFFERENTIAL test (vs stashed-HEAD over 10 benign code/URL/SQL/regex/date/
+adobe-frame strings) showed **ZERO new allow→block/redact flips**; the one "redact" (email+phone) is
+legit pre-existing PII detection, identical on HEAD. a85 bare + adobe injection → block (was allow);
+a85 SSN/email/AWS → detected+masked. In-process golden **620 ×3** (was 614; +6 G100); backend
+`ai_mesh_gateway/tests` **1827 passed / 0 failed** (excl. the other session's untracked WIP file) — the
+broad a85 alphabet caused NO regression thanks to the gate. Added `ascii85()` corpus helper.
+**Frozen:** golden `test_g100_*`.
+**Encoding-laundering coverage now COMPLETE:** base64(G34) · hex · rot13 · base32(G97) · base85/b85(G98)
+· Ascii85/a85(G100) — all decoded+rescanned on both the injection and PII/secret paths.
+Session ledger: TWENTY-TWO leaks (G74..G95, G97, G98, G100) + ONE false-block (G99) fixed; G96 freezes
+6 defended vectors; G77/G78/G80 frozen.

@@ -411,6 +411,12 @@ _BASE32_TOKEN_RE: re.Pattern[str] = re.compile(r"[A-Z2-7]{16,}={0,6}")
 # base64's so the base64 attempt gates out. A contiguous 14+ run of the b85 alphabet; real prose has
 # spaces so it never matches ordinary text, and any non-b85 token decodes to garbage (gated). FP-safe.
 _BASE85_TOKEN_RE: re.Pattern[str] = re.compile(r"[0-9A-Za-z!#$%&()*+;<=>?@^_`{|}~-]{14,}")
+# G100: Ascii85 (a85, alphabet !..u). Sibling of G98/b85 — an injection/PII laundered through Ascii85
+# ("ascii85-decode: <blob>", incl. the Adobe <~...~> frame whose inner content matches as a bare token)
+# leaked. Gated on an a85-ONLY char (never valid base64) so a base64/base32/hex blob is never re-decoded;
+# printability-gated; 14+ contiguous run (prose has spaces => no match). FP-safe (same design as G98).
+_A85_TOKEN_RE: re.Pattern[str] = re.compile(r"[!-u]{14,}")
+_A85_ONLY_CHARS: frozenset[str] = frozenset("!\"#$%&'()*,-.:;<=>?@[\\]^_`")
 # G22: follow up to this many NESTED encoding layers (double-base64 / base64-of-hex
 # "prompt laundering") so an injection wrapped in >1 encoding layer is still rescanned.
 # Bounded depth + per-token length cap => decode-bomb safe.
@@ -558,6 +564,23 @@ def _b85_decode_printable(tok: str) -> str | None:
     return decoded if probe.isprintable() else None
 
 
+def _a85_decode_printable(tok: str) -> str | None:
+    """G100: decode an Ascii85 token to a printable UTF-8 string, else ``None``.
+    The printability gate + the caller's ``_A85_ONLY_CHARS`` gate keep it FP-safe."""
+    try:
+        raw = base64.a85decode(tok)
+    except Exception:  # noqa: BLE001 - decode helpers must never break the scan
+        return None
+    if not (0 < len(raw) <= _TRANSPORT_DECODE_MAX_LEN * 2):
+        return None
+    try:
+        decoded = raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return None
+    probe = "".join(ch for ch in _decode_unicode_tags(decoded) if unicodedata.category(ch) != "Cf")
+    return decoded if probe.isprintable() else None
+
+
 def _decode_one_layer(text: str, seen: set[str]) -> list[str]:
     """One transport-decode layer over ``text``: whole-text ROT13 + nested base64/hex
     tokens + text-encodings (HTML/URL/escape). Adds each new readable variant to
@@ -602,6 +625,17 @@ def _decode_one_layer(text: str, seen: set[str]) -> list[str]:
         if not any(c in _B85_ONLY_CHARS for c in token):
             continue
         decoded = _b85_decode_printable(token)
+        if decoded is not None and decoded not in seen:
+            seen.add(decoded)
+            out.append(decoded)
+    # G100: Ascii85-decode embedded tokens. Gated on an a85-only char (never a base64/base32/hex
+    # blob) + printability => FP-safe. Covers the Adobe <~...~> frame (inner content matches here).
+    for token in _A85_TOKEN_RE.findall(text)[:8]:
+        if not (14 <= len(token) <= _TRANSPORT_DECODE_MAX_LEN):
+            continue
+        if not any(c in _A85_ONLY_CHARS for c in token):
+            continue
+        decoded = _a85_decode_printable(token)
         if decoded is not None and decoded not in seen:
             seen.add(decoded)
             out.append(decoded)
