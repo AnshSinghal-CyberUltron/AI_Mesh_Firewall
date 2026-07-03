@@ -135,3 +135,8 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   output_guard omitted metadata.pipeline_trace. FIX: _build_blocked_pipeline_trace +
   _REQUEST_PIPELINE_CTX + _enrich_blocked_event_pipeline_trace in _emit_telemetry; policy/check
   explicit trace. +4 tests. Gate: 2059 passed.
+- PIPELINE-0020 (2026-07-03) — PER-STAGE WHY TRANSPARENCY (P6-20): pipeline_trace stages now
+  carry matched_policies/rules, guard_reason, tier, confidence, decision_source, prompt_in/out
+  (redacted-safe) on every stage via STAGE_TRANSPARENCY_KEYS + normalize_stage_transparency;
+  policy/auth/rate_limit/model stages enriched; StageTimeline renders policy WHY block. +5 tests.
+  Gate: 2064 GW + lint/build green.

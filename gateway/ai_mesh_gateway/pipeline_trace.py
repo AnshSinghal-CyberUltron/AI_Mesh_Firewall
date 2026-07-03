@@ -291,7 +291,103 @@ DECISION_SOURCE_LABELS: dict[str, str] = {
     "policy_adjudicator": ZEROSHIELD_ADJUDICATOR_LABEL,
     "routing_disabled": "Routing disabled",
     "no_routing_models": "No routing models",
+    "policy_engine": "Policy engine",
+    "gateway_auth": "Gateway authentication",
+    "org_rate_limit": "Org rate limit",
+    "zeroshield_guard_model": GUARD_MODEL_LABEL,
+    "pattern_engine": PATTERN_ENGINE_LABEL,
+    "output_guard": OUTPUT_GUARD_LABEL,
+    "llm_request": "LLM request",
+    "llm_provider": "LLM provider",
 }
+
+# PIPELINE-0020: every stage object carries these keys (empty when N/A).
+STAGE_TRANSPARENCY_KEYS: tuple[str, ...] = (
+    "action",
+    "latency_ms",
+    "decision_source",
+    "decision_source_label",
+    "guard_reason",
+    "tier",
+    "confidence",
+    "matched_policies",
+    "matched_rules",
+    "prompt_in",
+    "prompt_out",
+)
+
+
+def _empty_stage_why_fields() -> dict[str, Any]:
+    return {
+        "decision_source": "",
+        "decision_source_label": "",
+        "guard_reason": "",
+        "tier": "",
+        "confidence": 0,
+        "matched_policies": [],
+        "matched_rules": [],
+        "prompt_in": "",
+        "prompt_out": "",
+    }
+
+
+def _decision_source_fields(source: str) -> dict[str, str]:
+    key = str(source or "").strip().lower()
+    if not key:
+        return {"decision_source": "", "decision_source_label": ""}
+    return {
+        "decision_source": key,
+        "decision_source_label": _format_decision_source(key),
+    }
+
+
+def _guard_source_for_tier(tier: str, *, output: bool = False) -> str:
+    if output:
+        return "output_guard"
+    t = str(tier or "").lower()
+    if t in ("policy",):
+        return "policy_engine"
+    if t.startswith("tier_1") or t == "tier_1":
+        return "pattern_engine"
+    if t in ("tier_2", "tier2", "input_scan"):
+        return "zeroshield_guard_model"
+    return "zeroshield_guard_model"
+
+
+def _policy_guard_reason(
+    *,
+    action: str,
+    matched_policies: list[str],
+    matched_rules: list[str],
+    detail: str,
+) -> str:
+    lines: list[str] = [f"Policy engine — enforcement: {str(action or 'allow').upper()}"]
+    if matched_policies:
+        lines.append("Matched policies: " + ", ".join(matched_policies))
+    if matched_rules:
+        lines.append("Matched rules: " + ", ".join(matched_rules))
+    if detail:
+        lines.append(str(detail).strip())
+    return "\n".join(lines)
+
+
+def normalize_stage_transparency(stage: dict[str, Any]) -> dict[str, Any]:
+    """Ensure every stage dict exposes the PIPELINE-0020 field contract."""
+    if not isinstance(stage, dict):
+        return stage
+    for key in STAGE_TRANSPARENCY_KEYS:
+        if key not in stage:
+            if key in ("matched_policies", "matched_rules"):
+                stage[key] = []
+            elif key == "confidence":
+                stage[key] = 0
+            elif key == "latency_ms":
+                stage[key] = 0.0
+            else:
+                stage[key] = ""
+    if stage.get("decision_source") and not stage.get("decision_source_label"):
+        stage["decision_source_label"] = _format_decision_source(str(stage["decision_source"]))
+    return stage
 
 
 def _sanitize_routing_reason(text: str) -> str:
@@ -557,6 +653,7 @@ def build_guard_fields(
     if policy_note:
         guard_reason = guard_reason + "\n" + policy_note
 
+    ds = _guard_source_for_tier(tier, output=output)
     return {
         "guard_model": scanner_label,
         "guard_action": enforcement_action,
@@ -564,7 +661,8 @@ def build_guard_fields(
         "reason_code": reason_code,
         "recommended_action": recommended,
         "guard_findings": findings[:8],
-        "enforcement_source": "zeroshield_guard_model",
+        "enforcement_source": ds,
+        **_decision_source_fields(ds),
     }
 
 
@@ -847,48 +945,78 @@ def build_pipeline_trace(
         f"Routed to {selected}" if selected else "Model routing evaluated"
     )
 
+    policy_action = (
+        "block" if blocked_stage == "policy"
+        else "redact" if policy_redacted
+        else _action("policy")
+    )
+    policy_detail = (
+        scan_detail
+        if blocked_stage == "policy"
+        else (
+            "Policy engine redacted %d matched rule(s) before scanning"
+            % len(policy_rules)
+            if policy_redacted
+            else "Policy engine evaluated request against compiled rules"
+            + (
+                "; matched %d rule(s)" % len(policy_rules)
+                if policy_rules
+                else "; no matching policy rule"
+            )
+        )
+    )
+    policy_confidence = 0.0
+    if blocked_stage == "policy" or policy_redacted:
+        try:
+            policy_confidence = float(zs.get("confidence") or confidence or 0)
+        except (TypeError, ValueError):
+            policy_confidence = 0.0
+
     stages: list[dict[str, Any]] = [
         {
             "name": "auth",
             "action": _action("auth"),
             "latency_ms": _latency("auth"),
             "detail": "Gateway API key accepted" if _action("auth") != "block" else "Gateway API key invalid or missing",
+            **_empty_stage_why_fields(),
+            **_decision_source_fields("gateway_auth"),
+            "guard_reason": (
+                blocked_detail if blocked_stage == "auth" else "Gateway API key accepted"
+            ),
+            "prompt_in": prompt_preview,
+            "prompt_out": prompt_preview if _action("auth") != "block" else "",
         },
         {
             "name": "rate_limit",
             "action": _action("rate_limit"),
             "latency_ms": _latency("rate_limit"),
             "detail": blocked_detail if blocked_stage == "rate_limit" else "Within org TPM / RPM limits",
+            **_empty_stage_why_fields(),
+            **_decision_source_fields("org_rate_limit"),
+            "guard_reason": (
+                blocked_detail if blocked_stage == "rate_limit" else "Within org TPM / RPM limits"
+            ),
+            "prompt_in": prompt_preview,
+            "prompt_out": prompt_preview if _action("rate_limit") != "block" else "",
         },
         {
             "name": "policy",
-            "action": (
-                "block" if blocked_stage == "policy"
-                else "redact" if policy_redacted
-                else _action("policy")
-            ),
+            "action": policy_action,
             "latency_ms": _latency("policy"),
-            "detail": (
-                scan_detail
-                if blocked_stage == "policy"
-                else (
-                    "Policy engine redacted %d matched rule(s) before scanning"
-                    % len(policy_rules)
-                    if policy_redacted
-                    else "Policy engine evaluated request against compiled rules"
-                    + (
-                        "; matched %d rule(s)" % len(policy_rules)
-                        if policy_rules
-                        else "; no matching policy rule"
-                    )
-                )
-            ),
+            "detail": policy_detail,
             "matched_policies": policy_matched,
             "matched_rules": policy_rules,
-            # Operator input→output for the hover card: original prompt in,
-            # policy-redacted prompt out (only when policy actually masked).
             "prompt_in": prompt_preview,
-            "prompt_out": policy_redacted_preview if policy_redacted else "",
+            "prompt_out": policy_redacted_preview if policy_redacted else prompt_preview,
+            **_decision_source_fields("policy_engine"),
+            "guard_reason": _policy_guard_reason(
+                action=policy_action,
+                matched_policies=policy_matched,
+                matched_rules=policy_rules,
+                detail=policy_detail if policy_action in ("block", "redact") else "",
+            ),
+            "tier": "policy",
+            "confidence": policy_confidence,
         },
         {
             "name": "input_scan",
@@ -928,6 +1056,11 @@ def build_pipeline_trace(
             "action": kill_switch_action,
             "latency_ms": _latency("kill_switch"),
             "detail": kill_switch_detail,
+            **_empty_stage_why_fields(),
+            **_decision_source_fields("kill_switch" if ks_rerouted or blocked_stage == "kill_switch" else ""),
+            "guard_reason": kill_switch_detail,
+            "prompt_in": scan_input_preview,
+            "prompt_out": scan_input_preview if kill_switch_action not in ("block",) else "",
         },
         {
             "name": "model_routing",
@@ -943,6 +1076,13 @@ def build_pipeline_trace(
             "policy_summary": policy_summary,
             "decision_factors": decision_factors,
             "weights": weights,
+            "guard_reason": routing_detail,
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": scan_input_preview,
+            "prompt_out": scan_input_preview,
         },
         {
             "name": "model_input",
@@ -956,6 +1096,18 @@ def build_pipeline_trace(
             ),
             "content": "" if _model_skipped else forwarded_preview,
             "prompt_submitted": forwarded_preview,
+            **_empty_stage_why_fields(),
+            **_decision_source_fields("llm_request"),
+            "guard_reason": (
+                "Prompt was not sent to the model (blocked upstream)" if _model_skipped
+                else (
+                    "Sanitized prompt delivered to the LLM"
+                    if forwarded_prompt and forwarded_prompt != prompt
+                    else "Prompt delivered to LLM unchanged"
+                )
+            ),
+            "prompt_in": scan_input_preview,
+            "prompt_out": "" if _model_skipped else forwarded_preview,
         },
         {
             "name": "model_output",
@@ -963,6 +1115,14 @@ def build_pipeline_trace(
             "latency_ms": _latency("model_output"),
             "detail": "LLM inference complete" if response_text else ("Inference skipped or blocked upstream" if _model_skipped else "No completion body"),
             "content": _truncate(response_text, 2000) if response_text else "",
+            **_empty_stage_why_fields(),
+            **_decision_source_fields("llm_provider"),
+            "guard_reason": (
+                "Inference skipped or blocked upstream" if _model_skipped
+                else ("LLM inference complete" if response_text else "No completion body")
+            ),
+            "prompt_in": "" if _model_skipped else forwarded_preview,
+            "prompt_out": "" if _model_skipped else _truncate(response_text, 2000),
         },
         {
             "name": "output_guardrail",
@@ -1017,6 +1177,7 @@ def build_pipeline_trace(
             "reason_code", "recommended_action", "matched_patterns",
             "matched_rules", "matched_policies", "guard_findings",
             "scan_outcome", "enforcement_source", "tier", "prompt_in", "prompt_out",
+            "decision_source", "decision_source_label",
         )
         if _b_idx >= 0:
             for _s in stages:
@@ -1038,6 +1199,9 @@ def build_pipeline_trace(
     for _s in stages:
         if _s.get("action") == "skip":
             _s["latency_ms"] = 0.0
+
+    for _s in stages:
+        normalize_stage_transparency(_s)
 
     stage_sum = sum(_round_ms(s.get("latency_ms")) for s in stages)
     overhead = metrics.get("overhead_ms") or 0.0

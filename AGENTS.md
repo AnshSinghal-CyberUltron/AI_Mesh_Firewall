@@ -97,6 +97,12 @@
   _build_blocked_pipeline_trace + _REQUEST_PIPELINE_CTX + _enrich_blocked_event_pipeline_trace in
   _emit_telemetry; policy/check builds trace once for emit+response. Control tasks.py hoist unchanged.
   +4 tests test_pipeline_blocked_trace_telemetry.py. Gate: 2059 passed.
+ - PIPELINE-0020 (2026-07-03) — PER-STAGE WHY TRANSPARENCY (P6-20): pipeline_trace stage objects
+  enriched with matched_policies, matched_rules, guard_reason, tier, confidence, decision_source,
+  prompt_in/prompt_out (redacted-safe) on ALL stages via STAGE_TRANSPARENCY_KEYS +
+  normalize_stage_transparency(); build_pipeline_trace + blocked path inherit; StageTimeline/
+  LogDetailPage render policy WHY + decision source labels. +5 tests
+  test_pipeline_stage_transparency.py. Gate: 2064 GW + lint/build green.
 - PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
  (dominant stage/share, by_stage, hints[]) via build_latency_breakdown+attach_latency_breakdown;
  stream frame recomputes after total reconcile. FE LogDetailPage breakdown table + "How to reduce

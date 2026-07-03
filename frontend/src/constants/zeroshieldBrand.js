@@ -35,6 +35,14 @@ const DECISION_SOURCE_LABELS = {
   policy_adjudicator: ZEROSHIELD_ADJUDICATOR_LABEL,
   routing_disabled: "Routing disabled",
   no_routing_models: "No routing models",
+  policy_engine: "Policy engine",
+  gateway_auth: "Gateway authentication",
+  org_rate_limit: "Org rate limit",
+  zeroshield_guard_model: ZEROSHIELD_GUARD_MODEL_LABEL,
+  pattern_engine: ZEROSHIELD_TIER1_LABEL,
+  output_guard: "ZeroShield Output Guard",
+  llm_request: "LLM request",
+  llm_provider: "LLM provider",
 };
 
 /** Sanitize routing reason text for operator-facing UI (never show Bedrock). */

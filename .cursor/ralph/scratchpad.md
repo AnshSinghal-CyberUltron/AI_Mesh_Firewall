@@ -33,7 +33,7 @@
 
 ## P6 — Full frontend transparency (the pipeline log/trace)
 - [x] 19. Record + expose the FULL per-stage trace for EVERY event type — including input_blocked/output_blocked (fix L9: "no per-stage trace recorded"). DONE: PIPELINE-0019.
-- [ ] 20. For each stage show: action, WHY (matched policies/rules, guard reason, tier, confidence), exact latency, prompt_in/prompt_out (redacted-safe), and the decision source.
+- [x] 20. For each stage show: action, WHY (matched policies/rules, guard reason, tier, confidence), exact latency, prompt_in/prompt_out (redacted-safe), and the decision source. → PIPELINE-0020: STAGE_TRANSPARENCY_KEYS + normalize_stage_transparency; all stages enriched; StageTimeline WHY UI; +5 tests; gate 2064 GW + build green.
 - [ ] 21. Show the ROUTING decision explicitly: where the request went — RAG / Vector DB / MCP / which model — and why (the adjudicator factors/weights). (Answers "where to route".)
 - [ ] 22. Show the actual INPUT and OUTPUT (redacted-safe) so operators see what was blocked/redacted and why.
 - [ ] 23. Fix event conflation: one report = one request_id; no mixing of different prompts/IDs. (Fix L10.)

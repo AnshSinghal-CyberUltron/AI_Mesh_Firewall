@@ -339,10 +339,12 @@ function StageDetailCard({ stage, onClose, isPinned }) {
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
-        {(stage.name === "input_scan" || stage.name === "output_guardrail") && stage.guard_reason && (
+        {(stage.name === "input_scan" || stage.name === "output_guardrail" || stage.name === "policy") && stage.guard_reason && (
           <div className="col-span-2 rounded-xl border border-violet-200/80 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-500/10">
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
-              {stage.guard_model || ZEROSHIELD_GUARD_MODEL_LABEL}
+              {stage.name === "policy"
+                ? "Policy decision"
+                : (stage.guard_model || ZEROSHIELD_GUARD_MODEL_LABEL)}
             </div>
             <pre className="whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-slate-800 dark:text-slate-100">
               {stage.guard_reason}
@@ -476,10 +478,18 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             </span>
           </div>
         )}
-        {stage.tier && (
+        {stage.tier && stage.name !== "input_scan" && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Tier:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">{formatDetectionTier(stage.tier)}</span>
+          </div>
+        )}
+        {Number(stage.confidence) > 0 && stage.name !== "input_scan" && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Confidence:</span>{" "}
+            <span className="text-slate-700 dark:text-slate-200">
+              {Math.round(Number(stage.confidence) * 100)}%
+            </span>
           </div>
         )}
         {dedupedPatterns.length > 0 && (

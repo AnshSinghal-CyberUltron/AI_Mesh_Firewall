@@ -2,6 +2,30 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0020 (2026-07-03)
+
+**Per-stage WHY transparency on pipeline trace (P6 item 20).**
+
+Root Cause:
+- `pipeline_trace.stages[]` carried action + latency for every stage but WHY fields
+  (matched policies/rules, guard reason, tier, confidence, decision source,
+  prompt_in/prompt_out) were sparse — policy/auth/rate_limit/model stages omitted
+  them; LogDetailPage `StageTimeline` could not explain each decision.
+
+Fix:
+- `pipeline_trace.py`: `STAGE_TRANSPARENCY_KEYS` contract +
+  `normalize_stage_transparency()`; every stage now exposes decision_source,
+  guard_reason, tier, confidence, matched_policies/rules, prompt_in/out (PII-safe
+  via `_truncate`); policy stage gets `_policy_guard_reason`; guard fields map
+  tier→decision_source (pattern_engine / zeroshield_guard_model / policy_engine).
+- `StageTimeline.jsx` + `zeroshieldBrand.js`: render policy guard_reason block +
+  tier/confidence/decision_source labels for all stages.
+- `test_pipeline_stage_transparency.py` (+5): allow/redact/block paths assert field
+  completeness on active stages.
+
+Verification:
+- Gateway gate: 2064 passed; frontend lint + build green.
+
 ## PIPELINE-0019 (2026-07-03)
 
 **Blocked events carry full pipeline_trace in telemetry (P6 item 19 / L9).**
