@@ -176,6 +176,29 @@ async def test_c4_completions_prompt_batch_cap_bounds_llm_fanout(recording_app):
 # ───────────────────── 4. moderations agrees with an independent detector ─────────────────────
 
 @pytest.mark.asyncio
+async def test_c4_chat_tools_array_cap_bounds_redaction_dos(recording_app):
+    """G65: every tool's free text is folded into the scan AND recursively masked on a redact
+    verdict (~5s CPU for 100k tools), so an oversized `tools` array is rejected 400 up front.
+    A normal tools array is still accepted."""
+    from ai_mesh_gateway import main as gm
+    client = _raw(recording_app)
+    try:
+        over = await client.post("/v1/chat/completions", json={
+            "model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}],
+            "tools": [{"type": "function", "function": {"name": f"f{i}", "description": "x"}}
+                      for i in range(gm.MAX_TOOLS + 1)]})
+        assert over.status_code == 400 and "too_many_tools" in over.text, over.text
+        # at the limit is accepted (boundary), and a normal tools array works.
+        ok = await client.post("/v1/chat/completions", json={
+            "model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}],
+            "tools": [{"type": "function",
+                       "function": {"name": "search", "description": "search the web"}}]})
+        assert ok.status_code == 200, ok.text
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_c4_moderations_verdict_matches_independent_signal(recording_app):
     """The moderation flag on an injection input is a REAL verdict: benign text is not
     flagged, injection text is flagged with prompt_injection True — an independent contrast

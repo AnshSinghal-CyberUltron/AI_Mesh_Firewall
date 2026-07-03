@@ -1927,6 +1927,14 @@ MAX_COMPLETION_INPUT_CHARS = 200_000
 # per-message text length is already capped, but an unbounded ``messages`` array
 # is itself a resource-exhaustion / scanner-amplification vector.
 MAX_MESSAGES = 200               # max entries in a /v1/chat/completions messages array
+# G65: cap the ``tools`` array. Every tool's free-text name/description is FOLDED into the
+# scanned prompt (_extract_tool_definitions_text) and, on a redact verdict, RECURSIVELY
+# masked (_redact_tool_descriptions) — measured ~5s of CPU for 100k tools (~1s for 20k). An
+# attacker trivially triggers the redact path (one PII value in the prompt) + a huge tools
+# array -> seconds of CPU per request, an amplification the MAX_PROMPT_LENGTH scan cap does
+# NOT bound (it caps the scanned string, not the per-tool redaction recursion). OpenAI's own
+# practical limit is ~128 tools, so 256 is generous headroom.
+MAX_TOOLS = 256                  # max entries in a `tools` / `functions` array
 MAX_OUTPUT_TOKENS_CEILING = 1_000_000  # C5: absolute upper bound on max_tokens
 
 # C2: allowlist of recognized multimodal content-part ``type`` values. An
@@ -4610,6 +4618,21 @@ async def proxy_chat(
                     "error": "too_many_messages",
                     "message": "messages array exceeds the maximum of 200 entries.",
                     "code": "too_many_messages",
+                },
+            )
+        # G65: cap the tools array — each entry's free text is folded into the scan AND
+        # recursively masked on a redact verdict (~5s CPU for 100k tools), a DoS amplification
+        # the per-prompt length cap does not bound (it caps the scanned string, not the
+        # per-tool redaction recursion). Reject an over-limit array with 400 up front.
+        _tools_arr = body.get("tools")
+        if isinstance(_tools_arr, list) and len(_tools_arr) > MAX_TOOLS:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "too_many_tools",
+                    "message": f"'tools' array exceeds the maximum of {MAX_TOOLS} entries.",
+                    "param": "tools",
+                    "code": "too_many_tools",
                 },
             )
         if isinstance(messages_raw, list):
