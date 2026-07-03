@@ -2,6 +2,40 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0009 (2026-07-03)
+
+**Policy REDACTS PII/PCI/PHI before input_scan (B-POL fix).**
+
+Root Cause:
+- `policy_engine.evaluate()` resolves the MAX action across all matched rules.
+  When both redact AND block rules co-match (e.g. PCI: PAN redact + CVV block,
+  or PII: email redact + a secrets block rule), the final action is "block".
+- `_policy_check_cached` in `main.py` only applied `redaction_hints` when
+  `result.action == "redact"`, silently discarding them when action="block".
+- Result: the caller received action="block" with NO redacted_prompt → hard
+  block at L6237 without ever masking the PII/PCI content. The scanner stage
+  never saw the prompt (blocked before scan_text assignment).
+
+Fix:
+- When `result.action == "block"` AND `result.redaction_hints` is non-empty,
+  `_policy_check_cached` now:
+  1. Applies all redaction hints (masking PII/PCI/PHI content).
+  2. Re-evaluates ONLY block rules against the post-redaction text.
+  3. If NO block rule still matches → downgrades action to "redact" and returns
+     the masked prompt (pipeline continues through input_scan with clean text).
+  4. If a block rule STILL matches → keeps action="block" (genuinely unmaskable
+     dangerous content) but still provides the redacted_prompt for metadata.
+
+Contract preserved:
+- Compile+push path verified correct (control compiler emits redaction_config
+  with replacement; POLICY_SYNC delivers bundles to gateway policy engine).
+- `proxy_chat` L6306-6317: action="redact" + redacted_prompt → effective_prompt
+  updated → scan_text = effective_prompt → scanner sees masked text only.
+- `resolve_and_enforce` at the scanner stage still downgrades PII/secret blocks
+  to redact (unchanged behavior for the scanner path itself).
+
+Gate: 18 new tests (test_pipeline_policy_redact.py) + 1948 full gateway suite passed.
+
 ## PIPELINE-0008 (2026-07-03)
 
 **LEAK VERIFIED FIXED: PII NEVER reaches the model on a block; the original

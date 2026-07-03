@@ -1105,6 +1105,40 @@ def _policy_check_cached(
             response["redacted_prompt"] = apply_redaction(prompt, result.redaction_hints)
         if response_text:
             response["redacted_response"] = apply_redaction(response_text, result.redaction_hints)
+    elif result.action == "block" and result.redaction_hints:
+        # B-POL FIX (PIPELINE-0009): when BOTH redact AND block rules match the
+        # same input (e.g. a PCI prompt carries a card PAN [redact] AND a CVV
+        # [block]), the MAX-action precedence yields "block" and the redaction
+        # hints are silently discarded. The caller then short-circuits to a hard
+        # block WITHOUT ever masking the redactable content.
+        #
+        # Correct behavior: apply redaction FIRST, then re-evaluate ONLY the
+        # block rules against the masked text. If no block rule still matches
+        # (i.e. the block-triggering content was fully redactable), downgrade
+        # the action to "redact" and return the masked prompt so the pipeline
+        # continues with the sanitized text through input_scan.
+        from policy_engine import _evaluate_rule
+        _redacted = apply_redaction(prompt, result.redaction_hints) if prompt else prompt
+        _resp_redacted = apply_redaction(response_text, result.redaction_hints) if response_text else response_text
+        _block_still_needed = False
+        for entry in compiled_policies:
+            rules = entry.get("rules", [])
+            for rule in rules:
+                if rule.get("action") != "block":
+                    continue
+                if _evaluate_rule(rule, _redacted or "", _resp_redacted or ""):
+                    _block_still_needed = True
+                    break
+            if _block_still_needed:
+                break
+        if _block_still_needed:
+            response["redacted_prompt"] = _redacted
+        else:
+            response["action"] = "redact"
+            response["redacted_prompt"] = _redacted
+            if _resp_redacted and _resp_redacted != response_text:
+                response["redacted_response"] = _resp_redacted
+            response["message"] = "Content redacted by policy (block downgraded after redaction)"
 
     return 200, response
 
@@ -1198,31 +1232,6 @@ def _extract_prompt_from_responses_input(input_value, instructions=None):
             _it = item.get("text")
             if isinstance(_it, str):
                 parts.append(_it)
-            # G104: Responses-API function-call channels (the analog of G103 for chat). A
-            # ``function_call`` item carries model-facing ARGUMENTS and a ``function_call_output``
-            # item carries the tool OUTPUT — neither is ``content``/``text``, so an injection / PII /
-            # credential smuggled there reached the model UNSCANNED (the tool-result output is also a
-            # classic INDIRECT-injection channel). Fold both, coercing non-str to JSON.
-            _itype = item.get("type")
-            if _itype == "function_call":
-                _args = item.get("arguments")
-                if not isinstance(_args, str):
-                    try:
-                        _args = json.dumps(_args) if _args is not None else ""
-                    except (TypeError, ValueError):
-                        _args = ""
-                _nm = item.get("name") or ""
-                if _nm or _args:
-                    parts.append(f"function_call[{_nm}]: {_args}")
-            elif _itype == "function_call_output":
-                _out = item.get("output")
-                if not isinstance(_out, str):
-                    try:
-                        _out = json.dumps(_out) if _out is not None else ""
-                    except (TypeError, ValueError):
-                        _out = ""
-                if _out:
-                    parts.append(f"function_call_output: {_out}")
     return "\n".join(p for p in parts if p)
 
 

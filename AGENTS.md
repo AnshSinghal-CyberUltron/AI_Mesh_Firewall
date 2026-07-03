@@ -50,6 +50,13 @@
  build_pipeline_trace blocked_stage → model_output=skip content=""; (5) LIVE Docker stack
  SSN+email+key → 403, model_input=skip, model_output=skip, 9.7ms (no 7710ms). 26 new tests
  in test_pipeline_leak_verification.py. Gate: 26 targeted + 1920 full suite passed.
+ - PIPELINE-0009 (2026-07-03) — POLICY REDACTS PII/PCI/PHI BEFORE INPUT_SCAN (B-POL fix):
+ main.py _policy_check_cached. When both redact+block rules co-match, evaluate() returns
+ action="block" (MAX); redaction_hints were only applied when action=="redact" → silently
+ discarded → hard block without masking PII. FIX: apply redaction FIRST, re-evaluate block
+ rules on masked text; if no block rule still matches → downgrade to "redact" + return
+ masked prompt (input_scan sees clean text). Compile+push path verified. 18 new tests in
+ test_pipeline_policy_redact.py. Gate: 18 targeted + 1948 full suite passed.
 
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is

@@ -67,6 +67,14 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   LIVE verified: SSN+email+key → HTTP 403, model_input=skip, model_output=skip, 9.7ms
   total (no 7710ms LLM call). 26 new tests in test_pipeline_leak_verification.py.
   Gate: 26 targeted + 1920 full suite passed.
+- PIPELINE-0009 (2026-07-03) — Policy REDACTS PII/PCI/PHI before input_scan (B-POL fix):
+  main.py _policy_check_cached. ROOT CAUSE: evaluate() returns action="block" when both
+  redact+block rules co-match (MAX precedence); redaction_hints were only applied when
+  action=="redact" → silently discarded on block → hard block without masking. FIX: when
+  action="block"+hints, apply redaction FIRST, re-evaluate block rules on masked text; if no
+  block rule still matches → downgrade to "redact" + return masked prompt (input_scan sees
+  clean). Compile+push path verified correct. 18 new tests in test_pipeline_policy_redact.py.
+  Gate: 18 targeted + 1948 full gateway suite passed.
 - PIPELINE-0007 (2026-07-03) — ONE authoritative final_action + blocked_by: main.py.
   _build_safe_block_response accepts blocked_by param (single-writer from _build_block_response,
   no double-resolution); removed redundant pipeline_stage from 403 JSON. Non-streaming +
