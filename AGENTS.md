@@ -32,6 +32,13 @@
  terminal-block contract (injection/unmaskable-PII/org-policy → is_terminal_block; PII-maskable →
  redact not block; monitor mode → never terminal). 24 new tests in
  test_pipeline_block_shortcircuit.py. Gate: 24 targeted + 30 enforcement + 1851 full suite passed.
+ - PIPELINE-0006 (2026-07-03) — DEGRADED SCANNER FAILS CLOSED: enforcement.py + main.py.
+ tier2_degraded + PII/secrets/credentials detected in scan text → REDACT (or BLOCK if
+ unmaskable), NEVER raw to model. Clean prompt under degraded → monitor only. Fixes D-02
+ (Tier-2 degraded fail-open). tier1_pii_detected param + detect_pii/detect_secrets run at
+ degraded path. Output enforce_output(scan_degraded) → redact confirmed wired. 19 new tests
+ in test_pipeline_degraded_failclosed.py. Gate: 19 targeted + 54 enforcement + 1870 full
+ suite passed.
 
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is

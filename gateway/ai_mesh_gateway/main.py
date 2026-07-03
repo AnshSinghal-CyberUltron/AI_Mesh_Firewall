@@ -6454,17 +6454,18 @@ async def proxy_chat(
                 )
 
             scan_verdict = verdict
+            _degraded_pii_detected = False
 
             if _is_tier2_degraded_verdict(verdict):
-                # Static-first / fail-open design: a Tier-2 *degraded* verdict
-                # (Bedrock unavailable — client_error / parse failure /
-                # bedrock_degraded) is NOT a content threat. The Tier-1 static
-                # checks already ran and did not block (degraded verdicts only
-                # occur after Tier-1 passed in scan_prompt_with_tier2), so we
-                # fall back to that clean Tier-1 decision and ALLOW the request
-                # instead of hard-blocking it. Hard-blocking here took the data
-                # plane fully down whenever Bedrock auth/availability flapped,
-                # contradicting the scanner's own MONITOR recommendation.
+                # PIPELINE-0006 fail-CLOSED: a Tier-2 *degraded* verdict means
+                # Bedrock was unavailable. Tier-1 ran first and did not block,
+                # but PII/secrets may still be present (Tier-1 flags at a lower
+                # threshold or misses them). We DETECT whether the scan text
+                # actually carries PII/secrets and communicate that to the
+                # enforcement authority, which will REDACT (or BLOCK if
+                # unmaskable). If the text is clean → monitor only (not block,
+                # so Bedrock auth/availability flaps don't take the data plane
+                # down). Per CANONICAL.md: degraded → never raw PII to model.
                 LOG.warning(
                     "Tier-2 scanner degraded (reason=%s, detail=%s, user=%s); "
                     "falling back to Tier-1 static decision (fail-open).",
@@ -6505,7 +6506,23 @@ async def proxy_chat(
                         "module_id": "1.1",
                     },
                 )
-                # Fall through to normal processing; Tier-1 was clean.
+                # PIPELINE-0006: fail-CLOSED on degraded. Tier-2 can't
+                # confirm/deny, so proactively detect PII/secrets in the text.
+                # If present → resolve_and_enforce will REDACT (never raw to model).
+                try:
+                    from patterns import detect_pii as _dp, detect_secrets as _ds, detect_credential_exposure as _dce
+                except ImportError:
+                    from .patterns import detect_pii as _dp, detect_secrets as _ds, detect_credential_exposure as _dce
+                _degraded_pii_detected = bool(
+                    _dp(scan_text) or _ds(scan_text) or _dce(scan_text)
+                )
+                if _degraded_pii_detected:
+                    LOG.warning(
+                        "Tier-2 degraded but PII/secrets detected in prompt "
+                        "(fail-closed to REDACT, user=%s)",
+                        user_id,
+                    )
+                # Fall through to enforcement with degraded + detection flag.
 
             try:
                 from enforcement import (
@@ -6550,6 +6567,7 @@ async def proxy_chat(
                 matched_policy_names=check_resp.get("matched_policy_names") or [],
                 enforcement_mode=enforcement_mode,
                 tier2_degraded=_is_tier2_degraded_verdict(verdict),
+                tier1_pii_detected=_degraded_pii_detected,
                 redaction_possible=True,
                 pii_detection_enabled=bool(org_config.get("scan_block_on_pii", True)),
                 scan_block_on_injection=org_config.get("scan_block_on_injection", True),
@@ -6632,6 +6650,7 @@ async def proxy_chat(
             _redact_threat = (
                 verdict.threat_type == "secret"
                 or (pii_detection_enabled and _is_redactable_pii_threat(verdict.threat_type))
+                or (_input_decision.degraded and _degraded_pii_detected)
             )
 
             _text_before_pii_redact = effective_prompt
@@ -6698,6 +6717,8 @@ async def proxy_chat(
                     scanner_tier=verdict.tier,
                     org_policy_action=_org_policy_action,
                     enforcement_mode=enforcement_mode,
+                    tier2_degraded=_is_tier2_degraded_verdict(verdict),
+                    tier1_pii_detected=_degraded_pii_detected,
                     redaction_possible=not _redaction_noop,
                     pii_detection_enabled=pii_detection_enabled,
                     scan_block_on_injection=org_config.get("scan_block_on_injection", True),

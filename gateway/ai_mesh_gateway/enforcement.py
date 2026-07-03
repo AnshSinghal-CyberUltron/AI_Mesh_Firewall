@@ -231,6 +231,7 @@ def resolve_and_enforce(
     matched_policy_names: list[str] | None = None,
     enforcement_mode: str = "block",
     tier2_degraded: bool = False,
+    tier1_pii_detected: bool = False,
     redaction_possible: bool = True,
     pii_detection_enabled: bool = True,
     scan_block_on_injection: bool = True,
@@ -246,8 +247,10 @@ def resolve_and_enforce(
     Returns a frozen ``PipelineDecision``. The caller short-circuits on
     ``decision.is_terminal_block`` and applies redaction on ``decision.is_redact``.
 
-    **Fail-closed contract:**
+    **Fail-closed contract (PIPELINE-0006):**
     - ``tier2_degraded`` + Tier-1 detected PII/secret → ``redact``
+    - ``tier2_degraded`` + ``tier1_pii_detected`` (pattern detectors found
+      PII/secrets/credentials in the scan text) → ``redact``
     - ``tier2_degraded`` + Tier-1 clean → ``monitor`` (degraded=True)
     - An exception inside → ``PipelineDecision(action="block")``
     """
@@ -293,9 +296,9 @@ def resolve_and_enforce(
         elif not _redact_eligible and resolved == "redact":
             action = "allow"
             blocked_by = None
-        elif tier2_degraded and _threat_is_pii_class:
-            action = "redact"
-            blocked_by = None
+        elif tier2_degraded and (_threat_is_pii_class or tier1_pii_detected):
+            action = "redact" if redaction_possible else "block"
+            blocked_by = None if redaction_possible else "input_scan"
         elif tier2_degraded:
             action = resolved if resolved != "allow" else "monitor"
             blocked_by = None

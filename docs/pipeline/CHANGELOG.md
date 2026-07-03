@@ -2,6 +2,32 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0006 (2026-07-03)
+
+**Degraded scanner fails CLOSED** — A degraded/unavailable Tier-2 scanner no longer
+allows raw PII/secrets through to the model (closes D-02 fail-open).
+
+Changes:
+- **enforcement.py**: `resolve_and_enforce()` gains `tier1_pii_detected: bool` parameter.
+  When `tier2_degraded=True` and PII/secrets detected in scan text → `action="redact"`
+  (or `"block"` if `redaction_possible=False`). Clean prompt under degraded → `"monitor"`.
+- **main.py (~L6458–6520)**: The degraded path now runs `detect_pii` / `detect_secrets` /
+  `detect_credential_exposure` on the scan text BEFORE calling `resolve_and_enforce`.
+  Result passed as `tier1_pii_detected`. Redaction trigger (`_redact_threat`) extended
+  to fire when `_input_decision.degraded and _degraded_pii_detected`.
+- **Output side**: `enforce_output(scan_degraded=True)` already returns `action="redact"`
+  (confirmed wired, no change needed — was correct since PIPELINE-0004).
+- **D-06 (streaming reasoning_content/tool_calls)**: NOT addressed this iteration — not
+  naturally part of the degraded fail-closed scope. Noted for a future iteration.
+
+Fail-closed contract (byte-verified):
+- Degraded + PII in prompt → redacted text forwarded (raw PII absent from payload)
+- Degraded + clean prompt → monitor only (no redact, no block)
+- Degraded + PII + unmaskable → BLOCK (never raw to model)
+- Output scan degraded → redact (per CANONICAL.md)
+
+Gate: 19 targeted + 54 enforcement + 1870 full suite passed (0 failed).
+
 ## PIPELINE-0005 (2026-07-03)
 
 **Block short-circuit invariant VERIFIED** — A block at ANY input stage

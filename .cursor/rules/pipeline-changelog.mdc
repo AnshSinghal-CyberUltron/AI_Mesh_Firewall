@@ -55,3 +55,7 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   unmaskable_PII L6745) ALL precede ALL model calls across all 4 paths (A/B/C/D). Structural
   source proof + pipeline_trace model-skip verification + enforcement authority terminal-block
   contract. 24 new tests. Gate: 24 + 30 + 1851 full suite passed.
+- PIPELINE-0006 (2026-07-03) — DEGRADED SCANNER FAILS CLOSED: enforcement.py +
+  main.py. tier2_degraded + PII/secrets detected in scan text → REDACT (or BLOCK if
+  unmaskable), never raw to model. Clean prompt under degraded → monitor only. Closes D-02
+  fail-open. 19 new tests. Gate: 19 + 54 + 1870 full suite passed.
