@@ -960,6 +960,20 @@ def _findings_have_infra_network_leak(findings: list[dict] | None) -> bool:
     return False
 
 
+def _findings_have_exfil(findings: list[dict] | None) -> bool:
+    """CHG-0096: True if an OUTPUT scan finding is a defanged EXFIL beacon
+    (``threat_type == "exfil"``). The orchestrator detects a zero-click auto-render
+    exfil beacon (markdown-image / HTML img / srcset) under any posture but, like
+    PII/secret/infra, only APPLIES the defang mutation under a ``redact`` action — so
+    the E12 result-redaction floor must ALSO fire for an exfil finding to force the
+    defang under the default ``tag`` posture (else the beacon egressed raw)."""
+    if not findings:
+        return False
+    return any(
+        isinstance(f, dict) and f.get("threat_type") == "exfil" for f in findings
+    )
+
+
 async def _scan_tool_args_block(
     arguments,
     *,
@@ -1087,6 +1101,7 @@ async def _scan_tool_result_floor(
         and (
             _findings_have_secret_or_pii(findings)
             or _findings_have_infra_network_leak(findings)  # CHG-0074
+            or _findings_have_exfil(findings)  # CHG-0096
         )
     ):
         try:
@@ -3406,6 +3421,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         and (
                             _findings_have_secret_or_pii(_out_find_new)
                             or _findings_have_infra_network_leak(_out_find_new)  # CHG-0074
+                            or _findings_have_exfil(_out_find_new)  # CHG-0096
                         )
                     ):
                         # ── E12: result-REDACTION floor. The output scan DETECTED a
@@ -3629,6 +3645,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         and (
                             _findings_have_secret_or_pii(_out_find_new2)
                             or _findings_have_infra_network_leak(_out_find_new2)  # CHG-0074
+                            or _findings_have_exfil(_out_find_new2)  # CHG-0096
                         )
                     ):
                         (

