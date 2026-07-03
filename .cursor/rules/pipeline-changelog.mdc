@@ -164,3 +164,8 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   CollapsibleSection a11y); StageTimeline responsive popover + detail grid. Playwright gate
   pipeline_p24_trace_view_verify.mjs 8/8 @1440/1024/768/375 light/dark. detect clean; lint+build green.
   Evidence mcp-parallel/findings/pipeline-p24-trace-view/.
+- PIPELINE-0025 (2026-07-03) — FULL HISTORY BROWSER GATE (P6-25): Playwright gate
+  pipeline_p25_full_history_verify.mjs verifies blocked+redact+allow Scan Detail events render
+  full pipeline stages, latency parity (±0.1ms), routing card (allow), withheld banner (block),
+  redact stage reason + output (redact). Optional Attack Simulator trigger when feed lacks samples.
+  pipelineP25Pass:true; 0 console errors. Evidence mcp-parallel/findings/pipeline-p25/.

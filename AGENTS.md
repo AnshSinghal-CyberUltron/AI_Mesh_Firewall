@@ -129,6 +129,13 @@
   Playwright gate pipeline_p24_trace_view_verify.mjs (1440/1024/768/375 × light/dark, 0 console
   errors, no overflow). detect [] clean; lint 92 + build green. Evidence
   mcp-parallel/findings/pipeline-p24-trace-view/.
+- PIPELINE-0025 (2026-07-03) — FULL HISTORY BROWSER GATE (P6-25): Playwright gate
+  pipeline_p25_full_history_verify.mjs verifies blocked+redact+allow Scan Detail events each
+  render full pipeline stages, latency parity (±0.1ms vs total_latency_ms), routing-decision-card
+  (allow), withheld banner (block), redact stage enforcement reason + output panel (redact).
+  Picks best threat-feed samples (3+ stages, positive latency); optional Attack Simulator trigger
+  for missing kinds. pipelineP25Pass:true (block 16.2ms / redact 13607.1ms / allow 1065.1ms;
+  0 console errors). Evidence mcp-parallel/findings/pipeline-p25/.
 - PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
  (dominant stage/share, by_stage, hints[]) via build_latency_breakdown+attach_latency_breakdown;
  stream frame recomputes after total reconcile. FE LogDetailPage breakdown table + "How to reduce

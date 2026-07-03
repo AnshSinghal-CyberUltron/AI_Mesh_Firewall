@@ -2,6 +2,30 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0025 (2026-07-03)
+
+**Full scan-history browser gate (P6 item 25).**
+
+Root Cause:
+- PIPELINE-0024 revamps the trace view layout but had no gate proving blocked, redacted,
+  and allowed events each render the full pipeline history with correct latency parity,
+  routing transparency, withheld output, and redaction reasons in Scan Detail.
+
+Fix:
+- `scripts/ralph/pipeline_p25_full_history_verify.mjs`: Playwright gate logs in at :8180,
+  picks (or triggers via Attack Simulator) block/redact/allow threat-feed events with
+  3+ pipeline stages + positive `total_latency_ms`, opens Detailed Records → Scan Detail,
+  and asserts per kind:
+  - **blocked**: 9-stage timeline, Duration parity (±0.1ms), withheld banner + input panel
+  - **redact**: stage REACT badges + enforcement reason + output panel + latency parity
+  - **allow**: routing-decision-card + 9-stage timeline + latency parity
+- Proof screenshots saved under `mcp-parallel/findings/pipeline-p25/`.
+
+Verification:
+- Playwright `pipelineP25Pass: true` (block zs-8a4cbbd2226f 16.2ms, redact
+  zs-294755069ea4 13607.1ms, allow zs-a9d4c239fa7b 1065.1ms; 0 console errors).
+- Evidence: `mcp-parallel/findings/pipeline-p25/evidence.json` + `*-scan-detail.png`.
+
 ## PIPELINE-0024 (2026-07-03)
 
 **Pipeline-trace view UI revamp (P6 item 24).**

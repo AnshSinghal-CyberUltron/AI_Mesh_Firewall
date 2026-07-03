@@ -1841,3 +1841,9 @@
       StageTimeline responsive popover + sm:grid-cols-2 detail grid. Gate:
       pipeline_p24_trace_view_verify.mjs pipelineP24Pass:true (8/8); detect [] clean; lint 92 +
       build green. Evidence mcp-parallel/findings/pipeline-p24-trace-view/.
+
+- [x] 25. Verify (Browser) full history for blocked+redact+allow: stages, latency parity,
+      routing (allow), withheld (block), redact reason+output. PIPELINE-0025 (2026-07-03):
+      pipeline_p25_full_history_verify.mjs pipelineP25Pass:true (block 16.2ms / redact
+      13607.1ms / allow 1065.1ms; 9 stages each; 0 console errors). Evidence
+      mcp-parallel/findings/pipeline-p25/.

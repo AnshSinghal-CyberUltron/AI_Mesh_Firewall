@@ -1,0 +1,53 @@
+{
+  "ok": true,
+  "checkpoint": "pipeline-p25",
+  "blocked": {
+    "kind": "block",
+    "id": "296117",
+    "requestId": "zs-8a4cbbd2226f",
+    "pass": true,
+    "stages": 9,
+    "stageButtons": 9,
+    "apiTotalMs": 16.2,
+    "headerMs": 16.2,
+    "metricMs": 16.2,
+    "latencyOk": true,
+    "specificOk": true,
+    "specificReason": "withheld banner + input panel",
+    "hasRouting": true
+  },
+  "redact": {
+    "kind": "redact",
+    "id": "296107",
+    "requestId": "zs-294755069ea4",
+    "pass": true,
+    "stages": 9,
+    "stageButtons": 9,
+    "apiTotalMs": 13607.1,
+    "headerMs": 13607.1,
+    "metricMs": 13607.1,
+    "latencyOk": true,
+    "specificOk": true,
+    "specificReason": "redact stage reason + output",
+    "hasRouting": true
+  },
+  "allow": {
+    "kind": "allow",
+    "id": "296062",
+    "requestId": "zs-a9d4c239fa7b",
+    "pass": true,
+    "stages": 9,
+    "stageButtons": 9,
+    "apiTotalMs": 1065.1,
+    "headerMs": 1065.1,
+    "metricMs": 1065.1,
+    "latencyOk": true,
+    "specificOk": true,
+    "specificReason": "routing decision card",
+    "hasRouting": true
+  },
+  "triggered": null,
+  "consoleErrors": [],
+  "noConsoleErrors": true,
+  "pipelineP25Pass": true
+}
