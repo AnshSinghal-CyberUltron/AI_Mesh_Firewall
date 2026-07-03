@@ -1152,6 +1152,26 @@ class InputScanner:
                 tier="tier_1",
             )
 
+        # G68: credential-EXPOSURE patterns (connection string, basic-auth, stripe/github/
+        # azure key, exposed password) that are NOT in SECRET_PATTERNS. The input scan ran
+        # detect_pii + detect_secrets but NEVER detect_credential_exposure, so a credential-
+        # only value pasted into a prompt (``sk_live_…``, ``mongodb://user:pw@host/db``)
+        # reached the model provider RAW — the input analog of the output-guard gap G54.
+        # redact_all masks CREDENTIAL_EXPOSURE_PATTERNS, so a redact verdict scrubs it; and
+        # the detector is obfuscation-aware (G54/G55) so this also catches a fullwidth /
+        # base64-encoded credential in the prompt. threat_type='secret' -> the same
+        # redactable input enforcement path as detect_secrets above.
+        cred_matched = detect_credential_exposure(text)
+        if cred_matched:
+            return ScanVerdict(
+                action="redact",
+                threat_type="secret",
+                confidence=0.9,
+                detail=f"Credential detected in prompt: {', '.join(cred_matched.keys())}",
+                matched_patterns=list(cred_matched.keys()),
+                tier="tier_1",
+            )
+
         # G33: obfuscated PII/secret exfil via text-encodings (HTML char refs,
         # URL/percent-encoding, \\u / \\x escapes). detect_pii/detect_secrets above
         # already fold base64/hex transport; these text-encodings are checked here

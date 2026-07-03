@@ -1327,6 +1327,50 @@ def test_g53_input_benign_markdown_allowed(payload):
     assert _verdict(payload) == "allow", f"benign markdown input wrongly blocked: {payload[:40]!r}"
 
 
+# ── G68: INPUT-side credential-EXPOSURE detection (input analog of the output-guard G54) ──
+# The input scan ran detect_pii + detect_secrets but NEVER detect_credential_exposure, so a
+# credential-only value (connection string / basic-auth / stripe / github PAT / azure key —
+# none of which are in SECRET_PATTERNS) pasted into a PROMPT reached the model provider RAW.
+# It is now redacted (redact_all masks CREDENTIAL_EXPOSURE_PATTERNS). Obfuscation-aware
+# (G54/G55): a fullwidth / base64-encoded credential in the prompt is caught too.
+def _fw68(s):  # fullwidth fold for the obfuscated case
+    d = {c: chr(ord("０") + i) for i, c in enumerate("0123456789")}
+    d.update({c: chr(ord("ａ") + i) for i, c in enumerate("abcdefghijklmnopqrstuvwxyz")})
+    d.update({c: chr(ord("Ａ") + i) for i, c in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ")})
+    return "".join(d.get(c, c) for c in s)
+
+
+_G68_CRED_REDACT = [
+    "here is my key sk_live_abcd1234efgh5678ij",
+    "the db uri is mongodb://admin:s3cretpwd@dbhost:27017/prod",
+    "auth header: Basic YWxhZGRpbjpvcGVuc2VzYW1lMTIz",
+    "my token github_pat_11ABCDE0000aaaaaaaaaaabbb",
+    "key " + _fw68("sk_live_abcd1234efgh5678ij"),  # fullwidth-obfuscated credential
+]
+_G68_ALLOW = [
+    "how do I reset my password if I forgot it",
+    "explain how a mongodb connection string works",
+    "write a function that takes a key parameter",
+    "the password field should be required in the form",
+    "what is the capital of France",
+]
+
+
+@pytest.mark.parametrize("payload", _G68_CRED_REDACT)
+def test_g68_input_credential_is_redacted(payload):
+    v = _SCANNER._scan_prompt_sync(payload, False, None)
+    assert v.action in ("redact", "block"), (
+        f"credential in prompt reached the model unredacted: {payload[:50]!r}"
+    )
+    assert "sk_live_abcd1234efgh5678ij" not in patterns.redact_all(payload)
+    assert "mongodb://admin" not in patterns.redact_all(payload)
+
+
+@pytest.mark.parametrize("payload", _G68_ALLOW)
+def test_g68_input_benign_credential_words_allowed(payload):
+    assert _verdict(payload) == "allow", f"benign prompt wrongly flagged as credential: {payload[:50]!r}"
+
+
 # ── G54: OUTPUT-side unicode/zero-width/homoglyph-obfuscated CREDENTIAL / internal IP ──────
 # detect_pii/detect_secrets canonicalize before matching (G1), but detect_credential_exposure
 # and detect_ip_leakage did NOT — so a fullwidth / zero-width-split credential (connection
