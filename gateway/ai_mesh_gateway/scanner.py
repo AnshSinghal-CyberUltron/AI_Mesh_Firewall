@@ -1212,22 +1212,30 @@ class InputScanner:
         # span). Reaching here means the plaintext carried no PII/secret, so this
         # only fires on genuinely-hidden payloads; verified zero FP on benign
         # entities/URLs/escapes (they decode to harmless text, not PII patterns).
-        for _variant in _decode_text_encoding_variants(text):
-            _v_pii = detect_pii(_variant)
-            _v_secret = detect_secrets(_variant)
-            if _v_pii or _v_secret:
-                _kinds = list(_v_pii.keys()) + list(_v_secret.keys())
-                return ScanVerdict(
-                    action="block",
-                    threat_type="obfuscated_pii" if _v_pii else "obfuscated_secret",
-                    confidence=0.9,
-                    detail=(
-                        "Encoded PII/secret exfil attempt via text-encoding: "
-                        + ", ".join(_kinds)
-                    ),
-                    matched_patterns=_kinds,
-                    tier="tier_1",
-                )
+        # G87: Cf (zero-width/bidi/format) interleaved THROUGH an entity/percent/escape-encoded
+        # value breaks the raw _decode_text_encoding_variants token regex, so an interleaved-Cf
+        # encoded PII/secret in the INPUT prompt evaded this G33 check (verdict allow -> forwarded
+        # to the model, which drops the Cf and decodes the value). Symmetric to the OUTPUT-side G85
+        # fix in _scan_output_sync: also run the decoders over the Cf-stripped canonical form.
+        _canon_in = canonicalize_for_detection(text)
+        _enc_sources_in = (text,) if _canon_in == text else (text, _canon_in)
+        for _esrc in _enc_sources_in:
+            for _variant in _decode_text_encoding_variants(_esrc):
+                _v_pii = detect_pii(_variant)
+                _v_secret = detect_secrets(_variant)
+                if _v_pii or _v_secret:
+                    _kinds = list(_v_pii.keys()) + list(_v_secret.keys())
+                    return ScanVerdict(
+                        action="block",
+                        threat_type="obfuscated_pii" if _v_pii else "obfuscated_secret",
+                        confidence=0.9,
+                        detail=(
+                            "Encoded PII/secret exfil attempt via text-encoding: "
+                            + ", ".join(_kinds)
+                        ),
+                        matched_patterns=_kinds,
+                        tier="tier_1",
+                    )
 
         # G53: obfuscated PII/secret hidden by INLINE markdown emphasis / render-invisible
         # HTML (``1**2**3-45-6789`` / ``12<!-- -->3-45-6789``) — the raw bytes dodge the
@@ -1236,26 +1244,29 @@ class InputScanner:
         # entity-split is already covered above (G33 decodes entities). Only fires when
         # stripping the render-invisible markers REVEALS PII/secret the plaintext lacked,
         # so benign markdown (**bold**, snake_case, `code`) is unaffected -> block.
-        _md_stripped = strip_interleaved_emphasis(text)
-        if _md_stripped != text:
-            _s_pii = detect_pii(_md_stripped)
-            _s_secret = detect_secrets(_md_stripped)
-            # G53: also a bearer/api-key CREDENTIAL hidden by emphasis (sk_live_**..**);
-            # internal-IP leakage is an OUTPUT concern (a user-supplied IP is not exfil).
-            _s_cred = detect_credential_exposure(_md_stripped)
-            if _s_pii or _s_secret or _s_cred:
-                _skinds = list(_s_pii.keys()) + list(_s_secret.keys()) + list(_s_cred.keys())
-                return ScanVerdict(
-                    action="block",
-                    threat_type="obfuscated_pii" if _s_pii else "obfuscated_secret",
-                    confidence=0.9,
-                    detail=(
-                        "Markdown/HTML-obfuscated PII/secret exfil attempt: "
-                        + ", ".join(_skinds)
-                    ),
-                    matched_patterns=_skinds,
-                    tier="tier_1",
-                )
+        # G87: markdown-emphasis split with Cf interleaved (``1​*​2​*​3-45-6789``) — strip
+        # emphasis over the Cf-stripped canonical form too, mirroring the G33 fix above.
+        for _msrc in _enc_sources_in:
+            _md_stripped = strip_interleaved_emphasis(_msrc)
+            if _md_stripped != _msrc:
+                _s_pii = detect_pii(_md_stripped)
+                _s_secret = detect_secrets(_md_stripped)
+                # G53: also a bearer/api-key CREDENTIAL hidden by emphasis (sk_live_**..**);
+                # internal-IP leakage is an OUTPUT concern (a user-supplied IP is not exfil).
+                _s_cred = detect_credential_exposure(_md_stripped)
+                if _s_pii or _s_secret or _s_cred:
+                    _skinds = list(_s_pii.keys()) + list(_s_secret.keys()) + list(_s_cred.keys())
+                    return ScanVerdict(
+                        action="block",
+                        threat_type="obfuscated_pii" if _s_pii else "obfuscated_secret",
+                        confidence=0.9,
+                        detail=(
+                            "Markdown/HTML-obfuscated PII/secret exfil attempt: "
+                            + ", ".join(_skinds)
+                        ),
+                        matched_patterns=_skinds,
+                        tier="tier_1",
+                    )
 
         toxicity_verdict = self._check_toxicity(text, toxicity_threshold)
         if toxicity_verdict is not None:

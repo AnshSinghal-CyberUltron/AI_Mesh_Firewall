@@ -2494,3 +2494,38 @@ presigned (binary-decoding sig) / plain-path / plain-link URLs. Egress fuzz 0/84
 **Frozen:** golden `test_g86_*` (3 flag + 4 FP via `_url_smuggles_data`) + integration `test_output_transport_
 egress.py` `test_g86_*` (full inspect→sanitize path, attacker-recovery oracle + 3 FP).
 Session ledger: TEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86) + soft DoS (G79) fixed; G77/G78/G80 frozen.
+
+---
+
+## G87 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — Cf-blind raw-decoder detection sites (completeness sweep)
+Systematic audit of ALL raw transport/text-encoding decoder call sites (the G84/G85/G86 class). Two
+remaining Cf-blind DETECTION sites confirmed leaking:
+  (1) **INPUT** `_scan_prompt_sync` G33 (`_decode_text_encoding_variants(text)`) + G44/G53
+      (`strip_interleaved_emphasis(text)`) decoded over RAW text. A Cf-interleaved entity/percent/
+      markdown-encoded PII/secret in the PROMPT (`my ssn is &​#​4​9​;…`) → verdict **allow** → forwarded
+      to the model, which drops the Cf and decodes → PII/secret reaches the model (violates R5 "no PII
+      reaches models"). Contiguous was already caught (block); only Cf-interleaved bypassed. Input analog
+      of G85.
+  (2) **OUTPUT** `patterns.detect_ip_leakage` transport-decode used the raw `_iter_transport_decodes` →
+      a Cf-interleaved base64-encoded internal IP evaded the guard (verdict allow → blob egressed raw).
+**FIX (owned scanner.py + patterns.py):** (1) run the G33/G44 decoders over the Cf-stripped canonical
+form too (`canonicalize_for_detection`); (2) switch detect_ip_leakage to `_iter_transport_decodes_canon`
+(parity with detect_pii/detect_secrets, G75).
+**Verify:** input Cf entity/percent/markdown/ALM PII+secret → **block**; benign color-entity/url-percent/
+bold-italic input → **allow** (no FP); output ip_leakage Cf/ALM base64 IP → **detected**, benign b64 →
+not flagged. In-process golden **505 ×3 consecutive clean** (GATEWAY_LIVE=0); backend `ai_mesh_gateway/
+tests` **1703 passed**. Frozen: golden `test_g87_*` (5 input-block + 3 input-FP + 2 output-IP + 1 IP-FP).
+
+### COORDINATION NOTE (not my code) — deployed gateway lost org policies (policy_count 48 -> 0)
+During this iteration the DEPLOYED gateway (localhost:8300) health shows `policy_cache_version: 0,
+policy_count: 0` (was 41/48 at the G85 iteration). The org-policy sync did not reload after a gateway
+redeploy/restart (vector_policy_count 13 DID sync). This breaks the **LIVE** chat_pipeline golden cases
+(`03_jailbreak_block`/`04_injection_block` stages drift, `05_secrets_block` block→**redact**) because
+those cases (`characterize:"live"`, GATEWAY_LIVE default 1) depend on the org policy stage. Proven
+INDEPENDENT of G87 (reverting G87 to HEAD still fails; in-process 03/04 still block, 05 redacts
+deterministically). **Security posture maintained** — 05's input AWS key is still tier-1 REDACTED before
+reaching the model (not leaked); only the stricter policy-BLOCK contract is unmet. Root cause is
+control-plane/policy-seed state (org policies empty in the control plane or the post-restart re-register
+fetch returned 0), owned by the control-plane/infra session — flagging here so that session can re-seed /
+reload the org policy cache. In-process golden (GATEWAY_LIVE=0) is fully green (505 ×3).
+Session ledger: ELEVEN confirmed leaks (G74/G75/G76/G81/G82/G83/G84/G85/G86/G87) + soft DoS (G79) fixed; G77/G78/G80 frozen.

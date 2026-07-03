@@ -389,6 +389,56 @@ def test_g86_benign_url_not_flagged_as_exfil(label, url):
     assert not _og._url_smuggles_data(url), f"{label}: benign URL wrongly flagged as data-exfil (false positive)"
 
 
+# G87 — completeness sweep of the "raw decoder is Cf-blind" class (G84/G85/G86). Two remaining sites:
+#   (1) INPUT: the G33/G44 encoded/markdown-split checks in _scan_prompt_sync decoded over RAW text, so
+#       a Cf-interleaved entity/percent/markdown-encoded PII/secret in the PROMPT evaded detection
+#       (verdict allow -> forwarded to the model, which drops the Cf and decodes -> PII reaches the model,
+#       violating "no PII reaches models"). FIXED: also decode over the Cf-stripped canonical form
+#       (input parity with the OUTPUT-side G85 fix in _scan_output_sync).
+#   (2) OUTPUT: detect_ip_leakage's transport-decode used the raw _iter_transport_decodes, so a
+#       Cf-interleaved base64-encoded internal IP evaded the guard. FIXED: _iter_transport_decodes_canon
+#       (parity with detect_pii/detect_secrets, G75).
+_G87_INPUT_CF_ENCODED = [
+    ("g87_in_entity_ssn",   "my ssn is " + zero_width(_ent(SSN))),
+    ("g87_in_entity_key",   "my key " + zero_width(_ent(OAI_KEY))),
+    ("g87_in_percent_ssn",  "data " + zero_width(_pct(SSN))),
+    ("g87_in_markdown_ssn", "value " + zero_width(_md_split(SSN))),
+    ("g87_in_alm_entity",   "ssn " + "".join(c + chr(0x061C) for c in _ent(SSN))),
+]
+
+
+@pytest.mark.parametrize("label,payload", _G87_INPUT_CF_ENCODED)
+def test_g87_input_cf_encoded_pii_is_blocked(label, payload):
+    assert _verdict(payload) == "block", (
+        f"{label}: Cf-interleaved encoded PII/secret on INPUT not blocked (would reach the model)"
+    )
+
+
+# FP guard: benign encoded/markdown input must not be blocked as obfuscated PII.
+@pytest.mark.parametrize("label,payload", [
+    ("g87_fp_color",   "the color is &#35;FF00AA in hex"),
+    ("g87_fp_percent", "visit https://x.com/a%2Fb%2Fc for docs"),
+    ("g87_fp_bold",    "use **bold** and *italic* for emphasis"),
+])
+def test_g87_benign_encoded_input_not_blocked(label, payload):
+    assert _verdict(payload) == "allow", f"{label}: benign encoded input wrongly blocked (false positive)"
+
+
+# OUTPUT: Cf-interleaved base64-encoded internal IP must be detected by detect_ip_leakage.
+@pytest.mark.parametrize("label,blob", [
+    ("g87_ip_zw_b64",  zero_width(base64.b64encode(b"host is 10.20.30.40 internal").decode())),
+    ("g87_ip_alm_b64", "".join(c + chr(0x061C) for c in base64.b64encode(b"connect to 192.168.1.5 now").decode())),
+])
+def test_g87_output_cf_encoded_ip_leakage_detected(label, blob):
+    assert patterns.detect_ip_leakage(blob), f"{label}: Cf-encoded internal IP not detected on output (would egress)"
+
+
+def test_g87_benign_b64_not_ip_flagged():
+    assert not patterns.detect_ip_leakage(base64.b64encode(b"hello this is a friendly message here").decode()), (
+        "benign base64 (decodes to prose, no IP) wrongly flagged as ip_leakage (false positive)"
+    )
+
+
 # G77 — truncation-boundary defense (verified defended, FROZEN against config drift). Obfuscated
 # PII/secret placed PAST patterns._CANON_MAX_LEN escapes the canonical pass (a fullwidth SSN at
 # offset 21k -> detect_pii False, since canonicalize_for_detection only folds text[:_CANON_MAX_LEN];

@@ -1455,7 +1455,11 @@ def detect_ip_leakage(text: str) -> Dict[str, str]:
     if canon != text:
         for k, v in _detect_ip_leakage_core(canon).items():
             found.setdefault(k, v)
-    for _tok, dec in _iter_transport_decodes(text):
+    # G87: use the Cf-aware / whitespace-collapsed transport decode (parity with
+    # detect_pii/detect_secrets, G75/G76). The raw _iter_transport_decodes broke on a
+    # base64/hex blob with zero-width/bidi/format chars interleaved, so a Cf-obfuscated
+    # base64-encoded internal IP evaded the guard (verdict allow -> the blob egressed raw).
+    for dec in _iter_transport_decodes_canon(text, canon):
         dec_canon = canonicalize_for_detection(dec)
         for src in ((dec, dec_canon) if dec_canon != dec else (dec,)):
             for k, v in _detect_ip_leakage_core(src).items():
