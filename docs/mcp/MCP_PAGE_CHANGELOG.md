@@ -78,3 +78,11 @@ Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
 - **NOW DOES:** syncServerTools(id) → POST /servers/<id>/tools/ (buttons: aria-label "Sync tools from server" :1396, :1443; auto after retry/register). Re-syncing all 12 → every one left "unknown": 6 connected (Everything 1-5 + Filesystem Canary), 6 failed-with-CLEAN-errors (probe/Stub Bearer→unreachable, Stub OAuth→re-auth, Linear×3→rejected auth). 0 remain unknown.
 - **AFFECTS:** server state resolution. With item 07 (registration auto-sync) + this re-sync button, no server can stay stuck at unknown.
 - **VERIFY:** LIVE bulk re-sync via API → "STILL UNKNOWN: NONE"; failed servers show clean branded errors.
+
+## MCP-PAGE-CLEANUP-09 — "Syncing" state renders (no fall-through to "Unknown") + page verify
+- **files:** frontend/src/lib/mcpColors.js; scripts/ralph/mcp_page_cleanup_item09_verify.mjs (new)
+- **WHAT:** added the "syncing"/"connecting" entries to CONNECTION_STATUS + Playwright page-level verification that no server sits at "Unknown".
+- **WHY:** item 07 sets connection_status="syncing", but the frontend map had no such key → connectionInfo("syncing") fell through to `unknown` → rendered "Unknown" (the stuck state we're removing).
+- **NOW DOES:** syncing→"Syncing" (amber, pulsing), connecting→"Connecting"; the state reads unknown→Syncing→Connected/Failed. Live page shows all servers resolved.
+- **AFFECTS:** the connection-status badge on every MCP surface using connectionInfo.
+- **VERIFY:** node connectionInfo("syncing")==="Syncing"; frontend build green; LIVE Playwright (both themes @1440+375) → cleanup09Pass:true (Connected=12 Failed=9 Unknown=0; hasNeverSynced=false; 0 console errors; no overflow).
