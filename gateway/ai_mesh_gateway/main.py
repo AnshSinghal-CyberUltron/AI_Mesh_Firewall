@@ -1323,12 +1323,50 @@ def _extract_prompt_from_messages(messages):
     return "\n".join(parts)
 
 
+_TOOL_SCHEMA_TEXT_BUDGET = 8000   # total model-facing schema chars folded into the scan
+_TOOL_SCHEMA_MAX_DEPTH = 8
+# Keys whose VALUE is a JSON-Schema structural token, not model-facing prose — skip so the
+# folded text stays signal (an injection lives in description/enum/title/default, not in "type").
+_TOOL_SCHEMA_STRUCTURAL_KEYS = frozenset({"type", "$ref", "$schema", "format", "$id", "$comment"})
+
+
+def _extract_schema_text(schema, depth: int, budget: list) -> list:
+    """Recursively collect the model-facing STRING content (parameter descriptions, enum/title/
+    default/example values) from a JSON-Schema ``parameters`` object, bounded by depth + a shared
+    char budget. The model reads the whole tool schema, so an injection/PII/secret smuggled in a
+    parameter description or an enum value must be scanned too (G81)."""
+    out: list = []
+    if depth > _TOOL_SCHEMA_MAX_DEPTH or budget[0] <= 0:
+        return out
+    if isinstance(schema, dict):
+        items = schema.items()
+    elif isinstance(schema, list):
+        items = enumerate(schema)
+    else:
+        return out
+    for k, v in items:
+        if budget[0] <= 0:
+            break
+        if isinstance(v, str):
+            if isinstance(k, str) and k in _TOOL_SCHEMA_STRUCTURAL_KEYS:
+                continue
+            s = v[: budget[0]]
+            out.append(s)
+            budget[0] -= len(s)
+        elif isinstance(v, (dict, list)):
+            out.extend(_extract_schema_text(v, depth + 1, budget))
+    return out
+
+
 def _extract_tool_definitions_text(tools) -> str:
-    """G7: fold top-level ``tools[].function.{name,description}`` into scannable
-    text so a prompt-injection smuggled in a tool *definition* is scanned too."""
+    """G7/G81: fold ``tools[].function.{name,description}`` AND the model-facing strings of the
+    ``parameters`` JSON schema (property descriptions, enum/title/default values) into scannable
+    text, so a prompt-injection / PII / secret smuggled in a tool *definition* — including its
+    parameter schema, which the raw name+description fold used to miss — is scanned too."""
     if not isinstance(tools, list):
         return ""
     parts: list[str] = []
+    budget = [_TOOL_SCHEMA_TEXT_BUDGET]
     for t in tools:
         if not isinstance(t, dict):
             continue
@@ -1337,6 +1375,11 @@ def _extract_tool_definitions_text(tools) -> str:
         desc = fn.get("description") or ""
         if name or desc:
             parts.append(f"tool_def[{name}]: {desc}")
+        params = fn.get("parameters")
+        if isinstance(params, (dict, list)) and budget[0] > 0:
+            schema_strs = _extract_schema_text(params, 0, budget)
+            if schema_strs:
+                parts.append(f"tool_params[{name}]: " + " ".join(schema_strs))
     return "\n".join(parts)
 
 

@@ -2338,3 +2338,22 @@ Two things this iteration:
   downgraded to redact-and-forward — it stays block. Froze the 10-case matrix as
   `test_g80_enforcement_precedence`. golden **462 passed × 3** (was 452; +10). Test-only (no prod change).
 Session ledger update: 4 real leaks (G74-G76) + soft DoS (G79) fixed+deployed; G77/G78/G80 = defended+frozen.
+
+---
+
+## G81 (CONFIRMED NEW LEAK — fixed) — 2026-07-03 — injection via tool-parameter JSON schema
+Fresh surface: tool/function DEFINITIONS. `main._extract_tool_definitions_text` (folded into the scanned
+prompt at main.py:5767) captured ONLY `function.{name,description}` — NOT `function.parameters` (the JSON
+schema). But the model reads the WHOLE tool schema: property `description`s and `enum` values are
+instructions to it. So an injection/PII/secret smuggled in
+`tools[].function.parameters.properties.X.description` (or an enum value, or a nested property) reached
+the model **UNSCANNED → verdict allow** (confirmed: extractor text lacked the injection; `json.dumps(tools)`
+would have blocked). OWASP LLM01 indirect / LLM07 insecure plugin/tool design.
+**FIX (owned main.py, minimal+claimed):** new bounded recursive `_extract_schema_text(schema, depth, budget)`
+collects the model-facing STRINGS of the parameters schema (descriptions, enum/title/default/example),
+skipping structural keys (type/$ref/format); depth≤8, shared char budget 8000. Folded into
+`_extract_tool_definitions_text` as `tool_params[name]: …`.
+**Verify:** injection in param-desc / enum / nested-prop / ALM-obfuscated → **block**; SSN/stripe in param
+→ **redact**; benign weather/search schemas → **allow** (no FP); 300 tools × 50 props → 0.3ms, budget-capped
+(DoS-safe). backend `ai_mesh_gateway/tests` **1644 passed**; golden 462×3; ruff clean.
+**Frozen:** `ai_mesh_gateway/tests/test_tool_param_injection.py` (9): 6 threat-caught + 2 benign-FP + 1 DoS-bound.
