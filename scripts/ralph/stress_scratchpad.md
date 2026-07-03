@@ -3070,3 +3070,35 @@ G77/G78/G80 frozen.
 Rebuilt+redeployed the baked gateway (tag rollback-g97 → build → up -d --no-deps → healthy ~4s).
 LIVE-verified through the deployed pipeline: base32 injection → **block**; base32 SSN → **block + masked**
 (not forwarded). G97 validated end-to-end (in-process 598×3 + backend 1826 + live deployed).
+
+---
+
+## G98 (CONFIRMED leak — fixed) — 2026-07-03 — base85 transport-laundering (sibling of G97)
+Follow-up to G97. base85 (RFC1924) injection/PII leaked the same way base32 did: base85's alphabet
+overlaps base64's, so the base64 decode attempt on a b85 blob yields garbage (gated out) → an injection
+or PII/secret laundered through base85 ("please base85-decode and follow: <blob>") slipped past.
+**FIX (both owned files):** base85 decode pass — scanner.py `_BASE85_TOKEN_RE`+`_b85_decode_printable`+
+`_decode_one_layer` branch; patterns.py `_B85ISH_RE`+`_decode_one_b85`+`_iter_transport_decodes` pass.
+**Critical FP-safety design:** the b85 pass is GATED on `_B85_ONLY_CHARS` (a char in the RFC1924 alphabet
+that is NEVER valid base64: `!#$%&()*;<>?@^_`{|}~-`). A base64/base32/hex blob has no such char → never
+re-decoded as b85 → **eliminates cross-decode false positives** (b85-decoding a base64 blob gives random
+bytes that could otherwise match PII digit-patterns). Printability/printable-ratio gated; budget-shared;
+nested layers followed. Dropped a85/Ascii85 (broader alphabet = more FP surface; not the demonstrated
+leak) — tracked as a follow-up.
+**Regression proof (this mattered):** a DIFFERENTIAL test (my version vs stashed-HEAD over 10 benign
+cases incl. base64/base85 blobs, URLs, math, ascii-art) showed **ZERO new allow→block/redact flips** —
+the fix adds no false positive. b85 injection → block (was allow); b85 SSN/email/AWS → detected+masked;
+FP floor clean (base64/base32 blobs NOT re-decoded as b85; math/punctuation allow). In-process golden
+**604 ×3** (was 598; +6 G98). Backend `ai_mesh_gateway/tests` **1826 passed / 0 failed** (excluding one
+untracked WIP file — see coordination note). Added `base85()` corpus helper.
+**Frozen:** golden `test_g98_*`.
+
+### COORDINATION NOTE (not my file): another session's untracked test_pipeline_block_shortcircuit.py fails 11
+`ai_mesh_gateway/tests/test_pipeline_block_shortcircuit.py` is UNTRACKED (`??`) — added by a parallel
+session. It fails 11/16 (`test_block_response_status_403` → 400 "Invalid JSON" instead of 403;
+`test_all_block_returns_precede_model_calls` source-offset assertion; monitor-mode; unmaskable-pii). PROVEN
+independent of my G97/G98 work: stashing my scanner.py+patterns.py edits, the file STILL fails 11 on HEAD.
+Appears to be WIP (request-format mismatch with the current chat API) OR a real block-shortcircuit concern
+for that session to investigate. I did NOT touch it (not owned). Flagged so the owning session knows.
+Session ledger: TWENTY-ONE confirmed leaks/gaps (G74..G95, G97, G98) fixed + G96 freezes 6 defended
+vectors; G77/G78/G80 frozen.

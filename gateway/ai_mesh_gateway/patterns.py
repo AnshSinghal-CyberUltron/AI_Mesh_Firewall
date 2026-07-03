@@ -183,6 +183,10 @@ _HEXISH_RE = re.compile(r"(?:[0-9A-Fa-f]{2}){8,}")
 # tokens first and yields garbage (gated out) — a PII/secret laundered through base32 therefore
 # leaked. Decode them as base32 here. Printable-ratio gated => FP-safe (parity with scanner G97).
 _B32ISH_RE = re.compile(r"[A-Z2-7]{16,}={0,6}")
+# G98: base85 (RFC1924). Only tokens carrying a b85-ONLY char (never a base64/base32/hex blob) are
+# decoded, so no cross-decode FP. Printable-ratio gated. Parity with scanner G98.
+_B85ISH_RE = re.compile(r"[0-9A-Za-z!#$%&()*+;<=>?@^_`{|}~-]{14,}")
+_B85_ONLY_CHARS = frozenset("!#$%&()*;<>?@^_`{|}~-")
 # CHG-0060: the decode scan is bounded by a decoded-BYTE budget, not a token COUNT.
 # The old count cap (12) let a result hide an encoded secret past 12 decoy tokens
 # (``<12 benign base64 blobs> <base64(secret)>`` -> the secret token was never decoded
@@ -277,6 +281,20 @@ def _decode_one_b32(tok: str):
     return dec if probe and _printable_ratio(probe) >= 0.8 else None
 
 
+def _decode_one_b85(tok: str):
+    """G98: decode a single RFC1924 base85 token to mostly-printable UTF-8, else ``None``.
+    Caller gates on ``_B85_ONLY_CHARS`` so a base64/hex blob is never re-decoded as b85."""
+    try:
+        raw = base64.b85decode(tok)
+        if not (0 < len(raw) <= _MAX_DECODE_BYTES):
+            return None
+        dec = raw.decode("utf-8")
+    except Exception:
+        return None
+    probe = canonicalize_for_detection(dec)
+    return dec if probe and _printable_ratio(probe) >= 0.8 else None
+
+
 def _decode_nested(layer: str):
     """A decoded blob may itself be another encoding layer. Find the first base64/hex
     token in ``layer`` and decode it; returns the next-layer text or ``None``. A pure-
@@ -345,6 +363,30 @@ def _iter_transport_decodes(text: str):
         seen32 += 1
         top_tok = m.group(0)
         dec = _decode_one_b32(top_tok)
+        if dec is None:
+            continue
+        budget -= len(dec)
+        yield top_tok, dec
+        layer = dec
+        for _ in range(_MAX_DECODE_DEPTH - 1):
+            if budget <= 0:
+                break
+            nxt = _decode_nested(layer)
+            if nxt is None or nxt == layer:
+                break
+            budget -= len(nxt)
+            yield top_tok, nxt
+    # G98: base85 pass (RFC1924). Gated on _B85_ONLY_CHARS so a base64/hex blob is never
+    # re-decoded as b85 (no cross-decode FP); shares the budget, follows nested layers.
+    seen85 = 0
+    for m in _B85ISH_RE.finditer(scan):
+        if seen85 >= _MAX_DECODE_TOKENS or budget <= 0:
+            break
+        top_tok = m.group(0)
+        if not any(c in _B85_ONLY_CHARS for c in top_tok):
+            continue
+        seen85 += 1
+        dec = _decode_one_b85(top_tok)
         if dec is None:
             continue
         budget -= len(dec)

@@ -391,6 +391,10 @@ _HEX_TOKEN_RE: re.Pattern[str] = re.compile(r"(?:[0-9a-fA-F]{2}){8,}")
 # non-printable garbage and is gated out) — so an injection wrapped in base32 slipped past. Same
 # realistic prompt-laundering class as G34/base64; LLMs decode base32. Printability-gated => FP-safe.
 _BASE32_TOKEN_RE: re.Pattern[str] = re.compile(r"[A-Z2-7]{16,}={0,6}")
+# G98: base85 laundering (RFC1924 b85 + Ascii85). Same class as G97 — base85's alphabet overlaps
+# base64's so the base64 attempt gates out. A contiguous 14+ run of the b85 alphabet; real prose has
+# spaces so it never matches ordinary text, and any non-b85 token decodes to garbage (gated). FP-safe.
+_BASE85_TOKEN_RE: re.Pattern[str] = re.compile(r"[0-9A-Za-z!#$%&()*+;<=>?@^_`{|}~-]{14,}")
 # G22: follow up to this many NESTED encoding layers (double-base64 / base64-of-hex
 # "prompt laundering") so an injection wrapped in >1 encoding layer is still rescanned.
 # Bounded depth + per-token length cap => decode-bomb safe.
@@ -514,6 +518,30 @@ _ROT13_MAP = str.maketrans(
 )
 
 
+# Chars in the RFC1924 base85 alphabet that are NEVER valid base64 ([A-Za-z0-9+/] + '=' pad).
+# A token containing one is genuinely base85, not a base64/base32/hex blob — so gating the b85
+# decode on its presence means we never re-decode a base64 blob as b85 (eliminating any
+# cross-decode false positive), while real b85 payloads (statistically full of these) are caught.
+_B85_ONLY_CHARS: frozenset[str] = frozenset("!#$%&()*;<>?@^_`{|}~-")
+
+
+def _b85_decode_printable(tok: str) -> str | None:
+    """G98: decode an RFC1924 base85 token to a printable UTF-8 string, else ``None``.
+    The printability gate + the caller's ``_B85_ONLY_CHARS`` gate keep it FP-safe."""
+    try:
+        raw = base64.b85decode(tok)
+    except Exception:  # noqa: BLE001 - decode helpers must never break the scan
+        return None
+    if not (0 < len(raw) <= _TRANSPORT_DECODE_MAX_LEN * 2):
+        return None
+    try:
+        decoded = raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return None
+    probe = "".join(ch for ch in _decode_unicode_tags(decoded) if unicodedata.category(ch) != "Cf")
+    return decoded if probe.isprintable() else None
+
+
 def _decode_one_layer(text: str, seen: set[str]) -> list[str]:
     """One transport-decode layer over ``text``: whole-text ROT13 + nested base64/hex
     tokens + text-encodings (HTML/URL/escape). Adds each new readable variant to
@@ -548,6 +576,17 @@ def _decode_one_layer(text: str, seen: set[str]) -> list[str]:
             continue
         probe = "".join(ch for ch in _decode_unicode_tags(decoded) if unicodedata.category(ch) != "Cf")
         if probe.isprintable() and decoded not in seen:
+            seen.add(decoded)
+            out.append(decoded)
+    # G98: base85-decode embedded tokens (RFC1924 b85). Only tokens carrying a b85-only char
+    # (never a base64/base32/hex blob) are attempted, so no cross-decode false positive.
+    for token in _BASE85_TOKEN_RE.findall(text)[:8]:
+        if not (14 <= len(token) <= _TRANSPORT_DECODE_MAX_LEN):
+            continue
+        if not any(c in _B85_ONLY_CHARS for c in token):
+            continue
+        decoded = _b85_decode_printable(token)
+        if decoded is not None and decoded not in seen:
             seen.add(decoded)
             out.append(decoded)
     for v in _decode_text_encoding_variants(text):

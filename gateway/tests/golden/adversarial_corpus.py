@@ -64,6 +64,11 @@ def base32(s: str) -> str:
     return base64.b32encode(s.encode()).decode()
 
 
+def base85(s: str) -> str:
+    """G98: RFC1924 base85-encode. Alphabet overlaps base64 so the base64 decode missed it."""
+    return base64.b85encode(s.encode()).decode()
+
+
 # G96: Mathematical Alphanumeric Symbols (U+1D400+) — "fancy" unicode a jailbreak is often
 # pasted in (𝓲𝓰𝓷𝓸𝓻𝓮 / 𝕚𝕘𝕟𝕠𝕣𝕖 / 𝚒𝚐𝚗𝚘𝚛𝚎 …). NFKC compat-folds these to ASCII, so the firewall
 # must still block. Lowercase bases; a few styles place letters as letterlike symbols OUTSIDE
