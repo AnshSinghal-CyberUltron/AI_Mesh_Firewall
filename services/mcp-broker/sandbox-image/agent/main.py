@@ -160,3 +160,20 @@ async def rpc(
             exc,
         )
         return _jsonrpc_error(body.jsonrpc_id, -32000, str(exc))
+    except Exception:  # noqa: BLE001 — final safety net
+        # CHG-0135: an UNEXPECTED exception from a transport handler (TimeoutError,
+        # OSError, ValueError, a bug — all more likely under chaos: connection resets,
+        # partial failures) must still return a STRUCTURED JSON-RPC error carrying the
+        # request id, NOT escape to a raw HTTP 500 (which loses the jsonrpc_id correlation
+        # + the error classification the broker/gateway rely on). GENERIC message only —
+        # the full detail is logged server-side via LOG.exception (SAFE metadata: org /
+        # server / method, never params/args), never returned, so an unknown exception's
+        # text cannot leak internal detail to the caller. asyncio.CancelledError is a
+        # BaseException (not Exception), so cancellation still propagates uncaught.
+        LOG.exception(
+            "RPC unexpected error for %s/%s method=%s",
+            ORG_SLUG,
+            body.server_slug,
+            body.method,
+        )
+        return _jsonrpc_error(body.jsonrpc_id, -32000, "internal sandbox agent error")

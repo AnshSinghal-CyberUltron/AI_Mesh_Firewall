@@ -260,3 +260,32 @@ def test_rpc_logs_x_request_id_safely(agent_client, caplog):
     assert any("request_id=trace-agent-7" in m for m in msgs)              # correlated
     assert all("npx" not in m and "secret-pkg" not in m and "command" not in m
                for m in msgs)                                              # no args/command leaked
+
+
+def test_unexpected_exception_returns_jsonrpc_error_not_500(agent_client):
+    # CHG-0135: an UNEXPECTED exception (not UpstreamError/RuntimeError) from a transport
+    # handler must return a STRUCTURED JSON-RPC error carrying the id — not escape to a
+    # raw HTTP 500 — and must NOT leak the exception's detail to the caller.
+    from unittest.mock import AsyncMock, patch
+
+    payload = {
+        "server_slug": "u-stub",
+        "transport": "streamable-http",
+        "upstream": {
+            "url": "https://mcp.example.com/mcp",
+            "allowed_hosts": ["mcp.example.com"],
+            "headers": {},
+        },
+        "method": "tools/list",
+        "jsonrpc_id": 777,
+    }
+    boom = AsyncMock(side_effect=ValueError("SECRET_INTERNAL_DETAIL xyz"))
+    with patch("agent.main.send_upstream_jsonrpc", new=boom):
+        resp = agent_client.post("/rpc", json=payload)
+
+    assert resp.status_code == 200                 # NOT a raw HTTP 500
+    body = resp.json()
+    assert body["id"] == 777                       # id correlation preserved
+    assert body["error"]["code"] == -32000
+    assert body["error"]["message"] == "internal sandbox agent error"
+    assert "SECRET_INTERNAL_DETAIL" not in body["error"]["message"]  # no detail leak

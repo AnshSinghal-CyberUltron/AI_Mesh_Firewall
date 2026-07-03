@@ -1546,3 +1546,11 @@
 - **Gap closed:** the suite had extensive strict/fail_open coverage over Tier-2 ACTION verdicts but NO test forcing a Tier-2 EXCEPTION -> a refactor dropping the `if strict_mode=='strict'` branch would silently forward results unscanned-by-Tier-2 during a Bedrock outage (1.4 degradation leak) with a green suite. Added test_tier2_bedrock_exception_fails_closed_under_strict (drives real scan_mcp_payload; scanner raises; asserts strict->blocked True, fail_open->blocked False).
 - **Gate:** test_mcp_scan_orchestrator.py 38 passed.
 - **Evidence:** mcp-parallel/findings/backstop-p-tier2-error-failclosed-lock/finding.md. Promise WITHHELD (G5 live stress items 14-19 host-blocked; item-21 UI cross-plane).
+
+---
+## CHG-0135 (2026-07-03) — sandbox agent /rpc final safety-net (unexpected exc -> clean JSON-RPC error, item 18)
+
+- **Gap:** services/mcp-broker/sandbox-image/agent/main.py /rpc dispatches all transports in one try but only caught UpstreamError + RuntimeError. Any OTHER exception (asyncio.TimeoutError, OSError/ConnectionError, ValueError, KeyError, a bug) escaped -> FastAPI raw HTTP 500: (1) broker/gateway got a non-200 instead of the JSON-RPC error envelope -> jsonrpc_id correlation lost + error classification degrades to generic 502; (2) a raw 500 can carry framework/exception detail; (3) under chaos (kill sandbox/broker/Redis/PG) unexpected excs (resets/timeouts/partial failures) are the likely case. Found auditing the agent /rpc entrypoint.
+- **Fix:** final `except Exception` safety net returns a structured JSON-RPC error with the request id + GENERIC message ("internal sandbox agent error", -32000); full detail LOG.exception'd server-side with SAFE metadata (org/server/method, never params/args). asyncio.CancelledError (BaseException, not Exception) is NOT caught -> cancellation still propagates.
+- **Gate:** test_rpc_unified.py test_unexpected_exception_returns_jsonrpc_error_not_500 (patch transport to raise ValueError("SECRET…") -> 200 {"id":777,"error":{-32000,"internal sandbox agent error"}}, no leak); full agent suite green.
+- **Evidence:** mcp-parallel/findings/backstop-p-agent-rpc-catchall/finding.md. Promise WITHHELD (G5 live chaos/soak items 14-19 host-blocked).
