@@ -307,3 +307,59 @@ async def test_broker_send_rpc_no_correlation_id_sends_no_x_request_id():
     hdrs = mock_http.request.call_args.kwargs["headers"]
     assert "X-Request-ID" not in hdrs                       # no empty/None header when unset
     assert hdrs[client.BROKER_KEY_HEADER] == BROKER_KEY
+
+
+# ── CHG-0137: never retry a non-idempotent tools/call after dispatch (double-exec guard)
+
+_RPC_URL = f"http://broker.test:8311/v1/sandbox/{ORG}/rpc"
+
+
+def _mock_http(side_effect):
+    m = AsyncMock()
+    m.request.side_effect = side_effect
+    m.__aenter__.return_value = m
+    m.__aexit__.return_value = None
+    return m
+
+
+@pytest.mark.asyncio
+async def test_tools_call_not_retried_after_read_timeout():
+    req = httpx.Request("POST", _RPC_URL)
+    mock_http = _mock_http(httpx.ReadTimeout("slow tool", request=req))
+    with patch.object(client.httpx, "AsyncClient", return_value=mock_http):
+        with pytest.raises(RuntimeError, match="double execution"):
+            await client.broker_send_rpc(ORG, SERVER_CONFIG, "tools/call", {"name": "send_email"})
+    assert mock_http.request.call_count == 1  # dispatched → NOT retried
+
+
+@pytest.mark.asyncio
+async def test_tools_list_retries_after_read_timeout():
+    req = httpx.Request("POST", _RPC_URL)
+    ok = _response(200, json_body={"jsonrpc": "2.0", "id": 1, "result": {"tools": []}}, url=_RPC_URL)
+    mock_http = _mock_http([httpx.ReadTimeout("slow", request=req), ok])
+    with patch.object(client.httpx, "AsyncClient", return_value=mock_http):
+        result = await client.broker_send_rpc(ORG, SERVER_CONFIG, "tools/list", None)
+    assert mock_http.request.call_count == 2  # idempotent read → retried
+    assert result["result"]["tools"] == []
+
+
+@pytest.mark.asyncio
+async def test_tools_call_retries_on_pre_send_connect_error():
+    req = httpx.Request("POST", _RPC_URL)
+    ok = _response(200, json_body={"jsonrpc": "2.0", "id": 1, "result": {"ok": True}}, url=_RPC_URL)
+    mock_http = _mock_http([httpx.ConnectError("refused", request=req), ok])
+    with patch.object(client.httpx, "AsyncClient", return_value=mock_http):
+        result = await client.broker_send_rpc(ORG, SERVER_CONFIG, "tools/call", {"name": "x"})
+    assert mock_http.request.call_count == 2  # pre-send (tool could not have run) → retried
+    assert result["result"]["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_tools_call_retries_on_503():
+    busy = _response(503, json_body={"detail": "Sandbox not running"}, url=_RPC_URL)
+    ok = _response(200, json_body={"jsonrpc": "2.0", "id": 1, "result": {"ok": True}}, url=_RPC_URL)
+    mock_http = _mock_http([busy, ok])
+    with patch.object(client.httpx, "AsyncClient", return_value=mock_http):
+        result = await client.broker_send_rpc(ORG, SERVER_CONFIG, "tools/call", {"name": "x"})
+    assert mock_http.request.call_count == 2  # 503 = not-yet-executed → always safe to retry
+    assert result["result"]["ok"] is True

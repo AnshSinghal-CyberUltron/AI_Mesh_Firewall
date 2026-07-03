@@ -87,6 +87,22 @@ async def _sleep_backoff(attempt: int) -> None:
     await asyncio.sleep(delay + jitter)
 
 
+# CHG-0137: JSON-RPC methods whose retry-after-dispatch would double-execute a side
+# effect at the upstream MCP server. tools/call runs an arbitrary tool (send email,
+# charge, delete, create); every other method (initialize, tools/list, resources/*,
+# prompts/*, ping, completion/complete) is a read/handshake that is safe to repeat.
+_NON_IDEMPOTENT_METHODS: frozenset[str] = frozenset({"tools/call"})
+
+
+def _err_is_pre_send(exc: httpx.HTTPError) -> bool:
+    """True when the failure happened BEFORE the request body could reach the server
+    (connection never established / no pool slot), so the upstream tool could NOT have
+    executed — safe to retry even a non-idempotent call. A POST-connection failure
+    (read/write timeout, reset mid-response) may mean the tool ALREADY ran, so a
+    non-idempotent call must NOT be retried on those."""
+    return isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout))
+
+
 async def _request_with_503_retry(
     client: httpx.AsyncClient,
     method: str,
@@ -94,6 +110,7 @@ async def _request_with_503_retry(
     *,
     json: dict[str, Any] | None = None,
     extra_headers: dict[str, str] | None = None,
+    idempotent: bool = True,
 ) -> httpx.Response:
     last_response: httpx.Response | None = None
     # CHG-0051: broker auth headers + optional out-of-band tracing headers (e.g. the
@@ -105,6 +122,20 @@ async def _request_with_503_retry(
         try:
             response = await client.request(method, url, json=json, headers=_hdrs)
         except httpx.HTTPError as exc:
+            # CHG-0137: a non-idempotent call (tools/call) that failed AFTER the request
+            # was dispatched (read timeout / reset mid-response) may have ALREADY executed
+            # the tool at the upstream — retrying would double-execute a side effect. Only
+            # a pre-send connection error (the tool could not have run) is retried for such
+            # calls. The 503 path below is always safe (503 = sandbox not ready, before any
+            # execution), so it retries regardless of idempotency.
+            if not idempotent and not _err_is_pre_send(exc):
+                LOG.warning(
+                    "Non-idempotent MCP call failed after dispatch; NOT retrying "
+                    "(avoid double-execution): %s", exc,
+                )
+                raise RuntimeError(
+                    "MCP tool call failed after dispatch; not retried to avoid double execution"
+                ) from exc
             LOG.warning("Broker unreachable (attempt %d/%d): %s", attempt, _RETRY_MAX, exc)
             if attempt >= _RETRY_MAX:
                 raise RuntimeError("MCP sandbox is temporarily unavailable") from exc
@@ -262,7 +293,9 @@ async def broker_send_rpc(
     _trace_hdrs = {"X-Request-ID": correlation_id} if correlation_id else None
     async with httpx.AsyncClient(timeout=_http_timeout(timeout)) as client:
         response = await _request_with_503_retry(
-            client, "POST", url, json=payload, extra_headers=_trace_hdrs
+            client, "POST", url, json=payload, extra_headers=_trace_hdrs,
+            # CHG-0137: don't retry tools/call after dispatch (double-execution guard).
+            idempotent=(method not in _NON_IDEMPOTENT_METHODS),
         )
 
     _raise_for_broker_error(response)
