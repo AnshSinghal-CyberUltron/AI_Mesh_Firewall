@@ -139,4 +139,9 @@
       12c 1.57-2.43GiB — both << 0.75 headroom, no OOM. pg 29/400 redis 123/10000 no starvation. All 12 workers engaged+balanced.
 
 ## P8 — Freeze
-- [ ] 25. Re-run P7 3× consecutive on both profiles, stable; all changes logged to the four memories → <promise>COMPLETE</promise>.
+- [x] 25. Re-run P7 3× consecutive on both profiles, stable; all changes logged to the four memories → <promise>COMPLETE</promise>.
+      → scripts/perf/p8_freeze.sh: 3 rounds × both profiles = 6 runs, ALL PASS (exit 0). Every round: detector scaled
+      correctly (6c→6 workers, 12c→12 workers), health 200, 0 errors, OOMKilled=false, RAM under budget. Full-core
+      saturation proven in dedicated loads (item22: 6.07/6, 6.31/6; item17: control 10.37/12; all 12 workers engaged).
+      Four-memory VERIFIED: PERF-0001..0012 in docs/perf/CHANGELOG.md + .cursor/rules + AGENTS.md + Ruflo shared/infra-changes.
+      Real stack: control-1 un-wedged (single daphne→16 workers, PERF-0012). DONE.
