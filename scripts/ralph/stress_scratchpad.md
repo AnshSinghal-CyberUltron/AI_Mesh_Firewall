@@ -3389,3 +3389,28 @@ verbatim, unscanned, on BOTH chat + responses — documented, not chased).
 golden suite) — no source/behavior change, so no gateway rebuild.
 Session ledger unchanged: TWENTY-SIX leaks (G74..G95, G97, G98, G100, G101, G102, G103, G105) + ONE
 false-block (G99) fixed; G104 was a FALSE finding; G96/G106 freeze defended vectors; G77/G78/G80 frozen.
+
+---
+
+## FULL-SYSTEM RE-VALIDATION (health checkpoint after ~18 iterations + concurrent churn) — 2026-07-03
+Re-confirmed the whole system is green after G95–G106 + other sessions' concurrent commits
+(PIPELINE-0006 fail-closed / -0007 authoritative final_action / -0008 PII-never-reaches-model /
+-0009 policy-redacts-before-input-scan, plus MCP hardening CHG-0139..0142). Deployed gateway is current
+(last pipeline change was my G105 e547fecd, deployed).
+**In-process:** adversarial golden **645 ×3** (frozen-9 + all G-regressions + G106 parity); frozen
+chat-pipeline golden 3 pass; backend `ai_mesh_gateway/tests` **1941 passed / 0 failed** (excl. other
+session's untracked WIP). NO regression from any of my 18 iterations or the concurrent other-session
+pipeline rewrites.
+**LIVE (deployed gateway + free models, reused session):** 10/10 —
+* BLOCK families all security-blocked (HTTP 400): plain · greek-homoglyph(G95) · monospace-styled(G96) ·
+  base32-laundering(G97) · cyrillic-homoglyph(G102) · legacy-function_call(G103, chat) · flat-Responses-
+  tool(G105, /v1/responses). Every recent fix still enforces LIVE after PIPELINE-000x.
+* PII masking: plain SSN → redact, not forwarded; cyrillic-homoglyph github token(G102) → **redact,
+  token NOT forwarded to model** (verified from the trace — the one apparent live "FAIL" was a
+  needle=None check artifact, re-verified as a real PASS).
+* Benign → routes (HTTP 200, not security-blocked).
+**Frontend gates (owned components):** impeccable detector `[]` (clean) on StageTimeline.jsx +
+ModelConnectionPanel.jsx; `npm run lint` (node --test) pass; `npm run build` (vite) OK.
+**Conclusion:** all completion conditions RE-CONFIRMED green under churn EXCEPT the literal full-corpus ×
+all-10-models live sweep (throttle-bounded, redundant with 645×3 + this family-complete live matrix).
+No source change this iteration (re-validation only). Ledger unchanged: 26 leaks + 1 false-block fixed.
