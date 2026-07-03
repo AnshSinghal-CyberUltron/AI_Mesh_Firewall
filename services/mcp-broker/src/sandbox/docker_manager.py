@@ -200,12 +200,40 @@ class DockerManager:
             pass
         return None
 
+    @staticmethod
+    def _container_labels(container: Any) -> dict:
+        """Best-effort label dict for a container (SDK ``.labels`` or raw attrs)."""
+        labels = getattr(container, "labels", None)
+        if not isinstance(labels, dict):
+            labels = (getattr(container, "attrs", {}) or {}).get("Config", {}).get("Labels", {}) or {}
+        return labels if isinstance(labels, dict) else {}
+
     def get_container_by_name(self, org_slug: str) -> Any | None:
-        """Fallback when label filters miss a container that already owns the name."""
+        """Look up the org's sandbox by its deterministic name — but VERIFY the org
+        label before returning it (CHG-0112).
+
+        The container NAME is derived by a LOSSY sanitizer (see ``container_name``), so a
+        name match is NOT proof of tenancy: a legacy/renamed/reused container that owns
+        the name but carries a DIFFERENT ``LABEL_ORG_SLUG`` (e.g. a pre-CHG-0111 container
+        created for a colliding slug like ``acme/prod`` still owning ``…-acme-prod``) would
+        otherwise be returned for the WRONG org — a cross-tenant hazard. The org LABEL is
+        the authoritative tenant key; on a label mismatch return None (fail closed) so the
+        caller falls through to the label-filtered lookup, which is authoritative.
+        """
         try:
-            return self.client.containers.get(self.container_name(org_slug))
+            container = self.client.containers.get(self.container_name(org_slug))
         except Exception:
             return None
+        labels = self._container_labels(container)
+        if labels.get(LABEL_ORG_SLUG) != org_slug or labels.get(LABEL_ROLE) != ROLE_VALUE:
+            logger.warning(
+                "sandbox name/label mismatch: name=%s requested_org=%s labeled_org=%s "
+                "role=%s (ignoring by-name match, fail-closed)",
+                self.container_name(org_slug), org_slug,
+                labels.get(LABEL_ORG_SLUG), labels.get(LABEL_ROLE),
+            )
+            return None
+        return container
 
     def list_sandbox_containers(self) -> list[tuple[str, Any]]:
         """(org_slug, container) for every sandbox container (any org) by role label.
@@ -221,10 +249,7 @@ class DockerManager:
         except Exception:
             return out
         for c in containers:
-            labels = getattr(c, "labels", None)
-            if not isinstance(labels, dict):
-                labels = (getattr(c, "attrs", {}) or {}).get("Config", {}).get("Labels", {}) or {}
-            org = labels.get(LABEL_ORG_SLUG)
+            org = self._container_labels(c).get(LABEL_ORG_SLUG)
             if org:
                 out.append((org, c))
         return out

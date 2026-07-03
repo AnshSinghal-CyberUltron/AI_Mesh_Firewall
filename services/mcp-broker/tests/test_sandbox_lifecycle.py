@@ -29,6 +29,9 @@ def _mock_container(
     container.id = container_id
     container.name = f"{org_slug}-mcp-sandbox"
     container.status = status
+    # A real sandbox container ALWAYS carries these labels (set by ensure via
+    # manager.labels(org_slug)); CHG-0112 verifies them on by-name lookup.
+    container.labels = {LABEL_ROLE: ROLE_VALUE, LABEL_ORG_SLUG: org_slug}
     container.attrs = {
         "Created": created,
         "State": {"Status": status},
@@ -470,3 +473,45 @@ def test_sandbox_labels_include_org_slug_for_isolation():
     labels = manager.labels("zeroshield")
     assert labels[LABEL_ORG_SLUG] == "zeroshield"
     assert labels[LABEL_ROLE] == ROLE_VALUE
+
+
+# ── CHG-0112: by-name container lookup must VERIFY the org label (defense-in-depth
+# completion of CHG-0111). A container that owns the deterministic NAME but is labeled
+# for a DIFFERENT org (a pre-CHG-0111 collided container, or a renamed/reused name)
+# must NOT be returned for this org — the org LABEL is the authoritative tenant key.
+
+
+def test_get_container_by_name_returns_when_org_label_matches(manager: DockerManager):
+    c = _mock_container(org_slug="acme")
+    manager.client.containers.get.side_effect = None
+    manager.client.containers.get.return_value = c
+    assert manager.get_container_by_name("acme") is c
+
+
+def test_get_container_by_name_rejects_mismatched_org_label(manager: DockerManager):
+    foreign = _mock_container(org_slug="acme")  # owns the "acme-mcp-sandbox" name…
+    foreign.labels = {LABEL_ROLE: ROLE_VALUE, LABEL_ORG_SLUG: "other-tenant"}  # …but is org B's
+    manager.client.containers.get.side_effect = None
+    manager.client.containers.get.return_value = foreign
+    assert manager.get_container_by_name("acme") is None  # fail-closed, no cross-tenant
+
+
+def test_get_container_by_name_rejects_missing_or_wrong_role(manager: DockerManager):
+    c = _mock_container(org_slug="acme")
+    c.labels = {LABEL_ORG_SLUG: "acme"}  # no role label → not a sandbox container
+    manager.client.containers.get.side_effect = None
+    manager.client.containers.get.return_value = c
+    assert manager.get_container_by_name("acme") is None
+
+
+def test_find_container_ignores_name_match_with_foreign_label(manager: DockerManager):
+    # by-name returns a FOREIGN-labeled container; find_container must ignore it and
+    # use the authoritative label filter, which returns the CORRECT org's container.
+    foreign = _mock_container(org_slug="acme", container_id="foreign-id")
+    foreign.labels = {LABEL_ROLE: ROLE_VALUE, LABEL_ORG_SLUG: "other-tenant"}
+    correct = _mock_container(org_slug="acme", container_id="correct-id")
+    manager.client.containers.get.side_effect = None
+    manager.client.containers.get.return_value = foreign
+    manager.client.containers.list.return_value = [correct]
+    got = manager.find_container("acme")
+    assert got is correct and got.id == "correct-id"

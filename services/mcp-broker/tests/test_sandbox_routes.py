@@ -11,7 +11,13 @@ from fastapi.testclient import TestClient
 
 from auth import BROKER_KEY_HEADER
 from sandbox.docker_health import bind_docker_manager, cached_docker_ok
-from sandbox.docker_manager import DockerManager, SandboxDockerConfig
+from sandbox.docker_manager import (
+    LABEL_ORG_SLUG,
+    LABEL_ROLE,
+    ROLE_VALUE,
+    DockerManager,
+    SandboxDockerConfig,
+)
 from sandbox.registry import SandboxRegistry
 from sandbox.routes import build_sandbox_router
 
@@ -30,6 +36,8 @@ def _mock_container(
     container.id = container_id
     container.name = f"{org_slug}-mcp-sandbox"
     container.status = status
+    # Real sandbox containers always carry these (CHG-0112 verifies them by-name).
+    container.labels = {LABEL_ROLE: ROLE_VALUE, LABEL_ORG_SLUG: org_slug}
     container.attrs = {
         "Created": "2026-06-29T12:00:00.000000000Z",
         "State": {"Status": status},

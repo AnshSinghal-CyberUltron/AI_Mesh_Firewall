@@ -1622,6 +1622,23 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   delta (collision demo + route-level 400s authoritative). touched: broker sandbox routes (`build_sandbox_router`);
   complements CHG-0052. Evidence `mcp-parallel/findings/backstop-p-broker-org-slug-collision/`.
 
+- **CHG-0112** (2026-07-03) — **MEDIUM-HIGH cross-tenant residual (completes CHG-0111): broker by-name container
+  lookup didn't verify the org label**. `find_container(slug)` calls `get_container_by_name` FIRST, which did a
+  pure `client.containers.get(container_name(slug))` with NO label check. The container NAME comes from a LOSSY
+  sanitizer, so a name match is NOT proof of tenancy: a legacy/renamed/reused container that owns the name but
+  carries a DIFFERENT `LABEL_ORG_SLUG` would be returned for the WRONG org — e.g. a pre-CHG-0111 container created
+  for the colliding slug `acme/prod` still owning `…-acme-prod`, matched for the canonical `acme-prod`. CHG-0111's
+  input validation can't cover this (the mislabeled container already exists). **FIX
+  (`services/mcp-broker/src/sandbox/docker_manager.py`):** `get_container_by_name` now reads the labels (new
+  `_container_labels` helper, robust to SDK `.labels` vs `attrs.Config.Labels`) and returns the container ONLY if
+  `LABEL_ORG_SLUG==slug` AND `LABEL_ROLE=="mcp-sandbox"`; on mismatch it logs + returns None (fail-closed), so
+  `find_container` falls through to the authoritative label-filtered `containers.list`. The org LABEL is now the
+  tenant key; the deterministic name is only an optimization. +4 tests; the two broker `_mock_container` helpers
+  made realistic (real sandbox containers always carry these labels, set by `ensure`). Gate: 4 + 150 broker passed;
+  gateway unaffected (broker-only). Oracle N/A — cross-tenant ROUTING/isolation fix, no PII-text egress delta.
+  touched: broker `DockerManager` resolution; completes CHG-0111 (input-validation + label-verification =
+  belt-and-suspenders). Evidence `mcp-parallel/findings/backstop-p-broker-name-label-verify/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

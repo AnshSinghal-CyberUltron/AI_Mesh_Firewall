@@ -1084,6 +1084,17 @@
     slugs also 404 at routing. NEW TEST test_sandbox_org_slug_validation.py (26). Gate: 26 + 146 broker passed;
     gateway unaffected (posts over HTTP, supplies validated slugs). Oracle N/A (routing/isolation fix, no PII-text
     delta). Evidence mcp-parallel/findings/backstop-p-broker-org-slug-collision/.
+  - CHG-0112 (2026-07-03) — MEDIUM-HIGH cross-tenant residual (completes CHG-0111): broker by-name container lookup
+    didn't verify the org label. find_container calls get_container_by_name FIRST, which did a pure
+    client.containers.get(container_name(slug)) with NO label check. The name comes from a LOSSY sanitizer, so a
+    name match isn't proof of tenancy: a legacy/renamed container owning the name but with a DIFFERENT
+    LABEL_ORG_SLUG would serve the WRONG org (e.g. a pre-CHG-0111 container for colliding slug acme/prod still
+    owning ...-acme-prod, matched for canonical acme-prod). FIX (services/mcp-broker/src/sandbox/docker_manager.py):
+    get_container_by_name now verifies LABEL_ORG_SLUG==slug AND LABEL_ROLE==mcp-sandbox (via new _container_labels
+    helper); on mismatch logs + returns None (fail-closed) so find_container falls through to the authoritative
+    label filter. Org LABEL is now the tenant key; name is only an optimization. +4 tests; the 2 broker mocks made
+    realistic (real containers always carry these labels). Gate: 4 + 150 broker passed; gateway unaffected. Oracle
+    N/A (routing/isolation fix). Evidence mcp-parallel/findings/backstop-p-broker-name-label-verify/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
