@@ -1365,6 +1365,24 @@
         TWENTY-TWO confirmed-live leaks (G40-G46, G49-G61, G66, G67) + G62 DiD + 3 DoS (G63-G65) + G48 + 2
         tradeoffs. Data-shape coercion now uniform across chat in/out, RAG ingest (G66), and RAG query egress
         (G67) — no surface scans/redacts a str-only view of a shape that can be list/dict.
+    - 🔴 G68 chat INPUT scan never ran detect_credential_exposure -> credentials to model raw (LLM06, 2026-07-03):
+        PRECEDENCE probe (block>redact confirmed correct for injection+PII) incidentally surfaced this: a bare
+        secret-only input `key sk_live_...` -> verdict ALLOW. ROOT CAUSE: _scan_prompt_sync ran detect_pii +
+        detect_secrets but NEVER detect_credential_exposure. The credential-ONLY patterns (connection string,
+        basic-auth, stripe/github/azure key, exposed_password) are NOT in SECRET_PATTERNS, so a credential
+        pasted into a PROMPT reached the third-party model provider RAW. bearer/JWT were caught only because
+        they're DUPLICATED into SECRET_PATTERNS. This is the INPUT analog of the OUTPUT-guard gap G54; only the
+        MCP tier-1 scan got the credential detector (CHG-0075), never the chat path. FIX (owned scanner.py):
+        run detect_credential_exposure(text) after detect_secrets in _scan_prompt_sync -> redact verdict
+        (threat_type=secret; redact_all masks CREDENTIAL_EXPOSURE_PATTERNS). Obfuscation-aware (G54/G55) so a
+        fullwidth / base64 credential in the prompt is caught too (bonus). VERIFY: stripe/connstr/basic/github
+        + fullwidth-stripe -> redact + masked; FP floor clean (reset-password help, mongodb question, 'key
+        parameter', 'password field required', plain -> all allow). FROZEN G68 golden (5 redact + 5 allow).
+        GATE: golden 416×3 (was 406; +10); gateway suite 1540 pass. commit 5528971c. REDEPLOYING (rollback
+        pre-g68). PRECEDENCE verified correct: injection+PII->block, secret+injection->block, PII+secret->redact
+        (redact_all masks both), injection-only->block, PII-only->redact. block>redact>flag>allow holds.
+        TWENTY-THREE confirmed-live leaks (G40-G46, G49-G61, G66-G68) + G62 DiD + 3 DoS + G48 + 2 tradeoffs.
+        Credential detection now SYMMETRIC: chat input (G68) + output guard (G54) + MCP (CHG-0075).
       ★ FINAL COMPLETION 2026-07-02 (+G30..G38): ALL 7 criteria met. The prior sole blocker — the tier-2
         guard-model HALLUCINATION FP (translate-a-paragraph blocked on a fabricated self-referential ROT13)
         — is FIXED (G30) + live-confirmed (now allows). Post-G30 full-corpus-live re-run: 0 leaks, 0 under-
