@@ -1113,6 +1113,19 @@
     cap per-key. FLAGGED (not fixed — control-plane test env unavailable here: no venv, django/fakeredis not
     importable; and not reachable today): _gateway_request_org honors X-Org-Slug relying on the view permission gate
     rather than self-verifying the internal secret — defense-in-depth self-verify deferred to a gated iteration.
+  - CHG-0114 (2026-07-03) — MEDIUM fail-open DoS: deep-nested JSON result crashed _neutralize_exfil_deep. The
+    CHG-0097 render-leak neutralizer parses the WHOLE result JSON + walks it per string leaf, but _walk had NO depth
+    bound. CPython json.loads PARSES thousands-deep JSON that the Python _walk then can't traverse (recursion limit
+    ~1000) -> RecursionError; the try/except covered only json.loads, so it propagated to tier1 which SWALLOWED it,
+    SILENTLY SKIPPING exfil-beacon/markdown-split neutralization for that result (fail-open of the CHG-0096-0099
+    defense) + a per-call stack-exhaustion vector. Byte-verified: _neutralize_exfil_deep(json.dumps(nested(6000)))
+    raised RecursionError. FIX (mcp_scan_orchestrator.py): _walk is depth-bounded (_MAX_EXFIL_WALK_DEPTH=200, env
+    MCP_EXFIL_WALK_MAX_DEPTH) + the walk/dumps wrapped in try/except -> fall back to string-level neutralize. Deep
+    results no longer crash NOR disable the defense; realistic shallow beacons still defanged. +6 tests. Gate: 33
+    exfil + 1699 gateway passed 0 failed; broker unaffected. Oracle N/A (DoS + beacon-defang fix; no-RecursionError +
+    beacon-absent byte assertions authoritative). RESIDUAL: a beacon nested past the 200 cap isn't per-leaf-defanged
+    (not a realistic client auto-render vector; closing the stack-DoS is the priority). Self-correction of backstop
+    CHG-0097. Evidence mcp-parallel/findings/backstop-p-exfil-deep-nest-dos/.
 
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.

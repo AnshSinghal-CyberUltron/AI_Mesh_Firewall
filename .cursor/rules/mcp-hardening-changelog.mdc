@@ -1663,6 +1663,23 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   callers gated): `_gateway_request_org` honors `X-Org-Slug` relying on the view permission gate rather than
   self-verifying the internal secret — a defense-in-depth self-verify is deferred to a gated iteration.
 
+- **CHG-0114** (2026-07-03) — **MEDIUM fail-open DoS: deep-nested JSON result crashed `_neutralize_exfil_deep`**
+  (self-correction of backstop CHG-0097). The render-leak neutralizer parses the WHOLE result JSON and walks it per
+  string leaf, but `_walk` had NO depth bound. CPython `json.loads` (C scanner) PARSES thousands-deep JSON that the
+  Python `_walk` then can't traverse (recursion limit ~1000) → `RecursionError`; the `try/except` covered only
+  `json.loads` (not `_walk`/`json.dumps`), so it propagated to tier1's exfil block which SWALLOWED it — SILENTLY
+  SKIPPING exfil-beacon / markdown-split neutralization for that result (fail-OPEN of the CHG-0096–0099 defense) and
+  a per-call stack-exhaustion vector. Byte-verified: `_neutralize_exfil_deep(json.dumps(nested(6000)))` raised
+  RecursionError; the floor returned clean (exfil check bypassed). **FIX (`mcp_scan_orchestrator.py`):** `_walk` is
+  DEPTH-BOUNDED (`_MAX_EXFIL_WALK_DEPTH=200`, env `MCP_EXFIL_WALK_MAX_DEPTH`) — beyond the cap the subtree is returned
+  as-is (a beacon nested this deep can't reconstruct client-side, and the whole text is still tier1-scanned) — and the
+  walk + re-serialize are wrapped in `try/except` → fall back to string-level `_neutralize_render_leaks`. Deep results
+  no longer exhaust the stack NOR silently disable the defense; realistic shallow beacons still defanged. +6 tests.
+  Gate: 33 exfil + 1699 gateway passed, 0 failed; broker unaffected. Oracle N/A — DoS + beacon-defang fix (no
+  RecursionError + beacon-absent byte assertions authoritative). RESIDUAL: a beacon nested PAST the 200 cap is not
+  per-leaf-defanged (not a realistic client auto-render vector; closing the stack-DoS is the priority). touched: the
+  owning-session orchestrator `_neutralize_exfil_deep`. Evidence `mcp-parallel/findings/backstop-p-exfil-deep-nest-dos/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

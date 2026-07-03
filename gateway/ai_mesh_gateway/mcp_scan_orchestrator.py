@@ -286,6 +286,16 @@ def _neutralize_render_leaks(text: str) -> str:
     return neutralize_markdown_split_pii(neutralize_encoded_pii(neutralize_exfil_channels(text)))
 
 
+# CHG-0114: cap the recursive walk depth in _neutralize_exfil_deep. CPython's
+# ``json.loads`` C scanner parses very deeply-nested JSON that the Python-level walk
+# below then cannot traverse (default recursion limit ~1000) — so an untrusted MCP
+# result nested a few thousand deep RAISED RecursionError, which tier1 swallowed,
+# SILENTLY SKIPPING render-leak neutralization for that result (a fail-open DoS on the
+# exfil defense). Legit MCP result nesting is shallow; 200 is far beyond any real
+# payload and well under the stack limit. Overridable for pathological legit servers.
+_MAX_EXFIL_WALK_DEPTH = int(os.environ.get("MCP_EXFIL_WALK_MAX_DEPTH", "200"))
+
+
 def _neutralize_exfil_deep(text: str) -> str:
     """CHG-0097/0099: render-leak neutralization that is robust to JSON serialization.
 
@@ -297,7 +307,12 @@ def _neutralize_exfil_deep(text: str) -> str:
     markdown-split PII, CHG-0099), then re-serialize — so HTML/SVG/CSS beacons AND
     markdown-split PII nested in a field are handled too. Non-JSON text (a plain-string
     result) is neutralized directly. Returns the ORIGINAL text unchanged when nothing was
-    neutralized (no reformatting churn, so a benign result stays byte-identical)."""
+    neutralized (no reformatting churn, so a benign result stays byte-identical).
+
+    CHG-0114: the per-leaf walk is DEPTH-BOUNDED and the walk + re-serialize are
+    fail-safe (RecursionError / any error → string-level neutralize), so a deeply-nested
+    untrusted result cannot exhaust the Python stack and cannot silently disable the
+    render-leak defense."""
     stripped = text.lstrip()
     if stripped[:1] not in ("{", "["):
         return _neutralize_render_leaks(text)
@@ -308,20 +323,30 @@ def _neutralize_exfil_deep(text: str) -> str:
         return _neutralize_render_leaks(text)
     changed = [False]
 
-    def _walk(o):
+    def _walk(o, _depth=0):
+        # CHG-0114: cap recursion — beyond the depth an adversarial payload cannot
+        # exhaust the stack; a render-time beacon nested this deep cannot reconstruct
+        # client-side anyway, and the whole serialized text is still tier1-scanned.
+        if _depth >= _MAX_EXFIL_WALK_DEPTH:
+            return o
         if isinstance(o, str):
             n = _neutralize_render_leaks(o)
             if n != o:
                 changed[0] = True
             return n
         if isinstance(o, list):
-            return [_walk(x) for x in o]
+            return [_walk(x, _depth + 1) for x in o]
         if isinstance(o, dict):
-            return {k: _walk(v) for k, v in o.items()}
+            return {k: _walk(v, _depth + 1) for k, v in o.items()}
         return o
 
-    obj = _walk(obj)
-    return _json.dumps(obj) if changed[0] else text
+    try:
+        obj = _walk(obj)
+        return _json.dumps(obj) if changed[0] else text
+    except Exception:
+        # Never raise into the scan: a very deep (past-cap) obj can still trip
+        # json.dumps recursion — fall back to string-level neutralization.
+        return _neutralize_render_leaks(text)
 
 
 def _scan_text_tier1_sync(
