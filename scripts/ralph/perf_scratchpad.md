@@ -62,7 +62,12 @@
       Starlette/anyio offload pool separately capped 40/worker (didn't spawn under async /health). No code change.
 
 ## P4 — De-block async handlers (the #1 latency cause)
-- [ ] 12. Audit for blockers (sync ORM, requests.get, CPU loops, sync file/lock) → docs/perf/BLOCKING_CALLS.md; claim shared files in the ledger + log.
+- [x] 12. Audit for blockers (sync ORM, requests.get, CPU loops, sync file/lock) → docs/perf/BLOCKING_CALLS.md; claim shared files in the ledger + log.
+      → docs/perf/BLOCKING_CALLS.md. FINDING: async handlers ALREADY de-blocked. Gateway offloads ALL sync work
+      (scanner/bedrock/vault/judge/vector) to run_in_executor, HTTP=httpx async, Redis=redis.asyncio; NO requests.*,
+      no sync-redis, no .result() on a loop. Control ws consumers wrap ORM in sync_to_async. Control HTTP=100% sync
+      views (0 async/38 sync) → serialize on the per-worker thread-sensitive thread (not loop-block); mitigated by N
+      workers (item 07). Worst staller = soc-kpis 24-30s sync query (fixed in P6). Audit only, no code/stack change.
 - [ ] 13. Offload/convert: sync ORM → sync_to_async/async; requests → httpx async; CPU → run_in_executor.
 - [ ] 14. Verify a slow request no longer stalls concurrent requests on the same worker.
 
