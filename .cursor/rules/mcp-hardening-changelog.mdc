@@ -1708,6 +1708,21 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   `_scan_tool_args_block` (input-side twin of CHG-0115; parity with CHG-0104). Evidence
   `mcp-parallel/findings/backstop-p-args-depth-cap/`.
 
+- **CHG-0117** (2026-07-03) — **MEDIUM fail-open DoS: non-finite SSE stream had no TOTAL bound (infinite-stream
+  resource bomb)**. The ext-proxy NON-finite SSE `stream_gen` (CHG-0098 — server notifications / `*subscribe`) caps
+  each EVENT at 1MB and never buffers the whole stream, but had NO cap on total bytes / events / duration. An
+  untrusted (compromised allowlisted) upstream can stream an INFINITE sequence of small (<1MB) events forever — the
+  `async for chunk in resp.aiter_bytes()` loop runs indefinitely, holding the gateway connection, burning CPU
+  scanning each event, and egressing unbounded data; httpx's per-read timeout does NOT bound a slow-but-steady
+  infinite stream. **FIX (`mcp_proxy.py`):** `stream_gen` tracks `total_bytes` + `event_count`; once either crosses
+  `_MCP_SSE_STREAM_MAX_BYTES` (100MB, env `MCP_SSE_STREAM_MAX_BYTES`) or `_MCP_SSE_STREAM_MAX_EVENTS` (100000, env
+  `MCP_SSE_STREAM_MAX_EVENTS`) it CLOSES the stream fail-closed — yields `: [stream closed: resource limit]`, audits
+  `sse_stream_limit_exceeded`, returns (the `finally` still `aclose()`s the upstream resp + client). Generous defaults
+  ≫ any realistic long-lived feed; env-tunable. +3 tests. Gate: 8 ext-sse + 1709 gateway passed, 0 failed; broker
+  unaffected (gateway-only). Oracle N/A — DoS-containment fix, no PII-text leak delta. touched: `ext_mcp_proxy`
+  non-finite SSE path (extends CHG-0098; streaming-path twin of the CHG-0104/0115/0116 caps). Evidence
+  `mcp-parallel/findings/backstop-p-sse-stream-total-bound/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true

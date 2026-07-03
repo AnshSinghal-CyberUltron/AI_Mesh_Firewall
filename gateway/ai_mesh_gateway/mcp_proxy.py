@@ -245,6 +245,15 @@ _MCP_MAX_RESPONSE_BYTES = int(os.environ.get("MCP_MAX_RESPONSE_BYTES", str(10 * 
 # exceeds this without a boundary is withheld (fail-closed), so an untrusted upstream
 # cannot force unbounded buffering by never closing an event.
 _MCP_SSE_EVENT_MAX_BYTES = int(os.environ.get("MCP_SSE_EVENT_MAX_BYTES", str(1 * 1024 * 1024)))
+# CHG-0117: TOTAL bounds on a non-finite SSE stream (notifications / *subscribe). CHG-0098
+# caps each EVENT at 1MB and never buffers the whole stream, but an untrusted upstream can
+# stream an INFINITE sequence of small (<1MB) events forever — holding the gateway connection,
+# burning CPU scanning each event, and egressing unbounded data (httpx's per-read timeout does
+# NOT bound a slow-but-steady infinite stream). Cap total bytes + total events (generous
+# defaults ≫ any realistic long-lived notification feed; env-tunable) and close the stream when
+# exceeded, so a runaway/DoS stream is contained.
+_MCP_SSE_STREAM_MAX_BYTES = int(os.environ.get("MCP_SSE_STREAM_MAX_BYTES", str(100 * 1024 * 1024)))
+_MCP_SSE_STREAM_MAX_EVENTS = int(os.environ.get("MCP_SSE_STREAM_MAX_EVENTS", "100000"))
 # CHG-0104: cap the NUMBER of content blocks in a tool result. The 10MB byte cap does NOT
 # stop a many-tiny-block resource bomb (50k × ~200B = ~3-10MB, UNDER the byte cap) that
 # amplifies cost across every per-block loop (scan, JSON serialize, filter) — a real
@@ -1990,11 +1999,15 @@ async def ext_mcp_proxy(path: str, request: Request):
 
             async def stream_gen():
                 buf = ""
+                total_bytes = 0   # CHG-0117: total-stream resource-bomb counters
+                event_count = 0
                 try:
                     async for chunk in resp.aiter_bytes():
+                        total_bytes += len(chunk)
                         buf += chunk.decode("utf-8", "replace").replace("\r\n", "\n")
                         while "\n\n" in buf:
                             raw_event, buf = buf.split("\n\n", 1)
+                            event_count += 1
                             reframed, block = await _scan_reframe_sse_tool_result(
                                 raw_event, tool_name=_ext_tool_name, scan_notifications=True,
                             )
@@ -2019,6 +2032,19 @@ async def ext_mcp_proxy(path: str, request: Request):
                                 "block", "sse_stream_event_too_large", tool=_ext_tool_name)
                             yield b": [event withheld: oversized]\n\n"
                             buf = ""
+                        # CHG-0117: contain a runaway/infinite stream (total bytes or events).
+                        # A slow-but-steady infinite feed of small events would otherwise hold
+                        # the connection + burn CPU forever (httpx per-read timeout won't stop
+                        # it). Close the stream fail-closed once either total bound is crossed.
+                        if total_bytes > _MCP_SSE_STREAM_MAX_BYTES or event_count > _MCP_SSE_STREAM_MAX_EVENTS:
+                            LOG.warning(
+                                "ext_mcp_proxy.sse_stream_limit host=%s bytes=%d events=%d (CLOSING)",
+                                hostname, total_bytes, event_count,
+                            )
+                            await _ext_audit(
+                                "block", "sse_stream_limit_exceeded", tool=_ext_tool_name)
+                            yield b": [stream closed: resource limit]\n\n"
+                            return
                     # Flush a trailing partial event (no terminating blank line).
                     if buf.strip():
                         reframed, block = await _scan_reframe_sse_tool_result(

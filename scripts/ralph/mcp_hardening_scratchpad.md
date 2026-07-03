@@ -1280,6 +1280,17 @@
       Credential force-block on shallow args unchanged. +3 tests. Gate: 14 resource-limit + 1706 gateway passed 0
       failed; broker unaffected. Oracle N/A (DoS containment). Input-side twin of CHG-0115; parity with CHG-0104.
       Evidence mcp-parallel/findings/backstop-p-args-depth-cap/finding.md.
+      CHG-0117 (2026-07-03, MEDIUM fail-open DoS — infinite-stream resource bomb): the ext-proxy NON-finite SSE
+      stream_gen (CHG-0098, server notifications/*subscribe) caps each EVENT at 1MB + never buffers the whole stream,
+      but had NO cap on total bytes/events/duration -> an untrusted allowlisted upstream can stream an INFINITE
+      sequence of small (<1MB) events forever (holds the connection, burns CPU scanning each, egresses unbounded;
+      httpx per-read timeout won't stop a slow-steady infinite stream). FIX (mcp_proxy.py): stream_gen tracks
+      total_bytes + event_count and, past _MCP_SSE_STREAM_MAX_BYTES (100MB, env MCP_SSE_STREAM_MAX_BYTES) or
+      _MCP_SSE_STREAM_MAX_EVENTS (100000, env MCP_SSE_STREAM_MAX_EVENTS), CLOSES the stream fail-closed (yields ':
+      [stream closed: resource limit]', audits sse_stream_limit_exceeded, returns -> finally aclose()s resp+client).
+      Generous defaults >> realistic feed; env-tunable. +3 tests. Gate: 8 ext-sse + 1709 gateway passed 0 failed;
+      broker unaffected. Oracle N/A (DoS containment). Streaming-path twin of CHG-0104/0115/0116; extends CHG-0098.
+      Evidence mcp-parallel/findings/backstop-p-sse-stream-total-bound/finding.md.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

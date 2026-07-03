@@ -140,5 +140,44 @@ async def test_oversized_unterminated_event_withheld(monkeypatch):
     assert "sse_stream_event_too_large" in reasons
 
 
+# ── CHG-0117: TOTAL bounds on the non-finite SSE stream. Per-event cap (CHG-0098) does not
+# stop an untrusted upstream from streaming an INFINITE sequence of small events forever
+# (connection hold + CPU + unbounded egress). Total-bytes + total-events caps close it.
+
+
+@pytest.mark.asyncio
+async def test_stream_closes_after_total_event_cap():
+    frames = ['data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"n":%d}}\n\n' % i
+              for i in range(50)]
+    with patch.object(mcp_proxy, "_MCP_SSE_STREAM_MAX_EVENTS", 5):
+        out, reasons = await _drive_stream(frames)
+    assert "stream closed: resource limit" in out
+    assert "sse_stream_limit_exceeded" in reasons
+    # it stopped early — not all 50 events made it through
+    assert out.count("notifications/progress") <= 10
+
+
+@pytest.mark.asyncio
+async def test_stream_closes_after_total_byte_cap():
+    frames = ['data: {"jsonrpc":"2.0","method":"notifications/message","params":{"d":"%s"}}\n\n' % ("x" * 500)
+              for _ in range(50)]
+    with patch.object(mcp_proxy, "_MCP_SSE_STREAM_MAX_BYTES", 2000):
+        out, reasons = await _drive_stream(frames)
+    assert "stream closed: resource limit" in out
+    assert "sse_stream_limit_exceeded" in reasons
+
+
+@pytest.mark.asyncio
+async def test_under_cap_stream_completes_normally():
+    frames = ['data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"n":%d}}\n\n' % i
+              for i in range(5)]
+    with (patch.object(mcp_proxy, "_MCP_SSE_STREAM_MAX_EVENTS", 100000),
+          patch.object(mcp_proxy, "_MCP_SSE_STREAM_MAX_BYTES", 100 * 1024 * 1024)):
+        out, reasons = await _drive_stream(frames)
+    assert "stream closed: resource limit" not in out
+    assert "sse_stream_limit_exceeded" not in reasons
+    assert out.count("notifications/progress") == 5  # all events streamed
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
