@@ -34,6 +34,13 @@ fi
 # the resolved integer so gunicorn's own default matches --workers and is never "".
 export WEB_CONCURRENCY="$WORKERS"
 
+# Size the event-loop default thread-pool (sync offload) from the detector unless
+# pinned. main_app/asgi.py reads ASGI_THREADS per worker (P3 item 09).
+if [ -z "${ASGI_THREADS:-}" ]; then
+    ASGI_THREADS="$(python -m ai_mesh_shared.resource_budget --value asgi_threads 2>/dev/null || true)"
+fi
+export ASGI_THREADS
+
 echo "[control-entrypoint] CONTROL workers=$WORKERS (source=$WSRC)" >&2
 python -m ai_mesh_shared.resource_budget --json 2>/dev/null \
     | sed 's/^/[control-entrypoint]   /' >&2 || true

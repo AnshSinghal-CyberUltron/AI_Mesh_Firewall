@@ -13,6 +13,13 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0004 — Control ASGI sync-offload thread pool sized from detector (2026-07-03)
+- `control/main_app/asgi.py` sizes the event-loop default thread pool per worker from
+  `ASGI_THREADS` (entrypoint exports it from the detector: 6c=12, 12c=24), replacing
+  Python's non-cgroup-aware `min(32, os.cpu_count()+4)`. Thread-sensitive Django views
+  untouched (P4). `ASGI_THREADS` env overrides. AFFECTS: control image. ACTION:
+  `docker compose build control`. Running container not recreated.
+
 ## PERF-0003 — Harden gateway+control entrypoints vs empty WEB_CONCURRENCY (2026-07-03)
 - Both entrypoints now `export WEB_CONCURRENCY="$WORKERS"` before exec'ing gunicorn —
   gunicorn reads WEB_CONCURRENCY at config-import time and crashes on an empty string

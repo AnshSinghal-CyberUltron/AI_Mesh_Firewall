@@ -7,6 +7,26 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0004 — Control ASGI sync-offload thread pool sized from the detector
+- **Date:** 2026-07-03
+- **Files:** `control/ai_mesh_control/main_app/asgi.py`, `control/server-entrypoint.sh`.
+- **What:** Non-thread-sensitive sync offload (`sync_to_async(thread_sensitive=False)`,
+  `loop.run_in_executor(None, ...)`) runs on the event loop's default thread pool,
+  which Python sizes `min(32, os.cpu_count()+4)` — and `os.cpu_count()` is **not
+  cgroup-aware** (returns the host's 16 even in a `--cpus=6` container → a 20-thread
+  pool per worker). `asgi.py` now sizes that pool per worker from `ASGI_THREADS`
+  (exported by the entrypoint from the detector: `clamp(cpu_budget*2, 8, 32)` →
+  6c=12, 12c=24). `ASGI_THREADS` env overrides. Thread-*sensitive* sync (Django
+  views/ORM, asgiref's hardcoded single-thread executor) is **untouched** — that
+  serialization is the P4 de-block concern, not this item.
+- **AFFECTS:** the `ai_mesh_firewall-control` image (rebuilt). Bounds/right-sizes the
+  offload pool so total threads track the CPU budget (no over-provisioning in
+  constrained containers; see item 11).
+- **ACTION FOR OTHERS:** `docker compose build control` to adopt. No behavior change
+  for the request path except the offload pool size; running container not recreated.
+- **PROOF:** `--cpus=6` → boot log `asgi_threads: 12`; each worker logs "ASGI default
+  thread-pool executor sized to 12 (ASGI_THREADS)" on first request; `/api/health/` 200.
+
 ## PERF-0003 — Harden gateway + control entrypoints against empty WEB_CONCURRENCY
 - **Date:** 2026-07-03
 - **Files:** `gateway/entrypoint.sh`, `control/server-entrypoint.sh`.

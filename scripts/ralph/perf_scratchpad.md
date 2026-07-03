@@ -44,7 +44,11 @@
       bug (PERF-0003): gunicorn crashes on empty WEB_CONCURRENCY at config-import → entrypoints now export resolved int.
 
 ## P3 — Dynamic thread pools
-- [ ] 09. Size Django ASGI_THREADS / asgiref executor from cpu_budget.
+- [x] 09. Size Django ASGI_THREADS / asgiref executor from cpu_budget.
+      → control/main_app/asgi.py sets loop.set_default_executor(ThreadPoolExecutor(ASGI_THREADS)) per worker;
+      entrypoint exports ASGI_THREADS from detector (6c=12, 12c=24) unless pinned. Replaces Python's non-cgroup
+      min(32,os.cpu_count()+4)=20-in-6c-container. Thread-SENSITIVE Django views untouched (asgiref 1-thread; P4).
+      PERF-0004 logged to 4 memories. PROVEN: --cpus=6 → each worker logs "executor sized to 12"; /api/health/ 200.
 - [ ] 10. Size gateway scanner/bedrock/vault pools from cpu_budget (not fixed 4/8).
 - [ ] 11. Verify total threads = workers × pool (no explosion).
 
