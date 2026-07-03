@@ -291,7 +291,16 @@ _MCP_MAX_CONTENT_BLOCKS = int(os.environ.get("MCP_MAX_CONTENT_BLOCKS", "10000"))
 # generic SCAN_ERROR. This PROACTIVE cap detects excessive nesting O(depth-bounded) BEFORE
 # the scan and fail-closes with a clear RESOURCE_LIMIT reason. 500 ≫ any realistic legit
 # result (a handful of levels) and well under the stack limit; env-tunable.
-_MCP_MAX_RESULT_DEPTH = int(os.environ.get("MCP_MAX_RESULT_DEPTH", "500"))
+# CHG-0149: the cap MUST sit below the recursion-crash threshold it is meant to pre-empt —
+# otherwise the crash wins and the "proactive" guard never fires cleanly. Empirically
+# copy.deepcopy (used by apply_field_redaction) RecursionErrors at ~498 depth with a shallow
+# stack, and LOWER under a real request's ambient call stack; the recursive scan/serialize
+# crashes even earlier. 500 sat AT that threshold, so a depth-498..500 result hit the crash
+# (caught only as a generic SCAN_ERROR) instead of the clean RESOURCE_LIMIT, and left the
+# control-plane redaction (whose deepcopy-crash handling differs) exposed to results the
+# gateway forwarded. 200 is still far above any realistic legit result (a handful of levels)
+# but comfortably below the crash threshold, so the guard reliably fires first.
+_MCP_MAX_RESULT_DEPTH = int(os.environ.get("MCP_MAX_RESULT_DEPTH", "200"))
 # CHG-0116: same cap for inbound tool ARGS (attacker-controlled). Defaults to the result
 # cap; separately env-tunable.
 _MCP_MAX_ARG_DEPTH = int(os.environ.get("MCP_MAX_ARG_DEPTH", str(_MCP_MAX_RESULT_DEPTH)))

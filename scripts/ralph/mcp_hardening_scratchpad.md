@@ -691,6 +691,26 @@
       → the ~250..500 window crashes deepcopy → caller fail-open (PRE-EXISTING, independent of this change;
       recommend lowering _MCP_MAX_RESULT_DEPTH below the deepcopy limit, or failing closed on the
       RecursionError). Evidence: mcp-parallel/findings/backstop-p2-field-redaction-deep-nesting-bypass/finding.md.
+      CHG-0149 (2026-07-03, LOW-MEDIUM robustness — CLOSES CHG-0148 residual #2): the MCP result/arg depth
+      guard (mcp_proxy.py _MCP_MAX_RESULT_DEPTH, CHG-0115) is a PROACTIVE cap meant to fire BEFORE the
+      recursive scan hits the recursion limit and emit a clean RESOURCE_LIMIT block. But it was set at 500,
+      while copy.deepcopy (first recursive op in apply_field_redaction) empirically RecursionErrors at ~498
+      (shallow stack; LOWER under a real ambient stack) and the recursive scan crashes earlier — so a
+      depth-498..500 result passed the guard, crashed deepcopy → caught only as generic SCAN_ERROR, and left
+      the control-plane redactor (deepcopy-crash handling differs) exposed to results the gateway forwarded.
+      IMPORTANT correction of CHG-0148 residual #2: on the gateway FLOOR path this is NOT a fail-open leak —
+      _scan_tool_result_floor's `except Exception` (mcp_proxy.py:1283) DOES fail-close the RecursionError
+      (blocks). So #2 was a guard-CALIBRATION + control-path-robustness gap, not a leak. FIX:
+      _MCP_MAX_RESULT_DEPTH 500→200 (env-tunable; also defaults _MCP_MAX_ARG_DEPTH); 200 is ~10× any realistic
+      legit result but comfortably below the crash threshold, so the iterative guard reliably fires first
+      (clean RESOURCE_LIMIT block before any recursive copy/scan, on the gateway AND — by blocking upstream —
+      the control path). Depth-201..~498 now blocks (fail-closed) vs redact-and-forward; depth >200 is
+      pathological. +1 test. Gate: test_mcp_result_block_count_cap.py 15 passed (new
+      test_depth_cap_fires_below_deepcopy_recursion_limit: depth-300 → result_too_deeply_nested +
+      RESOURCE_LIMIT, no result_scan_error = no deepcopy crash); full gateway 2034 passed 0 failed. STILL OPEN
+      (CHG-0148 residual #1): node-count overflow (max_nodes=100k) still fail-open on a huge-but-shallow result
+      — the clean fail-closed fix over-blocks benign large results, so it stays a documented tradeoff for the
+      owning session. Evidence: mcp-parallel/findings/backstop-p2-depth-guard-recalibrate/finding.md.
 - [x] 3. Per-user/agent/role tool authorization (close the mcp_proxy.py:302-305 gap; actor-keyed).
       DONE via CHG-0006+0007+0008 (2026-07-02). Per-actor tool ACCESS authorization (block/allow by
       user/agent/role) is enforced + tested across ALL paths: HTTP (MCPToolCallView), stdio/ws ADAPTER

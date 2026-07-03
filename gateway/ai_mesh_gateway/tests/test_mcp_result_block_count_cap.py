@@ -125,6 +125,24 @@ async def test_deeply_nested_result_fails_closed_with_clear_reason():
 
 
 @pytest.mark.asyncio
+async def test_depth_cap_fires_below_deepcopy_recursion_limit():
+    """CHG-0149: the depth cap must fire CLEANLY (RESOURCE_LIMIT) for a result that would
+    otherwise crash copy.deepcopy inside apply_field_redaction (~498 depth, lower under an
+    ambient stack). A depth-300 result sits below the old 500 cap (so it USED to pass the
+    guard and risk a deepcopy crash → generic SCAN_ERROR / control-plane exposure) but above
+    the recalibrated 200 cap → now blocked cleanly by the proactive guard, before any
+    recursive copy/scan."""
+    assert mcp_proxy._MCP_MAX_RESULT_DEPTH <= 200
+    scanned, blocked, tags, findings, meta = await _floor(
+        {"structuredContent": _nest_dict(300)},
+        enabled_info={"default_scan_action": "redact"})
+    assert blocked is True
+    assert meta.get("result_too_deeply_nested") is True   # clean guard, not a crash
+    assert meta.get("result_scan_error") is not True       # did NOT reach a deepcopy crash
+    assert "RESOURCE_LIMIT" in tags
+
+
+@pytest.mark.asyncio
 async def test_shallow_result_not_blocked_by_depth_cap():
     # A realistic (a few levels) result scans normally + masks PII (not depth-blocked).
     scanned, blocked, tags, findings, meta = await _floor(
