@@ -132,7 +132,11 @@
       workers engaged+evenly balanced (per-worker CPU 11.2-12.4% each), ~8-9 cores (capped by co-located generator on
       the shared 16-core host, NOT the gateway). control12 (item 17): 10.37/12 cores, 3060rps, 0err, no starvation.
       RAM<<44GiB headroom, no OOM. control-1 stayed HEALTHY through all load (multi-worker resilient). → scratch_perf/p7_12c_results.txt.
-- [ ] 24. Load-test both: throughput scales with hardware, all cores used, p99 stable, RAM under budget + headroom, ~0 errors → docs/perf/SCALING_RESULTS.md.
+- [x] 24. Load-test both: throughput scales with hardware, all cores used, p99 stable, RAM under budget + headroom, ~0 errors → docs/perf/SCALING_RESULTS.md.
+      → docs/perf/SCALING_RESULTS.md written. Detector: 6c→6w/12t, 12c→12w/24t, host→16w/32t (no static number).
+      Throughput scales (control same generator): baseline 346rps(1core) → 6c 1989rps(6.01/6 saturated) → 12c 2343rps(p99
+      87ms, gen-limited) → 12c heavy 3060rps(10.37/12, item17). p99 stable/improves, 0 errors all runs. RAM: 6c 0.83-1.24GiB,
+      12c 1.57-2.43GiB — both << 0.75 headroom, no OOM. pg 29/400 redis 123/10000 no starvation. All 12 workers engaged+balanced.
 
 ## P8 — Freeze
 - [ ] 25. Re-run P7 3× consecutive on both profiles, stable; all changes logged to the four memories → <promise>COMPLETE</promise>.

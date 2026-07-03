@@ -2975,15 +2975,37 @@ async def internal_tools_call(request: Request):
             call_resp.raise_for_status()
             content_type = call_resp.headers.get("content-type", "")
             if "text/event-stream" in content_type:
-                for line in call_resp.text.split("\n"):
-                    line = line.strip()
-                    if line.startswith("data:"):
-                        data_str = line[5:].strip()
-                        if data_str:
-                            try:
-                                return await _scan_internal_result(json.loads(data_str))
-                            except json.JSONDecodeError:
-                                pass
+                # CHG-0123: parse PER EVENT and return the RESULT/ERROR event (the tool
+                # response). The old per-LINE split returned the FIRST parseable data: line —
+                # which could be a server-pushed NOTIFICATION (wrong response) — and dropped a
+                # multi-line-data result (each partial line failed json.loads → "Empty SSE").
+                # Reassemble each event's data: fields (concatenated with "\n" per the SSE
+                # spec, CHG-0093 parity), prefer the event carrying result/error; a
+                # notification event is skipped (it is not the tool response, so it never
+                # egresses to the chat pipeline).
+                _sse_result = None
+                _sse_first = None
+                for _event in call_resp.text.split("\n\n"):
+                    _data_parts = [
+                        ln.strip()[5:].strip()
+                        for ln in _event.split("\n")
+                        if ln.strip().startswith("data:")
+                    ]
+                    _data_parts = [d for d in _data_parts if d]
+                    if not _data_parts:
+                        continue
+                    try:
+                        _obj = json.loads("\n".join(_data_parts))
+                    except json.JSONDecodeError:
+                        continue
+                    if _sse_first is None:
+                        _sse_first = _obj
+                    if isinstance(_obj, dict) and ("result" in _obj or "error" in _obj):
+                        _sse_result = _obj
+                        break
+                _chosen = _sse_result if _sse_result is not None else _sse_first
+                if _chosen is not None:
+                    return await _scan_internal_result(_chosen)
                 return JSONResponse(
                     content={
                         "jsonrpc": "2.0",
