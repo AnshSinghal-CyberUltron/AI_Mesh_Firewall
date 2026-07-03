@@ -1206,6 +1206,19 @@
       NOT a credential leak (creds already stripped) -> privacy/topology/tenant-identity minimization; aidefence blind
       to IP/header class -> byte-level header-absence authoritative. Evidence mcp-parallel/findings/backstop-p-ext-
       egress-header-minimization/finding.md.
+      CHG-0111 (2026-07-03, HIGH cross-tenant isolation break — broker org_slug sanitize-collision): the broker key
+      (X-MCP-Broker-Key) is a SHARED secret (not per-org), so the path org_slug is the SOLE tenant selector for
+      sandbox routing. DockerManager LOSSILY sanitizes it for the container name (re.sub([^a-zA-Z0-9_.-] -> "-").
+      strip("-") or "default") and find_container matches by NAME first; NO route validated the slug. So distinct
+      slugs COLLIDE onto one container: acme/prod == acme-prod; -acme == acme- == acme; teñant == te-ant; empty/all-
+      invalid -> default. A colliding slug on /rpc runs org B's call in org A's sandbox; DELETE destroys the wrong
+      org's container; /status leaks another org's processes. FIX (services/mcp-broker/src/sandbox/routes.py): new
+      _require_canonical_org_slug fails CLOSED (400) on any slug the sanitizer would alter (accept only sanitize(slug)
+      ==slug, non-empty, <=64, no leading/trailing -); applied to /ensure /rpc /stdio/rpc /status DELETE. Encoded-slash
+      slugs also 404 at routing. NEW TEST test_sandbox_org_slug_validation.py (26). Gate: 26 + 146 broker passed;
+      gateway unaffected (posts over HTTP, supplies validated slugs). Oracle N/A (routing/isolation fix, no PII-text
+      delta; collision demo + route-level 400s authoritative). Evidence mcp-parallel/findings/backstop-p-broker-org-
+      slug-collision/finding.md.
 
 ## G5 — VERY HARD stress (big hardware; run each, capture evidence)
 - [ ] 14. 30–50 orgs × 8–10 MCPs = 300–500 sandboxes concurrently — provision + healthy.

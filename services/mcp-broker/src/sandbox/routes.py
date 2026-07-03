@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -18,6 +19,31 @@ from sandbox.docker_health import cached_docker_ok
 from sandbox.docker_manager import DockerManager, SandboxContainerInfo
 
 LOG = logging.getLogger("mcp_broker.sandbox_rpc")
+
+# CHG-0111: the broker key (X-MCP-Broker-Key) is a SHARED secret, not per-org — so the
+# path ``org_slug`` is the SOLE tenant selector for sandbox routing. ``DockerManager``
+# LOSSILY sanitizes it for the container/volume/network name
+# (``re.sub(r"[^a-zA-Z0-9_.-]", "-", slug).strip("-")``), so two DISTINCT slugs can COLLIDE
+# onto one container ("acme/prod" == "acme-prod"; "-acme" == "acme-" == "acme"; any
+# all-invalid/empty slug -> "default"), and ``find_container`` matches by that name FIRST —
+# a CROSS-TENANT hazard (org B's tool call would execute in / destroy org A's sandbox).
+# Fail CLOSED at the boundary: accept ONLY a slug that the sanitizer maps 1:1 (no
+# substitution, no strip, non-empty, bounded) so distinct tenants can never share a sandbox.
+_MAX_ORG_SLUG_LEN = 64
+
+
+def _require_canonical_org_slug(org_slug: str) -> None:
+    """Reject (400) any ``org_slug`` that ``DockerManager`` would lossily sanitize or
+    strip. Such a slug is not a 1:1 tenant key and could collide onto another org's
+    sandbox — so it must never be resolved to a container. Only exactly-canonical slugs
+    (``[a-zA-Z0-9_.-]``, no leading/trailing ``-``, 1..64 chars) are routed."""
+    if (
+        not org_slug
+        or len(org_slug) > _MAX_ORG_SLUG_LEN
+        or re.sub(r"[^a-zA-Z0-9_.-]", "-", org_slug).strip("-") != org_slug
+    ):
+        raise HTTPException(status_code=400, detail="Invalid org_slug")
+
 
 _AGENT_TIMEOUT = float(os.environ.get("MCP_BROKER_AGENT_TIMEOUT", "130"))
 # Cold-start agent-readiness window. A freshly (re)started sandbox container
@@ -226,6 +252,7 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
 
     @router.post("/{org_slug}/ensure")
     async def ensure_sandbox(org_slug: str, body: EnsureRequest) -> dict[str, Any]:
+        _require_canonical_org_slug(org_slug)  # CHG-0111: no cross-tenant slug collision
         _require_docker(docker_manager)
         _check_org_quota(docker_manager, org_slug)
         response = await asyncio.to_thread(_ensure_response, docker_manager, org_slug)
@@ -253,6 +280,7 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
         dials the upstream from inside the org sandbox (egress-allowlisted), so the
         gateway never connects to an external MCP URL directly.
         """
+        _require_canonical_org_slug(org_slug)  # CHG-0111: no cross-tenant slug collision
         # CHG-0052: log the forward (safe metadata ONLY — never params/args/env/upstream,
         # which can carry PII/secrets) with the propagated X-Request-ID (CHG-0051), so a
         # tool call is traceable gateway audit -> broker. Logged before the docker/sandbox
@@ -330,6 +358,7 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
 
     @router.get("/{org_slug}/status")
     async def sandbox_status(org_slug: str) -> dict[str, Any]:
+        _require_canonical_org_slug(org_slug)  # CHG-0111: no cross-tenant slug collision
         container = await asyncio.to_thread(docker_manager.find_container, org_slug)
         info = docker_manager.to_info(org_slug, container)
         processes: list[dict[str, Any]] = []
@@ -371,6 +400,7 @@ def build_sandbox_router(docker_manager: DockerManager) -> APIRouter:
 
     @router.delete("/{org_slug}")
     def destroy_sandbox(org_slug: str) -> dict[str, bool]:
+        _require_canonical_org_slug(org_slug)  # CHG-0111: never destroy a collided sandbox
         docker_manager.destroy(org_slug)
         return {"destroyed": True}
 

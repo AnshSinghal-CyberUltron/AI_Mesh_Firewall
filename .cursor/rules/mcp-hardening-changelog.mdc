@@ -1605,6 +1605,23 @@ frontend build + Playwright) before marking any scratchpad item `[x]`.
   (`piiFound=false` on the raw blob) → byte-level header-absence assertion is authoritative. touched: owning-session
   `_ext_proxy_forward_headers` (extends CHG-0033). Evidence `mcp-parallel/findings/backstop-p-ext-egress-header-minimization/`.
 
+- **CHG-0111** (2026-07-03) — **HIGH cross-tenant isolation break: broker org_slug sanitize-collision**. The broker
+  key (`X-MCP-Broker-Key`) is a SHARED secret (not per-org), so the path `org_slug` is the SOLE tenant selector for
+  sandbox routing. `DockerManager` LOSSILY sanitizes it for the container/volume/network name
+  (`re.sub(r"[^a-zA-Z0-9_.-]","-",slug).strip("-") or "default"`) and `find_container` matches by that NAME first
+  (`get_container_by_name`) before the exact-label filter. NO route validated the slug. So DISTINCT slugs COLLIDE
+  onto ONE container: `acme/prod` == `acme-prod`; `acme prod` == `acme-prod`; `-acme` == `acme-` == `acme`; `teñant`
+  == `te-ant`; empty/all-invalid (`""`/`///`/`!!!`) -> `default`. A colliding slug on `/rpc` runs org B's tool call
+  in org A's sandbox; `DELETE /{org_slug}` destroys the wrong org's container; `/status` leaks another org's process
+  list. **FIX (`services/mcp-broker/src/sandbox/routes.py`):** new `_require_canonical_org_slug` fails CLOSED (400)
+  on any slug the sanitizer would alter — accept ONLY `sanitize(slug)==slug` (non-empty, <=64, no leading/trailing
+  `-`, chars in `[a-zA-Z0-9_.-]`); applied to `/ensure` `/rpc` `/stdio/rpc` `/status` `DELETE /{org_slug}`. (Encoded-
+  slash slugs also 404 at FastAPI routing before the handler.) Canonical slugs unaffected. NEW TEST
+  `test_sandbox_org_slug_validation.py` (26). Gate: 26 + 146 broker passed; gateway unaffected (posts to the broker
+  over HTTP, supplies validated org slugs). Oracle N/A — cross-tenant ROUTING/isolation fix, no PII-text egress
+  delta (collision demo + route-level 400s authoritative). touched: broker sandbox routes (`build_sandbox_router`);
+  complements CHG-0052. Evidence `mcp-parallel/findings/backstop-p-broker-org-slug-collision/`.
+
 - MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
 
 - MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
