@@ -3491,3 +3491,23 @@ gate 10/10 · kill-switch reroute+block+auto-expiry · full R5 verify checklist 
 591-variant × all-10-model sweep stays throttle-bounded and is redundant with 645×3 in-process + these
 family-complete, 6-model-broad live checks. No source change this iteration (live validation only).
 Session ledger unchanged: 26 leaks + 1 false-block fixed; G96/G106 defended-vector freezes.
+
+---
+
+## G107 (ReDoS / DoS safety — VERIFIED + frozen) — 2026-07-03
+R2 addressed the prompt's explicit "ReDoS / denial-of-service patterns" target. Measured scan time for
+pathological inputs across every regex alphabet I added (G97 base32 [A-Z2-7], G98 base85, G100 Ascii85
+[!-u], G101 decorated-alnum, G102 confusables) + classic ReDoS bait (a*b evil, nested parens, giant
+alnum@alnum email, digit floods, zalgo combining).
+**Findings:** NO ReDoS. The added regexes are simple backtrack-FREE character classes, so no
+catastrophic-backtracking path exists — every classic-bait + alphabet-run input completes in <80ms.
+Growth is POLYNOMIAL (≤3.8×/2× — quadratic-ish, NOT exponential), and the injection SCAN itself is ~0ms
+even on a 10 000-char pathological input. The heavier detect/redact path is bounded by
+`_CANON_MAX_LEN=20000` to ~275ms; the INPUT scan is capped at `MAX_PROMPT_LENGTH=10000` (~74ms worst).
+Both bounded + polynomial → DoS-safe (a firewall <300ms on a max-size pathological input; normal <5ms).
+My added regexes introduced NO ReDoS/DoS.
+**FROZEN (G107, +9 golden):** a MAX-length pathological input over each new-regex alphabet + classic
+ReDoS bait must scan+detect+redact in <2.0s (a ~25× margin over the measured worst → NON-FLAKY, yet a
+genuine exponential blow-up of minutes/hang trips it). In-process golden **654 ×3** (was 645). Test-only
+iteration (owned golden suite) — no source/behavior change, no gateway rebuild.
+Session ledger unchanged: 26 leaks + 1 false-block fixed; G96/G106 defended freezes; G107 ReDoS guard.

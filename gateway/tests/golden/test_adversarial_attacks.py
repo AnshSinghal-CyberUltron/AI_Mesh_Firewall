@@ -3405,3 +3405,38 @@ def test_g106_responses_parity_fp_floor():
     resp = {"model": "x", "input": "hi", "text": {"format": {"type": "json_schema", "name": "weather",
         "schema": {"type": "object", "properties": {"temp": {"type": "number", "description": "temperature in celsius"}}}}}}
     assert _verdict(_fold_response_format(_responses_to_chat(resp).get("response_format"))) == "allow", "benign schema wrongly blocked (FP)"
+
+
+# ================================================================== G107 (FROZEN) =========
+# G107 — ReDoS / DoS safety guard. The obfuscation-decode regexes added across G97/G98/G100/G101/G102
+# (base32 [A-Z2-7], base85 [0-9A-Za-z!#$%&()*+;<=>?@^_`{|}~-], Ascii85 [!-u], decorated-alnum, confusable
+# folds) are all simple backtrack-FREE character classes, so no catastrophic-backtracking ReDoS exists.
+# This guard freezes that: a pathological MAX-length input over each such alphabet — plus classic ReDoS
+# bait (nested quantifiers, a*b evil, giant alnum@alnum email) — must SCAN + DETECT + REDACT in bounded
+# time. The bound (2.0s) is generous by ~25x over the measured worst (~0.08s scan / ~0.3s detect at the
+# _CANON_MAX_LEN cap) so it is NON-FLAKY, yet a genuine exponential blow-up (minutes/hang) trips it.
+import time as _time
+
+_G107_MAXLEN = 10000  # == scanner.MAX_PROMPT_LENGTH (input cap)
+_G107_PATHOLOGICAL = {
+    "base32_alphabet_run": ("ABCDEFG234567" * (_G107_MAXLEN // 13 + 1))[:_G107_MAXLEN],
+    "base85_alphabet_run": ("aB3!#$%&()*+;<=>?@" * (_G107_MAXLEN // 18 + 1))[:_G107_MAXLEN],
+    "ascii85_alphabet_run": ("!\"#$%&'()*+,-./:;<" * (_G107_MAXLEN // 18 + 1))[:_G107_MAXLEN],
+    "digits_run": "1234567890" * (_G107_MAXLEN // 10),
+    "zalgo_combining": ("a" + "́̀̈") * (_G107_MAXLEN // 4),
+    "redos_bait_evil": "a" * (_G107_MAXLEN - 1) + "!",
+    "redos_bait_nested_paren": "(" * (_G107_MAXLEN // 3),
+    "email_bomb": "a" * 4000 + "@" + "b" * 4000 + ".com",
+    "b85_specials_run": "!#$%&()*+;<=>?@" * (_G107_MAXLEN // 14),
+}
+
+
+@pytest.mark.parametrize("label,payload", list(_G107_PATHOLOGICAL.items()))
+def test_g107_no_redos_scan_bounded(label, payload):
+    t0 = _time.perf_counter()
+    _verdict(payload)                       # injection scan (Tier-1)
+    patterns.detect_pii(payload)            # PII detect path
+    patterns.detect_secrets(payload)        # secret detect path
+    patterns.redact_all(payload)            # redaction path (output-guard core)
+    elapsed = _time.perf_counter() - t0
+    assert elapsed < 2.0, f"{label}: pathological input took {elapsed:.2f}s (>2s) — possible ReDoS/DoS blow-up"
