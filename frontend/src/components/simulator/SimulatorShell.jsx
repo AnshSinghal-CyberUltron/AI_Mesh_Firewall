@@ -174,7 +174,12 @@ export function SimulatorShell({
           <div className="flex items-center gap-2 mb-2">
             <ResultBadge action={deriveResultAction(result)} />
             {result.total_latency_ms !== undefined && (
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">{result.total_latency_ms}ms</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                {result.total_latency_ms}ms total
+                {result.stream && result.ttft_ms != null && (
+                  <span> · TTFT {result.ttft_ms}ms</span>
+                )}
+              </span>
             )}
             {result.latency_ms !== undefined && (
               <span className="text-[10px] text-slate-500 dark:text-slate-400">{result.latency_ms}ms</span>

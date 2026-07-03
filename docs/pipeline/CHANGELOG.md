@@ -2,6 +2,39 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0016 (2026-07-03)
+
+**Frontend Duration/total matches backend latency; streaming TTFT exposed (P5 item 16).**
+
+Root Cause:
+- `LogDetailPage` and module log charts used `meta.latency_ms` (often `0` on streamed
+  events) instead of `pipeline_trace.total_latency_ms` from PIPELINE-0015 — UI showed
+  `0ms` while backend had e.g. `13555ms`.
+- `liveGateway.js` fallback path preferred client `context.totalLatencyMs` over
+  `pipeline_trace.total_latency_ms`; streaming SSE ignored the M-51 terminal trace
+  frame carrying the authoritative trace.
+- Streaming terminal `pipeline_trace` was built at stream launch (stale totals); `ttft_ms`
+  was emitted only in telemetry metadata, not in the client-visible trace frame.
+
+Fix:
+- `frontend/src/utils/pipelineTrace.js`: `resolveTotalLatencyMs`, `formatPipelineDurationMs`,
+  `resolveTtftMs`, `resolveLatencyBreakdown` (prefers `total_latency_ms` → sum+overhead).
+- `LogDetailPage.jsx`, `module-specific-log-charts.jsx`, `liveGateway.js`: wire Duration/total
+  to pipeline trace; SSE `terminalTracePayload` capture; hoist `stage_latency_sum_ms`,
+  `overhead_ms`, `ttft_ms`.
+- `AttackSimulatorPanel.jsx`, `SimulatorShell.jsx`: show `TTFT Nms` on stream results.
+- `stream_orchestration.py` `build_stream_trace_frame`: reconcile `total_latency_ms` on
+  completed stream wall-clock; expose `ttft_ms` on zeroshield + pipeline_trace.
+
+Verification:
+- 5 new frontend tests (`pipelineTrace.test.js` latency/ttft helpers).
+- 1 new gateway test (`test_build_stream_trace_frame_reconciles_total_and_ttft`).
+- Browser live (:8180): Scan Detail `Duration: 13607.1ms` / `Total Duration: 13607.1ms`
+  (not `0ms`); stage latencies visible (model_output 7757.1ms).
+- Gate: frontend lint + build green; pipelineTrace 13/13; stream+latency gateway 6/6.
+
+Evidence: `mcp-parallel/findings/pipeline-p16-frontend-latency-ttft/` (browser + unit tests)
+
 ## PIPELINE-0015 (2026-07-03)
 
 **Per-stage latency instrumentation + reconciliation (P5 item 15 / L8).**

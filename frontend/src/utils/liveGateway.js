@@ -9,6 +9,7 @@ import {
   formatRoutingReason,
   isRoutingReroute,
 } from "../constants/zeroshieldBrand.js";
+import { resolveTotalLatencyMs, resolveTtftMs } from "./pipelineTrace.js";
 
 export function chatCompletionBody({
   prompt,
@@ -75,6 +76,7 @@ export async function consumeSSEStream(response) {
   const events = [];
   let aggregatedContent = "";
   let terminalError = null;
+  let terminalTracePayload = null;
 
   // Parse a single SSE "event block" (already split on the \n\n boundary).
   // Returns nothing; mutates events/aggregatedContent/terminalError in place.
@@ -96,6 +98,10 @@ export async function consumeSSEStream(response) {
     events.push({ type: "data", payload: parsed });
     if (parsed?.error) {
       terminalError = parsed.error;
+    }
+    // M-51 terminal trace frame: empty choices + zeroshield/pipeline_trace.
+    if (parsed?.pipeline_trace || parsed?.zeroshield) {
+      terminalTracePayload = parsed;
     }
     const delta = parsed?.choices?.[0]?.delta?.content;
     if (typeof delta === "string") {
@@ -123,7 +129,14 @@ export async function consumeSSEStream(response) {
     processPart(buffer);
   }
 
-  return { isStream: true, events, aggregatedContent, terminalError, raw: "" };
+  return {
+    isStream: true,
+    events,
+    aggregatedContent,
+    terminalError,
+    terminalTracePayload,
+    raw: "",
+  };
 }
 
 /** Map streamed chat completion into Attack Simulator pipeline shape. */
@@ -153,13 +166,17 @@ export function normalizeStreamChatPipelineResult(
     return normalizeChatPipelineResult(sseResult?.data || {}, httpStatus, ctx);
   }
 
+  const terminal = sseResult?.terminalTracePayload;
+  const terminalZs = terminal?.zeroshield || {};
   const synthetic = {
     choices: sseResult?.aggregatedContent
       ? [{ message: { content: sseResult.aggregatedContent } }]
       : [],
+    pipeline_trace: terminal?.pipeline_trace,
     zeroshield: {
-      action: blockedInStream ? "block" : terminalErr ? "error" : "allow",
-      threat_type: blockedInStream ? (terminalErr?.type || "output_blocked") : "",
+      ...terminalZs,
+      action: blockedInStream ? "block" : terminalErr ? "error" : (terminalZs.action || "allow"),
+      threat_type: blockedInStream ? (terminalErr?.type || "output_blocked") : (terminalZs.threat_type || ""),
       stream: true,
       stream_scan_mode: scanMode,
     },
@@ -167,12 +184,18 @@ export function normalizeStreamChatPipelineResult(
   };
 
   const normalized = normalizeChatPipelineResult(synthetic, blockedInStream ? 403 : httpStatus, ctx);
+  const ttftMs = resolveTtftMs({
+    pipelineTrace: terminal?.pipeline_trace,
+    zeroshield: synthetic.zeroshield,
+    meta: synthetic.zeroshield,
+  });
   return {
     ...normalized,
     stream: true,
     stream_events: sseResult?.events?.length || 0,
     stream_scan_mode: scanMode,
     aggregated_content: sseResult?.aggregatedContent || "",
+    ttft_ms: ttftMs ?? normalized.ttft_ms,
     final_action: blockedInStream
       ? "block"
       : terminalErr
@@ -1016,8 +1039,15 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     const finalAction = inferFinalAction(data, httpStatus, zs);
     const blockedStage = inferTerminalBlockedStage(data, httpStatus, zs, finalAction);
     const stages = enrichStages(data.pipeline_trace.stages, data, zs, mergedContext);
-    const totalLatency = data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs;
+    const totalLatency = resolveTotalLatencyMs({
+      pipelineTrace: data.pipeline_trace,
+      zeroshield: zs,
+      clientMs: context.totalLatencyMs,
+    }) ?? data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs;
     const guardSummary = data.pipeline_trace.guard_summary || null;
+    const stageLatencySum = data.pipeline_trace.stage_latency_sum_ms;
+    const overheadMs = data.pipeline_trace.overhead_ms;
+    const ttftMs = resolveTtftMs({ pipelineTrace: data.pipeline_trace, zeroshield: zs });
     // Hoist stages/guard_summary/total_latency to the top level (the single
     // source the simulator reads) and DROP the raw pipeline_trace so the result
     // doesn't carry a full duplicate of the stage array + guard summary.
@@ -1032,6 +1062,9 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
       request_id: data.request_id || zs.request_id,
       stages,
       total_latency_ms: totalLatency,
+      stage_latency_sum_ms: stageLatencySum,
+      overhead_ms: overheadMs,
+      ttft_ms: ttftMs,
       estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
       pipeline_live: true,
     };
@@ -1081,7 +1114,12 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
       }
       : null);
 
-  const totalLatency = context.totalLatencyMs ?? payload.pipeline_trace?.total_latency_ms;
+  const totalLatency = resolveTotalLatencyMs({
+    pipelineTrace: payload.pipeline_trace,
+    zeroshield: zs,
+    clientMs: context.totalLatencyMs,
+  }) ?? context.totalLatencyMs ?? payload.pipeline_trace?.total_latency_ms;
+  const ttftMs = resolveTtftMs({ pipelineTrace: payload.pipeline_trace, zeroshield: zs });
   // Drop the raw pipeline_trace — its stages/guard_summary are hoisted below.
   const { pipeline_trace: _omitTrace, ...payloadRest } = payload;
   return {
@@ -1094,6 +1132,9 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     guard_summary: guardSummary,
     request_id: payload.request_id || zs.request_id,
     total_latency_ms: totalLatency,
+    stage_latency_sum_ms: payload.pipeline_trace?.stage_latency_sum_ms,
+    overhead_ms: payload.pipeline_trace?.overhead_ms,
+    ttft_ms: ttftMs,
     estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
     pipeline_live: true,
   };

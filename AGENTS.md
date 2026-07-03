@@ -82,6 +82,11 @@
  defaults removed; skipped model_output latency forced 0 (was 11.6ms from processing_time_ms);
  total_latency_ms = sum(stages)+overhead_ms. PipelineStageTimer+finalize_stage_metrics;
  proxy_chat perf_counter per stage. 5 new tests. Gate: 2039 passed.
+ - PIPELINE-0016 (2026-07-03) — FRONTEND LATENCY+TTFT (P5-16): UI Duration/total wired to
+ pipeline_trace.total_latency_ms (not meta.latency_ms=0). resolveTotalLatencyMs/resolveTtftMs;
+ LogDetailPage+liveGateway+charts; SSE terminal trace capture; stream trace frame reconciles
+ total+ttft_ms; simulator TTFT label. Browser: Duration 13607.1ms not 0. 5 FE+1 GW tests.
+ Gate: lint+build green. Evidence mcp-parallel/findings/pipeline-p16-frontend-latency-ttft/.
  - PIPELINE-0014 (2026-07-03) — OUTPUT REDACT BYTE-VERIFIED (P4-14): enforce_output() maskable
  block→redact + redaction_possible noop→block; connected sync Path D + _apply_output_guard_nonstream
  wired through enforce_output(); sanitize byte-check fail-closed. 15 new tests. Gate: 2029 passed.

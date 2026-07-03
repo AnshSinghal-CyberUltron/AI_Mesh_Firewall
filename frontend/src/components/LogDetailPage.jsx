@@ -8,6 +8,12 @@ import { StageTimeline } from "./simulator/StageTimeline";
 import { copyToClipboard } from "../lib/clipboard";
 import { getModuleLogCharts } from "./module-specific-log-charts";
 import { useAuth } from "../context/AuthContext";
+import {
+  formatPipelineDurationMs,
+  resolveLatencyBreakdown,
+  resolveTotalLatencyMs,
+  resolveTtftMs,
+} from "../utils/pipelineTrace";
 
 function normalizeLogDetail(logData) {
   const raw = logData?.raw || logData || {};
@@ -61,6 +67,25 @@ function normalizeLogDetail(logData) {
 
   const pipelineStages = Array.isArray(pipelineTrace?.stages) ? pipelineTrace.stages : [];
 
+  const totalLatencyMs = resolveTotalLatencyMs({
+    pipelineTrace,
+    meta,
+    extra,
+    logData,
+  });
+  const latencyBreakdown = resolveLatencyBreakdown({ pipelineTrace, meta, extra, logData });
+  const ttftMs = resolveTtftMs({ pipelineTrace, meta, extra, zeroshield: meta.zeroshield || extra.zeroshield });
+
+  let durationLabel = formatPipelineDurationMs(totalLatencyMs);
+  if (
+    latencyBreakdown
+    && latencyBreakdown.stage_latency_sum_ms != null
+    && latencyBreakdown.overhead_ms != null
+    && totalLatencyMs > 0
+  ) {
+    durationLabel = `${formatPipelineDurationMs(totalLatencyMs)} (stages ${Math.round(latencyBreakdown.stage_latency_sum_ms)}ms + overhead ${Math.round(latencyBreakdown.overhead_ms)}ms)`;
+  }
+
   return {
     raw,
     meta,
@@ -72,7 +97,10 @@ function normalizeLogDetail(logData) {
     pipelineTrace,
     pipelineStages,
     timestamp: logData?.timestamp || raw?.timestamp || "",
-    duration: meta?.latency_ms ? `${meta.latency_ms}ms` : (logData?.duration || formatDuration(meta?.latency_ms)),
+    duration: durationLabel,
+    totalLatencyMs,
+    ttftMs,
+    latencyBreakdown,
     status: logData?.status || logData?.action || raw?.action || "allowed",
     action: logData?.action || raw?.action || "ALLOWED",
   };
@@ -156,6 +184,7 @@ export function LogDetailPage({ logData, onBack }) {
 
   const timestamp = normalized.timestamp;
   const duration = normalized.duration;
+  const ttftMs = normalized.ttftMs;
   const status = normalized.status;
   const action = normalized.action;
   const scanId = normalized.scanId;
@@ -290,9 +319,12 @@ export function LogDetailPage({ logData, onBack }) {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${ttftMs != null ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
         <MetricCard icon={CheckCircle} label="Overall Status" value={(effectiveAction || status).toUpperCase()} color={ACTION_TONE[String(effectiveAction || status).toLowerCase()] || "emerald"} />
         <MetricCard icon={Clock} label="Total Duration" value={duration} color="blue" />
+        {ttftMs != null && (
+          <MetricCard icon={Activity} label="Time to First Token" value={formatPipelineDurationMs(ttftMs)} color="teal" />
+        )}
         <MetricCard icon={Shield} label="Security Score" value={`${securityScore}/100`} color="purple" />
         <MetricCard icon={Activity} label="Threat Level" value={threatLevel} color="teal" />
       </div>

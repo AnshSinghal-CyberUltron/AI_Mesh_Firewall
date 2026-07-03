@@ -1,4 +1,5 @@
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
+import { resolveTotalLatencyMs } from "../utils/pipelineTrace";
 
 // ── ECharts option builders (replace recharts; the registered zs-light/zs-dark
 // theme drives axis/grid/tooltip/legend colors). Only charts backed by REAL
@@ -165,7 +166,11 @@ function get12LogCharts(logData) {
   const hasAudit = Object.keys(auditStages).length > 0;
 
   const detected = logData.action === "block" || logData.action === "redact" ? 1 : 0;
-  const totalLatency = parseNumeric(metadata.latency_ms) || parseNumeric(logData.duration) || 0;
+  const totalLatency = resolveTotalLatencyMs({
+    pipelineTrace: metadata?.pipeline_trace || metadata?.extra?.pipeline_trace || logData?.pipeline_trace,
+    meta: metadata,
+    logData,
+  }) || parseNumeric(metadata.latency_ms) || parseNumeric(logData.duration) || 0;
   const riskScore = parseNumeric(metadata.security_risk_score) || Math.round((parseNumeric(metadata.risk_score) || 0) * 100);
   const stageHint = String(metadata.pipeline_stage || logData.stage || "").toLowerCase();
   const hasStageData = !!stageHint;

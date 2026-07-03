@@ -14,6 +14,7 @@ from ai_mesh_gateway.stream_orchestration import (
     StreamRunMetrics,
     StreamScanMode,
     build_base_stream_headers,
+    build_stream_trace_frame,
     enrich_stream_headers,
     finalize_stream,
     instrumented_stream_generator,
@@ -120,6 +121,39 @@ async def test_instrumented_stream_tracks_ttft():
     assert metrics.first_token_ts > 0
     assert metrics.completed is True
     assert metrics.chunks_emitted >= 1
+
+
+def test_build_stream_trace_frame_reconciles_total_and_ttft():
+    import time
+
+    ctx = StreamLaunchContext(
+        body={"model": "gpt-4o-mini"},
+        redacted_prompt="hello",
+        org_slug="acme",
+        model="gpt-4o-mini",
+        request_id="req-ttft",
+        start_time=time.perf_counter() - 2.0,
+    )
+    metrics = StreamRunMetrics(completed=True)
+    metrics.provider_start_ts = time.perf_counter() - 1.5
+    metrics.first_token_ts = time.perf_counter() - 1.2
+    base_pt = {
+        "stages": [{"name": "auth", "action": "allow", "latency_ms": 1.0}],
+        "total_latency_ms": 1.0,
+        "stage_latency_sum_ms": 1.0,
+        "overhead_ms": 0.0,
+    }
+    frame_line = build_stream_trace_frame(
+        ctx,
+        metrics,
+        {"action": "allow", "request_id": "req-ttft"},
+        pipeline_trace_base=base_pt,
+    )
+    frame = json.loads(frame_line.strip().removeprefix("data: ").strip())
+    assert frame["zeroshield"]["ttft_ms"] > 0
+    assert frame["pipeline_trace"]["total_latency_ms"] > 1.0
+    assert frame["pipeline_trace"]["ttft_ms"] > 0
+    assert frame["pipeline_trace"]["overhead_ms"] >= 0
 
 
 @pytest.mark.asyncio

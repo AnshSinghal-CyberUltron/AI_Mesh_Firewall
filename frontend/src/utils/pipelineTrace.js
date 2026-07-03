@@ -114,3 +114,92 @@ export function extractFinalAction(event, fallback) {
   const trace = zs.pipeline_trace || meta.pipeline_trace || extra.pipeline_trace || (event && event.pipeline_trace) || {};
   return trace.final_action || (event && event.action) || fallback || "allow";
 }
+
+function finiteMs(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Locate pipeline_trace across telemetry / gateway envelope shapes. */
+export function resolvePipelineTrace(sources = {}) {
+  const meta = sources.meta || {};
+  const extra = meta.extra || {};
+  return sources.pipelineTrace
+    || meta.pipeline_trace
+    || extra.pipeline_trace
+    || sources.logData?.pipeline_trace
+    || sources.zeroshield?.pipeline_trace
+    || null;
+}
+
+/**
+ * Authoritative end-to-end latency for UI Duration/total displays.
+ * Prefers PIPELINE-0015 fields: total_latency_ms, then stage_latency_sum_ms + overhead_ms.
+ */
+export function resolveTotalLatencyMs(sources = {}) {
+  const meta = sources.meta || {};
+  const extra = meta.extra || {};
+  const trace = resolvePipelineTrace({ ...sources, meta, extra });
+
+  const fromTrace = finiteMs(trace?.total_latency_ms);
+  if (fromTrace != null && fromTrace > 0) return fromTrace;
+
+  const stageSum = finiteMs(trace?.stage_latency_sum_ms);
+  const overhead = finiteMs(trace?.overhead_ms) ?? 0;
+  if (stageSum != null && stageSum > 0) {
+    return Math.round((stageSum + overhead) * 10) / 10;
+  }
+
+  if (Array.isArray(trace?.stages) && trace.stages.length) {
+    const summed = trace.stages.reduce(
+      (acc, s) => acc + (finiteMs(s?.latency_ms) ?? 0),
+      0,
+    );
+    if (summed > 0) return Math.round(summed * 10) / 10;
+  }
+
+  const fromMeta = finiteMs(meta.latency_ms) ?? finiteMs(extra.latency_ms);
+  if (fromMeta != null && fromMeta > 0) return fromMeta;
+
+  const fromLog = finiteMs(sources.logData?.duration);
+  if (fromLog != null && fromLog > 0) return fromLog;
+
+  const fromClient = finiteMs(sources.clientMs);
+  if (fromClient != null && fromClient > 0) return fromClient;
+
+  if (fromTrace === 0) return 0;
+  return null;
+}
+
+export function formatPipelineDurationMs(ms) {
+  if (ms == null || !Number.isFinite(Number(ms))) return "--";
+  const rounded = Math.round(Number(ms) * 10) / 10;
+  return `${rounded}ms`;
+}
+
+/** Time-to-first-token for streaming responses (when backend exposes it). */
+export function resolveTtftMs(sources = {}) {
+  const meta = sources.meta || {};
+  const extra = meta.extra || {};
+  const zs = sources.zeroshield || meta.zeroshield || extra.zeroshield || {};
+  const trace = resolvePipelineTrace({ ...sources, meta, extra });
+  return finiteMs(trace?.ttft_ms)
+    ?? finiteMs(zs?.ttft_ms)
+    ?? finiteMs(meta.ttft_ms)
+    ?? finiteMs(extra.ttft_ms)
+    ?? null;
+}
+
+export function resolveLatencyBreakdown(sources = {}) {
+  const trace = resolvePipelineTrace(sources);
+  if (!trace) return null;
+  const stageSum = finiteMs(trace.stage_latency_sum_ms);
+  const overhead = finiteMs(trace.overhead_ms);
+  const total = resolveTotalLatencyMs(sources);
+  if (stageSum == null && overhead == null) return null;
+  return {
+    total_latency_ms: total,
+    stage_latency_sum_ms: stageSum,
+    overhead_ms: overhead,
+  };
+}

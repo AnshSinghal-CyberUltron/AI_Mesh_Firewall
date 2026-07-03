@@ -6,6 +6,9 @@ import {
   extractRealStages,
   extractFinalAction,
   normalizeStages,
+  resolveTotalLatencyMs,
+  formatPipelineDurationMs,
+  resolveTtftMs,
 } from "./pipelineTrace.js";
 
 // Robustness: the trace card (StageTimeline) renders `stage.action` per element, so a
@@ -90,4 +93,35 @@ test("extractRealStages finds the trace under the zeroshield envelope", () => {
   // no trace -> empty, and final action falls back to event.action
   assert.deepEqual(extractRealStages({ action: "block" }), []);
   assert.equal(extractFinalAction({ action: "block" }, "x"), "block");
+});
+
+test("resolveTotalLatencyMs prefers pipeline_trace.total_latency_ms over meta.latency_ms", () => {
+  const ms = resolveTotalLatencyMs({
+    pipelineTrace: { total_latency_ms: 13555, stage_latency_sum_ms: 120, overhead_ms: 13435 },
+    meta: { latency_ms: 0 },
+  });
+  assert.equal(ms, 13555);
+});
+
+test("resolveTotalLatencyMs falls back to stage_latency_sum_ms + overhead_ms", () => {
+  const ms = resolveTotalLatencyMs({
+    pipelineTrace: { stage_latency_sum_ms: 50.2, overhead_ms: 12.3 },
+    meta: { latency_ms: 0 },
+  });
+  assert.equal(ms, 62.5);
+});
+
+test("resolveTotalLatencyMs uses meta.latency_ms when trace absent", () => {
+  assert.equal(resolveTotalLatencyMs({ meta: { latency_ms: 420 } }), 420);
+});
+
+test("formatPipelineDurationMs renders rounded ms", () => {
+  assert.equal(formatPipelineDurationMs(13555.44), "13555.4ms");
+  assert.equal(formatPipelineDurationMs(null), "--");
+});
+
+test("resolveTtftMs reads ttft from pipeline_trace then zeroshield", () => {
+  assert.equal(resolveTtftMs({ pipelineTrace: { ttft_ms: 88.2 } }), 88.2);
+  assert.equal(resolveTtftMs({ zeroshield: { ttft_ms: 41 } }), 41);
+  assert.equal(resolveTtftMs({ meta: { ttft_ms: 9 } }), 9);
 });

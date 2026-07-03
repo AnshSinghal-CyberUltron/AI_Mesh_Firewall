@@ -118,3 +118,9 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   {1,2} emphasis cap, G53 smart-mask skip, B1 noop exemption, redact eligibility on smart-mask
   text, pipeline_trace input_scan=redact on intentional noop. LIVE input_scan REDACT + masked
   prompt forwarded. 7 new tests. Gate: 2009 full suite. Evidence: pipeline-p12-live-proof.json.
+- PIPELINE-0016 (2026-07-03) — FRONTEND LATENCY+TTFT (P5-16): UI Duration/total wired to
+  pipeline_trace.total_latency_ms (PIPELINE-0015), not meta.latency_ms=0. resolveTotalLatencyMs/
+  resolveTtftMs in pipelineTrace.js; LogDetailPage+liveGateway+charts fixed; SSE terminal trace
+  frame captured; stream build_stream_trace_frame reconciles total+ttft_ms; simulator shows TTFT.
+  Browser: Scan Detail Duration 13607.1ms (not 0). 5 FE + 1 GW tests. Gate: lint+build green.
+  Evidence mcp-parallel/findings/pipeline-p16-frontend-latency-ttft/.

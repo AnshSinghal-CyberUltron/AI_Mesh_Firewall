@@ -827,7 +827,12 @@ export function AttackSimulatorPanel() {
                 <StatusIcon className={`w-5 h-5 ${statusCfg.text}`} />
                 <span className={`text-sm font-bold ${statusCfg.text}`}>{statusCfg.label}</span>
                 <span className="text-xs text-slate-500 dark:text-slate-400">HTTP {result.httpStatus}</span>
-                <span className="text-[10px] text-slate-400">{result.total_latency_ms ?? result.elapsed}ms</span>
+                <span className="text-[10px] text-slate-400">
+                  {result.total_latency_ms ?? result.elapsed}ms total
+                  {result.stream && result.ttft_ms != null && (
+                    <span className="text-slate-500 dark:text-slate-400"> · TTFT {result.ttft_ms}ms</span>
+                  )}
+                </span>
                 {result.request_id && (
                   <span className="text-[10px] text-slate-500 font-mono ml-2">{result.request_id}</span>
                 )}

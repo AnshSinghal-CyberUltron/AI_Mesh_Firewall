@@ -537,6 +537,8 @@ def build_stream_trace_frame(
     if elapsed_ms <= 0 and ctx.start_time:
         elapsed_ms = (time.perf_counter() - ctx.start_time) * 1000
     zs["processing_time_ms"] = round(elapsed_ms, 2)
+    if metrics.ttft_ms > 0:
+        zs["ttft_ms"] = round(metrics.ttft_ms, 2)
 
     frame: dict[str, Any] = {
         "id": stream_id or f"chatcmpl-{ctx.request_id or 'zs-stream'}",
@@ -566,6 +568,17 @@ def build_stream_trace_frame(
                             s2["detail"] = zs["detail"]
                     _stages.append(s2)
                 pt["stages"] = _stages
+            # Reconcile totals with the completed stream wall-clock (PIPELINE-0015).
+            _stage_sum = round(
+                sum(float(s.get("latency_ms") or 0) for s in (pt.get("stages") or []) if isinstance(s, dict)),
+                1,
+            )
+            _overhead = round(max(0.0, elapsed_ms - _stage_sum), 1)
+            pt["stage_latency_sum_ms"] = _stage_sum
+            pt["overhead_ms"] = _overhead
+            pt["total_latency_ms"] = round(elapsed_ms, 2)
+            if metrics.ttft_ms > 0:
+                pt["ttft_ms"] = round(metrics.ttft_ms, 2)
             frame["pipeline_trace"] = pt
         except Exception:
             frame["pipeline_trace"] = pipeline_trace_base
