@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRealtimeNotifications } from "./useRealtimeNotifications";
+import { TELEMETRY_ACTIVITY_EVENT, TELEMETRY_STORAGE_KEY } from "../utils/telemetryEvents";
 
 export const TIME_RANGE_TO_HOURS = {
   "1h": 1,
@@ -142,8 +143,31 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
   // Polling fallback: refresh without clearing UI (avoids hero/table flicker).
   useEffect(() => {
     if (!enabled) return undefined;
-    const id = setInterval(() => fetchData({ background: true }), 15000);
+    const id = setInterval(() => fetchData({ background: true }), 10_000);
     return () => clearInterval(id);
+  }, [fetchData, enabled]);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const onTelemetry = () => fetchData({ background: true });
+    const onStorage = (event) => {
+      if (event.key === TELEMETRY_STORAGE_KEY) onTelemetry();
+    };
+    window.addEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [fetchData, enabled]);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchData({ background: true });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [fetchData, enabled]);
 
   const metrics = buildMetrics(moduleId, socKpis, gatewayStats, threatFeedCount);

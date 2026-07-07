@@ -14,6 +14,8 @@ import {
   formatAttackVectors,
   formatExposureChartData,
   formatTelemetryTimeline,
+  buildTickerAnalystFields,
+  formatTickerAnalystSummary,
   mergeTickerFeed,
   patchIncidentSummaryForMutation,
   resolveEventLane,
@@ -187,6 +189,42 @@ test("mergeTickerFeed dedupes live events and merges incidents", () => {
   assert.equal(merged.length, 2);
   assert.equal(merged[0]._fromFeed, true);
   assert.equal(merged[1].title, "Open case");
+});
+
+test("formatTickerAnalystSummary explains enforcement events in plain language", () => {
+  const summary = formatTickerAnalystSummary({
+    action: "block",
+    metadata: {
+      event_type: "rag_pipeline",
+      threat_type: "prompt_injection",
+      model: "gpt-4o",
+      key_prefix: "zs-abcd",
+      detail: "Policy violation in query stage",
+    },
+  });
+  assert.match(summary, /rag/i);
+  assert.match(summary, /blocked/i);
+  assert.match(summary, /prompt injection/i);
+  assert.match(summary, /gpt-4o/i);
+});
+
+test("buildTickerAnalystFields includes routing and request metadata", () => {
+  const fields = buildTickerAnalystFields({
+    id: "42",
+    action: "allow",
+    timestamp: "2026-07-07T10:00:00+00:00",
+    metadata: {
+      event_type: "model_routed",
+      original_model: "gpt-4o",
+      routed_model: "gpt-4o-mini",
+      rerouted: true,
+      request_id: "zs-req-1",
+    },
+  });
+  const labels = fields.map((f) => f.label);
+  assert.ok(labels.includes("Model routing"));
+  assert.ok(labels.includes("Request ID"));
+  assert.match(fields.find((f) => f.label === "Model routing").value, /gpt-4o-mini/);
 });
 
 test("resolveEventLane prefers pipeline metadata over policy source", () => {

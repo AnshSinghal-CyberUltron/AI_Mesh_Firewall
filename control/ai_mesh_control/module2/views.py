@@ -39,6 +39,18 @@ from module2.analytics import (
 from module2.models import ThreatIntelEntry
 from module2.serializers import ThreatIntelEntrySerializer
 from module2.tasks import sync_threat_intel_to_redis
+from module2.ueba_metrics import POLICY_ESCALATION_THREATS
+from module2.ueba_service import (
+    assessment_to_risk_payload,
+    assessments_map_for_keys,
+    apply_org_ueba_settings_update,
+    build_risk_rows,
+    get_or_create_org_settings,
+    latest_assessment_for_key,
+    RECENT_BEHAVIOR_EVENTS,
+    risk_calc_settings_payload,
+    risk_calc_formula_reference,
+)
 from policy.constants import ACTION_BLOCK, ACTION_REDACT
 from policy.models import EnforcementEvent, SecurityIncident
 from policy.request_scoped_metrics import collapse_events_by_request, iter_rows_from_queryset, summarize_request_scoped_events
@@ -117,6 +129,11 @@ _VALID_INCIDENT_STATUSES = {"open", "investigating", "escalated", "resolved"}
 _VALID_INCIDENT_SEVERITIES = {"low", "medium", "high", "critical", "critical_high"}
 _VALID_INCIDENT_SOURCES = {"threat_intel", "rag", "mcp", "vector", "chat", "generic"}
 _VALID_INCIDENT_QUEUES = {"active"}
+
+
+def _client_ip(request):
+    forwarded = (request.META.get("HTTP_X_FORWARDED_FOR", "") or "").split(",")[0].strip()
+    return forwarded or request.META.get("REMOTE_ADDR") or None
 
 
 def _sanitize_incident_metadata(meta):
@@ -221,6 +238,7 @@ def _collect_key_metrics_from_collapsed(keys_qs, collapsed_rows):
             "total": 0,
             "blocked": 0,
             "redacted": 0,
+            "policy_escalations": 0,
             "endpoint_ids": set(),
             "models": set(),
             "model_counts": defaultdict(int),
@@ -257,6 +275,8 @@ def _collect_key_metrics_from_collapsed(keys_qs, collapsed_rows):
             m["model_counts"][model_name] += 1
         threat = str(meta.get("threat_type") or "unknown")
         m["threat_types"][threat] += 1
+        if threat in POLICY_ESCALATION_THREATS:
+            m["policy_escalations"] += 1
         if hour_bucket:
             m["hourly"][hour_bucket] += 1
 
@@ -341,13 +361,35 @@ def _kill_switches_by_prefix(org):
     return grouped
 
 
-def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix):
+def _empty_key_metric():
+    return {
+        "total": 0,
+        "blocked": 0,
+        "redacted": 0,
+        "policy_escalations": 0,
+        "endpoint_ids": set(),
+        "models": set(),
+        "model_counts": defaultdict(int),
+        "threat_types": defaultdict(int),
+        "hourly": defaultdict(int),
+    }
+
+
+def _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org):
+    keys = list(keys_qs)
+    org_settings = get_or_create_org_settings(org) if org else None
+    return build_risk_rows(keys, key_by_prefix, metrics, org_settings)
+
+
+def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix, org=None):
     """Merge gateway key registry rows with UEBA behavior metrics and kill-switch scope."""
+    org_settings = get_or_create_org_settings(org) if org else None
+    assessments = assessments_map_for_keys(list(keys_qs[:200]))
     results = []
     for k in keys_qs[:200]:
         prefix = k.prefix
         metric = metrics.get(prefix) or _empty_key_metric()
-        risk = _risk_payload(prefix, k, metric)
+        risk = assessment_to_risk_payload(k, metric, assessments.get(k.pk), org_settings)
         active_ks = kill_by_prefix.get(prefix, [])
         top_threats = sorted(metric["threat_types"].items(), key=lambda x: -x[1])[:3]
         top_models = sorted(metric["model_counts"].items(), key=lambda x: -x[1])[:3]
@@ -366,6 +408,12 @@ def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefi
                 "expires_at": k.expires_at.isoformat() if k.expires_at else None,
                 "risk_band": risk["risk_band"],
                 "risk_score": risk["risk_score"],
+                "final_score": risk.get("final_score", risk["risk_score"]),
+                "traditional_score": risk.get("traditional_score", risk["risk_score"]),
+                "llm_verdict": risk.get("llm_verdict"),
+                "llm_reasoning": risk.get("llm_reasoning", ""),
+                "behavior_profile": risk.get("behavior_profile"),
+                "score_breakdown": risk.get("score_breakdown", {}),
                 "velocity_spike": risk["velocity_spike"],
                 "anomaly_flags": risk["anomaly_flags"],
                 "request_count": risk["request_count"],
@@ -393,58 +441,6 @@ def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefi
     return results
 
 
-def _risk_payload(prefix: str, key_obj, metric: dict):
-    total = metric["total"]
-    block_rate = (metric["blocked"] / total) if total else 0.0
-    redact_rate = (metric["redacted"] / total) if total else 0.0
-    hourly_values = list(metric["hourly"].values()) or [0]
-    baseline = sum(hourly_values) / len(hourly_values)
-    current = hourly_values[-1] if hourly_values else 0
-    if baseline:
-        velocity_spike = current / baseline
-    elif current:
-        velocity_spike = float(current)
-    else:
-        velocity_spike = 1.0
-    velocity_factor = min(max((velocity_spike - 1.0) / 3.0, 0.0), 1.0)
-    risk_score = min((0.55 * block_rate) + (0.2 * redact_rate) + (0.25 * velocity_factor), 1.0)
-    if risk_score >= 0.7:
-        band = "high"
-    elif risk_score >= 0.35:
-        band = "medium"
-    else:
-        band = "low"
-
-    anomalies = []
-    if block_rate >= 0.35:
-        anomalies.append("high_block_rate")
-    if velocity_spike >= 2.5:
-        anomalies.append("velocity_spike")
-    if len(metric["models"]) >= 4:
-        anomalies.append("model_spread")
-
-    top_threat = sorted(metric["threat_types"].items(), key=lambda x: -x[1])[0][0] if metric["threat_types"] else "none"
-    return {
-        "key_id": str(key_obj.id),
-        "prefix": prefix,
-        "name": key_obj.name,
-        "project_id": key_obj.project_id,
-        "is_active": key_obj.is_active,
-        "risk_band": band,
-        "risk_score": round(risk_score, 3),
-        "velocity_spike": round(velocity_spike, 2),
-        "anomaly_flags": anomalies,
-        "request_count": total,
-        "blocked_count": metric["blocked"],
-        "redacted_count": metric["redacted"],
-        "block_rate_pct": round(block_rate * 100, 1),
-        "redact_rate_pct": round(redact_rate * 100, 1),
-        "unique_endpoints": len(metric["endpoint_ids"]),
-        "unique_models": len(metric["models"]),
-        "top_threat_type": top_threat,
-    }
-
-
 class UebaApiKeySummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -463,7 +459,7 @@ class UebaApiKeySummaryView(APIView):
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
         key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
-        rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
+        rows = _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org)
         rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
         total_events = sum(m["total"] for m in metrics.values())
         blocked_events = sum(m["blocked"] for m in metrics.values())
@@ -507,7 +503,7 @@ class UebaApiKeyRegistryView(APIView):
         )
         key_by_prefix, metrics = _collect_key_metrics(qs, events)
         kill_by_prefix = _kill_switches_by_prefix(org)
-        results = _build_fleet_registry_payload(qs, key_by_prefix, metrics, kill_by_prefix)
+        results = _build_fleet_registry_payload(qs, key_by_prefix, metrics, kill_by_prefix, org)
 
         return Response(
             {
@@ -538,14 +534,14 @@ def _ueba_period_bundle(request, period: str):
     collapsed_rows = _collapse_prepared_event_rows(event_rows)
     key_by_prefix, metrics = _collect_key_metrics_from_collapsed(keys_qs, collapsed_rows)
     kill_by_prefix = _kill_switches_by_prefix(org)
-    rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
+    rows = _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org)
     rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
     total_events = sum(m["total"] for m in metrics.values())
     blocked_events = sum(m["blocked"] for m in metrics.values())
     key_count = keys_qs.count()
     active_key_count = keys_qs.filter(is_active=True).count()
     containment = _build_key_containment_payload(org, keys_qs)
-    registry_results = _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix)
+    registry_results = _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix, org)
 
     risky_rows = list(rows)
     tracked_prefixes = {r["prefix"] for r in risky_rows[:5]}
@@ -631,6 +627,79 @@ class UebaApiKeyBundleView(APIView):
         return Response(_ueba_period_bundle(request, period))
 
 
+class UebaRiskCalculationView(APIView):
+    """GET/PATCH /api/module2/ueba/risk-calculation/ — org-level risk formula and knobs."""
+
+    permission_classes = [IsAuthenticated, _ReadOnlyOrAdminPermission]
+
+    def get(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_400_BAD_REQUEST)
+        org_settings = get_or_create_org_settings(org)
+
+        period = request.query_params.get("period", "24h")
+        since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        keys_qs = GatewayAPIKey.objects.filter(organization=org).select_related("owner").order_by("-created_at")
+        events = EnforcementEvent.objects.filter(organization=org, created_at__gte=since)
+        key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
+        rows = build_risk_rows(list(keys_qs), key_by_prefix, metrics, org_settings)
+        rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+        rows = rows[:25]
+
+        metric_rows = []
+        for row in rows:
+            breakdown = row.get("score_breakdown") or {}
+            metric_rows.append(
+                {
+                    "key_id": row.get("key_id"),
+                    "prefix": row.get("prefix"),
+                    "risk_score": row.get("risk_score"),
+                    "traditional_score": row.get("traditional_score"),
+                    "final_score": row.get("final_score"),
+                    "llm_verdict": row.get("llm_verdict"),
+                    "request_count": row.get("request_count", 0),
+                    "block_rate_pct": row.get("block_rate_pct", 0),
+                    "redact_rate_pct": row.get("redact_rate_pct", 0),
+                    "velocity_spike": row.get("velocity_spike"),
+                    "top_threat_type": row.get("top_threat_type"),
+                    "behavior_profile": row.get("behavior_profile", {}),
+                    "score_breakdown": breakdown,
+                }
+            )
+
+        return Response(
+            {
+                "period": period,
+                "settings": risk_calc_settings_payload(org_settings),
+                "formula_reference": risk_calc_formula_reference(org_settings),
+                "api_key_metrics": metric_rows,
+            }
+        )
+
+    def patch(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_400_BAD_REQUEST)
+        org_settings = get_or_create_org_settings(org)
+        try:
+            org_settings, changes = apply_org_ueba_settings_update(
+                org_settings,
+                request.data or {},
+                user=request.user,
+                org=org,
+                ip=_client_ip(request),
+            )
+        except (TypeError, ValueError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "settings": risk_calc_settings_payload(org_settings),
+                "changes": changes,
+            }
+        )
+
+
 class UebaApiKeyTimelineView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -651,7 +720,7 @@ class UebaApiKeyTimelineView(APIView):
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
         key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
-        risky_rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
+        risky_rows = _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org)
         risky_rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
         tracked_prefixes = {r["prefix"] for r in risky_rows[:5]}
 
@@ -764,6 +833,11 @@ class UebaApiKeyBehaviorView(APIView):
             "total": len(events),
             "blocked": sum(1 for e in events if e["action"] in (ACTION_BLOCK, "block")),
             "redacted": sum(1 for e in events if e["action"] in (ACTION_REDACT, "redact")),
+            "policy_escalations": sum(
+                1
+                for e in events
+                if str((e.get("metadata") or {}).get("threat_type") or "") in POLICY_ESCALATION_THREATS
+            ),
             "endpoint_ids": set(endpoint_counts.keys()),
             "models": set(model_counts.keys()),
             "threat_types": threat_counts,
@@ -773,7 +847,9 @@ class UebaApiKeyBehaviorView(APIView):
             bucket = ev["created_at"].replace(minute=0, second=0, microsecond=0).isoformat()
             metric["hourly"][bucket] += 1
 
-        payload = _risk_payload(key.prefix, key, metric)
+        org_settings = get_or_create_org_settings(org) if org else None
+        assessment = latest_assessment_for_key(key)
+        payload = assessment_to_risk_payload(key, metric, assessment, org_settings)
         payload["top_endpoints"] = sorted(endpoint_counts.items(), key=lambda x: -x[1])[:10]
         payload["top_models"] = sorted(model_counts.items(), key=lambda x: -x[1])[:10]
         payload["top_threat_types"] = sorted(threat_counts.items(), key=lambda x: -x[1])[:10]
@@ -798,9 +874,13 @@ class UebaApiKeyBehaviorView(APIView):
             events,
             key=lambda e: (e["created_at"], e.get("id") or 0),
             reverse=True,
-        )[:5]
+        )[:RECENT_BEHAVIOR_EVENTS]
         payload["recent_requests"] = [build_recent_request_json(ev) for ev in recent]
         payload["recent_requests_json"] = payload["recent_requests"]
+        payload["risk_calculation"] = {
+            "settings": risk_calc_settings_payload(org_settings),
+            "formula_reference": risk_calc_formula_reference(org_settings),
+        }
         return Response(payload)
 
 
@@ -914,10 +994,17 @@ class UnifiedDashboardView(APIView):
             keys_qs = keys_qs.none()
 
         key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
-        risky_rows = [_risk_payload(p, key_by_prefix[p], m) for p, m in metrics.items()]
+        risky_rows = _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org)
         risky_rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+        org_settings = get_or_create_org_settings(org) if org else None
+        assessments = assessments_map_for_keys(list(keys_qs))
         fleet_risk_rows = [
-            _risk_payload(k.prefix, k, metrics.get(k.prefix) or _empty_key_metric())
+            assessment_to_risk_payload(
+                k,
+                metrics.get(k.prefix) or _empty_key_metric(),
+                assessments.get(k.pk),
+                org_settings,
+            )
             for k in keys_qs
         ]
 

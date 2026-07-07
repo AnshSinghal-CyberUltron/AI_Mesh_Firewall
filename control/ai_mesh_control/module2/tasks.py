@@ -334,7 +334,8 @@ def evaluate_ueba_auto_kill_switches():
     from core.models import GatewayAPIKey, KillSwitch
     from policy.models import EnforcementEvent
 
-    from module2.views import _collect_key_metrics, _risk_payload
+    from module2.ueba_service import assessments_map_for_keys, build_risk_rows, get_or_create_org_settings
+    from module2.views import _collect_key_metrics
 
     lookback_hours = int(getattr(settings, "MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS", 24))
     since = timezone.now() - timedelta(hours=lookback_hours)
@@ -343,14 +344,17 @@ def evaluate_ueba_auto_kill_switches():
     for org in Organization.objects.filter(is_active=True):
         keys_qs = GatewayAPIKey.objects.filter(organization=org, is_active=True)
         events = EnforcementEvent.objects.filter(organization=org, created_at__gte=since)
-        _key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
+        key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
+        org_settings = get_or_create_org_settings(org)
+        rows = build_risk_rows(list(keys_qs), key_by_prefix, metrics, org_settings)
+        row_by_prefix = {r["prefix"]: r for r in rows}
         for prefix, metric in metrics.items():
             stats["examined"] += 1
-            key_obj = _key_by_prefix.get(prefix)
+            key_obj = key_by_prefix.get(prefix)
             if not key_obj:
                 stats["skipped"] += 1
                 continue
-            payload = _risk_payload(prefix, key_obj, metric)
+            payload = row_by_prefix.get(prefix) or {}
             if payload.get("risk_band") != "high":
                 stats["skipped"] += 1
                 continue
@@ -380,6 +384,96 @@ def evaluate_ueba_auto_kill_switches():
             else:
                 stats["skipped"] += 1
 
+    return stats
+
+
+@shared_task(queue="compute.heavy", bind=True, max_retries=2)
+def reassess_ueba_keys_for_prefixes(self, org_id: int, prefixes: list[str]):
+    """Reassess UEBA risk for specific API key prefixes after telemetry drain."""
+    from core.models import GatewayAPIKey
+    from module2.ueba_service import get_or_create_org_settings, reassess_api_key
+
+    if not org_id or not prefixes:
+        return {"reassessed": 0}
+
+    org_settings = None
+    keys = list(
+        GatewayAPIKey.objects.filter(organization_id=org_id, prefix__in=prefixes).select_related(
+            "organization"
+        )
+    )
+    if not keys:
+        return {"reassessed": 0}
+
+    org_settings = get_or_create_org_settings(keys[0].organization)
+    count = 0
+    for key in keys:
+        try:
+            reassess_api_key(key, org_settings, run_llm=True)
+            count += 1
+        except Exception:
+            logger.exception("UEBA reassess failed for key=%s org=%s", key.prefix, org_id)
+    return {"reassessed": count}
+
+
+@shared_task(queue="compute.heavy")
+def reassess_org_ueba_keys(org_id: int, *, run_llm: bool = False):
+    """Reassess all gateway keys for one org (e.g. after risk formula settings change)."""
+    from core.models import GatewayAPIKey
+    from module2.ueba_service import get_or_create_org_settings, reassess_api_key
+
+    keys = list(
+        GatewayAPIKey.objects.filter(organization_id=org_id, is_active=True).select_related(
+            "organization"
+        )
+    )
+    if not keys:
+        return {"reassessed": 0}
+
+    org_settings = get_or_create_org_settings(keys[0].organization)
+    count = 0
+    for key in keys:
+        try:
+            reassess_api_key(key, org_settings, run_llm=run_llm)
+            count += 1
+        except Exception:
+            logger.exception("UEBA org reassess failed for key=%s org=%s", key.prefix, org_id)
+    return {"reassessed": count}
+
+
+@shared_task(queue="compute.heavy")
+def reassess_all_active_ueba_keys():
+    """Periodic fallback: reassess keys with activity in the last 24h."""
+    from datetime import timedelta
+
+    from auth.models import Organization
+    from core.models import GatewayAPIKey
+    from module2.analytics import key_prefix_from_meta
+    from module2.ueba_service import get_or_create_org_settings, reassess_api_key
+    from policy.models import EnforcementEvent
+
+    since = timezone.now() - timedelta(hours=24)
+    stats = {"orgs": 0, "reassessed": 0}
+
+    for org in Organization.objects.filter(is_active=True):
+        events = EnforcementEvent.objects.filter(organization=org, created_at__gte=since)
+        prefixes = set()
+        for ev in events.values("metadata"):
+            meta = ev.get("metadata") or {}
+            prefix = key_prefix_from_meta(meta)
+            if prefix:
+                prefixes.add(prefix)
+        if not prefixes:
+            continue
+        org_settings = get_or_create_org_settings(org)
+        keys = GatewayAPIKey.objects.filter(organization=org, prefix__in=prefixes)
+        stats["orgs"] += 1
+        for key in keys:
+            try:
+                reassess_api_key(key, org_settings, run_llm=True)
+                stats["reassessed"] += 1
+            except Exception:
+                logger.exception("UEBA periodic reassess failed key=%s", key.prefix)
     return stats
 
 

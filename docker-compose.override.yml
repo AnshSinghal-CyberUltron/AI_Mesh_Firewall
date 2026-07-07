@@ -1,12 +1,7 @@
-# LOCAL-ONLY email kill-switch.
-# This dev stack pulls the PRODUCTION Microsoft Graph / Outlook creds from .env,
-# so it was sending real critical-alert emails (sender support@zeroshield.ai) to
-# whatever address sat in alert_recipients — bad addresses bounced and flooded the
-# inbox. A local/dev stack must never send real email. This override blanks the
-# Graph creds (so graph_mail_configured() -> False) and routes Django mail to the
-# dummy backend (SMTP becomes a no-op) for the email-sending services.
+# LOCAL-ONLY overrides (safe to delete for prod-like runs).
+# - Email kill-switch (no real Graph sends from dev)
 #
-# Reversible: delete this file, then `docker compose --profile workers up -d control workers`.
+# Reversible: delete this file, then `docker compose up -d`.
 services:
   control:
     environment:
@@ -23,7 +18,10 @@ services:
       CLIENT_SECRET: ""
   gateway:
     environment:
-      # Demo/local: synchronous RAG ingest so documents are queryable without
-      # the vector.index Celery worker profile.
       GATEWAY_ASYNC_VECTOR_INGEST: "false"
       VECTOR_PROVIDER_ALLOW_PRIVATE: "1"
+      # Outbound HTTPS to OpenAI/BYOK providers inside the container.
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+      # Local dev: Windows/corporate TLS inspection often breaks container trust stores.
+      SSL_VERIFY: "false"

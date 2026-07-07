@@ -62,10 +62,12 @@ class KeyContainmentPayloadTests(TestCase):
         events = EnforcementEvent.objects.filter(organization=self.org)
         key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
         kill_by_prefix = _kill_switches_by_prefix(self.org)
-        fleet = _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix)
+        fleet = _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix, self.org)
         active_row = next(r for r in fleet if r["prefix"] == self.active_key.prefix)
         self.assertEqual(active_row["active_kill_switch_count"], 1)
         self.assertGreaterEqual(active_row["request_count"], 1)
+        self.assertIn("behavior_profile", active_row)
+        self.assertIn("traditional_score", active_row)
         disabled_row = next(r for r in fleet if r["prefix"] == self.disabled_key.prefix)
         self.assertFalse(disabled_row["is_active"])
 
@@ -98,7 +100,11 @@ class KeyContainmentPayloadTests(TestCase):
             f"/api/module2/ueba/api-keys/{self.active_key.id}/behavior/?period=24h"
         )
         self.assertEqual(resp.status_code, 200)
-        recent = resp.json().get("recent_requests") or []
+        body = resp.json()
+        recent = body.get("recent_requests") or []
         self.assertEqual(len(recent), 1)
         self.assertEqual(recent[0]["model"], "gpt-4o")
         self.assertIn("ignore", recent[0]["prompt_snippet"])
+        obs = body.get("llm_observation") or {}
+        self.assertIn("requests_meet_prompt_target", obs)
+        self.assertIn("prompt_target", obs)

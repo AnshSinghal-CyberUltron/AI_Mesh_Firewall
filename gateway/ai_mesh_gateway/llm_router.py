@@ -41,6 +41,7 @@ from litellm.exceptions import (
     BudgetExceededError,
     ContentPolicyViolationError,
     ContextWindowExceededError,
+    InternalServerError,
     NotFoundError,
     RateLimitError,
     ServiceUnavailableError,
@@ -107,6 +108,7 @@ _EXCEPTION_STATUS_MAP = {
     BudgetExceededError: 429,
     Timeout: 504,
     APIConnectionError: 502,
+    InternalServerError: 502,
     ServiceUnavailableError: 503,
     APIError: 502,
 }
@@ -863,6 +865,13 @@ class LLMRouter:
                         continue
                     except tuple(_EXCEPTION_STATUS_MAP.keys()):
                         continue
+                    except Exception as retry_exc:
+                        LOG.warning(
+                            "Compliant fallback candidate '%s' failed (%s); trying next",
+                            candidate,
+                            type(retry_exc).__name__,
+                        )
+                        continue
             if allowlist:
                 status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
                 LOG.warning(
@@ -1215,6 +1224,13 @@ class LLMRouter:
                     except (BadRequestError, NotFoundError):
                         continue
                     except tuple(_EXCEPTION_STATUS_MAP.keys()):
+                        continue
+                    except Exception as retry_exc:
+                        LOG.warning(
+                            "Compliant stream fallback candidate '%s' failed (%s); trying next",
+                            candidate,
+                            type(retry_exc).__name__,
+                        )
                         continue
             if allowlist:
                 status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)

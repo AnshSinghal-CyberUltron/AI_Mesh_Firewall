@@ -8,6 +8,7 @@ from django.utils import timezone
 from module2.analytics import (
     build_model_exposure_payload,
     build_rag_pipeline_kpis,
+    build_recent_request_json,
     build_threat_telemetry_payload,
     classify_telemetry_bucket,
     event_source,
@@ -40,6 +41,29 @@ class Module2AnalyticsTests(SimpleTestCase):
     def test_prompt_snippet_from_meta_direct(self):
         meta = {"prompt_snippet": "hello world"}
         self.assertEqual(prompt_snippet_from_meta(meta), "hello world")
+
+    def test_prompt_snippet_from_meta_prompt_submitted(self):
+        meta = {"prompt_submitted": "how are u today", "threat_type": "policy_violation"}
+        self.assertEqual(prompt_snippet_from_meta(meta), "how are u today")
+
+    def test_classify_keyed_injection_counts_as_behavior_scoring(self):
+        meta = {"key_prefix": "lcvq62e6", "threat_type": "prompt_injection", "detail": "injection detected"}
+        self.assertEqual(classify_telemetry_bucket(meta, ACTION_BLOCK), "behavior_scoring")
+
+    def test_build_recent_request_json_includes_context_source_subtag(self):
+        row = build_recent_request_json(
+            {
+                "id": 42,
+                "action": "allow",
+                "metadata": {
+                    "event_type": "request",
+                    "context_source": "mcp",
+                    "prompt_snippet": "summarize customer",
+                },
+            }
+        )
+        self.assertEqual(row["metadata"]["context_source"], "mcp")
+        self.assertEqual(event_source({"event_type": "request", "context_source": "mcp"}), "chat")
 
     def test_build_model_exposure_payload(self):
         events = [

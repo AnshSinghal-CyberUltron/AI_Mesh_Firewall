@@ -107,28 +107,88 @@ function appendChat(role, content) {
   el.scrollTop = el.scrollHeight;
 }
 
+function friendlyErrorText(result) {
+  if (!result || !result.error) return "";
+  const support = result.support || {};
+  const plain = support.plain_text || result.message || "Request failed.";
+  const next = support.next_step ? ` Next: ${support.next_step}` : "";
+  return `[Gateway issue] ${plain}${next}`;
+}
+
+function streamFallbackFromTrace(ev) {
+  const zs = ev?.zeroshield || {};
+  const detail = String(zs.detail || zs.reason || "").trim();
+  if (!detail) return "";
+  const action = String(zs.action || "info").toUpperCase();
+  return `[${action}] ${detail}`;
+}
+
+function finalizeStreamText(acc, lastError, lastTrace) {
+  if (acc) return acc;
+  if (lastError) {
+    const fromErr = friendlyErrorText(lastError) || lastError.message;
+    if (fromErr) return fromErr;
+  }
+  const fromTrace = streamFallbackFromTrace(lastTrace);
+  if (fromTrace) return fromTrace;
+  const zs = lastTrace?.zeroshield || {};
+  if (String(zs.action || "").toLowerCase() === "block") {
+    return "[BLOCK] Request was blocked by ZeroShield policy.";
+  }
+  return "Gateway returned no streamed text. Check the Request Pipeline panel for block/error details.";
+}
+
 async function loadModels() {
   try {
     const { models } = await api("/api/models");
     const sel = document.getElementById("chat-model");
     sel.querySelectorAll('option:not([value="auto"])').forEach((o) => o.remove());
     models.forEach((m) => {
+      if (/ollama/i.test(m.id) || /ollama/i.test(m.owned_by || "")) return;
       const o = document.createElement("option");
       o.value = m.id;
       o.textContent = m.id;
       sel.appendChild(o);
     });
+    const preferred = models.find((m) => m.id === "gpt-5.2") || models.find((m) => m.id !== "auto") || models[0];
+    if (preferred) sel.value = preferred.id;
   } catch (e) {
     console.warn("models", e);
   }
 }
 
 async function loadHealth() {
+  const el = document.getElementById("gateway-meta");
+  let baseUrl = "";
   try {
-    const h = await api("/api/health");
-    document.getElementById("gateway-meta").textContent = `Gateway: ${h.gateway_base_url}`;
+    const hres = await fetch(rel("/api/health"));
+    const h = await hres.json();
+    baseUrl = h.gateway_base_url || "";
+    el.textContent = `Gateway: ${baseUrl} · checking…`;
   } catch {
-    document.getElementById("gateway-meta").textContent = "Gateway: unavailable";
+    el.textContent = "Gateway: unavailable (is the demo server running?)";
+    return;
+  }
+  if (!authToken) {
+    el.textContent = `Gateway: ${baseUrl} · sign in for readiness`;
+    return;
+  }
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    const res = await fetch(rel("/api/readiness"), {
+      headers: authHeaders(),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (handleAuthFailure(res)) return;
+    const r = await res.json();
+    const status = r.ok ? "ready" : "degraded";
+    const mode = r.readiness_mode === "deep" ? "deep probe" : "models listed";
+    const healthy = `${r.models_healthy}/${r.models_total}`;
+    el.textContent = `Gateway: ${baseUrl} · ${status} (${mode}) · models ${healthy}`;
+  } catch {
+    el.textContent = `Gateway: ${baseUrl} · readiness slow — try sending a chat request`;
   }
 }
 
@@ -148,15 +208,27 @@ document.getElementById("chat-send").addEventListener("click", async () => {
   const stream = document.getElementById("chat-stream").checked;
   appendChat("user", message);
   document.getElementById("chat-input").value = "";
+  const sendBtn = document.getElementById("chat-send");
+  sendBtn.disabled = true;
 
+  try {
   if (stream) {
     let acc = "";
+    let lastError = null;
+    let lastTrace = null;
     const res = await fetch(rel("/api/chat/stream"), {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ session_id: sessionId, message, model, stream: true }),
     });
     if (handleAuthFailure(res)) return;
+    if (!res.ok) {
+      const errBody = await res.text();
+      let detail = errBody;
+      try { detail = JSON.parse(errBody).detail || errBody; } catch {}
+      appendChat("assistant", `[Error] ${detail}`);
+      return;
+    }
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = "";
@@ -173,10 +245,18 @@ document.getElementById("chat-send").addEventListener("click", async () => {
         const ev = JSON.parse(payload);
         if (ev.type === "delta") acc += ev.content;
         if (ev.type === "session") sessionId = ev.session_id;
-        if (ev.type === "trace") renderPipeline({ zeroshield: ev.zeroshield, pipeline: ev.pipeline });
+        if (ev.type === "trace") {
+          lastTrace = ev;
+          renderPipeline({ zeroshield: ev.zeroshield, pipeline: ev.pipeline });
+        }
+        if (ev.type === "error") {
+          lastError = ev;
+          acc = friendlyErrorText(ev) || acc;
+          renderPipeline(ev);
+        }
       }
     }
-    appendChat("assistant", acc || "(empty stream)");
+    appendChat("assistant", finalizeStreamText(acc, lastError, lastTrace));
     return;
   }
 
@@ -185,8 +265,13 @@ document.getElementById("chat-send").addEventListener("click", async () => {
     body: JSON.stringify({ session_id: sessionId, message, model }),
   });
   sessionId = data.session_id;
-  appendChat("assistant", data.content || "");
+  appendChat("assistant", data.content || friendlyErrorText(data) || "(empty response)");
   renderPipeline(data);
+  } catch (e) {
+    appendChat("assistant", `[Error] ${e.message || e}`);
+  } finally {
+    sendBtn.disabled = false;
+  }
 });
 
 document.getElementById("rag-ingest").addEventListener("click", async () => {
@@ -217,6 +302,7 @@ document.getElementById("mcp-run").addEventListener("click", async () => {
     body: JSON.stringify({ input, model: "auto", scenario: "mcp" }),
   });
   document.getElementById("mcp-out").textContent = JSON.stringify(out, null, 2);
+  if (out.error) document.getElementById("mcp-out").textContent = friendlyErrorText(out) + "\n\n" + JSON.stringify(out, null, 2);
   renderPipeline(out);
 });
 
@@ -233,6 +319,7 @@ document.getElementById("route-run").addEventListener("click", async () => {
     }),
   });
   document.getElementById("route-out").textContent = JSON.stringify(out, null, 2);
+  if (out.error) document.getElementById("route-out").textContent = friendlyErrorText(out) + "\n\n" + JSON.stringify(out, null, 2);
   renderPipeline(out);
 });
 
@@ -272,6 +359,8 @@ document.querySelectorAll("[data-scenario]").forEach((btn) => {
     try {
       if (s === "stream") {
         let acc = "";
+        let lastError = null;
+        let lastTrace = null;
         const res = await fetch(rel("/api/respond/stream"), {
           method: "POST",
           headers: authHeaders({ "Content-Type": "application/json" }),
@@ -290,9 +379,18 @@ document.querySelectorAll("[data-scenario]").forEach((btn) => {
             const ev = JSON.parse(part.slice(6));
             if (ev.type === "delta") acc += ev.content;
             if (ev.type === "completed") renderPipeline(ev);
+            if (ev.type === "trace") {
+              lastTrace = ev;
+              renderPipeline({ zeroshield: ev.zeroshield, pipeline: ev.pipeline });
+            }
+            if (ev.type === "error") {
+              lastError = ev;
+              acc = friendlyErrorText(ev) || acc;
+              renderPipeline(ev);
+            }
           }
         }
-        outEl.textContent = acc;
+        outEl.textContent = finalizeStreamText(acc, lastError, lastTrace);
         return;
       }
       const map = {

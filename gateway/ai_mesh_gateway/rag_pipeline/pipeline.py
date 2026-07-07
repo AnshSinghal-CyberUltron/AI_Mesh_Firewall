@@ -140,7 +140,11 @@ class RAGFirewallPipeline:
                 "original_query": q_out.original_query,
             },
         ))
-        self._emit_stage_telemetry(ctx, "query", q_out.verdict, project_id, key_hash, collection_name, q_out.latency_ms, organization_id=organization_id, user_id=user_id, namespace=namespace)
+        self._emit_stage_telemetry(
+            ctx, "query", q_out.verdict, project_id, key_hash, collection_name, q_out.latency_ms,
+            organization_id=organization_id, user_id=user_id, namespace=namespace,
+            query_text=query_text,
+        )
         if q_out.verdict.action == "block":
             ctx.final_action = "block"
             return self._build_result(ctx, 0, blocked=True)
@@ -389,6 +393,7 @@ class RAGFirewallPipeline:
         organization_id: int | None = None,
         user_id: int | str | None = None,
         namespace: str = "",
+        query_text: str = "",
     ) -> None:
         if self._telemetry is None:
             return
@@ -396,6 +401,9 @@ class RAGFirewallPipeline:
             from telemetry import build_telemetry_event
         except ImportError:
             from gateway.telemetry import build_telemetry_event
+
+        _prompt = (query_text or getattr(ctx, "query_text", "") or "")[:500]
+        _prompt_full = (query_text or getattr(ctx, "query_text", "") or "")[:2000]
 
         self._telemetry.emit(build_telemetry_event(
             event_type="rag_pipeline",
@@ -408,12 +416,14 @@ class RAGFirewallPipeline:
             latency_ms=latency_ms,
             organization_id=organization_id,
             user_id=user_id,
+            prompt_snippet=_prompt,
             metadata={
                 "request_id": ctx.request_id,
                 "collection": collection_name,
                 "namespace": namespace,
                 "escalation_level": ctx.escalation_level,
                 "detail": verdict.detail,
+                "prompt_submitted": _prompt_full,
                 "module": "1.3",
                 "module_id": "1.3",
             },

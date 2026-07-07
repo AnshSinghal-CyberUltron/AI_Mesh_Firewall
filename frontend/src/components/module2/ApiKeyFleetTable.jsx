@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, ChevronDown, ChevronRight, Loader2, Power, PowerOff, ShieldAlert, Zap,
+  AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, Power, PowerOff, ShieldAlert, Zap,
 } from "lucide-react";
 import { createModule2Api } from "../../api/module2";
 import { adoptSimulatorKeyById } from "../../api/gatewayContext";
@@ -14,10 +14,11 @@ import {
 import { ApiKeyRiskProfile } from "./ApiKeyRiskProfile";
 import { RiskBandBadge } from "./RiskBandBadge";
 import { InfoTooltip } from "./InfoTooltip";
+import { LlMObservationBadge } from "./LlMObservationStatus";
 
 const FLASH_DISMISS_MS = 5000;
-const BEHAVIOR_RELOAD_DELAYS_POLLING_MS = [0, 2000];
-const BEHAVIOR_RELOAD_DELAYS_LIVE_MS = [0];
+const BEHAVIOR_RELOAD_DELAYS_POLLING_MS = [0, 2000, 4000];
+const BEHAVIOR_RELOAD_DELAYS_LIVE_MS = [0, 2000, 4000];
 const BEHAVIOR_TELEMETRY_DEBOUNCE_MS = 150;
 const BEHAVIOR_POLL_MS = 10_000;
 
@@ -235,7 +236,9 @@ function FleetRowActions({
 export function ApiKeyFleetTable({
   rows = [],
   selectedKeyId,
+  activeProfileKeyId,
   onSelectKey,
+  onOpenProfile,
   fetchWithAuth,
   period,
   refreshSignal = 0,
@@ -246,6 +249,7 @@ export function ApiKeyFleetTable({
   onActionComplete,
   loading = false,
   liveConnected = false,
+  riskCalculation = null,
 }) {
   const module2Api = useMemo(() => createModule2Api(fetchWithAuth), [fetchWithAuth]);
   const killApi = useMemo(() => createKillSwitchApi(fetchWithAuth), [fetchWithAuth]);
@@ -253,14 +257,13 @@ export function ApiKeyFleetTable({
   const [expandedKeyId, setExpandedKeyId] = useState(null);
   const [expandedBehavior, setExpandedBehavior] = useState(null);
   const [expandLoading, setExpandLoading] = useState(false);
-  const reloadTimersRef = useRef([]);
   const behaviorSeqRef = useRef(0);
+  const reloadTimersRef = useRef([]);
   const telemetryDebounceRef = useRef(null);
-  const prevSelectedKeyIdRef = useRef(selectedKeyId);
+  const hasLoadedExpandedBehaviorRef = useRef(false);
   const [killModalRow, setKillModalRow] = useState(null);
   const [killModalLoading, setKillModalLoading] = useState(false);
   const [flash, setFlash] = useState(null);
-  const hasLoadedExpandedBehaviorRef = useRef(false);
 
   useEffect(() => {
     if (!flash) return undefined;
@@ -292,13 +295,10 @@ export function ApiKeyFleetTable({
     });
   }, [filteredRows, simulatorKeyId]);
 
-  useEffect(() => {
-    const prev = prevSelectedKeyIdRef.current;
-    prevSelectedKeyIdRef.current = selectedKeyId;
-    if (selectedKeyId && selectedKeyId !== prev) {
-      setExpandedKeyId(selectedKeyId);
-    }
-  }, [selectedKeyId]);
+  const openProfile = useCallback((row) => {
+    onSelectKey?.(row.key_id);
+    onOpenProfile?.(row);
+  }, [onOpenProfile, onSelectKey]);
 
   const behaviorSnapshotEqual = useCallback((prev, next) => {
     if (!prev || !next) return false;
@@ -309,12 +309,11 @@ export function ApiKeyFleetTable({
     return (
       prev.request_count === next.request_count
       && prev.blocked_count === next.blocked_count
-      && prev.redacted_count === next.redacted_count
       && prev.risk_score === next.risk_score
-      && prev.risk_band === next.risk_band
       && prevRecent.length === nextRecent.length
-      && prevRecentHead.created_at === nextRecentHead.created_at
+      && prevRecentHead.timestamp === nextRecentHead.timestamp
       && prevRecentHead.action === nextRecentHead.action
+      && prevRecentHead.prompt_snippet === nextRecentHead.prompt_snippet
     );
   }, []);
 
@@ -325,7 +324,7 @@ export function ApiKeyFleetTable({
       setExpandedBehavior(null);
     }
     try {
-      const data = await module2Api.getUebaBehavior(keyId, period, { useCache: silent });
+      const data = await module2Api.getUebaBehavior(keyId, period, { useCache: false });
       if (seq !== behaviorSeqRef.current) return;
       hasLoadedExpandedBehaviorRef.current = true;
       setExpandedBehavior((prev) => {
@@ -336,8 +335,8 @@ export function ApiKeyFleetTable({
       if (seq !== behaviorSeqRef.current) return;
       if (!silent) {
         setExpandedBehavior(null);
+        showFlash(err.message || "Failed to load key behavior.", "error");
       }
-      showFlash(err.message || "Failed to load key behavior.", "error");
     } finally {
       if (seq !== behaviorSeqRef.current) return;
       if (!silent) setExpandLoading(false);
@@ -346,37 +345,30 @@ export function ApiKeyFleetTable({
 
   const scheduleBehaviorReload = useCallback((keyId) => {
     const delays = liveConnected ? BEHAVIOR_RELOAD_DELAYS_LIVE_MS : BEHAVIOR_RELOAD_DELAYS_POLLING_MS;
-    reloadTimersRef.current.forEach((timerId) => clearTimeout(timerId));
-    reloadTimersRef.current = delays.map((delay) => (
+    reloadTimersRef.current.forEach((id) => clearTimeout(id));
+    reloadTimersRef.current = delays.map((delay) =>
       setTimeout(() => {
-        if (expandedKeyId === keyId) {
-          loadExpandedBehavior(keyId, { silent: true });
-        }
-      }, delay)
-    ));
+        if (expandedKeyId === keyId) loadExpandedBehavior(keyId, { silent: true });
+      }, delay),
+    );
   }, [expandedKeyId, liveConnected, loadExpandedBehavior]);
 
   const debouncedBehaviorReload = useCallback((keyId) => {
     clearTimeout(telemetryDebounceRef.current);
-    telemetryDebounceRef.current = setTimeout(() => {
-      scheduleBehaviorReload(keyId);
-    }, BEHAVIOR_TELEMETRY_DEBOUNCE_MS);
+    telemetryDebounceRef.current = setTimeout(() => scheduleBehaviorReload(keyId), BEHAVIOR_TELEMETRY_DEBOUNCE_MS);
   }, [scheduleBehaviorReload]);
 
   useEffect(() => () => {
-    reloadTimersRef.current.forEach((timerId) => clearTimeout(timerId));
+    reloadTimersRef.current.forEach((id) => clearTimeout(id));
     clearTimeout(telemetryDebounceRef.current);
   }, []);
 
   const profileBehavior = useMemo(() => {
     if (!expandedBehavior || expandedBehavior.key_id !== expandedKeyId) return null;
     const row = rows.find((r) => r.key_id === expandedKeyId);
-    if (!row || row.request_count !== expandedBehavior.request_count) {
-      return expandedBehavior;
-    }
+    if (!row) return expandedBehavior;
     return {
       ...expandedBehavior,
-      ...row,
       key_id: expandedBehavior.key_id,
       prefix: expandedBehavior.prefix || row.prefix,
       name: expandedBehavior.name || row.name,
@@ -386,18 +378,30 @@ export function ApiKeyFleetTable({
       redacted_count: row.redacted_count ?? expandedBehavior.redacted_count,
       block_rate_pct: row.block_rate_pct ?? expandedBehavior.block_rate_pct,
       redact_rate_pct: row.redact_rate_pct ?? expandedBehavior.redact_rate_pct,
-      risk_score: row.risk_score ?? expandedBehavior.risk_score,
+      risk_score: row.final_score ?? row.risk_score ?? expandedBehavior.risk_score,
+      final_score: row.final_score ?? row.risk_score ?? expandedBehavior.final_score,
+      traditional_score: row.traditional_score ?? expandedBehavior.traditional_score,
+      behavior_profile: row.behavior_profile ?? expandedBehavior.behavior_profile,
+      score_breakdown: row.score_breakdown ?? expandedBehavior.score_breakdown,
+      risk_calculation: expandedBehavior.risk_calculation ?? riskCalculation,
+      llm_reasoning: row.llm_reasoning ?? expandedBehavior.llm_reasoning,
+      llm_verdict: row.llm_verdict ?? expandedBehavior.llm_verdict,
       risk_band: row.risk_band ?? expandedBehavior.risk_band,
       velocity_spike: row.velocity_spike ?? expandedBehavior.velocity_spike,
+      anomaly_flags: row.anomaly_flags ?? expandedBehavior.anomaly_flags,
+      llm_observation: row.llm_observation ?? expandedBehavior.llm_observation,
+      top_threat_types: expandedBehavior.top_threat_types ?? row.top_threat_types,
+      top_models: expandedBehavior.top_models ?? row.top_models,
       recent_requests: expandedBehavior.recent_requests,
-      active_kill_switches: row.active_kill_switches ?? expandedBehavior.active_kill_switches,
     };
-  }, [expandedBehavior, expandedKeyId, rows]);
+  }, [expandedBehavior, expandedKeyId, rows, riskCalculation]);
 
   useEffect(() => {
     if (expandedKeyId) {
       hasLoadedExpandedBehaviorRef.current = false;
       loadExpandedBehavior(expandedKeyId);
+    } else {
+      setExpandedBehavior(null);
     }
   }, [period, expandedKeyId, loadExpandedBehavior]);
 
@@ -414,13 +418,12 @@ export function ApiKeyFleetTable({
     };
     window.addEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
     window.addEventListener("storage", onStorage);
-    const id = liveConnected
-      ? null
-      : setInterval(() => {
-          loadExpandedBehavior(expandedKeyId, { silent: true });
-        }, BEHAVIOR_POLL_MS);
+    const pollId = setInterval(
+      () => loadExpandedBehavior(expandedKeyId, { silent: true }),
+      BEHAVIOR_POLL_MS,
+    );
     return () => {
-      if (id) clearInterval(id);
+      if (pollId) clearInterval(pollId);
       clearTimeout(telemetryDebounceRef.current);
       window.removeEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
       window.removeEventListener("storage", onStorage);
@@ -429,24 +432,17 @@ export function ApiKeyFleetTable({
 
   const toggleExpand = useCallback((row) => {
     const collapsing = expandedKeyId === row.key_id;
-    const next = collapsing ? null : row.key_id;
-    setExpandedKeyId(next);
+    setExpandedKeyId(collapsing ? null : row.key_id);
     onSelectKey?.(collapsing ? null : row.key_id);
-    if (collapsing) {
-      setExpandedBehavior(null);
-    }
   }, [expandedKeyId, onSelectKey]);
 
   const handleKillSwitchConfirm = async () => {
     if (!killModalRow) return;
     setKillModalLoading(true);
     try {
-      const behavior = expandedBehavior?.key_id === killModalRow.key_id
-        ? expandedBehavior
-        : killModalRow;
       const payload = buildCredentialKillSwitchPayload({
         apiKeyPrefix: killModalRow.prefix,
-        reason: buildAnalystKillSwitchReason(behavior),
+        reason: buildAnalystKillSwitchReason(killModalRow),
       });
       await killApi.createAndActivateKillSwitch(payload);
       showFlash(`Kill switch activated for ${killModalRow.prefix} (all models)`);
@@ -470,7 +466,7 @@ export function ApiKeyFleetTable({
             API Key Fleet Inspector
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Inspect behavior and apply kill-switch / disable on every key — updates live.
+            Expand a row for last 5 prompts and safety rates · <strong>Profile</strong> opens the full sidebar.
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -513,7 +509,8 @@ export function ApiKeyFleetTable({
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/40">
                 {[
-                  { label: "", help: "Expand row for full behavior drilldown" },
+                  { label: "", help: "Expand row for last 5 prompts, block/redact rates, and key metrics" },
+                  { label: "Profile", help: "Open full behavior timeline sidebar with score breakdown" },
                   { label: "Key", help: "Truncated credential prefix" },
                   { label: "Name / Owner", help: "Human label and owning user" },
                   { label: "Status", help: "Active keys pass auth; disabled keys are rejected at ingress" },
@@ -536,6 +533,7 @@ export function ApiKeyFleetTable({
             <tbody>
               {displayRows.map((row) => {
                 const isExpanded = expandedKeyId === row.key_id;
+                const isProfileOpen = activeProfileKeyId === row.key_id;
                 const isSelected = selectedKeyId === row.key_id;
                 const isSimulatorKey = simulatorKeyId && row.key_id === simulatorKeyId;
                 return (
@@ -550,9 +548,25 @@ export function ApiKeyFleetTable({
                           type="button"
                           onClick={() => toggleExpand(row)}
                           className="rounded p-1 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700"
-                          aria-label={isExpanded ? "Collapse" : "Expand"}
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? "Collapse quick view" : "Expand last 5 prompts"}
                         >
                           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => openProfile(row)}
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors ${
+                            isProfileOpen
+                              ? "bg-teal-600 text-white"
+                              : "text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/40"
+                          }`}
+                          aria-label={`Open full profile for ${row.prefix}`}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Profile
                         </button>
                       </td>
                       <td className="px-3 py-2 font-mono text-xs">
@@ -581,7 +595,16 @@ export function ApiKeyFleetTable({
                         </span>
                       </td>
                       <td className="px-3 py-2">
-                        <RiskBandBadge type="behavioral" band={row.risk_band} score={row.risk_score} />
+                        <div className="flex flex-col gap-0.5">
+                          <RiskBandBadge type="behavioral" band={row.risk_band} score={row.final_score ?? row.risk_score} />
+                          <LlMObservationBadge observation={row.llm_observation} compact />
+                          {row.behavior_profile?.status === "building" && (
+                            <span className="text-[10px] text-slate-400">
+                              {row.behavior_profile.prompt_samples_collected ?? 0}/
+                              {row.behavior_profile.prompt_samples_target ?? 50} prompts
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2">
                         <span className={row.block_rate_pct >= 35 ? "font-semibold text-red-600" : ""}>
@@ -623,20 +646,37 @@ export function ApiKeyFleetTable({
                       </td>
                     </tr>
                     {isExpanded && (
-                      <tr key={`${row.key_id}-detail`} className="border-b border-slate-100 bg-slate-50/60 dark:border-slate-700/50 dark:bg-slate-900/30">
-                        <td colSpan={10} className="px-4 py-4">
+                      <tr className="border-b border-slate-100 bg-slate-50/60 dark:border-slate-700/50 dark:bg-slate-900/30">
+                        <td colSpan={11} className="px-4 py-4">
                           {expandLoading ? (
                             <div className="flex justify-center py-8">
                               <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
                             </div>
                           ) : profileBehavior ? (
-                            <ApiKeyRiskProfile
-                              behavior={profileBehavior}
-                              fetchWithAuth={fetchWithAuth}
-                              onActionComplete={onActionComplete}
-                              showActions={false}
-                              simulatorKeyPrefix={simulatorKeyPrefix}
-                            />
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                  Quick view · {row.prefix}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => openProfile(row)}
+                                  className="inline-flex items-center gap-1 text-xs font-semibold text-teal-600 hover:underline dark:text-teal-400"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  Open full profile
+                                </button>
+                              </div>
+                              <ApiKeyRiskProfile
+                                behavior={profileBehavior}
+                                fetchWithAuth={fetchWithAuth}
+                                onActionComplete={onActionComplete}
+                                showActions={false}
+                                simulatorKeyPrefix={simulatorKeyPrefix}
+                                riskCalculation={riskCalculation}
+                                variant="preview"
+                              />
+                            </div>
                           ) : (
                             <p className="py-4 text-center text-xs text-amber-600 dark:text-amber-400">
                               Could not load request detail. Collapse and expand the row to retry.

@@ -55,3 +55,30 @@ class RequestScopedMetricsTests(TestCase):
         self.assertEqual(dash["kpis"]["requests_inspected"], 1)
         self.assertEqual(dash["kpis"]["requests_blocked"], soc["requests_blocked"])
         self.assertEqual(dash["lane_summary"]["chat"]["total"], 1)
+
+    def test_collapse_preserves_prompt_when_block_event_lacks_snippet(self):
+        rows = [
+            {
+                "action": "allow",
+                "metadata": {
+                    "request_id": "zs-eeeeeeeeeeee",
+                    "event_type": "request",
+                    "prompt_snippet": "how are u today",
+                    "prompt_submitted": "how are u today",
+                },
+            },
+            {
+                "action": ACTION_BLOCK,
+                "metadata": {
+                    "request_id": "zs-eeeeeeeeeeee",
+                    "event_type": "input_blocked",
+                    "threat_type": "llm_judge:direct",
+                    "detail": "LLM Judge detected injection",
+                },
+            },
+        ]
+        collapsed = collapse_events_by_request(rows)
+        self.assertEqual(len(collapsed), 1)
+        self.assertEqual(collapsed[0].action, "block")
+        self.assertEqual(collapsed[0].metadata.get("prompt_snippet"), "how are u today")
+        self.assertEqual(collapsed[0].metadata.get("prompt_submitted"), "how are u today")

@@ -10,7 +10,6 @@ import {
   Radio,
   RefreshCw,
   Search,
-  UserRound,
   X,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -879,23 +878,6 @@ function IncidentsPageInner() {
                   label: "API key",
                   helpText: "Truncated key prefix for identity correlation.",
                   render: (r) => r.key_prefix || "—",
-                },
-                {
-                  key: "assigned_to_username",
-                  label: "Assigned",
-                  helpText: "Current case owner. Unassigned means nobody has claimed the case yet.",
-                  render: (r) => (
-                    r.assigned_to_username ? (
-                      <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
-                        <UserRound className="h-3 w-3" />
-                        {r.assigned_to_username}
-                      </span>
-                    ) : (
-                      <span className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                        Unassigned
-                      </span>
-                    )
-                  ),
                 },
                 {
                   key: "age",

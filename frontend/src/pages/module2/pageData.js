@@ -425,8 +425,116 @@ export function formatTickerDetail(item = {}) {
     return `${item.category}${sub}`;
   }
   if (item.message) return item.message;
+  const meta = item.metadata || {};
+  const detail = metadataDetail(meta);
+  if (detail) return detail;
   if (item.timestamp) return item.timestamp.replace("T", " ").slice(0, 19);
   return "";
+}
+
+const TICKER_ACTION_PHRASES = {
+  block: "was blocked by policy",
+  redact: "was allowed after sensitive data was redacted",
+  monitor: "was allowed but flagged for analyst review",
+  flag: "was flagged for review",
+  allow: "was allowed",
+};
+
+/** Plain-language one-liner for ticker hover / quick scan. */
+export function formatTickerAnalystSummary(item = {}) {
+  if (item.title) {
+    const sev = item.severity ? `${item.severity} severity` : "unknown severity";
+    const status = item.status || "open";
+    return `Incident case (${sev}, ${status}): ${item.title}`;
+  }
+
+  const meta = item.metadata || {};
+  const lane = resolveEventLane(item).replace(/_/g, " ");
+  const action = String(item.action || meta.action || "").toLowerCase();
+  const phrase = TICKER_ACTION_PHRASES[action] || (action ? `had outcome ${action}` : "was processed");
+  const parts = [`A ${lane} request ${phrase}`];
+
+  const threat = meta.threat_type ? String(meta.threat_type).replace(/_/g, " ") : "";
+  if (threat) parts.push(`threat: ${threat}`);
+
+  const model = meta.model || meta.routed_model || meta.selected_model;
+  if (model) parts.push(`model ${model}`);
+
+  const key = meta.key_prefix || meta.api_key_prefix;
+  if (key) parts.push(`key ${key}`);
+
+  const detail = metadataDetail(meta);
+  if (detail) parts.push(detail);
+
+  return parts.join(" · ");
+}
+
+/** Structured fields for expanded ticker rows (analyst forensics). */
+export function buildTickerAnalystFields(item = {}) {
+  if (item.title) {
+    const fields = [
+      { label: "Record type", value: "Security incident" },
+      { label: "Title", value: item.title },
+    ];
+    if (item.severity) fields.push({ label: "Severity", value: item.severity });
+    if (item.status) fields.push({ label: "Status", value: item.status });
+    if (item.source) fields.push({ label: "Enforcement lane", value: String(item.source).replace(/_/g, " ") });
+    if (item.created_at) {
+      fields.push({ label: "Opened (UTC)", value: String(item.created_at).replace("T", " ").slice(0, 19) });
+    }
+    return fields.filter((f) => f.value);
+  }
+
+  const meta = item.metadata || {};
+  const extra = meta.extra && typeof meta.extra === "object" ? meta.extra : {};
+  const fields = [
+    { label: "Enforcement lane", value: resolveEventLane(item).replace(/_/g, " ") },
+  ];
+
+  if (item.action) fields.push({ label: "Outcome", value: String(item.action).toUpperCase() });
+  if (meta.threat_type) fields.push({ label: "Threat type", value: String(meta.threat_type).replace(/_/g, " ") });
+  if (meta.owasp_code || meta.subcategory || item.subcategory) {
+    fields.push({ label: "OWASP / category", value: meta.owasp_code || meta.subcategory || item.subcategory });
+  }
+  if (meta.model) fields.push({ label: "Model", value: meta.model });
+
+  const original = meta.original_model || extra.original_model || extra.requested_model;
+  const routed = meta.routed_model || meta.selected_model || extra.routed_model || extra.selected_model;
+  if (original && routed) fields.push({ label: "Model routing", value: `${original} → ${routed}` });
+  else if (meta.rerouted === true || extra.rerouted === true) {
+    fields.push({ label: "Model routing", value: "Rerouted to alternate model" });
+  }
+
+  const key = meta.key_prefix || meta.api_key_prefix;
+  if (key) fields.push({ label: "API key prefix", value: key });
+  if (meta.pipeline_stage) fields.push({ label: "Pipeline stage", value: meta.pipeline_stage });
+  if (meta.collection || meta.vector_collection) {
+    fields.push({ label: "Vector collection", value: meta.collection || meta.vector_collection });
+  }
+  if (meta.mcp_server || meta.server_slug) {
+    fields.push({ label: "MCP server", value: meta.mcp_server || meta.server_slug });
+  }
+  const tools = meta.tools_invoked;
+  if (tools) {
+    fields.push({
+      label: "MCP tool",
+      value: Array.isArray(tools) ? tools.join(", ") : String(tools),
+    });
+  }
+
+  const detail = metadataDetail(meta);
+  if (detail) fields.push({ label: "Reason", value: detail });
+
+  const snippet = meta.prompt_snippet;
+  if (snippet) fields.push({ label: "Prompt snippet", value: String(snippet).slice(0, 160) });
+
+  if (meta.request_id) fields.push({ label: "Request ID", value: meta.request_id });
+  if (item.id) fields.push({ label: "Event ID", value: String(item.id) });
+  if (item.timestamp) {
+    fields.push({ label: "Time (UTC)", value: String(item.timestamp).replace("T", " ").slice(0, 19) });
+  }
+
+  return fields.filter((f) => f.value);
 }
 
 /** Merge live WS feed with open incidents — dedupe by event/incident id. */

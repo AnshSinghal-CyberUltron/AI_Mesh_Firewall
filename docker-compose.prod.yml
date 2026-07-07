@@ -196,8 +196,18 @@ services:
     environment:
       ZEROSHIELD_API_KEY: ${DEMO_GATEWAY_KEY:-}
       ZEROSHIELD_BASE_URL: ${DEMO_GATEWAY_BASE_URL:-http://gateway:8300/v1}
+      CONTROL_BASE_URL: ${DEMO_CONTROL_BASE_URL:-http://control:8000}
+      ZEROSHIELD_TIMEOUT: ${DEMO_ZEROSHIELD_TIMEOUT:-60}
+      ZEROSHIELD_MAX_RETRIES: ${DEMO_ZEROSHIELD_MAX_RETRIES:-2}
     depends_on:
       gateway: { condition: service_started }
+      control: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8770/api/health', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:

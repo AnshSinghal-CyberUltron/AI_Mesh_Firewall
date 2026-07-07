@@ -76,9 +76,17 @@ BASE_URL = env("ZEROSHIELD_BASE_URL", "http://127.0.0.1:8300/v1").rstrip("/")
 CONTROL_BASE_URL = env("CONTROL_BASE_URL", "http://127.0.0.1:8100").rstrip("/")
 TIMEOUT = float(env("ZEROSHIELD_TIMEOUT", "120"))
 MAX_RETRIES = int(env("ZEROSHIELD_MAX_RETRIES", "3"))
+# Streaming responses can exceed non-stream request latency; keep a dedicated
+# upper bound to avoid false timeout errors on first-token delays.
+STREAM_TIMEOUT = float(env("DEMO_STREAM_TIMEOUT", "180"))
 RAG_COLLECTION = env("RAG_DEFAULT_COLLECTION", "demo_knowledge")
 DEMO_HOST = env("DEMO_HOST", "127.0.0.1")
 DEMO_PORT = int(env("DEMO_PORT", "8765"))
+DEFAULT_MODEL = env("DEMO_DEFAULT_MODEL", "gpt-5.2")
+# Lite readiness lists models only (fast). Set DEMO_READINESS_LITE=0 for
+# deep upstream probe checks.
+READINESS_LITE = env("DEMO_READINESS_LITE", "1").lower() not in ("0", "false", "no")
+READINESS_PROBE_TIMEOUT = float(env("DEMO_READINESS_PROBE_TIMEOUT", "12"))
 
 _debug_log(
     location="config.py:init",

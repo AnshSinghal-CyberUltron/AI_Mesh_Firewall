@@ -3,9 +3,9 @@
  * Clears the Module 2 GET cache and emits DOM events consumed by M2 pages.
  */
 
-import { clearModule2Cache } from "../api/module2";
-import { notifyContainmentChanged } from "./containmentEvents";
-import { notifyTelemetryActivity } from "./telemetryEvents";
+import { clearModule2Cache } from "../api/module2.js";
+import { notifyContainmentChanged } from "./containmentEvents.js";
+import { notifyTelemetryActivity } from "./telemetryEvents.js";
 
 /** After config/policy/model changes that affect telemetry KPIs and analytics. */
 export function syncModule2AfterTelemetryChange(source = "module1", detail = {}) {

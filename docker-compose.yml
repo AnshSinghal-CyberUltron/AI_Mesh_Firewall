@@ -116,10 +116,12 @@ services:
       redis: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=5)"]
-      interval: 10s
-      timeout: 5s
-      retries: 8
-      start_period: 120s
+      # Bedrock scanner warmup + migrate/collectstatic on cold Windows Docker can exceed 2 min;
+      # workers/gateway depend_on control:service_healthy — keep grace long enough to avoid false unhealthy.
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 300s
 
   workers:
     build:

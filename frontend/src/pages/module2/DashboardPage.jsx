@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Area, AreaChart, CartesianGrid,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -12,13 +12,17 @@ import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
 import { KPIBar } from "../../components/module2/KPIBar";
-import { module2TooltipProps } from "../../components/module2/module2Chart";
 import { ChartCard } from "../../components/module2/ChartCard";
+import { module2TooltipProps } from "../../components/module2/module2Chart";
+import { RiskBandBadge } from "../../components/module2/RiskBandBadge";
+import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import { InfoTooltip } from "../../components/module2/InfoTooltip";
 import { Module2EmptyState, Module2ErrorState, Module2PageSkeleton } from "../../components/module2/PageStates";
 import {
+  buildTickerAnalystFields,
+  formatTickerAnalystSummary,
   formatTickerDetail,
   formatTickerHeadline,
   mergeTickerFeed,
@@ -88,6 +92,65 @@ const LANE_BADGE = {
   threat_intel: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
 };
 
+function tickerRowKey(item, lane, index) {
+  if (item.id) return item._fromFeed ? `ev-${item.id}` : `inc-${item.id}`;
+  return `row-${lane}-${item.timestamp || index}`;
+}
+
+function HighRiskTickerRow({ item, index }) {
+  const [expanded, setExpanded] = useState(false);
+  const lane = resolveEventLane(item);
+  const badge = LANE_BADGE[lane] || LANE_BADGE.chat;
+  const headline = formatTickerHeadline(item);
+  const detail = formatTickerDetail(item);
+  const summary = formatTickerAnalystSummary(item);
+  const analystFields = buildTickerAnalystFields(item);
+  const rowKey = tickerRowKey(item, lane, index);
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-600 dark:bg-slate-700/40">
+      <button
+        type="button"
+        onClick={() => setExpanded((open) => !open)}
+        className="group flex w-full items-start gap-2 px-3 py-2 text-left text-sm"
+        aria-expanded={expanded}
+        aria-controls={`ticker-detail-${rowKey}`}
+        title={summary}
+      >
+        <span className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${badge}`}>
+          {lane.replace("_", " ")}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium truncate">{headline}</p>
+          {detail ? <p className="text-xs text-slate-500 truncate">{detail}</p> : null}
+          <p className="mt-1 hidden text-xs leading-relaxed text-slate-600 group-hover:block dark:text-slate-300">
+            {summary}
+          </p>
+        </div>
+        {item._fromFeed ? (
+          <span className="shrink-0 text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400">live</span>
+        ) : null}
+        <span className="shrink-0 text-[10px] uppercase tracking-wide text-slate-400">
+          {expanded ? "Hide" : "Details"}
+        </span>
+      </button>
+      {expanded && analystFields.length > 0 ? (
+        <dl
+          id={`ticker-detail-${rowKey}`}
+          className="border-t border-slate-200 px-3 py-2 text-xs dark:border-slate-600"
+        >
+          {analystFields.map(({ label, value }) => (
+            <div key={label} className="grid grid-cols-[7rem_1fr] gap-2 py-1">
+              <dt className="font-medium text-slate-500 dark:text-slate-400">{label}</dt>
+              <dd className="break-words text-slate-800 dark:text-slate-100">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </div>
+  );
+}
+
 function LaneSummaryGrid({ laneSummary, period = "24h" }) {
   return (
     <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -128,7 +191,6 @@ function LaneSummaryGrid({ laneSummary, period = "24h" }) {
 
 export function DashboardPage() {
   const { fetchWithAuth } = useAuth();
-  const navigate = useNavigate();
   const api = useMemo(() => createModule2Api(fetchWithAuth), [fetchWithAuth]);
   const [period, setPeriod] = useState("24h");
   const [data, setData] = useState(null);
@@ -231,18 +293,14 @@ export function DashboardPage() {
       label: "Monitored",
       value: kpis.monitored ?? 0,
       color: "text-sky-600",
-      helpText: "Policy monitor verdicts — traffic allowed but flagged for analyst review.",
-      clickable: true,
-      onClick: () => navigate("/threat-intel"),
+      helpText: "Distinct gateway requests with a monitor/flag verdict — allowed through but marked for analyst review in this window.",
     },
     {
       key: "rerouted",
       label: "Rerouted",
       value: kpis.rerouted ?? 0,
       color: "text-violet-600",
-      helpText: "Routing decisions that sent traffic to a different model than the caller requested.",
-      clickable: true,
-      onClick: () => { window.location.href = "/?tab=firewall-1-5"; },
+      helpText: "Distinct gateway requests where model routing sent traffic to a different model than the caller requested.",
     },
     { key: "block-rate", label: "Block Rate", value: `${kpis.block_rate ?? 0}%`, helpText: "Block rate across gateway requests in this window." },
   ];
@@ -292,6 +350,37 @@ export function DashboardPage() {
 
       <LaneSummaryGrid laneSummary={data?.lane_summary} period={period} />
 
+      <div className="mt-6">
+        <ChartCard
+          title="API Key Activity"
+          titleHelpText="Gateway credentials with enforcement traffic in this window — same fleet data as M2.2 UEBA."
+        >
+          <div className="mb-3 flex justify-end">
+            <Link
+              to={`/ueba/api-keys?period=${period}`}
+              className="inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900 dark:text-teal-400 dark:hover:text-teal-300"
+            >
+              Open M2.2 UEBA
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <DataTable
+            columns={[
+              { key: "prefix", label: "Key", render: (r) => <span className="font-mono text-xs">{r.prefix}</span> },
+              { key: "name", label: "Name" },
+              { key: "request_count", label: "Requests" },
+              {
+                key: "risk_band",
+                label: "Risk",
+                render: (r) => <RiskBandBadge type="behavioral" band={r.risk_band} score={r.risk_score} />,
+              },
+            ]}
+            rows={data?.top_risky_keys || []}
+            emptyMessage="No API key traffic in this period — send demo or simulator requests through the gateway to populate UEBA."
+          />
+        </ChartCard>
+      </div>
+
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Threat Timeline"
@@ -321,29 +410,12 @@ export function DashboardPage() {
 
         <ChartCard
           title="High-Risk Ticker"
-          titleHelpText="Live enforcement events merged with open incidents across all lanes."
+          titleHelpText="Live enforcement events merged with open incidents. Hover a row for a plain-language summary; click Details to expand forensics."
         >
-          <div className="max-h-60 space-y-2 overflow-y-auto">
-            {tickerItems.map((item, i) => {
-              const lane = resolveEventLane(item);
-              const badge = LANE_BADGE[lane] || LANE_BADGE.chat;
-              const headline = formatTickerHeadline(item);
-              const detail = formatTickerDetail(item);
-              return (
-                <div key={item.id || `${lane}-${item.timestamp || i}`} className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-700/40">
-                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${badge}`}>
-                    {lane.replace("_", " ")}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{headline}</p>
-                    {detail ? <p className="text-xs text-slate-500 truncate">{detail}</p> : null}
-                  </div>
-                  {item._fromFeed && (
-                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400">live</span>
-                  )}
-                </div>
-              );
-            })}
+          <div className="max-h-72 space-y-2 overflow-y-auto">
+            {tickerItems.map((item, i) => (
+              <HighRiskTickerRow key={tickerRowKey(item, resolveEventLane(item), i)} item={item} index={i} />
+            ))}
             {!tickerItems.length && (
               <Module2EmptyState
                 title="No active alerts"

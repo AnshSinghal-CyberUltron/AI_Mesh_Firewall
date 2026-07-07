@@ -1,6 +1,7 @@
 """API tests for Module 2 model exposure, threat telemetry, and incidents endpoints."""
 
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -311,6 +312,90 @@ class Module2PagesApiTests(TestCase):
         self.assertIn("summary", data["summary"])
         self.assertIn("timeline", data["timeline"])
         self.assertIn("results", data["registry"])
+        top_keys = data["summary"].get("top_risky_keys") or []
+        if top_keys:
+            row = top_keys[0]
+            self.assertIn("behavior_profile", row)
+            self.assertIn("traditional_score", row)
+            self.assertIn("final_score", row)
+            self.assertIn("llm_observation", row)
+            obs = row["llm_observation"]
+            self.assertIn("requests_meet_prompt_target", obs)
+            self.assertIn("triage_threshold", obs)
+
+    def test_ueba_risk_calculation_view_returns_settings_and_metrics(self):
+        from core.models import GatewayAPIKey
+        from module2.models import OrgUebaSettings
+
+        key, _ = GatewayAPIKey.generate_key(name="risk-key", owner=self.user, project_id="proj-risk")
+        key.organization = self.org
+        key.save(update_fields=["organization"])
+        self._event(
+            self.org,
+            ACTION_BLOCK,
+            key_prefix=key.prefix,
+            model="gpt-4o",
+            threat_type="prompt_injection",
+            prompt_snippet="ignore system instructions",
+        )
+        OrgUebaSettings.objects.get_or_create(organization=self.org)
+
+        resp = self.client.get("/api/module2/ueba/risk-calculation/?period=24h")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        body = resp.json()
+        self.assertIn("settings", body)
+        self.assertIn("formula_reference", body)
+        self.assertIn("api_key_metrics", body)
+        self.assertIn("weights", body["settings"])
+        self.assertIn("weight_guardrails", body["settings"])
+
+    @patch("module2.tasks.reassess_org_ueba_keys.delay")
+    def test_ueba_risk_calculation_patch_updates_settings_for_admin(self, reassess_delay):
+        from core.models import AuditLog
+        from module2.models import OrgUebaSettings
+
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        settings_obj, _ = OrgUebaSettings.objects.get_or_create(organization=self.org)
+        payload = {
+            "behavior_profile_prompt_target": 60,
+            "weights": {
+                "block_rate": 0.45,
+                "threat_severity": 0.30,
+                "velocity": 0.15,
+                "policy_escalation": 0.10,
+                "baseline_deviation": 0.25,
+            },
+        }
+        resp = self.client.patch("/api/module2/ueba/risk-calculation/", payload, format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        body = resp.json()
+        self.assertIn("changes", body)
+        settings_obj.refresh_from_db()
+        self.assertEqual(settings_obj.behavior_profile_prompt_target, 60)
+        self.assertAlmostEqual(settings_obj.weight_baseline_deviation, 0.25)
+        reassess_delay.assert_called_once_with(self.org.id, run_llm=False)
+        audit = AuditLog.objects.filter(
+            organization=self.org,
+            action="ueba_risk_settings_update",
+        ).first()
+        self.assertIsNotNone(audit)
+        self.assertIn("behavior_profile_prompt_target", audit.details)
+
+    def test_ueba_risk_calculation_patch_rejects_invalid_weights(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        payload = {
+            "weights": {
+                "block_rate": 0.05,
+                "threat_severity": 0.05,
+                "velocity": 0.05,
+                "policy_escalation": 0.05,
+                "baseline_deviation": 0.9,
+            },
+        }
+        resp = self.client.patch("/api/module2/ueba/risk-calculation/", payload, format="json")
+        self.assertEqual(resp.status_code, 400, resp.content)
 
     def test_incident_summary_counts_statuses_with_enforcement_join(self):
         """select_related(enforcement_event) must not break status KPI aggregation."""

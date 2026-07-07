@@ -195,6 +195,9 @@ echo "==> Gateway, workers, nginx (restart: unless-stopped)"
 
 # Optional demo app (before nginx reload so the /demo/ upstream is resolvable).
 # Tolerant: failure here never blocks the platform deploy.
+if [[ -z "${DEMO_GATEWAY_KEY:-}" ]]; then
+  echo "WARNING: DEMO_GATEWAY_KEY is empty — /demo/ will start but AI calls will fail until a gateway key is set."
+fi
 "${COMPOSE[@]}" up -d --no-build demo 2>/dev/null \
   || echo "    (demo service not started — /demo/ unavailable; platform unaffected)"
 
@@ -237,11 +240,30 @@ if curl -sfk -o /dev/null "https://127.0.0.1/gw-health" 2>/dev/null; then
   _check_v1_proxy https 443 -k
 fi
 
+# Optional /demo smoke (Basic Auth + demo health). Non-fatal: platform deploy still succeeds.
+_demo_user="${DEMO_AUTH_USER:-superuser}"
+_demo_pass="${DEMO_AUTH_PASSWORD:-}"
+if [[ -n "${_demo_pass}" ]]; then
+  if curl -sf -u "${_demo_user}:${_demo_pass}" -H "Host: ${FH}" "http://127.0.0.1/demo/api/health" >/dev/null 2>&1; then
+    echo "    /demo/api/health OK (HTTP)"
+  else
+    echo "WARNING: /demo/api/health failed on HTTP (demo may be down or misconfigured)"
+  fi
+  if curl -sfk -u "${_demo_user}:${_demo_pass}" -H "Host: ${FH}" "https://127.0.0.1/demo/api/health" >/dev/null 2>&1; then
+    echo "    /demo/api/health OK (HTTPS)"
+  else
+    echo "WARNING: /demo/api/health failed on HTTPS (check nginx-ssl /demo block or demo container)"
+  fi
+else
+  echo "WARNING: DEMO_AUTH_PASSWORD unset — skipping /demo smoke check"
+fi
+
 cat <<EOF
 
 Stack is up (ECR ${IMAGE_TAG}).
 
   UI       : https://${FH}  (nginx :443)
+  Demo     : https://${FH}/demo/  (HTTP Basic Auth + superuser login)
   Control  : https://${BH}/api/
   Gateway  : https://${GH}/v1/
 

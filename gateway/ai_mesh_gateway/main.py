@@ -1303,6 +1303,38 @@ def _extract_tool_definitions_text(tools) -> str:
     return "\n".join(parts)
 
 
+def _resolve_context_source(
+    body: dict | None,
+    x_agent_data: str | None,
+    raw_body: dict | None = None,
+) -> str | None:
+    """Classify injected agent context for telemetry sub-tagging (SOC / UEBA).
+
+    Chat-lane requests with ``mcp_context`` stay in the chat lane for M2 KPIs
+    but carry ``metadata.context_source=mcp`` so behavior scoring can trace the
+    anomaly vector without conflating SDK context injection with MCP tool calls.
+    """
+    candidates: list[dict] = []
+    for src in (body, raw_body):
+        if isinstance(src, dict):
+            candidates.append(src)
+    for src in candidates:
+        mc = src.get("mcp_context")
+        if isinstance(mc, dict) and mc:
+            return "mcp"
+        if isinstance(mc, str) and mc.strip():
+            return "mcp"
+    for src in candidates:
+        ad = src.get("agent_data")
+        if isinstance(ad, dict) and ad:
+            return "agent_data"
+        if isinstance(ad, str) and ad.strip():
+            return "agent_data"
+    if x_agent_data and str(x_agent_data).strip():
+        return "header"
+    return None
+
+
 def _extract_agent_data(body: dict, x_agent_data: str | None):
     """agent_data from body.agent_data, body.mcp_context, or X-Agent-Data header.
 
@@ -2523,6 +2555,7 @@ def _launch_chat_stream_response(
         org_slug=org_slug or "default",
         model=model,
         key_hash=key_hash,
+        key_prefix=getattr(auth_ctx, "prefix", "") if auth_ctx else "",
         rate_limit_tpm=rate_limit_tpm or 0,
         estimated_tokens=estimated_tokens,
         org_tpm_limit=org_tpm_limit or 0,
@@ -3528,6 +3561,7 @@ _REQUEST_ORG_ID: _ctxvars.ContextVar[int | None] = _ctxvars.ContextVar("_req_org
 _REQUEST_ORG_SLUG: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_org_slug", default="")
 _REQUEST_SOURCE_IP: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_src_ip", default="")
 _REQUEST_METHOD: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_method", default="POST")
+_REQUEST_CONTEXT_SOURCE: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_context_source", default="")
 
 # Event types that represent isolation / kill-switch / circuit-breaker actions.
 # These are security-critical and MUST always be recorded, even when an org
@@ -3600,6 +3634,11 @@ def _emit_telemetry(status_code: int = 200, **kwargs):
             kwargs["metadata"] = _md
     except Exception:
         pass
+    _ctx_src = (_REQUEST_CONTEXT_SOURCE.get() or "").strip()
+    if _ctx_src:
+        _md = dict(kwargs.get("metadata") or {})
+        _md.setdefault("context_source", _ctx_src)
+        kwargs["metadata"] = _md
     event_type = kwargs.get("event_type") or ""
     _is_isolation = event_type in _ALWAYS_AUDIT_EVENT_TYPES
     # Per-org audit-logging gate (audit_logging_enabled → telemetry_enabled).
@@ -4401,6 +4440,7 @@ async def proxy_chat(
         or f"zs-{_uuid.uuid4().hex[:12]}"
     )
     _REQUEST_ID.set(_rid)
+    _REQUEST_CONTEXT_SOURCE.set("")
     # D3: expose this same id on the x-request-id RESPONSE header (the OpenAI-compat
     # shim middleware reads request.state.gw_request_id after the handler returns) so
     # the SDK's response._request_id / error.request_id is populated and matches the body.
@@ -4850,6 +4890,16 @@ async def proxy_chat(
             raw_agent_data = raw_body.get("agent_data")
             if isinstance(raw_agent_data, (dict, str)):
                 body["agent_data"] = raw_agent_data
+            raw_mcp_context = raw_body.get("mcp_context")
+            if isinstance(raw_mcp_context, (dict, str)):
+                body["mcp_context"] = raw_mcp_context
+
+        _ctx_src = _resolve_context_source(
+            body if isinstance(body, dict) else None,
+            x_agent_data,
+            raw_body if isinstance(raw_body, dict) else None,
+        )
+        _REQUEST_CONTEXT_SOURCE.set(_ctx_src or "")
 
         # ── Identity: prefer auth_context from AuthMiddleware, fall back to legacy headers ──
         auth_ctx = getattr(request.state, "auth_context", None)
@@ -7377,6 +7427,36 @@ async def proxy_chat(
                         },
                     )
             METRICS["allowed"] += 1
+            # Emit canonical ingress telemetry before launching the stream so
+            # stream-start failures (upstream timeout/disconnect before first
+            # chunk) still count in Module 1/2 request visibility.
+            _tel_action = "redact" if redacted_prompt is not None else "allow"
+            _tel_threat = (
+                scan_verdict.threat_type
+                if scan_verdict and redacted_prompt is not None
+                else ""
+            )
+            _tel_risk = (
+                scan_verdict.confidence
+                if scan_verdict and redacted_prompt is not None
+                else 0.0
+            )
+            telemetry_start = time.perf_counter()
+            _emit_telemetry(
+                event_type="request",
+                model=body.get("model", ""),
+                user_id=user_id,
+                project_id=str(project_id or ""),
+                key_prefix=auth_ctx.prefix if auth_ctx else "",
+                latency_ms=(time.perf_counter() - start) * 1000,
+                risk_score=_tel_risk,
+                action=_tel_action,
+                threat_type=_tel_threat,
+                prompt_snippet=_prompt_snippet,
+                endpoint_id=endpoint_id,
+                metadata={"stage_metrics_ms": stage_metrics},
+            )
+            stage_metrics["telemetry_enqueue_ms"] = round((time.perf_counter() - telemetry_start) * 1000, 2)
             chat_outcome = "stream"
             return _launch_chat_stream_response(
                 request=request,
@@ -10134,6 +10214,7 @@ async def rag_query(request: Request):
                 threat_type=last.verdict.threat_type if last else "",
                 pipeline_stage=last.stage_name if last else "unknown",
                 latency_ms=elapsed_rag_ms,
+                prompt_snippet=(query_text or "")[:500],
                 metadata={
                     "collection": collection_name,
                     "vector_db_type": vector_db_type,
@@ -10141,6 +10222,7 @@ async def rag_query(request: Request):
                     "pipeline_request_id": result.pipeline_context.request_id if result.pipeline_context else "",
                     "blocked_at_stage": last.stage_name if last else "unknown",
                     "detail": last.verdict.detail if last else "",
+                    "prompt_submitted": (query_text or "")[:2000],
                     "module": "1.3",
                     "module_id": "1.3",
                 },
@@ -10177,6 +10259,7 @@ async def rag_query(request: Request):
             risk_score=0.0,
             pipeline_stage="rag",
             latency_ms=elapsed_rag_ms,
+            prompt_snippet=(query_text or "")[:500],
             metadata={
                 "collection": collection_name,
                 "vector_db_type": vector_db_type,
@@ -10186,6 +10269,7 @@ async def rag_query(request: Request):
                 "request_id": result.pipeline_context.request_id if result.pipeline_context else "",
                 "pipeline_request_id": result.pipeline_context.request_id if result.pipeline_context else "",
                 "stages_executed": len(result.pipeline_context.stages) if result.pipeline_context else 0,
+                "prompt_submitted": (query_text or "")[:2000],
                 "module": "1.3",
                 "module_id": "1.3",
             },

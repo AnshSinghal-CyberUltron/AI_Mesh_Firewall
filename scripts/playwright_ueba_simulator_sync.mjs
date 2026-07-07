@@ -4,8 +4,9 @@
  * 1. Log into the app.
  * 2. Run an adversarial Attack Simulator payload on Module 1.1.
  * 3. Open /ueba/api-keys and assert simulator banner, Simulator badge, request count > 0.
- * 4. Expand the simulator row and assert Recent prompts contains data.
- * 5. Activate and deactivate kill switch from fleet row, assert KPI and button state parity.
+ * 4. Expand the simulator row (quick view) and assert Recent prompts contains data.
+ * 5. Open Profile sidebar and assert risk score footer is visible.
+ * 6. Activate and deactivate kill switch from fleet row, assert KPI and button state parity.
  *
  * Run:
  *   NODE_PATH="$PWD/tests/e2e/node_modules" BASE_URL=http://127.0.0.1:8180 \
@@ -177,12 +178,12 @@ async function assertUebaSync(page) {
 
   const simulatorRow = page.locator("tr").filter({ has: simulatorBadge }).first();
   await simulatorRow.waitFor({ state: "visible", timeout: 15000 });
-  const requestsCell = simulatorRow.locator("td").nth(6);
+  const requestsCell = simulatorRow.locator("td").nth(7);
   const requestCount = Number((await requestsCell.innerText()).trim()) || 0;
   report.notes.push(`simulator row request_count=${requestCount}`);
   assert(requestCount > 0, `simulator row request count > 0 (parsed ${requestCount})`);
 
-  await simulatorRow.getByRole("button", { name: /^Expand$/i }).click();
+  await simulatorRow.getByRole("button", { name: /Expand last 5 prompts/i }).click();
   const behaviorResp = await page.waitForResponse(
     (r) => r.url().includes("/api/module2/ueba/api-keys/") && r.url().includes("/behavior/") && r.ok(),
     { timeout: 90000 },
@@ -190,6 +191,25 @@ async function assertUebaSync(page) {
   const behavior = await behaviorResp.json();
   report.notes.push(`behavior recent_requests=${(behavior.recent_requests || []).length}`);
   assert((behavior.recent_requests || []).length > 0, "behavior API returns recent_requests");
+  assert(behavior.behavior_profile != null, "behavior API returns behavior_profile");
+  assert(
+    typeof behavior.behavior_profile.prompt_samples_collected === "number",
+    "behavior_profile includes prompt_samples_collected",
+  );
+  assert(typeof behavior.traditional_score === "number", "behavior API returns traditional_score");
+
+  const refreshBundleResp = await page.waitForResponse(
+    (r) => r.url().includes("/api/module2/ueba/api-keys/bundle/") && r.request().method() === "GET" && r.ok(),
+    { timeout: 60000 },
+  ).catch(() => null);
+  if (refreshBundleResp) {
+    const refreshBundle = await refreshBundleResp.json();
+    const registryRows = refreshBundle.registry?.results || [];
+    const simRow = registryRows.find((r) => (r.prefix || "").length > 0);
+    if (simRow) {
+      assert(simRow.behavior_profile != null, "registry row includes behavior_profile");
+    }
+  }
 
   await page.locator(".animate-spin").first().waitFor({ state: "hidden", timeout: 60000 }).catch(() => {});
   const recentHeading = page.locator("tr").filter({ has: page.getByText(/^Recent prompts/i) }).getByText(/^Recent prompts/i).first();
@@ -200,6 +220,16 @@ async function assertUebaSync(page) {
   assert(/Ignore all previous|injection|DAN|prompt|total/i.test(recentText), "Recent prompts contains drill-down data");
   report.steps.push("m2-ueba-sync");
   await shot(page, "02-ueba-expanded");
+
+  await simulatorRow.getByRole("button", { name: /Open full profile for/i }).click();
+  await page.getByText(/^API key profile$/i).first().waitFor({ state: "visible", timeout: 30000 });
+  await page.getByText(/^Behavioral risk score$/i).first().waitFor({ state: "visible", timeout: 30000 });
+  assert(true, "Profile sidebar opens with behavioral risk score footer");
+  await page.getByRole("button", { name: "Close profile" }).click().catch(async () => {
+    await page.getByRole("button", { name: "Close" }).first().click();
+  });
+  report.steps.push("m2-ueba-profile-sidebar");
+  await shot(page, "03-ueba-profile-sidebar");
 
   await page.getByRole("button", { name: "Refresh UEBA data" }).click();
   await page.waitForResponse(
@@ -214,7 +244,7 @@ async function assertUebaKillSwitchCycle(page) {
   const simulatorBadge = page.locator("span", { hasText: /^Simulator$/ }).first();
   const simulatorRow = page.locator("tr").filter({ has: simulatorBadge }).first();
   await simulatorRow.waitFor({ state: "visible", timeout: 30000 });
-  const ksCell = simulatorRow.locator("td").nth(8);
+  const ksCell = simulatorRow.locator("td").nth(9);
   const beforeLabel = (await ksCell.innerText()).trim();
   report.notes.push(`kill-switch count before=${beforeLabel || "-"}`);
 

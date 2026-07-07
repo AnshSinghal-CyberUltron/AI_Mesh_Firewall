@@ -30,7 +30,7 @@ export const INCIDENTS_GUIDE = {
   resolveDefinition:
     "Resolve closes a case when investigation is complete and the threat is contained or deemed a false positive. Resolved incidents stay in history for audit but leave the active workload.",
   tableSummary:
-    "Each row is one incident case. You will see where it came from (chat, RAG, MCP, threat intel, etc.), how severe it is, who it is assigned to, and the model or API key involved. Use the case ID to open full timeline and evidence, or use Escalate / Resolve directly from the table.",
+    "Each row is one incident case. You will see where it came from (chat, RAG, MCP, threat intel, etc.), how severe it is, and the model or API key involved. Use the case ID to open full timeline and evidence, or use Escalate / Resolve directly from the table.",
   kpiHelp:
     "The KPI cards at the top count your entire org queue (they do not shrink when you filter the table). Click a card to filter the table to that slice — for example Open or Escalated. Click again to clear.",
   filterHelp: {

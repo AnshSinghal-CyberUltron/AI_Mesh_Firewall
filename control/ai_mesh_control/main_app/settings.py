@@ -446,6 +446,10 @@ MODULE2_UEBA_AUTO_KILL_ENABLED = os.environ.get("MODULE2_UEBA_AUTO_KILL_ENABLED"
     "on",
 )
 MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS = int(os.environ.get("MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS", "24"))
+MODULE2_UEBA_BEHAVIOR_PROMPT_TARGET = int(os.environ.get("MODULE2_UEBA_BEHAVIOR_PROMPT_TARGET", "50"))
+MODULE2_UEBA_LLM_MAX_PER_MIN = int(os.environ.get("MODULE2_UEBA_LLM_MAX_PER_MIN", "10"))
+MODULE2_UEBA_LLM_TIMEOUT_SEC = float(os.environ.get("MODULE2_UEBA_LLM_TIMEOUT_SEC", "30"))
+MODULE2_UEBA_ASSESSMENT_RETENTION_COUNT = int(os.environ.get("MODULE2_UEBA_ASSESSMENT_RETENTION_COUNT", "48"))
 
 CELERY_BEAT_SCHEDULE = {
     "process-telemetry-batch": {
@@ -463,7 +467,7 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=3, minute=0),
     },
     "update-risk-scores": {
-        "task": "core.tasks.update_risk_scores_from_telemetry",
+        "task": "module2.tasks.reassess_all_active_ueba_keys",
         "schedule": 300.0,
     },
     "generate-compliance-report": {

@@ -99,6 +99,26 @@ test("getMcpRisk requests mcp risk endpoint with period and uses GET cache", asy
   assert.deepEqual(second, first);
 });
 
+test("UEBA risk calculation endpoints are wired", async () => {
+  const calls = [];
+  const fetchWithAuth = async (url, opts = {}) => {
+    calls.push({ url, method: opts.method || "GET", body: opts.body || null });
+    if ((opts.method || "GET") === "PATCH") {
+      return { ok: true, json: async () => ({ settings: { behavior_profile_prompt_target: 60 } }) };
+    }
+    return {
+      ok: true,
+      json: async () => ({ settings: {}, formula_reference: {}, api_key_metrics: [] }),
+    };
+  };
+  const api = createModule2Api(fetchWithAuth);
+  await api.getUebaRiskCalculation("24h");
+  await api.updateUebaRiskCalculation({ behavior_profile_prompt_target: 60 });
+  assert.ok(calls[0].url.includes("/api/module2/ueba/risk-calculation/"));
+  assert.ok(calls[0].url.includes("period=24h"));
+  assert.equal(calls[1].method, "PATCH");
+});
+
 test("cache is invalidated when auth scope changes", async () => {
   clearModule2Cache();
   setModule2CacheScope("org-a:user-a");

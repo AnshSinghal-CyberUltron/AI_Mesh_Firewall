@@ -41,6 +41,7 @@ _HOIST_FIELDS = (
     "vector_namespace",
     "key_prefix",
     "api_key_prefix",
+    "context_source",
 )
 
 _last_background_repair_at = 0.0

@@ -90,7 +90,33 @@ class LoginRequest(BaseModel):
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "gateway_base_url": BASE_URL}
+    return {"ok": True, "gateway_base_url": BASE_URL, "demo_host": DEMO_HOST, "demo_port": DEMO_PORT}
+
+
+@app.get("/api/readiness", dependencies=GUARD)
+def readiness() -> dict:
+    try:
+        probe = _client().readiness_probe()
+        return {"gateway_base_url": BASE_URL, **probe}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        return {
+            "ok": False,
+            "gateway_base_url": BASE_URL,
+            "gateway_reachable": False,
+            "models_total": 0,
+            "models_healthy": 0,
+            "models": [],
+            "issues": [
+                {
+                    "issue": "demo_probe_failed",
+                    "summary": "Readiness probe failed.",
+                    "plain_text": "The demo could not complete its startup checks right now.",
+                    "next_step": f"Retry after gateway restart. ({str(exc)[:200]})",
+                }
+            ],
+        }
 
 
 @app.post("/api/login")

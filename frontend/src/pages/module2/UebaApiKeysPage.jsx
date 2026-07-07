@@ -23,6 +23,7 @@ import { DataTable } from "../../components/module2/DataTable";
 import { PeriodSelector } from "../../components/module2/PeriodSelector";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import { ApiKeyFleetTable } from "../../components/module2/ApiKeyFleetTable";
+import { ApiKeyProfileSidebar } from "../../components/module2/ApiKeyProfileSidebar";
 import { ApiKeyContainmentDetailPanel } from "../../components/module2/ApiKeyContainmentDetailPanel";
 import { RiskBandBadge } from "../../components/module2/RiskBandBadge";
 import { Module2EmptyState, Module2ErrorState, Module2PageErrorBoundary, Module2PageSkeleton } from "../../components/module2/PageStates";
@@ -50,7 +51,12 @@ function UebaApiKeysPageInner() {
   const [summary, setSummary] = useState(null);
   const [timeline, setTimeline] = useState(null);
   const [registry, setRegistry] = useState(null);
+  const [riskCalc, setRiskCalc] = useState(null);
+  const [riskCalcDraft, setRiskCalcDraft] = useState(null);
+  const [riskCalcSaveError, setRiskCalcSaveError] = useState(null);
+  const [riskCalcSaving, setRiskCalcSaving] = useState(false);
   const [selectedKey, setSelectedKey] = useState(null);
+  const [profileRow, setProfileRow] = useState(null);
   const [simulatorCtx, setSimulatorCtx] = useState(() => readStoredGatewayKeyContext());
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -66,6 +72,21 @@ function UebaApiKeysPageInner() {
     setSelectedKey(keyId);
   }, []);
 
+  const openProfile = useCallback((row) => {
+    if (!row?.key_id) return;
+    initialSelectDone.current = true;
+    setSelectedKey(row.key_id);
+    setProfileRow(row);
+  }, []);
+
+  const closeProfile = useCallback(() => {
+    setProfileRow(null);
+  }, []);
+
+  const findRegistryRow = useCallback((keyId) => {
+    return (registry?.results || []).find((row) => row.key_id === keyId) || null;
+  }, [registry]);
+
   const load = useCallback(async ({ silent = false } = {}) => {
     const seq = ++loadSeqRef.current;
     if (!silent) {
@@ -73,11 +94,17 @@ function UebaApiKeysPageInner() {
       setLoadError(null);
     }
     try {
-      const bundle = await api.getUebaBundle(period, { useCache: silent });
+      clearModule2Cache();
+      const [bundle, calc] = await Promise.all([
+        api.getUebaBundle(period, { useCache: false }),
+        api.getUebaRiskCalculation(period, { useCache: false }),
+      ]);
       if (seq !== loadSeqRef.current) return;
       setSummary(bundle.summary);
       setTimeline(bundle.timeline);
       setRegistry(bundle.registry);
+      setRiskCalc(calc);
+      setRiskCalcDraft(calc.settings || null);
       setRefreshError(null);
       setRefreshSignal((n) => n + 1);
     } catch (err) {
@@ -191,6 +218,31 @@ function UebaApiKeysPageInner() {
     await load({ silent: true });
   }, [load]);
 
+  const canEditRiskCalc = Boolean(user?.is_superuser || (user?.roles || []).includes("platform_admin"));
+  const updateRiskCalcDraft = useCallback((mutator) => {
+    setRiskCalcDraft((prev) => {
+      const next = structuredClone(prev || {});
+      mutator(next);
+      return next;
+    });
+  }, []);
+
+  const saveRiskCalculation = useCallback(async () => {
+    if (!canEditRiskCalc || !riskCalcDraft) return;
+    setRiskCalcSaving(true);
+    setRiskCalcSaveError(null);
+    try {
+      const data = await api.updateUebaRiskCalculation(riskCalcDraft);
+      setRiskCalc((prev) => ({ ...(prev || {}), settings: data.settings }));
+      setRiskCalcDraft(data.settings);
+      await load({ silent: true });
+    } catch (err) {
+      setRiskCalcSaveError(err.message || "Failed to save risk calculation settings.");
+    } finally {
+      setRiskCalcSaving(false);
+    }
+  }, [api, canEditRiskCalc, load, riskCalcDraft]);
+
   useEffect(() => {
     const onTelemetry = () => {
       if (!initialSelectDone.current && simulatorCtx.keyId) {
@@ -213,7 +265,15 @@ function UebaApiKeysPageInner() {
     onEnforcementEvent: refreshLive,
   });
 
-  useContainmentPolling(refreshLive, { enabled: !!summary && !wsConnected, intervalMs: CONTAINMENT_POLL_MS });
+  useContainmentPolling(refreshLive, { enabled: !!summary, intervalMs: CONTAINMENT_POLL_MS });
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshLive();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshLive]);
 
   if (loading && !summary) {
     return (
@@ -303,18 +363,44 @@ function UebaApiKeysPageInner() {
           Attack Simulator traffic is recorded under API key{" "}
           <span className="font-mono font-semibold">{simulatorCtx.prefix}</span>
           {simulatorCtx.name ? ` (${simulatorCtx.name})` : ""}.
-          {" "}Expand that row (marked <strong>Simulator</strong>) for live prompts and counts.
+          {" "}Expand the row or click <strong>Profile</strong> for the full behavior sidebar.
         </div>
       )}
 
       <KPIBar items={kpiItems} loading={kpiLoading} />
+
+      <ApiKeyProfileSidebar
+        open={!!profileRow}
+        rowSummary={profileRow ? (findRegistryRow(profileRow.key_id) || profileRow) : null}
+        period={period}
+        fetchWithAuth={fetchWithAuth}
+        onClose={closeProfile}
+        onActionComplete={handleActionComplete}
+        simulatorKeyPrefix={simulatorCtx.prefix}
+        riskCalculation={
+          riskCalc
+            ? { settings: riskCalc.settings, formula_reference: riskCalc.formula_reference }
+            : null
+        }
+        riskCalcDraft={riskCalcDraft}
+        riskCalcGuardrails={riskCalcDraft?.weight_guardrails}
+        canEditRiskCalc={canEditRiskCalc}
+        onRiskCalcChange={updateRiskCalcDraft}
+        onRiskCalcSave={saveRiskCalculation}
+        riskCalcSaving={riskCalcSaving}
+        riskCalcSaveError={riskCalcSaveError}
+        refreshSignal={refreshSignal}
+        liveConnected={wsConnected}
+      />
 
       <ApiKeyContainmentDetailPanel
         panel={containmentPanel}
         containment={containment}
         onClose={() => setContainmentPanel(null)}
         onSelectKey={(keyId) => {
-          selectKey(keyId);
+          const row = findRegistryRow(keyId);
+          if (row) openProfile(row);
+          else selectKey(keyId);
           setContainmentPanel(null);
         }}
       />
@@ -353,7 +439,7 @@ function UebaApiKeysPageInner() {
 
         <ChartCard
           title="Top Risky Keys"
-          titleHelpText="Click a key prefix to load its drilldown profile and response controls."
+          titleHelpText="Click a key prefix to open its profile sidebar with behavior timeline and safety rates."
         >
           <DataTable
             columns={[
@@ -363,7 +449,7 @@ function UebaApiKeysPageInner() {
                 render: (r) => (
                   <button
                     type="button"
-                    onClick={() => selectKey(r.key_id)}
+                    onClick={() => openProfile(findRegistryRow(r.key_id) || r)}
                     className={`font-mono text-xs ${selectedKey === r.key_id ? "text-teal-600" : "text-slate-700 dark:text-slate-300"}`}
                   >
                     {r.prefix}
@@ -388,20 +474,31 @@ function UebaApiKeysPageInner() {
         </ChartCard>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6" id="ueba-key-fleet-registry">
         <ApiKeyFleetTable
           rows={registry?.results || []}
           selectedKeyId={selectedKey}
+          activeProfileKeyId={profileRow?.key_id}
           onSelectKey={selectKey}
+          onOpenProfile={openProfile}
           fetchWithAuth={fetchWithAuth}
           period={period}
           refreshSignal={refreshSignal}
           simulatorKeyId={simulatorCtx.keyId}
           simulatorKeyPrefix={simulatorCtx.prefix}
           orgId={orgId}
+          riskCalculation={
+            riskCalc
+              ? { settings: riskCalc.settings, formula_reference: riskCalc.formula_reference }
+              : null
+          }
           onSimulatorKeyAdopted={(ctx) => {
             setSimulatorCtx(ctx);
-            if (ctx?.keyId) selectKey(ctx.keyId);
+            if (ctx?.keyId) {
+              const row = findRegistryRow(ctx.keyId);
+              if (row) openProfile(row);
+              else selectKey(ctx.keyId);
+            }
           }}
           onActionComplete={handleActionComplete}
           loading={loading}

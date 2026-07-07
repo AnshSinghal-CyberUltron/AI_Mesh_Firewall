@@ -5,8 +5,8 @@ Exercises the demo app's full HTTP surface, which in turn drives the stock OpenA
 SDK against the ZeroShield gateway. Proves chat / streaming / multi-turn / responses
 / MCP context / RAG / file analysis / routing visibility / guardrails end to end.
 
-Run (app must be up; defaults to the keyed instance on :8766):
-    DEMO_URL=http://127.0.0.1:8766 .venv/bin/python tests/validation_backend.py
+Run (app must be up; defaults to the standalone demo on :8765):
+    DEMO_URL=http://127.0.0.1:8765 .venv/bin/python tests/validation_backend.py
 
 Exit code 0 = all critical checks passed. Results are also printed as evidence.
 """
@@ -23,7 +23,7 @@ try:
 except ImportError:
     httpx = None  # type: ignore
 
-BASE = os.environ.get("DEMO_URL", "http://127.0.0.1:8766").rstrip("/")
+BASE = os.environ.get("DEMO_URL", "http://127.0.0.1:8765").rstrip("/")
 OK_MODELS = {"gemma-free", "haiku-cheap", "gpt4o-mini", "auto"}
 UPSTREAM_LEAK = ["anthropic/", "bedrock/", "Amazon Bedrock", "claude-3", "::", "routed_model_id", "cost_details"]
 

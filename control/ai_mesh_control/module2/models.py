@@ -214,6 +214,12 @@ class OrgUebaSettings(models.Model):
     scanner_graduation_min_days = models.FloatField(default=1.0)
     llm_triage_enabled = models.BooleanField(default=True)
     llm_triage_min_traditional_score = models.FloatField(default=0.45)
+    behavior_profile_prompt_target = models.PositiveIntegerField(default=50)
+    weight_block_rate = models.FloatField(default=0.50)
+    weight_threat_severity = models.FloatField(default=0.25)
+    weight_velocity = models.FloatField(default=0.15)
+    weight_policy_escalation = models.FloatField(default=0.10)
+    weight_baseline_deviation = models.FloatField(default=0.20)
     high_risk_threshold = models.FloatField(default=0.70)
     medium_risk_threshold = models.FloatField(default=0.35)
     updated_at = models.DateTimeField(auto_now=True)
@@ -249,6 +255,43 @@ class ApiKeyBehaviorBaseline(models.Model):
 
     def __str__(self):
         return f"Baseline key={self.gateway_api_key_id} samples={self.sample_count}"
+
+
+class ApiKeyBehaviorProfile(models.Model):
+    """LLM behavior profile built from the first N redacted prompt samples."""
+
+    BEHAVIOR_CLASS_CHOICES = [
+        ("prod_app", "Production App"),
+        ("scanner", "Security Scanner"),
+        ("dev_test", "Dev / Test"),
+        ("unknown", "Unknown"),
+    ]
+
+    gateway_api_key = models.OneToOneField(
+        "core.GatewayAPIKey",
+        on_delete=models.CASCADE,
+        related_name="ueba_behavior_profile",
+    )
+    prompt_samples = models.JSONField(default=list, blank=True)
+    sample_count = models.PositiveIntegerField(default=0)
+    profile_built_at = models.DateTimeField(null=True, blank=True)
+    expected_use_case = models.TextField(blank=True, default="")
+    behavior_class = models.CharField(
+        max_length=32,
+        choices=BEHAVIOR_CLASS_CHOICES,
+        default="unknown",
+    )
+    risk_prediction = models.TextField(blank=True, default="")
+    llm_confidence = models.FloatField(null=True, blank=True)
+    baseline_metrics = models.JSONField(default=dict, blank=True)
+    profile_version = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"BehaviorProfile key={self.gateway_api_key_id} samples={self.sample_count}"
 
 
 class ApiKeyRiskAssessment(models.Model):

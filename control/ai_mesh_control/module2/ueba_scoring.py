@@ -88,6 +88,27 @@ def redact_learning_contribution(redact_rate: float) -> float:
     return min(0.05, (redact_rate - 0.5) * 0.1)
 
 
+def _resolve_learning_weights(weights: dict[str, float] | None) -> dict[str, float]:
+    default = {
+        "block_rate": 0.50,
+        "threat_severity": 0.25,
+        "velocity": 0.15,
+        "policy_escalation": 0.10,
+    }
+    if not weights:
+        return default
+    merged = {
+        "block_rate": float(weights.get("block_rate", default["block_rate"])),
+        "threat_severity": float(weights.get("threat_severity", default["threat_severity"])),
+        "velocity": float(weights.get("velocity", default["velocity"])),
+        "policy_escalation": float(weights.get("policy_escalation", default["policy_escalation"])),
+    }
+    total = sum(max(0.0, v) for v in merged.values())
+    if total <= 0:
+        return default
+    return {k: max(0.0, v) / total for k, v in merged.items()}
+
+
 def graduation_thresholds(
     key,
     org_settings,
@@ -186,7 +207,12 @@ def _compute_model_novelty(current_models: set, typical_models: set, baseline: A
     return len(current_models - typical_models) / max(len(typical_models), 1), False
 
 
-def score_learning_mode(metric: dict, *, key_purpose: str | None = None) -> tuple[float, dict[str, Any]]:
+def score_learning_mode(
+    metric: dict,
+    *,
+    key_purpose: str | None = None,
+    weights: dict[str, float] | None = None,
+) -> tuple[float, dict[str, Any]]:
     total = metric.get("total", 0)
     block_rate = (metric.get("blocked", 0) / total) if total else 0.0
     redact_rate = (metric.get("redacted", 0) / total) if total else 0.0
@@ -195,11 +221,12 @@ def score_learning_mode(metric: dict, *, key_purpose: str | None = None) -> tupl
     policy_esc = policy_escalation_factor(metric)
     redact_contrib = redact_learning_contribution(redact_rate)
 
+    resolved_weights = _resolve_learning_weights(weights)
     score = clamp(
-        0.50 * block_rate
-        + 0.25 * threat_idx
-        + 0.15 * velocity
-        + 0.10 * policy_esc
+        resolved_weights["block_rate"] * block_rate
+        + resolved_weights["threat_severity"] * threat_idx
+        + resolved_weights["velocity"] * velocity
+        + resolved_weights["policy_escalation"] * policy_esc
         + redact_contrib
     )
 
@@ -228,6 +255,12 @@ def score_learning_mode(metric: dict, *, key_purpose: str | None = None) -> tupl
         "velocity_factor": round(velocity, 4),
         "policy_escalation": round(policy_esc, 4),
         "redact_contribution": round(redact_contrib, 4),
+        "weights": {
+            "block_rate": round(resolved_weights["block_rate"], 4),
+            "threat_severity": round(resolved_weights["threat_severity"], 4),
+            "velocity": round(resolved_weights["velocity"], 4),
+            "policy_escalation": round(resolved_weights["policy_escalation"], 4),
+        },
         "velocity_spike": round(velocity_spike, 2),
         "anomaly_flags": anomalies,
         "band_cap": band_cap,
@@ -316,13 +349,62 @@ def apply_llm_blend(
     return traditional_score, llm_score, final, round(weighted_delta, 4)
 
 
+def baseline_deviation_factor(metric: dict, behavior_profile) -> tuple[float, dict[str, Any]]:
+    if behavior_profile is None:
+        return 0.0, {}
+    baseline = dict(getattr(behavior_profile, "baseline_metrics", {}) or {})
+    if not baseline:
+        return 0.0, {}
+
+    total = int(metric.get("total", 0) or 0)
+    current_block = (metric.get("blocked", 0) / total) if total else 0.0
+    current_redact = (metric.get("redacted", 0) / total) if total else 0.0
+    baseline_block = float(baseline.get("block_rate", 0.0) or 0.0)
+    baseline_redact = float(baseline.get("redact_rate", 0.0) or 0.0)
+
+    block_delta = abs(current_block - baseline_block) / max(baseline_block, 0.05)
+    redact_delta = abs(current_redact - baseline_redact) / max(baseline_redact, 0.05)
+    block_deviation = clamp(block_delta)
+    redact_deviation = clamp(redact_delta)
+
+    baseline_models = {str(m).strip() for m in baseline.get("models", []) if str(m).strip()}
+    current_models = {str(m).strip() for m in (metric.get("models") or []) if str(m).strip()}
+    model_novelty = (
+        clamp(len(current_models - baseline_models) / max(len(baseline_models), 1))
+        if baseline_models else 0.0
+    )
+
+    baseline_top = str((baseline.get("top_threats") or [["none", 0]])[0][0] or "none")
+    current_top = (
+        sorted((metric.get("threat_types") or {}).items(), key=lambda x: -x[1])[0][0]
+        if metric.get("threat_types") else "none"
+    )
+    threat_shift = 0.5 if baseline_top != current_top and current_top != "none" else 0.0
+
+    factor = clamp(
+        0.50 * block_deviation
+        + 0.25 * model_novelty
+        + 0.15 * redact_deviation
+        + 0.10 * threat_shift
+    )
+    breakdown = {
+        "baseline_block_rate": round(baseline_block, 4),
+        "current_block_rate": round(current_block, 4),
+        "baseline_redact_rate": round(baseline_redact, 4),
+        "current_redact_rate": round(current_redact, 4),
+        "model_novelty": round(model_novelty, 4),
+        "threat_shift": round(threat_shift, 4),
+        "factor": round(factor, 4),
+    }
+    return round(factor, 4), breakdown
+
+
 def compute_traditional_score(
-    ueba_mode: str,
     metric: dict,
-    baseline: Any | None = None,
     *,
     key_purpose: str | None = None,
+    weights: dict[str, float] | None = None,
+    **_legacy_kwargs,
 ) -> tuple[float, dict[str, Any]]:
-    if ueba_mode == "active" and baseline is not None:
-        return score_active_mode(metric, baseline)
-    return score_learning_mode(metric, key_purpose=key_purpose)
+    """Always use learning-mode traditional scoring (active/graduation deprecated)."""
+    return score_learning_mode(metric, key_purpose=key_purpose, weights=weights)

@@ -32,6 +32,19 @@ cp .env.example .env   # set ZEROSHIELD_API_KEY
 python -m app.server
 ```
 
+## Production readiness checklist
+
+Before client demos or production rollout, verify:
+
+1. `GET /api/readiness` returns `ok: true` and `models_healthy >= 1`.
+2. No provider connectivity errors in gateway logs (TLS/certificate, timeout, unreachable host).
+3. RAG backend (Chroma/custom provider) is reachable and ingestion succeeds.
+4. Demo server and gateway clocks/network are stable (timeouts often indicate infrastructure drift).
+
+If `/api/readiness` is degraded, fix provider connectivity first; the demo UI is resilient and will show friendly error hints, but upstream model calls will still fail until infrastructure is healthy.
+
+**Production image:** ECR `ai-mesh-demo` is built from this directory (`demo/zeroshield-openai-demo`) via `infra/scripts/build-push-images.sh` and served at `/demo/` behind nginx Basic Auth.
+
 ## Architecture
 
 ```

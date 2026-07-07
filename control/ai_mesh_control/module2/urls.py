@@ -16,6 +16,7 @@ from module2.views import (
     UebaApiKeyRegistryView,
     UebaApiKeySummaryView,
     UebaApiKeyTimelineView,
+    UebaRiskCalculationView,
     UnifiedDashboardView,
 )
 
@@ -29,6 +30,7 @@ urlpatterns = [
     path("ueba/api-keys/timeline/", UebaApiKeyTimelineView.as_view(), name="module2-ueba-timeline"),
     path("ueba/api-keys/registry/", UebaApiKeyRegistryView.as_view(), name="module2-ueba-registry"),
     path("ueba/api-keys/<uuid:key_id>/behavior/", UebaApiKeyBehaviorView.as_view(), name="module2-ueba-behavior"),
+    path("ueba/risk-calculation/", UebaRiskCalculationView.as_view(), name="module2-ueba-risk-calculation"),
     path("models/exposure/", ModelExposureView.as_view(), name="module2-models-exposure"),
     path("threat-intel/telemetry/", ThreatIntelTelemetryView.as_view(), name="module2-threat-intel-telemetry"),
     path("threat-intel/sync/", ThreatIntelSyncView.as_view(), name="module2-threat-intel-sync"),

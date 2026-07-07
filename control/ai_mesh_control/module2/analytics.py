@@ -57,9 +57,18 @@ def prefixes_match(stored_prefix: str, meta_prefix: str) -> bool:
 def prompt_snippet_from_meta(meta: dict | None, max_len: int = 200) -> str:
     """Extract a display-safe prompt preview from enforcement metadata."""
     data = meta or {}
-    direct = str(data.get("prompt_snippet") or "").strip()
-    if direct:
-        return direct[:max_len]
+    for field in (
+        "prompt_snippet",
+        "prompt_submitted",
+        "original_prompt",
+        "user_prompt",
+        "input_preview",
+        "input_text",
+        "forwarded_prompt",
+    ):
+        direct = str(data.get(field) or "").strip()
+        if direct:
+            return direct[:max_len]
 
     lineage = data.get("prompt_lineage") or []
     if isinstance(lineage, list):
@@ -72,12 +81,20 @@ def prompt_snippet_from_meta(meta: dict | None, max_len: int = 200) -> str:
 
     extra = data.get("extra")
     if isinstance(extra, dict):
-        for field in ("prompt_snippet", "prompt", "user_message", "query"):
+        for field in (
+            "prompt_snippet",
+            "prompt_submitted",
+            "prompt",
+            "user_message",
+            "query",
+            "original_prompt",
+            "input_preview",
+        ):
             value = str(extra.get(field) or "").strip()
             if value:
                 return value[:max_len]
 
-    fallback = str(data.get("intent") or data.get("detail") or "").strip()
+    fallback = str(data.get("intent") or data.get("detail") or _meta_detail(data) or "").strip()
     return fallback[:max_len]
 
 
@@ -104,6 +121,7 @@ def build_recent_request_json(ev: dict, max_snippet: int = 500) -> dict:
         "metadata": {
             "key_prefix": key_prefix_from_meta(meta),
             "source": meta.get("source"),
+            "context_source": meta.get("context_source"),
             "pipeline_stage": meta.get("pipeline_stage"),
             "security_risk_score": meta.get("security_risk_score"),
         },
@@ -133,6 +151,11 @@ def _is_mcp_event_type(event_type: str) -> bool:
 
 
 def event_source(meta: dict) -> str:
+    """Primary M2 dashboard lane (chat/rag/vector/mcp/threat_intel).
+
+    SDK ``mcp_context`` injection stays **chat** lane; use ``metadata.context_source=mcp``
+    to trace MCP-injected context separately from ``mcp_tool_call`` tool traffic.
+    """
     event_type = str(meta.get("event_type") or "").lower()
     detail = _meta_detail(meta).lower()
     src = str(meta.get("source") or "").lower()
@@ -166,12 +189,13 @@ def classify_telemetry_bucket(meta: dict, action: str) -> str:
 
     if event_source(meta) == "threat_intel":
         return "threat_intel_matches"
+    # Key-attributed traffic feeds M2.2 UEBA and the M2.1 "API Key Activity" KPI.
+    if key_prefix_from_meta(meta):
+        return "behavior_scoring"
     if any(k in combined for k in INJECTION_KEYWORDS) or "injection" in _meta_detail(meta).lower():
         return "injection_attempts"
     if action == ACTION_REDACT and any(k in combined for k in PII_KEYWORDS):
         return "pii_leaks"
-    if key_prefix_from_meta(meta):
-        return "behavior_scoring"
     return "other"
 
 

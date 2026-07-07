@@ -53,10 +53,43 @@ class CollapsedRequest:
 
 def _merge_metadata(existing: dict, incoming: dict, incoming_action: str) -> dict:
     if incoming_action == ACTION_BLOCK:
-        return {**existing, **incoming}
-    if incoming_action == ACTION_REDACT:
-        return {**existing, **incoming}
-    return {**incoming, **existing}
+        merged = {**existing, **incoming}
+    elif incoming_action == ACTION_REDACT:
+        merged = {**existing, **incoming}
+    else:
+        merged = {**incoming, **existing}
+    # Preserve prompt preview fields when a later event (e.g. input_blocked,
+    # rag_query block, stream_complete) merges over an earlier row that carried
+    # the user text but does not repeat prompt_snippet / prompt_lineage.
+    _prompt_keys = (
+        "prompt_snippet",
+        "prompt_submitted",
+        "original_prompt",
+        "user_prompt",
+        "input_preview",
+        "input_text",
+        "forwarded_prompt",
+        "prompt_lineage",
+        "context_source",
+    )
+    for key in _prompt_keys:
+        if str(merged.get(key) or "").strip():
+            continue
+        prev = existing.get(key)
+        if prev:
+            merged[key] = prev
+    extra_in = incoming.get("extra")
+    extra_ex = existing.get("extra")
+    if isinstance(extra_in, dict) and isinstance(extra_ex, dict):
+        extra_merged = {**extra_ex, **extra_in}
+        for key in ("prompt_snippet", "prompt_submitted", "prompt", "user_message", "query"):
+            if str(extra_merged.get(key) or "").strip():
+                continue
+            prev = extra_ex.get(key)
+            if prev:
+                extra_merged[key] = prev
+        merged["extra"] = extra_merged
+    return merged
 
 
 def collapse_events_by_request(rows: Iterable[dict]) -> list[CollapsedRequest]:

@@ -6,7 +6,10 @@ import {
   createKillSwitchApi,
   filterKillSwitchesForPrefix,
 } from "../../api/killSwitch";
+import { LlMObservationBadge, LlMObservationPanel } from "./LlMObservationStatus";
 import { RiskBandBadge } from "./RiskBandBadge";
+import { RiskScoreCalculationGuide } from "./RiskScoreCalculationGuide";
+import { ApiKeyActivityTimeline } from "./ApiKeyActivityTimeline";
 
 const BAND_STYLES = {
   low: {
@@ -33,7 +36,8 @@ const ANOMALY_LABELS = {
 };
 
 function RiskGauge({ score, band }) {
-  const pct = Math.min(Math.max(Number(score) || 0, 0), 1) * 100;
+  const displayScore = score ?? 0;
+  const pct = Math.min(Math.max(Number(displayScore) || 0, 0), 1) * 100;
   const styles = BAND_STYLES[band] || BAND_STYLES.low;
   const radius = 36;
   const circumference = 2 * Math.PI * radius;
@@ -83,7 +87,16 @@ function formatRequestTime(timestamp) {
 }
 
 function promptPreview(req) {
-  return (req?.prompt_snippet || req?.intent || req?.detail || "").trim();
+  const direct = (req?.prompt_snippet || req?.intent || req?.detail || "").trim();
+  if (direct) return direct;
+  const lineage = req?.prompt_lineage;
+  if (Array.isArray(lineage)) {
+    for (const entry of lineage) {
+      const text = (entry?.prompt || entry?.text || "").trim();
+      if (text) return text;
+    }
+  }
+  return "";
 }
 
 function compactRequestJson(req) {
@@ -146,7 +159,7 @@ function RecentRequestsSection({ requests, requestCount }) {
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase text-slate-500">
           Recent prompts
-          {requestCount ? ` · ${requestCount} total` : ""}
+          {requestCount ? ` · last ${Math.min(requests?.length || 0, 10)} shown` : ""}
         </p>
       </div>
 
@@ -251,7 +264,94 @@ function RecentRequestsSection({ requests, requestCount }) {
   );
 }
 
-export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, showActions = true, simulatorKeyPrefix = "" }) {
+function BehaviorProfileSection({ profile, llmReasoning, llmVerdict, traditionalScore, finalScore }) {
+  if (!profile) return null;
+  const collected = profile.prompt_samples_collected ?? 0;
+  const target = profile.prompt_samples_target ?? 50;
+  const pct = target ? Math.min(100, (collected / target) * 100) : 0;
+  const ready = profile.status === "ready";
+  const scoreDiff =
+    traditionalScore != null
+    && finalScore != null
+    && Math.abs(Number(traditionalScore) - Number(finalScore)) >= 0.01;
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-600">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase text-slate-500">Behavior intelligence</p>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+          ready
+            ? "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300"
+            : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+        }`}>
+          {ready ? "Profile ready" : "Collecting prompts"}
+        </span>
+      </div>
+      {!ready && (
+        <div className="mb-3">
+          <div className="mb-1 flex justify-between text-[11px] text-slate-500">
+            <span>First {target} prompts for LLM baseline</span>
+            <span>{collected}/{target}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+            <div
+              className="h-full rounded-full bg-teal-500 transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+      {ready && (
+        <div className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
+          {profile.profile_locked && profile.prompt_samples_build_count != null && (
+            <p className="text-[11px] text-slate-500">
+              Profile locked from {profile.prompt_samples_build_count} prompts
+              {profile.prompt_samples_target !== profile.prompt_samples_build_count
+                ? ` (org target now ${profile.prompt_samples_target})`
+                : ""}
+            </p>
+          )}
+          {profile.expected_use_case && (
+            <p><span className="font-semibold text-slate-500">Expected use:</span> {profile.expected_use_case}</p>
+          )}
+          {profile.behavior_class && profile.behavior_class !== "unknown" && (
+            <p><span className="font-semibold text-slate-500">Class:</span> {profile.behavior_class.replace("_", " ")}</p>
+          )}
+          {profile.risk_prediction && (
+            <p><span className="font-semibold text-slate-500">Prediction:</span> {profile.risk_prediction}</p>
+          )}
+        </div>
+      )}
+      {scoreDiff && (
+        <p className="mt-2 text-[11px] text-slate-500">
+          Traditional {Number(traditionalScore).toFixed(2)} → LLM-adjusted {Number(finalScore).toFixed(2)}
+        </p>
+      )}
+      {llmReasoning && llmVerdict && llmVerdict !== "skipped" && (
+        <div className="mt-3 rounded-md border border-slate-100 bg-white/60 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+            Analyst · {llmVerdict}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{llmReasoning}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ApiKeyRiskProfile({
+  behavior,
+  fetchWithAuth,
+  onActionComplete,
+  showActions = true,
+  simulatorKeyPrefix = "",
+  riskCalculation = null,
+  variant = "inline",
+  showScoreGuide,
+}) {
+  const isSidebar = variant === "sidebar";
+  const isPreview = variant === "preview";
+  const scoreGuideVisible = showScoreGuide ?? (!isSidebar && !isPreview);
   const api = useMemo(() => createKillSwitchApi(fetchWithAuth), [fetchWithAuth]);
   const [killSwitches, setKillSwitches] = useState([]);
   const [ksLoading, setKsLoading] = useState(true);
@@ -290,13 +390,13 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
   if (!behavior) {
     return (
       <p className="py-8 text-center text-sm text-slate-400">
-        Select a key from Top Risky Keys to inspect behavior and response controls.
+        Click <strong>Profile</strong> on any key in the fleet registry to open the behavior timeline and score breakdown.
       </p>
     );
   }
 
   const band = behavior.risk_band || "low";
-  const styles = BAND_STYLES[band] || BAND_STYLES.low;
+  const displayScore = behavior.final_score ?? behavior.risk_score ?? 0;
 
   const handleApplyKillSwitch = async () => {
     const confirmed = window.confirm(
@@ -365,36 +465,55 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
           Attack Simulator records traffic under key{" "}
           <span className="font-mono font-semibold">{simulatorKeyPrefix}</span>, not{" "}
           <span className="font-mono font-semibold">{behavior.prefix}</span>.
-          {" "}Expand the row marked <strong>Simulator</strong> to see new prompts and request counts.
+          {" "}Open the <strong>Simulator</strong> key profile to see new prompts and request counts.
         </div>
       )}
-      <div className="flex flex-wrap items-start gap-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-600 dark:bg-slate-800/40">
-        <RiskGauge score={behavior.risk_score} band={band} />
+      <div className={`flex flex-wrap items-start gap-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-600 dark:bg-slate-800/40 ${isSidebar ? "py-3" : ""}`}>
+        <RiskGauge score={displayScore} band={band} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <RiskBandBadge type="behavioral" band={band} score={behavior.risk_score} />
+            <RiskBandBadge type="behavioral" band={band} score={displayScore} />
+            <LlMObservationBadge observation={behavior.llm_observation} compact />
             {!behavior.is_active && (
               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                 Key disabled
               </span>
             )}
           </div>
-          <p className="mt-1 font-mono text-sm text-slate-800 dark:text-slate-100">{behavior.prefix}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            {behavior.name || "—"} · {behavior.project_id || "no project"}
-            {behavior.owner_email ? ` · ${behavior.owner_email}` : ""}
-          </p>
-          <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">
-            Score {behavior.risk_score} · Velocity {behavior.velocity_spike}x · {behavior.request_count} requests
+          {!isSidebar && (
+            <>
+              <p className="mt-1 font-mono text-sm text-slate-800 dark:text-slate-100">{behavior.prefix}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {behavior.name || "—"} · {behavior.project_id || "no project"}
+                {behavior.owner_email ? ` · ${behavior.owner_email}` : ""}
+              </p>
+            </>
+          )}
+          <p className={`text-xs text-slate-600 dark:text-slate-300 ${isSidebar ? "mt-1" : "mt-2"}`}>
+            Score {Number(displayScore).toFixed(2)} · Velocity {behavior.velocity_spike}x · {behavior.request_count} requests
           </p>
         </div>
       </div>
 
       <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase text-slate-500">Safety rates</p>
         <MetricBar label="Blocked" value={behavior.block_rate_pct} colorClass="bg-red-500" />
         <MetricBar label="Redacted" value={behavior.redact_rate_pct} colorClass="bg-amber-500" />
         <MetricBar label="Allowed" value={allowRate} colorClass="bg-emerald-500" />
       </div>
+
+      <BehaviorProfileSection
+        profile={behavior.behavior_profile}
+        llmReasoning={behavior.llm_reasoning}
+        llmVerdict={behavior.llm_verdict}
+        traditionalScore={behavior.traditional_score}
+        finalScore={behavior.final_score ?? behavior.risk_score}
+      />
+
+      <LlMObservationPanel
+        observation={behavior.llm_observation}
+        traditionalScore={behavior.traditional_score}
+      />
 
       {(behavior.anomaly_flags || []).length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -408,6 +527,18 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
             </span>
           ))}
         </div>
+      )}
+
+      {isSidebar ? (
+        <ApiKeyActivityTimeline
+          requests={behavior.recent_requests}
+          requestCount={behavior.request_count}
+        />
+      ) : (
+        <RecentRequestsSection
+          requests={behavior.recent_requests}
+          requestCount={behavior.request_count}
+        />
       )}
 
       <div className="grid grid-cols-2 gap-3 text-xs">
@@ -425,11 +556,14 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
         </div>
       </div>
 
-      <RecentRequestsSection
-        requests={behavior.recent_requests}
-        requestCount={behavior.request_count}
-      />
+      {scoreGuideVisible && (
+        <RiskScoreCalculationGuide
+          behavior={behavior}
+          riskCalculation={behavior.risk_calculation || riskCalculation}
+        />
+      )}
 
+      {!isPreview && (
       <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-600">
         <p className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase text-slate-500">
           <ShieldAlert className="h-3.5 w-3.5" />
@@ -475,6 +609,7 @@ export function ApiKeyRiskProfile({ behavior, fetchWithAuth, onActionComplete, s
           </ul>
         )}
       </div>
+      )}
 
       {actionError && (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">

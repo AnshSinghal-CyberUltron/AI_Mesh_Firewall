@@ -70,6 +70,8 @@ export function createModule2Api(fetchWithAuth) {
     getUebaTimeline: (period = "24h", opts = {}) => get("/ueba/api-keys/timeline/", { period }, opts),
     getUebaRegistry: (period = "24h", opts = {}) => get("/ueba/api-keys/registry/", { period }, opts),
     getUebaBehavior: (keyId, period = "24h", opts = {}) => get(`/ueba/api-keys/${keyId}/behavior/`, { period }, opts),
+    getUebaRiskCalculation: (period = "24h", opts = {}) => get("/ueba/risk-calculation/", { period }, opts),
+    updateUebaRiskCalculation: (data) => mutate("/ueba/risk-calculation/", "PATCH", data),
     getModelExposure: (period = "24h", opts = {}) => get("/models/exposure/", { period }, opts),
     getRagHealth: (period = "24h", opts = {}) => get("/rag/health/", { period }, opts),
     getMcpRisk: (period = "24h", opts = {}) => get("/mcp/risk/", { period }, opts),

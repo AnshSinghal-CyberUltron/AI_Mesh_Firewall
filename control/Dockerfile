@@ -2,13 +2,14 @@
 # syntax=docker/dockerfile:1
 
 # uv installs wheels into .venv; CPython in the runtime stage executes them.
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_HTTP_TIMEOUT=300
 
 WORKDIR /app/control
+RUN pip install --no-cache-dir uv
 COPY control/pyproject.toml control/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
