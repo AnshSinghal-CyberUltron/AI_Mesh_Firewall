@@ -61,6 +61,13 @@ class ZeroShieldClient:
         msg = str(message or "").lower()
         body_text = json.dumps(body or {}, ensure_ascii=True).lower()
         merged = f"{msg}\n{body_text}"
+        if "compliance_routing_unsatisfiable" in merged or "no model satisfies" in merged:
+            return {
+                "issue": "routing_unsatisfiable",
+                "summary": "No connected model satisfies the requested routing policy.",
+                "plain_text": "No model currently matches this sensitivity/compliance requirement.",
+                "next_step": "Use standard sensitivity for this prompt, or connect a model with higher compliance coverage.",
+            }
         if "certificate_verify_failed" in merged or "certificate verify failed" in merged:
             return {
                 "issue": "provider_tls",
@@ -104,6 +111,30 @@ class ZeroShieldClient:
                 pass
         return {}
 
+    @staticmethod
+    def _fallback_model_for(requested_model: str) -> str:
+        requested = str(requested_model or "").strip().lower()
+        candidate = str(DEFAULT_MODEL or "").strip()
+        if requested not in ("", "auto"):
+            return ""
+        if not candidate or candidate.lower() in ("auto", requested):
+            return ""
+        return candidate
+
+    @staticmethod
+    def _is_retriable_upstream(error_view: dict) -> bool:
+        status = int(error_view.get("status") or 0)
+        support = error_view.get("support") if isinstance(error_view.get("support"), dict) else {}
+        issue = str(support.get("issue") or "").strip().lower()
+        message = str(error_view.get("message") or "").lower()
+        if issue == "routing_unsatisfiable" or "compliance_routing_unsatisfiable" in message:
+            return False
+        if status >= 500:
+            return True
+        if issue in {"upstream_timeout", "upstream_error", "provider_tls"}:
+            return True
+        return "timed out" in message or "timeout" in message or "upstream" in message
+
     def _error_view(self, exc: Exception, *, requested_model: str = "auto", default_status: int = 502) -> dict:
         body = self._error_body(exc)
         status = int(getattr(exc, "status_code", default_status) or default_status)
@@ -134,6 +165,71 @@ class ZeroShieldClient:
             support=support,
             raw=body or {"message": message},
         )
+
+    def _try_fallback_response(
+        self,
+        *,
+        requested_model: str,
+        input_text: str,
+        extra: dict | None,
+        headers: dict | None,
+    ) -> dict | None:
+        fallback_model = self._fallback_model_for(requested_model)
+        if not fallback_model:
+            return None
+        try:
+            resp = self.client.responses.create(
+                model=fallback_model,
+                input=input_text,
+                extra_body=extra or None,
+                extra_headers=headers or None,
+            )
+            meta = self._meta(resp)
+            view = self._view(
+                meta,
+                model=resp.model or fallback_model,
+                content=resp.output_text or "",
+                fallback="default_model_retry",
+            )
+            view["requested_model"] = requested_model
+            view["fallback_model"] = fallback_model
+            return view
+        except Exception:
+            return None
+
+    def _try_chat_recovery(
+        self,
+        *,
+        requested_model: str,
+        input_text: str,
+        extra: dict | None,
+        headers: dict | None,
+        recovery_tag: str,
+    ) -> dict | None:
+        messages = [{"role": "user", "content": input_text}]
+        create_kw: dict[str, Any] = dict(
+            model=requested_model,
+            messages=messages,
+            max_tokens=1024,
+        )
+        if extra:
+            create_kw["extra_body"] = extra
+        if headers:
+            create_kw["extra_headers"] = headers
+        try:
+            resp = self.client.chat.completions.create(**create_kw)
+            choice = resp.choices[0]
+            meta = self._meta(resp)
+            return self._view(
+                meta,
+                model=resp.model or requested_model,
+                content=choice.message.content or "",
+                finish_reason=choice.finish_reason,
+                usage=resp.usage.model_dump() if resp.usage else {},
+                fallback=recovery_tag,
+            )
+        except Exception:
+            return None
 
     @staticmethod
     def _messages_to_input(messages: list[dict]) -> str:
@@ -310,10 +406,40 @@ class ZeroShieldClient:
                         fallback="responses_api",
                     )
                 except APIStatusError as fb_exc:
-                    return self._error_view(fb_exc, requested_model=model)
-            return self._error_view(exc, requested_model=model)
+                    err = self._error_view(fb_exc, requested_model=model)
+                    if self._is_retriable_upstream(err):
+                        rescue = self._try_fallback_response(
+                            requested_model=model,
+                            input_text=self._messages_to_input(messages),
+                            extra=extra,
+                            headers=headers,
+                        )
+                        if rescue:
+                            return rescue
+                    return err
+            err = self._error_view(exc, requested_model=model)
+            if self._is_retriable_upstream(err):
+                rescue = self._try_fallback_response(
+                    requested_model=model,
+                    input_text=self._messages_to_input(messages),
+                    extra=extra,
+                    headers=headers,
+                )
+                if rescue:
+                    return rescue
+            return err
         except Exception as exc:
-            return self._error_view(exc, requested_model=model)
+            err = self._error_view(exc, requested_model=model)
+            if self._is_retriable_upstream(err):
+                rescue = self._try_fallback_response(
+                    requested_model=model,
+                    input_text=self._messages_to_input(messages),
+                    extra=extra,
+                    headers=headers,
+                )
+                if rescue:
+                    return rescue
+            return err
 
     @staticmethod
     def _stream_fallback_text(zeroshield: dict | None) -> str:
@@ -431,9 +557,69 @@ class ZeroShieldClient:
             meta = self._meta(resp)
             return self._view(meta, model=resp.model or model, content=resp.output_text or "")
         except APIStatusError as exc:
-            return self._error_view(exc, requested_model=model)
+            err = self._error_view(exc, requested_model=model)
+            if self._is_retriable_upstream(err):
+                rescue = self._try_fallback_response(
+                    requested_model=model,
+                    input_text=input_text,
+                    extra=extra,
+                    headers=headers,
+                )
+                if rescue:
+                    return rescue
+                rescue = self._try_chat_recovery(
+                    requested_model=model,
+                    input_text=input_text,
+                    extra=extra,
+                    headers=headers,
+                    recovery_tag="chat_recovery",
+                )
+                if rescue:
+                    return rescue
+                forced_model = self._fallback_model_for(model)
+                if forced_model:
+                    rescue = self._try_chat_recovery(
+                        requested_model=forced_model,
+                        input_text=input_text,
+                        extra=extra,
+                        headers=headers,
+                        recovery_tag="chat_default_model_recovery",
+                    )
+                    if rescue:
+                        return rescue
+            return err
         except Exception as exc:
-            return self._error_view(exc, requested_model=model)
+            err = self._error_view(exc, requested_model=model)
+            if self._is_retriable_upstream(err):
+                rescue = self._try_fallback_response(
+                    requested_model=model,
+                    input_text=input_text,
+                    extra=extra,
+                    headers=headers,
+                )
+                if rescue:
+                    return rescue
+                rescue = self._try_chat_recovery(
+                    requested_model=model,
+                    input_text=input_text,
+                    extra=extra,
+                    headers=headers,
+                    recovery_tag="chat_recovery",
+                )
+                if rescue:
+                    return rescue
+                forced_model = self._fallback_model_for(model)
+                if forced_model:
+                    rescue = self._try_chat_recovery(
+                        requested_model=forced_model,
+                        input_text=input_text,
+                        extra=extra,
+                        headers=headers,
+                        recovery_tag="chat_default_model_recovery",
+                    )
+                    if rescue:
+                        return rescue
+            return err
 
     def _respond_stream(self, **kwargs) -> Iterator[dict]:
         model = kwargs.get("model", "auto")
@@ -633,9 +819,38 @@ class ZeroShieldClient:
     def scenario_routing(self, prompt: str, model: str = "auto", sensitivity: str = "standard") -> dict:
         # Let the gateway's org routing run for model=auto; avoid forcing
         # routing_override which can hard-block when compliance tags mismatch.
-        prefs = {"data_sensitivity": sensitivity}
+        raw = str(sensitivity or "standard").strip().lower()
+        sens_map = {
+            # Demo UX values -> gateway routing sensitivity taxonomy.
+            "standard": "public",
+            "public": "public",
+            "internal": "internal",
+            "confidential": "confidential",
+            "restricted": "restricted",
+            # HIPAA is compliance scope, not a sensitivity enum in router;
+            # map to strict sensitivity and carry an explicit compliance tag.
+            "hipaa": "restricted",
+        }
+        normalized = sens_map.get(raw, "public")
+        prefs = {"data_sensitivity": normalized}
+        if raw == "hipaa":
+            prefs["compliance_requirements"] = ["hipaa"]
         try:
-            return self.respond(prompt, model=model, routing_preferences=prefs)
+            out = self.respond(prompt, model=model, routing_preferences=prefs)
+            if isinstance(out, dict) and out.get("error"):
+                # Scenario-specific hardening: if responses path still yields a
+                # retriable upstream failure, attempt one direct chat recovery
+                # with the same routing preferences before surfacing failure.
+                recovered = self.chat(
+                    [{"role": "user", "content": prompt}],
+                    model=model,
+                    mcp_context=None,
+                    routing_preferences=prefs,
+                )
+                if isinstance(recovered, dict) and not recovered.get("error") and (recovered.get("content") or "").strip():
+                    recovered["fallback"] = recovered.get("fallback") or "scenario_routing_chat_recovery"
+                    return recovered
+            return out
         except Exception as exc:
             body = getattr(exc, "body", None)
             if isinstance(body, str):

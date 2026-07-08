@@ -87,6 +87,10 @@ DEFAULT_MODEL = env("DEMO_DEFAULT_MODEL", "gpt-5.2")
 # deep upstream probe checks.
 READINESS_LITE = env("DEMO_READINESS_LITE", "1").lower() not in ("0", "false", "no")
 READINESS_PROBE_TIMEOUT = float(env("DEMO_READINESS_PROBE_TIMEOUT", "12"))
+# Demo app auth gate:
+# - False (default): rely on nginx Basic Auth at /demo/ only.
+# - True: require an additional in-app superuser token login.
+DEMO_REQUIRE_APP_LOGIN = env("DEMO_REQUIRE_APP_LOGIN", "0").lower() in ("1", "true", "yes")
 
 _debug_log(
     location="config.py:init",

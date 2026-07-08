@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.auth import authenticate, require_superuser
-from app.config import BASE_URL, DEMO_HOST, DEMO_PORT, RAG_COLLECTION
+from app.config import BASE_URL, DEMO_HOST, DEMO_PORT, DEMO_REQUIRE_APP_LOGIN, RAG_COLLECTION
 from app.extractors import extract_text
 from app.gateway_client import ZeroShieldClient
 
@@ -27,9 +27,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Every data route is gated to platform superusers; only the login, health,
-# UI shell and static assets are public.
-GUARD = [Depends(require_superuser)]
+# Optional in-app gate:
+# - False: rely on nginx /demo Basic Auth only (single login prompt).
+# - True: require platform superuser JWT for each API request.
+GUARD = [Depends(require_superuser)] if DEMO_REQUIRE_APP_LOGIN else []
 
 _sessions: dict[str, list[dict]] = {}
 
@@ -90,7 +91,13 @@ class LoginRequest(BaseModel):
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "gateway_base_url": BASE_URL, "demo_host": DEMO_HOST, "demo_port": DEMO_PORT}
+    return {
+        "ok": True,
+        "gateway_base_url": BASE_URL,
+        "demo_host": DEMO_HOST,
+        "demo_port": DEMO_PORT,
+        "app_login_required": DEMO_REQUIRE_APP_LOGIN,
+    }
 
 
 @app.get("/api/readiness", dependencies=GUARD)

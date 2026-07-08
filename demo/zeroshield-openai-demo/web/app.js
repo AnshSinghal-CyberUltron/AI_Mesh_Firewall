@@ -2,22 +2,28 @@
 
 let sessionId = null;
 let authToken = localStorage.getItem("zs_demo_token") || null;
+let appLoginRequired = false;
 
 // Relative URL so the UI works both at "/" (local) and "/demo/" (prod behind nginx).
 function rel(path) { return String(path).replace(/^\//, ""); }
 
 function authHeaders(extra = {}) {
   const h = { ...extra };
-  if (authToken) h["Authorization"] = "Bearer " + authToken;
+  if (appLoginRequired && authToken) h["Authorization"] = "Bearer " + authToken;
   return h;
 }
 
 function clearAuth() {
+  if (!appLoginRequired) return;
   authToken = null;
   localStorage.removeItem("zs_demo_token");
 }
 
 function showLogin(message) {
+  if (!appLoginRequired) {
+    showApp();
+    return;
+  }
   const ov = document.getElementById("login-overlay");
   ov.style.display = "flex";
   document.getElementById("app-root").classList.add("app-hidden");
@@ -31,7 +37,7 @@ function showApp() {
 
 // Returns true if the response was an auth failure (and routed the user to login).
 function handleAuthFailure(res) {
-  if (res.status === 401 || res.status === 403) {
+  if (appLoginRequired && (res.status === 401 || res.status === 403)) {
     clearAuth();
     showLogin("Session expired or not authorized. Sign in as a superuser.");
     return true;
@@ -48,8 +54,56 @@ async function api(path, opts = {}) {
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  if (!res.ok) throw new Error(data.detail || data.message || text);
+  if (!res.ok) {
+    const friendly = friendlyErrorText(data);
+    throw new Error(friendly || data.detail || data.message || text);
+  }
   return data;
+}
+
+function toTitleCase(value) {
+  return String(value || "")
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function normalizePipelineStages(result, pipeline) {
+  const pipelineStages = Array.isArray(pipeline?.stages) ? pipeline.stages : [];
+  const answer = result?.answer || {};
+  const trace = result?.pipeline_trace || answer?.pipeline_trace || {};
+  const traceStages = Array.isArray(trace?.stages) ? trace.stages : [];
+
+  const fromTrace = traceStages.map((stage) => {
+    const id = stage?.name || stage?.id || "";
+    const action = stage?.action || stage?.status || "allow";
+    const latency = stage?.latency_ms ?? stage?.duration_ms ?? stage?.elapsed_ms ?? null;
+    const detail = stage?.guard_reason || stage?.detail || stage?.reason || stage?.message || "";
+    return {
+      id,
+      label: stage?.label || toTitleCase(id || "stage"),
+      action,
+      latency_ms: latency,
+      detail,
+    };
+  });
+
+  if (pipelineStages.length === 0) return fromTrace;
+
+  // Keep server stage order, enrich missing bits from trace when present.
+  const traceIndex = new Map(fromTrace.map((s) => [s.id, s]));
+  return pipelineStages.map((stage, idx) => {
+    const id = stage?.id || stage?.name || `stage-${idx + 1}`;
+    const fallback = traceIndex.get(id) || {};
+    return {
+      id,
+      label: stage?.label || fallback.label || toTitleCase(id),
+      action: stage?.action || stage?.status || fallback.action || "allow",
+      latency_ms: stage?.latency_ms ?? fallback.latency_ms ?? null,
+      detail: stage?.detail || stage?.guard_reason || fallback.detail || "",
+    };
+  });
 }
 
 function renderPipeline(result) {
@@ -73,8 +127,13 @@ function renderPipeline(result) {
   const routed = p.routed_model || r.selected_model || zs.selected_model || "—";
   const reason = p.routing_reason || r.routing_reason || zs.routing_reason || "—";
   const reqId = p.request_id || zs.request_id || "—";
+  const blockedBy = p.blocked_by || zs.blocked_by || "—";
+  const category = p.category || zs.category || "—";
+  const code = p.code || zs.code || "—";
+  const totalLatency = p.processing_time_ms ?? zs.processing_time_ms;
+  const stageData = normalizePipelineStages(result, p);
 
-  const hasAnything = (p.stages?.length) || action !== "—" || requested !== "—" || routed !== "—";
+  const hasAnything = stageData.length || action !== "—" || requested !== "—" || routed !== "—";
   if (!hasAnything) {
     viz.innerHTML = "<p class='muted'>No pipeline metadata returned.</p>";
     return;
@@ -87,12 +146,32 @@ function renderPipeline(result) {
       <div><strong>Routed:</strong> ${routed}</div>
       <div><strong>Fallback:</strong> ${p.fallback_model || "—"}</div>
       <div><strong>Reason:</strong> ${reason}</div>
+      <div><strong>Blocked By:</strong> ${blockedBy}</div>
+      <div><strong>Category:</strong> ${category}</div>
+      <div><strong>Code:</strong> ${code}</div>
+      <div><strong>Total Latency:</strong> ${totalLatency != null ? `${totalLatency}ms` : "—"}</div>
       <div><strong>Request ID:</strong> ${reqId}</div>
     </div>`;
 
-  const stages = (p.stages || []).map((s) => {
+  const stages = stageData.map((s) => {
     const cls = ["allow", "block", "flag", "redact"].includes(s.action) ? s.action : "";
-    return `<div class="stage"><span class="dot ${cls}"></span><span>${s.label}</span><span class="muted">${s.action}${s.latency_ms != null ? ` · ${s.latency_ms}ms` : ""}</span></div>`;
+    const latencyText = s.latency_ms != null ? `${s.latency_ms}ms` : "—";
+    const detail = s.detail ? `<div class="stage-detail muted">${String(s.detail).replace(/</g, "&lt;")}</div>` : "";
+    return `
+      <div class="stage">
+        <div class="stage-head">
+          <span class="stage-left">
+            <span class="dot ${cls}"></span>
+            <span>${s.label || toTitleCase(s.id)}</span>
+          </span>
+          <span class="stage-right">
+            <span class="stage-badge ${cls}">${s.action || "allow"}</span>
+            <span class="muted">${latencyText}</span>
+          </span>
+        </div>
+        ${detail}
+      </div>
+    `;
   }).join("");
 
   viz.innerHTML = routing + (stages || "<p class='muted'>Per-stage timeline shows on non-streamed requests.</p>");
@@ -113,6 +192,25 @@ function friendlyErrorText(result) {
   const plain = support.plain_text || result.message || "Request failed.";
   const next = support.next_step ? ` Next: ${support.next_step}` : "";
   return `[Gateway issue] ${plain}${next}`;
+}
+
+function extractRequestId(result) {
+  return result?.pipeline?.request_id
+    || result?.zeroshield?.request_id
+    || result?.answer?.pipeline?.request_id
+    || result?.answer?.zeroshield?.request_id
+    || "";
+}
+
+function renderStructuredOutput(outputEl, result) {
+  if (!outputEl) return;
+  if (result && typeof result === "object" && result.error) {
+    const msg = friendlyErrorText(result) || "[Gateway issue] Request failed.";
+    const reqId = extractRequestId(result);
+    outputEl.textContent = reqId ? `${msg}\nRequest ID: ${reqId}` : msg;
+    return;
+  }
+  outputEl.textContent = JSON.stringify(result, null, 2);
 }
 
 function streamFallbackFromTrace(ev) {
@@ -164,12 +262,13 @@ async function loadHealth() {
     const hres = await fetch(rel("/api/health"));
     const h = await hres.json();
     baseUrl = h.gateway_base_url || "";
+    appLoginRequired = Boolean(h.app_login_required);
     el.textContent = `Gateway: ${baseUrl} · checking…`;
   } catch {
     el.textContent = "Gateway: unavailable (is the demo server running?)";
     return;
   }
-  if (!authToken) {
+  if (appLoginRequired && !authToken) {
     el.textContent = `Gateway: ${baseUrl} · sign in for readiness`;
     return;
   }
@@ -291,7 +390,7 @@ document.getElementById("rag-search").addEventListener("click", async () => {
     method: "POST",
     body: JSON.stringify({ collection, query, synthesize: true }),
   });
-  document.getElementById("rag-out").textContent = JSON.stringify(out, null, 2);
+  renderStructuredOutput(document.getElementById("rag-out"), out);
   renderPipeline(out.answer || out);
 });
 
@@ -301,8 +400,7 @@ document.getElementById("mcp-run").addEventListener("click", async () => {
     method: "POST",
     body: JSON.stringify({ input, model: "auto", scenario: "mcp" }),
   });
-  document.getElementById("mcp-out").textContent = JSON.stringify(out, null, 2);
-  if (out.error) document.getElementById("mcp-out").textContent = friendlyErrorText(out) + "\n\n" + JSON.stringify(out, null, 2);
+  renderStructuredOutput(document.getElementById("mcp-out"), out);
   renderPipeline(out);
 });
 
@@ -318,8 +416,7 @@ document.getElementById("route-run").addEventListener("click", async () => {
       routing_preferences: { enable_routing: true, data_sensitivity: sensitivity },
     }),
   });
-  document.getElementById("route-out").textContent = JSON.stringify(out, null, 2);
-  if (out.error) document.getElementById("route-out").textContent = friendlyErrorText(out) + "\n\n" + JSON.stringify(out, null, 2);
+  renderStructuredOutput(document.getElementById("route-out"), out);
   renderPipeline(out);
 });
 
@@ -331,7 +428,7 @@ document.getElementById("file-analyze").addEventListener("click", async () => {
   const res = await fetch(rel("/api/files/analyze?model=auto"), { method: "POST", headers: authHeaders(), body: fd });
   if (handleAuthFailure(res)) return;
   const out = await res.json();
-  document.getElementById("file-out").textContent = JSON.stringify(out, null, 2);
+  renderStructuredOutput(document.getElementById("file-out"), out);
   renderPipeline(out.analysis);
 });
 
@@ -340,7 +437,7 @@ async function runGuard(prompt) {
     method: "POST",
     body: JSON.stringify({ input: prompt, model: "auto", scenario: "guardrail" }),
   });
-  document.getElementById("guard-out").textContent = JSON.stringify(out, null, 2);
+  renderStructuredOutput(document.getElementById("guard-out"), out);
   renderPipeline(out);
 }
 
@@ -405,13 +502,13 @@ document.querySelectorAll("[data-scenario]").forEach((btn) => {
           method: "POST",
           body: JSON.stringify({ collection: "demo_knowledge", query: "Summarize indexed documents", synthesize: true }),
         });
-        outEl.textContent = JSON.stringify(out, null, 2);
+        renderStructuredOutput(outEl, out);
         renderPipeline(out.answer || out);
         return;
       }
       const body = map[s];
       const out = await api("/api/respond", { method: "POST", body: JSON.stringify({ model: "auto", ...body }) });
-      outEl.textContent = JSON.stringify(out, null, 2);
+      renderStructuredOutput(outEl, out);
       renderPipeline(out);
     } catch (e) {
       outEl.textContent = String(e.message || e);
@@ -422,6 +519,12 @@ document.querySelectorAll("[data-scenario]").forEach((btn) => {
 // ── Superuser auth gate ──────────────────────────────────────────────────
 document.getElementById("login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!appLoginRequired) {
+    showApp();
+    loadHealth();
+    loadModels();
+    return;
+  }
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
   const errEl = document.getElementById("login-error");
@@ -450,6 +553,10 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
 });
 
 document.getElementById("logout-btn").addEventListener("click", () => {
+  if (!appLoginRequired) {
+    showApp();
+    return;
+  }
   clearAuth();
   document.getElementById("user-meta").textContent = "";
   showLogin("Signed out.");
@@ -457,7 +564,14 @@ document.getElementById("logout-btn").addEventListener("click", () => {
 
 // Boot: if a token is present, show the app (protected calls bounce to login if
 // the token is stale); otherwise show the sign-in gate.
-if (authToken) {
+if (!appLoginRequired) {
+  const logoutBtn = document.getElementById("logout-btn");
+  logoutBtn.style.display = "none";
+  document.getElementById("user-meta").textContent = "superuser (Basic Auth)";
+  showApp();
+  loadHealth();
+  loadModels();
+} else if (authToken) {
   showApp();
   loadHealth();
   loadModels();
