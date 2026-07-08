@@ -66,7 +66,47 @@ FIELD_SENSITIVITY_MAP: Dict[str, str] = {
     "user_id": "internal",
 }
 
-_JSON_BLOCK_RE = re.compile(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}")
+def _find_top_level_json_spans(content: str) -> list:
+    """Byte spans of balanced, string-aware top-level ``{...}`` objects in free text.
+
+    The prior ``_JSON_BLOCK_RE`` regex (``\\{[^{}]*(?:\\{[^{}]*\\}[^{}]*)*\\}``) could
+    only match an object whose brace nesting was at most ONE level deep. For a blob
+    nesting >=2 levels, that regex matched only an inner fragment, so a
+    sensitivity-classified field sitting OUTSIDE that fragment (e.g. a top-level
+    ``ssn``/``diagnosis`` beside a deeply-nested sibling) was never handed to
+    ``_redact_dict`` and silently egressed on the RAG grounding path — a field-level
+    redaction bypass. This scanner tracks brace depth while respecting JSON string
+    literals (so braces inside string values do not miscount) and yields the FULL
+    top-level object at any depth; ``_redact_dict`` already recurses over the whole
+    tree, so the complete object is redacted.
+    """
+    spans: list = []
+    depth = 0
+    start = -1
+    in_str = False
+    esc = False
+    for i, ch in enumerate(content):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start >= 0:
+                    spans.append((start, i + 1))
+                    start = -1
+    return spans
 
 
 def estimate_tokens(text: str) -> int:
@@ -224,30 +264,40 @@ def _redact_dict(obj: dict, max_level: int) -> dict:
     return result
 
 
-def _replace_json_match(match: re.Match, max_level: int) -> str:
-    """Replace a JSON match with redacted version."""
-    try:
-        obj = json.loads(match.group(0))
-        if isinstance(obj, dict):
-            redacted = _redact_dict(obj, max_level)
-            return json.dumps(redacted)
-    except (json.JSONDecodeError, TypeError):
-        pass
-    return match.group(0)
-
-
 def redact_structured_fields(
     content: str,
     max_sensitivity: str = "public",
 ) -> str:
     """
     Detect JSON objects in message content and redact fields
-    whose sensitivity exceeds ``max_sensitivity``.
+    whose sensitivity exceeds ``max_sensitivity`` — at ANY brace-nesting depth.
     """
+    if not content:
+        return content
     max_level = SENSITIVITY_LEVELS.get(max_sensitivity, 0)
-    return _JSON_BLOCK_RE.sub(
-        lambda m: _replace_json_match(m, max_level), content
-    )
+    spans = _find_top_level_json_spans(content)
+    if not spans:
+        return content
+    out: list = []
+    last = 0
+    for start, end in spans:
+        out.append(content[last:start])  # verbatim text before this object
+        candidate = content[start:end]
+        try:
+            obj = json.loads(candidate)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            obj = None
+        if isinstance(obj, dict):
+            redacted = _redact_dict(obj, max_level)
+            # Re-serialize only when redaction actually changed something; else keep
+            # the original bytes verbatim (no cosmetic reformatting churn on benign
+            # JSON that has no classified fields).
+            out.append(json.dumps(redacted) if redacted != obj else candidate)
+        else:
+            out.append(candidate)
+        last = end
+    out.append(content[last:])
+    return "".join(out)
 
 
 def redact_messages(
