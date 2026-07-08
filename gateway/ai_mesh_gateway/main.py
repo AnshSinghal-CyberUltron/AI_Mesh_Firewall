@@ -686,47 +686,53 @@ def _is_redactable_pii_threat(threat_type: str) -> bool:
     return "pii" in t or "phone" in t or t.startswith("phi") or t.startswith("pci")
 
 
-# Tier-1/2 categories that must stay on the block path even when the prompt also
-# carries maskable PII (injection + exfiltration beats redact-and-forward).
-_INJECTION_ATTACK_BLOCK_THREATS = frozenset({
-    "prompt_injection",
-    "jailbreak",
-    "goal_hijacking",
-    "sql_injection",
-    "command_injection",
-    "path_traversal",
-    "vector_injection",
-    "rag_poisoning",
-    "tool_overreach",
-    "dos",
-    "toxicity",
-})
-
-
-def _prompt_has_maskable_pii(text: str) -> bool:
-    """True when deterministic tier-1 PII patterns match (SSN, email, card, phone, …)."""
+def _prompt_has_raw_sensitive_data(text: str) -> bool:
+    """True when deterministic detectors still find maskable PII/secrets in text."""
+    if not (text or "").strip():
+        return False
     try:
-        from patterns import detect_pii
+        from patterns import detect_pii, detect_secrets
     except ImportError:  # pragma: no cover - packaging fallback
-        from .patterns import detect_pii
-    return bool(detect_pii(text or ""))
+        from .patterns import detect_pii, detect_secrets
+    return bool(detect_pii(text) or detect_secrets(text))
 
 
-def _should_prefer_pii_redaction_over_block(verdict, prompt: str) -> bool:
-    """Prefer redact-and-forward when a block verdict targets maskable PII content.
+def _apply_input_pii_redaction(text: str, verdict) -> str:
+    """Apply deterministic + verdict-aware PII scrubbing before upstream egress.
 
-    Prod symptom: Attack Simulator ``sensitive-data`` prompt (OWASP LLM02) was
-    blocked at input_scan in prod while localhost redacted — tier-2 often returns
-    ``block`` + ``sensitive_content`` even though tier-1 already said ``redact``.
+    Org policy for sensitive-data prompts is redact-and-allow: always run the
+    shared ``redact_all`` pass first (same module the router backstop uses), then
+    apply verdict-aware evidence spans via ``InputScanner.redact_pii``.
     """
-    if getattr(verdict, "action", None) != "block":
-        return False
-    threat = (getattr(verdict, "threat_type", None) or "").lower()
-    if threat in _INJECTION_ATTACK_BLOCK_THREATS:
-        return False
-    if _is_redactable_pii_threat(threat):
-        return True
-    return _prompt_has_maskable_pii(prompt)
+    if not text:
+        return text
+    try:
+        from patterns import redact_all as _redact_all
+    except ImportError:  # pragma: no cover - packaging fallback
+        from .patterns import redact_all as _redact_all
+    scrubbed = _redact_all(text)
+    if INPUT_SCANNER is None:
+        return scrubbed
+    return INPUT_SCANNER.redact_pii(scrubbed, verdict=verdict)
+
+
+def _scrub_input_pii_for_egress(text: str, verdict) -> str:
+    """Scrub input PII/secrets for upstream egress; retry ``redact_all`` until clean."""
+    scrubbed = _apply_input_pii_redaction(text, verdict=verdict)
+    if not _prompt_has_raw_sensitive_data(scrubbed):
+        return scrubbed
+    try:
+        from patterns import redact_all as _redact_all
+    except ImportError:  # pragma: no cover - packaging fallback
+        from .patterns import redact_all as _redact_all
+    for _ in range(3):
+        nxt = _redact_all(scrubbed)
+        if not _prompt_has_raw_sensitive_data(nxt):
+            return nxt
+        if nxt == scrubbed:
+            break
+        scrubbed = nxt
+    return scrubbed
 
 
 def _build_safe_block_response(
@@ -6382,17 +6388,6 @@ async def proxy_chat(
                 )
             # For non-injection threats (toxicity, dos, etc.), the scanner
             # already applied its own threshold; respect the verdict directly.
-            # OWASP LLM02: maskable PII in the prompt should redact, not block —
-            # tier-2 may escalate to ``block`` + ``sensitive_content`` even when
-            # tier-1 already returned ``redact`` + ``pii``.
-            if _should_block_verdict and _should_prefer_pii_redaction_over_block(verdict, prompt):
-                LOG.info(
-                    "Maskable PII present — preferring redaction over block "
-                    "(type=%s, user=%s)",
-                    verdict.threat_type,
-                    user_id,
-                )
-                _should_block_verdict = False
             if _should_block_verdict:
                 LOG.warning(
                     "Input blocked by scanner (type=%s, detail=%s, user=%s)",
@@ -6497,7 +6492,9 @@ async def proxy_chat(
                 # degrades to plain redact_all (scanner.py:854) and a Tier-2-flagged
                 # bare digit span would ride RAW to the provider while the verdict says
                 # "redact" — a phantom redaction. Matches the embeddings egress path.
-                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
+                effective_prompt = _scrub_input_pii_for_egress(
+                    _text_before_pii_redact, verdict=verdict
+                )
                 redacted_prompt = effective_prompt
                 _pii_redaction_applied = True
             elif (
@@ -6514,7 +6511,9 @@ async def proxy_chat(
                 LOG.info("PII/secret flagged in prompt, redacting before LLM call (user=%s)", user_id)
                 # B1 (egress = truth): pass the verdict (see the redact-action branch
                 # above) so Tier-2 evidence digit spans are masked, not just regex hits.
-                effective_prompt = INPUT_SCANNER.redact_pii(effective_prompt, verdict=verdict)
+                effective_prompt = _scrub_input_pii_for_egress(
+                    _text_before_pii_redact, verdict=verdict
+                )
                 redacted_prompt = effective_prompt
                 _pii_redaction_applied = True
 
@@ -6534,15 +6533,27 @@ async def proxy_chat(
                 _pii_redaction_applied
                 and enforcement_mode == "block"
                 and (_text_before_pii_redact or "").strip()
-                # Only fail-closed when redact_pii itself was a total no-op; if bytes
-                # changed, maskable PII was handled and must not over-block.
-                and effective_prompt == _text_before_pii_redact
             ):
                 try:
                     from llm_router import _redact_text_with_backstop as _egress_backstop
                 except ImportError:  # pragma: no cover - packaging fallback
                     from .llm_router import _redact_text_with_backstop as _egress_backstop
-                if _egress_backstop(_text_before_pii_redact, effective_prompt) == _text_before_pii_redact:
+                if effective_prompt == _text_before_pii_redact:
+                    effective_prompt = _scrub_input_pii_for_egress(
+                        _text_before_pii_redact, verdict=verdict
+                    )
+                    redacted_prompt = effective_prompt
+                _wire_text = _egress_backstop(_text_before_pii_redact, effective_prompt)
+                if not _prompt_has_raw_sensitive_data(_wire_text):
+                    if redacted_prompt is None and _is_redactable_pii_threat(verdict.threat_type):
+                        redacted_prompt = _wire_text
+                    if _wire_text != _text_before_pii_redact and effective_prompt != _wire_text:
+                        effective_prompt = _wire_text
+                        redacted_prompt = effective_prompt
+                elif (
+                    effective_prompt == _text_before_pii_redact
+                    and _wire_text == _text_before_pii_redact
+                ):
                     LOG.warning(
                         "PII/secret flagged but redaction was a no-op (unmaskable); "
                         "failing closed to prevent raw egress (type=%s, user=%s)",

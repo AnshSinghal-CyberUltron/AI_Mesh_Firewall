@@ -1322,7 +1322,13 @@ class InputScanner:
         # Preserve the Tier-1 redact unless Tier-2 genuinely escalates to a block
         # (e.g. PII prompt that ALSO carries a high-confidence injection).
         if tier1.action == "redact":
-            _t2_escalates_to_block = recommended == "block" or score >= 0.70
+            # Preserve Tier-1 redact when Tier-2 recommends redact/monitor/allow.
+            # Score-only escalation to block was turning maskable PII prompts into
+            # hard blocks despite a redact recommendation (senior policy: redact+allow).
+            _rec = str(recommended or "").strip().lower()
+            _t2_escalates_to_block = recommended == "block" or (
+                score >= 0.70 and _rec not in ("redact", "monitor", "allow")
+            )
             if not _t2_escalates_to_block:
                 if not isinstance(getattr(tier1, "scan_meta", None), dict):
                     tier1.scan_meta = {}
