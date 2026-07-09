@@ -665,13 +665,24 @@ async def _scan_redact_upsert_documents(
     # Lazy, function-local import of the gateway singletons (same idiom as
     # mcp_proxy / mcp_scan_orchestrator) — avoids a circular import at module load
     # (main imports vector_routes at startup).
-    try:
-        import main as gateway_main
-    except Exception:  # noqa: BLE001 — never let an import error block a write path
+    # Resolve the LIVE app module from sys.modules (same defect class as
+    # _get_input_scanner/_get_policy_sync, #18/#19): gunicorn loads
+    # ``ai_mesh_gateway.main`` and its startup handler sets CONTEXT_GUARD/CONFIG_SYNC
+    # on THAT module object. A bare ``import main`` resolves a *different* module
+    # object (same file, separate namespace) whose startup never ran → those globals
+    # stayed None → the embedding-input scan silently PASSED THROUGH. Prefer the
+    # packaged module already in sys.modules; only import fresh as a last resort.
+    import sys
+
+    gateway_main = sys.modules.get("ai_mesh_gateway.main") or sys.modules.get("main")
+    if gateway_main is None:
         try:
             from ai_mesh_gateway import main as gateway_main  # type: ignore[no-redef]
-        except Exception:
-            return doc_ids, doc_texts, doc_metas, [], False
+        except Exception:  # noqa: BLE001 — never let an import error block a write path
+            try:
+                import main as gateway_main  # type: ignore[no-redef]
+            except Exception:
+                return doc_ids, doc_texts, doc_metas, [], False
 
     context_guard = getattr(gateway_main, "CONTEXT_GUARD", None)
     config_sync = getattr(gateway_main, "CONFIG_SYNC", None)
