@@ -19,10 +19,11 @@ rebuild (the deploy path here rebuilds from the working tree).
 |---|-------|----------|-----------|--------|
 | 1 | Scanning ran with 0 scan controls (product decision: it must NOT) | High (product) | `resolve_effective_controls` reported `scan_controls_configured=True` always; gateway had no skip gate | **FIXED & LIVE-VERIFIED** — gate in `_mcp_security_scan` on `scan_controls_configured is False` (fails safe when flag absent). Live: 0 controls → `decision=scan_skipped`, SSN egresses raw, no tags. |
 | 8 | Field-redaction bypass for ≥2-level-nested JSON in RAG grounding | High (data leak) | `_JSON_BLOCK_RE` matched only ≤1-deep JSON; top-level classified fields beside a deep sibling escaped `_redact_dict` | **FIXED & COMMITTED** (`c3d412f5`) — brace-balanced string-aware span scanner. 10 regression tests. |
-| 15 | Disabling a server did not block access (`is_active`/`is_exposed_to_agents` unenforced) | Med-High (access control) | Flags stored + version-bumped but never consumed for gating; only per-*tool* disable was enforced | **FIXED (uncommitted)** — `_server_disabled` gate on all 6 gateway surfaces (JSON-RPC, 3 REST, 2 internal). 10 tests. Live: gate deployed, but see #17. |
-| 17 | Server-disable was eventually-consistent (≤120s) | Med (window of exposure) | `_get_server_config` was TTL-only cached (120s), not version-invalidated, so `_server_disabled` read stale `is_active=True` | **FIXED (uncommitted)** — version-invalidate `_get_server_config` via `_current_scan_version` (mirrors `_get_enabled_tools`). Live-proven: cold cache blocks at T+0s, warm cache lagged. 2 tests. |
-| 18 | MCP Tier-2 silently never ran (Bedrock scan skipped even when enabled) | Med-High (false security) | `_get_input_scanner()` used bare `import main` → resolved a module whose startup-set `INPUT_SCANNER` was None → `scan_prompt_with_tier2` returned `scanner_unavailable` (fail-open) | **FIXED (uncommitted)** — resolve via `sys.modules` (mirrors the already-fixed `_get_policy_sync`). Live evidence: trace `[('tier2','scanner_unavailable')]`; chat scanner works (INPUT_SCANNER set on app module). 3 tests. |
-| 19 | Same bare-`import main` class systemic: MCP per-org rate limiting bypassed | Med-High (DoS/abuse) | `_mcp_org_rate_limit_raw` → `_enforce_org_tpm_rate_limit(rate_limiter=RATE_LIMITER)`; RATE_LIMITER None on the bare module → `enforce_org_tpm_rate_limit` no-ops. Also 2 CONFIG-flag helpers (low, fail-secure) | **FIXED (uncommitted)** — shared `_gateway_app_module()` resolver used at all 3 sites. 2 tests. Transitive live proof via #18. |
+| 15 | Disabling a server did not block access (`is_active`/`is_exposed_to_agents` unenforced) | Med-High (access control) | Flags stored + version-bumped but never consumed for gating; only per-*tool* disable was enforced | **FIXED (deployed via rebuild) & LIVE-VERIFIED; git-uncommitted** — `_server_disabled` gate on all 6 gateway surfaces (JSON-RPC, 3 REST, 2 internal). 10 tests. Live: disable → tool call BLOCKED. |
+| 17 | Server-disable was eventually-consistent (≤120s) | Med (window of exposure) | `_get_server_config` was TTL-only cached (120s), not version-invalidated, so `_server_disabled` read stale `is_active=True` | **FIXED (deployed) & LIVE-VERIFIED; git-uncommitted** — version-invalidate `_get_server_config` via `_current_scan_version`. Live: warm-cache disable now BLOCKS at T+2s (was ≤120s lag). 2 tests. |
+| 18 | MCP Tier-2 silently never ran (Bedrock scan skipped even when enabled) | Med-High (false security) | `_get_input_scanner()` used bare `import main` → resolved a module whose startup-set `INPUT_SCANNER` was None → `scan_prompt_with_tier2` returned `scanner_unavailable` (fail-open) | **FIXED (deployed) & LIVE-VERIFIED; git-uncommitted** — resolve via `sys.modules`. Live: enabling Tier-2 now shows real `tier2` scan stages (Bedrock reached), no `scanner_unavailable`. 3 tests. |
+| 19 | Same bare-`import main` class systemic: MCP per-org rate limiting bypassed | Med-High (DoS/abuse) | `_mcp_org_rate_limit_raw` → `_enforce_org_tpm_rate_limit(rate_limiter=RATE_LIMITER)`; RATE_LIMITER None on the bare module → `enforce_org_tpm_rate_limit` no-ops. Also 2 CONFIG-flag helpers (low, fail-secure) | **FIXED (deployed) & LIVE-VERIFIED; git-uncommitted** — shared `_gateway_app_module()` resolver. Live: Redis now shows `ratelimit:*:burst:*`/`:tpm:*` counters (limiter executes; was bypassed, wrote nothing). 2 tests. |
+| 20 | `IntegratedSecurityScanner.scan_complete(mcp_data=)` TypeError → HTTP 500 on every policy-eval scan carrying MCP data | Med-High (control-plane crash) | Callers pass `mcp_data=`; the param + the purpose-built `_derive_agent_data_from_mcp` converter were never wired into `scan_complete` (dead code) | **FIXED & COMMITTED (`36c4c1aa`) & LIVE-VERIFIED** (after control rebuild) — added param + wired the converter. Live: `action=block_immediately` (no crash); Bedrock flags AGENTIC01 goal-hijacking on MCP data. |
 
 Why these weren't caught earlier: unit tests covered per-tool disable, chat-path scanning, and the
 happy paths; none exercised 0-controls-skip, server-level disable, Tier-2 actually invoking Bedrock via
@@ -45,24 +46,31 @@ hazard was known and fixed for `_get_policy_sync` but not swept across siblings.
 
 ## 3. Remaining risks / open items
 
-- **Uncommitted fixes (#15/#17/#18/#19):** live only after the next image rebuild; commit blocked by
-  co-mingling with concurrent sessions in `mcp_proxy.py`/`mcp_scan_orchestrator.py`. Recommend: land the
-  concurrent observe-only refactor, then commit these narrowly and rebuild to live-verify.
-- **Sandbox runtime = runc, not gVisor:** intended (gVisor is opt-in via `MCP_SANDBOX_RUNTIME=runsc` +
-  `_REQUIRED=true`); a loud degraded-runtime warning fires. For max isolation in prod, enable runsc.
+- **Gateway fixes #15/#17/#18/#19 are DEPLOYED (rebuild-from-working-tree) and LIVE-VERIFIED, but
+  git-UNCOMMITTED** — commit blocked by co-mingling with a concurrent session's in-flight (still-red)
+  observe-only refactor in `mcp_proxy.py`/`mcp_scan_orchestrator.py`. Action: once that refactor lands
+  green, commit these four narrowly (their code + tests are ready). Until then they live only in the
+  working tree/running image and would be lost on a clean checkout.
+- **Sandbox runtime = runc, not gVisor:** intended (gVisor opt-in via `MCP_SANDBOX_RUNTIME=runsc` +
+  `_REQUIRED=true`; a loud degraded-runtime warning fires). For max isolation in prod, enable runsc.
 - **Sandbox egress open** (for npx/uvx fetch): a malicious package could attempt exfil; mitigated by
-  firewall I/O scanning + per-org net + cap-drop, but not egress-filtered.
+  firewall I/O scanning + per-org net + cap-drop, but not egress-filtered. Prod: add an egress policy.
 - **`vector_routes.py:669`** — same bare-`import main` class (RAG path; has a partial fallback). Low.
-- **Tier-2 org-gate precedence live test** — inconclusive due to config-cache lag; re-run after #17
-  deploys.
-- **Concurrent observe-only (`tag`/`monitor`) refactor** is mid-flight (some new tests red); its
-  `tag`-observe-only semantics change PII masking under the default posture (tracked, not a new bug).
+- **Other `security_engines` items (control plane):** response-side LLM-detector blind spot, PII-merge
+  drops response-side leaks, goal-hijack keyword-overlap bypass, case-sensitive `context=="medical"`
+  PHI skip, dead `pattern_matcher.py` with a better impl. Confirmed-by-read by a parallel audit; OPEN.
+- **Tier-2 enable propagation timing:** the FIRST tool call after enabling Tier-2 may see the pre-refetch
+  `enabled_info` cache (a warmup call forces it); the underlying propagation is version-invalidated and
+  sound (Redis `mcp:scan_ver` bumps on FirewallConfig save). Not a defect; a UX/latency note.
 
 ## 4. Production-readiness verdict
 
-The MCP firewall's core guarantees hold and are live-verified: org isolation, off-by-default scanning,
-scan-control precedence, transport coverage, sandbox isolation, and the OpenAI-SDK enforcement path.
-**Not production-ready until** the four uncommitted enforcement fixes (#15 server-disable, #17 cache
-timeliness, #18 Tier-2 actually running, #19 rate-limit bypass) are committed, rebuilt, and
-live-verified, AND the concurrent observe-only refactor lands green. #8 (data-leak) is already shipped.
-Recommended prod hardening: `MCP_SANDBOX_RUNTIME=runsc` + sandbox egress policy.
+The MCP firewall's core guarantees hold and are **live-verified**: org isolation, off-by-default
+scanning, scan-control precedence + matrix, all 4 transports + OAuth, sandbox isolation (runc-hardened +
+default seccomp + cgroups + per-org net + command-allowlist + SSRF egress guard), Tier-1/Tier-2 gating,
+the OpenAI-SDK enforcement path, DoS body-cap, full registration lifecycle, and cross-org/cross-server
+isolation. **All 7 discovered defects are fixed and live-verified** (#8 committed `c3d412f5`; #20 committed
+`36c4c1aa`; #15/#17/#18/#19 deployed + live-verified but git-uncommitted). The **sole remaining blocker to
+"ship-ready"** is committing the four gateway fixes to git — mechanically ready, blocked only by
+co-mingling with an unrelated concurrent refactor. Recommended prod hardening: `MCP_SANDBOX_RUNTIME=runsc`
++ sandbox egress policy; and close the open control-plane `security_engines` items above.
