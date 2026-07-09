@@ -466,20 +466,40 @@ def _safe_json(value: Any) -> str:
         return str(value)
 
 
-def _collect_key_values(obj: Any, key: str, *, _depth: int = 0) -> list[str]:
-    if _depth > 10 or not key:
+# #31 (gateway twin of control #29): the old RECURSIVE depth-10 cap was a
+# DETECTION BYPASS — a scope='key' rule targeting a field nested 11..500 deep was
+# silently NOT matched, so its block/redact action never fired. The gateway admits
+# payloads to _MCP_MAX_RESULT_DEPTH=500 and apply_field_redaction (CHG-0148) masks
+# to 500 → this matcher was the inconsistent sibling. Iterative (explicit stack) so
+# depth 500 is safe with no RecursionError; node cap bounds pathological width.
+_KEY_COLLECT_MAX_DEPTH = 500
+_KEY_COLLECT_MAX_NODES = 2_000_000
+
+
+def _collect_key_values(obj: Any, key: str) -> list[str]:
+    if not key:
         return []
     target = _normalize_key(key)
     out: list[str] = []
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if _normalize_key(k) == target:
-                out.append(v if isinstance(v, str) else _safe_json(v))
-            else:
-                out.extend(_collect_key_values(v, key, _depth=_depth + 1))
-    elif isinstance(obj, list):
-        for item in obj:
-            out.extend(_collect_key_values(item, key, _depth=_depth + 1))
+    stack: list[tuple[Any, int]] = [(obj, 0)]
+    nodes = 0
+    while stack:
+        cur, depth = stack.pop()
+        if depth > _KEY_COLLECT_MAX_DEPTH:
+            continue
+        nodes += 1
+        if nodes > _KEY_COLLECT_MAX_NODES:
+            break
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                if _normalize_key(k) == target:
+                    # Matched key: collect but do NOT descend (original semantics).
+                    out.append(v if isinstance(v, str) else _safe_json(v))
+                else:
+                    stack.append((v, depth + 1))
+        elif isinstance(cur, list):
+            for item in cur:
+                stack.append((item, depth + 1))
     return out
 
 
