@@ -196,22 +196,36 @@ class PIIDetector:
 
     @staticmethod
     def _anonymize(text: str, found_entities: dict[str, list[dict[str, Any]]]) -> str:
+        # #38: the old algorithm spliced right-to-left but only de-duped EXACT
+        # spans. For PARTIALLY-OVERLAPPING spans (two detectors matching the same
+        # digit run, e.g. SSN vs CREDIT_CARD) the right-to-left splice applied
+        # original indices to an already-modified string, corrupting output and
+        # LEAKING RAW PII DIGITS (e.g. "<SSN>ARD>56789XY"). Fix: MERGE overlapping
+        # spans into disjoint union intervals first, so every covered byte is
+        # redacted and the right-to-left splice only ever touches non-overlapping
+        # intervals (index-safe).
         all_matches: list[dict[str, Any]] = []
         for entities in found_entities.values():
             all_matches.extend(entities)
+        if not all_matches:
+            return text
 
-        all_matches.sort(key=lambda m: m["start"], reverse=True)
+        # Sort by start asc, then longer span first, to build union intervals.
+        all_matches.sort(key=lambda m: (m["start"], -m["end"]))
+        merged: list[list[Any]] = []  # [start, end, type_label]
+        for m in all_matches:
+            s, e, t = m["start"], m["end"], m["type"]
+            if merged and s < merged[-1][1]:  # overlaps the previous union
+                if e > merged[-1][1]:
+                    merged[-1][1] = e  # extend to cover the union
+                # keep the first (leftmost) entity's type label for the merge
+            else:
+                merged.append([s, e, t])
 
-        seen_spans: set[tuple[int, int]] = set()
+        # Apply right-to-left over now-disjoint intervals (index-safe).
         result = text
-        for entity in all_matches:
-            span = (entity["start"], entity["end"])
-            if span in seen_spans:
-                continue
-            seen_spans.add(span)
-            replacement = f"<{entity['type']}>"
-            result = result[: entity["start"]] + replacement + result[entity["end"] :]
-
+        for s, e, t in sorted(merged, key=lambda x: x[0], reverse=True):
+            result = result[:s] + f"<{t}>" + result[e:]
         return result
 
 
