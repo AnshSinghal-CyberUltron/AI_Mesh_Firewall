@@ -192,3 +192,15 @@ Highest-priority security items to close (all documented, fixes external-gated):
 | Known cost caveats | Noted | Bedrock 2000-char prompt truncation (control-plane, security-relevant not perf); one-warmup-call latency on first Tier-2 after enable (UX note, not a defect) |
 
 No performance defect found; the guards trade a cheap O(1)/iterative pre-check for avoiding multi-second resource-bomb scans — net positive. No unbounded loops or N+1 control-plane calls on the hot path.
+
+## 8. Final independent verification pass (regression re-check)
+
+Performed a non-destructive final pass (assume prior fixes may have regressed): (1) the #24 regression
+test still xfails correctly (`expectedFailures=2`, 0 errors/failures — intact, bug still present); (2) the
+gateway fixes are STILL DEPLOYED in the running container (`_server_disabled`/`_gateway_app_module` present
+in `mcp_proxy.py`, `sys.modules.get` in `mcp_scan_orchestrator.py`); (3) the control-plane #20 `mcp_data`
+fix is still baked in; (4) a fresh live `echo` end-to-end still returns HTTP 200 `Echo: …`. **No
+regressions detected across the 30+ clean commits + deployed fixes; the platform is stable.** Live
+evidence set (all fresh, non-destructive, this session): all-4-transport tool execution; off-by-default
+(0 controls → both scans skipped, audit trace); cross-org 403 / no-auth 401 / malformed −32700 /
+tool-error −32602; `tools/list` discovery; 6-parallel concurrency isolation; 11 MiB→413 DoS cap + 200 KB→200.
