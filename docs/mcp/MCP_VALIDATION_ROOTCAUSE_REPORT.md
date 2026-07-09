@@ -91,7 +91,10 @@ hazard was known and fixed for `_get_policy_sync` but not swept across siblings.
   still SSRF-guarded, but reduced isolation: no per-org net/cgroups/cap-drop around the upstream dial).
   Default-off and confirmed OFF (`=true`) in the running env; stdio/websocket are unaffected (always
   sandbox-routed). Prod: keep it unset/true. Not a defect (secure default), a config caveat.
-- **Sandbox container-level hardening relies on gVisor (defense-in-depth gap):** live `docker inspect`
+- **Sandbox container-level hardening relies on gVisor (defense-in-depth gap):** CONFIG SOURCE confirmed —
+  broker env `MCP_SANDBOX_RUNTIME=runsc` (+ `MCP_SANDBOX_MEMORY_MB=2048`, `MCP_SANDBOX_IMAGE=ai-mesh/mcp-sandbox:latest`)
+  is why gVisor is active; gateway env `MCP_HTTP_VIA_SANDBOX=true` (all-transport routing), `MCP_MAX_BODY_BYTES`
+  unset → default 10 MiB. Live `docker inspect`
   shows the running sandbox uses `Runtime=runsc` (gVisor) BUT with `ReadonlyRootfs=false`, `SecurityOpt=[]`
   (no host seccomp / no-new-privileges), and `CapAdd=[SETUID SETGID]` — relaxed to accommodate the entrypoint
   `setpriv` privilege-drop + DNS bootstrap for the gVisor bridge net. gVisor's user-space kernel is the real
