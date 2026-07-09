@@ -137,3 +137,35 @@ Legend: ✅ VERIFIED (evidence) · 🔧 FIXED&(live-)verified · 📝 DOCUMENTED
 Cross-cutting: multi-org isolation ✅ (413 live `org_scope_violation`); per-org rate limiting 🔧 (#19); DoS body/depth/node caps ✅; PII/secret not in telemetry ✅ (0 raw bytes in 295k findings).
 
 **Coverage gaps / not-yet-live-exercised** (honest disclosure, not silent): live-verify of #21/#22/#23 (control rebuild pending); a live end-to-end tool call exercising #25/#26/#27 under the exact triggering config (would mutate shared org state / need Bedrock-outage simulation — deferred to avoid infra disruption per the iteration-33 discipline); every-permutation policy matrix (representative permutations verified live + by executable probe, not the full Cartesian product — the 10/10 precedence probe + reversible live matrix cover the resolution logic).
+
+## 6. Security review (deliverable #18)
+
+Threat model: an untrusted MCP server (or a poisoned tool registration) is the primary adversary — it can return malicious tool results (secret/PII/injection/exfil), advertise poisoned tool descriptions, or attempt SSRF/exfil from inside the sandbox. Secondary: a malicious agent/client sending secrets/injection in tool args, or attempting cross-org access.
+
+| Control | Posture | Evidence |
+|---------|---------|----------|
+| Tenant isolation | STRONG | `_validate_org_scope` on all agent routes; org_slug=sha256(key); per-org caches/sandbox/bridge-net; 413 live `org_scope_violation`; cross-org→403; per-org server-state isolation (same `everything-N` synced in one org, offline in another) |
+| Sandbox confinement | STRONG (config-dependent) | runc-hardened (CapDrop ALL, RO rootfs, non-root, own PID ns, per-org net, cgroups); ALL 4 transports sandbox-routed live (`MCP_HTTP_VIA_SANDBOX=true`); gateway never dials upstream. RISK: `=0` debug bypass (SSRF-guarded, off by default) |
+| Egress / SSRF | GUARDED | per-org egress allowlist; SSRF guard on the direct path; sandbox bridge net. RISK: egress not fully filtered for npx/uvx fetch (remaining-risk) |
+| Input (tool args) scanning | CORRECT | credential force-block (findings-dependent → correctly off at 0 controls); off-by-default gate (#1) |
+| Output (tool result) scanning | CORRECT w/ 1 caveat | metadata poisoning scan (CHG-0077/0082), cross-block split-secret, infra/exfil floors; fail-closed on scan error. CAVEAT #26: split-secret + resource floors run at 0 controls (output-only asymmetry) |
+| Tier-2 semantic scan | 2 GAPS | #18 fixed (was silently never running). OPEN: #25 org toggle no-op; #27 fails open on Bedrock-unavailable for a strict org |
+| Least-privilege tool visibility | STRONG | disabled/unexposed/cross-tool not leaked in `tools/list` (JSON-RPC/REST parity); server-disable enforced (#15) |
+| Telemetry hygiene | STRONG | 0 raw secret/PII bytes across 295k `scan_findings` |
+| Availability / DoS | STRONG | body cap; arg/result depth+node+block-count caps; per-org TPM rate limiting (#19 fixed) |
+| Fail-safe posture | MOSTLY | off-by-default gates fail SAFE to scanning on control-plane outage; scan errors fail CLOSED. GAP: #27 Tier-2-unavailable fails OPEN on MCP path |
+
+Highest-priority security items to close (all documented, fixes external-gated): **#27** (Tier-2 fail-open on Bedrock outage — silent bypass), **#25** (Tier-2 org toggle no-op — false sense of security), **#26** (residual 0-controls floors — decision-#1 inconsistency), **#24** (conflict nondeterminism). Plus the co-mingled-uncommitted gateway fixes (#1/#15/#17/#18/#19) must land in git so a clean checkout retains them.
+
+## 7. Performance review (deliverable #19)
+
+| Dimension | Assessment | Evidence |
+|-----------|-----------|----------|
+| Config propagation | Low-latency, correct | Redis `mcp:scan_ver` version bump + version-invalidated caches (`_get_server_config`, `_get_enabled_tools`); no full-scan on every request; #17 replaced 120s TTL-only staleness with version-invalidation |
+| Scan pipeline cost | Bounded | Tier-1 regex is O(n) on capped payloads; Tier-2 Bedrock gated behind Tier-1 pass + explicit enable (rarely on); depth/node/block-count guards pre-empt pathological payloads BEFORE the deepcopy+recursive scan (CHG-0115/0150) |
+| Caching | Effective | per-`{org}/{server}` TTL+version caches; avoids per-call control-plane round-trips |
+| Concurrency | Sound (asyncio) | single-loop; caches are dict read/update between awaits (no data race); version-check self-heals on the next request; 5-parallel live test → distinct request_ids |
+| Sandbox overhead | Acceptable | per-org container reused; idle reaper cleans up; cold-start only on first call per org |
+| Known cost caveats | Noted | Bedrock 2000-char prompt truncation (control-plane, security-relevant not perf); one-warmup-call latency on first Tier-2 after enable (UX note, not a defect) |
+
+No performance defect found; the guards trade a cheap O(1)/iterative pre-check for avoiding multi-second resource-bomb scans — net positive. No unbounded loops or N+1 control-plane calls on the hot path.
