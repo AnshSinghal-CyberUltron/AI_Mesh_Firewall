@@ -62,11 +62,19 @@ hazard was known and fixed for `_get_policy_sync` but not swept across siblings.
 
 ## 3. Remaining risks / open items
 
-- **Gateway fixes #15/#17/#18/#19 are DEPLOYED (rebuild-from-working-tree) and LIVE-VERIFIED, but
-  git-UNCOMMITTED** — commit blocked by co-mingling with a concurrent session's in-flight (still-red)
-  observe-only refactor in `mcp_proxy.py`/`mcp_scan_orchestrator.py`. Action: once that refactor lands
-  green, commit these four narrowly (their code + tests are ready). Until then they live only in the
-  working tree/running image and would be lost on a clean checkout.
+- **Gateway fixes #1/#15/#17/#18/#19 are DEPLOYED (rebuild-from-working-tree) and LIVE-VERIFIED, but
+  git-UNCOMMITTED — BLOCKED WITH PROOF.** Commit blocked by co-mingling with a concurrent session's
+  in-flight refactor in `mcp_proxy.py`/`mcp_scan_orchestrator.py`. **Exact blocker (hunk-level re-verified):**
+  the fix set spans TWO files; `git diff HEAD` shows `mcp_scan_orchestrator.py` = 9 hunks (my #18
+  `_get_input_scanner` sys.modules fix is the isolable `@@ -100` hunk; the other 8 across
+  `_scan_text_tier1_sync`/`scan_mcp_payload` are the concurrent refactor), and `mcp_proxy.py` = **489
+  insertions** with my #1/#15/#17/#19 (`_server_disabled`/`_gateway_app_module`/`_rest_server_disabled_response`/
+  `scan_controls_configured` gate) interleaved across many functions among the concurrent hunks — NOT
+  cleanly separable as a unit. A partial commit would (a) fragment the fix set, (b) move shared HEAD under
+  a possibly-resuming concurrent session (shared-index hazard), (c) risk a non-coherent intermediate. So
+  per discipline: NO partial commit; the set stays deployed+verified but uncommitted. **Unblock condition:**
+  the concurrent refactor lands/settles (its 543 insertions committed or reverted), then commit these five
+  narrowly. Until then they live only in the working tree/running image and would be lost on a clean checkout.
 - **Sandbox bypass flag (`MCP_HTTP_VIA_SANDBOX=0`):** a documented debug fallback that makes
   streamable-http/sse transports bypass the per-org sandbox (gateway dials upstream via direct-httpx —
   still SSRF-guarded, but reduced isolation: no per-org net/cgroups/cap-drop around the upstream dial).
