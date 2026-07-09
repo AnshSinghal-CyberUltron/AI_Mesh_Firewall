@@ -19,6 +19,20 @@ from .risk_scorer import RiskScorer
 
 LOG = logging.getLogger("security_engines.integrated_scanner")
 
+# Ordered severity ranks so prompt/response scan results can be combined by MAX severity
+# instead of silently biasing toward the prompt (which dropped 'high' response-side findings).
+_SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "none": 0, "": 0}
+
+
+def _max_severity(*severities: str) -> str:
+    """Return the highest-ranked severity string among the args (default 'none')."""
+    best, best_rank = "none", 0
+    for s in severities:
+        r = _SEVERITY_RANK.get((s or "").lower(), 0)
+        if r > best_rank:
+            best, best_rank = s, r
+    return best
+
 
 @dataclass
 class ScanResult:
@@ -164,18 +178,24 @@ class IntegratedSecurityScanner:
                     llm_prompt_results["summary"]["critical_threats"],
                     llm_response_results["summary"]["critical_threats"],
                 ),
-                "overall_severity": (
-                    "critical"
-                    if any(
-                        r["summary"]["overall_severity"] == "critical"
-                        for r in [llm_prompt_results, llm_response_results]
-                    )
-                    else llm_prompt_results["summary"]["overall_severity"]
+                "overall_severity": _max_severity(
+                    llm_prompt_results["summary"]["overall_severity"],
+                    llm_response_results["summary"]["overall_severity"],
                 ),
             },
         }
 
-        pii_results = pii_response_results if pii_response_results.severity == "critical" else pii_prompt_results
+        # Pick the MORE SEVERE of prompt/response PII (response wins ties so a response-only
+        # leak is kept). The prior `response if response=='critical' else prompt` SILENTLY
+        # DROPPED a 'high'-severity PII leak in the model RESPONSE whenever the prompt had no
+        # PII — the response leak never reached the risk scorer, so it was neither flagged nor
+        # redacted. Same prompt-bias defect the overall_severity line above had.
+        pii_results = (
+            pii_response_results
+            if _SEVERITY_RANK.get(pii_response_results.severity, 0)
+            >= _SEVERITY_RANK.get(pii_prompt_results.severity, 0)
+            else pii_prompt_results
+        )
 
         detection_results: dict[str, Any] = {"owasp_llm": combined_llm, "pii": pii_results}
         tier1_detection = dict(detection_results)
