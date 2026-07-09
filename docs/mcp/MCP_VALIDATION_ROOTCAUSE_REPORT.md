@@ -217,8 +217,12 @@ Performed a non-destructive final pass (assume prior fixes may have regressed): 
 test still xfails correctly (`expectedFailures=2`, 0 errors/failures — intact, bug still present); (2) the
 gateway fixes are STILL DEPLOYED in the running container (`_server_disabled`/`_gateway_app_module` present
 in `mcp_proxy.py`, `sys.modules.get` in `mcp_scan_orchestrator.py`); (3) the control-plane #20 `mcp_data`
-fix is still baked in; (4) a fresh live `echo` end-to-end still returns HTTP 200 `Echo: …`. **No
-regressions detected across the 30+ clean commits + deployed fixes; the platform is stable.** Live
+fix is still baked in; (4) a fresh live `echo` end-to-end still returns HTTP 200 `Echo: …`; (5) committed
+control-plane fixes re-verified STANDALONE (live-verify blocked on control rebuild, but the committed CODE
+is correct): #22 — `PIIDetector.detect` context `medical`/`MEDICAL`/` Medical ` all → `critical` identically
+(case/whitespace-insensitive fix); #23 — `OWASPAgenticDetector.scan` with bare-string action entries does NOT
+crash (8 threats; `_coerce_action` fix). **No
+regressions detected across the 40+ clean commits + deployed fixes; the platform is stable.** Live
 evidence set (all fresh, non-destructive, this session): all-4-transport tool execution; off-by-default
 (0 controls → both scans skipped, audit trace); cross-org 403 / no-auth 401 / malformed −32700 /
 tool-error −32602; `tools/list` discovery; 6-parallel concurrency isolation; 11 MiB→413 DoS cap + 200 KB→200.
