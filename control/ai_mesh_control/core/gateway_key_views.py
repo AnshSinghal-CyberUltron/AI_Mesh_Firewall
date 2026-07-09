@@ -37,7 +37,13 @@ class IsGatewayKeyOwner(BasePermission):
         # Allow org admins to manage any key in their org
         profile = getattr(user, "profile", None)
         if profile and profile.organization_id == obj.organization_id:
-            if profile.role in ("admin", "superadmin", "org_admin"):
+            # #43: UserProfile has a `roles` M2M (auth/models.py) — there is NO
+            # singular `role` attribute, so the old `profile.role in (...)` raised
+            # AttributeError → HTTP 500, BREAKING the org-admin-manages-any-key path
+            # (a same-org non-owner mutation hit this branch and 500'd instead of the
+            # intended allow/deny). Query the M2M by role name (codebase idiom, cf.
+            # core/models.py `profile.roles.values_list("name", ...)`).
+            if profile.roles.filter(name__in=("admin", "superadmin", "org_admin")).exists():
                 return True
         return False
 
