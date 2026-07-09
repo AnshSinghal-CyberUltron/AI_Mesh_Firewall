@@ -215,18 +215,48 @@ def _hint_targets_side(hint: dict[str, Any], side: str) -> bool:
     return direction == "both" or direction == side
 
 
+# #30: match apply_field_redaction (max_depth=500) and the gateway's _MCP_MAX_RESULT_DEPTH=500.
+_REDACT_STRING_LEAVES_MAX_DEPTH = 500
+_REDACT_STRING_LEAVES_MAX_NODES = 2_000_000
+
+
 def _redact_string_leaves(node: Any, hints: list[dict[str, Any]], placeholder: str, depth: int = 0) -> Any:
-    """Recursively apply ``apply_redaction`` (regex/keyword) to every string
-    leaf in a dict/list/str structure. Used for scope='entire' rules where
-    the operator wants the pattern scrubbed anywhere it appears."""
-    if depth > 10:
-        return node
+    """Apply ``apply_redaction`` (regex/keyword) to every string leaf in a
+    dict/list/str structure. Used for scope='entire' rules where the operator
+    wants the pattern scrubbed anywhere it appears.
+
+    #30 (sibling of #29): the old RECURSIVE ``depth > 10`` cap was a REDACTION
+    BYPASS — a scope='entire' hint stopped scrubbing past depth 10, so depth-11+
+    string leaves EGRESSED UNREDACTED while the audit trail said "redacted".
+    Inconsistent with ``apply_field_redaction`` (CHG-0148, max_depth=500) and the
+    gateway's ``_MCP_MAX_RESULT_DEPTH=500``. Now ITERATIVE (explicit stack) with
+    cap 500 + node cap: covers the full admitted depth, NO RecursionError at any
+    depth, DoS still bounded. The sole caller (``redact_structured``) passes an
+    owned ``copy.deepcopy`` result, so containers are scrubbed IN PLACE.
+    """
     if isinstance(node, str):
         return apply_redaction(node, hints, placeholder=placeholder)
-    if isinstance(node, dict):
-        return {k: _redact_string_leaves(v, hints, placeholder, depth + 1) for k, v in node.items()}
-    if isinstance(node, list):
-        return [_redact_string_leaves(v, hints, placeholder, depth + 1) for v in node]
+    if not isinstance(node, (dict, list)):
+        return node
+    stack: list[tuple[Any, int]] = [(node, 0)]
+    node_count = 0
+    while stack:
+        cur, d = stack.pop()
+        if d > _REDACT_STRING_LEAVES_MAX_DEPTH or node_count > _REDACT_STRING_LEAVES_MAX_NODES:
+            continue
+        node_count += 1
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                if isinstance(v, str):
+                    cur[k] = apply_redaction(v, hints, placeholder=placeholder)
+                elif isinstance(v, (dict, list)):
+                    stack.append((v, d + 1))
+        elif isinstance(cur, list):
+            for i, v in enumerate(cur):
+                if isinstance(v, str):
+                    cur[i] = apply_redaction(v, hints, placeholder=placeholder)
+                elif isinstance(v, (dict, list)):
+                    stack.append((v, d + 1))
     return node
 
 
