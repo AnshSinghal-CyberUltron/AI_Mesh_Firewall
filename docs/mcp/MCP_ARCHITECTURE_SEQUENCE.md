@@ -152,3 +152,73 @@ sequenceDiagram
 `_get_server_config` and `_get_enabled_tools` are both version-invalidated (the #17 fix
 brought `_get_server_config` in line), so disable/enable/scan-control/Tier-2 toggles take
 effect on the next call rather than after the 120s/30s TTL.
+
+## 6. Transport routing (all transports execute in the per-org sandbox)
+
+```mermaid
+flowchart TD
+    C[Client tools/call] --> GW[Gateway auth + org-scope]
+    GW --> R{_is_sandbox_routed transport?}
+    R -->|stdio, websocket| SB[gateway → broker → sandbox → upstream]
+    R -->|streamable-http, sse| F{MCP_HTTP_VIA_SANDBOX?}
+    F -->|true default| SB
+    F -->|=0 debug fallback| DX[gateway direct-httpx, SSRF-guarded, reduced isolation]
+    SB --> AG[sandbox agent: allowlist + resolved-IP SSRF guard + metadata block]
+    AG --> UP[(upstream MCP server)]
+    UP --> AG --> SB --> GW --> C
+```
+
+Live-verified: stdio/streamable-http/sse/websocket all returned `Echo:` with `_meta.transport`
+confirming the route (MCP_HTTP_VIA_SANDBOX=true in the running env → the direct-httpx branch is off).
+
+## 7. Tier-1 policy evaluation (deterministic, most-restrictive-wins)
+
+```mermaid
+flowchart TD
+    IN[context: prompt/response, actor, tool] --> Q[Policy.objects enabled, order_by -priority, domain-filter]
+    Q --> LOOP[for each policy: actor-scope check M-04]
+    LOOP --> RS[rules sorted -priority, id  ← id TIEBREAK = deterministic]
+    RS --> M{rule matches + tool-target?}
+    M -->|no| RS
+    M -->|yes| RANK[rank = ACTION_ORDER block5 redact4 rewrite3 downgrade2 monitor1 allow0]
+    RANK --> BEST{rank > best_action_rank?}
+    BEST -->|yes| SET[result.action = rule.action]
+    SET --> HINT[collect redaction hints from ALL redact rules]
+    HINT --> LOOP
+    LOOP --> OUT[final = single MOST-RESTRICTIVE action, exactly once]
+```
+
+Contrast: the scan-control `_pick_control` (#24) lacks the `id` tiebreak → nondeterministic on
+same-scope+same-priority ties; the fix is to adopt this engine's pattern.
+
+## 8. Compliance execution (two distinct surfaces, both correct)
+
+```mermaid
+flowchart LR
+    subgraph EVENT[Event-time tagging — INTRINSIC]
+      T[threat detected] --> M[get_compliance_tags threat_type<br/>pure static map pii→GDPR/CCPA ssn→HIPAA]
+      M --> TAG[compliance_tags on event<br/>NOT gated by org config]
+    end
+    subgraph POSTURE[compliance_frameworks — POSTURE SELECTOR]
+      CF[FirewallConfig.compliance_frameworks] --> V[validate_compliance_requirements<br/>gap-check config vs framework reqs]
+      CF --> S[serializer: constrain tier2_execution_mode for strict frameworks]
+    end
+    NOTE[No on/off 'compliance mapping' toggle exists — prompt premise is FALSE]
+```
+
+## 9. Context assembly & least privilege
+
+```mermaid
+flowchart TD
+    A[agent request] --> V[org-scope validate + tool-visibility filter]
+    V --> F1[_filter_tools_by_enabled: drop DISABLED tools]
+    F1 --> F2[_filter_tools_by_key_allowlist: per-key visibility]
+    F2 --> SD[server-disable gate #15]
+    SD --> POI[tool-metadata poisoning scan CHG-0077/0082]
+    POI --> CTX[assembled context: only visible+enabled tools]
+    CTX --> RED[field-level redaction: brace-balanced JSON scanner #8<br/>redact_structured_fields]
+    RED --> OUT[least-privilege context — no cross-tool/server/org leak]
+```
+
+Field-redaction bypass for nested JSON (#8) fixed in `context_assembler.py` (brace-balanced,
+string-aware span scanner). Tool visibility verified with full JSON-RPC↔REST parity.
