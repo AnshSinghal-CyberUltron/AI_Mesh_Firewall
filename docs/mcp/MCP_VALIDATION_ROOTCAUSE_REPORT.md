@@ -257,3 +257,29 @@ regressions detected across the 40+ clean commits + deployed fixes; the platform
 evidence set (all fresh, non-destructive, this session): all-4-transport tool execution; off-by-default
 (0 controls → both scans skipped, audit trace); cross-org 403 / no-auth 401 / malformed −32700 /
 tool-error −32602; `tools/list` discovery; 6-parallel concurrency isolation; 11 MiB→413 DoS cap + 200 KB→200.
+
+## Deliverable #14/#16 — Regression Test Suite Manifest (added this session)
+
+Every code fix landed with a regression test. Standalone tests (stdlib-only → run via
+`PYTHONPATH=control/ai_mesh_control python3 -m unittest ...`, verified GREEN this session);
+env-dependent tests run in the control/gateway test envs (compile-verified here; assertions AST/behavior-
+verified against real source).
+
+| Test file | Finding | Cases | Status |
+|---|---|---|---|
+| `security_engines/tests/test_pii_anonymize_overlap.py` | #38 PII overlapping-span leak | 5 | **RAN GREEN** (standalone) |
+| `security_engines/tests/test_risk_scorer_action_boundary.py` | RiskScorer PII+agentic→block boundary | 6 | **RAN GREEN** (standalone) |
+| `security_engines/tests/test_owasp_llm_obfuscation.py` | #41 LLM whitespace-obfuscation | 8 | **RAN GREEN** (standalone) |
+| `policy/tests/test_key_scope_depth.py` | #29 scope='key' depth | 6 | compile-OK; AST-verified vs real source |
+| `policy/tests/test_redact_string_leaves_depth.py` | #30 scope='entire' depth | 6 | compile-OK; AST-verified vs real chain |
+| `policy/tests/test_rate_limit_atomic.py` | #33 atomic rate-limit | 3 | compile-OK; AST + threaded-race sim verified |
+| `policy/tests/test_scan_control_conflict_determinism.py` | #24 conflict nondeterminism | 2 (@expectedFailure) | runs green as xfail |
+| `gateway/…/tests/test_policy_engine_key_scope_depth.py` | #31 gateway scope='key' depth | 6 | compile-OK; AST-verified vs real source |
+| `gateway/…/tests/test_mcp_scan_targets.py` (+2) | #32 scan-target collector depth | +2 | compile-OK; AST-verified vs real source |
+| `gateway/…/tests/test_mcp_tier2_strict_unavailable.py` | #27 Tier-2 strict-unavailable | 1 (@expectedFailure)+1 | runs green as xfail |
+| `gateway/…/tests/test_mcp_input_scanner_resolution.py` | #18/#19 (pre-compaction) | 3 | isolation-verified (co-mingled deploy) |
+
+Standalone suite this session: **19 tests, all green** (`security_engines` went from 0 → 3 test files).
+Blocked fixes (#1/#15/#17/#18/#19, #34/#35/#36/#39/#40) carry documented regression-test specs to apply
+once the co-mingled working tree clears (e.g. #34: a JWT request with a forged `X-Gateway-Roles` must not
+gain the spoofed role in `policy_context["roles"]`, the queryset filter, OR the gateway `actor` forward).
