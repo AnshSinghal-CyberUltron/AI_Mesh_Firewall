@@ -25,21 +25,40 @@ def _safe_json(value: Any) -> str:
         return str(value)
 
 
-def collect_key_values(obj: Any, key: str, *, _depth: int = 0) -> list[str]:
-    """Recursively collect string values under ``key`` (case-insensitive)."""
-    if _depth > 10 or not key:
+# #32 (consistency with control #29 / gateway #31): align this "aligned with the
+# policy engine" helper to cap 500 (was a recursive depth-10 cap). The gateway's
+# LIVE key-path scan walker is extract_scan_targets._walk (unbounded, bounded by the
+# _MCP_MAX_RESULT_DEPTH result guard) — collect_key_values is currently only exercised
+# by tests, so the depth-10 cap was latent, not a live bypass; still fixed so a future
+# caller can't inherit the old blind spot. Iterative → no RecursionError at any depth.
+_KEY_COLLECT_MAX_DEPTH = 500
+_KEY_COLLECT_MAX_NODES = 2_000_000
+
+
+def collect_key_values(obj: Any, key: str) -> list[str]:
+    """Collect string values under ``key`` (case-insensitive), ITERATIVE walk."""
+    if not key:
         return []
     target = _normalize_key(key)
     out: list[str] = []
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if _normalize_key(k) == target:
-                out.append(v if isinstance(v, str) else _safe_json(v))
-            else:
-                out.extend(collect_key_values(v, key, _depth=_depth + 1))
-    elif isinstance(obj, list):
-        for item in obj:
-            out.extend(collect_key_values(item, key, _depth=_depth + 1))
+    stack: list[tuple[Any, int]] = [(obj, 0)]
+    nodes = 0
+    while stack:
+        cur, depth = stack.pop()
+        if depth > _KEY_COLLECT_MAX_DEPTH:
+            continue
+        nodes += 1
+        if nodes > _KEY_COLLECT_MAX_NODES:
+            break
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                if _normalize_key(k) == target:
+                    out.append(v if isinstance(v, str) else _safe_json(v))
+                else:
+                    stack.append((v, depth + 1))
+        elif isinstance(cur, list):
+            for item in cur:
+                stack.append((item, depth + 1))
     return out
 
 

@@ -10,6 +10,23 @@ def test_collect_key_values_nested():
     assert "c@d.com" in values
 
 
+def test_collect_key_values_deeply_nested_not_capped_at_10():
+    # #32: a key nested 15 deep must still be collected (old recursive depth-10
+    # cap silently returned [] past depth 10). Iterative cap is 500.
+    node = {"email": "deep@x.com"}
+    for _ in range(15):
+        node = {"wrap": node}
+    assert "deep@x.com" in collect_key_values(node, "email")
+
+
+def test_collect_key_values_beyond_cap_no_recursion_error():
+    # 600 deep: bounded (not collected past 500) but MUST NOT RecursionError.
+    node = {"email": "toodeep@x.com"}
+    for _ in range(600):
+        node = {"wrap": node}
+    assert collect_key_values(node, "email") == []
+
+
 def test_extract_and_bind_key_path_redacts_single_field():
     payload = {"arguments": {"email": "secret@example.com", "note": "ok"}}
     state, targets = extract_and_bind(
