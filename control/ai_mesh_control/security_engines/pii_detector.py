@@ -135,7 +135,11 @@ class PIIDetector:
             for match in pattern.finditer(text):
                 found_entities["SECRET"].append(self._match_to_entity(entity_type, match, text))
 
-        if context == "medical":
+        # Normalize context: the caller passes it straight from the request body
+        # (evaluation_views body.get("context", "general")), so an exact-match
+        # `context == "medical"` silently skipped ALL PHI (critical) detection for
+        # "Medical" / "MEDICAL" / " medical". Case- and whitespace-insensitive now.
+        if (context or "").strip().lower() == "medical":
             for entity_type, pattern in PHI_PATTERNS.items():
                 for match in pattern.finditer(text):
                     found_entities["PHI"].append(self._match_to_entity(entity_type, match, text))
