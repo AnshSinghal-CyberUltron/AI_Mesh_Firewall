@@ -252,6 +252,7 @@ class IntegratedSecurityScanner:
         prompt: str | None = None,
         response: str | None = None,
         agent_data: dict | None = None,
+        mcp_data: dict | None = None,
         context: str = "general",
     ) -> ScanResult:
         """
@@ -261,6 +262,12 @@ class IntegratedSecurityScanner:
             prompt: User prompt (optional).
             response: AI response (optional).
             agent_data: Agent behavior data (optional).
+            mcp_data: MCP activity — ``requested_tools`` / ``tool_call_history``
+                (``{name, args}`` entries). Folded into the agentic detector's
+                ``action_history`` so invoked/requested tools are scanned for agentic
+                threats. Callers (``policy/evaluation_views`` scan endpoints) already
+                pass ``mcp_data=``; the parameter was previously MISSING from this
+                signature, raising ``TypeError`` on every scan carrying MCP data.
             context: Context hint.
 
         Returns:
@@ -280,6 +287,16 @@ class IntegratedSecurityScanner:
             tier1_detection = dict(detection_results)
 
         effective_agent_data = agent_data
+
+        # Wire up ``_derive_agent_data_from_mcp`` (previously dead code): when no explicit
+        # agent_data is supplied, derive a full agent-behavior view from mcp_data
+        # (requested_tools/tool_call_history/allowed_tools -> original_goal, current_actions,
+        # action_history, agent_permissions, attempted_actions) so MCP-only requests get the
+        # FULL agentic scan (AGENTIC01 goal-hijack, AGENTIC02 loops, AGENTIC03 permission
+        # escalation), not just partial coverage. Explicit agent_data still wins. This also
+        # closes the crash: callers pass ``mcp_data=`` and the param was previously missing.
+        if not effective_agent_data and mcp_data:
+            effective_agent_data = self._derive_agent_data_from_mcp(mcp_data, prompt)
 
         if effective_agent_data:
             agentic_results = self.agentic_detector.scan(effective_agent_data)
