@@ -96,3 +96,36 @@ to "fully ship-ready"** are all external-gated, not open questions: (a) commit t
 concurrent refactor settles; (b) a control rebuild to live-verify #21–#23; (c) a product decision + clean
 window to land the #24 conflict-determinism fix. Recommended prod hardening: `MCP_SANDBOX_RUNTIME=runsc`
 + sandbox egress policy; and close the open control-plane `security_engines` detection-tuning items above.
+
+## 5. Coverage matrix — MCP lifecycle stages × validation status (deliverable #15/#16)
+
+Legend: ✅ VERIFIED (evidence) · 🔧 FIXED&(live-)verified · 📝 DOCUMENTED-root-cause (fix external-gated) · ⚠️ residual/caveat.
+
+| # | Lifecycle stage | Status | Evidence / finding |
+|---|-----------------|--------|--------------------|
+| 1 | Frontend config surfaces | ✅/📝 | Action vocab matches backend (`ACTION_CHOICES`); BUT org Tier-2 "Enabled" toggle is a no-op (📝 #25) |
+| 2 | API (control endpoints) | ✅ | `/api/firewall/config/`, MCP scan-control CRUD, enabled-tools; org-scoped |
+| 3 | Database (models) | ✅/📝 | `MCPScanControl` has NO UniqueConstraint → conflict nondeterminism (📝 #24) |
+| 4 | Backend (control plane) | 🔧 | security_engines crashes #20/#21/#22/#23 fixed |
+| 5 | Config loading | ✅ | `enabled_info` builder (`views.py:2567-2612`) |
+| 6 | Config caching | ✅ | version-invalidated (`mcp:scan_ver` bump on save); #17 fixed TTL-only server-disable cache |
+| 7 | Org config | ✅ | `FirewallConfig` per-org; Redis `firewall:config:{org}` |
+| 8 | Server config | 🔧 | server disable (`is_active`/`is_exposed_to_agents`) enforced — #15 fixed |
+| 9 | Tool config | ✅ | per-tool `scan_action`, tool-scope controls |
+| 10 | Policy resolution | ✅ | 49 policies; OpenAI-SDK path live-verified |
+| 11 | Scan-control resolution | ✅/⚠️ | tool>server>org precedence VERIFIED; conflict tie nondeterministic (⚠️ #24) |
+| 12 | Context assembly | 🔧 | nested-JSON field redaction bypass fixed (#8 `c3d412f5`) |
+| 13 | Compliance mapping | ✅ | no toggle (false premise); tags intrinsic; `compliance_frameworks` = posture selector |
+| 14 | Tier-1 scanning | ✅/📝 | on-by-default when configured; off at 0 controls — BUT residual output floors (📝 #26) |
+| 15 | Tier-2 scanning | 🔧/📝 | #18 fixed (was silently never running); org toggle no-op (📝 #25); strict-unavailable bypass (📝 #27) |
+| 16 | MCP broker | ✅ | `ai_mesh_mcp_broker` healthy; docker_ok |
+| 17 | Sandbox | ✅ | runc-hardened (CapDrop ALL, RO rootfs, non-root, per-org net, cgroups); gVisor opt-in |
+| 18 | MCP runtime | ✅ | command allowlist (node/npx/python/uv/uvx); MCP runs inside sandbox |
+| 19 | Transport | ✅ | stdio/streamable-http/sse/websocket all have live connected servers + discovered tools |
+| 20 | Tool execution | ✅ | live tool calls per transport; historical 295k events |
+| 21 | Output scanning | 🔧/📝 | direction dimension correct; #26 residual floors at 0 controls (output-only asymmetry) |
+| 22 | Response generation | ✅ | JSON-RPC + SSE reframing; fail-closed on scan error |
+
+Cross-cutting: multi-org isolation ✅ (413 live `org_scope_violation`); per-org rate limiting 🔧 (#19); DoS body/depth/node caps ✅; PII/secret not in telemetry ✅ (0 raw bytes in 295k findings).
+
+**Coverage gaps / not-yet-live-exercised** (honest disclosure, not silent): live-verify of #21/#22/#23 (control rebuild pending); a live end-to-end tool call exercising #25/#26/#27 under the exact triggering config (would mutate shared org state / need Bedrock-outage simulation — deferred to avoid infra disruption per the iteration-33 discipline); every-permutation policy matrix (representative permutations verified live + by executable probe, not the full Cartesian product — the 10/10 precedence probe + reversible live matrix cover the resolution logic).
