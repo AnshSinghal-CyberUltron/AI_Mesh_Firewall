@@ -126,6 +126,68 @@ function buildActiveFilterChips({ statusFilter, severityFilter, sourceFilter, qu
   return chips;
 }
 
+function IncidentsGuideContent() {
+  return (
+    <div className="space-y-6 px-6 py-5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+      <section>
+        <h3 className="mb-2 flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
+          <Info className="h-4 w-4 text-teal-600" />
+          Page objective
+        </h3>
+        <p>{INCIDENTS_GUIDE.objective}</p>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+        <h3 className="mb-2 font-semibold text-slate-800 dark:text-slate-100">What is a security incident?</h3>
+        <p>{INCIDENTS_GUIDE.incidentDefinition}</p>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-800/50 dark:bg-amber-950/20">
+          <h3 className="mb-2 flex items-center gap-2 font-semibold text-amber-900 dark:text-amber-100">
+            <AlertTriangle className="h-4 w-4" />
+            Escalate
+          </h3>
+          <p className="text-amber-950/90 dark:text-amber-100/90">{INCIDENTS_GUIDE.escalationDefinition}</p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-800/50 dark:bg-emerald-950/20">
+          <h3 className="mb-2 flex items-center gap-2 font-semibold text-emerald-900 dark:text-emerald-100">
+            <CheckCircle2 className="h-4 w-4" />
+            Resolve
+          </h3>
+          <p className="text-emerald-950/90 dark:text-emerald-100/90">{INCIDENTS_GUIDE.resolveDefinition}</p>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="mb-2 font-semibold text-slate-800 dark:text-slate-100">What the table shows</h3>
+        <p>{INCIDENTS_GUIDE.tableSummary}</p>
+      </section>
+
+      <section>
+        <h3 className="mb-3 font-semibold text-slate-800 dark:text-slate-100">What filters do</h3>
+        <ul className="space-y-2">
+          <li>
+            <strong className="text-slate-700 dark:text-slate-200">KPI cards —</strong> {INCIDENTS_GUIDE.kpiHelp}
+          </li>
+          <li>
+            <strong className="text-slate-700 dark:text-slate-200">Search —</strong> {INCIDENTS_GUIDE.filterHelp.search}
+          </li>
+          <li>
+            <strong className="text-slate-700 dark:text-slate-200">Status —</strong> {INCIDENTS_GUIDE.filterHelp.status}
+          </li>
+          <li>
+            <strong className="text-slate-700 dark:text-slate-200">Severity —</strong> {INCIDENTS_GUIDE.filterHelp.severity}
+          </li>
+          <li>
+            <strong className="text-slate-700 dark:text-slate-200">Lane chips —</strong> {INCIDENTS_GUIDE.filterHelp.source}
+          </li>
+        </ul>
+      </section>
+    </div>
+  );
+}
+
 function IncidentsGuideModal({ open, onClose }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -168,64 +230,7 @@ function IncidentsGuideModal({ open, onClose }) {
             <X className="h-4 w-4" />
           </button>
         </div>
-
-        <div className="space-y-6 px-6 py-5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-          <section>
-            <h3 className="mb-2 flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
-              <Info className="h-4 w-4 text-teal-600" />
-              Page objective
-            </h3>
-            <p>{INCIDENTS_GUIDE.objective}</p>
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/40">
-            <h3 className="mb-2 font-semibold text-slate-800 dark:text-slate-100">What is a security incident?</h3>
-            <p>{INCIDENTS_GUIDE.incidentDefinition}</p>
-          </section>
-
-          <section className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-800/50 dark:bg-amber-950/20">
-              <h3 className="mb-2 flex items-center gap-2 font-semibold text-amber-900 dark:text-amber-100">
-                <AlertTriangle className="h-4 w-4" />
-                Escalate
-              </h3>
-              <p className="text-amber-950/90 dark:text-amber-100/90">{INCIDENTS_GUIDE.escalationDefinition}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-800/50 dark:bg-emerald-950/20">
-              <h3 className="mb-2 flex items-center gap-2 font-semibold text-emerald-900 dark:text-emerald-100">
-                <CheckCircle2 className="h-4 w-4" />
-                Resolve
-              </h3>
-              <p className="text-emerald-950/90 dark:text-emerald-100/90">{INCIDENTS_GUIDE.resolveDefinition}</p>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-2 font-semibold text-slate-800 dark:text-slate-100">What the table shows</h3>
-            <p>{INCIDENTS_GUIDE.tableSummary}</p>
-          </section>
-
-          <section>
-            <h3 className="mb-3 font-semibold text-slate-800 dark:text-slate-100">What filters do</h3>
-            <ul className="space-y-2">
-              <li>
-                <strong className="text-slate-700 dark:text-slate-200">KPI cards —</strong> {INCIDENTS_GUIDE.kpiHelp}
-              </li>
-              <li>
-                <strong className="text-slate-700 dark:text-slate-200">Search —</strong> {INCIDENTS_GUIDE.filterHelp.search}
-              </li>
-              <li>
-                <strong className="text-slate-700 dark:text-slate-200">Status —</strong> {INCIDENTS_GUIDE.filterHelp.status}
-              </li>
-              <li>
-                <strong className="text-slate-700 dark:text-slate-200">Severity —</strong> {INCIDENTS_GUIDE.filterHelp.severity}
-              </li>
-              <li>
-                <strong className="text-slate-700 dark:text-slate-200">Lane chips —</strong> {INCIDENTS_GUIDE.filterHelp.source}
-              </li>
-            </ul>
-          </section>
-        </div>
+        <IncidentsGuideContent />
       </div>
     </div>
   );
@@ -233,7 +238,7 @@ function IncidentsGuideModal({ open, onClose }) {
 
 export function IncidentsPage() {
   return (
-    <Module2PageErrorBoundary title="Incident Queue failed to render">
+    <Module2PageErrorBoundary title="Incident and Forensics failed to render">
       <IncidentsPageInner />
     </Module2PageErrorBoundary>
   );
@@ -423,9 +428,6 @@ function IncidentsPageInner() {
         if (action === "escalate") {
           await api.escalateIncident(incidentId);
           setActionNotice({ type: "success", text: `Incident #${incidentId} escalated.` });
-        } else if (action === "investigate") {
-          await api.investigateIncident(incidentId);
-          setActionNotice({ type: "success", text: `Incident #${incidentId} marked investigating.` });
         } else {
           await api.resolveIncident(incidentId);
           setActionNotice({ type: "success", text: `Incident #${incidentId} resolved.` });
@@ -553,22 +555,13 @@ function IncidentsPageInner() {
   return (
     <div>
       <IncidentsGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} />
-
       <ContextualAppBar title={ANALYST_BRIEF_TITLE} description={PAGE_BRIEFS.incidents} />
       <PageHeader
-        title="Incident Queue"
+        title="Incident and Forensics"
         subtitle="Triage, escalate, and resolve formal security cases raised by alert rules and anomaly detection"
         actions={
           <>
             <PeriodSelector value={period} onChange={setPeriod} />
-            <button
-              type="button"
-              onClick={() => setGuideOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-teal-600 dark:hover:text-teal-300"
-            >
-              <CircleHelp className="h-3.5 w-3.5" />
-              Guide
-            </button>
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
                 wsConnected
@@ -622,6 +615,16 @@ function IncidentsPageInner() {
       )}
 
       <KPIBar items={kpiItems} />
+      <div className="mt-3 flex justify-start">
+        <button
+          type="button"
+          onClick={() => setGuideOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-teal-600 dark:hover:text-teal-300"
+        >
+          <CircleHelp className="h-3.5 w-3.5" />
+          Guide
+        </button>
+      </div>
 
       {sourceChart.length > 0 && (
         <div className="mt-4">
@@ -645,20 +648,11 @@ function IncidentsPageInner() {
       <div
         ref={tableSectionRef}
         id="incident-cases-table"
-        className="mb-4 mt-6 scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800/60"
+        className="mt-6 scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800/60"
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Incident cases</h2>
-            <button
-              type="button"
-              onClick={() => setGuideOpen(true)}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-teal-700 dark:hover:bg-slate-700 dark:hover:text-teal-300"
-              title="What this table shows and how filters work"
-            >
-              <Info className="h-3.5 w-3.5" />
-              What is this?
-            </button>
           </div>
           {hasFilters && (
             <button
@@ -771,7 +765,7 @@ function IncidentsPageInner() {
                   to="/threat-intel"
                   className="inline-flex items-center rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
                 >
-                  Review M2.5 Threat Intel
+                  Review M2.3 Threat Intel
                 </Link>
               )}
             />
@@ -855,7 +849,7 @@ function IncidentsPageInner() {
                 {
                   key: "status",
                   label: "Status",
-                  helpText: "Workflow state: Open → Investigating → Escalated or Resolved.",
+                  helpText: "Workflow state: Open → Escalated or Resolved.",
                   render: (r) => (
                     <span className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${STATUS_CLASS[r.status] || STATUS_CLASS.open}`}>
                       {r.status}
@@ -891,22 +885,10 @@ function IncidentsPageInner() {
                   helpText: "Escalate for senior review, Resolve when investigation is complete, or open the case for forensics.",
                   render: (r) => {
                     const busy = rowActionId === r.id;
-                    const canInvestigate = r.status === "open";
                     const canEscalate = r.status !== "escalated" && r.status !== "resolved";
                     const canResolve = r.status !== "resolved";
                     return (
                       <div className="flex min-w-[9rem] flex-wrap gap-1">
-                        {canInvestigate && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => handleRowAction(r, "investigate")}
-                            className="rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-50 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-200"
-                            title="Claim case and begin triage"
-                          >
-                            {busy ? "…" : "Investigate"}
-                          </button>
-                        )}
                         {canEscalate && (
                           <button
                             type="button"

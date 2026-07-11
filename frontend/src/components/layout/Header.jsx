@@ -158,8 +158,9 @@ const TAB_TITLES = {
   "firewall-config": "Module 1 Inputs",
   "m2-dashboard": "M2.1 Gateway Intelligence",
   "m2-ueba-api-keys": "M2.2 API Key Behavior (UEBA)",
-  "m2-models-exposure": "M2.3 Model Health & Exposure",
-  "m2-threat-intel": "M2.5 Threat Intelligence Ops",
+  "m2-threat-intel": "M2.3 Threat Intelligence Ops",
+  "m2-models-exposure": "M2.4 Model Health & Exposure",
+  "m2-mcp-risk": "M2.5 MCP & Context Risk",
   "m2-incidents": "M2.6 Incidents & Forensics",
 };
 

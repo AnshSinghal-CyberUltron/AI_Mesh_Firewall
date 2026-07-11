@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -128,6 +128,7 @@ class Module2PagesApiTests(TestCase):
             ACTION_BLOCK,
             threat_type="prompt_injection",
             owasp_code="LLM01",
+            key_prefix="zs_test",
         )
         ev2 = self._event(
             self.org,
@@ -135,6 +136,7 @@ class Module2PagesApiTests(TestCase):
             threat_type="pii_ssn",
             category="pii",
             owasp_code="LLM06",
+            key_prefix="zs_test",
         )
         EnforcementEvent.objects.filter(pk__in=[ev1.pk, ev2.pk]).update(created_at=since)
 
@@ -145,6 +147,9 @@ class Module2PagesApiTests(TestCase):
         self.assertIn("timeline", data)
         self.assertIn("top_attack_vectors", data)
         self.assertGreaterEqual(data["summary"]["total_events"], 2)
+        self.assertGreaterEqual(data["summary"].get("requests_inspected", 0), 2)
+        self.assertGreaterEqual(data["summary"].get("injection_attempts", 0), 1)
+        self.assertGreaterEqual(data["summary"].get("pii_leaks", 0), 1)
         self.assertTrue(data["timeline"])
         vectors = {row["vector"] for row in data["top_attack_vectors"]}
         self.assertTrue("LLM01" in vectors or "LLM06" in vectors)
@@ -221,6 +226,40 @@ class Module2PagesApiTests(TestCase):
         ):
             resp = self.client.get(f"/api/module2/incidents/?{query}")
             self.assertEqual(resp.status_code, 400, query)
+
+    def test_incidents_chat_filter_includes_model_only_rows(self):
+        self._incident(self.org, "Model only chat", model="gpt-4o")
+        resp = self.client.get("/api/module2/incidents/?source=chat")
+        self.assertEqual(resp.status_code, 200)
+        titles = [row["title"] for row in resp.json()["results"]]
+        self.assertIn("Model only chat", titles)
+
+    @override_settings(DEBUG=True)
+    def test_incidents_e2e_seed_creates_probe_and_bulk(self):
+        resp = self.client.post(
+            "/api/module2/incidents/e2e-seed/",
+            {
+                "probe_title": "PW probe",
+                "bulk_titles": ["PW bulk A", "PW bulk B"],
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        body = resp.json()
+        self.assertTrue(body["probe_id"] > 0)
+        self.assertEqual(len(body["bulk_ids"]), 2)
+        search = self.client.get("/api/module2/incidents/?search=PW probe")
+        self.assertEqual(search.status_code, 200)
+        self.assertTrue(any(row["id"] == body["probe_id"] for row in search.json()["results"]))
+
+    @override_settings(DEBUG=False)
+    def test_incidents_e2e_seed_disabled_returns_404(self):
+        resp = self.client.post(
+            "/api/module2/incidents/e2e-seed/",
+            {"probe_title": "PW probe", "bulk_titles": ["A", "B"]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
 
     def test_incidents_list_period_filters_summary_and_rows(self):
         old = self._incident(self.org, "Old incident", status="open", severity="medium")
@@ -311,6 +350,11 @@ class Module2PagesApiTests(TestCase):
         self.assertIn("registry", data)
         self.assertIn("summary", data["summary"])
         self.assertIn("timeline", data["timeline"])
+        timeline_rows = data["timeline"].get("timeline") or []
+        if timeline_rows:
+            sample = timeline_rows[0]
+            self.assertIn("chat", sample)
+            self.assertIn("total_events", sample)
         self.assertIn("results", data["registry"])
         top_keys = data["summary"].get("top_risky_keys") or []
         if top_keys:
@@ -374,13 +418,31 @@ class Module2PagesApiTests(TestCase):
         settings_obj.refresh_from_db()
         self.assertEqual(settings_obj.behavior_profile_prompt_target, 60)
         self.assertAlmostEqual(settings_obj.weight_baseline_deviation, 0.25)
-        reassess_delay.assert_called_once_with(self.org.id, run_llm=False)
+        reassess_delay.assert_called_once_with(self.org.id, run_llm=True)
         audit = AuditLog.objects.filter(
             organization=self.org,
             action="ueba_risk_settings_update",
         ).first()
         self.assertIsNotNone(audit)
         self.assertIn("behavior_profile_prompt_target", audit.details)
+
+    @patch("module2.tasks.reassess_org_ueba_keys.delay")
+    def test_ueba_risk_calculation_patch_skips_llm_when_triage_disabled(self, reassess_delay):
+        from module2.models import OrgUebaSettings
+
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        settings_obj, _ = OrgUebaSettings.objects.get_or_create(organization=self.org)
+        settings_obj.llm_triage_enabled = False
+        settings_obj.save(update_fields=["llm_triage_enabled"])
+
+        resp = self.client.patch(
+            "/api/module2/ueba/risk-calculation/",
+            {"behavior_profile_prompt_target": 55},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        reassess_delay.assert_called_once_with(self.org.id, run_llm=False)
 
     def test_ueba_risk_calculation_patch_rejects_invalid_weights(self):
         self.user.is_superuser = True
@@ -444,6 +506,55 @@ class Module2PagesApiTests(TestCase):
         self.user.save(update_fields=["is_staff"])
         resp_admin = self.client.post("/api/module2/threat-intel/", payload, format="json")
         self.assertEqual(resp_admin.status_code, 201, resp_admin.content)
+
+    def test_threat_intel_sync_returns_503_when_redis_fails(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        with patch(
+            "module2.views.safe_sync_threat_intel_to_redis",
+            return_value=(False, "redis down"),
+        ):
+            resp = self.client.post("/api/module2/threat-intel/sync/", {}, format="json")
+        self.assertEqual(resp.status_code, 503, resp.content)
+        body = resp.json()
+        self.assertEqual(body["status"], "sync_failed")
+        self.assertIn("redis_key", body)
+
+    def test_threat_intel_sync_returns_synced_payload_on_success(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        from module2.models import ThreatIntelEntry
+
+        ThreatIntelEntry.objects.create(
+            organization=self.org,
+            threat_type="jailbreak_probe",
+            indicator="ignore previous",
+            auto_block=True,
+            source="manual",
+        )
+        with patch("module2.views.safe_sync_threat_intel_to_redis", return_value=(True, None)):
+            resp = self.client.post("/api/module2/threat-intel/sync/", {}, format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        body = resp.json()
+        self.assertEqual(body["status"], "synced")
+        self.assertIn("synced_by_threat_type", body)
+        self.assertEqual(body["synced_by_threat_type"].get("jailbreak_probe"), 1)
+
+    def test_threat_intel_telemetry_ioc_library_includes_by_threat_type(self):
+        from module2.models import ThreatIntelEntry
+
+        ThreatIntelEntry.objects.create(
+            organization=self.org,
+            threat_type="pw_probe",
+            indicator="test-ioc",
+            source="manual",
+        )
+        resp = self.client.get("/api/module2/threat-intel/telemetry/?period=24h")
+        self.assertEqual(resp.status_code, 200)
+        lib = resp.json().get("ioc_library") or {}
+        self.assertIn("by_threat_type", lib)
+        self.assertEqual(lib["by_threat_type"].get("pw_probe"), 1)
+        self.assertIn("expiring_soon", lib)
 
     def test_incident_detail_timeline_redacts_unknown_metadata_fields(self):
         incident = self._incident(

@@ -10,6 +10,19 @@ import { LlMObservationBadge, LlMObservationPanel } from "./LlMObservationStatus
 import { RiskBandBadge } from "./RiskBandBadge";
 import { RiskScoreCalculationGuide } from "./RiskScoreCalculationGuide";
 import { ApiKeyActivityTimeline } from "./ApiKeyActivityTimeline";
+import {
+  actionLabelStyle,
+  actionPromptStyle,
+  eventPromptPreview,
+  laneLabel,
+} from "./uebaPromptDisplay";
+import { formatUebaRequestTime } from "./uebaTimeFormat";
+
+const RECOMMENDED_ACTION_LABELS = {
+  monitor: "Monitor — routine watch",
+  investigate: "Investigate — review prompts and owner",
+  contain: "Contain — consider kill-switch or disable",
+};
 
 const BAND_STYLES = {
   low: {
@@ -83,20 +96,11 @@ function MetricBar({ label, value, colorClass }) {
 }
 
 function formatRequestTime(timestamp) {
-  return (timestamp || "").replace("T", " ").slice(0, 19);
+  return formatUebaRequestTime(timestamp);
 }
 
 function promptPreview(req) {
-  const direct = (req?.prompt_snippet || req?.intent || req?.detail || "").trim();
-  if (direct) return direct;
-  const lineage = req?.prompt_lineage;
-  if (Array.isArray(lineage)) {
-    for (const entry of lineage) {
-      const text = (entry?.prompt || entry?.text || "").trim();
-      if (text) return text;
-    }
-  }
-  return "";
+  return eventPromptPreview(req);
 }
 
 function compactRequestJson(req) {
@@ -180,6 +184,7 @@ function RecentRequestsSection({ requests, requestCount }) {
                     ? "bg-teal-600 text-white shadow-sm"
                     : "border border-slate-200 bg-white text-slate-600 hover:border-teal-300 hover:text-teal-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-teal-600 dark:hover:text-teal-300"
                 }`}
+                title={req.timestamp ? formatUebaRequestTime(req.timestamp) : promptPositionLabel(i)}
               >
                 {promptPositionLabel(i)}
               </button>
@@ -225,19 +230,20 @@ function RecentRequestsSection({ requests, requestCount }) {
           )}
 
           {selected && (
-            <div className="rounded-md border border-slate-100 bg-white/70 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/60">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-teal-600 dark:text-teal-400">
+            <div className={`rounded-md border px-3 py-2 text-xs ${actionPromptStyle(selected.action)}`}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 {promptPositionLabel(safeIndex)}
               </p>
-              <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">
-                {(selected.action || "—").toUpperCase()}
+              <p className={`mt-1 font-semibold uppercase ${actionLabelStyle(selected.action)}`}>
+                {laneLabel(selected.request_lane || selected.metadata?.source || "chat")}
+                {" · "}{(selected.action || "—").toUpperCase()}
                 {" · "}{selected.model || "—"}
                 {" · "}{selected.threat_type || "—"}
               </p>
-              <p className="mt-1 text-[10px] text-slate-400">
-                {formatRequestTime(selected.timestamp)} UTC
+              <p className="mt-1 text-[10px] opacity-80">
+                {formatRequestTime(selected.timestamp)}
               </p>
-              <p className="mt-2 whitespace-pre-wrap break-words text-slate-600 dark:text-slate-300">
+              <p className="mt-2 whitespace-pre-wrap break-words leading-relaxed">
                 {promptPreview(selected) || "No prompt captured for this event."}
               </p>
               <button
@@ -264,7 +270,7 @@ function RecentRequestsSection({ requests, requestCount }) {
   );
 }
 
-function BehaviorProfileSection({ profile, llmReasoning, llmVerdict, traditionalScore, finalScore }) {
+function BehaviorProfileSection({ profile, llmReasoning, llmVerdict, llmRecommendedAction, traditionalScore, finalScore }) {
   if (!profile) return null;
   const collected = profile.prompt_samples_collected ?? 0;
   const target = profile.prompt_samples_target ?? 50;
@@ -322,6 +328,12 @@ function BehaviorProfileSection({ profile, llmReasoning, llmVerdict, traditional
           )}
         </div>
       )}
+      {llmRecommendedAction && (
+        <p className="mt-2 text-[11px] text-slate-600 dark:text-slate-300">
+          <span className="font-semibold text-slate-500">Recommended action:</span>{" "}
+          {RECOMMENDED_ACTION_LABELS[llmRecommendedAction] || llmRecommendedAction}
+        </p>
+      )}
       {scoreDiff && (
         <p className="mt-2 text-[11px] text-slate-500">
           Traditional {Number(traditionalScore).toFixed(2)} → LLM-adjusted {Number(finalScore).toFixed(2)}
@@ -348,6 +360,7 @@ export function ApiKeyRiskProfile({
   riskCalculation = null,
   variant = "inline",
   showScoreGuide,
+  scoreUpdating = false,
 }) {
   const isSidebar = variant === "sidebar";
   const isPreview = variant === "preview";
@@ -473,6 +486,12 @@ export function ApiKeyRiskProfile({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <RiskBandBadge type="behavioral" band={band} score={displayScore} />
+            {scoreUpdating && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Updating score
+              </span>
+            )}
             <LlMObservationBadge observation={behavior.llm_observation} compact />
             {!behavior.is_active && (
               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
@@ -492,6 +511,12 @@ export function ApiKeyRiskProfile({
           <p className={`text-xs text-slate-600 dark:text-slate-300 ${isSidebar ? "mt-1" : "mt-2"}`}>
             Score {Number(displayScore).toFixed(2)} · Velocity {behavior.velocity_spike}x · {behavior.request_count} requests
           </p>
+          {behavior.llm_recommended_action && (
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold">SOC action:</span>{" "}
+              {RECOMMENDED_ACTION_LABELS[behavior.llm_recommended_action] || behavior.llm_recommended_action}
+            </p>
+          )}
         </div>
       </div>
 
@@ -499,13 +524,14 @@ export function ApiKeyRiskProfile({
         <p className="text-xs font-semibold uppercase text-slate-500">Safety rates</p>
         <MetricBar label="Blocked" value={behavior.block_rate_pct} colorClass="bg-red-500" />
         <MetricBar label="Redacted" value={behavior.redact_rate_pct} colorClass="bg-amber-500" />
-        <MetricBar label="Allowed" value={allowRate} colorClass="bg-emerald-500" />
+        <MetricBar label="Allowed (safe bandwidth)" value={allowRate} colorClass="bg-emerald-500" />
       </div>
 
       <BehaviorProfileSection
         profile={behavior.behavior_profile}
         llmReasoning={behavior.llm_reasoning}
         llmVerdict={behavior.llm_verdict}
+        llmRecommendedAction={behavior.llm_recommended_action}
         traditionalScore={behavior.traditional_score}
         finalScore={behavior.final_score ?? behavior.risk_score}
       />

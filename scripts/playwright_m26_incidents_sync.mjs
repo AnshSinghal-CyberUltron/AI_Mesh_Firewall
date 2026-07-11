@@ -1,16 +1,18 @@
 /**
- * M2.6 Incident Queue & Forensics — KPI load, filter, escalate, detail timeline, resolve sync gate.
+ * M2.6 Incident and Forensics — KPI load, filter, escalate, detail timeline, resolve sync gate.
  *
  * Run (host with playwright):
  *   NODE_PATH="$PWD/tests/e2e/node_modules" BASE_URL=http://127.0.0.1:8180 \
  *     node scripts/playwright_m26_incidents_sync.mjs
  *
- * Docker (no local node):
- *   docker run --rm --network ai_mesh_firewall_default -v "%CD%:/work" -w /work \
+ * Docker-only (no host docker CLI; stack on host :8180):
+ *   docker run --rm --add-host=host.docker.internal:host-gateway -v "%CD%:/work" -w /work \
  *     mcr.microsoft.com/playwright:v1.60.0-jammy bash -lc \
  *     "cd tests/e2e && npm ci --omit=dev 2>/dev/null || npm install && \
- *      NODE_PATH=/work/tests/e2e/node_modules BASE_URL=http://frontend:5173 \
- *      M26_PROBE_STAMP=$M26_PROBE_STAMP node /work/scripts/playwright_m26_incidents_sync.mjs"
+ *      NODE_PATH=/work/tests/e2e/node_modules BASE_URL=http://host.docker.internal:8180 \
+ *      M26_PROBE_STAMP=\$M26_PROBE_STAMP node /work/scripts/playwright_m26_incidents_sync.mjs"
+ *
+ * Pre-seed on host (optional): M26_INCIDENT_ID=<id> node scripts/playwright_m26_incidents_sync.mjs
  */
 import { chromium } from "playwright";
 import { execSync } from "node:child_process";
@@ -27,6 +29,7 @@ const PROBE_TITLE = process.env.M26_PROBE_TITLE || `M2.6 E2E probe ${STAMP}`;
 const BULK_TITLE_A = `M2.6 E2E bulk A ${STAMP}`;
 const BULK_TITLE_B = `M2.6 E2E bulk B ${STAMP}`;
 const PRESEED_ID = process.env.M26_INCIDENT_ID ? Number(process.env.M26_INCIDENT_ID) : null;
+const CONTROL_CONTAINER = process.env.CONTROL_CONTAINER || "ai_mesh_firewall-control-1";
 
 const report = {
   base: BASE,
@@ -55,12 +58,7 @@ async function shot(page, name) {
   } catch {}
 }
 
-function seedOpenIncident() {
-  if (PRESEED_ID) {
-    report.incidentId = PRESEED_ID;
-    report.notes.push(`using pre-seeded incident id=${PRESEED_ID} (host)`);
-    return;
-  }
+function tryDockerSeed() {
   const py =
     `from auth.models import Organization; from policy.models import EnforcementEvent, SecurityIncident; ` +
     `from policy.constants import ACTION_BLOCK; title=${JSON.stringify(PROBE_TITLE)}; ` +
@@ -78,8 +76,7 @@ function seedOpenIncident() {
     `print(f"{inc.id},{inc_a.id},{inc_b.id}")`;
   try {
     const cmd =
-      `docker exec -w /app/control ai_mesh_firewall-control-1 python manage.py shell -c ` +
-      JSON.stringify(py);
+      `docker exec -w /app/control ${CONTROL_CONTAINER} python manage.py shell -c ` + JSON.stringify(py);
     const out = execSync(cmd, { encoding: "utf-8", timeout: 90000 });
     const idLine = (out || "")
       .split(/\r?\n/)
@@ -90,10 +87,54 @@ function seedOpenIncident() {
     const [probeId, bulkAId, bulkBId] = idLine.split(",").map((v) => Number(v));
     report.incidentId = probeId;
     report.bulkIds = [bulkAId, bulkBId];
-    report.notes.push(`seeded probe=${report.incidentId} bulk=${report.bulkIds.join(",")}`);
+    report.notes.push(`seeded probe=${report.incidentId} bulk=${report.bulkIds.join(",")} (host docker)`);
+    return true;
   } catch (err) {
-    report.notes.push(`seed skipped (${String(err?.message || err).slice(0, 140)})`);
+    report.notes.push(`host docker seed skipped (${String(err?.message || err).slice(0, 140)})`);
+    return false;
   }
+}
+
+function seedPreseedOrDocker() {
+  if (PRESEED_ID) {
+    report.incidentId = PRESEED_ID;
+    report.notes.push(`using pre-seeded incident id=${PRESEED_ID}`);
+    return;
+  }
+  tryDockerSeed();
+}
+
+async function seedOpenIncidentViaApi(page) {
+  if (report.incidentId) return true;
+  const data = await page.evaluate(
+    async ({ probeTitle, bulkA, bulkB }) => {
+      const tok = localStorage.getItem("auth_access");
+      const r = await fetch("/api/module2/incidents/e2e-seed/", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${tok}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          probe_title: probeTitle,
+          bulk_titles: [bulkA, bulkB],
+        }),
+      });
+      const body = await r.json().catch(() => ({}));
+      return { status: r.status, body };
+    },
+    { probeTitle: PROBE_TITLE, bulkA: BULK_TITLE_A, bulkB: BULK_TITLE_B },
+  );
+  if (data.status === 201 && data.body?.probe_id) {
+    report.incidentId = data.body.probe_id;
+    report.bulkIds = data.body.bulk_ids || [];
+    report.notes.push(`seeded probe=${report.incidentId} bulk=${report.bulkIds.join(",")} (API)`);
+    return true;
+  }
+  report.notes.push(
+    `API seed unavailable (HTTP ${data.status}${data.body?.detail ? `: ${data.body.detail}` : ""})`,
+  );
+  return false;
 }
 
 async function waitForControlPlane(page) {
@@ -149,7 +190,7 @@ async function openIncidentsQueue(page) {
     ),
     page.goto(`${BASE}/incidents`, { waitUntil: "domcontentloaded", timeout: 120000 }),
   ]);
-  await page.getByRole("heading", { name: /Incident Queue/i }).waitFor({ state: "visible", timeout: 60000 });
+  await page.getByRole("heading", { name: /Incident and Forensics/i }).waitFor({ state: "visible", timeout: 60000 });
   await page.getByText(/Active Queue/i).first().waitFor({ state: "visible", timeout: 30000 });
 
   const body = await listResp.json().catch(() => ({}));
@@ -163,20 +204,23 @@ async function openIncidentsQueue(page) {
 async function filterToProbe(page) {
   CURRENT_PHASE = "m26-search-filter";
   if (PRESEED_ID) {
-    const data = await page.evaluate(async ({ incidentId }) => {
-      const tok = localStorage.getItem("auth_access");
-      const detailResp = await fetch(`/api/module2/incidents/${incidentId}/`, {
-        headers: { Authorization: `Bearer ${tok}` },
-      });
-      const detail = await detailResp.json().catch(() => ({}));
-      const title = detail?.incident?.title || "";
-      const r = await fetch(`/api/module2/incidents/?search=${encodeURIComponent(title)}`, {
-        headers: { Authorization: `Bearer ${tok}` },
-      });
-      const body = await r.json().catch(() => ({}));
-      const row = (body.results || []).find((item) => item.id === incidentId) || (body.results || [])[0];
-      return { status: r.status, row, title };
-    }, { incidentId: PRESEED_ID });
+    const data = await page.evaluate(
+      async ({ incidentId }) => {
+        const tok = localStorage.getItem("auth_access");
+        const detailResp = await fetch(`/api/module2/incidents/${incidentId}/`, {
+          headers: { Authorization: `Bearer ${tok}` },
+        });
+        const detail = await detailResp.json().catch(() => ({}));
+        const title = detail?.incident?.title || "";
+        const r = await fetch(`/api/module2/incidents/?search=${encodeURIComponent(title)}`, {
+          headers: { Authorization: `Bearer ${tok}` },
+        });
+        const body = await r.json().catch(() => ({}));
+        const row = (body.results || []).find((item) => item.id === incidentId) || (body.results || [])[0];
+        return { status: r.status, row, title };
+      },
+      { incidentId: PRESEED_ID },
+    );
     assert(data.row, `pre-seeded incident visible in API search (id=${PRESEED_ID})`);
     report.incidentId = data.row.id;
     report.probeTitle = data.title || report.probeTitle;
@@ -207,24 +251,15 @@ async function filterToProbe(page) {
   return row;
 }
 
-async function investigateFromQueue(page, incidentId) {
-  CURRENT_PHASE = "m26-investigate";
+async function viewFromQueue(page, incidentId) {
+  CURRENT_PHASE = "m26-view";
   const row = page.locator("tr").filter({ has: page.getByRole("link", { name: new RegExp(`#${incidentId}`) }) }).first();
-  const [invResp] = await Promise.all([
-    page.waitForResponse(
-      (r) => r.url().includes(`/api/security/incidents/${incidentId}/investigate-incident/`) && r.ok(),
-      { timeout: 60000 },
-    ),
-    row.getByRole("button", { name: /^Investigate$/i }).click(),
-  ]);
-  const invBody = await invResp.json().catch(() => ({}));
-  assert(invBody.status === "investigating", `investigate API status investigating (got ${invBody.status})`);
-  await page.getByText(new RegExp(`Incident #${incidentId} marked investigating`, "i")).waitFor({
-    state: "visible",
-    timeout: 30000,
-  });
-  report.steps.push("investigate-queue");
-  await shot(page, "03-investigating");
+  await row.getByRole("link", { name: /^View$/i }).click();
+  await page.waitForURL(new RegExp(`/incidents/${incidentId}`), { timeout: 60000 });
+  report.steps.push("view-queue");
+  await shot(page, "03-view");
+  await page.getByRole("link", { name: /Back to Incidents/i }).click();
+  await page.waitForURL(/\/incidents/, { timeout: 30000 });
 }
 
 async function escalateFromQueue(page, incidentId) {
@@ -282,9 +317,9 @@ async function resolveFromDetail(page, incidentId) {
 
 async function verifyResolvedInQueue(page, incidentId) {
   CURRENT_PHASE = "m26-resolved-filter";
-  await page.getByRole("link", { name: /Back to Queue/i }).click();
+  await page.getByRole("link", { name: /Back to Incidents/i }).click();
   await page.waitForURL(/\/incidents/, { timeout: 30000 });
-  await page.getByRole("heading", { name: /Incident Queue/i }).waitFor({ state: "visible", timeout: 60000 });
+  await page.getByRole("heading", { name: /Incident and Forensics/i }).waitFor({ state: "visible", timeout: 60000 });
 
   await page.locator("select").filter({ hasText: /All statuses/i }).first().selectOption("resolved");
   await page.getByPlaceholder(/Search title or notes/i).fill(report.probeTitle || PROBE_TITLE);
@@ -299,7 +334,7 @@ async function verifyResolvedInQueue(page, incidentId) {
 async function bulkResolveFromQueue(page) {
   CURRENT_PHASE = "m26-bulk-resolve";
   await page.goto(`${BASE}/incidents`, { waitUntil: "domcontentloaded", timeout: 120000 });
-  await page.getByRole("heading", { name: /Incident Queue/i }).waitFor({ state: "visible", timeout: 60000 });
+  await page.getByRole("heading", { name: /Incident and Forensics/i }).waitFor({ state: "visible", timeout: 60000 });
   if (!PRESEED_ID) {
     await page.getByPlaceholder(/Search title or notes/i).fill("M2.6 E2E bulk");
     await page.getByPlaceholder(/Search title or notes/i).press("Enter");
@@ -333,7 +368,7 @@ async function bulkResolveFromQueue(page) {
 
 async function main() {
   fs.mkdirSync("runs", { recursive: true });
-  seedOpenIncident();
+  seedPreseedOrDocker();
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -342,6 +377,10 @@ async function main() {
 
   try {
     await login(page);
+    if (!report.incidentId) {
+      const seeded = await seedOpenIncidentViaApi(page);
+      assert(seeded, "probe incidents seeded (host docker or API e2e-seed)");
+    }
     CURRENT_PHASE = "baseline";
     const baseline = await fetchIncidentSummary(page);
     assert(baseline.status === 200, `baseline incidents -> 200 (got ${baseline.status})`);
@@ -352,7 +391,7 @@ async function main() {
     const incidentId = row.id;
     report.incidentId = incidentId;
 
-    await investigateFromQueue(page, incidentId);
+    await viewFromQueue(page, incidentId);
     await escalateFromQueue(page, incidentId);
     await openDetailAndVerifyTimeline(page, incidentId);
     await resolveFromDetail(page, incidentId);

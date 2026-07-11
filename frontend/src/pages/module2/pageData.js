@@ -69,12 +69,13 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
     ? Math.round(((retrieverTotal - retrieverBlocked) / retrieverTotal) * 100)
     : 100;
 
-  return [
+  const ingestEvents = ragPipelineKpis?.ingest_events || 0;
+  const cards = [
     {
       key: "pipeline-events",
       label: "Pipeline Events",
       value: pipelineIngress || totalStageChecks,
-      helpText: "RAG requests entering the pipeline (Query stage volume when present).",
+      helpText: "RAG query requests entering the pipeline (Query stage volume when present). Ingest is tracked separately.",
     },
     {
       key: "blocked-at-gate",
@@ -104,6 +105,15 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
       helpText: "Share of Retriever stage checks that were not hard-blocked.",
     },
   ];
+  if (ingestEvents > 0) {
+    cards.push({
+      key: "ingest-events",
+      label: "Ingest Events",
+      value: ingestEvents,
+      helpText: "Document ingest operations in this window (not counted in Query stage).",
+    });
+  }
+  return cards;
 }
 
 export function formatRagStageChartData(stages = {}) {
@@ -284,7 +294,7 @@ export function normalizeThreatIntelRows(data) {
   return [];
 }
 
-/** Fleet stats for the IOC library table — used on M2.5 SOC panels. */
+/** Fleet stats for the IOC library table — used on M2.3 SOC panels. */
 export function buildIocFleetStats(entries = []) {
   const list = Array.isArray(entries) ? entries : [];
   const now = Date.now();
@@ -319,41 +329,49 @@ export function iocMatchRatePct(summary = {}) {
   return Math.min(100, Math.round((hits / total) * 100));
 }
 
-export function buildTelemetryKpis(summary = {}) {
+export function buildTelemetryKpis(summary = {}, iocLibrary = {}) {
+  const libTotal = iocLibrary?.total;
+  const libArmed = iocLibrary?.auto_block_enabled;
+  const libSub =
+    libTotal != null
+      ? `${libTotal} IOCs in library${libArmed != null ? ` · ${libArmed} armed` : ""}`
+      : undefined;
+
   return [
     {
       key: "total-events",
-      label: "Gateway Requests (Deduped)",
-      value: summary.total_events ?? summary.requests_inspected ?? 0,
-      helpText: "Distinct gateway requests in this window (aligned with Module 1.1 — one count per request_id, not per enforcement row).",
+      label: "Gateway Requests",
+      value: summary.requests_inspected ?? summary.total_events ?? 0,
+      helpText: "All gateway requests in this window (live enforcement telemetry — one count per request_id, aligned with Module 1.1 SOC totals).",
     },
     {
       key: "injection-attempts",
       label: "Injection & Jailbreak",
       value: summary.injection_attempts ?? 0,
       color: "text-red-600",
-      helpText: "Prompt injection, jailbreak, or LLM01-style attacks — including Attack Simulator blocks.",
+      helpText: "All prompt-injection / jailbreak detections in this period (global gateway telemetry, not IOC-only).",
     },
     {
       key: "pii-leaks",
       label: "PII Detected",
       value: summary.pii_leaks ?? 0,
       color: "text-amber-600",
-      helpText: "Requests where sensitive data was redacted by policy (SSN, PHI, credentials, etc.).",
+      helpText: "All policy redaction detections in this period (global gateway telemetry, not IOC-only).",
     },
     {
       key: "behavior-scoring",
       label: "API Key Activity",
       value: summary.behavior_scoring_events ?? 0,
       color: "text-sky-600",
-      helpText: "Events tied to a gateway API key prefix — feeds M2.2 UEBA; shown here for attack-volume context.",
+      helpText: "All key-attributed gateway events in this period (feeds M2.2 UEBA; not limited to Threat Intel sync).",
     },
     {
       key: "threat-intel-hits",
       label: "IOC Matches",
       value: summary.threat_intel_matches ?? 0,
       color: "text-violet-600",
-      helpText: "Traffic that matched an indicator from your IOC table after Sync to Gateway. Not the same as generic injection blocks.",
+      sub: libSub,
+      helpText: "Traffic that matched a synced IOC from your library. These blocks use the Threat Intelligence policy path (code: threat_intel_blocked), not generic scanner or Policy Management rules. Library size is shown below — matches rise only after live gateway enforcement.",
     },
   ];
 }
@@ -440,6 +458,26 @@ const TICKER_ACTION_PHRASES = {
   allow: "was allowed",
 };
 
+/** True when enforcement metadata reflects an IOC / threat-intel policy block (not generic scanner policy). */
+export function isThreatIntelEnforcementMeta(meta = {}) {
+  if (!meta || typeof meta !== "object") return false;
+  const source = String(meta.source || "").toLowerCase();
+  const detail = String(meta.detail || "").toLowerCase();
+  const tier = String(meta.detection_tier || meta.pipeline_stage || "").toLowerCase();
+  const code = String(meta.code || meta.error_code || "").toLowerCase();
+  if (source === "threat_intel" || tier === "threat_intel" || code === "threat_intel_blocked") {
+    return true;
+  }
+  return detail.includes("ioc match") || detail.includes("threat intelligence");
+}
+
+/** Analyst-facing block label distinguishing IOC policy blocks from generic policy/scanner blocks. */
+export function formatEnforcementBlockLabel(meta = {}, action = "block") {
+  if (String(action).toLowerCase() !== "block") return String(action || "processed");
+  if (isThreatIntelEnforcementMeta(meta)) return "Threat Intel policy block";
+  return "Policy block";
+}
+
 /** Plain-language one-liner for ticker hover / quick scan. */
 export function formatTickerAnalystSummary(item = {}) {
   if (item.title) {
@@ -451,7 +489,10 @@ export function formatTickerAnalystSummary(item = {}) {
   const meta = item.metadata || {};
   const lane = resolveEventLane(item).replace(/_/g, " ");
   const action = String(item.action || meta.action || "").toLowerCase();
-  const phrase = TICKER_ACTION_PHRASES[action] || (action ? `had outcome ${action}` : "was processed");
+  let phrase = TICKER_ACTION_PHRASES[action] || (action ? `had outcome ${action}` : "was processed");
+  if (action === "block" && isThreatIntelEnforcementMeta(meta)) {
+    phrase = "was blocked by Threat Intelligence policy (IOC match)";
+  }
   const parts = [`A ${lane} request ${phrase}`];
 
   const threat = meta.threat_type ? String(meta.threat_type).replace(/_/g, " ") : "";
@@ -574,11 +615,11 @@ export function metadataDetail(meta = {}) {
 }
 
 const INCIDENT_LANE_DRILL_DOWN = {
-  chat: { to: "/models/exposure", label: "M2.3 Model exposure" },
-  rag: { to: "/models/exposure?tab=rag", label: "M2.3 RAG health" },
-  vector: { to: "/models/exposure?tab=rag", label: "M2.3 Vectors" },
-  mcp: { to: "/mcp/risk", label: "M2.4 MCP risk" },
-  threat_intel: { to: "/threat-intel", label: "M2.5 Threat intel" },
+  chat: { to: "/models/exposure", label: "M2.4 Model exposure" },
+  rag: { to: "/models/exposure?tab=rag", label: "M2.4 RAG health" },
+  vector: { to: "/models/exposure?tab=rag", label: "M2.4 Vectors" },
+  mcp: { to: "/mcp/risk", label: "M2.5 MCP risk" },
+  threat_intel: { to: "/threat-intel", label: "M2.3 Threat intel" },
 };
 
 export function incidentLaneDrillDown(source) {

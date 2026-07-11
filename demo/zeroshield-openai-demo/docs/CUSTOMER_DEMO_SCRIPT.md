@@ -78,8 +78,10 @@ Show `docs/SDK_EXAMPLES.md` Scenario 1 code snippet.
 
 ## 8. SDK scenarios + close (2 min)
 
-1. Open **SDK Scenarios** → run scenarios 1–6
-2. Emphasize: *"This demo app uses zero provider SDKs. Your integration looks identical."*
+1. Open **SDK Scenarios** → preview shows SDK pattern one-liner per button
+2. Run scenarios **1 (Basic)**, **2 (Streaming)**, and **6 (Guardrail)** for the live proof
+3. Emphasize: *"This demo app uses zero provider SDKs. Your integration looks identical."*
+4. Reference [reports/SDK_SCENARIOS_VALIDATION.md](reports/SDK_SCENARIOS_VALIDATION.md) for release gates
 
 **Close:** Hand off `docs/SDK_EXAMPLES.md` and gateway API key provisioning docs.
 

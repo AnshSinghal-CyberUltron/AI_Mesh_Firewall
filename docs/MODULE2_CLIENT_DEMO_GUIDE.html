@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZeroShield Module 2 — Client Demo Guide</title>
+  <style>
+    @page { margin: 18mm 16mm; size: A4; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.55;
+      color: #1e293b;
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 24px 28px 40px;
+    }
+    .cover {
+      text-align: center;
+      padding: 48px 24px 56px;
+      border-bottom: 3px solid #0d9488;
+      margin-bottom: 32px;
+      page-break-after: always;
+    }
+    .cover h1 {
+      font-size: 26pt;
+      color: #0f766e;
+      margin: 0 0 8px;
+      font-weight: 700;
+    }
+    .cover .subtitle {
+      font-size: 13pt;
+      color: #475569;
+      margin-bottom: 24px;
+    }
+    .cover .meta {
+      font-size: 9.5pt;
+      color: #64748b;
+    }
+    .cover .logo-line {
+      font-size: 11pt;
+      font-weight: 600;
+      color: #0d9488;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    h2 {
+      font-size: 15pt;
+      color: #0f766e;
+      border-bottom: 2px solid #ccfbf1;
+      padding-bottom: 6px;
+      margin-top: 28px;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 12pt;
+      color: #134e4a;
+      margin-top: 20px;
+      page-break-after: avoid;
+    }
+    h4 {
+      font-size: 10.5pt;
+      color: #334155;
+      margin-top: 14px;
+      page-break-after: avoid;
+    }
+    p { margin: 0 0 10px; }
+    .lead {
+      font-size: 11pt;
+      color: #334155;
+      background: #f0fdfa;
+      border-left: 4px solid #0d9488;
+      padding: 12px 16px;
+      margin: 16px 0;
+      border-radius: 0 6px 6px 0;
+    }
+    .use-case {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 12px 0;
+    }
+    .use-case strong { color: #1d4ed8; }
+    .objective {
+      background: #fefce8;
+      border: 1px solid #fde047;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 12px 0;
+    }
+    .objective strong { color: #a16207; }
+    .client-line {
+      background: #f8fafc;
+      border-left: 3px solid #6366f1;
+      padding: 8px 12px;
+      margin: 10px 0;
+      font-style: italic;
+      color: #475569;
+      font-size: 10pt;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 9.5pt;
+      page-break-inside: avoid;
+    }
+    th {
+      background: #0f766e;
+      color: #fff;
+      text-align: left;
+      padding: 8px 10px;
+      font-weight: 600;
+    }
+    td {
+      border: 1px solid #e2e8f0;
+      padding: 7px 10px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #f8fafc; }
+    ul, ol { margin: 8px 0 12px; padding-left: 22px; }
+    li { margin-bottom: 4px; }
+    .toc { page-break-after: always; }
+    .toc h2 { border: none; }
+    .toc ol { font-size: 11pt; line-height: 1.8; }
+    .toc a { color: #0f766e; text-decoration: none; }
+    .page-section { page-break-before: always; }
+    .page-section:first-of-type { page-break-before: auto; }
+    .kpi-label { font-weight: 600; color: #0f766e; }
+    .footer-note {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 8.5pt;
+      color: #94a3b8;
+      text-align: center;
+    }
+    .closing {
+      background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%);
+      border: 1px solid #99f6e4;
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+    .module-tag {
+      display: inline-block;
+      background: #0d9488;
+      color: #fff;
+      font-size: 8pt;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo-line">ZeroShield AI Mesh Firewall</div>
+  <h1>Module 2 — Client Demo Guide</h1>
+  <p class="subtitle">SOC Intelligence &amp; Response<br>Use Cases, Objectives &amp; Screen-by-Screen Walkthrough</p>
+  <p class="meta">For security leaders, SOC managers, and platform owners<br>Companion to the ZeroShield OpenAI Demo Application</p>
+</div>
+
+<div class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#intro">What Module 2 Is</a></li>
+    <li><a href="#m21">M2.1 — SOC Command Center (Dashboard)</a></li>
+    <li><a href="#m22">M2.2 — API Key Behavior Analytics (UEBA)</a></li>
+    <li><a href="#m23">M2.3 — Model &amp; RAG Health</a></li>
+    <li><a href="#m24">M2.4 — MCP &amp; Context Risk</a></li>
+    <li><a href="#m25">M2.5 — Threat Intelligence Ops</a></li>
+    <li><a href="#m26">M2.6 — Incidents &amp; Forensics</a></li>
+    <li><a href="#closing">Closing Narrative for Clients</a></li>
+  </ol>
+</div>
+
+<section id="intro">
+  <h2>1. What Module 2 Is</h2>
+  <p>Your AI firewall (Module 1) stops bad traffic in real time — it blocks injections, redacts sensitive data, routes models safely, and logs every decision. <strong>Module 2 is where your security team lives after that.</strong> It turns those enforcement decisions into something a human team can act on: dashboards, risk scores, threat indicators, and formal incident cases.</p>
+  <p>Think of it this way: <strong>Module 1 is the guard at the door. Module 2 is the security operations center</strong> watching the cameras, reviewing who keeps knocking, and deciding when to lock someone out entirely.</p>
+
+  <div class="lead">
+    <strong>Four questions Module 2 answers:</strong>
+    <ol>
+      <li>Are attacks or misuse going up right now?</li>
+      <li>Which API keys, models, tools, or data paths are highest risk?</li>
+      <li>Which cases need immediate attention?</li>
+      <li>What containment action should we take — disable a key, sync a new threat rule, escalate a case?</li>
+    </ol>
+  </div>
+
+  <p>Everything on Module 2 screens comes from <strong>real enforcement telemetry</strong> produced by your gateway. When you run the demo app or built-in simulators, those requests flow through the same firewall and appear on these screens within seconds.</p>
+
+  <table>
+    <tr><th>Concern</th><th>Module 1</th><th>Module 2</th></tr>
+    <tr><td>Block a prompt</td><td>Gateway enforces</td><td>Shows visibility &amp; trends</td></tr>
+    <tr><td>Kill switch / disable key</td><td>Gateway + Control</td><td>Analyst UI triggers it</td></tr>
+    <tr><td>SOC dashboard</td><td>—</td><td>M2.1 Dashboard</td></tr>
+    <tr><td>Behavioral risk scoring</td><td>—</td><td>M2.2 UEBA</td></tr>
+    <tr><td>IOC management</td><td>Gateway enforces</td><td>M2.5 manages &amp; syncs</td></tr>
+    <tr><td>Incident workflow</td><td>—</td><td>M2.6 Incidents</td></tr>
+  </table>
+</section>
+
+<section id="m21" class="page-section">
+  <h2><span class="module-tag">M2.1</span> SOC Command Center (Dashboard)</h2>
+
+  <h3>In Plain Language</h3>
+  <p>When a SOC manager opens their shift, they start here. The Dashboard is your <strong>single pane of glass</strong> for AI security posture. It shows how much traffic passed through the gateway, how much was blocked or redacted, which lanes (chat, RAG, vector databases, MCP tools) are under pressure, and what is happening live right now.</p>
+
+  <div class="use-case"><strong>Use case:</strong> A security lead logs in Monday morning and needs to answer: <em>"Did anything bad happen over the weekend, and where should my team focus first?"</em> They open the Dashboard, scan the top numbers, check which lane cards are red, glance at the live ticker, and drill into UEBA, Model/RAG, or MCP pages for detail.</div>
+
+  <div class="objective"><strong>Objective:</strong> Give leadership and analysts a fast, trustworthy snapshot of gateway health across all AI traffic types — without requiring them to dig through logs.</div>
+
+  <h3>Top KPI Cards</h3>
+  <table>
+    <tr><th>KPI</th><th>What It Means (Client Language)</th></tr>
+    <tr><td class="kpi-label">Gateway Requests</td><td>Distinct AI requests that hit your firewall in the selected time window — one count per request.</td></tr>
+    <tr><td class="kpi-label">Blocked</td><td>Requests fully stopped. The user or app never got the dangerous output.</td></tr>
+    <tr><td class="kpi-label">Redacted</td><td>Allowed, but sensitive content (PII, secrets) was masked before the response went out.</td></tr>
+    <tr><td class="kpi-label">Monitored</td><td>Passed through but flagged for analyst review — like a yellow alert.</td></tr>
+    <tr><td class="kpi-label">Rerouted</td><td>Caller asked for one model; policy sent the request to a safer or cheaper model.</td></tr>
+    <tr><td class="kpi-label">Block Rate</td><td>Percentage of all requests that were hard-stopped — your headline risk number.</td></tr>
+  </table>
+
+  <h3>Lane Summary Cards</h3>
+  <p>Five colored cards — <strong>Chat, RAG, Vector, MCP, Threat Intel</strong> — each showing total events, blocks, and block rate. Each links to the deeper Module 2 page for that lane.</p>
+  <div class="client-line">"If the RAG card is flashing red while Chat is calm, your problem is probably document injection or poisoned knowledge — not general chat abuse."</div>
+
+  <h3>Charts &amp; Tables</h3>
+  <h4>API Key Activity Table</h4>
+  <p>Most active or riskiest API keys: prefix, name, request count, behavioral risk band (Low / Medium / High). Links to M2.2 UEBA.</p>
+
+  <h4>Threat Timeline (Area Chart)</h4>
+  <p>Hourly traffic volume with three layers: <strong>Blue (Total)</strong>, <strong>Red (Blocked)</strong>, <strong>Amber (Redacted)</strong>.</p>
+  <div class="client-line">"This tells you when pressure spiked. A sudden red spike at 2 AM might mean an automated attack, a misconfigured integration, or a pen test."</div>
+
+  <h4>High-Risk Ticker (Live Feed)</h4>
+  <p>Scrolling list of recent enforcement events and open incidents. Expand rows for forensic detail: threat type, model, API key prefix, pipeline stage. Green "Live" badge = real-time WebSocket updates.</p>
+</section>
+
+<section id="m22" class="page-section">
+  <h2><span class="module-tag">M2.2</span> API Key Behavior Analytics (UEBA)</h2>
+
+  <h3>In Plain Language</h3>
+  <p>Every application connecting to your AI gateway uses an <strong>API key</strong>. UEBA watches how each key behaves over time. A key that normally sends 10 polite questions per hour suddenly sending 500 injection attempts is a compromise signal — even if each individual request was blocked.</p>
+
+  <div class="use-case"><strong>Use case:</strong> An analyst sees repeated blocks from the same integration key. They open UEBA, find that key, review its behavior profile, and decide: <em>"This looks like a compromised service account — disable the key and activate a kill switch."</em></div>
+
+  <div class="objective"><strong>Objective:</strong> Move from "something was blocked" to "this identity is risky and needs containment."</div>
+
+  <h3>Top KPI Cards</h3>
+  <table>
+    <tr><th>KPI</th><th>What It Means</th></tr>
+    <tr><td class="kpi-label">Total Keys</td><td>All API keys registered for your organization.</td></tr>
+    <tr><td class="kpi-label">Active Keys</td><td>Keys currently enabled and able to authenticate.</td></tr>
+    <tr><td class="kpi-label">Disabled Keys</td><td>Keys turned off — every request with these keys fails at the door.</td></tr>
+    <tr><td class="kpi-label">Active Kill Switches</td><td>Emergency containment switches blocking traffic for specific keys or models.</td></tr>
+    <tr><td class="kpi-label">Key Events / Blocked</td><td>Enforcement events tied to API keys in this window, and how many were hard blocks.</td></tr>
+    <tr><td class="kpi-label">High Behavioral Risk Keys</td><td>Keys scoring in the High risk band — your priority review list.</td></tr>
+  </table>
+
+  <h3>Charts &amp; Tables</h3>
+  <h4>Behavior Timeline (Line Chart)</h4>
+  <p>Three lines over time: <strong>Total events (blue)</strong>, <strong>Blocks (red)</strong>, <strong>Redactions (amber)</strong>.</p>
+  <div class="client-line">"This shows whether abuse is a one-off spike or a sustained campaign against a specific credential."</div>
+
+  <h4>Top Risky Keys Table</h4>
+  <p>Click a key prefix to open the profile sidebar: recent prompts, safety rates, velocity spike factor, and containment actions (disable key, kill switch).</p>
+
+  <h4>API Key Fleet Table</h4>
+  <p>Full registry of every key with status, project, volume, risk band, and quick actions.</p>
+  <div class="client-line">"You do not need engineering to contain a bad key — an analyst can disable it from this screen, and the gateway blocks the next request immediately."</div>
+</section>
+
+<section id="m23" class="page-section">
+  <h2><span class="module-tag">M2.3</span> Model &amp; RAG Health</h2>
+
+  <h3>In Plain Language</h3>
+  <p><strong>Model Exposure</strong> answers: <em>"Which LLM models are under the most attack or policy friction?"</em> <strong>RAG &amp; Retrieval</strong> answers: <em>"Where in the document-Q&A pipeline are we losing control?"</em> Two tabs because chat abuse and RAG abuse are different problems.</p>
+
+  <div class="use-case"><strong>Use case:</strong> A platform owner sees elevated blocks on one model but not another — they adjust routing policy. Separately, RAG retriever blocks spike on one vector collection — they investigate poisoned documents or wrong ACLs.</div>
+
+  <div class="objective"><strong>Objective:</strong> Help teams prioritize which models and which RAG stages need policy attention.</div>
+
+  <h3>Tab A — Model Exposure</h3>
+  <table>
+    <tr><th>KPI</th><th>What It Means</th></tr>
+    <tr><td class="kpi-label">Active Models</td><td>LLM models currently enabled in your gateway.</td></tr>
+    <tr><td class="kpi-label">High Exposure</td><td>Models in the High exposure band — review these first.</td></tr>
+    <tr><td class="kpi-label">Total Requests</td><td>Combined traffic volume across all models.</td></tr>
+    <tr><td class="kpi-label">Avg Block Rate</td><td>Fleet-wide average — sudden jumps often mean an active campaign.</td></tr>
+    <tr><td class="kpi-label">Avg Exposure</td><td>Composite risk score (0–1). Higher = more enforcement friction.</td></tr>
+  </table>
+
+  <h4>Vulnerability Exposure by Model (Horizontal Bar)</h4>
+  <p>Composite exposure score per model (0–100%), combining block rate, redact rate, and latency stress.</p>
+
+  <h4>Block Rate by Model (Vertical Bar)</h4>
+  <p>Percentage of each model's traffic that was hard-blocked.</p>
+  <div class="client-line">"If Model A has 40% block rate and Model B has 2%, attackers or misconfigured apps are targeting Model A specifically."</div>
+
+  <h4>Active Models Table</h4>
+  <p>Per-model: provider, requests, block %, redact %, latency, keys, exposure band, score.</p>
+
+  <h3>Tab B — RAG &amp; Retrieval</h3>
+  <p>Every RAG request passes through four gates: <strong>Query → Retriever → Ranker → Generator</strong>.</p>
+
+  <table>
+    <tr><th>KPI</th><th>What It Means</th></tr>
+    <tr><td class="kpi-label">Pipeline Events</td><td>RAG requests entering the pipeline.</td></tr>
+    <tr><td class="kpi-label">Blocked at Gate</td><td>Hard blocks at any pipeline stage.</td></tr>
+    <tr><td class="kpi-label">Collections</td><td>Vector database collections touched.</td></tr>
+    <tr><td class="kpi-label">High-Risk Collections</td><td>Collections with block rate ≥ 50%.</td></tr>
+    <tr><td class="kpi-label">Retriever Pass Rate</td><td>Share of retriever checks not blocked.</td></tr>
+  </table>
+
+  <h4>Pipeline Stage Volume (Stacked Bar)</h4>
+  <p>Per stage: green = allowed, amber = flagged, red = blocked.</p>
+  <div class="client-line">"High block rate at Query means bad questions. High block rate at Retriever means bad documents or wrong collection access."</div>
+
+  <h4>Stage Block Rate, Throughput Snapshot, Policy Escalation Mix (Pie)</h4>
+  <p>Block % per gate; document survival across stages; Normal / Elevated / Strict policy tier distribution.</p>
+
+  <h4>Collection Block Rate &amp; Stage Latency</h4>
+  <p>Collections ranked by block rate; average processing time per stage in milliseconds.</p>
+
+  <h4>Vector Collection Registry Table</h4>
+  <p>Full per-collection breakdown: total, blocked, redacted, block %.</p>
+</section>
+
+<section id="m24" class="page-section">
+  <h2><span class="module-tag">M2.4</span> MCP &amp; Context Risk</h2>
+
+  <h3>In Plain Language</h3>
+  <p>Modern AI agents call tools — CRM lookups, SQL, tickets, files. MCP is how those tools connect. This page shows <strong>which tools and servers trigger security enforcement</strong> when agents try to use them.</p>
+
+  <div class="use-case"><strong>Use case:</strong> Security wants to know: <em>"Are agents sending dangerous SQL in tool arguments? Are tool responses leaking secrets back into the model?"</em> They open MCP Risk after live tool calls and see which tools hit policy.</div>
+
+  <div class="objective"><strong>Objective:</strong> Visibility into agent tool-call risk — a blind spot in traditional API security.</div>
+
+  <h3>Top KPI Cards</h3>
+  <table>
+    <tr><th>KPI</th><th>What It Means</th></tr>
+    <tr><td class="kpi-label">MCP Events</td><td>Every tool call the firewall evaluated.</td></tr>
+    <tr><td class="kpi-label">Blocked Calls</td><td>Tool calls completely stopped (dangerous SQL, path traversal, etc.).</td></tr>
+    <tr><td class="kpi-label">Redacted Calls</td><td>Allowed only after sensitive values were masked.</td></tr>
+    <tr><td class="kpi-label">Unique Tools</td><td>Distinct tool names — sudden jumps may mean unexplored tools.</td></tr>
+    <tr><td class="kpi-label">Policy Hit Rate</td><td>% of MCP events ending in block or redaction.</td></tr>
+  </table>
+
+  <h4>Tool Activity vs Policy Hits (Grouped Bar)</h4>
+  <p>Per tool: blue = total calls, amber = policy hits. High volume + low hits = noisy but safe. Few calls + many hits = priority to restrict.</p>
+
+  <h4>Inbound vs Outbound Scans</h4>
+  <ul>
+    <li><strong>Inbound</strong> — scans tool arguments before execution. High hit rate = bad inputs.</li>
+    <li><strong>Outbound</strong> — scans tool responses before they reach the model. High hit rate = secrets in tool output.</li>
+    <li><strong>Unknown</strong> — missing direction metadata; should stay near zero.</li>
+  </ul>
+
+  <h4>Busiest MCP Servers Table</h4>
+  <p>Servers/connectors ranked by total event volume.</p>
+</section>
+
+<section id="m25" class="page-section">
+  <h2><span class="module-tag">M2.5</span> Threat Intelligence Ops</h2>
+
+  <h3>In Plain Language</h3>
+  <p>Analysts maintain a library of <strong>known-bad patterns</strong> — jailbreak phrases, malicious IPs, attack fingerprints. Add, edit, and <strong>sync indicators to the live gateway</strong>, then measure whether they catch traffic.</p>
+  <p><strong>Important:</strong> The IOC table is your configuration library. KPIs and charts are live enforcement results. Adding an indicator does nothing until you click <strong>Sync to Gateway</strong>.</p>
+
+  <div class="use-case"><strong>Use case:</strong> A researcher discovers a new jailbreak phrase. They add it as an IOC with Auto-Block, sync to gateway, and see IOC Matches rise when attackers use that phrase.</div>
+
+  <div class="objective"><strong>Objective:</strong> Close the loop between threat research and live gateway enforcement — with measurable effectiveness.</div>
+
+  <h3>Top KPI Cards</h3>
+  <table>
+    <tr><th>KPI</th><th>What It Means</th></tr>
+    <tr><td class="kpi-label">Gateway Requests</td><td>Distinct requests in this window.</td></tr>
+    <tr><td class="kpi-label">Injection &amp; Jailbreak</td><td>Prompt injection attempts — including simulator blocks.</td></tr>
+    <tr><td class="kpi-label">PII Detected</td><td>Requests where sensitive data was redacted.</td></tr>
+    <tr><td class="kpi-label">API Key Activity</td><td>Events tied to a specific API key.</td></tr>
+    <tr><td class="kpi-label">IOC Matches</td><td>Traffic matching your synced indicator library.</td></tr>
+  </table>
+
+  <h4>Attack Categories Over Time (Stacked Area)</h4>
+  <p>Hourly mix: Injection, PII, API Keys, IOC Matches.</p>
+
+  <h4>Top OWASP / Threat Labels (Bar)</h4>
+  <p>Most common threat classification labels on enforcement events.</p>
+
+  <h4>Where IOC Matches Fired (Horizontal Bar)</h4>
+  <p>Pipeline stage where IOC matches occurred: Ingress, RAG Query, Retriever, Ranker, Generator.</p>
+
+  <h4>IOC Library Table</h4>
+  <p>Configuration entries with Add, Edit, Delete, and Sync to Gateway.</p>
+
+  <h4>Live Demo Validation Flow</h4>
+  <ol>
+    <li>Add an IOC (e.g. "ignore previous instructions")</li>
+    <li>Click Sync to Gateway</li>
+    <li>Send matching prompt in demo app or Attack Simulator (Live mode)</li>
+    <li>Return — IOC Matches KPI rises</li>
+  </ol>
+</section>
+
+<section id="m26" class="page-section">
+  <h2><span class="module-tag">M2.6</span> Incidents &amp; Forensics</h2>
+
+  <h3>In Plain Language</h3>
+  <p>A blocked request is a log line. A <strong>security incident</strong> is a formal case your team works until the threat is understood and closed. Incidents open automatically when alert rules or anomaly detection decide something is serious enough to track.</p>
+
+  <div class="use-case"><strong>Use case:</strong> Overnight, repeated high-severity blocks from one API key create an incident. The morning analyst filters Active + High, opens the case, reviews timeline and evidence, escalates to IR, and disables the key in UEBA.</div>
+
+  <div class="objective"><strong>Objective:</strong> End-to-end case management with audit trail — trackable, assignable, and defensible for compliance.</div>
+
+  <h3>Incident Queue — KPI Cards (Clickable Filters)</h3>
+  <table>
+    <tr><th>KPI</th><th>What It Means</th></tr>
+    <tr><td class="kpi-label">Active Queue</td><td>Cases in progress: open, investigating, or escalated.</td></tr>
+    <tr><td class="kpi-label">Open</td><td>New cases awaiting first review.</td></tr>
+    <tr><td class="kpi-label">Escalated</td><td>Cases promoted for senior review or IR handoff.</td></tr>
+    <tr><td class="kpi-label">Critical / High</td><td>Active cases at highest severity tiers.</td></tr>
+    <tr><td class="kpi-label">Resolved</td><td>Closed cases — kept in history for audit.</td></tr>
+  </table>
+  <p><em>Note: KPI cards count the entire org queue. Filtering the table does not shrink KPI numbers — click a KPI to filter the table.</em></p>
+
+  <h4>Incidents by Enforcement Lane (Bar Chart)</h4>
+  <p>How many incidents came from Chat, RAG, Vector, MCP, Threat Intel, or Generic sources.</p>
+  <div class="client-line">"If most incidents are MCP-sourced this week, your agent tool surface is the hot problem — not chat."</div>
+
+  <h4>Incident Cases Table</h4>
+  <p>Workflow: <strong>Investigate</strong> (claim case) → <strong>Escalate</strong> (senior review) → <strong>Resolve</strong> (close). Bulk resolve available. Filter by status, severity, lane, search.</p>
+
+  <h3>Incident Detail Page</h3>
+  <ul>
+    <li><strong>Enforcement Timeline</strong> — chronological events tied to the case</li>
+    <li><strong>Chain-of-Custody</strong> — step-by-step RAG/MCP pipeline trace (Ingress → Query → Retriever → Ranker → Generator)</li>
+    <li><strong>Prompt Evidence</strong> — sanitized snippet of the triggering prompt</li>
+    <li><strong>Lane drill-down links</strong> — jump to UEBA, Threat Intel, Model/RAG, or MCP Risk</li>
+  </ul>
+  <div class="client-line">"This is your audit evidence — exactly where the firewall acted and why, stage by stage."</div>
+</section>
+
+<section id="closing" class="page-section">
+  <h2>Closing Narrative for Clients</h2>
+  <div class="closing">
+    <p>Your applications connect through our gateway — production chatbots, RAG knowledge bases, or the demo app. <strong>Module 1 enforces policy on every request.</strong> Module 2 gives your security team the operational layer:</p>
+    <ul>
+      <li><strong>Dashboard</strong> — morning posture</li>
+      <li><strong>UEBA</strong> — when a specific API key looks suspicious</li>
+      <li><strong>Model &amp; RAG Health</strong> — which models or document pipelines are under attack</li>
+      <li><strong>MCP Risk</strong> — when agents and tools are involved</li>
+      <li><strong>Threat Intel</strong> — publish and measure new attack patterns</li>
+      <li><strong>Incidents</strong> — formal tracking and closure</li>
+    </ul>
+    <p>Every number, chart, and table comes from the same enforcement telemetry your firewall produces in production. When you run a block in the demo app, you will see it on the Dashboard within seconds, in UEBA under that API key, and potentially as an incident if alert rules say it is serious enough.</p>
+    <p style="margin-top:16px;font-size:12pt;font-weight:600;color:#0f766e;">Module 1 protects. Module 2 lets you prove it, prioritize it, and respond to it.</p>
+  </div>
+
+  <h3>Console Navigation</h3>
+  <table>
+    <tr><th>Screen</th><th>Route</th></tr>
+    <tr><td>Dashboard</td><td>/dashboard</td></tr>
+    <tr><td>UEBA</td><td>/ueba/api-keys</td></tr>
+    <tr><td>Model Exposure</td><td>/models/exposure</td></tr>
+    <tr><td>RAG Health</td><td>/models/exposure?tab=rag</td></tr>
+    <tr><td>MCP Risk</td><td>/mcp/risk</td></tr>
+    <tr><td>Threat Intel</td><td>/threat-intel</td></tr>
+    <tr><td>Incidents</td><td>/incidents</td></tr>
+    <tr><td>Demo App</td><td>http://127.0.0.1:8765</td></tr>
+  </table>
+</section>
+
+<p class="footer-note">ZeroShield AI Mesh Firewall — Module 2 Client Demo Guide · Generated for customer presentations</p>
+
+</body>
+</html>

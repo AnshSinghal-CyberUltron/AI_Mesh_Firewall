@@ -247,6 +247,50 @@ def sync_threat_intel_to_redis(self, org_id):
         raise
 
 
+def safe_sync_threat_intel_to_redis(org_id) -> tuple[bool, str | None]:
+    """Best-effort sync for request/signal paths — never raises to callers."""
+    try:
+        sync_threat_intel_to_redis(org_id)
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+
+def build_threat_intel_sync_meta(org) -> dict:
+    """Summarize active IOC rows published to gateway Redis (for sync API + UI)."""
+    from collections import Counter
+
+    from django.db.models import Q
+
+    from module2.models import ThreatIntelEntry
+
+    now = timezone.now()
+    week_ahead = now + timedelta(days=7)
+    entries = list(
+        ThreatIntelEntry.objects.filter(organization=org)
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        .order_by("threat_type", "id")
+    )
+    by_type = dict(Counter(e.threat_type for e in entries))
+    return {
+        "synced_by_threat_type": by_type,
+        "synced_entries": [
+            {
+                "threat_type": e.threat_type,
+                "indicator": (e.indicator or "")[:160],
+                "auto_block": bool(e.auto_block),
+            }
+            for e in entries[:50]
+        ],
+        "active_entry_count": len(entries),
+        "expiring_soon": sum(
+            1
+            for e in entries
+            if e.expires_at and now < e.expires_at <= week_ahead
+        ),
+    }
+
+
 @shared_task(queue="platform.batch", bind=True, max_retries=2)
 def execute_playbook(self, run_id):
     """Execute playbook steps."""

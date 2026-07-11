@@ -16,6 +16,8 @@ import {
   formatTelemetryTimeline,
   buildTickerAnalystFields,
   formatTickerAnalystSummary,
+  formatEnforcementBlockLabel,
+  isThreatIntelEnforcementMeta,
   mergeTickerFeed,
   patchIncidentSummaryForMutation,
   resolveEventLane,
@@ -86,6 +88,8 @@ test("formatAttackVectors maps vector counts for bar chart", () => {
 
 test("buildTelemetryKpis renders telemetry summary cards", () => {
   const kpis = buildTelemetryKpis(TELEMETRY_FIXTURE.summary);
+  assert.equal(kpis[0].label, "Gateway Requests");
+  assert.ok(!kpis[0].label.toLowerCase().includes("deduped"));
   assert.equal(kpis[1].value, 40);
   assert.equal(kpis[4].value, 5);
 });
@@ -206,6 +210,20 @@ test("formatTickerAnalystSummary explains enforcement events in plain language",
   assert.match(summary, /blocked/i);
   assert.match(summary, /prompt injection/i);
   assert.match(summary, /gpt-4o/i);
+});
+
+test("formatTickerAnalystSummary labels threat intel IOC blocks distinctly", () => {
+  const summary = formatTickerAnalystSummary({
+    action: "block",
+    metadata: {
+      event_type: "chat_pipeline",
+      code: "threat_intel_blocked",
+      detail: "Blocked by threat intelligence (IOC match: jailbreak_probe)",
+    },
+  });
+  assert.match(summary, /Threat Intelligence policy/i);
+  assert.equal(formatEnforcementBlockLabel({ code: "threat_intel_blocked" }, "block"), "Threat Intel policy block");
+  assert.ok(isThreatIntelEnforcementMeta({ code: "threat_intel_blocked" }));
 });
 
 test("buildTickerAnalystFields includes routing and request metadata", () => {

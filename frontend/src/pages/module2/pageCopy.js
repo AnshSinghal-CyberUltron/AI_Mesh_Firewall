@@ -4,7 +4,7 @@ export const ANALYST_BRIEF_TITLE = "Page Objective";
 
 export const PAGE_BRIEFS = {
   dashboard:
-    "SOC command view across Chat, RAG, Vector, and MCP enforcement lanes. Scan live gateway pressure and lane totals—then open M2.2 (API keys), M2.3 (Model & RAG), or M2.4 (MCP) for deep dives.",
+    "SOC command view across Chat, RAG, Vector, and MCP enforcement lanes. Scan live gateway pressure and lane totals—then open M2.2 (API keys), M2.3 (Threat Intel), M2.4 (Model & RAG), or M2.5 (MCP) for deep dives.",
   ueba:
     "Identity-centric UEBA for API keys. Baseline normal usage, surface anomaly flags, and correlate key activity to vector collections and MCP tools when investigating compromise or data harvesting.",
   modelRag:

@@ -284,6 +284,11 @@ def _build_enforcement_metadata(event: dict) -> dict:
         if event_metadata.get(_resp_key):
             result[_resp_key] = event_metadata[_resp_key]
 
+    if str(event_type).startswith("rag"):
+        for key in ("collection", "vector_collection", "vector_namespace", "vector_db_type", "blocked_at_stage"):
+            if event_metadata.get(key):
+                result[key] = event_metadata[key]
+
     if event_type == "model_routed":
         extra = result.get("extra") or {}
         if isinstance(extra, dict):

@@ -10,7 +10,35 @@ import { RiskBandBadge } from "./RiskBandBadge";
 const BEHAVIOR_POLL_MS = 10_000;
 const BEHAVIOR_RELOAD_DELAYS_POLLING_MS = [0, 2000, 4000];
 const BEHAVIOR_RELOAD_DELAYS_LIVE_MS = [0, 2000, 4000];
+const BEHAVIOR_RELOAD_DELAYS_REASSESS_MS = [0, 1500, 3000, 6000, 12000, 20000, 30000, 45000, 60000];
 const BEHAVIOR_TELEMETRY_DEBOUNCE_MS = 150;
+const SCORE_SETTLE_TIMEOUT_MS = 90_000;
+const SCORE_SETTLE_EPSILON = 0.001;
+
+function behaviorSnapshotEqual(prev, next) {
+  if (!prev || !next) return false;
+  const prevRecent = Array.isArray(prev.recent_requests) ? prev.recent_requests : [];
+  const nextRecent = Array.isArray(next.recent_requests) ? next.recent_requests : [];
+  const prevRecentHead = prevRecent[0] || {};
+  const nextRecentHead = nextRecent[0] || {};
+  return (
+    prev.request_count === next.request_count
+    && prev.blocked_count === next.blocked_count
+    && prev.risk_score === next.risk_score
+    && prev.final_score === next.final_score
+    && prev.risk_band === next.risk_band
+    && prevRecent.length === nextRecent.length
+    && prevRecentHead.timestamp === nextRecentHead.timestamp
+    && prevRecentHead.action === nextRecentHead.action
+    && prevRecentHead.prompt_snippet === nextRecentHead.prompt_snippet
+  );
+}
+
+function readBehaviorScore(row) {
+  if (!row) return null;
+  const raw = row.final_score ?? row.risk_score;
+  return raw == null ? null : Number(raw);
+}
 
 export function ApiKeyProfileSidebar({
   open,
@@ -26,8 +54,10 @@ export function ApiKeyProfileSidebar({
   canEditRiskCalc,
   onRiskCalcChange,
   onRiskCalcSave,
+  onRiskCalcRestore,
   riskCalcSaving,
   riskCalcSaveError,
+  riskCalcReassessSignal = 0,
   refreshSignal = 0,
   liveConnected = false,
 }) {
@@ -36,39 +66,106 @@ export function ApiKeyProfileSidebar({
   const [behavior, setBehavior] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [riskCalcReassessing, setRiskCalcReassessing] = useState(false);
   const behaviorSeqRef = useRef(0);
   const reloadTimersRef = useRef([]);
   const telemetryDebounceRef = useRef(null);
   const hasLoadedRef = useRef(false);
+  const rowSummaryRef = useRef(rowSummary);
+  const riskCalculationRef = useRef(riskCalculation);
+  const settleBaselineRef = useRef(null);
+  const reassessComputedAtRef = useRef(null);
+  const reassessBandRef = useRef(null);
+  const lastReassessSignalRef = useRef(riskCalcReassessSignal);
+  const riskCalcReassessingRef = useRef(false);
+
+  useEffect(() => {
+    rowSummaryRef.current = rowSummary;
+    riskCalculationRef.current = riskCalculation;
+  }, [rowSummary, riskCalculation]);
+
+  useEffect(() => {
+    riskCalcReassessingRef.current = riskCalcReassessing;
+  }, [riskCalcReassessing]);
+
+  const armRiskCalcReassess = useCallback(() => {
+    settleBaselineRef.current = readBehaviorScore(behavior) ?? readBehaviorScore(rowSummaryRef.current);
+    reassessComputedAtRef.current = behavior?.computed_at ?? null;
+    reassessBandRef.current = behavior?.risk_band ?? rowSummaryRef.current?.risk_band ?? null;
+    setRiskCalcReassessing(true);
+  }, [behavior]);
+
+  useEffect(() => {
+    if (riskCalcSaving) {
+      armRiskCalcReassess();
+    }
+  }, [riskCalcSaving, armRiskCalcReassess]);
+
+  useEffect(() => {
+    if (!riskCalcSaving && riskCalcSaveError) {
+      setRiskCalcReassessing(false);
+    }
+  }, [riskCalcSaving, riskCalcSaveError]);
+
+  useEffect(() => {
+    if (!riskCalcReassessing) return undefined;
+    const timer = setTimeout(() => setRiskCalcReassessing(false), SCORE_SETTLE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [riskCalcReassessing]);
+
+  useEffect(() => {
+    if (!riskCalcReassessing || !behavior) return;
+    const current = readBehaviorScore(behavior);
+    const baseline = settleBaselineRef.current;
+    const computedAtChanged = behavior.computed_at != null
+      && behavior.computed_at !== reassessComputedAtRef.current;
+    const bandChanged = Boolean(
+      reassessBandRef.current
+      && behavior.risk_band
+      && behavior.risk_band !== reassessBandRef.current,
+    );
+    if (computedAtChanged || bandChanged) {
+      setRiskCalcReassessing(false);
+      return;
+    }
+    if (current == null || baseline == null) return;
+    if (Math.abs(current - baseline) >= SCORE_SETTLE_EPSILON) {
+      setRiskCalcReassessing(false);
+    }
+  }, [behavior, riskCalcReassessing]);
 
   const mergeBehavior = useCallback((data) => {
-    if (!data || !rowSummary) return data;
+    const summary = rowSummaryRef.current;
+    const riskCalc = riskCalculationRef.current;
+    if (!data || !summary) return data;
     return {
       ...data,
-      key_id: data.key_id || rowSummary.key_id,
-      prefix: data.prefix || rowSummary.prefix,
-      name: data.name || rowSummary.name,
-      owner_email: data.owner_email || rowSummary.owner_email,
-      request_count: rowSummary.request_count ?? data.request_count,
-      blocked_count: rowSummary.blocked_count ?? data.blocked_count,
-      redacted_count: rowSummary.redacted_count ?? data.redacted_count,
-      block_rate_pct: rowSummary.block_rate_pct ?? data.block_rate_pct,
-      redact_rate_pct: rowSummary.redact_rate_pct ?? data.redact_rate_pct,
-      risk_score: rowSummary.final_score ?? rowSummary.risk_score ?? data.risk_score,
-      final_score: rowSummary.final_score ?? rowSummary.risk_score ?? data.final_score,
-      traditional_score: rowSummary.traditional_score ?? data.traditional_score,
-      behavior_profile: rowSummary.behavior_profile ?? data.behavior_profile,
-      score_breakdown: rowSummary.score_breakdown ?? data.score_breakdown,
-      risk_calculation: data.risk_calculation ?? riskCalculation,
-      llm_reasoning: rowSummary.llm_reasoning ?? data.llm_reasoning,
-      llm_verdict: rowSummary.llm_verdict ?? data.llm_verdict,
-      risk_band: rowSummary.risk_band ?? data.risk_band,
-      velocity_spike: rowSummary.velocity_spike ?? data.velocity_spike,
-      anomaly_flags: rowSummary.anomaly_flags ?? data.anomaly_flags,
-      llm_observation: rowSummary.llm_observation ?? data.llm_observation,
-      is_active: rowSummary.is_active ?? data.is_active,
+      key_id: data.key_id || summary.key_id,
+      prefix: data.prefix || summary.prefix,
+      name: data.name || summary.name,
+      owner_email: data.owner_email || summary.owner_email,
+      request_count: data.request_count ?? summary.request_count,
+      blocked_count: data.blocked_count ?? summary.blocked_count,
+      redacted_count: data.redacted_count ?? summary.redacted_count,
+      block_rate_pct: data.block_rate_pct ?? summary.block_rate_pct,
+      redact_rate_pct: data.redact_rate_pct ?? summary.redact_rate_pct,
+      risk_score: data.final_score ?? data.risk_score ?? summary.final_score ?? summary.risk_score,
+      final_score: data.final_score ?? data.risk_score ?? summary.final_score ?? summary.risk_score,
+      traditional_score: data.traditional_score ?? summary.traditional_score,
+      computed_at: data.computed_at ?? summary.computed_at,
+      behavior_profile: data.behavior_profile ?? summary.behavior_profile,
+      score_breakdown: data.score_breakdown ?? summary.score_breakdown,
+      risk_calculation: data.risk_calculation ?? riskCalc,
+      llm_reasoning: data.llm_reasoning ?? summary.llm_reasoning,
+      llm_verdict: data.llm_verdict ?? summary.llm_verdict,
+      llm_recommended_action: data.llm_recommended_action ?? summary.llm_recommended_action,
+      risk_band: data.risk_band ?? summary.risk_band,
+      velocity_spike: data.velocity_spike ?? summary.velocity_spike,
+      anomaly_flags: data.anomaly_flags ?? summary.anomaly_flags,
+      llm_observation: data.llm_observation ?? summary.llm_observation,
+      is_active: data.is_active ?? summary.is_active,
     };
-  }, [rowSummary, riskCalculation]);
+  }, []);
 
   const loadBehavior = useCallback(async ({ silent = false } = {}) => {
     if (!keyId) return;
@@ -81,7 +178,11 @@ export function ApiKeyProfileSidebar({
       const data = await module2Api.getUebaBehavior(keyId, period, { useCache: false });
       if (seq !== behaviorSeqRef.current) return;
       hasLoadedRef.current = true;
-      setBehavior(mergeBehavior(data));
+      const merged = mergeBehavior(data);
+      setBehavior((prev) => {
+        if (silent && prev && behaviorSnapshotEqual(prev, merged)) return prev;
+        return merged;
+      });
     } catch (err) {
       if (seq !== behaviorSeqRef.current) return;
       if (!silent) {
@@ -94,30 +195,59 @@ export function ApiKeyProfileSidebar({
     }
   }, [keyId, mergeBehavior, module2Api, period]);
 
-  const scheduleReload = useCallback(() => {
+  const loadBehaviorRef = useRef(loadBehavior);
+  useEffect(() => {
+    loadBehaviorRef.current = loadBehavior;
+  }, [loadBehavior]);
+
+  const scheduleReload = useCallback((delays = null) => {
     if (!keyId) return;
-    const delays = liveConnected ? BEHAVIOR_RELOAD_DELAYS_LIVE_MS : BEHAVIOR_RELOAD_DELAYS_POLLING_MS;
+    const resolvedDelays = delays
+      ?? (riskCalcReassessingRef.current
+        ? BEHAVIOR_RELOAD_DELAYS_REASSESS_MS
+        : (liveConnected ? BEHAVIOR_RELOAD_DELAYS_LIVE_MS : BEHAVIOR_RELOAD_DELAYS_POLLING_MS));
     reloadTimersRef.current.forEach((id) => clearTimeout(id));
-    reloadTimersRef.current = delays.map((delay) =>
-      setTimeout(() => loadBehavior({ silent: true }), delay),
+    reloadTimersRef.current = resolvedDelays.map((delay) =>
+      setTimeout(() => loadBehaviorRef.current({ silent: true }), delay),
     );
-  }, [keyId, liveConnected, loadBehavior]);
+  }, [keyId, liveConnected]);
+
+  const scheduleReassessReload = useCallback(() => {
+    scheduleReload(BEHAVIOR_RELOAD_DELAYS_REASSESS_MS);
+  }, [scheduleReload]);
+
+  useEffect(() => {
+    if (!open || riskCalcReassessSignal === lastReassessSignalRef.current) return;
+    lastReassessSignalRef.current = riskCalcReassessSignal;
+    if (riskCalcReassessSignal > 0) {
+      armRiskCalcReassess();
+      if (keyId) scheduleReassessReload();
+    }
+  }, [riskCalcReassessSignal, open, keyId, armRiskCalcReassess, scheduleReassessReload]);
 
   useEffect(() => {
     if (!open || !keyId) {
       setBehavior(null);
       setLoadError(null);
+      setRiskCalcReassessing(false);
       hasLoadedRef.current = false;
+      settleBaselineRef.current = null;
+      reassessComputedAtRef.current = null;
+      reassessBandRef.current = null;
       return;
     }
     hasLoadedRef.current = false;
-    loadBehavior();
-  }, [open, keyId, period, loadBehavior]);
+    loadBehaviorRef.current();
+  }, [open, keyId, period]);
 
   useEffect(() => {
-    if (!open || !keyId || refreshSignal === 0 || loading || !hasLoadedRef.current) return;
+    if (!open || !keyId || refreshSignal === 0 || !hasLoadedRef.current) return;
+    if (riskCalcReassessingRef.current) {
+      scheduleReassessReload();
+      return;
+    }
     scheduleReload();
-  }, [refreshSignal, open, keyId, loading, scheduleReload]);
+  }, [refreshSignal, open, keyId, scheduleReload, scheduleReassessReload]);
 
   useEffect(() => {
     if (!open || !keyId) return undefined;
@@ -130,7 +260,7 @@ export function ApiKeyProfileSidebar({
     };
     window.addEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
     window.addEventListener("storage", onStorage);
-    const pollId = setInterval(() => loadBehavior({ silent: true }), BEHAVIOR_POLL_MS);
+    const pollId = setInterval(() => loadBehaviorRef.current({ silent: true }), BEHAVIOR_POLL_MS);
     return () => {
       if (pollId) clearInterval(pollId);
       clearTimeout(telemetryDebounceRef.current);
@@ -138,7 +268,7 @@ export function ApiKeyProfileSidebar({
       window.removeEventListener(TELEMETRY_ACTIVITY_EVENT, onTelemetry);
       window.removeEventListener("storage", onStorage);
     };
-  }, [open, keyId, liveConnected, loadBehavior, scheduleReload]);
+  }, [open, keyId, scheduleReload]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -150,6 +280,8 @@ export function ApiKeyProfileSidebar({
   }, [open, onClose]);
 
   if (!open) return null;
+
+  const scoreUpdating = Boolean(riskCalcSaving || riskCalcReassessing);
 
   return (
     <>
@@ -211,6 +343,7 @@ export function ApiKeyProfileSidebar({
                 riskCalculation={behavior?.risk_calculation || riskCalculation}
                 variant="sidebar"
                 showScoreGuide={false}
+                scoreUpdating={scoreUpdating}
               />
               <RiskScoreCalculationGuide
                 behavior={behavior}
@@ -224,6 +357,7 @@ export function ApiKeyProfileSidebar({
                 canEdit={canEditRiskCalc}
                 onChange={onRiskCalcChange}
                 onSave={onRiskCalcSave}
+                onRestoreDefaults={onRiskCalcRestore}
                 saving={riskCalcSaving}
                 saveError={riskCalcSaveError}
                 defaultOpen={false}
@@ -232,7 +366,7 @@ export function ApiKeyProfileSidebar({
           )}
         </div>
 
-        {behavior && !loading && (
+        {behavior && (
           <footer className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/80">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -244,6 +378,12 @@ export function ApiKeyProfileSidebar({
                 </p>
               </div>
               <div className="text-right">
+                {scoreUpdating && (
+                  <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Updating score
+                  </span>
+                )}
                 <RiskBandBadge
                   type="behavioral"
                   band={behavior.risk_band || "low"}

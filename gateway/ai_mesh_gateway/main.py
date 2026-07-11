@@ -2138,8 +2138,14 @@ def _build_routing_metadata(
         and original_model not in ("", "auto")
         and selection.model_name != original_model
     )
+    routing_status = ""
+    if selection.decision_source == "weighted_fastpath" and (selection.candidate_count or 0) <= 1:
+        routing_status = "single_route"
+    elif selection.decision_source in ("routing_disabled", "no_routing_models"):
+        routing_status = "routing_not_configured"
     return {
         "original_model": original_model,
+        "requested_model": original_model,
         "selected_model": selection.model_name,
         "routed_model": selection.model_name,
         "routing_enabled": routing_enabled,
@@ -2150,6 +2156,7 @@ def _build_routing_metadata(
         "rerouted": rerouted,
         "reroute_reason": selection.reason,
         "routing_reason": selection.reason,
+        "routing_status": routing_status,
         "fallback_chain": selection.fallback_chain,
         "decision_source": selection.decision_source,
         "policy_summary": selection.policy_summary,
@@ -7076,12 +7083,14 @@ async def proxy_chat(
             _safe_req_model = _safe_model_echo(body.get("model")) or "auto"
             route_metadata = {
                 "original_model": _safe_req_model,
+                "requested_model": _safe_req_model,
                 "selected_model": _safe_req_model,
                 "routed_model": _safe_req_model,
                 "routing_enabled": bool(routing_prefs["routing_enabled"]),
                 "routing_override": routing_prefs["routing_override"],
                 "org_routing_enabled": bool(routing_prefs["org_routing_enabled"]),
                 "decision_source": "routing_disabled" if not routing_prefs["routing_enabled"] else "no_routing_models",
+                "routing_status": "routing_not_configured",
                 "routing_reason": (
                     "Dynamic routing disabled by governance setting"
                     if not routing_prefs["routing_enabled"]
@@ -10238,14 +10247,33 @@ async def rag_query(request: Request):
                     "module_id": "1.3",
                 },
             )
+            _blocked_stage = last.stage_name if last else "unknown"
+            _blocked_detail = last.verdict.detail if last else ""
+            _audit = getattr(result, "pipeline_audit", None)
+            if not isinstance(_audit, dict) and result.pipeline_context is not None:
+                try:
+                    _audit = result.pipeline_context.to_audit_dict()
+                except Exception:
+                    _audit = {}
+            if not isinstance(_audit, dict):
+                _audit = {}
             return JSONResponse(
                 status_code=403,
                 content={
                     "error": "blocked",
-                    "message": f"RAG pipeline blocked at {last.stage_name if last else 'unknown'}: {last.verdict.detail if last else ''}",
+                    "message": f"RAG pipeline blocked at {_blocked_stage}: {_blocked_detail}",
                     "code": "rag_pipeline_blocked",
                     "threat_type": last.verdict.threat_type if last else "",
-                    "pipeline_stage": last.stage_name if last else "",
+                    "pipeline_stage": _blocked_stage,
+                    "blocked_at_stage": _blocked_stage,
+                    "action": "block",
+                    "collection": collection_name,
+                    "pipeline_audit": _audit,
+                    "scan_verdict": {
+                        "action": "block",
+                        "threat_type": last.verdict.threat_type if last else "",
+                        "detail": _blocked_detail,
+                    },
                 },
             )
 

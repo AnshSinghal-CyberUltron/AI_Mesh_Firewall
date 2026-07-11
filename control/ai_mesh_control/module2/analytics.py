@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import Counter, defaultdict
 from datetime import timedelta
 
@@ -98,13 +99,37 @@ def prompt_snippet_from_meta(meta: dict | None, max_len: int = 200) -> str:
     return fallback[:max_len]
 
 
+_USER_TURN_RE = re.compile(r"^\[user\]:\s*(.*)$", re.IGNORECASE | re.MULTILINE)
+
+
+def event_prompt_from_meta(meta: dict | None, max_len: int = 500) -> str:
+    """Return only the user turn that triggered this event (not prior chat turns)."""
+    raw = prompt_snippet_from_meta(meta, max_len=10_000)
+    if not raw:
+        return ""
+
+    user_turns = [m.group(1).strip() for m in _USER_TURN_RE.finditer(raw) if m.group(1).strip()]
+    if user_turns:
+        return user_turns[-1][:max_len]
+
+    lines = [line.strip() for line in raw.split("\n") if line.strip()]
+    for line in reversed(lines):
+        if line.lower().startswith("[assistant]:"):
+            continue
+        user_match = re.match(r"^\[user\]:\s*(.*)$", line, re.IGNORECASE)
+        if user_match:
+            return user_match.group(1).strip()[:max_len]
+        return line[:max_len]
+
+    return raw[:max_len]
+
+
 def build_recent_request_json(ev: dict, max_snippet: int = 500) -> dict:
     """SOC-friendly JSON row for the last-N request panel."""
     meta = dict(ev.get("metadata") or {})
-    snippet = prompt_snippet_from_meta(meta, max_len=max_snippet)
-    lineage = meta.get("prompt_lineage")
-    if not isinstance(lineage, list):
-        lineage = []
+    snippet = event_prompt_from_meta(meta, max_len=max_snippet)
+    risk_score = meta.get("security_risk_score")
+    lineage = [{"prompt": snippet, "risk_score": risk_score}] if snippet else []
     return {
         "event_id": ev.get("id"),
         "timestamp": ev.get("created_at").isoformat() if ev.get("created_at") else None,
@@ -113,11 +138,12 @@ def build_recent_request_json(ev: dict, max_snippet: int = 500) -> dict:
         "model": meta.get("model"),
         "threat_type": meta.get("threat_type"),
         "event_type": meta.get("event_type"),
+        "request_lane": event_source(meta),
         "owasp_code": meta.get("owasp_code"),
         "intent": meta.get("intent"),
         "detail": meta.get("detail"),
         "prompt_snippet": snippet,
-        "prompt_lineage": lineage[:3],
+        "prompt_lineage": lineage,
         "metadata": {
             "key_prefix": key_prefix_from_meta(meta),
             "source": meta.get("source"),
@@ -182,20 +208,28 @@ def _looks_like_mcp_event(meta: dict) -> bool:
 
 
 def classify_telemetry_bucket(meta: dict, action: str) -> str:
-    """Map enforcement metadata to telemetry series keys."""
+    """Map enforcement metadata to telemetry series keys.
+
+    Threat-type buckets (injection, PII, IOC) take priority over generic key-attributed
+    traffic so M2.3 KPI cards reflect full gateway enforcement, not IOC-only or
+    behavior-only slices.
+    """
     threat = str(meta.get("threat_type") or "").lower()
     category = str(meta.get("category") or meta.get("violation_type") or "").lower()
     combined = f"{threat} {category}"
+    detail = _meta_detail(meta).lower()
 
     if event_source(meta) == "threat_intel":
         return "threat_intel_matches"
-    # Key-attributed traffic feeds M2.2 UEBA and the M2.1 "API Key Activity" KPI.
+    if any(k in combined for k in INJECTION_KEYWORDS) or "injection" in detail or "jailbreak" in detail:
+        return "injection_attempts"
+    if action in (ACTION_BLOCK, ACTION_REDACT) and (
+        any(k in combined for k in PII_KEYWORDS) or "pii" in detail
+    ):
+        return "pii_leaks"
+    # Key-attributed traffic without injection/PII/IOC threat feeds M2.2 UEBA volume.
     if key_prefix_from_meta(meta):
         return "behavior_scoring"
-    if any(k in combined for k in INJECTION_KEYWORDS) or "injection" in _meta_detail(meta).lower():
-        return "injection_attempts"
-    if action == ACTION_REDACT and any(k in combined for k in PII_KEYWORDS):
-        return "pii_leaks"
     return "other"
 
 
@@ -381,6 +415,7 @@ def build_threat_telemetry_payload(events: list[dict], period: str, since) -> di
         "period": period,
         "summary": {
             "total_events": totals["total_events"],
+            "requests_inspected": totals["total_events"],
             "injection_attempts": totals["injection_attempts"],
             "pii_leaks": totals["pii_leaks"],
             "behavior_scoring_events": totals["behavior_scoring"],
@@ -420,23 +455,23 @@ def build_lane_summary(events) -> dict:
 
 
 def build_rag_pipeline_kpis(events) -> dict:
-    """Per-stage breakdown for RAG pipeline funnel — mirrors RAGPipelineStageKpisView scoped to org."""
+    """Per-stage breakdown for RAG pipeline funnel — mirrors RAGPipelineStageKpisView scoped to org.
+
+    Stage rows prefer authoritative ``rag_pipeline`` per-stage telemetry. Top-level
+    ``rag_query`` rows are used only as a fallback when no ``rag_pipeline`` stages
+    were recorded for the same request_id (legacy / blocked-before-stages paths).
+    ``rag_ingest_*`` events are counted separately — they must not inflate Query stage.
+    """
     stage_names = ("query", "retriever", "ranker", "generator")
     stage_entries: dict[str, dict[str, dict]] = {stage: {} for stage in stage_names}
     escalation_by_request: dict[str, int] = {}
+    pipeline_request_ids: set[str] = set()
+    ingest_events = 0
 
-    for idx, ev in enumerate(events.values("action", "metadata")):
-        meta = ev.get("metadata") or {}
-        if meta.get("event_type") != "rag_pipeline":
-            continue
-        stage = str(meta.get("pipeline_stage") or "").strip()
+    def _record_stage(stage: str, req_id: str, action: str, latency_ms: float, escalation_level: int) -> None:
         if stage not in stage_entries:
-            continue
-
-        req_id = request_key(meta, idx)
-        action = str(ev.get("action") or "allow").lower()
+            return
         current = stage_entries[stage].get(req_id)
-        latency = float(meta.get("latency_ms") or 0)
         if current is None:
             stage_entries[stage][req_id] = {
                 "action": merge_request_action(None, action),
@@ -446,12 +481,61 @@ def build_rag_pipeline_kpis(events) -> dict:
             current["action"] = merge_request_action(current.get("action"), action)
             if current.get("latency_ms", 0) <= 0 and latency > 0:
                 current["latency_ms"] = latency
+        escalation_by_request[req_id] = max(escalation_level, escalation_by_request.get(req_id, 0))
 
+    rows = list(events.values("action", "metadata"))
+
+    for idx, ev in enumerate(rows):
+        meta = ev.get("metadata") or {}
+        if str(meta.get("event_type") or "").lower() != "rag_pipeline":
+            continue
+        stage = str(meta.get("pipeline_stage") or "").strip()
+        if stage not in stage_entries:
+            continue
+        req_id = request_key(meta, idx)
+        pipeline_request_ids.add(req_id)
+        action = str(ev.get("action") or "allow").lower()
+        latency = float(meta.get("latency_ms") or 0)
         try:
-            level = int(meta.get("escalation_level", 0) or 0)
+            escalation_level = int(meta.get("escalation_level", 0) or 0)
         except (TypeError, ValueError):
-            level = 0
-        escalation_by_request[req_id] = max(level, escalation_by_request.get(req_id, 0))
+            escalation_level = 0
+        _record_stage(stage, req_id, action, latency, escalation_level)
+
+    for idx, ev in enumerate(rows):
+        meta = ev.get("metadata") or {}
+        event_type = str(meta.get("event_type") or "").lower()
+        if event_type != "rag_query":
+            continue
+        req_id = request_key(meta, idx)
+        if req_id in pipeline_request_ids:
+            continue
+        action = str(ev.get("action") or "allow").lower()
+        latency = float(meta.get("latency_ms") or 0)
+        try:
+            escalation_level = int(meta.get("escalation_level", 0) or 0)
+        except (TypeError, ValueError):
+            escalation_level = 0
+        blocked_stage = str(
+            meta.get("blocked_at_stage") or meta.get("pipeline_stage") or ""
+        ).strip()
+        if blocked_stage in stage_entries:
+            _record_stage(blocked_stage, req_id, action, latency, escalation_level)
+        elif action == ACTION_BLOCK:
+            _record_stage("retriever", req_id, action, latency, escalation_level)
+        else:
+            _record_stage("query", req_id, action, latency, escalation_level)
+            try:
+                stages_executed = int(meta.get("stages_executed") or 0)
+            except (TypeError, ValueError):
+                stages_executed = 0
+            if stages_executed >= 2:
+                _record_stage("retriever", req_id, "allow", 0.0, escalation_level)
+
+    for ev in rows:
+        meta = ev.get("metadata") or {}
+        if str(meta.get("event_type") or "").lower().startswith("rag_ingest"):
+            ingest_events += 1
 
     result_stages = {}
     for stage, entries in stage_entries.items():
@@ -483,6 +567,7 @@ def build_rag_pipeline_kpis(events) -> dict:
             "post_generator": result_stages["generator"]["total"] - result_stages["generator"]["blocked"],
         },
         "escalation_distribution": escalation_dist,
+        "ingest_events": ingest_events,
     }
 
 

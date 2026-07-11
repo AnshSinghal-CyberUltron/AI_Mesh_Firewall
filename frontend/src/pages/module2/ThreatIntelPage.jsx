@@ -46,6 +46,7 @@ import {
 
 const PERIOD_LABELS = { "1h": "1 hour", "24h": "24 hours", "7d": "7 days", "30d": "30 days" };
 const REFRESH_DEBOUNCE_MS = 300;
+const TELEMETRY_POLL_MS = 10_000;
 const ATTACK_SIMULATOR_PATH = "/?tab=firewall-1-1";
 const INCIDENTS_THREAT_INTEL_PATH = "/incidents?source=threat_intel";
 
@@ -55,16 +56,17 @@ const IOC_EXAMPLE = {
   owasp_code: "LLM01",
   confidence: 0.8,
   auto_block: true,
+  sync_to_gateway: true,
 };
 
 const VALIDATION_STEPS = [
   {
     title: "Add Entry (this page)",
-    body: "Saves an IOC to the control-plane database — a regex or plain-text fingerprint plus metadata. The gateway cannot see it until you sync.",
+    body: "Saves an IOC to the control-plane database and syncs it to the gateway immediately (Redis key firewall:threat_intel:{org}). Enable Auto-Block so matches hard-block traffic.",
   },
   {
-    title: "Sync to Gateway",
-    body: "Pushes every org indicator to Redis (firewall:threat_intel:{org}). Required after add, edit, delete, or auto-block changes.",
+    title: "Optional: Sync to Gateway",
+    body: "Re-publishes every org indicator to Redis after bulk edits or if you need to confirm sync status. Add/edit/delete already sync automatically.",
   },
   {
     title: "Open M1.1 Attack Simulator",
@@ -206,7 +208,16 @@ function ThreatIntelSocPanel({ summary, iocLibrary, fleetStats, topVector, perio
         </p>
         <p className="mt-2 text-violet-800/80 dark:text-violet-200/80">
           Sources: manual {fleet.bySource?.manual ?? 0}, feed {fleet.bySource?.feed ?? 0}, auto{" "}
-          {fleet.bySource?.auto ?? 0}. After edits, use <strong>Sync to Gateway</strong> so Redis picks up changes.
+          {fleet.bySource?.auto ?? 0}.
+          {lib.by_threat_type && Object.keys(lib.by_threat_type).length > 0 && (
+            <>
+              {" "}Types synced:{" "}
+              {Object.entries(lib.by_threat_type)
+                .slice(0, 4)
+                .map(([t, c]) => `${t} (${c})`)
+                .join(", ")}
+            </>
+          )}
         </p>
       </div>
 
@@ -244,11 +255,57 @@ function ThreatIntelSocPanel({ summary, iocLibrary, fleetStats, topVector, perio
   );
 }
 
-function ThreatIntelTelemetryDashboard({ telemetry, period }) {
+function SyncBatchPanel({ syncStatus }) {
+  if (!syncStatus) return null;
+  const rows = Object.entries(syncStatus.synced_by_threat_type || {}).sort((a, b) => b[1] - a[1]);
+  const failed = syncStatus.status === "sync_failed";
+  const border = failed
+    ? "border-amber-200 bg-amber-50/70 text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/25 dark:text-amber-100"
+    : "border-emerald-200 bg-emerald-50/70 text-emerald-950 dark:border-emerald-800/60 dark:bg-emerald-950/25 dark:text-emerald-100";
+
+  return (
+    <div className={`mb-4 rounded-xl border px-4 py-3 text-xs ${border}`}>
+      <p className="font-semibold">
+        Gateway sync {failed ? "failed" : "batch"} —{" "}
+        {syncStatus.active_entry_count ?? syncStatus.entry_count ?? rows.reduce((s, [, c]) => s + c, 0)} active IOC(s)
+      </p>
+      <p className="mt-1 opacity-90">
+        {failed && syncStatus.error ? `${syncStatus.error}. ` : ""}
+        Target <code className="font-mono">{syncStatus.redis_key || "firewall:threat_intel:{org}"}</code>
+        {syncStatus.last_sync_at ? ` · ${new Date(syncStatus.last_sync_at).toLocaleString()}` : ""}
+      </p>
+      {rows.length > 0 ? (
+        <div className="mt-2 overflow-x-auto rounded-lg border border-inherit bg-white/60 dark:bg-slate-900/40">
+          <table className="w-full min-w-[280px] text-left">
+            <thead className="opacity-80">
+              <tr>
+                <th className="px-3 py-1.5 font-semibold">Threat type</th>
+                <th className="px-3 py-1.5 font-semibold">Synced</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([threatType, count]) => (
+                <tr key={threatType} className="border-t border-inherit">
+                  <td className="px-3 py-1.5 font-mono">{threatType}</td>
+                  <td className="px-3 py-1.5">{count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-2 opacity-80">No active indicators in this sync batch.</p>
+      )}
+    </div>
+  );
+}
+
+function ThreatIntelTelemetryDashboard({ telemetry, period, kpiLoading = false }) {
   const timeline = formatTelemetryTimeline(telemetry?.timeline);
   const vectors = formatAttackVectors(telemetry?.top_attack_vectors);
   const seriesKeys = telemetrySeriesKeys();
   const summary = telemetry?.summary || {};
+  const iocLibrary = telemetry?.ioc_library || {};
   const stageRows = (Array.isArray(telemetry?.stage_hit_distribution)
     ? telemetry.stage_hit_distribution
     : []
@@ -265,7 +322,7 @@ function ThreatIntelTelemetryDashboard({ telemetry, period }) {
         configuration — it does not auto-populate from traffic.
       </div>
 
-      <KPIBar items={buildTelemetryKpis(summary)} />
+      <KPIBar items={buildTelemetryKpis(summary, iocLibrary)} loading={kpiLoading} />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
@@ -369,7 +426,9 @@ function ThreatIntelPageInner() {
   const [error, setError] = useState(null);
   const [entriesError, setEntriesError] = useState(null);
   const [syncStatus, setSyncStatus] = useState(null);
+  const [syncWarning, setSyncWarning] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [telemetryRefreshing, setTelemetryRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -378,7 +437,8 @@ function ThreatIntelPageInner() {
     indicator: "",
     owasp_code: "",
     confidence: 0.8,
-    auto_block: false,
+    auto_block: true,
+    sync_to_gateway: true,
   });
 
   const loadSeqRef = useRef(0);
@@ -390,6 +450,8 @@ function ThreatIntelPageInner() {
     if (!silent) {
       setLoading(true);
       setError(null);
+    } else {
+      setTelemetryRefreshing(true);
     }
     try {
       clearModule2Cache();
@@ -402,7 +464,10 @@ function ThreatIntelPageInner() {
       setError(e.message || "Failed to load threat telemetry.");
       if (!silent) setTelemetry(null);
     } finally {
-      if (seq === loadSeqRef.current && !silent) setLoading(false);
+      if (seq === loadSeqRef.current) {
+        if (!silent) setLoading(false);
+        else setTelemetryRefreshing(false);
+      }
     }
   }, [api, period]);
 
@@ -435,7 +500,15 @@ function ThreatIntelPageInner() {
   const { connected: wsConnected } = useRealtimeNotifications({
     onEnforcementEvent: refreshLive,
   });
-  useContainmentPolling(refreshLive, { enabled: !!(telemetry || entries.length) });
+  useContainmentPolling(refreshLive, { enabled: !!(telemetry || entries.length), intervalMs: TELEMETRY_POLL_MS });
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshLive();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshLive]);
 
   useEffect(() => {
     const onTelemetry = () => refreshLive();
@@ -451,6 +524,34 @@ function ThreatIntelPageInner() {
     loadEntries();
   }, [loadEntries]);
 
+  const syncToGateway = useCallback(async ({ silent = false, bestEffort = false } = {}) => {
+    if (!isAdmin) return null;
+    if (!silent) setSyncing(true);
+    if (!bestEffort) setEntriesError(null);
+    try {
+      const status = await api.syncThreatIntel();
+      setSyncStatus(status);
+      setSyncWarning(null);
+      await loadEntries({ silent: true });
+      await loadTelemetry({ silent: true });
+      return status;
+    } catch (e) {
+      const msg = e.message || "Gateway sync failed.";
+      if (bestEffort) {
+        setSyncWarning(
+          `${msg} The indicator was saved in the database — click Sync to Gateway to retry publishing to Redis.`,
+        );
+        return null;
+      }
+      setEntriesError(
+        isAdmin ? msg : `${msg} Sync requires platform admin or superuser.`,
+      );
+      throw e;
+    } finally {
+      if (!silent) setSyncing(false);
+    }
+  }, [api, isAdmin, loadEntries, loadTelemetry]);
+
   const handleCreate = async () => {
     if (!form.threat_type.trim() || !form.indicator.trim()) {
       setEntriesError("Threat type and indicator are required.");
@@ -458,17 +559,26 @@ function ThreatIntelPageInner() {
     }
     setSaving(true);
     setEntriesError(null);
+    setSyncWarning(null);
     try {
-      await api.createThreatIntel({ ...form, source: "manual" });
+      const shouldSync = form.sync_to_gateway;
+      const { sync_to_gateway: _syncFlag, ...createPayload } = form;
+      await api.createThreatIntel({ ...createPayload, source: "manual" });
       setShowForm(false);
       setForm({
         threat_type: "",
         indicator: "",
         owasp_code: "",
         confidence: 0.8,
-        auto_block: false,
+        auto_block: true,
+        sync_to_gateway: true,
       });
       await loadEntries();
+      if (shouldSync && isAdmin) {
+        await syncToGateway({ silent: true, bestEffort: true });
+      } else {
+        await loadTelemetry({ silent: true });
+      }
     } catch (e) {
       setEntriesError(e.message || "Failed to create indicator.");
     } finally {
@@ -477,27 +587,19 @@ function ThreatIntelPageInner() {
   };
 
   const handleSync = async () => {
-    setSyncing(true);
-    setEntriesError(null);
-    try {
-      const status = await api.syncThreatIntel();
-      setSyncStatus(status);
-      await loadEntries({ silent: true });
-    } catch (e) {
-      const msg = e.message || "Gateway sync failed.";
-      setEntriesError(
-        isAdmin ? msg : `${msg} Sync requires platform admin or superuser.`,
-      );
-    } finally {
-      setSyncing(false);
-    }
+    setSyncWarning(null);
+    await syncToGateway();
   };
 
   const toggleAutoBlock = async (entry) => {
     setEntriesError(null);
+    setSyncWarning(null);
     try {
       await api.updateThreatIntel(entry.id, { auto_block: !entry.auto_block });
       await loadEntries({ silent: true });
+      if (isAdmin) {
+        await syncToGateway({ silent: true, bestEffort: true });
+      }
     } catch (e) {
       setEntriesError(e.message || "Failed to update auto-block setting.");
     }
@@ -505,15 +607,18 @@ function ThreatIntelPageInner() {
 
   const handleDelete = async (entry) => {
     const label = entry.threat_type || entry.indicator?.slice(0, 40) || "this indicator";
-    if (!window.confirm(`Delete IOC "${label}"? Sync to Gateway after delete so Redis stops matching it.`)) {
+    if (!window.confirm(`Delete IOC "${label}"? Gateway sync runs automatically after delete.`)) {
       return;
     }
     setDeletingId(entry.id);
     setEntriesError(null);
+    setSyncWarning(null);
     try {
       await api.deleteThreatIntel(entry.id);
       await loadEntries();
-      setSyncStatus(null);
+      if (isAdmin) {
+        await syncToGateway({ silent: true, bestEffort: true });
+      }
     } catch (e) {
       setEntriesError(e.message || "Failed to delete indicator.");
     } finally {
@@ -576,7 +681,7 @@ function ThreatIntelPageInner() {
               type="button"
               onClick={handleSync}
               disabled={syncing}
-              title={isAdmin ? "Push IOC table to gateway Redis cache" : "Requires platform admin or superuser"}
+              title={isAdmin ? "Re-publish IOC table to gateway Redis cache" : "Requires platform admin or superuser"}
               className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50 dark:border-slate-600"
             >
               <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
@@ -593,29 +698,27 @@ function ThreatIntelPageInner() {
         }
       />
 
-      {syncStatus && (
-        <div
-          className={`mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm ${
-            syncStatus.entry_count > 0
-              ? "border-teal-200 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-900/30 dark:text-teal-200"
-              : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
-          }`}
-        >
-          <span>
-            Gateway sync queued for <strong>{syncStatus.org_slug}</strong> —{" "}
-            <strong>{syncStatus.entry_count}</strong> indicators in org DB
-            {syncStatus.redis_key && (
-              <>
-                {" "}
-                (<code className="font-mono text-xs">{syncStatus.redis_key}</code>)
-              </>
-            )}
-          </span>
-          <span className="text-xs opacity-70">
-            {syncStatus.last_sync_at ? new Date(syncStatus.last_sync_at).toLocaleString() : "just now"}
-          </span>
+      <div className="mb-4 flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
+        <Shield className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <p className="font-semibold">Threat Intel policy blocks vs generic policy blocks</p>
+          <p className="mt-1 text-violet-800 dark:text-violet-300">
+            IOC matches block with gateway code <code className="font-mono">threat_intel_blocked</code> and appear under{" "}
+            <strong>IOC Matches</strong> — not under Policy Management rules or scanner-only injection blocks.
+          </p>
+        </div>
+      </div>
+
+      {syncWarning && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <span>{syncWarning}</span>
+          <button type="button" onClick={handleSync} className="font-medium underline">
+            Retry sync
+          </button>
         </div>
       )}
+
+      {syncStatus && <SyncBatchPanel syncStatus={syncStatus} />}
 
       {error && telemetry && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
@@ -649,7 +752,7 @@ function ThreatIntelPageInner() {
         <Module2EmptyState
           title="No attack telemetry in this period"
           message="Charts summarize enforcement events from your gateway — prompt blocks, PII redactions, API-key activity, and IOC matches."
-          hint="Use M1.1 Attack Simulator for injection signals. Add an indicator below, Sync to Gateway, then send matching traffic for IOC Matches."
+          hint="Use M1.1 Attack Simulator for injection signals. Add an indicator below (auto-syncs to gateway). Matching traffic blocks with code threat_intel_blocked and increments IOC Matches — distinct from generic Policy Management blocks."
           action={(
             <Link
               to={ATTACK_SIMULATOR_PATH}
@@ -661,8 +764,12 @@ function ThreatIntelPageInner() {
         />
       )}
 
-      {telemetry && hasTelemetryActivity && (
-        <ThreatIntelTelemetryDashboard telemetry={telemetry} period={period} />
+      {telemetry && (
+        <ThreatIntelTelemetryDashboard
+          telemetry={telemetry}
+          period={period}
+          kpiLoading={telemetryRefreshing}
+        />
       )}
 
       {/* IOC library — always visible */}
@@ -672,8 +779,9 @@ function ThreatIntelPageInner() {
           <div>
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Threat Indicators (IOC library)</h3>
             <p className="mt-1 max-w-3xl text-xs text-slate-500 dark:text-slate-400">
-              <strong>Add Entry</strong> stores a pattern here. <strong>Sync to Gateway</strong> publishes it to Redis.
-              Matching traffic shows under <strong>IOC Matches</strong> above — not as new table rows.
+              <strong>Add Entry</strong> stores a pattern and syncs it to the gateway automatically.
+              Matching traffic is blocked as a <strong>Threat Intel policy block</strong> (not a generic Policy Management rule)
+              and shows under <strong>IOC Matches</strong> above.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -695,7 +803,7 @@ function ThreatIntelPageInner() {
               <p className="font-medium">No indicators configured yet</p>
               <p className="mt-1">
                 Example: threat type <code className="font-mono">jailbreak_probe</code>, indicator{" "}
-                <code className="font-mono">ignore previous instructions</code>, enable auto-block, then Sync.
+                <code className="font-mono">ignore previous instructions</code>, enable auto-block, then save (syncs automatically).
               </p>
             </div>
           </div>
@@ -736,6 +844,16 @@ function ThreatIntelPageInner() {
                 />
                 Auto-block on match (otherwise monitor-only at scanner tier)
               </label>
+              {isAdmin && (
+                <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={form.sync_to_gateway}
+                    onChange={(e) => setForm({ ...form, sync_to_gateway: e.target.checked })}
+                  />
+                  Sync to gateway immediately after save (Redis IOC cache)
+                </label>
+              )}
             </div>
             <div className="mt-3 flex gap-2">
               <button

@@ -34,7 +34,9 @@ services:
   # collections survive container recreates.
   chromadb:
     profiles: ["chroma"]
-    image: chromadb/chroma:0.5.20
+    # Pin to the same major line as gateway chromadb client (uv.lock ~1.5.x). The
+    # legacy 0.5.x server image lacks stable /api/v2 routes and breaks ingest.
+    image: chromadb/chroma:1.5.0
     ports: ["8001:8000"]
     environment:
       IS_PERSISTENT: "TRUE"
@@ -42,7 +44,7 @@ services:
       PERSIST_DIRECTORY: /chroma/chroma
     volumes: [chroma_data:/chroma/chroma]
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/heartbeat', timeout=2).status==200 else 1)\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v2/heartbeat', timeout=2).status==200 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 8

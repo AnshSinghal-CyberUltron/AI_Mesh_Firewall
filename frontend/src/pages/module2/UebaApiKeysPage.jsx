@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Loader2, Radio, RefreshCw } from "lucide-react";
+import { Loader2, Radio, RefreshCw, BookOpen } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import {
@@ -27,6 +27,8 @@ import { ApiKeyProfileSidebar } from "../../components/module2/ApiKeyProfileSide
 import { ApiKeyContainmentDetailPanel } from "../../components/module2/ApiKeyContainmentDetailPanel";
 import { RiskBandBadge } from "../../components/module2/RiskBandBadge";
 import { Module2EmptyState, Module2ErrorState, Module2PageErrorBoundary, Module2PageSkeleton } from "../../components/module2/PageStates";
+import { UebaScoreGuideModal } from "../../components/module2/UebaScoreGuideModal";
+import { cloneDefaultRiskCalcSettings } from "../../components/module2/uebaRiskCalcDefaults";
 import { buildUebaKpiItems } from "./pageData";
 import { ANALYST_BRIEF_TITLE, PAGE_BRIEFS } from "./pageCopy";
 
@@ -53,8 +55,10 @@ function UebaApiKeysPageInner() {
   const [registry, setRegistry] = useState(null);
   const [riskCalc, setRiskCalc] = useState(null);
   const [riskCalcDraft, setRiskCalcDraft] = useState(null);
+  const [riskCalcDirty, setRiskCalcDirty] = useState(false);
   const [riskCalcSaveError, setRiskCalcSaveError] = useState(null);
   const [riskCalcSaving, setRiskCalcSaving] = useState(false);
+  const [riskCalcReassessSignal, setRiskCalcReassessSignal] = useState(0);
   const [selectedKey, setSelectedKey] = useState(null);
   const [profileRow, setProfileRow] = useState(null);
   const [simulatorCtx, setSimulatorCtx] = useState(() => readStoredGatewayKeyContext());
@@ -63,6 +67,7 @@ function UebaApiKeysPageInner() {
   const [refreshError, setRefreshError] = useState(null);
   const [containmentPanel, setContainmentPanel] = useState(null);
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const [scoreGuideOpen, setScoreGuideOpen] = useState(false);
   const initialSelectDone = useRef(false);
   const refreshTimerRef = useRef(null);
   const loadSeqRef = useRef(0);
@@ -104,7 +109,9 @@ function UebaApiKeysPageInner() {
       setTimeline(bundle.timeline);
       setRegistry(bundle.registry);
       setRiskCalc(calc);
-      setRiskCalcDraft(calc.settings || null);
+      if (!silent || !riskCalcDirty) {
+        setRiskCalcDraft(calc.settings || null);
+      }
       setRefreshError(null);
       setRefreshSignal((n) => n + 1);
     } catch (err) {
@@ -119,7 +126,7 @@ function UebaApiKeysPageInner() {
       if (seq !== loadSeqRef.current) return;
       if (!silent) setLoading(false);
     }
-  }, [api, period]);
+  }, [api, period, riskCalcDirty]);
 
   useEffect(() => {
     load();
@@ -220,6 +227,7 @@ function UebaApiKeysPageInner() {
 
   const canEditRiskCalc = Boolean(user?.is_superuser || (user?.roles || []).includes("platform_admin"));
   const updateRiskCalcDraft = useCallback((mutator) => {
+    setRiskCalcDirty(true);
     setRiskCalcDraft((prev) => {
       const next = structuredClone(prev || {});
       mutator(next);
@@ -235,6 +243,8 @@ function UebaApiKeysPageInner() {
       const data = await api.updateUebaRiskCalculation(riskCalcDraft);
       setRiskCalc((prev) => ({ ...(prev || {}), settings: data.settings }));
       setRiskCalcDraft(data.settings);
+      setRiskCalcDirty(false);
+      setRiskCalcReassessSignal((n) => n + 1);
       await load({ silent: true });
     } catch (err) {
       setRiskCalcSaveError(err.message || "Failed to save risk calculation settings.");
@@ -242,6 +252,26 @@ function UebaApiKeysPageInner() {
       setRiskCalcSaving(false);
     }
   }, [api, canEditRiskCalc, load, riskCalcDraft]);
+
+  const restoreRiskCalculationDefaults = useCallback(async () => {
+    if (!canEditRiskCalc) return;
+    const defaults = cloneDefaultRiskCalcSettings();
+    setRiskCalcSaving(true);
+    setRiskCalcSaveError(null);
+    try {
+      const data = await api.updateUebaRiskCalculation(defaults);
+      setRiskCalc((prev) => ({ ...(prev || {}), settings: data.settings }));
+      setRiskCalcDraft(data.settings);
+      setRiskCalcDirty(false);
+      setRiskCalcReassessSignal((n) => n + 1);
+      await load({ silent: true });
+    } catch (err) {
+      setRiskCalcSaveError(err.message || "Failed to restore default score settings.");
+      throw err;
+    } finally {
+      setRiskCalcSaving(false);
+    }
+  }, [api, canEditRiskCalc, load]);
 
   useEffect(() => {
     const onTelemetry = () => {
@@ -310,6 +340,10 @@ function UebaApiKeysPageInner() {
     onKillSwitchClick: () => setContainmentPanel((p) => (p === "kill-switch" ? null : "kill-switch")),
   });
 
+  const riskCalculation = riskCalc
+    ? { settings: riskCalc.settings, formula_reference: riskCalc.formula_reference }
+    : null;
+
   const noKeyActivity = !kpiLoading && (s.keys_with_activity ?? 0) === 0;
 
   return (
@@ -336,6 +370,14 @@ function UebaApiKeysPageInner() {
               {wsConnected ? "Live" : "Polling"}
             </span>
             <PeriodSelector value={period} onChange={setPeriod} />
+            <button
+              type="button"
+              onClick={() => setScoreGuideOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              Score guide
+            </button>
             <button
               type="button"
               onClick={() => load()}
@@ -369,6 +411,13 @@ function UebaApiKeysPageInner() {
 
       <KPIBar items={kpiItems} loading={kpiLoading} />
 
+      <UebaScoreGuideModal
+        open={scoreGuideOpen}
+        onClose={() => setScoreGuideOpen(false)}
+        mediumThreshold={riskCalcDraft?.medium_risk_threshold ?? riskCalc?.settings?.medium_risk_threshold}
+        highThreshold={riskCalcDraft?.high_risk_threshold ?? riskCalc?.settings?.high_risk_threshold}
+      />
+
       <ApiKeyProfileSidebar
         open={!!profileRow}
         rowSummary={profileRow ? (findRegistryRow(profileRow.key_id) || profileRow) : null}
@@ -377,18 +426,16 @@ function UebaApiKeysPageInner() {
         onClose={closeProfile}
         onActionComplete={handleActionComplete}
         simulatorKeyPrefix={simulatorCtx.prefix}
-        riskCalculation={
-          riskCalc
-            ? { settings: riskCalc.settings, formula_reference: riskCalc.formula_reference }
-            : null
-        }
+        riskCalculation={riskCalculation}
         riskCalcDraft={riskCalcDraft}
         riskCalcGuardrails={riskCalcDraft?.weight_guardrails}
         canEditRiskCalc={canEditRiskCalc}
         onRiskCalcChange={updateRiskCalcDraft}
         onRiskCalcSave={saveRiskCalculation}
+        onRiskCalcRestore={restoreRiskCalculationDefaults}
         riskCalcSaving={riskCalcSaving}
         riskCalcSaveError={riskCalcSaveError}
+        riskCalcReassessSignal={riskCalcReassessSignal}
         refreshSignal={refreshSignal}
         liveConnected={wsConnected}
       />
@@ -418,7 +465,7 @@ function UebaApiKeysPageInner() {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Behavior Timeline"
-          titleHelpText="Hourly enforcement trend (total, blocked, redacted) for your organization."
+          titleHelpText="Hourly enforcement trend: total events plus per-lane chat, RAG, and MCP counts."
         >
           {hasTimeline ? (
             <ResponsiveContainer width="100%" height={260}>
@@ -428,6 +475,9 @@ function UebaApiKeysPageInner() {
                 <YAxis fontSize={11} allowDecimals={false} />
                 <Tooltip {...module2TooltipProps} />
                 <Line type="monotone" dataKey="total_events" stroke="#0ea5e9" strokeWidth={2} dot={false} name="Total" />
+                <Line type="monotone" dataKey="chat" stroke="#14b8a6" strokeWidth={2} dot={false} name="Chat" />
+                <Line type="monotone" dataKey="rag" stroke="#8b5cf6" strokeWidth={1.5} dot={false} name="RAG" />
+                <Line type="monotone" dataKey="mcp" stroke="#f97316" strokeWidth={1.5} dot={false} name="MCP" />
                 <Line type="monotone" dataKey="blocked" stroke="#ef4444" strokeWidth={2} dot={false} name="Blocked" />
                 <Line type="monotone" dataKey="redacted" stroke="#f59e0b" strokeWidth={2} dot={false} name="Redacted" />
               </LineChart>

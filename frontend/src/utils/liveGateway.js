@@ -435,9 +435,12 @@ function inferBlockedStage(data, httpStatus, zs) {
   if (
     category === "blocked_keyword"
     || tier === "config"
-    || code === "threat_intel_blocked"
   ) {
     return "policy";
+  }
+
+  if (code === "threat_intel_blocked" || tier === "threat_intel") {
+    return "threat_intel";
   }
 
   if (code === "content_blocked" && tier === "policy") return "policy";
@@ -469,6 +472,20 @@ function formatRateLimitDetail(data, context = {}) {
 }
 
 function formatPolicyBlockDetail(data, zs) {
+  const code = String(data?.code || "").toLowerCase();
+  const tier = String(data?.detection_tier || zs?.detection_tier || "").toLowerCase();
+  if (code === "threat_intel_blocked" || tier === "threat_intel") {
+    const threat = data?.category || zs?.threat_type || "IOC match";
+    const indicator = (zs?.matched_patterns || data?.matched_patterns || [])[0];
+    if (zs?.reason) return zs.reason;
+    if (data?.message && !String(data.message).toLowerCase().includes("policy management")) {
+      return `Threat Intelligence policy block — ${data.message}`;
+    }
+    return (
+      `Blocked by Threat Intelligence policy (IOC match: ${threat}`
+      + `${indicator ? ` — indicator "${indicator}"` : ""})`
+    );
+  }
   const category = data?.category || zs?.threat_type || "";
   if (category === "blocked_keyword" || data?.blocked_by === "firewall_keywords") {
     return (
@@ -760,9 +777,10 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     });
   }
 
-  // 3 — Policy
+  // 3 — Policy / Threat Intel IOC
   {
     const at = stageAt("policy");
+    const threatIntelBlocked = blockedStage === "threat_intel";
     const policyBlocked = blockedStage === "policy";
     const matchedPolicies = data?.matched_policies || zs.matched_policies || [];
     let matchedRules = data?.matched_rules || zs.matched_rules || [];
@@ -780,8 +798,8 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     }
     const policyActed = Boolean(matchedPolicies?.length || matchedRules?.length || policyRedacted);
     stages.push({
-      name: "policy",
-      action: policyBlocked
+      name: threatIntelBlocked ? "threat_intel" : "policy",
+      action: (policyBlocked || threatIntelBlocked)
         ? "block"
         : at === "after"
           ? "skip"
@@ -789,7 +807,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
             ? "redact"
             : (policyActed && finalAction === "flag" ? "flag" : "allow"),
       latency_ms: latencyForStage("policy", stageMetrics, zs, context),
-      detail: policyBlocked
+      detail: (policyBlocked || threatIntelBlocked)
         ? formatPolicyBlockDetail(data, zs)
         : at === "after"
           ? skipDetail("policy", blockedStage)

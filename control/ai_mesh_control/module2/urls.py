@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from module2.views import (
     IncidentBulkResolveView,
     IncidentDetailView,
+    IncidentE2eSeedView,
     IncidentListView,
     McpRiskView,
     ModelExposureView,
@@ -37,6 +38,7 @@ urlpatterns = [
     path("rag/health/", RagHealthView.as_view(), name="module2-rag-health"),
     path("mcp/risk/", McpRiskView.as_view(), name="module2-mcp-risk"),
     path("incidents/bulk-resolve/", IncidentBulkResolveView.as_view(), name="module2-incident-bulk-resolve"),
+    path("incidents/e2e-seed/", IncidentE2eSeedView.as_view(), name="module2-incident-e2e-seed"),
     path("incidents/", IncidentListView.as_view(), name="module2-incident-list"),
     path("incidents/<int:pk>/", IncidentDetailView.as_view(), name="module2-incident-detail"),
 ] + router.urls

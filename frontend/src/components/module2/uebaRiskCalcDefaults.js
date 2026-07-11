@@ -3,6 +3,8 @@ export const DEFAULT_UEBA_RISK_CALC_SETTINGS = {
   behavior_profile_prompt_target: 50,
   llm_triage_enabled: true,
   llm_triage_min_traditional_score: 0.45,
+  high_risk_threshold: 0.7,
+  medium_risk_threshold: 0.35,
   weights: {
     block_rate: 0.5,
     threat_severity: 0.25,
@@ -50,4 +52,15 @@ export function traditionalWeightSum(draft) {
 
 export function cloneDefaultRiskCalcSettings() {
   return structuredClone(DEFAULT_UEBA_RISK_CALC_SETTINGS);
+}
+
+/** Merge platform defaults onto a saved settings payload (keeps server guardrails). */
+export function applyDefaultRiskCalcSettings(current) {
+  const defaults = cloneDefaultRiskCalcSettings();
+  return {
+    ...(current || {}),
+    ...defaults,
+    weights: { ...defaults.weights },
+    weight_guardrails: current?.weight_guardrails,
+  };
 }

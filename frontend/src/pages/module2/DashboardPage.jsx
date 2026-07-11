@@ -42,7 +42,7 @@ const LANE_META = {
     bg: "bg-sky-50 dark:bg-sky-900/20",
     border: "border-sky-200 dark:border-sky-700",
     helpText: "Direct LLM chat/completion traffic through the gateway ingress.",
-    drillDown: { to: "/models/exposure?tab=model", label: "M2.3 Model exposure" },
+    drillDown: { to: "/models/exposure?tab=model", label: "M2.4 Model exposure" },
   },
   rag: {
     label: "RAG",
@@ -51,7 +51,7 @@ const LANE_META = {
     bg: "bg-violet-50 dark:bg-violet-900/20",
     border: "border-violet-200 dark:border-violet-700",
     helpText: "Retrieval-augmented requests tagged event_type=rag_pipeline.",
-    drillDown: { to: "/models/exposure?tab=rag", label: "M2.3 RAG health" },
+    drillDown: { to: "/models/exposure?tab=rag", label: "M2.4 RAG health" },
   },
   vector: {
     label: "Vector",
@@ -60,7 +60,7 @@ const LANE_META = {
     bg: "bg-emerald-50 dark:bg-emerald-900/20",
     border: "border-emerald-200 dark:border-emerald-700",
     helpText: "Vector DB access events with collection or namespace metadata.",
-    drillDown: { to: "/models/exposure?tab=rag", label: "M2.3 Vector collections" },
+    drillDown: { to: "/models/exposure?tab=rag", label: "M2.4 Vector collections" },
   },
   mcp: {
     label: "MCP",
@@ -69,7 +69,7 @@ const LANE_META = {
     bg: "bg-amber-50 dark:bg-amber-900/20",
     border: "border-amber-200 dark:border-amber-700",
     helpText: "Model Context Protocol tool-call enforcement events.",
-    drillDown: { to: "/mcp/risk", label: "M2.4 MCP risk" },
+    drillDown: { to: "/mcp/risk", label: "M2.5 MCP risk" },
   },
   threat_intel: {
     label: "Threat Intel",
@@ -78,7 +78,7 @@ const LANE_META = {
     bg: "bg-red-50 dark:bg-red-900/20",
     border: "border-red-200 dark:border-red-700",
     helpText: "Threat intelligence matches and indicator enforcement events.",
-    drillDown: { to: "/threat-intel", label: "M2.5 Threat intel" },
+    drillDown: { to: "/threat-intel", label: "M2.3 Threat intel" },
   },
 };
 

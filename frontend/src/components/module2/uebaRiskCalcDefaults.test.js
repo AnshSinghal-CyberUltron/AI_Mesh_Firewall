@@ -38,4 +38,6 @@ test("cloneDefaultRiskCalcSettings matches platform defaults", () => {
   const clone = cloneDefaultRiskCalcSettings();
   assert.deepEqual(clone, DEFAULT_UEBA_RISK_CALC_SETTINGS);
   assert.equal(traditionalWeightSum(clone), 1);
+  assert.equal(clone.high_risk_threshold, 0.7);
+  assert.equal(clone.medium_risk_threshold, 0.35);
 });

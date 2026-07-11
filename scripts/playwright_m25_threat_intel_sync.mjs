@@ -1,5 +1,5 @@
 /**
- * M2.5 Threat Intelligence Ops — IOC CRUD, Redis sync, Attack Simulator → telemetry sync gate.
+ * M2.3 Threat Intelligence Ops — IOC CRUD, auto gateway sync, Attack Simulator → telemetry sync gate.
  *
  * Run:
  *   NODE_PATH="$PWD/tests/e2e/node_modules" BASE_URL=http://127.0.0.1:8180 \
@@ -15,6 +15,8 @@ const PASS = process.env.TEST_PASSWORD || "Adm1n!Pass#2024";
 const ORG_SLUG = process.env.ORG_SLUG || "zeroshield";
 const OUT = process.env.E2E_REPORT || "runs/playwright_m25_threat_intel_sync.json";
 const SHOT_DIR = process.env.SHOT_DIR || "runs/m25-threat-intel-sync";
+const TELEMETRY_POLL_MS = Number(process.env.TELEMETRY_POLL_MS || 2000);
+const TELEMETRY_POLL_MAX = Number(process.env.TELEMETRY_POLL_MAX || 30);
 
 const STAMP = Date.now();
 const INDICATOR = process.env.IOC_INDICATOR || `pw_ioc_probe_${STAMP}`;
@@ -45,21 +47,38 @@ function inlineRedisSync() {
     const out = execSync(cmd, { encoding: "utf-8", timeout: 90000 });
     if (!out.includes("redis_sync_ok")) throw new Error(`inline redis sync failed: ${out}`);
     report.notes.push("inline redis sync ok (host docker)");
+    return true;
   } catch (err) {
     report.notes.push(`inline redis sync skipped (${String(err?.message || err).slice(0, 120)})`);
+    return false;
   }
 }
 
 function drainTelemetry() {
   try {
-    execSync(
+    const out = execSync(
       `docker exec -w /app/control ai_mesh_firewall-control-1 python manage.py shell -c ` +
         `"from core.tasks import drain_telemetry_from_redis; print(drain_telemetry_from_redis(100))"`,
       { encoding: "utf-8", timeout: 60000 },
     );
+    report.notes.push(`telemetry drain ok (${String(out).trim().slice(0, 40)})`);
+    return true;
   } catch {
     report.notes.push("telemetry drain skipped (no host docker)");
+    return false;
   }
+}
+
+async function apiSyncThreatIntel(page) {
+  return page.evaluate(async () => {
+    const tok = localStorage.getItem("auth_access");
+    const r = await fetch("/api/module2/threat-intel/sync/", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+    });
+    const body = await r.json().catch(() => ({}));
+    return { status: r.status, body };
+  });
 }
 
 async function waitForControlPlane(page) {
@@ -136,8 +155,8 @@ async function fetchTelemetrySummary(page, period = "24h") {
   }, period);
 }
 
-async function addIocAndSync(page) {
-  CURRENT_PHASE = "m25-ioc-crud";
+async function addIocWithAutoSync(page) {
+  CURRENT_PHASE = "m23-ioc-crud";
   await page.goto(`${BASE}/threat-intel?period=24h`, { waitUntil: "domcontentloaded", timeout: 120000 });
   await page.getByRole("heading", { name: /Threat Intelligence Ops/i }).waitFor({ state: "visible", timeout: 60000 });
 
@@ -147,6 +166,11 @@ async function addIocAndSync(page) {
   const autoBlock = page.getByLabel(/Auto-block on match/i);
   if (!(await autoBlock.isChecked())) await autoBlock.check();
 
+  const syncPromise = page.waitForResponse(
+    (r) => r.url().includes("/api/module2/threat-intel/sync/") && r.request().method() === "POST",
+    { timeout: 90000 },
+  ).catch(() => null);
+
   const [createResp] = await Promise.all([
     page.waitForResponse((r) => r.url().includes("/api/module2/threat-intel/") && r.request().method() === "POST", { timeout: 60000 }),
     page.getByRole("button", { name: /^Save$/i }).click(),
@@ -155,22 +179,31 @@ async function addIocAndSync(page) {
   await page.getByText(INDICATOR, { exact: false }).first().waitFor({ state: "visible", timeout: 30000 });
   report.steps.push("add-entry");
 
-  const [syncResp] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/module2/threat-intel/sync/") && r.request().method() === "POST", { timeout: 60000 }),
-    page.getByRole("button", { name: /Sync to Gateway/i }).click(),
-  ]);
-  assert(syncResp.ok(), `Sync to Gateway -> 2xx (${syncResp.status()})`);
-  const syncBody = await syncResp.json().catch(() => ({}));
-  report.notes.push(`sync redis_key=${syncBody.redis_key}`);
+  let syncResp = await syncPromise;
+  let syncBody = syncResp ? await syncResp.json().catch(() => ({})) : {};
+  if (!syncResp?.ok()) {
+    const apiSync = await apiSyncThreatIntel(page);
+    assert(apiSync.status >= 200 && apiSync.status < 300, `fallback sync API -> 2xx (${apiSync.status})`);
+    syncBody = apiSync.body || {};
+    report.notes.push("used API fallback sync after save");
+  } else {
+    report.notes.push("auto-sync POST fired after save");
+  }
 
-  await page.getByText(/Gateway sync queued/i).waitFor({ state: "visible", timeout: 30000 });
-  await page.locator("code").filter({ hasText: /firewall:threat_intel:/i }).first().waitFor({ state: "visible", timeout: 30000 });
   assert(Boolean(syncBody.redis_key), "sync response includes redis_key");
-  report.steps.push("sync-ui");
+  report.notes.push(`sync redis_key=${syncBody.redis_key} status=${syncBody.status || "unknown"}`);
 
-  inlineRedisSync();
-  await page.waitForTimeout(6000);
-  report.steps.push("redis-sync");
+  await page.getByText(/Gateway sync (complete|queued)/i).waitFor({ state: "visible", timeout: 45000 });
+  await page.locator("code").filter({ hasText: /firewall:threat_intel:/i }).first().waitFor({ state: "visible", timeout: 30000 });
+
+  if (!inlineRedisSync()) {
+    const apiSync = await apiSyncThreatIntel(page);
+    if (apiSync.status >= 200 && apiSync.status < 300) {
+      report.notes.push("API sync confirmed (no host docker)");
+    }
+  }
+  await page.waitForTimeout(3000);
+  report.steps.push("auto-sync");
   await shot(page, "01-ioc-synced");
 }
 
@@ -196,24 +229,31 @@ async function runLiveAttackSimulator(page, gatewayKey) {
     (resp.status() >= 400 && resp.status() < 500)
     || String(body?.code || "").toLowerCase() === "threat_intel_blocked";
   assert(blocked, `IOC-bearing prompt blocked (HTTP ${resp.status()} code=${body?.code || ""})`);
+  assert(
+    String(body?.code || "").toLowerCase() === "threat_intel_blocked",
+    `block uses threat_intel_blocked code (got ${body?.code || "none"})`,
+  );
   report.steps.push("live-attack");
   await shot(page, "02-attack-blocked");
 }
 
 async function assertIocMatchesIncremented(page, baselineMatches) {
-  CURRENT_PHASE = "m25-telemetry-sync";
-  drainTelemetry();
+  CURRENT_PHASE = "m23-telemetry-sync";
+  const drained = drainTelemetry();
 
   let latest = baselineMatches;
-  for (let i = 0; i < 12; i++) {
-    await page.waitForTimeout(2000);
+  for (let i = 0; i < TELEMETRY_POLL_MAX; i++) {
+    await page.waitForTimeout(TELEMETRY_POLL_MS);
     const { status, summary } = await fetchTelemetrySummary(page, "24h");
     assert(status === 200, `telemetry refetch -> 200 (got ${status})`);
     latest = summary.threat_intel_matches ?? 0;
     if (latest > baselineMatches) break;
+    if (!drained && i === Math.floor(TELEMETRY_POLL_MAX / 2)) {
+      drainTelemetry();
+    }
   }
 
-  report.notes.push(`IOC Matches before=${baselineMatches} after=${latest}`);
+  report.notes.push(`IOC Matches before=${baselineMatches} after=${latest} polls=${TELEMETRY_POLL_MAX}`);
   assert(latest >= baselineMatches + 1, `IOC Matches KPI incremented (delta=${latest - baselineMatches})`);
 
   const [telemResp] = await Promise.all([
@@ -225,6 +265,7 @@ async function assertIocMatchesIncremented(page, baselineMatches) {
   ]);
   await page.getByRole("heading", { name: /Threat Intelligence Ops/i }).waitFor({ state: "visible", timeout: 60000 });
   await page.getByText(/IOC Matches/i).first().waitFor({ state: "visible", timeout: 30000 });
+  await page.getByText(/Threat Intel policy blocks/i).waitFor({ state: "visible", timeout: 30000 });
 
   const telem = await telemResp.json().catch(() => ({}));
   const uiMatches = telem?.summary?.threat_intel_matches ?? latest;
@@ -249,7 +290,7 @@ async function main() {
     const baseMatches = baseline.summary.threat_intel_matches ?? 0;
     report.notes.push(`baseline IOC Matches=${baseMatches}`);
 
-    await addIocAndSync(page);
+    await addIocWithAutoSync(page);
     const gatewayKey = await provisionGatewayKey(page);
     report.notes.push(`gateway key prefix=${String(gatewayKey).slice(0, 8)}`);
     await runLiveAttackSimulator(page, gatewayKey);

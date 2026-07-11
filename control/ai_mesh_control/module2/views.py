@@ -3,8 +3,10 @@
 from collections import Counter, defaultdict
 from datetime import timedelta
 import logging
+import os
 from uuid import UUID
 
+from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
@@ -38,7 +40,7 @@ from module2.analytics import (
 )
 from module2.models import ThreatIntelEntry
 from module2.serializers import ThreatIntelEntrySerializer
-from module2.tasks import sync_threat_intel_to_redis
+from module2.tasks import safe_sync_threat_intel_to_redis, build_threat_intel_sync_meta
 from module2.ueba_metrics import POLICY_ESCALATION_THREATS
 from module2.ueba_service import (
     assessment_to_risk_payload,
@@ -175,6 +177,13 @@ def _build_event_trend(events_qs, since, hours, bucket_hours):
     return _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_hours)
 
 
+_TIMELINE_LANES = ("chat", "rag", "mcp", "vector", "threat_intel")
+
+
+def _empty_lane_counts() -> dict[str, int]:
+    return {lane: 0 for lane in _TIMELINE_LANES}
+
+
 def _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_hours):
     bucket_count = max(hours // bucket_hours, 1)
     timeline = []
@@ -186,6 +195,7 @@ def _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_hours
                 "total": 0,
                 "blocked": 0,
                 "redacted": 0,
+                **_empty_lane_counts(),
             }
         )
     bucket_seconds = bucket_hours * 3600
@@ -198,6 +208,10 @@ def _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_hours
             continue
         target = timeline[idx]
         target["total"] += 1
+        meta = item.metadata or {}
+        lane = event_source(meta)
+        if lane in target:
+            target[lane] += 1
         if item.action == "block":
             target["blocked"] += 1
         if item.action == "redact":
@@ -555,6 +569,11 @@ def _ueba_period_bundle(request, period: str):
                 "total_events": row["total"],
                 "blocked": row["blocked"],
                 "redacted": row["redacted"],
+                "chat": row.get("chat", 0),
+                "rag": row.get("rag", 0),
+                "mcp": row.get("mcp", 0),
+                "vector": row.get("vector", 0),
+                "threat_intel": row.get("threat_intel", 0),
                 "keys": {prefix: 0 for prefix in tracked_prefixes},
             }
         )
@@ -953,14 +972,32 @@ class ThreatIntelTelemetryView(APIView):
         payload["stage_hit_distribution"] = build_stage_hit_distribution(events_qs)
         now = timezone.now()
         if org:
+            from collections import Counter
+
+            from django.db.models import Q
+
             ioc_qs = ThreatIntelEntry.objects.filter(organization=org)
+            active_qs = ioc_qs.filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+            week_ahead = now + timedelta(days=7)
+            by_threat_type = dict(Counter(active_qs.values_list("threat_type", flat=True)))
             payload["ioc_library"] = {
                 "total": ioc_qs.count(),
                 "auto_block_enabled": ioc_qs.filter(auto_block=True).count(),
                 "expired": ioc_qs.filter(expires_at__lt=now).count(),
+                "expiring_soon": active_qs.filter(
+                    expires_at__isnull=False,
+                    expires_at__lte=week_ahead,
+                ).count(),
+                "by_threat_type": by_threat_type,
             }
         else:
-            payload["ioc_library"] = {"total": 0, "auto_block_enabled": 0, "expired": 0}
+            payload["ioc_library"] = {
+                "total": 0,
+                "auto_block_enabled": 0,
+                "expired": 0,
+                "expiring_soon": 0,
+                "by_threat_type": {},
+            }
         return Response(payload)
 
 
@@ -1116,15 +1153,32 @@ class ThreatIntelSyncView(APIView):
             return Response({"detail": "Organization required."}, status=status.HTTP_400_BAD_REQUEST)
         now = timezone.now()
         entry_count = ThreatIntelEntry.objects.filter(organization=org).count()
-        sync_threat_intel_to_redis.delay(org.id)
+        redis_key = f"firewall:threat_intel:{org.slug or org.id}"
+        sync_meta = build_threat_intel_sync_meta(org)
+        ok, err = safe_sync_threat_intel_to_redis(org.id)
+        if not ok:
+            return Response(
+                {
+                    "status": "sync_failed",
+                    "organization_id": org.id,
+                    "org_slug": org.slug or str(org.id),
+                    "entry_count": entry_count,
+                    "redis_key": redis_key,
+                    "last_sync_at": now.isoformat(),
+                    "error": err or "Redis sync failed",
+                    **sync_meta,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         return Response(
             {
-                "status": "sync_queued",
+                "status": "synced",
                 "organization_id": org.id,
                 "org_slug": org.slug or str(org.id),
                 "entry_count": entry_count,
-                "redis_key": f"firewall:threat_intel:{org.slug or org.id}",
+                "redis_key": redis_key,
                 "last_sync_at": now.isoformat(),
+                **sync_meta,
             }
         )
 
@@ -1215,7 +1269,10 @@ class IncidentListView(APIView):
                 & Q(enforcement_event__metadata__extra__has_key="detail")
                 & Q(enforcement_event__metadata__extra__detail__icontains="threat intel")
             )
-            | Q(enforcement_event__metadata__threat_type__istartswith="threat_intel")
+            | (
+                Q(enforcement_event__metadata__has_key="threat_type")
+                & Q(enforcement_event__metadata__threat_type__istartswith="threat_intel")
+            )
         )
 
         source_filter = request.query_params.get("source", "").strip()
@@ -1300,6 +1357,74 @@ class IncidentListView(APIView):
             elapsed_ms,
         )
         return response
+
+
+def _module2_e2e_seed_enabled() -> bool:
+    """Gate dev-only incident seeding used by Playwright Docker gates."""
+    if settings.DEBUG:
+        return True
+    return os.environ.get("MODULE2_E2E_SEED", "").strip().lower() in {"1", "true", "yes"}
+
+
+class IncidentE2eSeedView(APIView):
+    """POST /api/module2/incidents/e2e-seed/ — create probe incidents without host docker."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not _module2_e2e_seed_enabled():
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        org = _org_or_403(request)
+        if org is None and not request.user.is_superuser:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+
+        probe_title = str(request.data.get("probe_title") or "").strip()
+        bulk_titles = request.data.get("bulk_titles") or []
+        if not probe_title:
+            return Response({"detail": "probe_title is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(bulk_titles, list):
+            return Response({"detail": "bulk_titles must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+        bulk_titles = [str(t).strip() for t in bulk_titles if str(t).strip()]
+        if len(bulk_titles) < 2:
+            return Response(
+                {"detail": "bulk_titles must include at least two titles."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        def _seed_one(title: str, *, severity: str) -> SecurityIncident:
+            ev = EnforcementEvent.objects.create(
+                organization=org,
+                action=ACTION_BLOCK,
+                metadata={
+                    "source": "threat_intel",
+                    "threat_type": "prompt_injection",
+                    "detail": title,
+                    "model": "gpt-4o",
+                    "key_prefix": "zs_m26",
+                },
+            )
+            return SecurityIncident.objects.create(
+                organization=org,
+                enforcement_event=ev,
+                title=title,
+                severity=severity,
+                status="open",
+            )
+
+        probe = _seed_one(probe_title, severity="high")
+        bulk = [_seed_one(bulk_titles[0], severity="high"), _seed_one(bulk_titles[1], severity="medium")]
+        from module2.analytics import invalidate_incident_summary_cache
+
+        invalidate_incident_summary_cache(org.id if org else None)
+        return Response(
+            {
+                "probe_id": probe.id,
+                "bulk_ids": [bulk[0].id, bulk[1].id],
+                "probe_title": probe_title,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class IncidentBulkResolveView(APIView):

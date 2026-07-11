@@ -43,9 +43,9 @@ const menuItems = [
     subItems: [
       { id: "m2-dashboard", label: "M2.1 Gateway Intelligence Hub", route: "/dashboard" },
       { id: "m2-ueba-api-keys", label: "M2.2 API Key & Identity Risk", route: "/ueba/api-keys" },
-      { id: "m2-models-exposure", label: "M2.3 Model & RAG Health", route: "/models/exposure" },
-      { id: "m2-mcp-risk", label: "M2.4 MCP & Context Risk", route: "/mcp/risk" },
-      { id: "m2-threat-intel", label: "M2.5 Threat Intelligence Ops", route: "/threat-intel" },
+      { id: "m2-threat-intel", label: "M2.3 Threat Intelligence Ops", route: "/threat-intel" },
+      { id: "m2-models-exposure", label: "M2.4 Model & RAG Health", route: "/models/exposure" },
+      { id: "m2-mcp-risk", label: "M2.5 MCP & Context Risk", route: "/mcp/risk" },
       { id: "m2-incidents", label: "M2.6 Incidents & Forensics", route: "/incidents" },
     ],
   },

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Settings2 } from "lucide-react";
 import {
   buildRiskCalcFormulaLines,
-  cloneDefaultRiskCalcSettings,
+  applyDefaultRiskCalcSettings,
   traditionalWeightSum,
 } from "./uebaRiskCalcDefaults";
 
@@ -30,19 +30,31 @@ export function RiskCalculationSettingsPanel({
   canEdit,
   onChange,
   onSave,
+  onRestoreDefaults,
   saving,
   saveError,
   defaultOpen = false,
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [restoring, setRestoring] = useState(false);
   const liveFormula = useMemo(() => buildRiskCalcFormulaLines(draft), [draft]);
   const liveWeightSum = useMemo(() => traditionalWeightSum(draft), [draft]);
   if (!draft) return null;
 
-  const handleRestoreDefaults = () => {
-    if (!canEdit) return;
-    const defaults = cloneDefaultRiskCalcSettings();
+  const handleRestoreDefaults = async () => {
+    if (!canEdit || restoring) return;
+    if (onRestoreDefaults) {
+      setRestoring(true);
+      try {
+        await onRestoreDefaults();
+      } finally {
+        setRestoring(false);
+      }
+      return;
+    }
+    const defaults = applyDefaultRiskCalcSettings(draft);
     onChange((next) => {
+      Object.keys(next).forEach((key) => delete next[key]);
       Object.assign(next, defaults);
       next.weights = { ...defaults.weights };
     });
@@ -136,6 +148,18 @@ export function RiskCalculationSettingsPanel({
                 next.weights.policy_escalation = v;
               })}
             />
+            <NumberInput
+              label="Medium risk band threshold"
+              value={draft.medium_risk_threshold}
+              disabled={!canEdit}
+              onChange={(v) => onChange((next) => { next.medium_risk_threshold = v; })}
+            />
+            <NumberInput
+              label="High risk band threshold"
+              value={draft.high_risk_threshold}
+              disabled={!canEdit}
+              onChange={(v) => onChange((next) => { next.high_risk_threshold = v; })}
+            />
             <label className="flex items-end gap-2 text-xs text-slate-600 dark:text-slate-300">
               <input
                 type="checkbox"
@@ -161,15 +185,15 @@ export function RiskCalculationSettingsPanel({
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
-              disabled={!canEdit || saving}
+              disabled={!canEdit || saving || restoring}
               onClick={handleRestoreDefaults}
               className="flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             >
-              Restore defaults
+              {restoring ? "Restoring…" : "Restore defaults"}
             </button>
             <button
               type="button"
-              disabled={!canEdit || saving}
+              disabled={!canEdit || saving || restoring}
               onClick={onSave}
               className="flex-1 rounded-md bg-teal-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
             >

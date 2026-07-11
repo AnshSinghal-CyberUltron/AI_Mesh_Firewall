@@ -5,7 +5,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  BookOpen, Cpu, Database, Filter, RefreshCw, Search, Sparkles,
+  BookOpen, CircleHelp, Cpu, Database, Filter, Info, RefreshCw, Search, Sparkles, X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
@@ -116,30 +116,88 @@ function TabBar({ active, onChange }) {
   );
 }
 
-function RagPipelineGuide() {
+function ModelRagGuideModal({ open, onClose }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
   return (
-    <div className="mb-6 rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-800/60 dark:bg-violet-950/20">
-      <p className="mb-3 text-sm font-semibold text-violet-900 dark:text-violet-200">
-        How to read this page
-      </p>
-      <p className="mb-4 text-xs leading-relaxed text-violet-800/90 dark:text-violet-300/90">
-        Every RAG request passes through four gates. A <strong>block</strong> means the firewall stopped the
-        request at that stage. <strong>100% block rate</strong> on a stage with few events means every request
-        was denied there — not that your whole fleet is down. Compare volume (bars) with block rate together.
-      </p>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {RAG_STAGE_GUIDE.map(({ icon: Icon, title, text }) => (
-          <div
-            key={title}
-            className="rounded-lg border border-violet-200/80 bg-white/80 p-3 dark:border-violet-800/40 dark:bg-slate-900/40"
-          >
-            <p className="mb-1 flex items-center gap-1.5 text-xs font-bold text-violet-700 dark:text-violet-300">
-              <Icon className="h-3.5 w-3.5" />
-              {title}
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="model-rag-guide-title"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-6 py-5 dark:border-slate-700 dark:bg-slate-900">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-teal-600 dark:text-teal-400">
+              M2.4 · Model &amp; RAG Health Guide
             </p>
-            <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">{text}</p>
+            <h2 id="model-rag-guide-title" className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
+              What this page shows
+            </h2>
           </div>
-        ))}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+            aria-label="Close guide"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-6 px-6 py-5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+          <section>
+            <h3 className="mb-2 flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
+              <Info className="h-4 w-4 text-teal-600" />
+              Page objective
+            </h3>
+            <p>{PAGE_BRIEFS.modelRag}</p>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+            <h3 className="mb-2 font-semibold text-slate-800 dark:text-slate-100">Model Exposure tab</h3>
+            <p>
+              Shows per-model risk posture from real enforcement telemetry (requests, block %, redact %, latency,
+              exposure score). Use it to identify which models create the most policy friction.
+            </p>
+          </section>
+
+          <section className="rounded-xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-800/50 dark:bg-violet-950/20">
+            <h3 className="mb-2 font-semibold text-violet-900 dark:text-violet-200">RAG & Retrieval tab</h3>
+            <p className="mb-3 text-violet-900/90 dark:text-violet-100/90">
+              Shows where retrieval pipeline enforcement happens (query, retriever, ranker, generator), plus vector
+              collection risk. A high stage block rate with low volume means strict filtering on that stage, not a full outage.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {RAG_STAGE_GUIDE.map(({ icon: Icon, title, text }) => (
+                <div
+                  key={title}
+                  className="rounded-lg border border-violet-200/80 bg-white/80 p-3 dark:border-violet-800/40 dark:bg-slate-900/40"
+                >
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-bold text-violet-700 dark:text-violet-300">
+                    <Icon className="h-3.5 w-3.5" />
+                    {title}
+                  </p>
+                  <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">{text}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
@@ -183,7 +241,6 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
   if (totalPipelineEvents === 0 && collections.length === 0) {
     return (
       <>
-        <RagPipelineGuide />
         <Module2EmptyState
           title="No RAG pipeline activity in this period"
           message="Run RAG traffic through Module 1.3 (RAG & Vector DB Firewall) with event_type=rag_pipeline metadata so stage-level metrics appear here."
@@ -195,7 +252,6 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
 
   return (
     <>
-      <RagPipelineGuide />
       <KPIBar items={buildRagKpis(kpis, ragData.vector_exposure)} />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -407,6 +463,7 @@ function ModelExposurePageInner() {
     periodParam && PERIOD_LABELS[periodParam] ? periodParam : "24h",
   );
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -512,12 +569,21 @@ function ModelExposurePageInner() {
 
   return (
     <div>
+      <ModelRagGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} />
       <ContextualAppBar title={ANALYST_BRIEF_TITLE} description={PAGE_BRIEFS.modelRag} />
       <PageHeader
         title="Model & RAG Health"
         subtitle={`Model exposure and RAG pipeline health · ${PERIOD_LABELS[period] || period} window (server UTC)`}
         actions={
           <>
+            <button
+              type="button"
+              onClick={() => setGuideOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-teal-600 dark:hover:text-teal-300"
+            >
+              <CircleHelp className="h-3.5 w-3.5" />
+              Guide
+            </button>
             <PeriodSelector value={period} onChange={handlePeriodChange} />
             <button
               type="button"

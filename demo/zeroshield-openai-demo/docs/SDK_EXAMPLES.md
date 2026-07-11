@@ -2,6 +2,8 @@
 
 All examples use **only** the stock `openai` Python SDK.
 
+The demo **SDK Scenarios** tab and `scripts/sdk_examples.py` mirror the same six patterns defined in `app/sdk_scenarios.py` (`SDK_SCENARIO_CATALOG`). Keep CLI, UI, and catalog in sync when changing prompts or routing shapes.
+
 ```python
 from openai import OpenAI
 

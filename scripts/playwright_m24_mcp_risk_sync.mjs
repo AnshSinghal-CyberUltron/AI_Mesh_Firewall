@@ -1,5 +1,5 @@
 /**
- * M2.4 MCP & Context Risk — Dry-Run isolation + Live telemetry UI sync gate.
+ * M2.5 MCP & Context Risk — Dry-Run isolation + Live telemetry UI sync gate.
  *
  * Run:
  *   NODE_PATH="$PWD/tests/e2e/node_modules" BASE_URL=http://127.0.0.1:8180 \

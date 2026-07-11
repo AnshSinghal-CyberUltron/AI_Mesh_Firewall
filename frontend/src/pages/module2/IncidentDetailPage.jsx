@@ -199,19 +199,6 @@ function IncidentDetailPageInner() {
     };
   }, [selectedEvent, data?.source]);
 
-  const investigate = async () => {
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      await api.investigateIncident(id);
-      await load({ silent: true });
-    } catch (e) {
-      setActionError(e.message || "Investigation claim failed.");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const escalate = async () => {
     setActionLoading(true);
     setActionError(null);
@@ -279,7 +266,7 @@ function IncidentDetailPageInner() {
   return (
     <div>
       <Link to="/incidents" className="mb-4 inline-flex items-center gap-1 text-sm text-teal-600 hover:underline">
-        <ArrowLeft className="h-4 w-4" /> Back to Queue
+        <ArrowLeft className="h-4 w-4" /> Back to Incidents
       </Link>
       <ContextualAppBar title={ANALYST_BRIEF_TITLE} description={PAGE_BRIEFS.incidentDetail} />
       <PageHeader
@@ -311,16 +298,6 @@ function IncidentDetailPageInner() {
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
-            {incident.status === "open" && (
-              <button
-                type="button"
-                onClick={investigate}
-                disabled={actionLoading}
-                className="rounded-lg border border-violet-300 px-3 py-1.5 text-sm text-violet-700 disabled:opacity-50"
-              >
-                Investigate
-              </button>
-            )}
             {incident.status !== "escalated" && incident.status !== "resolved" && (
               <button
                 type="button"

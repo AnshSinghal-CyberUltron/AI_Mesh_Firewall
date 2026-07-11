@@ -315,7 +315,8 @@ def apply_org_ueba_settings_update(
     if changes and org is not None:
         from module2.tasks import reassess_org_ueba_keys
 
-        reassess_org_ueba_keys.delay(org.id, run_llm=False)
+        org_settings.refresh_from_db()
+        reassess_org_ueba_keys.delay(org.id, run_llm=bool(org_settings.llm_triage_enabled))
     return org_settings, changes
 
 

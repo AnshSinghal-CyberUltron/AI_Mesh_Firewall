@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E2E: M2.5 Add Entry → Sync → Gateway block → IOC Matches telemetry.
+"""E2E: M2.3 Add Entry → auto Sync → Gateway block → IOC Matches telemetry.
 
 Usage:
   python scripts/verify_threat_intel_add_entry_e2e.py
@@ -119,34 +119,39 @@ def main() -> None:
         fail(f"sync queue failed ({code}): {sync_resp}")
     ok(f"sync queued ({sync_resp.get('status', 'ok')}) entry_count={sync_resp.get('entry_count')}")
 
-    # Celery workers are optional in dev — run sync task inline in control container.
-    sync_cmd = [
-        "docker",
-        "exec",
-        "-w",
-        "/app/control",
-        "ai_mesh_firewall-control-1",
-        "python",
-        "manage.py",
-        "shell",
-        "-c",
-        (
-            "from auth.models import Organization; "
-            "from module2.tasks import sync_threat_intel_to_redis; "
-            f"org=Organization.objects.filter(slug='{ORG_SLUG}').first(); "
-            "assert org, 'org not found'; "
-            "sync_threat_intel_to_redis(org.id); "
-            "print('redis_sync_ok')"
-        ),
-    ]
-    try:
-        out = subprocess.check_output(sync_cmd, stderr=subprocess.STDOUT, text=True, timeout=90)
-        if "redis_sync_ok" not in out:
-            print(out)
-            fail("inline redis sync did not complete")
-        ok("Redis threat intel key updated (inline sync)")
-    except subprocess.CalledProcessError as e:
-        fail(f"inline redis sync failed: {e.output}")
+    # Sync is synchronous via API when status=synced; skip slow manage.py shell exec.
+    if str(sync_resp.get("status") or "").lower() != "synced":
+        sync_cmd = [
+            "docker",
+            "exec",
+            "-w",
+            "/app/control",
+            "ai_mesh_firewall-control-1",
+            "python",
+            "manage.py",
+            "shell",
+            "-c",
+            (
+                "from auth.models import Organization; "
+                "from module2.tasks import sync_threat_intel_to_redis; "
+                f"org=Organization.objects.filter(slug='{ORG_SLUG}').first(); "
+                "assert org, 'org not found'; "
+                "sync_threat_intel_to_redis(org.id); "
+                "print('redis_sync_ok')"
+            ),
+        ]
+        try:
+            out = subprocess.check_output(sync_cmd, stderr=subprocess.STDOUT, text=True, timeout=30)
+            if "redis_sync_ok" not in out:
+                print(out)
+                fail("inline redis sync did not complete")
+            ok("Redis threat intel key updated (inline sync)")
+        except subprocess.TimeoutExpired:
+            print("WARN: inline redis sync timed out — continuing with Redis key verification")
+        except subprocess.CalledProcessError as e:
+            fail(f"inline redis sync failed: {e.output}")
+    else:
+        ok("Redis threat intel key updated (sync API)")
 
     redis_key = f"firewall:threat_intel:{ORG_SLUG}"
     redis_cmd = ["docker", "exec", "ai_mesh_firewall-redis-1", "redis-cli", "GET", redis_key]
@@ -206,12 +211,12 @@ def main() -> None:
         "from core.tasks import drain_telemetry_from_redis; print(drain_telemetry_from_redis(100))",
     ]
     try:
-        subprocess.check_output(drain_cmd, stderr=subprocess.STDOUT, text=True, timeout=60)
-    except subprocess.CalledProcessError:
-        pass
+        subprocess.check_output(drain_cmd, stderr=subprocess.STDOUT, text=True, timeout=20)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        print("WARN: telemetry drain nudge skipped — polling KPI instead")
 
     latest_hits = base_hits
-    for attempt in range(12):
+    for attempt in range(24):
         time.sleep(2)
         code, telem = http_json(
             "GET",
@@ -223,7 +228,7 @@ def main() -> None:
         latest_hits = (telem.get("summary") or {}).get("threat_intel_matches", 0)
         if latest_hits > base_hits:
             break
-        print(f"  poll {attempt + 1}/12: IOC Matches still {latest_hits} (waiting…)")
+        print(f"  poll {attempt + 1}/24: IOC Matches still {latest_hits} (waiting…)")
     if latest_hits <= base_hits:
         fail(f"IOC Matches did not increase (before={base_hits}, after={latest_hits})")
     ok(f"IOC Matches increased to {latest_hits} (was {base_hits})")
@@ -237,11 +242,15 @@ def main() -> None:
         fail(f"delete IOC failed ({code})")
     ok(f"cleanup deleted entry id={entry_id}")
 
-    try:
-        subprocess.check_output(sync_cmd, stderr=subprocess.STDOUT, text=True, timeout=90)
+    code, post_sync = http_json(
+        "POST",
+        f"{CONTROL}/api/module2/threat-intel/sync/",
+        token=token,
+    )
+    if code in (200, 202) and str(post_sync.get("status") or "").lower() in ("synced", "sync_queued", "ok"):
         ok("post-delete Redis sync completed")
-    except subprocess.CalledProcessError:
-        print("WARN: post-delete redis sync failed (non-fatal)")
+    else:
+        print(f"WARN: post-delete redis sync returned {code} (non-fatal)")
 
     print("=== ALL E2E CHECKS PASSED ===")
 

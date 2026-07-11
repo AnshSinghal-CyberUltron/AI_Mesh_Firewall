@@ -1,5 +1,5 @@
 /**
- * M2.3 Model & RAG Health — Attack Simulator + RAG Attack → M2.3 tab sync gate.
+ * M2.4 Model & RAG Health — Attack Simulator + RAG Attack → M2.4 tab sync gate.
  *
  * Run:
  *   NODE_PATH="$PWD/tests/e2e/node_modules" BASE_URL=http://127.0.0.1:8180 \

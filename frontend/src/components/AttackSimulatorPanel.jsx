@@ -135,7 +135,14 @@ const ATTACK_SCENARIOS = [
   },
 ];
 
-function getStatusConfig(httpStatus, action) {
+function isThreatIntelBlock(result = {}) {
+  const code = String(result?.code || result?.zeroshield?.code || "").toLowerCase();
+  const blockedBy = String(result?.blocked_by || "").toLowerCase();
+  const tier = String(result?.zeroshield?.detection_tier || "").toLowerCase();
+  return code === "threat_intel_blocked" || blockedBy === "threat_intel" || tier === "threat_intel";
+}
+
+function getStatusConfig(httpStatus, action, result = null) {
   if (action === "needs_model") {
     return {
       color: "violet",
@@ -154,7 +161,15 @@ function getStatusConfig(httpStatus, action) {
     return { color: "amber", label: "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700" };
   }
   if (httpStatus === 403 || httpStatus === 503 || action === "block") {
-    return { color: "red", label: "BLOCKED", icon: AlertTriangle, bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800", text: "text-red-700" };
+    const threatIntel = result && isThreatIntelBlock(result);
+    return {
+      color: "red",
+      label: threatIntel ? "THREAT INTEL POLICY BLOCK" : "BLOCKED",
+      icon: AlertTriangle,
+      bg: threatIntel ? "bg-violet-50 dark:bg-violet-900/20" : "bg-red-50 dark:bg-red-900/20",
+      border: threatIntel ? "border-violet-200 dark:border-violet-800" : "border-red-200 dark:border-red-800",
+      text: threatIntel ? "text-violet-700 dark:text-violet-300" : "text-red-700",
+    };
   }
   if (action === "redact") {
     return { color: "blue", label: "REDACTED", icon: Shield, bg: "bg-blue-50 dark:bg-blue-900/20", border: "border-blue-200 dark:border-blue-800", text: "text-blue-700" };
@@ -546,7 +561,7 @@ export function AttackSimulatorPanel() {
   };
 
   const statusCfg = result
-    ? getStatusConfig(result.httpStatus, result.final_action || result.action)
+    ? getStatusConfig(result.httpStatus, result.final_action || result.action, result)
     : null;
   const StatusIcon = statusCfg?.icon;
 
@@ -794,9 +809,17 @@ export function AttackSimulatorPanel() {
             </span>
           )}
           {result.blocked_by && (
-            <span className="text-red-600 dark:text-red-400">
+            <span className={isThreatIntelBlock(result) ? "text-violet-700 dark:text-violet-300" : "text-red-600 dark:text-red-400"}>
               {" "}
-              Stopped at <span className="font-medium">{result.blocked_by.replace(/_/g, " ")}</span>.
+              {isThreatIntelBlock(result) ? (
+                <>
+                  Blocked by <span className="font-medium">Threat Intelligence policy</span> (IOC match).
+                </>
+              ) : (
+                <>
+                  Stopped at <span className="font-medium">{result.blocked_by.replace(/_/g, " ")}</span>.
+                </>
+              )}
             </span>
           )}
         </p>
@@ -890,8 +913,11 @@ export function AttackSimulatorPanel() {
                 ? (result.final_action?.toUpperCase() || "BLOCK")
                 : (scan.action || result.final_action?.toUpperCase() || "ALLOW");
               const isClean = blocked ? false : scan.clean;
+              const threatIntelBlocked = isThreatIntelBlock(result);
               const threatLabel =
-                blocked && scan.clean
+                threatIntelBlocked
+                  ? "Threat Intel policy block (IOC match)"
+                  : blocked && scan.clean
                   ? (result.blocked_by
                       ? `Blocked (${humanize(result.blocked_by)})`
                       : humanize(result.category) || "Policy violation")

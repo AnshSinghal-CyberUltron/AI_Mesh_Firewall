@@ -134,6 +134,30 @@ class LaneHelperUnitTests(SimpleTestCase):
         self.assertEqual(funnel["post_generator"], 0)  # 1 generator - 1 blocked
         self.assertIn("escalation_distribution", kpis)
 
+    def test_build_rag_pipeline_kpis_includes_rag_query_events(self):
+        qs = FakeQS([
+            _row(ACTION_BLOCK, event_type="rag_query", blocked_at_stage="retriever", collection="demo_knowledge"),
+            _row("allow", event_type="rag_query", stages_executed=2, collection="demo_knowledge"),
+            _row("allow", event_type="rag_ingest_accepted", collection="demo_knowledge"),
+        ])
+        kpis = build_rag_pipeline_kpis(qs)
+        stages = kpis["stages"]
+        self.assertEqual(stages["retriever"]["blocked"], 1)
+        self.assertEqual(stages["query"]["total"], 1)
+        self.assertEqual(stages["retriever"]["total"], 2)
+        self.assertEqual(kpis["ingest_events"], 1)
+
+    def test_build_rag_pipeline_kpis_prefers_rag_pipeline_over_rag_query(self):
+        qs = FakeQS([
+            _row("allow", event_type="rag_pipeline", pipeline_stage="query", request_id="req-12345678"),
+            _row("allow", event_type="rag_pipeline", pipeline_stage="retriever", request_id="req-12345678", latency_ms=40),
+            _row("allow", event_type="rag_query", stages_executed=2, request_id="req-12345678"),
+        ])
+        kpis = build_rag_pipeline_kpis(qs)
+        self.assertEqual(kpis["stages"]["query"]["total"], 1)
+        self.assertEqual(kpis["stages"]["retriever"]["total"], 1)
+        self.assertEqual(kpis["stages"]["retriever"]["avg_latency_ms"], 40.0)
+
     def test_build_mcp_activity_payload_ledger_direction_servers(self):
         qs = FakeQS([
             _row(ACTION_BLOCK, event_type="mcp_tool_call", tools_invoked=["execute_sql"],
